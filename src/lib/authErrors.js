@@ -25,12 +25,16 @@ export const AUTH_ERROR_CODES = Object.freeze( [
 ] );
 
 /**
- * Set view of AUTH_ERROR_CODES for O(1) lookup.
+ * Frozen lookup view of AUTH_ERROR_CODES for O(1) checks.
+ *
+ * The Set itself is module-private (audit #1354): exporting it would let
+ * any importer mutate the nonce-refresh contract behind the sync test's
+ * back. Importers must use isAuthErrorCode().
  *
  * @since NEXT
  * @type {Set<string>}
  */
-export const AUTH_ERROR_CODE_SET = new Set( AUTH_ERROR_CODES );
+const AUTH_ERROR_CODE_SET = new Set( AUTH_ERROR_CODES );
 
 /**
  * Whether a server payload code signals an auth/nonce failure.

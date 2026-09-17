@@ -192,12 +192,35 @@ export const getWooRuleRemediation = ( kind, pass ) => {
 /**
  * Run the read-only WooCommerce cache self-test with an AbortSignal.
  *
- * Thin shared wrapper so both call sites hit the same endpoint + signal
- * contract; AbortController creation, timeout, and stale-run guards stay
- * with the calling component (which owns its refs).
+ * Enforces WOO_SELF_TEST_TIMEOUT_MS here (audit #1354) so a hung request
+ * cannot depend on each caller remembering a timeout: the caller signal
+ * (if any) and the timeout race, whichever aborts first wins.
  *
  * @since NEXT
  * @param {AbortSignal} [signal] Optional AbortSignal for cancellation.
  * @return {Promise<Object>} Resolved self-test response.
  */
-export const runWooSelfTest = ( signal ) => fetchWooCacheSelfTest( signal );
+export const runWooSelfTest = ( signal ) => {
+	let timeoutSignal = null;
+	if ( typeof AbortSignal !== 'undefined' && AbortSignal.timeout ) {
+		timeoutSignal = AbortSignal.timeout( WOO_SELF_TEST_TIMEOUT_MS );
+	}
+	if ( ! signal ) {
+		return fetchWooCacheSelfTest( timeoutSignal );
+	}
+	if ( ! timeoutSignal ) {
+		return fetchWooCacheSelfTest( signal );
+	}
+	const controller = new AbortController();
+	const onAbort = () => controller.abort( signal.reason );
+	if ( signal.aborted ) {
+		onAbort();
+	} else {
+		signal.addEventListener( 'abort', onAbort, { once: true } );
+		timeoutSignal.addEventListener( 'abort', onAbort, { once: true } );
+	}
+	return fetchWooCacheSelfTest( controller.signal ).finally( () => {
+		signal.removeEventListener( 'abort', onAbort );
+		timeoutSignal.removeEventListener( 'abort', onAbort );
+	} );
+};

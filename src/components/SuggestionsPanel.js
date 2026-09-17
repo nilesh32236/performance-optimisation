@@ -129,6 +129,9 @@ export const formatValue = ( value, unit ) => {
 	if ( unit === 'ms' ) {
 		return `${ Math.round( value ) }ms`;
 	}
+	if ( unit === undefined || unit === null || unit === '' ) {
+		return String( value );
+	}
 	return `${ value } ${ unit }`;
 };
 

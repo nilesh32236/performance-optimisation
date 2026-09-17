@@ -10,10 +10,20 @@
 
 import { __ } from '@wordpress/i18n';
 
+// Audit #1354: accept the lib/status.js vocabulary too ('warning' from
+// scoreToStatus maps to the Needs Improvement badge); anything else
+// falls back to 'unknown'.
+const STATUS_ALIASES = {
+	warning: 'needs_improvement',
+};
+
 const KNOWN_STATUSES = [ 'good', 'needs_improvement', 'poor' ];
 
 const StatusBadge = ( { status } ) => {
-	const safeStatus = KNOWN_STATUSES.includes( status ) ? status : 'unknown';
+	const normalized = STATUS_ALIASES[ status ] || status;
+	const safeStatus = KNOWN_STATUSES.includes( normalized )
+		? normalized
+		: 'unknown';
 	const labelMap = {
 		good: __( 'Good', 'performance-optimisation' ),
 		needs_improvement: __(
@@ -26,10 +36,11 @@ const StatusBadge = ( { status } ) => {
 
 	const label = labelMap[ safeStatus ];
 
+	// Audit #1354: no redundant aria-label — the visible text is already
+	// the accessible name.
 	return (
 		<span
 			className={ `wppo-status-badge wppo-status-badge--${ safeStatus }` }
-			aria-label={ label }
 		>
 			{ label }
 		</span>

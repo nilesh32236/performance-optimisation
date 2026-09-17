@@ -38,6 +38,20 @@ const InfoRow = ( { label, value } ) => (
 );
 
 /**
+ * Humanize an unmapped machine key for display.
+ *
+ * @param {string} key Machine key (snake_case).
+ * @return {string} Title-cased label.
+ */
+const humanizeKey = ( key ) =>
+	String( key )
+		.split( '_' )
+		.map( ( word ) =>
+			word ? word[ 0 ].toUpperCase() + word.slice( 1 ) : word
+		)
+		.join( ' ' );
+
+/**
  * A labelled table of InfoRow items.
  *
  * @param {Object} props
@@ -58,7 +72,7 @@ const InfoTable = ( { title, data, labels = {} } ) => {
 					{ Object.entries( data ).map( ( [ key, value ] ) => (
 						<InfoRow
 							key={ key }
-							label={ labels[ key ] || key }
+							label={ labels[ key ] || humanizeKey( key ) }
 							value={ value }
 						/>
 					) ) }
@@ -209,7 +223,11 @@ const SystemInfo = () => {
 
 			{ /* Error state */ }
 			{ notice && (
-				<NoticeBanner type={ notice.type } message={ notice.message } />
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
 			) }
 
 			{ /* Results — two-column grid of tables */ }

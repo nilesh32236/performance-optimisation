@@ -68,7 +68,11 @@ const Tooltip = ( { content, children, label } ) => {
 					: ' wppo-tooltip-container--icon'
 			}${ visible ? ' wppo-tooltip-container--visible' : '' }` }
 			{ ...( hasChildren
-				? { 'aria-describedby': id }
+				? {
+						...( visible && {
+							'aria-describedby': id,
+						} ),
+				  }
 				: {
 						role: 'button',
 						tabIndex: '0',
@@ -99,7 +103,13 @@ const Tooltip = ( { content, children, label } ) => {
 					aria-hidden="true"
 				/>
 			) }
-			<span className="wppo-tooltip-content" role="tooltip" id={ id }>
+			{ /* Audit #1354: hidden tooltip content is inert to AT. */ }
+			<span
+				className="wppo-tooltip-content"
+				role="tooltip"
+				id={ id }
+				aria-hidden={ visible ? undefined : true }
+			>
 				{ content }
 			</span>
 		</span>

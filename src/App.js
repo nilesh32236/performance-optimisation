@@ -340,23 +340,33 @@ const App = () => {
 	}, [] );
 
 	useEffect( () => {
-		if ( activitiesControllerRef.current ) {
-			activitiesControllerRef.current.abort();
-		}
-		const activitiesController = new AbortController();
-		activitiesControllerRef.current = activitiesController;
-
-		if ( rulesControllerRef.current ) {
-			rulesControllerRef.current.abort();
-		}
-		const rulesController = new AbortController();
-		rulesControllerRef.current = rulesController;
-
-		if ( ccssControllerRef.current ) {
-			ccssControllerRef.current.abort();
-		}
-		const ccssController = new AbortController();
-		ccssControllerRef.current = ccssController;
+		// Audit #1354: only (re)create a controller for a fetch that will
+		// actually run — the hasFetched guards below make the other two
+		// no-ops, and aborting their controllers would kill unrelated
+		// in-flight requests on every tab change.
+		const wantActivities =
+			( activeTab === 'overview' ||
+				activeTab === 'dashboard' ||
+				recentActivities.length === 0 ) &&
+			! hasFetchedActivities.current;
+		const wantRules = ! serverRules && ! hasFetchedRules.current;
+		const wantCcss = ! hasFetchedCcss.current || 0 !== ccssRefreshTrigger;
+		const refreshController = ( ref ) => {
+			if ( ref.current ) {
+				ref.current.abort();
+			}
+			ref.current = new AbortController();
+			return ref.current;
+		};
+		const activitiesController = wantActivities
+			? refreshController( activitiesControllerRef )
+			: activitiesControllerRef.current;
+		const rulesController = wantRules
+			? refreshController( rulesControllerRef )
+			: rulesControllerRef.current;
+		const ccssController = wantCcss
+			? refreshController( ccssControllerRef )
+			: ccssControllerRef.current;
 
 		const fetchActivities = async () => {
 			if (

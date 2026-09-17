@@ -190,9 +190,11 @@ describe( 'DatabaseCleanup Component', () => {
 		fireEvent.click( confirmButton );
 
 		await waitFor( () => {
+			// Audit #1354: translated summary in UI; raw slugs go to console.
 			expect(
-				screen.getByText( 'Custom error message. Failures: some_item' )
+				screen.getByText( 'Custom error message.' )
 			).toBeInTheDocument();
+			expect( screen.queryByText( /some_item/ ) ).not.toBeInTheDocument();
 		} );
 	} );
 

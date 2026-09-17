@@ -782,11 +782,20 @@ export const sanitizeRumValues = ( raw ) => {
 		window.addEventListener( 'load', scheduleSend, { once: true } );
 	}
 
-	document.addEventListener( 'visibilitychange', () => {
+	// Audit #1354: named handler removed once the beacon is away so
+	// every hidden transition does not re-invoke send().
+	const onVisibilityHidden = () => {
 		if ( document.visibilityState === 'hidden' ) {
 			send();
+			if ( sent ) {
+				document.removeEventListener(
+					'visibilitychange',
+					onVisibilityHidden
+				);
+			}
 		}
-	} );
+	};
+	document.addEventListener( 'visibilitychange', onVisibilityHidden );
 	window.addEventListener(
 		'pagehide',
 		() => {

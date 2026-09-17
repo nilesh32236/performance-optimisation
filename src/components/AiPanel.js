@@ -7,9 +7,10 @@ import {
 	getErrorLogMessage,
 	patchSettingsCache,
 } from '../lib/apiRequest';
-import { suggestionKey } from './SuggestionsPanel';
+import { suggestionKey, formatValue } from './SuggestionsPanel';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
+import StatusBadge from './common/StatusBadge';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -199,11 +200,18 @@ const AiPanel = () => {
 		}
 	};
 
+	const [ applyingMetrics, setApplyingMetrics ] = useState( [] );
 	const handleApply = async ( suggestion ) => {
 		const payload = suggestion.ai_payload;
 		if ( ! payload ) {
 			return;
 		}
+		// Audit #1354: disable while in flight so double-clicks cannot
+		// fire duplicate update_settings requests.
+		if ( applyingMetrics.includes( suggestion.metric ) ) {
+			return;
+		}
+		setApplyingMetrics( ( prev ) => [ ...prev, suggestion.metric ] );
 		try {
 			const currentTabSettings =
 				typeof wppoSettings !== 'undefined'
@@ -243,6 +251,10 @@ const AiPanel = () => {
 					'performance-optimisation'
 				),
 			} );
+		} finally {
+			setApplyingMetrics( ( prev ) =>
+				prev.filter( ( metric ) => metric !== suggestion.metric )
+			);
 		}
 	};
 
@@ -383,7 +395,7 @@ const AiPanel = () => {
 				</p>
 			) }
 			{ suggestions.length > 0 && (
-				<div className="wppo-stacked-cards wppo-mt-16">
+				<div className="wppo-stacked-cards wppo-mt-16" role="list">
 					<h4>
 						{ __( 'AI Suggestions', 'performance-optimisation' ) }
 					</h4>
@@ -391,24 +403,27 @@ const AiPanel = () => {
 						<div
 							key={ suggestionKey( s, `ai-${ index }` ) }
 							className="wppo-suggestion-card wppo-suggestion-card--needs_improvement"
+							role="listitem"
 						>
 							<div className="wppo-suggestion-card__header">
 								<span className="wppo-suggestion-card__description">
 									{ s.description }
 								</span>
-								<span className="wppo-status-badge wppo-status-badge--warning">
-									{ s.status }
-								</span>
+								{ /* Audit #1354: translated badge instead of raw status. */ }
+								<StatusBadge status={ s.status } />
 							</div>
 							<div className="wppo-suggestion-card__body">
 								<span className="wppo-suggestion-card__value">
-									{ String( s.value ) }
+									{ formatValue( s.value, s.unit ) }
 								</span>
 								{ s.ai_payload && (
 									<button
 										type="button"
 										className="wppo-button wppo-button--sm wppo-button--primary"
 										onClick={ () => handleApply( s ) }
+										disabled={ applyingMetrics.includes(
+											s.metric
+										) }
 										aria-label={ sprintf(
 											// translators: %s is the suggestion description.
 											__(

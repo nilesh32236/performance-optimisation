@@ -1,5 +1,5 @@
-import { __, sprintf } from '@wordpress/i18n';
-import { useState, useEffect, useContext } from '@wordpress/element';
+import { __, sprintf, _n } from '@wordpress/i18n';
+import { useState, useEffect, useContext, useMemo } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -81,9 +81,29 @@ const PreloadSettings = ( { options = {} } ) => {
 	] );
 	useUnsavedChanges( settings, baseline );
 
-	const fetchPreloadStatus = async () => {
+	// Audit #1354: single memoized change handler instead of a new
+	// closure per input per render (mirrors FileOptimization).
+	const onFieldChange = useMemo(
+		() => handleChange( setSettings ),
+		[ setSettings ]
+	);
+
+	// Audit #1354: signal-guarded fetch so unmount cannot setState.
+	const fetchPreloadStatus = async ( signal ) => {
+		let cancelled = false;
+		if ( signal ) {
+			if ( signal.aborted ) {
+				return;
+			}
+			signal.addEventListener( 'abort', () => {
+				cancelled = true;
+			} );
+		}
 		try {
-			const res = await apiCall( 'preload_status', {}, 'GET' );
+			const res = await apiCall( 'preload_status', {}, 'GET', signal );
+			if ( cancelled || ( signal && signal.aborted ) ) {
+				return;
+			}
 			const payload = res && res.data ? res.data : res;
 			if ( payload && payload.preload ) {
 				setPreload( payload.preload );
@@ -100,7 +120,9 @@ const PreloadSettings = ( { options = {} } ) => {
 	};
 
 	useEffect( () => {
-		fetchPreloadStatus();
+		const controller = new AbortController();
+		fetchPreloadStatus( controller.signal );
+		return () => controller.abort();
 	}, [] );
 
 	const handleResume = async () => {
@@ -110,6 +132,16 @@ const PreloadSettings = ( { options = {} } ) => {
 		setIsResuming( true );
 		try {
 			const res = await apiCall( 'preload_resume', {} );
+			// Audit #1354: only celebrate actual success.
+			if ( ! res.success ) {
+				throw new Error(
+					res.message ||
+						__(
+							'Failed resuming preload queue.',
+							'performance-optimisation'
+						)
+				);
+			}
 			const payload = res && res.data ? res.data : res;
 			if ( payload && payload.preload ) {
 				setPreload( payload.preload );
@@ -130,10 +162,12 @@ const PreloadSettings = ( { options = {} } ) => {
 			);
 			notify( {
 				type: 'error',
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
+				message:
+					( err && err.message ) ||
+					__(
+						'An unexpected error occurred.',
+						'performance-optimisation'
+					),
 				durationMs: 5000,
 			} );
 		} finally {
@@ -286,7 +320,7 @@ const PreloadSettings = ( { options = {} } ) => {
 							) }
 							name="enablePreloadCache"
 							checked={ settings.enablePreloadCache }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 						{ settings.enablePreloadCache && (
 							<div className="wppo-field wppo-mt-20">
@@ -309,7 +343,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										'performance-optimisation'
 									) }
 									value={ settings.excludePreloadCache }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 									aria-describedby="excludePreloadCache-desc"
 								/>
 								<p
@@ -334,7 +368,7 @@ const PreloadSettings = ( { options = {} } ) => {
 							) }
 							name="preloadSitemap"
 							checked={ settings.preloadSitemap }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 						{ cacheCap && 'warn' === cacheCap.state && (
 							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
@@ -357,8 +391,10 @@ const PreloadSettings = ( { options = {} } ) => {
 								<p className="wppo-text-muted wppo-text-small">
 									{ sprintf(
 										/* translators: %1$d: queued count, %2$d: done count, %3$d: failed count. */
-										__(
+										_n(
 											'Preload progress — queued: %1$d, done: %2$d, failed: %3$d.',
+											'Preload progress — queued: %1$d, done: %2$d, failed: %3$d.',
+											preload.queued || 0,
 											'performance-optimisation'
 										),
 										preload.queued || 0,
@@ -403,7 +439,7 @@ const PreloadSettings = ( { options = {} } ) => {
 							) }
 							name="preconnect"
 							checked={ settings.preconnect }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 						{ settings.preconnect && (
 							<div className="wppo-field">
@@ -426,7 +462,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										'performance-optimisation'
 									) }
 									value={ settings.preconnectOrigins }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 									aria-describedby="preconnectOrigins-desc"
 								/>
 								<p
@@ -452,7 +488,7 @@ const PreloadSettings = ( { options = {} } ) => {
 							) }
 							name="prefetchDNS"
 							checked={ settings.prefetchDNS }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 						{ settings.prefetchDNS && (
 							<div className="wppo-field">
@@ -475,7 +511,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										'performance-optimisation'
 									) }
 									value={ settings.dnsPrefetchOrigins }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 									aria-describedby="dnsPrefetchOrigins-desc"
 								/>
 								<p
@@ -513,7 +549,7 @@ const PreloadSettings = ( { options = {} } ) => {
 								) }
 								name="preloadFonts"
 								checked={ settings.preloadFonts }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 							{ settings.preloadFonts && (
 								<div className="wppo-field">
@@ -536,7 +572,7 @@ const PreloadSettings = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 										value={ settings.preloadFontsUrls }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										aria-describedby="preloadFontsUrls-desc"
 									/>
 									<p
@@ -563,7 +599,7 @@ const PreloadSettings = ( { options = {} } ) => {
 								) }
 								name="autoDiscoverFonts"
 								checked={ settings.autoDiscoverFonts }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 							<SwitchField
 								label={ __(
@@ -576,7 +612,7 @@ const PreloadSettings = ( { options = {} } ) => {
 								) }
 								name="autoLcpPreload"
 								checked={ settings.autoLcpPreload }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 						</div>
 						<div className="wppo-field-group">
@@ -591,7 +627,7 @@ const PreloadSettings = ( { options = {} } ) => {
 								) }
 								name="preloadCSS"
 								checked={ settings.preloadCSS }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 							{ settings.preloadCSS && (
 								<div className="wppo-field">
@@ -614,7 +650,7 @@ const PreloadSettings = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 										value={ settings.preloadCSSUrls }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										aria-describedby="preloadCSSUrls-desc"
 									/>
 									<p
@@ -657,7 +693,7 @@ const PreloadSettings = ( { options = {} } ) => {
 							) }
 							name="enableSpeculationRules"
 							checked={ settings.enableSpeculationRules }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 						{ ! settings.enableSpeculationRules &&
 							( eagernessOverride || modeOverride ) && (
@@ -707,7 +743,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										id="speculationMode"
 										name="speculationMode"
 										value={ settings.speculationMode }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										aria-describedby="speculationMode-desc"
 									>
 										<option value="prefetch">
@@ -748,7 +784,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										id="speculationEagerness"
 										name="speculationEagerness"
 										value={ settings.speculationEagerness }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										aria-describedby="speculationEagerness-desc"
 									>
 										<option value="conservative">
@@ -794,7 +830,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										checked={ Boolean(
 											settings.speculationPrerenderList
 										) }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 									/>
 								</div>
 								<div className="wppo-field">
@@ -825,7 +861,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										value={
 											settings.speculationExcludeUrls
 										}
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										aria-describedby="speculationExcludeUrls-desc"
 									/>
 									<p

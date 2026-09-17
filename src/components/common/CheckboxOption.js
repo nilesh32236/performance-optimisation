@@ -77,8 +77,18 @@ export const CheckboxOption = ( {
 								placeholder={ textareaPlaceholder || '' }
 								aria-label={ textareaPlaceholder || label }
 								name={ textareaName }
-								value={ textareaValue }
-								onChange={ onTextareaChange }
+								// Audit #1354: uncontrolled when no handler is
+								// provided, so React never warns about a
+								// controlled-without-onChange textarea.
+								{ ...( onTextareaChange
+									? {
+											value: textareaValue,
+											onChange: onTextareaChange,
+									  }
+									: {
+											defaultValue: textareaValue,
+											readOnly: true,
+									  } ) }
 							/>
 						</div>
 					) }

@@ -14,6 +14,8 @@ import { apiCall } from '../../lib/apiRequest';
 // Mock the API request
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
 } ) );
 
 describe( 'ImageOptimization Component', () => {
@@ -311,7 +313,8 @@ describe( 'ImageOptimization Component', () => {
 		expect( apiCall ).toHaveBeenCalledWith(
 			'lcp_preload_candidate?path=' + encodeURIComponent( '/' ),
 			{},
-			'GET'
+			'GET',
+			expect.anything()
 		);
 	} );
 
@@ -435,8 +438,14 @@ describe( 'ImageOptimization Component', () => {
 			fireEvent.click( applyButton );
 		} );
 
+		// Audit #1354: translated string in UI; raw error to console only.
 		await waitFor( () => {
-			expect( screen.getByText( /Network error/i ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Could not apply the LCP preload.' )
+			).toBeInTheDocument();
+			expect(
+				screen.queryByText( /Network error/i )
+			).not.toBeInTheDocument();
 		} );
 	} );
 

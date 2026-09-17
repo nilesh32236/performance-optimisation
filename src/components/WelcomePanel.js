@@ -47,7 +47,12 @@ export const dismissWelcome = () => apiCall( 'dismiss_welcome' );
  * @return {string} Accessible button label.
  */
 export const getStepAriaLabel = ( step, isActive, isWoo, visibleLabel ) => {
-	const label = step?.label ?? '';
+	// Audit #1354: STEPS labels are lazy getters (module-scope __()
+	// would freeze translations at import time).
+	const label =
+		typeof step?.getLabel === 'function'
+			? step.getLabel()
+			: step?.label ?? '';
 	const visible = typeof visibleLabel === 'string' ? visibleLabel : '';
 	if ( visible ) {
 		if ( isActive ) {
@@ -122,11 +127,13 @@ const STEPS = [
 	{
 		number: 1,
 		key: 'cache',
-		label: __( 'Enable Page Caching', 'performance-optimisation' ),
-		description: __(
-			'Speed up your site with static HTML page caching — the single biggest performance win.',
-			'performance-optimisation'
-		),
+		getLabel: () => __( 'Enable Page Caching', 'performance-optimisation' ),
+		getDescription: () =>
+			__(
+				'Speed up your site with static HTML page caching — the single biggest performance win.',
+				'performance-optimisation'
+			),
+
 		settings: {
 			tab: 'cache_settings',
 			payload: { enableCache: true },
@@ -137,11 +144,14 @@ const STEPS = [
 	{
 		number: 2,
 		key: 'minify',
-		label: __( 'Enable JS / CSS Minification', 'performance-optimisation' ),
-		description: __(
-			'Reduce file sizes by removing whitespace and comments from your CSS and JavaScript.',
-			'performance-optimisation'
-		),
+		getLabel: () =>
+			__( 'Enable JS / CSS Minification', 'performance-optimisation' ),
+		getDescription: () =>
+			__(
+				'Reduce file sizes by removing whitespace and comments from your CSS and JavaScript.',
+				'performance-optimisation'
+			),
+
 		settings: {
 			tab: 'file_optimisation',
 			payload: { minifyJS: true, minifyCSS: true },
@@ -155,11 +165,13 @@ const STEPS = [
 	{
 		number: 3,
 		key: 'lazyload',
-		label: __( 'Enable Lazy Loading', 'performance-optimisation' ),
-		description: __(
-			'Defer off-screen images and videos so they only load when visitors scroll to them.',
-			'performance-optimisation'
-		),
+		getLabel: () => __( 'Enable Lazy Loading', 'performance-optimisation' ),
+		getDescription: () =>
+			__(
+				'Defer off-screen images and videos so they only load when visitors scroll to them.',
+				'performance-optimisation'
+			),
+
 		settings: {
 			tab: 'image_optimisation',
 			payload: { lazyLoadImages: true },
@@ -171,14 +183,15 @@ const STEPS = [
 	{
 		number: 4,
 		key: 'woo-verify',
-		label: __(
-			'Verify WooCommerce Cart Bypass',
-			'performance-optimisation'
-		),
-		description: __(
-			'Prove in one click that cart, checkout and account pages bypass the page cache so the guest cart survives.',
-			'performance-optimisation'
-		),
+		getLabel: () =>
+			__( 'Verify WooCommerce Cart Bypass', 'performance-optimisation' ),
+
+		getDescription: () =>
+			__(
+				'Prove in one click that cart, checkout and account pages bypass the page cache so the guest cart survives.',
+				'performance-optimisation'
+			),
+
 		action: 'woo-self-test',
 		isEnabled: () => false,
 	},
@@ -614,10 +627,10 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 							</span>
 							<div className="wppo-welcome-step__content">
 								<strong className="wppo-welcome-step__label">
-									{ step.label }
+									{ step.getLabel() }
 								</strong>
 								<p className="wppo-welcome-step__desc">
-									{ step.description }
+									{ step.getDescription() }
 								</p>
 								{ isWooStep &&
 									wooSelfTest &&

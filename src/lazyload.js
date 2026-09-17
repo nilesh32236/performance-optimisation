@@ -106,7 +106,7 @@ const AUTO_SIZES_SUPPORTED = ( () => {
 		probe.remove();
 		return supported;
 	} catch ( _e ) {
-		console.warn( 'WPPO: auto-sizes probe failed', _e );
+		console.warn( 'WPPO: auto-sizes probe failed', getLogMessage( _e ) );
 	}
 	return false;
 } )();
@@ -183,6 +183,10 @@ const BACKGROUND_URL_PATTERN = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
  * @type {number}
  */
 let pendingLazyCount = 0;
+// Audit #1354: tracked one-shot timers so teardownLazyload() can clear
+// them instead of letting them re-create observers / pin DOM post-teardown.
+let loadImagesTimer = null;
+const videoFallbackTimers = new Set();
 
 /**
  * Base allowlist of remote hosts permitted for deferred external scripts, in
@@ -1105,7 +1109,11 @@ async function loadScripts() {
 			}
 		}
 
-		setTimeout( () => {
+		if ( loadImagesTimer !== null ) {
+			clearTimeout( loadImagesTimer );
+		}
+		loadImagesTimer = setTimeout( () => {
+			loadImagesTimer = null;
 			loadImages();
 		}, 200 );
 	} )();
@@ -1249,8 +1257,9 @@ observeViewportScripts();
 
 // Only register interaction event listeners if there are scripts using interaction strategy.
 if ( delayedScripts.length > 0 && hasInteractionScripts( delayedScripts ) ) {
+	// Audit #1354: mouseover subsumes mouseenter at document level —
+	// drop the overlapping listener.
 	const triggerEvents = [
-		'mouseenter',
 		'mousedown',
 		'mouseover',
 		'touchstart',
@@ -1368,6 +1377,12 @@ const clearSafetyScan = () => {
  */
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
+	if ( loadImagesTimer !== null ) {
+		clearTimeout( loadImagesTimer );
+		loadImagesTimer = null;
+	}
+	videoFallbackTimers.forEach( ( t ) => clearTimeout( t ) );
+	videoFallbackTimers.clear();
 	clearSafetyScan();
 	if ( scriptRemovalObserver ) {
 		scriptRemovalObserver.disconnect();
@@ -2861,7 +2876,13 @@ const initVideoPlaceholders = () => {
 			iframe.allow = 'autoplay; fullscreen';
 			iframe.allowFullscreen = true;
 			iframe.loading = 'lazy';
-			iframe.title = 'YouTube video player';
+			// Audit #1354: PHP-provided translation via module data
+			// (server-localized); English fallback otherwise.
+			iframe.title =
+				typeof moduleData.videoPlayerLabel === 'string' &&
+				moduleData.videoPlayerLabel
+					? moduleData.videoPlayerLabel
+					: 'Video player';
 			iframe.style.cssText =
 				'position:absolute;inset:0;width:100%;height:100%;border:0;';
 
@@ -2957,12 +2978,15 @@ const initVideoPlaceholders = () => {
 
 			iframe.addEventListener( 'load', onLoad );
 
-			// Fallback: show iframe even if load event never fires
-			setTimeout( () => {
+			// Fallback: show iframe even if load event never fires.
+			// Tracked so teardown clears it instead of pinning el/iframe.
+			const fallbackTimer = setTimeout( () => {
+				videoFallbackTimers.delete( fallbackTimer );
 				if ( el.contains( iframe ) && iframe.style.opacity !== '1' ) {
 					onLoad();
 				}
 			}, 30000 );
+			videoFallbackTimers.add( fallbackTimer );
 		};
 
 		el.addEventListener( 'click', loadVideo );

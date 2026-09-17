@@ -50,13 +50,18 @@ const LlmsPanel = () => {
 			: null
 	);
 	useEffect( () => {
+		// Audit #1354: skip resync while saving (EdgeCachePanel pattern)
+		// so a global change cannot clobber in-flight user edits.
+		if ( saving ) {
+			return;
+		}
 		const s =
 			typeof wppoSettings !== 'undefined'
 				? wppoSettings?.settings?.llms_txt || {}
 				: {};
 		setEnabled( !! s.enabled );
 		setSource( s.source || 'both' );
-	}, [ llmsKey ] );
+	}, [ llmsKey, saving ] );
 
 	const homeUrl =
 		typeof wppoSettings !== 'undefined' ? wppoSettings?.homeUrl || '' : '';
@@ -66,6 +71,8 @@ const LlmsPanel = () => {
 
 	const handleSave = async () => {
 		setSaving( true );
+		// Audit #1354: clear stale notices first like sibling panels.
+		dismiss();
 		try {
 			const response = await apiCall( 'update_settings', {
 				tab: 'llms_txt',

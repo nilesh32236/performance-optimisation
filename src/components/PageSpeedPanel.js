@@ -96,12 +96,19 @@ const scoreStatus = ( score ) => {
  */
 const ScoreGauge = ( { label, score } ) => {
 	const status = scoreStatus( score );
+	// Audit #1354: expose metric context to screen readers.
 	return (
-		<div className={ `wppo-score-gauge wppo-score-gauge--${ status }` }>
-			<div className="wppo-score-gauge__circle">
+		<div
+			className={ `wppo-score-gauge wppo-score-gauge--${ status }` }
+			role="img"
+			aria-label={ `${ label }: ${ score }` }
+		>
+			<div className="wppo-score-gauge__circle" aria-hidden="true">
 				<span className="wppo-score-gauge__value">{ score }</span>
 			</div>
-			<span className="wppo-score-gauge__label">{ label }</span>
+			<span className="wppo-score-gauge__label" aria-hidden="true">
+				{ label }
+			</span>
 		</div>
 	);
 };

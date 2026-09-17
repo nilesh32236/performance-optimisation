@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -214,6 +214,8 @@ const ImageOptimization = ( { options = {} } ) => {
 
 	useEffect( () => {
 		let cancelled = false;
+		// Audit #1354: cancel the request on unmount, not just ignore it.
+		const controller = new AbortController();
 		setIsCandidateLoading( true );
 		// Promise.resolve() so a mocked apiCall resolving to undefined
 		// (and any sync throw) still lands in the fail-open path.
@@ -225,7 +227,8 @@ const ImageOptimization = ( { options = {} } ) => {
 				apiCall(
 					'lcp_preload_candidate?path=' + encodeURIComponent( '/' ),
 					{},
-					'GET'
+					'GET',
+					controller.signal
 				)
 			)
 			.then( ( res ) => {
@@ -254,6 +257,7 @@ const ImageOptimization = ( { options = {} } ) => {
 			} );
 		return () => {
 			cancelled = true;
+			controller.abort();
 		};
 	}, [] );
 
@@ -297,14 +301,17 @@ const ImageOptimization = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( error ) {
+			// Audit #1354: translated string to users; raw error to console.
+			console.error(
+				'Could not apply the LCP preload.',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
-				message:
-					( error && error.message ) ||
-					__(
-						'Could not apply the LCP preload.',
-						'performance-optimisation'
-					),
+				message: __(
+					'Could not apply the LCP preload.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {
@@ -422,6 +429,8 @@ const ImageOptimization = ( { options = {} } ) => {
 			e.preventDefault();
 		}
 		setIsLoading( true );
+		// Audit #1354: clear any prior notice before a new save attempt.
+		dismiss();
 		try {
 			const res = await apiCall( 'update_settings', {
 				tab: 'image_optimisation',

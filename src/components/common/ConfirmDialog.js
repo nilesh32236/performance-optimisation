@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from '@wordpress/element';
+import { useEffect, useRef, useCallback, useId } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 
@@ -31,6 +31,8 @@ const ConfirmDialog = ( {
 } ) => {
 	const dialogRef = useRef( null );
 	const confirmBtnRef = useRef( null );
+	// Audit #1354: unique title id so two mounted dialogs never share one.
+	const titleId = useId();
 	const focusableRef = useRef( [] );
 	const previouslyFocusedRef = useRef( null );
 
@@ -78,7 +80,9 @@ const ConfirmDialog = ( {
 		[ onCancel ]
 	);
 
-	useEffect( () => {
+	// Audit #1354: rebuild when children change too — async detail
+	// lists added while open would otherwise leave a stale trap list.
+	const rebuildTrapList = useCallback( () => {
 		if ( isOpen && dialogRef.current ) {
 			focusableRef.current = Array.from(
 				dialogRef.current.querySelectorAll(
@@ -89,6 +93,9 @@ const ConfirmDialog = ( {
 			focusableRef.current = [];
 		}
 	}, [ isOpen ] );
+	useEffect( () => {
+		rebuildTrapList();
+	}, [ rebuildTrapList, children ] );
 
 	useEffect( () => {
 		if ( isOpen && confirmBtnRef.current ) {
@@ -157,10 +164,10 @@ const ConfirmDialog = ( {
 				ref={ dialogRef }
 				role="dialog"
 				aria-modal="true"
-				aria-labelledby="wppo-dialog-title"
+				aria-labelledby={ titleId }
 				onClick={ ( e ) => e.stopPropagation() }
 			>
-				<h3 id="wppo-dialog-title">
+				<h3 id={ titleId }>
 					<FontAwesomeIcon
 						icon={ faExclamationTriangle }
 						aria-hidden="true"

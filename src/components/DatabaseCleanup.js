@@ -203,12 +203,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				);
 				notify( {
 					type: 'error',
-					message:
-						error?.message ||
-						__(
-							'Failed to load counts.',
-							'performance-optimisation'
-						),
+					// Audit #1354: translated string to users; the raw backend
+					// text stays in console.error above.
+					message: __(
+						'Failed to load counts.',
+						'performance-optimisation'
+					),
 					durationMs: 5000,
 				} );
 			} finally {
@@ -328,15 +328,16 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				);
 			} else {
 				const failures = response.data?.failures;
-				let errorMsg =
+				const errorMsg =
 					response.message ||
 					__( 'Cleanup failed.', 'performance-optimisation' );
 				if ( failures ) {
-					errorMsg +=
-						' ' +
-						__( 'Failures:', 'performance-optimisation' ) +
-						' ' +
-						Object.keys( failures ).join( ', ' );
+					// Audit #1354: raw backend slugs go to the console; users
+					// see the translated summary only.
+					console.error(
+						'Cleanup failures:',
+						getErrorLogMessage( failures )
+					);
 				}
 				notify( {
 					type: 'error',
@@ -390,6 +391,19 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		setExporting( true );
 		try {
 			const EXPORT_LIMIT = 500;
+
+			// Audit #1354: imperative download isolated in one helper (revokes the
+			// object URL after the click so no blob URL leaks).
+			const downloadBlob = ( blob, filename ) => {
+				const url = URL.createObjectURL( blob );
+				const link = document.createElement( 'a' );
+				link.href = url;
+				link.download = filename;
+				document.body.appendChild( link );
+				link.click();
+				link.remove();
+				URL.revokeObjectURL( url );
+			};
 			const response = await apiCall(
 				`expired_transients_export?limit=${ EXPORT_LIMIT }`,
 				{},
@@ -403,23 +417,21 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					[ JSON.stringify( response.data, null, 2 ) ],
 					{ type: 'application/json' }
 				);
-				const url = URL.createObjectURL( blob );
-				const link = document.createElement( 'a' );
-				link.href = url;
-				link.download = truncated
-					? `wppo-expired-transients-partial-${ EXPORT_LIMIT }.json`
-					: 'wppo-expired-transients.json';
-				document.body.appendChild( link );
-				link.click();
-				link.remove();
-				URL.revokeObjectURL( url );
+				downloadBlob(
+					blob,
+					truncated
+						? `wppo-expired-transients-partial-${ EXPORT_LIMIT }.json`
+						: 'wppo-expired-transients.json'
+				);
 				if ( truncated ) {
 					notify( {
 						type: 'warning',
 						message: sprintf(
 							// translators: %1$d is the number exported, %2$d is the export limit.
-							__(
+							_n(
+								'Exported first %1$d of more than %2$d expired transient (truncated). Purge and re-export for the rest.',
 								'Exported first %1$d of more than %2$d expired transients (truncated). Purge and re-export for the rest.',
+								count,
 								'performance-optimisation'
 							),
 							count,
@@ -786,15 +798,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 													'performance-optimisation'
 												) }
 											>
-												<span
-													tabIndex={ 0 }
-													aria-label={ __(
-														'No items to clean',
-														'performance-optimisation'
-													) }
-												>
-													{ cleanButton }
-												</span>
+												{ /* Audit #1354: plain anchor — no tabIndex/aria-label so
+													there is a single accessible name (the button's own). */ }
+												<span>{ cleanButton }</span>
 											</Tooltip>
 										) : (
 											cleanButton

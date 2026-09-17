@@ -6,6 +6,8 @@ import {
 	useMemo,
 } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faGlobe } from '@fortawesome/free-solid-svg-icons';
 import { apiCall, patchSettingsCache } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -145,7 +147,9 @@ const EdgeCachePanel = () => {
 	return (
 		<FeatureCard
 			title={ __( 'Edge HTML Cache', 'performance-optimisation' ) }
-			icon={ <i className="fas fa-globe"></i> }
+			// Audit #1354: real icon component (aria-hidden) instead of
+			// a global-CSS <i> tag with no accessible hiding.
+			icon={ <FontAwesomeIcon icon={ faGlobe } aria-hidden="true" /> }
 		>
 			{ notice && (
 				<NoticeBanner

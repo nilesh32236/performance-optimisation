@@ -1,8 +1,13 @@
 /**
  * Shared metric formatting helpers (single source for ms/percent/bytes).
  *
+ * Unit suffixes compose through sprintf() with translatable patterns
+ * (audit #1354) so UI-facing values localize like lib/util.js formatBytes.
+ *
  * @since NEXT
  */
+
+import { __, sprintf } from '@wordpress/i18n';
 
 /**
  * Format milliseconds.
@@ -45,7 +50,11 @@ export const formatMs = ( value ) => {
 	if ( ! Number.isFinite( num ) ) {
 		return '—';
 	}
-	return `${ Math.round( num ) } ms`;
+	return sprintf(
+		/* translators: %d: milliseconds value. */
+		__( '%d ms', 'performance-optimisation' ),
+		Math.round( num )
+	);
 };
 
 /**
@@ -77,7 +86,11 @@ export const formatPercent = ( value, options = {} ) => {
 	} else {
 		pct = num <= 1 && num >= 0 ? num * 100 : num;
 	}
-	return `${ Math.round( pct * 10 ) / 10 }%`;
+	return sprintf(
+		/* translators: %s: percent value. */
+		__( '%s%', 'performance-optimisation' ),
+		Math.round( pct * 10 ) / 10
+	);
 };
 
 /**
