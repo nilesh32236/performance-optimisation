@@ -17,7 +17,7 @@
  * filter. No new Composer deps; all WP APIs behind function_exists guards.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -57,6 +57,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * @var string
 		 */
 		const SCRIPT_HANDLE = 'wppo-bfcache';
+
+		/**
+		 * Inline invalidation script staged by enqueue_scripts().
+		 *
+		 * Held in a static property (instead of a closure use-clause) so
+		 * the footer printer below is a named, remove_action()-able,
+		 * inspectable, and unit-testable method.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private static string $invalidation_script = '';
+
+		/**
+		 * Whether the invalidation script was already staged for this request.
+		 *
+		 * Class property (instead of a function-static) so long-lived PHP
+		 * workers and unit tests can reset it via reset_state_for_tests().
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $script_staged = false;
 
 		/**
 		 * Whether bfcache handling is enabled.
@@ -334,11 +357,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 				return;
 			}
 			// Avoid duplicate output.
-			static $done = false;
-			if ( $done ) {
+			if ( self::$script_staged ) {
 				return;
 			}
-			$done = true;
+			self::$script_staged = true;
 
 			$cookie_name = self::get_cookie_name();
 			// Inline script: privacy-safe invalidation.
@@ -369,7 +391,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			// in-flight navigation. Reload is sufficient to drop stale private
 			// content.
 			//
-			// Use wp_print_inline_script_tag if available (WP 6.0+), else echo.
+			// Use wp_print_inline_script_tag unconditionally: the plugin floor
+			// is WP 6.2, where it always exists, so there is no pre-6.0 echo
+			// fallback (audit #1268) — the fallback would ship without a
+			// core CSP nonce.
 			$json_flags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
 			$js         = sprintf(
 				'(function(){var c=%1$s,t=%2$s,q="wppo_bfcache_reloaded";function g(){var p=c+"=",a=document.cookie.split(/; */);for(var i=0;i<a.length;i++){var kv=a[i];if(kv.indexOf(p)===0){return decodeURIComponent(kv.substring(p.length))}}return null}function i(){var u=new URL(window.location.href);if(u.searchParams.has(q))return;u.searchParams.set(q,String(Math.random()));history.replaceState({},\"\",u.href);window.location.reload()}function h(e){if(e.persisted&&t!==g()){i();return}var u=new URL(window.location.href);if(u.searchParams.has(q)){u.searchParams.delete(q);history.replaceState({},\"\",u.href)}}if(t!==g()){i()}else{window.addEventListener("pageshow",h)}})();',
@@ -377,29 +402,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 				wp_json_encode( $token, $json_flags )
 			);
 
-			if ( function_exists( 'wp_print_inline_script_tag' ) ) {
-				add_action(
-					'wp_footer',
-					static function () use ( $js ) {
-						wp_print_inline_script_tag( $js, array( 'id' => 'wppo-bfcache-invalidation' ) );
-					},
-					20
-				);
-			} else {
-				add_action(
-					'wp_footer',
-					static function () use ( $js ) {
-						// Stored-XSS note (issue #967): $js is a static literal
-						// with zero interpolation — both dynamic values are
-						// embedded as JSON_HEX_* tag-safe JSON above, so the
-						// legacy pre-6.0 fallback needs no escaper.
-						echo '<script id="wppo-bfcache-invalidation">' . $js . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Static literal; dynamic values embedded as JSON_HEX_* tag-safe JSON.
-					},
-					20
-				);
-			}
+			self::$invalidation_script = $js;
+
+			add_action(
+				'wp_footer',
+				array( self::class, 'print_invalidation_script' ),
+				20
+			);
 			// Also print in wp_head for early invalidation on HTTP cache restore (alternative to footer).
 			// The footer hook above is sufficient for bfcache; HTTP cache immediate check also runs there before DOM ready.
+		}
+
+		/**
+		 * Print the staged bfcache invalidation script.
+		 *
+		 * Named wp_footer callback (instead of an anonymous closure) so it
+		 * can be removed via remove_action(), inspected via has_action(),
+		 * and unit-tested directly. No-op when no script was staged. The
+		 * staged script is cleared after printing so a double wp_footer
+		 * cannot emit duplicate scripts (double pageshow listeners).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function print_invalidation_script(): void {
+			if ( '' === self::$invalidation_script ) {
+				return;
+			}
+			wp_print_inline_script_tag( self::$invalidation_script, array( 'id' => 'wppo-bfcache-invalidation' ) );
+			self::$invalidation_script = '';
+		}
+
+		/**
+		 * Reset staged bfcache state (tests / long-lived workers).
+		 *
+		 * Clears both the staged script and the already-staged flag so an
+		 * in-process second page starts clean.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_state_for_tests(): void {
+			self::$invalidation_script = '';
+			self::$script_staged       = false;
 		}
 
 		/**
@@ -413,9 +458,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			add_action( 'set_logged_in_cookie', array( self::class, 'on_set_logged_in_cookie' ), 10, 6 );
 			add_action( 'clear_auth_cookie', array( self::class, 'on_clear_auth_cookie' ) );
 			add_filter( 'nocache_headers', array( self::class, 'filter_nocache_headers' ), 1000 );
+			// Frontend only: enqueue_scripts() early-returns on is_admin(), so
+			// an admin_enqueue_scripts registration could never print — admin
+			// pages are intentionally excluded (no bfcache invalidation needed
+			// there).
 			add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_scripts' ) );
-			// Also for admin and customize (like upstream) so admin pages get bfcache too.
-			add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_scripts' ) );
 		}
 	}
 }

@@ -4154,6 +4154,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether core supports the native `strategy` script args (WP 6.3+).
+		 *
+		 * Single shared home for the version gate previously duplicated in
+		 * RUM::supports_script_strategy() and LiteSpeed_ESI::supports_script_strategy()
+		 * (audit follow-up): both now delegate here so floor bumps cannot drift.
+		 *
+		 * @since NEXT
+		 * @return bool True on WP 6.3+.
+		 */
+		public static function supports_script_strategy(): bool {
+			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+				$wp_version = $GLOBALS['wp_version'];
+			} elseif ( function_exists( 'get_bloginfo' ) ) {
+				$wp_version = (string) get_bloginfo( 'version' );
+			} else {
+				$wp_version = '';
+			}
+			return version_compare( $wp_version, '6.3-alpha', '>=' );
+		}
+
+		/**
 		 * Qualify a transient key with the current blog ID on multisite.
 		 *
 		 * Prevents transient key collisions when a shared object cache backend

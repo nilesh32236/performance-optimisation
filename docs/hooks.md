@@ -295,6 +295,21 @@ add_filter( 'wppo_used_css_regen_cooldown', function() {
 
 ---
 
+### `wppo_used_css_strict_csp`
+Return true when a Content-Security-Policy without `unsafe-inline` is enforced outside PHP (`.htaccess`/Nginx/hosting or edge headers), which the automatic detection (`headers_list()` plus a `<meta http-equiv>` scan) cannot see. Forces the async/delay used-CSS delivery modes to downgrade to the blocking file mode, since the async `onload` swap and the delay-mode inline loader would otherwise be blocked and leave stylesheets never applied. @since NEXT.
+
+**Parameters:**
+- `$strict_csp` *(bool)* — Whether a server/edge-level strict CSP is active. Default false.
+
+**Example:**
+```php
+add_filter( 'wppo_used_css_strict_csp', function() {
+    return true; // Server sends `Content-Security-Policy` without 'unsafe-inline'.
+} );
+```
+
+---
+
 ### `wppo_builder_drift_requeue`
 Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save; the save bumps the modification time so the post-modification freshness check in `Used_CSS::requeue_for_post()` still requeues genuine changes — issue #1107; fires when a job was queued or already pending, not fired when the variant was skipped as fresh). @since 2.0.0.
 

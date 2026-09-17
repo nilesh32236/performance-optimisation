@@ -26,6 +26,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 	final class LiteSpeed_ESI {
 
 		/**
+		 * Memoized build/esi.asset.php lookup (false when missing).
+		 *
+		 * Class property (instead of a function-static) so unit tests and
+		 * long-lived PHP workers can reset it via reset_asset_cache_for_tests()
+		 * — a first missing-artifact false must not stick forever in-process.
+		 *
+		 * @since NEXT
+		 * @var mixed
+		 */
+		private static $asset_cache = null;
+
+		/**
+		 * Whether $asset_cache was already populated.
+		 *
+		 * Null is a legitimate "not yet loaded" state distinct from a loaded
+		 * false, hence the separate flag.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $asset_cache_set = false;
+
+		/**
+		 * Reset the memoized asset lookup (tests / long-lived workers).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_asset_cache_for_tests(): void {
+			self::$asset_cache     = null;
+			self::$asset_cache_set = false;
+		}
+
+		/**
 		 * Whether ESI is available (Enterprise only).
 		 *
 		 * Checks LITESPEED_SERVER_TYPE, LITESPEED_ESI_ON, or litespeed_esi_status filter.
@@ -209,6 +243,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Whether core supports the native `strategy` script args (WP 6.3+).
+		 *
+		 * Delegates to Util::supports_script_strategy() — the single shared
+		 * home for this gate (also used by RUM::supports_script_strategy())
+		 * so floor bumps cannot drift between copies.
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		private static function supports_script_strategy(): bool {
+			return Util::supports_script_strategy();
+		}
+
+		/**
 		 * Enqueue the ESI hydration client (build/esi.js) for OLS placeholder mode.
 		 *
 		 * On OpenLiteSpeed there is no native ESI, so the server renders
@@ -227,8 +275,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *   not load.
 		 *
 		 * Enqueue mirrors RUM::maybe_enqueue_scripts(): build/esi.asset.php
-		 * supplies the version + dependency list, with a classic footer enqueue —
-		 * this client is plain vanilla JS, not a script module.
+		 * supplies the version + dependency list, with a deferred footer
+		 * enqueue on WP 6.3+ (native `strategy: defer`) and the classic
+		 * bool $in_footer fallback on older core — this client is plain
+		 * vanilla JS, not a script module.
 		 *
 		 * @since 2.0.0
 		 * @return void
@@ -262,16 +312,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 
 			$asset_file = WPPO_PLUGIN_PATH . 'build/esi.asset.php';
-			$deps       = array();
+			$deps       = array( 'wp-i18n' );
 			$version    = WPPO_VERSION;
-			if ( file_exists( $asset_file ) ) {
-				$asset   = include $asset_file; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
-				$deps    = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
-				$version = isset( $asset['version'] ) ? $asset['version'] : WPPO_VERSION;
+			// Memoize the asset lookup: this runs on every frontend request on
+			// LiteSpeed sites, so stat + include the artifact at most once per
+			// request instead of paying a second per-page stat. Resettable via
+			// reset_asset_cache_for_tests() for tests/long-lived workers.
+			if ( ! self::$asset_cache_set ) {
+				self::$asset_cache     = file_exists( $asset_file ) ? include $asset_file : false; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+				self::$asset_cache_set = true;
+			}
+			if ( false !== self::$asset_cache ) {
+				$asset = self::$asset_cache;
+				if ( is_array( $asset ) ) {
+					// Trust-but-verify the build artifact: entries must be
+					// non-empty strings (a tampered partial artifact must not
+					// widen the dependency trust surface), with a wp-i18n
+					// fallback since src/esi.js needs it for translated labels.
+					$raw_deps = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
+					$clean    = array();
+					foreach ( $raw_deps as $dep ) {
+						if ( ! is_scalar( $dep ) ) {
+							continue;
+						}
+						$dep = trim( (string) $dep );
+						if ( '' !== $dep ) {
+							$clean[] = $dep;
+						}
+					}
+					$clean = array_values( array_unique( $clean ) );
+					// Always union wp-i18n: src/esi.js needs it for translated
+					// labels, so a future build emitting non-empty deps without
+					// wp-i18n must not load without its i18n runtime.
+					if ( ! in_array( 'wp-i18n', $clean, true ) ) {
+						$clean[] = 'wp-i18n';
+					}
+					$deps = $clean;
+					if ( isset( $asset['version'] ) ) {
+						if ( is_string( $asset['version'] ) && '' !== $asset['version'] ) {
+							$version = $asset['version'];
+						} elseif ( is_int( $asset['version'] ) || is_float( $asset['version'] ) ) {
+							$version = (string) $asset['version'];
+						}
+					}
+				}
+			} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// Visible failure signal for partial deploys: src/esi.js
+				// imports @wordpress/i18n for translated aria-labels, so a
+				// missing asset file would otherwise ship an untranslated or
+				// broken hydration client with no log.
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only diagnostics, gated above.
+				error_log( 'WPPO ESI: build/esi.asset.php missing; falling back to wp-i18n dependencies.' );
 			}
 
-			// Bool $in_footer (not the array $args form, which needs WP 6.3+)
-			// so the client still loads in the footer on WP 6.2.
+			if ( self::supports_script_strategy() ) {
+				wp_enqueue_script(
+					'wppo-esi',
+					WPPO_PLUGIN_URL . 'build/esi.js',
+					$deps,
+					$version,
+					array(
+						'strategy'  => 'defer',
+						'in_footer' => true,
+					)
+				);
+				return;
+			}
+
+			// Bool $in_footer fallback so the client still loads in the
+			// footer on WP < 6.3 (fail-open: still hydrates, just
+			// render-blocking).
 			wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, true );
 		}
 

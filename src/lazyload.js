@@ -1243,6 +1243,18 @@ let globalObserver = null;
 let mutationObserver = null;
 
 /**
+ * One-way guard watching this bundle's own <script> element.
+ *
+ * When a theme/optimizer detaches the script element without calling
+ * window.wppoLazyloadTeardown() first, this observer fires the (idempotent)
+ * teardown automatically and then disconnects itself. Null when no lazyload
+ * script element was present at init (e.g. tests) or after teardown.
+ *
+ * @type {MutationObserver|null}
+ */
+let scriptRemovalObserver = null;
+
+/**
  * Set of elements already observed by globalObserver.
  * @type {WeakSet<Element>}
  */
@@ -1253,6 +1265,22 @@ const observedElements = new WeakSet();
  * @type {IntersectionObserver|null}
  */
 let backgroundObserver = null;
+
+/**
+ * MutationObserver instance tracking dynamically added native placeholders.
+ *
+ * Declared up-front (rather than at its first use ~700 lines below) so
+ * teardownLazyload() above never reads a later let binding — safe today
+ * (teardown only runs post-evaluation) but TDZ-fragile if teardown is ever
+ * called during module init.
+ *
+ * Installed separately from the data-src observer so natively-deferred
+ * images are covered even in full native-lazy mode (where loadImages()
+ * returns early and the main observer never installs).
+ *
+ * @type {MutationObserver|null}
+ */
+let nativePlaceholderObserver = null;
 
 /**
  * Module-local handle for the safety-scan interval.
@@ -1288,9 +1316,9 @@ const clearSafetyScan = () => {
  * Teardown lazyload observers and safety interval.
  *
  * Idempotent — safe to call multiple times. Runs automatically on
- * pagehide/beforeunload and is exposed as window.wppoLazyloadTeardown for
- * tests and SPA-style teardown (call it before removing this module's script
- * element dynamically; nothing observes script-element removal automatically).
+ * pagehide/beforeunload, when this bundle's <script> element is detached
+ * (see armScriptRemovalGuard below), and is exposed as
+ * window.wppoLazyloadTeardown for tests and SPA-style teardown.
  * Also deletes the `window.wppoNativeLazy` / `window.wppoDelayConfig` config
  * globals injected by Main::enqueue_scripts() on the WP <6.9 classic path.
  *
@@ -1299,6 +1327,10 @@ const clearSafetyScan = () => {
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
 	clearSafetyScan();
+	if ( scriptRemovalObserver ) {
+		scriptRemovalObserver.disconnect();
+		scriptRemovalObserver = null;
+	}
 	// Release any legacy mirror (e.g. set by tests or an older copy) so
 	// teardown stays idempotent and leak-free.
 	if ( window.wppoSafetyScanId ) {
@@ -1337,6 +1369,136 @@ const teardownLazyload = () => {
 window.wppoLazyloadTeardown = teardownLazyload;
 window.addEventListener( 'pagehide', teardownLazyload );
 window.addEventListener( 'beforeunload', teardownLazyload );
+
+/**
+ * Arm the fail-safe script-removal guard (audit #1268).
+ *
+ * The manual teardown contract (call window.wppoLazyloadTeardown() before
+ * detaching the script) is now a back-compat fallback: this one-way
+ * MutationObserver watches this bundle's own <script> element and runs the
+ * idempotent teardown automatically if the element is detached without a
+ * manual call, so observers/globals no longer leak silently on that path.
+ * The guard disconnects itself after firing (or on teardown) and never
+ * re-arms — a re-added bundle copy runs its own module evaluation.
+ *
+ * Scope: observation is on document.documentElement with subtree:true so
+ * ancestor removal (head/body innerHTML rewrites, parent.remove(),
+ * optimizer rewrites) is also caught — watching only the script's direct
+ * parent misses those paths and leaks the fail-safe it was added for. The
+ * per-mutation cost is a single isConnected check; the replacement scan
+ * only runs once the watched element actually leaves the DOM.
+ *
+ * Copy pinning: the watched element is this bundle's own script
+ * (document.currentScript when available). When currentScript is null
+ * (deferred/async evaluation) the fallback pins by id/filename and, with
+ * several copies present, watches the last match (the most recently parsed
+ * element, i.e. this evaluation) so an unrelated optimizer script can
+ * neither trigger nor defeat cleanup. A replacement by a live copy skips
+ * teardown so the new copy's globals survive. When no script element
+ * exists yet at arm time (async/deferred evaluation before insertion),
+ * arming is retried once on DOMContentLoaded.
+ *
+ * @since NEXT
+ * @param {boolean} [retried=false] Whether this is the DOMContentLoaded retry.
+ */
+const armScriptRemovalGuard = ( retried = false ) => {
+	if (
+		typeof MutationObserver === 'undefined' ||
+		typeof document === 'undefined' ||
+		! document.documentElement
+	) {
+		return;
+	}
+	let watched = null;
+	try {
+		const current = document.currentScript;
+		if ( current && 'SCRIPT' === current.tagName ) {
+			watched = current;
+		}
+		if ( ! watched ) {
+			// Attribute-free id/filename matching avoids selector-injection
+			// from the src value.
+			const candidates = document.querySelectorAll(
+				'script#wppo-lazyload-js, script[src*="build/lazyload.js"]'
+			);
+			if ( 1 === candidates.length ) {
+				watched = candidates[ 0 ];
+			} else if ( candidates.length > 1 ) {
+				// Most recently parsed element == this evaluation.
+				watched = candidates[ candidates.length - 1 ];
+			}
+		}
+	} catch {
+		return;
+	}
+	if ( ! watched ) {
+		// Detached-at-arm-time (null parent / not yet inserted): retry once
+		// on DOMContentLoaded instead of staying dormant forever.
+		if ( ! retried && typeof window !== 'undefined' ) {
+			try {
+				window.addEventListener(
+					'DOMContentLoaded',
+					() => {
+						armScriptRemovalGuard( true );
+					},
+					{ once: true }
+				);
+			} catch {
+				// Leave dormant when listeners are unavailable.
+			}
+		}
+		return;
+	}
+	const target = watched;
+	// Whether a *different* live copy of this bundle is still connected
+	// (the script was replaced rather than removed).
+	const hasLiveReplacement = () => {
+		try {
+			const scripts = document.querySelectorAll(
+				'script#wppo-lazyload-js, script[src*="build/lazyload.js"]'
+			);
+			for ( const el of scripts ) {
+				if ( el !== target && el.isConnected ) {
+					return true;
+				}
+			}
+		} catch {
+			return false;
+		}
+		return false;
+	};
+	// Disconnect any previous (e.g. DOMContentLoaded retry double-arm).
+	if ( scriptRemovalObserver ) {
+		scriptRemovalObserver.disconnect();
+		scriptRemovalObserver = null;
+	}
+	scriptRemovalObserver = new MutationObserver( () => {
+		// Still in the DOM (e.g. moved) — keep watching.
+		if ( target.isConnected ) {
+			return;
+		}
+		// Replaced with a live copy — the new copy runs its own module
+		// evaluation (arming its own guard), so leave its globals alone.
+		// One-way either way: disconnect after the decision.
+		scriptRemovalObserver.disconnect();
+		scriptRemovalObserver = null;
+		if ( hasLiveReplacement() ) {
+			return;
+		}
+		teardownLazyload();
+	} );
+	try {
+		scriptRemovalObserver.observe( document.documentElement, {
+			childList: true,
+			subtree: true,
+		} );
+	} catch {
+		scriptRemovalObserver.disconnect();
+		scriptRemovalObserver = null;
+	}
+};
+
+armScriptRemovalGuard();
 
 /**
  * Apply placeholder styling (dominant color background / LQIP blur) before
@@ -1911,17 +2073,6 @@ const observeElement = ( el ) => {
 		pendingLazyCount++;
 	}
 };
-
-/**
- * MutationObserver instance tracking dynamically added native placeholders.
- *
- * Installed separately from the data-src observer so natively-deferred
- * images are covered even in full native-lazy mode (where loadImages()
- * returns early and the main observer never installs).
- *
- * @type {MutationObserver|null}
- */
-let nativePlaceholderObserver = null;
 
 /**
  * Selector for natively-deferred images carrying local placeholder attributes.

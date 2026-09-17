@@ -3342,7 +3342,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private function build_delayed_css_loader(): string {
-			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false;function l(){if(d){return;}d=true;var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});setTimeout(l,5000);})();</script>';
+			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false,t=null;function l(){if(d){return;}d=true;if(t!==null){clearTimeout(t);t=null;}var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});t=setTimeout(l,5000);})();</script>';
 		}
 
 		/**
@@ -3551,7 +3551,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$file_opts_for_mode = $this->options['file_optimisation'] ?? array();
 			$delivery_mode      = self::get_used_css_delivery_mode( is_array( $file_opts_for_mode ) ? $file_opts_for_mode : array() );
 			$delivery_mode      = $this->resolve_effective_delivery_mode( $buffer_after_strip, $delivery_mode, $handles );
-			if ( in_array( $delivery_mode, array( 'async', 'delay' ), true ) && $this->has_strict_csp( $buffer_after_strip ) ) {
+			// has_strict_csp() only inspects headers_list() plus a meta tag in
+			// the buffer, so a CSP enforced at the server/edge layer (htaccess,
+			// Nginx, hosting headers) is invisible to it. Hosts with such a
+			// server-level CSP can force the file fallback via this filter.
+			// The delayed loader stays a raw inline script by design (a nonce
+			// must not be baked into cached HTML), so under a strict CSP it
+			// would be blocked and delay-mode stylesheets would stay
+			// never-applied preloads — hence the downgrade to blocking file
+			// mode instead (fail-open, never unstyled).
+			/**
+			 * Filters whether a server/edge-level strict CSP blocks inline scripts.
+			 *
+			 * Return true when a Content-Security-Policy without 'unsafe-inline'
+			 * is enforced outside PHP (htaccess/Nginx/hosting headers), which
+			 * has_strict_csp() cannot detect. Forces async/delay delivery modes
+			 * to downgrade to the blocking file mode.
+			 *
+			 * @since NEXT
+			 * @param bool $strict_csp Whether a server-level strict CSP is active.
+			 */
+			$server_strict_csp = (bool) apply_filters( 'wppo_used_css_strict_csp', false );
+			if ( in_array( $delivery_mode, array( 'async', 'delay' ), true ) && ( $server_strict_csp || $this->has_strict_csp( $buffer_after_strip ) ) ) {
 				// Strict Content-Security-Policy (no 'unsafe-inline') blocks
 				// the async onload swap and the delay inline loader below,
 				// leaving stylesheets never applied — downgrade to the

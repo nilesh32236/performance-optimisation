@@ -4333,10 +4333,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				</svg>
 			</button>';
 
-				// Accessibility contract (audit #1133): overrides of this filter must
+			// Accessibility contract (audit #1133): overrides of this filter must
 			// keep an accessible label (e.g. aria-label) on the play button so
-			// assistive-tech users can activate the placeholder.
-			$play_button = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
+			// assistive-tech users can activate the placeholder. Snapshot filter
+			// presence BEFORE applying either filter: a once-only self-removing
+			// filter must still trigger repair though it already detached, and a
+			// late-added filter must not trigger repair on already-final markup.
+			$had_play_button_filter = has_filter( 'wppo_video_play_button_html' );
+			$had_placeholder_filter = has_filter( 'wppo_video_placeholder_html' );
+			$play_button            = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
+
+			// Note: post-filter a11y repair happens once on the final markup
+			// below (gated on override filters), so the button is embedded
+			// as-is here — repairing it now would just re-parse the same
+			// markup twice per embed.
 
 			// Stored attrs mirror the client IFRAME_ATTR_ALLOWLIST exactly:
 			// src/width/height/style are owned by the placeholder (the client
@@ -4372,7 +4382,272 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// preserve an accessible name for the play control (aria-label or
 			// text content) and a meaningful img alt so the placeholder stays
 			// operable for assistive-tech users.
-			return apply_filters( 'wppo_video_placeholder_html', $placeholder_html, $video_id, $video_type, $thumbnail_url );
+			$placeholder_html = apply_filters( 'wppo_video_placeholder_html', $placeholder_html, $video_id, $video_type, $thumbnail_url );
+
+			// Enforce the contract post-filter (audit #1268): same repair as
+			// above, applied to the final markup so a placeholder-filter
+			// override cannot strip the button label or thumbnail alt. Skipped
+			// when no override filter exists — the default markup already
+			// carries both, so re-parsing every embed would be pure per-embed
+			// overhead in the output-buffer filter. Branches on the pre-apply
+			// snapshots above, not a post-apply has_filter() sample.
+			if ( $had_placeholder_filter ) {
+				$placeholder_html = $this->ensure_video_play_button_label( $placeholder_html );
+				$placeholder_html = $this->ensure_video_thumbnail_alt( $placeholder_html, $video_id );
+			} elseif ( $had_play_button_filter ) {
+				// Only the play-button filter ran: the placeholder embeds the
+				// filtered button, so only the button repair needs applying
+				// to the final markup (the thumbnail alt is untouched default).
+				$placeholder_html = $this->ensure_video_play_button_label( $placeholder_html );
+			}
+
+			return $placeholder_html;
+		}
+
+		/**
+		 * Default accessible name for a video thumbnail image.
+		 *
+		 * Single home for the sprintf( __( 'Video thumbnail (%s)' ) )
+		 * construction used by the placeholder default markup and both
+		 * repair paths, so translator comments cannot drift between copies.
+		 * Returns the raw translated string — callers escape for their sink
+		 * (Tag Processor set_attribute() escapes on output; regex splices
+		 * use esc_attr()).
+		 *
+		 * @since NEXT
+		 * @param string $video_id YouTube video ID.
+		 * @return string Default thumbnail alt text.
+		 */
+		private function default_video_thumbnail_alt( string $video_id ): string {
+			return sprintf(
+				/* translators: %s: YouTube video ID, used to distinguish multiple embeds for screen-reader users. */
+				__( 'Video thumbnail (%s)', 'performance-optimisation' ),
+				$video_id
+			);
+		}
+
+		/**
+		 * Re-inject the default accessible name on video play buttons.
+		 *
+		 * Parses the given HTML with WP_HTML_Tag_Processor and repairs every
+		 * <button> that lacks both aria-label and aria-labelledby and has no
+		 * text content, adding the default aria-label. Markup that already
+		 * names the control (either attribute or visible text) is returned
+		 * untouched so third-party button HTML survives except the repair.
+		 *
+		 * Trusted-filter contract: this only re-adds accessible names — it is
+		 * not a sanitizer. Filter-supplied HTML (event handlers,
+		 * javascript: URLs, inner active content) passes through unchanged;
+		 * filters are privileged code, so no new XSS frontier is introduced,
+		 * but future untrusted callers must sanitize separately.
+		 *
+		 * @since NEXT
+		 * @param string $html Button or placeholder HTML to validate.
+		 * @return string Validated HTML with accessible button names.
+		 */
+		private function ensure_video_play_button_label( string $html ): string {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return $html;
+			}
+			// Inner text per button, in document order (matches Tag Processor
+			// visit order below). SVG children contribute no text, so the
+			// default markup still qualifies for the repair.
+			$inner_texts = array();
+			if ( preg_match_all( '/<button\b[^>]*>(.*?)<\/button>/is', $html, $matches ) ) {
+				foreach ( $matches[1] as $inner ) {
+					$inner_texts[] = trim( (string) wp_strip_all_tags( $inner ) );
+				}
+			}
+			// Fail open on count mismatch: the regex above only pairs complete
+			// <button>…</button> elements while the Tag Processor below also
+			// visits comments-adjacent, unclosed, self-closing, or nested
+			// buttons — positional pairing would then misattribute text (a
+			// named button gaining a spurious aria-label, or an unnamed one
+			// keeping none), so leave the markup untouched instead.
+			$open_count = 0;
+			if ( preg_match_all( '/<button\b/i', $html, $open_matches ) ) {
+				$open_count = count( $open_matches[0] );
+			}
+			if ( count( $inner_texts ) !== $open_count ) {
+				return $html;
+			}
+			$tags     = new \WP_HTML_Tag_Processor( $html );
+			$index    = 0;
+			$repaired = false;
+			while ( $tags->next_tag( array( 'tag_name' => 'button' ) ) ) {
+				$inner_text = $inner_texts[ $index ] ?? '';
+				++$index;
+				$label      = $tags->get_attribute( 'aria-label' );
+				$labelledby = $tags->get_attribute( 'aria-labelledby' );
+				if ( ( is_string( $label ) && '' !== trim( $label ) ) || ( is_string( $labelledby ) && '' !== trim( $labelledby ) ) ) {
+					continue;
+				}
+				// Text content inside the button also names the control — only
+				// repair truly unnamed buttons.
+				if ( '' !== $inner_text ) {
+					continue;
+				}
+				// Raw (unescaped) value: the tag processor escapes on output.
+				$tags->set_attribute( 'aria-label', __( 'Play video', 'performance-optimisation' ) );
+				$repaired = true;
+			}
+			return $repaired ? (string) $tags->get_updated_html() : $html;
+		}
+
+		/**
+		 * Re-inject the default alt on the video thumbnail image.
+		 *
+		 * Primary target is the placeholder thumbnail (identified by its
+		 * data-wppo-fallback attribute) so the verbatim <noscript> embed is
+		 * never rewritten. When no marked thumbnail exists — e.g. a
+		 * placeholder filter stripped the marker or swapped the thumbnail —
+		 * falls back to the first image outside any <noscript> block so the
+		 * repair cannot silently no-op. Images with a non-empty alt are left
+		 * untouched.
+		 *
+		 * Trusted-filter contract: this only re-adds the alt text — it is
+		 * not a sanitizer (see ensure_video_play_button_label()).
+		 *
+		 * @since NEXT
+		 * @param string $html     Placeholder HTML to validate.
+		 * @param string $video_id YouTube video ID used in the default alt.
+		 * @return string Validated HTML with a meaningful thumbnail alt.
+		 */
+		private function ensure_video_thumbnail_alt( string $html, string $video_id ): string {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return $html;
+			}
+			$original_html   = $html;
+			$noscript_tokens = array();
+			// Verbatim no-JS guarantee: a filter-injected marker img inside
+			// <noscript> must never be rewritten — the same exclusion
+			// ensure_first_content_image_alt() applies by byte offset. The
+			// Tag Processor exposes no offsets, so noscript blocks are
+			// swapped for comment placeholders during the repair and
+			// restored afterwards (comments survive Tag Processor
+			// re-serialization verbatim and can never match an img tag).
+			$working_html = preg_replace_callback(
+				'#<noscript\b[^>]*>.*?</noscript>#is',
+				static function ( $m ) use ( &$noscript_tokens, $html ) {
+					$token                     = '<!--wppo-noscript-' . count( $noscript_tokens ) . '-' . md5( $html . count( $noscript_tokens ) ) . '-->';
+					$noscript_tokens[ $token ] = $m[0];
+					return $token;
+				},
+				$html
+			);
+			if ( is_string( $working_html ) ) {
+				$html = $working_html;
+			}
+			$tags         = new \WP_HTML_Tag_Processor( $html );
+			$updated      = false;
+			$marker_found = false;
+			while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+				// Only the placeholder thumbnail carries this marker; the
+				// <noscript> fallback re-emits the source embed verbatim.
+				if ( null === $tags->get_attribute( 'data-wppo-fallback' ) ) {
+					continue;
+				}
+				$marker_found = true;
+				$alt          = $tags->get_attribute( 'alt' );
+				if ( is_string( $alt ) && '' !== trim( $alt ) ) {
+					continue;
+				}
+				$tags->set_attribute( 'alt', $this->default_video_thumbnail_alt( $video_id ) );
+				$updated = true;
+			}
+			if ( $updated || $marker_found ) {
+				$result = $updated ? (string) $tags->get_updated_html() : $html;
+				if ( ! empty( $noscript_tokens ) ) {
+					$result = strtr( $result, $noscript_tokens );
+				}
+				return $result;
+			}
+			return $this->ensure_first_content_image_alt( $original_html, $video_id );
+		}
+
+		/**
+		 * Repair the alt of the first image outside any <noscript> block.
+		 *
+		 * Fallback for ensure_video_thumbnail_alt() when the placeholder
+		 * thumbnail marker is gone. <noscript> ranges and <img> positions are
+		 * located by byte offset so the verbatim no-JS embed is never
+		 * touched; the repair splices an alt attribute into the first
+		 * content image that lacks a non-empty one. Fail-open: any parse
+		 * failure returns the input unchanged.
+		 *
+		 * @since NEXT
+		 * @param string $html     Placeholder HTML to validate.
+		 * @param string $video_id YouTube video ID used in the default alt.
+		 * @return string HTML with the fallback image alt repaired, or unchanged.
+		 */
+		private function ensure_first_content_image_alt( string $html, string $video_id ): string {
+			try {
+				$noscript_ranges = array();
+				if ( preg_match_all( '#<noscript\b[^>]*>.*?</noscript>#is', $html, $noscript_matches, PREG_OFFSET_BYTES ) ) {
+					foreach ( $noscript_matches[0] as $match ) {
+						$noscript_ranges[] = array( $match[1], $match[1] + strlen( $match[0] ) );
+					}
+				}
+				if ( ! preg_match_all( '#<img\b[^>]*>#i', $html, $img_matches, PREG_OFFSET_BYTES ) ) {
+					return $html;
+				}
+				foreach ( $img_matches[0] as $match ) {
+					$img_tag         = $match[0];
+					$offset          = $match[1];
+					$inside_noscript = false;
+					foreach ( $noscript_ranges as $range ) {
+						if ( $offset >= $range[0] && $offset < $range[1] ) {
+							$inside_noscript = true;
+							break;
+						}
+					}
+					if ( $inside_noscript ) {
+						continue;
+					}
+					// Empty/unquoted-aware alt matching: `alt=` (no value) and
+					// bare `alt` are valid HTML for an empty alt and must be
+					// replaced in place — the old `[^\s>]+` (>=1 char) pattern
+					// fell through to the else branch and prepended a second
+					// alt attribute that browsers ignore (first wins). The `=`
+					// stays required in the first pattern so an "alt" substring
+					// inside a URL can never match; bare `alt` is handled
+					// separately with a delimiter lookahead.
+					if ( preg_match( '/\balt\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]*)?/i', $img_tag, $alt_match ) ) {
+						$alt_value = trim( $alt_match[1] ?? '', "\"' \t\n\r\0\x0B" );
+						if ( '' !== $alt_value ) {
+							return $html;
+						}
+						$repaired_tag = preg_replace(
+							'/\balt\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]*)?/i',
+							'alt="' . esc_attr( $this->default_video_thumbnail_alt( $video_id ) ) . '"',
+							$img_tag,
+							1
+						);
+					} elseif ( preg_match( '/\balt(?=\s|\/?>)/i', $img_tag ) ) {
+						// Bare `alt` attribute with no value — empty alt.
+						$repaired_tag = preg_replace(
+							'/\balt(?=\s|\/?>)/i',
+							'alt="' . esc_attr( $this->default_video_thumbnail_alt( $video_id ) ) . '"',
+							$img_tag,
+							1
+						);
+					} else {
+						$repaired_tag = preg_replace(
+							'/<img\b/i',
+							'<img alt="' . esc_attr( $this->default_video_thumbnail_alt( $video_id ) ) . '"',
+							$img_tag,
+							1
+						);
+					}
+					if ( ! is_string( $repaired_tag ) ) {
+						return $html;
+					}
+					return substr( $html, 0, $offset ) . $repaired_tag . substr( $html, $offset + strlen( $img_tag ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $html;
 		}
 
 		/**

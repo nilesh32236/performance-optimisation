@@ -3594,13 +3594,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// are deleted again by window.wppoLazyloadTeardown() (audit
 						// #1077 finding 9). If this script element is ever removed
 						// dynamically (e.g. by a theme or optimizer detaching the
-						// wppo-lazyload <script>), call window.wppoLazyloadTeardown()
-						// FIRST so the observers/interval and these config globals
-						// are released before the <script> is detached; nothing
-						// observes script removal automatically, so removal without
-						// teardown leaks the IntersectionObserver/MutationObserver.
-						// See the wppo_delay_js_allowed_hosts docs (docs/hooks.md)
-						// for this teardown contract.
+						// wppo-lazyload <script>), teardown runs automatically via
+						// the one-way script-removal guard in src/lazyload.js
+						// (audit #1268); calling window.wppoLazyloadTeardown()
+						// FIRST (it is idempotent) remains supported for
+						// back-compat. See the wppo_delay_js_allowed_hosts docs
+						// (docs/hooks.md) for this teardown contract.
 						//
 						// CSP note: sites with a strict Content-Security-Policy can
 						// attach a nonce to these inline config scripts via the core
