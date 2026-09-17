@@ -6197,6 +6197,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether the HTML API streaming token serializer is available.
+		 *
+		 * Additive alias for {@see should_use_html_processor()}: returns true
+		 * only when `WP_HTML_Processor` exists and its public
+		 * `serialize_token()` is callable, false otherwise (WP 6.2-6.8 keeps
+		 * the DOM fallback). Pure capability probe, no I/O, multisite-safe.
+		 *
+		 * @since NEXT
+		 * @return bool True when the streaming token walk can be used.
+		 */
+		public static function supports_serialize_token(): bool {
+			return self::should_use_html_processor();
+		}
+
+		/**
 		 * Reset the memoized HTML-processor availability probe.
 		 *
 		 * Same reset pattern as reset_cached_home_urls()/clear_settings_cache();
