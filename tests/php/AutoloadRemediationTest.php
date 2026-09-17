@@ -160,7 +160,7 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 					return $this->test->get_export_rows();
 				}
 				$this->test->last_candidate_query = is_string( $query ) ? $query : '';
-				$rows = $this->test->get_candidate_rows();
+				$rows                             = $this->test->get_candidate_rows();
 				// Threshold is the first integer bound arg (autoload flags
 				// are strings; LIKE patterns were appended after it in
 				// audit #1325, so end() is no longer reliable).

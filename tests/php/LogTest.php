@@ -268,8 +268,18 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		Log::get_recent_activities( array( 'page' => 1, 'per_page' => 10 ) );
-		Log::get_recent_activities( array( 'page' => 2, 'per_page' => 10 ) );
+		Log::get_recent_activities(
+			array(
+				'page'     => 1,
+				'per_page' => 10,
+			)
+		);
+		Log::get_recent_activities(
+			array(
+				'page'     => 2,
+				'per_page' => 10,
+			)
+		);
 
 		$this->assertSame( 1, $reads );
 		Log::reset_version_memo();
