@@ -127,72 +127,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const CONFIG_HTACCESS_MARKER = 'WPPO Redis Config';
 
 		/**
-		 * Config filename (web-reachable under WP_CONTENT_DIR).
-		 *
-		 * The file carries an ABSPATH guard and never stores the Redis
-		 * password, but it does disclose topology (hosts, ports, TLS mode,
-		 * sentinel/cluster layout). Apache/OLS/IIS are shielded by
-		 * protect_config_file(); Nginx ignores those files and needs a
-		 * server-level deny (see is_nginx_config_exposed()).
-		 *
-		 * @since NEXT
-		 * @var string
-		 */
-		public const CONFIG_FILENAME = 'wppo-redis-config.php';
-
-		/**
-		 * Transient prefix caching the Nginx exposure probe verdict.
-		 *
-		 * The live key is this prefix + '_' + md5() of the probed public
-		 * URL: content_url() is per-site on domain-mapped multisite, so a
-		 * single network-global key would serve site A's verdict for
-		 * deny-ruled site B and vice versa. The bare (unprefixed) value is
-		 * kept only as a legacy read/migration path for pre-fix installs
-		 * (see is_nginx_config_exposed()).
-		 *
-		 * @since NEXT
-		 * @var string
-		 */
-		public const NGINX_PROBE_TRANSIENT = 'wppo_nginx_config_probe';
-
-		/**
-		 * Per-request memo of the Nginx exposure probe verdict.
-		 *
-		 * Keyed by probe key (see is_nginx_config_exposed()): the transient
-		 * verdict is scoped by content-URL hash, so the memo must be too —
-		 * otherwise site A's verdict would be served for site B after a
-		 * switch_to_blog() mid-request. The `'server'` key holds the
-		 * deterministic non-Nginx false. Reset by clear_nginx_probe_cache().
-		 *
-		 * @since NEXT
-		 * @var array<string,bool>
-		 */
-		private static $nginx_probe_memo = array();
-
-		/**
-		 * Per-request memo of the circuit-breaker state.
-		 *
-		 * Reading circuit state costs get_option + 2x state-file reads
-		 * (filesystem init + get_contents) + filemtime + get_transient;
-		 * the memo keeps repeated callers (admin notice, get_status,
-		 * probe_recovery, REST, CLI) to one read per request. Reset by
-		 * reset_circuit_memo_for_tests() and invalidated in
-		 * auto_disable_circuit()/clear_circuit_state().
-		 *
-		 * @since NEXT
-		 * @var array|null Null when not yet read this request.
-		 */
-		private static $circuit_state_memo = null;
-
-		/**
-		 * Whether the circuit-state memo has been populated this request.
-		 *
-		 * @since NEXT
-		 * @var bool
-		 */
-		private static $circuit_state_memo_set = false;
-
-		/**
 		 * Suffix of the staging sibling used for atomic Redis config writes.
 		 *
 		 * `write_config_atomic()` stages new config at
@@ -355,14 +289,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$status['last_failure']       = $this->get_last_failure_payload();
 			$status['bypassed']           = self::is_outage_bypassed() || $this->is_outage_flagged();
 
-			// Memoized via is_own_dropin(): the drop-in read (file_exists +
-			// filesystem init + up-to-1MB get_contents) runs once per
-			// request per instance instead of on every get_status() call.
 			if ( file_exists( $this->dropin_path ) ) {
-				if ( $this->is_own_dropin() ) {
-					$status['enabled'] = true;
-				} else {
-					$status['foreign_dropin'] = true;
+				$wp_filesystem = Util::init_filesystem();
+
+				if ( is_readable( $this->dropin_path ) && filesize( $this->dropin_path ) < 1048576 ) {
+					if ( $wp_filesystem ) {
+						$content = $wp_filesystem->get_contents( $this->dropin_path );
+					} else {
+						$content = file_get_contents( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+					}
+				}
+
+				if ( isset( $content ) && is_string( $content ) ) {
+					if ( self::is_own_dropin_content( $content ) ) {
+						$status['enabled'] = true;
+					} else {
+						$status['foreign_dropin'] = true;
+					}
 				}
 			}
 
@@ -446,17 +389,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
-		 * Reset the per-request circuit-state memo (unit-test helper).
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		public static function reset_circuit_memo_for_tests(): void {
-			self::$circuit_state_memo     = null;
-			self::$circuit_state_memo_set = false;
-		}
-
-		/**
 		 * Read the merged circuit-breaker state.
 		 *
 		 * Sources (first non-empty wins per field): the CIRCUIT_OPTION mirror
@@ -469,9 +401,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return array Shape { open: bool, tripped_at: int, reason: string, error_code: string, failures: int }.
 		 */
 		public function get_circuit_state(): array {
-			if ( self::$circuit_state_memo_set && is_array( self::$circuit_state_memo ) ) {
-				return self::$circuit_state_memo;
-			}
 			$state = array(
 				'open'       => false,
 				'tripped_at' => 0,
@@ -549,8 +478,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 			}
 
-			self::$circuit_state_memo     = $state;
-			self::$circuit_state_memo_set = true;
 			return $state;
 		}
 
@@ -638,8 +565,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				),
 				DAY_IN_SECONDS
 			);
-			self::$circuit_state_memo     = null;
-			self::$circuit_state_memo_set = false;
 
 			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
 				System_Info::flush_dropin_cache();
@@ -710,8 +635,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return void
 		 */
 		public function clear_circuit_state(): void {
-			self::$circuit_state_memo     = null;
-			self::$circuit_state_memo_set = false;
 			delete_option( self::CIRCUIT_OPTION );
 			delete_transient( Util::transient_key( self::FAIL_TRANSIENT ) );
 			delete_transient( Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ) );
@@ -768,22 +691,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool True when the drop-in is ours (or absent), false for foreign files.
 		 */
 		private function is_own_dropin(): bool {
-			if ( null !== $this->own_dropin_memo ) {
-				return $this->own_dropin_memo;
-			}
 			if ( ! file_exists( $this->dropin_path ) ) {
-				$this->own_dropin_memo = true;
 				return true;
 			}
 
 			if ( ! is_readable( $this->dropin_path ) ) {
-				$this->own_dropin_memo = false;
 				return false;
 			}
 
 			$size = filesize( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
 			if ( false === $size || $size >= 1048576 ) {
-				$this->own_dropin_memo = false;
 				return false;
 			}
 
@@ -795,12 +712,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			if ( ! is_string( $content ) ) {
-				$this->own_dropin_memo = false;
 				return false;
 			}
 
-			$this->own_dropin_memo = self::is_own_dropin_content( $content );
-			return $this->own_dropin_memo;
+			return self::is_own_dropin_content( $content );
 		}
 
 		/**
@@ -1287,24 +1202,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				// Fast path: the memoized settings already prove the flag is
-				// clear, so skip the extra uncached get_option() on every
-				// Redis success. Only when the memo says possibly-set do the
-				// fresh read below (which matches arm_outage_flag() so clear
-				// never resurrects a concurrently saved tab).
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
-						$memo = Util::get_settings();
-						if ( is_array( $memo ) ) {
-							$memo_oc = isset( $memo['object_cache'] ) && is_array( $memo['object_cache'] ) ? $memo['object_cache'] : array();
-							if ( true !== filter_var( $memo_oc['outage_bypassed'] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE ) ) {
-								return;
-							}
-						}
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
 				// allowlist(settings-read-guard): deliberate fresh read — matches
 				// arm_outage_flag() so clear never resurrects a concurrently
 				// saved tab. See tests/php/SettingsReadGuardTest.php.
@@ -1491,7 +1388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'ABSPATH' ) ) {
 						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						error_log( 'Redis ping exception: ' . self::scrub_redis_message( $e->getMessage() ) );
+						error_log( 'Redis ping exception: ' . str_replace( (string) ABSPATH, '', $e->getMessage() ) );
 					}
 					$error = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
 					self::arm_in_request_bypass( $error );
@@ -1926,9 +1823,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			// it (Apache + OLS .htaccess, IIS web.config) so topology is
 			// not disclosed when PHP handling is disabled.
 			self::protect_config_file();
-			// Config (re)written — drop the cached Nginx exposure verdict so
-			// the next admin pageload re-probes instead of serving stale state.
-			self::clear_nginx_probe_cache();
 
 			// Copy drop-in.
 			if ( ! $wp_filesystem->copy( $this->template_path, $this->dropin_path, true, FS_CHMOD_FILE ) ) {
@@ -1994,9 +1888,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( file_exists( $this->config_path ) ) {
 				$wp_filesystem->delete( $this->config_path );
 			}
-			// Config removed — the exposure question is moot; drop any cached
-			// probe verdict with it.
-			self::clear_nginx_probe_cache();
 
 			// A deliberate manual disable resolves any parked circuit state
 			// too, so a stale "auto-disabled" notice never outlives it.
@@ -2026,8 +1917,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * OpenLiteSpeed both read .htaccess; nginx ignores both files, so
 		 * nginx deployments must deny the file at the server level with:
 		 * `location = /wp-content/wppo-redis-config.php { deny all; }`.
-		 * Until that rule exists, is_nginx_config_exposed() reports the
-		 * file as fetchable and Admin_Notices surfaces a warning.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -2119,14 +2008,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			try {
-				Log::add(
-					sprintf(
-						/* translators: %1$s: Redis failure code, %2$s: failure message. */
-						__( 'Redis failure (%1$s): %2$s', 'performance-optimisation' ),
-						$code,
-						$message
-					)
-				);
+				Log::add( sprintf( 'Redis failure (%s): %s', $code, $message ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -2328,210 +2210,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			return true;
-		}
-
-		/**
-		 * Absolute path of the Redis config file ('' when undeterminable).
-		 *
-		 * @since NEXT
-		 * @return string
-		 */
-		public static function get_config_path(): string {
-			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === (string) WP_CONTENT_DIR ) {
-				return '';
-			}
-			return rtrim( wp_normalize_path( (string) WP_CONTENT_DIR ), '/' ) . '/' . self::CONFIG_FILENAME;
-		}
-
-		/**
-		 * Whether the Redis config file is directly fetchable over HTTP on Nginx.
-		 *
-		 * Nginx ignores the `.htaccess`/`web.config` deny rules written by
-		 * protect_config_file(), so a deployment without the manual
-		 * server-level deny (`location = /wp-content/wppo-redis-config.php
-		 * { deny all; }`) serves the file to anyone. The file never holds
-		 * the password, but it discloses topology (hosts, ports, TLS mode,
-		 * sentinel/cluster layout).
-		 *
-		 * Detection is a loopback HTTP probe of the public config URL with
-		 * redirects followed (an http→https/login/maintenance redirect chain
-		 * is resolved instead of misread as safe). A 200 alone is not
-		 * trusted: catch-all 200 themes/WAF pages are filtered by body
-		 * markers — an executed config exits via the ABSPATH guard with an
-		 * empty 200 body (safe, nothing disclosed), while a raw-served
-		 * config leaks `<?php` / wppo-redis markers; any other 200 body
-		 * (including empty) is treated as safe. Only marker bodies count
-		 * as exposed.
-		 *
-		 * The verdict is cached in a transient keyed by content-URL hash
-		 * (content_url() is per-site on domain-mapped multisite, so a
-		 * network-global key would serve site A's verdict for deny-ruled
-		 * site B and vice versa) — 1h when exposed so a fresh deny rule
-		 * clears the notice promptly, 2h when safe so a safe→exposed flip
-		 * surfaces quickly — plus a per-request memo keyed the same way so
-		 * repeated callers share one loopback at most. The transient is
-		 * checked before the file_exists() stat so cache hits skip I/O;
-		 * deterministic false returns (non-Nginx, missing file, transport
-		 * failure) set the memo too, so a blocked loopback costs one
-		 * request per pageload, not one per caller. Fail-open
-		 * throughout: any missing API, missing file, non-Nginx server, or
-		 * probe error returns false WITHOUT caching a transient, so a
-		 * blocked loopback (WP_Error) stays "unknown" and re-probes next
-		 * request instead of pinning a stale safe verdict.
-		 *
-		 * @since NEXT
-		 * @return bool True when the config file looks directly fetchable.
-		 */
-		public static function is_nginx_config_exposed(): bool {
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) || 'nginx' !== Server_Rules::get_server_type() ) {
-					self::$nginx_probe_memo['server'] = false;
-					return false;
-				}
-				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
-					self::$nginx_probe_memo['server'] = false;
-					return false;
-				}
-				if ( ! function_exists( 'content_url' ) || ! function_exists( 'wp_remote_get' ) || ! function_exists( 'wp_remote_retrieve_response_code' ) || ! function_exists( 'wp_remote_retrieve_body' ) || ! function_exists( 'is_wp_error' ) ) {
-					self::$nginx_probe_memo['server'] = false;
-					return false;
-				}
-				$url       = content_url( self::CONFIG_FILENAME );
-				$probe_key = self::NGINX_PROBE_TRANSIENT . '_' . md5( $url );
-				if ( isset( self::$nginx_probe_memo[ $probe_key ] ) ) {
-					return self::$nginx_probe_memo[ $probe_key ];
-				}
-				$cached = get_transient( $probe_key );
-				if ( 'exposed' === $cached ) {
-					self::$nginx_probe_memo[ $probe_key ] = true;
-					return true;
-				}
-				if ( 'safe' === $cached ) {
-					self::$nginx_probe_memo[ $probe_key ] = false;
-					return false;
-				}
-				// Legacy fallback: pre-fix installs cached the verdict under
-				// the network-global key. Honour it (and migrate it to the
-				// per-URL key) so upgrading does not force a re-probe storm.
-				$legacy = get_transient( self::NGINX_PROBE_TRANSIENT );
-				if ( 'exposed' === $legacy || 'safe' === $legacy ) {
-					$migrated                             = ( 'exposed' === $legacy );
-					self::$nginx_probe_memo[ $probe_key ] = $migrated;
-					set_transient( $probe_key, $legacy, $migrated ? HOUR_IN_SECONDS : 2 * HOUR_IN_SECONDS );
-					return $migrated;
-				}
-				$path = self::get_config_path();
-				if ( '' === $path || ! file_exists( $path ) ) {
-					self::$nginx_probe_memo[ $probe_key ] = false;
-					return false;
-				}
-				$response = wp_remote_get(
-					$url,
-					array(
-						'timeout'     => 3,
-						'redirection' => 5,
-					)
-				);
-				if ( is_wp_error( $response ) ) {
-					// Unknown, not safe: never cache transport failures as a
-					// transient, but memoize for this request so N callers
-					// share one loopback instead of doubling it.
-					self::$nginx_probe_memo[ $probe_key ] = false;
-					return false;
-				}
-				$exposed = false;
-				if ( 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
-					$body    = trim( (string) wp_remote_retrieve_body( $response ) );
-					$exposed = (
-						false !== stripos( $body, '<?php' ) ||
-						false !== stripos( $body, 'wppo-redis' ) ||
-						false !== stripos( $body, 'wppo_redis' )
-					);
-				}
-				set_transient(
-					$probe_key,
-					$exposed ? 'exposed' : 'safe',
-					$exposed ? HOUR_IN_SECONDS : 2 * HOUR_IN_SECONDS
-				);
-				self::$nginx_probe_memo[ $probe_key ] = $exposed;
-				return $exposed;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-		}
-
-		/**
-		 * Drop the cached Nginx exposure probe verdict.
-		 *
-		 * Called after protect/enable/disable flows so the next admin
-		 * pageload re-probes instead of serving a stale verdict. Clears the
-		 * per-URL probe key for the current site plus the legacy
-		 * network-global and blog-prefixed keys (pre-fix installs), and
-		 * resets the per-request memo. Never called from the notice dismiss
-		 * path: one admin's dismiss must not force a re-probe for everyone
-		 * else.
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		public static function clear_nginx_probe_cache(): void {
-			try {
-				self::$nginx_probe_memo = array();
-				if ( function_exists( 'delete_transient' ) ) {
-					if ( function_exists( 'content_url' ) ) {
-						try {
-							$url = content_url( self::CONFIG_FILENAME );
-							delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
-					}
-					delete_transient( self::NGINX_PROBE_TRANSIENT );
-					delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
-					// Multisite fan-out: the probe verdict is keyed per site
-					// (md5 of the per-site content_url()), so clearing only
-					// the current site would leave siblings stale up to 2h
-					// after an installation-wide enable()/disable().
-					try {
-						if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_sites' ) && function_exists( 'switch_to_blog' ) && function_exists( 'restore_current_blog' ) ) {
-							$sites = get_sites(
-								array(
-									'number' => 500,
-									'fields' => 'ids',
-								)
-							);
-							if ( is_array( $sites ) ) {
-								foreach ( $sites as $site_id ) {
-									$site_id = (int) $site_id;
-									if ( $site_id <= 0 ) {
-										continue;
-									}
-									switch_to_blog( $site_id );
-									try {
-										if ( function_exists( 'content_url' ) ) {
-											$site_url = content_url( self::CONFIG_FILENAME );
-											delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $site_url ) );
-										}
-										delete_transient( self::NGINX_PROBE_TRANSIENT );
-										if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
-											delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
-										}
-									} catch ( \Throwable $e ) {
-										unset( $e );
-									} finally {
-										restore_current_blog();
-									}
-								}
-							}
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
 		}
 
 		/**

@@ -7,7 +7,6 @@
  * @param {Object}                    props
  * @param {string}                    props.content  The tooltip text.
  * @param {import('react').ReactNode} props.children The element that triggers the tooltip.
- * @param {string}                    [props.label]  Optional accessible name for the icon-only trigger. Defaults to the string content, or a generic label for rich content.
  *
  * @since 1.5.0
  */
@@ -73,7 +72,8 @@ const Tooltip = ( { content, children, label } ) => {
 						role: 'button',
 						tabIndex: '0',
 						'aria-expanded': visible,
-						...( ( label || typeof content !== 'string' ) && {
+						...( ( typeof content !== 'string' ||
+							( label && label !== content ) ) && {
 							'aria-describedby': id,
 						} ),
 						'aria-label':

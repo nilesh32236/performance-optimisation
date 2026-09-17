@@ -88,6 +88,7 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_litespeed_strip_crlf_delegates_to_emitter(): void {
 		$ref = new \ReflectionMethod( LiteSpeed_Integration::class, 'strip_crlf' );
+		$ref->setAccessible( true );
 		$this->assertSame( Header_Emitter::strip_crlf( "a\rb\nc" ), $ref->invoke( null, "a\rb\nc" ) );
 		$this->assertSame( 'tag', $ref->invoke( null, "ta\rg" ) );
 	}

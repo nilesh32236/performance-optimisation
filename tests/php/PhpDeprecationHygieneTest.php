@@ -403,6 +403,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$cron = ( new \ReflectionClass( 'PerformanceOptimise\Inc\Cron' ) )->newInstanceWithoutConstructor();
 
 		$is_excluded = new \ReflectionMethod( 'PerformanceOptimise\Inc\Cron', 'is_woo_excluded_url' );
+		$is_excluded->setAccessible( true );
 
 		// Empty URL and plain home URL must not raise; failures fail-open
 		// (excluded) or fail-closed deterministically, never a notice.
@@ -417,30 +418,26 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $store_excluded );
 
 		$rest_route = new \ReflectionMethod( 'PerformanceOptimise\Inc\Cron', 'get_rest_route_param' );
+		$rest_route->setAccessible( true );
 
 		$this->assertSame( '', $rest_route->invoke( $cron, 'http://example.com/', '' ) );
 		$this->assertSame( '/wc/store/v1/cart', $rest_route->invoke( $cron, 'http://example.com/?rest_route=/wc/store/v1/cart', 'rest_route=/wc/store/v1/cart' ) );
 	}
 
 	/**
-	 * Repeatable PHP 8.4/8.5 deprecation grep (issues #1260, #1292).
+	 * Repeatable PHP 8.4/8.5 deprecation grep (issue #1260).
 	 *
 	 * Token-scans `includes/`, `templates/`, root `*.php`, and
 	 * `uninstall.php` for the banned patterns from the acceptance
-	 * criteria — `curl_close(null)`, `E_STRICT`, `mysqli_ping`,
-	 * `mysqli_execute`, `socket_set_timeout`, `$http_response_header`,
-	 * `DATE_RFC7231`, `__sleep`/`__wakeup` definitions, non-canonical
-	 * casts (`(boolean)`/`(integer)`/`(double)`/`(binary)`),
-	 * `Reflection::setAccessible()`, backtick shell execution,
-	 * implicitly-nullable `Type $x = null` signatures, and raw 8.5
-	 * resource-teardown calls outside the version-gated legacy branches
-	 * of `Util` — so PHP 8.5 stays clean without touching CI workflows.
-	 * Token-based (not regex) so docblock backticks, explicit-nullable
-	 * `?Type $x = null` signatures, and Redis `$manager->ping()` calls
-	 * cannot false-positive; the code-only raw-pattern checks additionally
-	 * ignore comments and strings. The WP object-cache drop-in keeps
-	 * core's untyped signatures by design (untyped `$x = null` is legal
-	 * and never flagged here).
+	 * criteria — `curl_close(null)`, `E_STRICT`, `mysqli_ping`, backtick
+	 * shell execution, implicitly-nullable `Type $x = null` signatures,
+	 * and raw 8.5 resource-teardown calls outside the version-gated
+	 * legacy branches of `Util` — so PHP 8.5 stays clean without
+	 * touching CI workflows. Token-based (not regex) so docblock
+	 * backticks, explicit-nullable `?Type $x = null` signatures, and
+	 * Redis `$manager->ping()` calls cannot false-positive. The WP
+	 * object-cache drop-in keeps core's untyped signatures by design
+	 * (untyped `$x = null` is legal and never flagged here).
 	 *
 	 * @since NEXT
 	 * @return void
@@ -489,20 +486,20 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The banned-pattern scanner must catch each violation class (issues #1260, #1292).
+	 * The banned-pattern scanner must catch each violation class (issue #1260).
 	 *
 	 * Pins the green-path gate above with synthetic fixtures run through
-	 * the private scan helper via reflection: every one of the thirteen
+	 * the private scan helper via reflection: every one of the six
 	 * violation classes must report, while explicit-nullable `?array`,
-	 * `mixed`, attributed `#[MyAttr] ?string`, canonical `(bool)` casts,
-	 * `mysqli_stmt_execute()` / `stream_set_timeout()`, `__serialize()`,
-	 * method-call, and comment/string mentions must stay clean.
+	 * `mixed`, attributed `#[MyAttr] ?string`, method-call, and
+	 * comment/string mentions must stay clean.
 	 *
 	 * @since NEXT
 	 * @return void
 	 */
 	public function test_deprecation_scanner_catches_known_violations(): void {
 		$method = new \ReflectionMethod( self::class, 'scan_file_for_deprecation_patterns' );
+		$method->setAccessible( true );
 
 		$dir = sys_get_temp_dir() . '/wppo-scanner-' . uniqid();
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
@@ -526,40 +523,16 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotEmpty( $scan( "<?php\nmysqli_ping( \$conn );\n" ), 'mysqli_ping() must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\n\$out = `ls`;\n" ), 'Backtick execution must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\ncurl_close( \$ch );\n" ), 'Raw curl_close() outside Util must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\n\$ref->setAccessible( true );\n" ), 'Reflection::setAccessible() must be flagged (deprecated on PHP 8.5).' );
-			$this->assertNotEmpty( $scan( "<?php\n\$x = (boolean) \$y;\n" ), 'Non-canonical (boolean) cast must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\n\$x = (integer) \$y;\n" ), 'Non-canonical (integer) cast must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\n\$x = (double) \$y;\n" ), 'Non-canonical (double) cast must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\n\$x = (binary) \$y;\n" ), 'Non-canonical (binary) cast must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\nmysqli_execute( \$stmt );\n" ), 'mysqli_execute() alias must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\nsocket_set_timeout( \$s, 1 );\n" ), 'socket_set_timeout() alias must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\n\$h = \$http_response_header;\n" ), '$http_response_header must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\necho DATE_RFC7231;\n" ), 'DATE_RFC7231 must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\nclass WPPO_Sleep_Fixture {\npublic function __sleep() { return array(); }\n}\n" ), '__sleep() definition must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\nclass WPPO_Wakeup_Fixture {\npublic function __wakeup() {}\n}\n" ), '__wakeup() definition must be flagged.' );
 
 			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_nullable( ?array \$x = null, mixed \$y = null ) {}\n" ), 'Explicit ?array and mixed defaults must pass.' );
-			$this->assertSame( array(), $scan( "<?php\n\$x = (bool) \$y;\n\$i = (int) \$z;\n\$f = (float) \$w;\n\$s = (string) \$v;\n" ), 'Canonical (bool)/(int)/(float)/(string) casts must pass.' );
-			$this->assertSame( array(), $scan( "<?php\nmysqli_stmt_execute( \$stmt );\nstream_set_timeout( \$s, 1 );\n" ), 'Non-deprecated mysqli/stream functions must pass.' );
-			$this->assertSame( array(), $scan( "<?php\nclass WPPO_Serialize_Fixture {\npublic function __serialize() { return array(); }\n}\n" ), '__serialize() definition must pass.' );
-			$this->assertSame( array(), $scan( "<?php\nclass WPPO_Unserialize_Fixture {\npublic function __unserialize( \$data ) {}\n}\n" ), '__unserialize() definition must pass.' );
 			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_attr( #[MyAttr] ?string \$x = null ) {}\n" ), 'Attributed explicitly-nullable params must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$manager->ping();\n\$manager?->ping();\n" ), 'Method and nullsafe ping() calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj->curl_close( \$ch );\n" ), 'Method teardown calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj?->curl_close( \$ch );\n" ), 'Nullsafe teardown calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n// E_STRICT in a comment with `backticks`\n\$doc = 'curl_close(null) in a string';\n" ), 'Comment/string mentions must pass.' );
-			$this->assertNotEmpty( $scan( "<?php\n\\curl_close( \$ch );\n" ), 'Fully-qualified \\curl_close() must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\n\$ref->{'setAccessible'}( true );\n" ), 'Dynamic setAccessible name must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\ncall_user_func( array( \$ref, 'setAccessible' ) );\n" ), 'call_user_func setAccessible name must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\n\$ref->/* c */setAccessible( true );\n" ), 'Comment-interrupted setAccessible() must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\nimagedestroy( \$img );\n" ), 'Raw imagedestroy() outside Util must be flagged.' );
-			$this->assertNotEmpty( $scan( "<?php\nfinfo_close( \$finfo );\n" ), 'Raw finfo_close() outside Util must be flagged.' );
-			$this->assertSame( array(), $scan( "<?php\nUtil::destroy_gd_image( \$img );\n" ), 'Util::destroy_gd_image() helper calls must pass.' );
-			$this->assertSame( array(), $scan( "<?php\n\$doc = \"escaped \\\" quote \$http_response_header stays clean\";\n" ), 'Escaped-quote string content must not leak into code_only.' );
-			$this->assertSame( array(), $scan( "<?php\n\$doc = \"interpolated {\$http_response_header} stays clean\";\n" ), 'Double-quoted $http_response_header interpolation must pass.' );
 
 			$util_subdir = $dir . '/includes';
-			$this->assertTrue( mkdir( $util_subdir ) || is_dir( $util_subdir ), 'Scanner Util fixture dir must be creatable.' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $util_subdir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
 			$util_file = $util_subdir . '/class-util.php';
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
 			file_put_contents( $util_file, "<?php\nclass WPPO_Util_Fixture {\npublic static function close_curl_handle( &\$ch ) {\nif ( function_exists( 'curl_close' ) ) {\ncurl_close( \$ch );\n}\n}\n}\n" );
@@ -572,7 +545,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$method->invokeArgs( $this, array( $util_file, $dir, &$stray_violations ) );
 			$this->assertNotEmpty( $stray_violations, 'Raw teardown outside the Util legacy helpers must be flagged.' );
 		} finally {
-			foreach ( (array) glob( $dir . '/*.php' ) as $file ) {
+			foreach ( glob( $dir . '/*.php' ) as $file ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 				unlink( $file );
 			}
@@ -591,17 +564,13 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * Scan one PHP file for the banned 8.4/8.5 patterns.
 	 *
 	 * Appends `file:line description` strings to `$violations` for every
-	 * hit: raw `curl_close(null)` / `E_STRICT` / `mysqli_ping` /
-	 * `mysqli_execute` / `socket_set_timeout` / `$http_response_header` /
-	 * `DATE_RFC7231` / `__sleep`+`__wakeup` / non-canonical casts in code
-	 * tokens, `Reflection::setAccessible()` via operator tokens (so
-	 * comment-interrupted calls are caught) plus dynamic `'setAccessible'`
-	 * string literals, standalone backtick
-	 * operators, implicitly-nullable `Type $param = null` declarations
-	 * (typed without `?`, `|null`, or `mixed`), and raw `curl_close()` /
-	 * `curl_multi_close()` / `curl_share_close()` / `finfo_close()` /
-	 * `xml_parser_free()` / `imagedestroy()` calls outside the
-	 * version-gated legacy branches of `includes/class-util.php`.
+	 * hit: raw `curl_close(null)` / `E_STRICT` / `mysqli_ping` in code
+	 * tokens, standalone backtick operators, implicitly-nullable
+	 * `Type $param = null` declarations (typed without `?`, `|null`, or
+	 * `mixed`), and raw `curl_close()` / `curl_multi_close()` /
+	 * `curl_share_close()` / `finfo_close()` / `xml_parser_free()` /
+	 * `imagedestroy()` calls outside the version-gated legacy branches
+	 * of `includes/class-util.php`.
 	 *
 	 * @since NEXT
 	 * @param string   $file       Absolute file path.
@@ -620,44 +589,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$count  = count( $tokens );
 
 		// Code-only text (no comments/strings) for the raw-pattern checks
-		// so docblock mentions can never false-positive. Double-quoted and
-		// heredoc interpolations are skipped as well so "$var" inside a
-		// string cannot false-positive (e.g. $http_response_header).
-		$code_only  = '';
-		$in_double  = false;
-		$in_heredoc = false;
+		// so docblock mentions can never false-positive.
+		$code_only = '';
 		foreach ( $tokens as $token ) {
-			if ( is_array( $token ) && defined( 'T_START_HEREDOC' ) && T_START_HEREDOC === $token[0] ) {
-				$in_heredoc = true;
-				$code_only .= ' ';
-				continue;
-			}
-			if ( is_array( $token ) && defined( 'T_END_HEREDOC' ) && T_END_HEREDOC === $token[0] ) {
-				$in_heredoc = false;
-				$code_only .= ' ';
-				continue;
-			}
-			if ( ! is_array( $token ) && '"' === $token ) {
-				// An escaped quote (odd trailing backslashes) is string
-				// content, not a delimiter — toggling on it would desync
-				// in_double and leak string content into code_only.
-				$trailing = 0;
-				$len      = strlen( $code_only );
-				while ( $trailing < $len && '\\' === $code_only[ $len - 1 - $trailing ] ) {
-					++$trailing;
-				}
-				if ( 1 === $trailing % 2 ) {
-					$code_only .= '"';
-					continue;
-				}
-				$in_double  = ! $in_double;
-				$code_only .= ' ';
-				continue;
-			}
-			if ( $in_double || $in_heredoc ) {
-				$code_only .= ' ';
-				continue;
-			}
 			if ( is_array( $token ) && in_array( $token[0], array( T_COMMENT, T_DOC_COMMENT, T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE ), true ) ) {
 				$code_only .= ' ';
 				continue;
@@ -666,21 +600,10 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		}
 
 		$raw_patterns = array(
-			'/\bcurl_close\s*\(\s*null/i'                  => 'curl_close(null) call',
-			'/\bE_STRICT\b/'                               => 'E_STRICT usage',
-			'/\bmysqli_ping\b/i'                           => 'mysqli_ping() usage',
-			'/\bmysqli_execute\b/i'                        => 'mysqli_execute() alias usage (use mysqli_stmt_execute())',
-			'/\bsocket_set_timeout\b/i'                    => 'socket_set_timeout() alias usage (use stream_set_timeout())',
-			'/\$http_response_header\b/'                   => '$http_response_header usage (use http_get_last_response_headers())',
-			'/RFC7231\b/'                                  => 'DATE_RFC7231 usage (timezone is ignored, always GMT)',
-			'/\bfunction\s+__(sleep|wakeup)\b/i'           => '__sleep()/__wakeup() definition (use __serialize()/__unserialize())',
-			'/\(\s*(boolean|integer|double|binary)\s*\)/i' => 'non-canonical cast (use (bool)/(int)/(float)/(string))',
+			'/\bcurl_close\s*\(\s*null/i' => 'curl_close(null) call',
+			'/\bE_STRICT\b/'              => 'E_STRICT usage',
+			'/\bmysqli_ping\b/i'          => 'mysqli_ping() usage',
 		);
-		// Note: Reflection::setAccessible() is detected token-wise below
-		// (T_OBJECT_OPERATOR/T_NULLSAFE_OBJECT_OPERATOR/T_DOUBLE_COLON
-		// plus T_STRING, skipping comments) so comment-interrupted calls
-		// such as `-> /* c */ setAccessible()` cannot bypass the gate;
-		// dynamic `'setAccessible'` string literals are flagged separately.
 		foreach ( $raw_patterns as $pattern => $label ) {
 			if ( 1 === preg_match( $pattern, $code_only ) ) {
 				$violations[] = sprintf( '%s: raw %s', $rel, $label );
@@ -688,18 +611,6 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		}
 
 		$close_functions = array( 'curl_close', 'curl_multi_close', 'curl_share_close', 'finfo_close', 'xml_parser_free', 'imagedestroy' );
-
-		$name_ids = array( T_STRING );
-		if ( defined( 'T_NAME_FULLY_QUALIFIED' ) ) {
-			$name_ids[] = constant( 'T_NAME_FULLY_QUALIFIED' );
-		}
-		if ( defined( 'T_NAME_QUALIFIED' ) ) {
-			$name_ids[] = constant( 'T_NAME_QUALIFIED' );
-		}
-
-		// Build the function map once per file (not once per teardown call
-		// site) so large files stay cheap as patterns grow.
-		$function_map = $this->build_function_map( $tokens, $count );
 
 		for ( $i = 0; $i < $count; ++$i ) {
 			$token = $tokens[ $i ];
@@ -715,53 +626,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				continue;
 			}
 
-			// Dynamic 'setAccessible' string literals cover $ref->{'setAccessible'}()
-			// and call_user_func()/call_user_func_array() invocations that the
-			// operator-based check below cannot see (deprecated on PHP 8.5).
-			// Deliberately over-flags benign mentions (e.g. log messages) as a
-			// test-only strictness tradeoff: quotes are stripped, then inner
-			// whitespace, before comparing.
-			if ( T_CONSTANT_ENCAPSED_STRING === $token[0] ) {
-				$literal = strtolower( trim( trim( $token[1], "\"'" ) ) );
-				if ( 'setaccessible' === $literal ) {
-					$violations[] = sprintf( '%s:%d dynamic Reflection::setAccessible() name (deprecated on PHP 8.5)', $rel, $token[2] );
-					continue;
-				}
-			}
-
-			// Operator-based setAccessible detection: `->`, `?->`, or `::`
-			// followed (across whitespace/comments) by `setAccessible` and
-			// `(`, so comment-interrupted calls cannot bypass the gate.
-			$op_ids = array( T_OBJECT_OPERATOR, T_DOUBLE_COLON );
-			if ( defined( 'T_NULLSAFE_OBJECT_OPERATOR' ) ) {
-				$op_ids[] = constant( 'T_NULLSAFE_OBJECT_OPERATOR' );
-			}
-			if ( in_array( $token[0], $op_ids, true ) ) {
-				$after = $i + 1;
-				while ( $after < $count && is_array( $tokens[ $after ] ) && in_array( $tokens[ $after ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
-					++$after;
-				}
-				if ( $after < $count && is_array( $tokens[ $after ] ) && T_STRING === $tokens[ $after ][0] && 'setaccessible' === strtolower( $tokens[ $after ][1] ) ) {
-					$open = $after + 1;
-					while ( $open < $count && is_array( $tokens[ $open ] ) && in_array( $tokens[ $open ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
-						++$open;
-					}
-					if ( $open < $count && '(' === $tokens[ $open ] ) {
-						$violations[] = sprintf( '%s:%d Reflection::setAccessible() call (deprecated on PHP 8.5; no-op since PHP 8.1)', $rel, $token[2] );
-						continue;
-					}
-				}
-			}
-
-			if ( in_array( $token[0], $name_ids, true ) ) {
-				$basename = strtolower( $token[1] );
-				if ( false !== strpos( $basename, '\\' ) ) {
-					$parts    = explode( '\\', $basename );
-					$basename = end( $parts );
-				}
-				if ( ! in_array( $basename, $close_functions, true ) ) {
-					continue;
-				}
+			if ( T_STRING === $token[0] && in_array( strtolower( $token[1] ), $close_functions, true ) ) {
 				$next = $i + 1;
 				while ( $next < $count && is_array( $tokens[ $next ] ) && in_array( $tokens[ $next ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
 					++$next;
@@ -778,7 +643,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 						$method_guards[] = constant( 'T_NULLSAFE_OBJECT_OPERATOR' );
 					}
 					if ( ! in_array( $prev_id, $method_guards, true ) ) {
-						if ( ! $this->is_util_legacy_teardown_call( $tokens, $count, $i, $rel, $function_map ) ) {
+						if ( ! $this->is_util_legacy_teardown_call( $tokens, $count, $i, $rel ) ) {
 							$violations[] = sprintf( '%s:%d raw %s() outside the Util 8.5 helper', $rel, $token[2], $token[1] );
 						}
 					}
@@ -801,20 +666,17 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * added elsewhere in that file still fails the gate.
 	 *
 	 * @since NEXT
-	 * @param array      $tokens Full token stream of the file.
-	 * @param int        $count  Token count.
-	 * @param int        $index  Index of the teardown function-name token.
-	 * @param string     $rel    Relative file path for reporting.
-	 * @param array|null $function_map Optional precomputed map from
-	 *                       build_function_map() (built once per file by
-	 *                       the caller to avoid re-scanning per call site).
+	 * @param array  $tokens Full token stream of the file.
+	 * @param int    $count  Token count.
+	 * @param int    $index  Index of the teardown function-name token.
+	 * @param string $rel    Relative file path for reporting.
 	 * @return bool True when the call is an allowed legacy branch.
 	 */
-	private function is_util_legacy_teardown_call( $tokens, $count, $index, $rel, $function_map = null ): bool {
+	private function is_util_legacy_teardown_call( $tokens, $count, $index, $rel ): bool {
 		if ( false === strpos( $rel, 'includes/class-util.php' ) ) {
 			return false;
 		}
-		$allowed = array(
+		$allowed   = array(
 			'close_curl_handle',
 			'close_curl_multi_handle',
 			'destroy_gd_image',
@@ -822,34 +684,27 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			'close_finfo_handle',
 			'free_xml_parser',
 		);
-		if ( null === $function_map ) {
-			$function_map = $this->build_function_map( $tokens, $count );
-		}
-		$enclosing = null;
-		$size      = null;
-		foreach ( $function_map as $entry ) {
-			if ( $index > $entry['start'] && $index < $entry['end'] && ( null === $size || $entry['size'] < $size ) ) {
-				$enclosing = $entry['name'];
-				$size      = $entry['size'];
-			}
-		}
+		$enclosing = $this->get_enclosing_function_name( $tokens, $count, $index );
 		return in_array( $enclosing, $allowed, true );
 	}
 
 	/**
-	 * Map each named function declaration to its `{...}` body range.
+	 * Find the innermost named function containing a token index.
 	 *
-	 * Forward-scans for `T_FUNCTION` declarations once per file; callers
-	 * reuse the map for every teardown call site instead of re-scanning.
-	 * Anonymous functions/closures carry no name and are skipped.
+	 * Forward-scans for `T_FUNCTION` declarations, maps each named
+	 * declaration to its `{...}` body range, and returns the innermost
+	 * name containing `$index` (null when top-level). Anonymous
+	 * functions/closures carry no name and never match the legacy list.
 	 *
 	 * @since NEXT
 	 * @param array $tokens Full token stream of the file.
 	 * @param int   $count  Token count.
-	 * @return array[] List of `array( 'name' => string, 'start' => int, 'end' => int, 'size' => int )`.
+	 * @param int   $index  Token index to locate.
+	 * @return string|null Enclosing function name or null.
 	 */
-	private function build_function_map( $tokens, $count ): array {
-		$map = array();
+	private function get_enclosing_function_name( $tokens, $count, $index ): ?string {
+		$match      = null;
+		$match_size = null;
 		for ( $k = 0; $k < $count; ++$k ) {
 			$token = $tokens[ $k ];
 			if ( ! is_array( $token ) || T_FUNCTION !== $token[0] ) {
@@ -905,37 +760,12 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			if ( $brace_end < 0 ) {
 				continue;
 			}
-			$map[] = array(
-				'name'  => $name,
-				'start' => $brace_start,
-				'end'   => $brace_end,
-				'size'  => $brace_end - $brace_start,
-			);
-		}
-		return $map;
-	}
-
-	/**
-	 * Find the innermost named function containing a token index.
-	 *
-	 * Forward-scans for `T_FUNCTION` declarations, maps each named
-	 * declaration to its `{...}` body range, and returns the innermost
-	 * name containing `$index` (null when top-level). Anonymous
-	 * functions/closures carry no name and never match the legacy list.
-	 *
-	 * @since NEXT
-	 * @param array $tokens Full token stream of the file.
-	 * @param int   $count  Token count.
-	 * @param int   $index  Token index to locate.
-	 * @return string|null Enclosing function name or null.
-	 */
-	private function get_enclosing_function_name( $tokens, $count, $index ): ?string {
-		$match      = null;
-		$match_size = null;
-		foreach ( $this->build_function_map( $tokens, $count ) as $entry ) {
-			if ( $index > $entry['start'] && $index < $entry['end'] && ( null === $match_size || $entry['size'] < $match_size ) ) {
-				$match      = $entry['name'];
-				$match_size = $entry['size'];
+			if ( $index > $brace_start && $index < $brace_end ) {
+				$size = $brace_end - $brace_start;
+				if ( null === $match_size || $size < $match_size ) {
+					$match      = $name;
+					$match_size = $size;
+				}
 			}
 		}
 		return $match;
@@ -989,13 +819,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$params  = array();
 		$current = array();
 		$depth   = 0;
-		// T_ATTRIBUTE has existed since PHP 8.0, so the bare constant is
-		// safe on the plugin's PHP 8.2+ floor; the defined() guard mirrors
-		// the type-collection site below for backport safety.
-		$has_attr = defined( 'T_ATTRIBUTE' );
 		for ( $k = $j + 1; $k < $end; ++$k ) {
 			$token = $tokens[ $k ];
-			if ( '(' === $token || '[' === $token || '{' === $token || ( $has_attr && is_array( $token ) && T_ATTRIBUTE === $token[0] ) ) {
+			if ( '(' === $token || '[' === $token || '{' === $token ) {
 				++$depth;
 			} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
 				--$depth;
@@ -1013,7 +839,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$depth  = 0;
 			$equals = -1;
 			foreach ( $param as $idx => $token ) {
-				if ( '(' === $token || '[' === $token || '{' === $token || ( $has_attr && is_array( $token ) && T_ATTRIBUTE === $token[0] ) ) {
+				if ( '(' === $token || '[' === $token || '{' === $token || '#[' === $token ) {
 					++$depth;
 				} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
 					--$depth;
@@ -1029,9 +855,6 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 
 			$default = '';
 			foreach ( array_slice( $param, $equals + 1 ) as $token ) {
-				if ( is_array( $token ) && in_array( $token[0], array( T_COMMENT, T_DOC_COMMENT, T_WHITESPACE ), true ) ) {
-					continue;
-				}
 				$default .= is_array( $token ) ? $token[1] : $token;
 			}
 			if ( 'null' !== strtolower( trim( $default ) ) ) {
@@ -1062,7 +885,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				if ( 0 === $line && is_array( $token ) ) {
 					$line = $token[2];
 				}
-				if ( is_array( $token ) && defined( 'T_ATTRIBUTE' ) && T_ATTRIBUTE === $id ) {
+				if ( '#[' === $text ) {
 					++$in_attr;
 					continue;
 				}

@@ -28,6 +28,7 @@ class BlockAssetsFiltersTest extends \PHPUnit\Framework\TestCase {
 		$main = ( new ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
+		$options_prop->setAccessible( true );
 		$options_prop->setValue(
 			$main,
 			array(
@@ -36,6 +37,7 @@ class BlockAssetsFiltersTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$method = new ReflectionMethod( Main::class, 'register_block_assets_filters' );
+		$method->setAccessible( true );
 		$method->invoke( $main, $loads_on_demand );
 	}
 

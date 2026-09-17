@@ -63,6 +63,7 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 
 		$prop = new \ReflectionProperty( Cache::class, 'options' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, $options );
 
 		return $cache;
@@ -78,6 +79,7 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( Cache $cache, string $name, array $args = array() ) {
 		$method = new \ReflectionMethod( $cache, $name );
+		$method->setAccessible( true );
 		return $method->invokeArgs( $cache, $args );
 	}
 
@@ -268,15 +270,19 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 
 		// Make is_not_cacheable() pass: non-empty root dir + domain, benign URI.
 		$prop = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, WP_CONTENT_DIR . '/cache/wppo' );
 
 		$prop = new \ReflectionProperty( Cache::class, 'domain' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, 'example.com' );
 
 		$prop = new \ReflectionProperty( Cache::class, 'request_uri' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, '/' );
 
 		$prop = new \ReflectionProperty( Cache::class, 'url_path' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, '' );
 
 		// Guests are cache-eligible with the default (empty) settings.
@@ -290,6 +296,7 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 
 		// Clean the buffer opened by the test (and its tracked level).
 		$prop = new \ReflectionProperty( Cache::class, 'cache_ob_level' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, null );
 		while ( ob_get_level() > $level_before ) {
 			ob_end_clean();
@@ -305,6 +312,7 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 		$cache = $this->make_cache();
 
 		$prop = new \ReflectionProperty( Cache::class, 'buffer_enhanced' );
+		$prop->setAccessible( true );
 		$prop->setValue( null, true );
 
 		// When already enhanced this request, the input passes through untouched
@@ -353,10 +361,12 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 
 		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
+		$prop->setAccessible( true );
 		$prop->setValue( $main, true );
 
 		// should_optimise_for_logged_in() needs cache_settings; seed via reflection.
 		$prop = new \ReflectionProperty( Main::class, 'options' );
+		$prop->setAccessible( true );
 		$prop->setValue(
 			$main,
 			array(
@@ -377,6 +387,7 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function used_css_buffer_flag( Main $main ): bool {
 		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
+		$prop->setAccessible( true );
 		return (bool) $prop->getValue( $main );
 	}
 }

@@ -62,6 +62,7 @@ class UsedCssDeliveryModes1220Test extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'has_filter' )->justReturn( false );
 		$instance = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
 		$method   = new \ReflectionMethod( Used_CSS::class, 'resolve_effective_delivery_mode' );
+		$method->setAccessible( true );
 
 		$builder_buffer = '<html><body><div data-elementor-type="wp-page"><div class="elementor-widget">x</div></div></body></html>';
 		$plain_buffer   = '<html><body><p>Hello</p></body></html>';
@@ -190,6 +191,7 @@ class UsedCssDeliveryModes1220Test extends \PHPUnit\Framework\TestCase {
 	public function test_has_strict_csp_detects_meta_tag(): void {
 		$instance = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
 		$method   = new \ReflectionMethod( Used_CSS::class, 'has_strict_csp' );
+		$method->setAccessible( true );
 
 		$strict_meta = '<html><head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'"></head><body></body></html>';
 		$this->assertTrue( $method->invoke( $instance, $strict_meta ) );

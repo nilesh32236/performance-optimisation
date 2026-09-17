@@ -96,6 +96,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_mapping_allows_attr_respects_restriction(): void {
 		$ref = new \ReflectionMethod( CDN::class, 'mapping_allows_attr' );
+		$ref->setAccessible( true );
 
 		$mapping = array( 'cdn_attr' => 'src' );
 
@@ -109,6 +110,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_mapping_allows_attr_allows_all_when_unrestricted(): void {
 		$ref = new \ReflectionMethod( CDN::class, 'mapping_allows_attr' );
+		$ref->setAccessible( true );
 
 		$this->assertTrue( $ref->invoke( null, array(), 'href' ) );
 		$this->assertTrue( $ref->invoke( null, array( 'cdn_attr' => '' ), 'poster' ) );
@@ -119,6 +121,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_mapping_allows_attr_multi_values(): void {
 		$ref = new \ReflectionMethod( CDN::class, 'mapping_allows_attr' );
+		$ref->setAccessible( true );
 
 		$mapping = array( 'cdn_attr' => 'src, srcset' );
 
@@ -136,6 +139,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_per_mapping_restrictions_do_not_union(): void {
 		$ref = new \ReflectionMethod( CDN::class, 'mapping_allows_attr' );
+		$ref->setAccessible( true );
 
 		$src_only  = array( 'cdn_attr' => 'src' );
 		$href_only = array( 'cdn_attr' => 'href' );

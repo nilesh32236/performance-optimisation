@@ -107,6 +107,7 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$method = new ReflectionMethod( Activate::class, 'maybe_seed_settings' );
+		$method->setAccessible( true );
 		$method->invoke( null );
 
 		$this->assertNotNull( $seeded, 'Fresh install must seed wppo_settings' );

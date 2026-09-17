@@ -68,6 +68,7 @@ class MainSpeculationListRulesTest extends \PHPUnit\Framework\TestCase {
 		$main       = $reflection->newInstanceWithoutConstructor();
 
 		$options = $reflection->getProperty( 'options' );
+		$options->setAccessible( true );
 		$options->setValue(
 			$main,
 			array(

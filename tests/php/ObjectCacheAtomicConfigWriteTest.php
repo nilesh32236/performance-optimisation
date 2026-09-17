@@ -662,6 +662,7 @@ class ObjectCacheAtomicConfigWriteTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_atomic_write( Object_Cache $manager, string $content, $fs ) {
 		$method = new \ReflectionMethod( Object_Cache::class, 'write_config_atomic' );
+		$method->setAccessible( true );
 		return $method->invoke( $manager, $content, $fs );
 	}
 

@@ -26,6 +26,7 @@ class FontDisplaySwapTest extends \PHPUnit\Framework\TestCase {
 	private function make_fonts( array $file_optimisation = array() ): Google_Fonts {
 		$instance = ( new \ReflectionClass( Google_Fonts::class ) )->newInstanceWithoutConstructor();
 		$prop     = new \ReflectionProperty( Google_Fonts::class, 'options' );
+		$prop->setAccessible( true );
 		$prop->setValue( $instance, array( 'file_optimisation' => $file_optimisation ) );
 		return $instance;
 	}

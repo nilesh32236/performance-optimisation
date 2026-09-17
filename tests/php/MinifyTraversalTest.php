@@ -130,6 +130,7 @@ class MinifyTraversalTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function read_prop( $instance, string $prop ) {
 		$reflection = new \ReflectionProperty( $instance, $prop );
+		$reflection->setAccessible( true );
 		return $reflection->getValue( $instance );
 	}
 

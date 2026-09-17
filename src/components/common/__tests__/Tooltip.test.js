@@ -107,6 +107,10 @@ describe( 'Tooltip', () => {
 		expect( tooltipContainer ).toHaveAttribute( 'tabindex', '0' );
 		expect( tooltipContainer ).toHaveAttribute( 'aria-expanded', 'false' );
 		expect( tooltipContainer ).not.toHaveAttribute( 'aria-describedby' );
+		expect( tooltipContainer ).toHaveAttribute(
+			'aria-label',
+			'Icon tooltip'
+		);
 
 		fireEvent.keyDown( tooltipContainer, { key: 'Enter' } );
 		expect( tooltipContainer ).toHaveAttribute( 'aria-expanded', 'true' );
@@ -116,6 +120,29 @@ describe( 'Tooltip', () => {
 
 		fireEvent.keyDown( tooltipContainer, { key: ' ' } );
 		expect( tooltipContainer ).toHaveAttribute( 'aria-expanded', 'false' );
+	} );
+
+	it( 'uses explicit label prop and non-string fallback for icon-only trigger', () => {
+		const { container, rerender } = render(
+			<Tooltip content="Ignored" label="Explicit label" />
+		);
+		let tooltipContainer = container.querySelector(
+			'.wppo-tooltip-container'
+		);
+
+		expect( tooltipContainer ).toHaveAttribute(
+			'aria-label',
+			'Explicit label'
+		);
+		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
+
+		rerender( <Tooltip content={ <span>Rich JSX</span> } /> );
+		tooltipContainer = container.querySelector( '.wppo-tooltip-container' );
+		expect( tooltipContainer ).toHaveAttribute(
+			'aria-label',
+			'More information'
+		);
+		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
 	} );
 
 	it( 'wires aria-describedby for wrapped triggers without nesting button roles', () => {

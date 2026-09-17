@@ -187,6 +187,7 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 
 			$cache = new Cache();
 			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+			$store->setAccessible( true );
 			$this->assertFalse( $store->invoke( $cache ) );
 		} finally {
 			$this->restore_superglobals( $backup );
@@ -210,9 +211,11 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 			$cache = new Cache();
 
 			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
+			$not_cacheable->setAccessible( true );
 			$this->assertTrue( $not_cacheable->invoke( $cache ) );
 
 			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+			$store->setAccessible( true );
 			$this->assertFalse( $store->invoke( $cache ) );
 		} finally {
 			$this->restore_superglobals( $backup );
@@ -248,9 +251,11 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 		$cache = new Cache();
 
 		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
+		$not_cacheable->setAccessible( true );
 		$this->assertFalse( $not_cacheable->invoke( $cache ) );
 
 		$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+		$store->setAccessible( true );
 		$this->assertTrue( $store->invoke( $cache ) );
 	}
 
@@ -284,9 +289,11 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 		$cache = new Cache();
 
 		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
+		$not_cacheable->setAccessible( true );
 		$this->assertFalse( $not_cacheable->invoke( $cache ) );
 
 		$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+		$store->setAccessible( true );
 		$this->assertFalse( $store->invoke( $cache ) );
 	}
 

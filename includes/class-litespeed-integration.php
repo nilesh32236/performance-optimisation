@@ -420,12 +420,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Whether WPPO owns the page cache (is the cache owner).
 		 *
-		 * True when effective_mode === wppo. Standalone on LiteSpeed means
-		 * "ignore LS" and is NOT WPPO-owned, so no LS TTL/tags/vary
-		 * cookies are emitted when the user selected standalone. Standalone
-		 * on non-LiteSpeed hosts is WPPO-owned for file-cache purposes
-		 * (there is no LS layer to defer to), preserving the file-cache
-		 * bypass semantics in Cache::maybe_store_cache().
+		 * True when effective_mode === wppo, or when on non-LiteSpeed hosts
+		 * (standalone treated as WPPO-owned for file cache purposes).
+		 *
+		 * On LiteSpeed, standalone is NOT considered WPPO-owned for UI clarity
+		 * (user explicitly said "ignore LS").
 		 *
 		 * @since 2.0.0
 		 * @return bool True if WPPO is the cache owner.
@@ -433,15 +432,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		public static function is_wppo_cache_owner(): bool {
 			$effective = self::effective_mode();
 
-			if ( self::MODE_WPPO === $effective ) {
+			// Standalone on LiteSpeed means "ignore LS" → WPPO owns cache.
+			// Standalone on non-LiteSpeed → also WPPO owns cache.
+			// But the spec says standalone = ignore LS → WPPO cache.
+			// So both standalone and wppo are WPPO-owned.
+			if ( self::MODE_STANDALONE === $effective ) {
 				return true;
 			}
 
-			if ( self::MODE_STANDALONE === $effective ) {
-				return ! self::is_litespeed();
-			}
-
-			return false;
+			return self::MODE_WPPO === $effective;
 		}
 
 		/**
@@ -652,29 +651,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private static bool $queue_shutdown_hooked = false;
 
 		/**
-		 * Per-request buffer of queued purge tags (not yet persisted).
-		 *
-		 * The queue appends here instead of doing get+set transient I/O
-		 * per call; flush_tag_queue() merges the buffer with the stored
-		 * queue in a single get/delete so ESI handle_nonce + tag emission
-		 * calling queue multiple times per request cost one transient
-		 * round-trip instead of N (write amplification under DB-backed
-		 * transients).
-		 *
-		 * @since NEXT
-		 * @var string[]
-		 */
-		private static array $tag_buffer = array();
-
-		/**
-		 * Scopes seen in the per-request tag buffer.
-		 *
-		 * @since NEXT
-		 * @var string[]
-		 */
-		private static array $tag_buffer_scopes = array();
-
-		/**
 		 * Queue LiteSpeed purge tags (P3).
 		 *
 		 * Mirrors LSCWP Tag taxonomy (F,H,PGS,Po.{id},PT.{type},T.{id},A.{id},D.,B.{id},W.{id},ESI.,REST,HTTP.{code} + public/private/stale scope).
@@ -729,16 +705,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// inject CRLF into X-LiteSpeed-Purge/Tag headers.
 			$tags = array_values( array_filter( array_map( fn( $t ) => preg_replace( '/[^A-Za-z0-9_\.\-]/', '', (string) $t ), $tags ) ) );
 
-			// Buffer per request; the single get/delete happens in
-			// flush_tag_queue() so N queue calls cost one transient
-			// round-trip instead of N get+set pairs.
-			self::$tag_buffer = array_values( array_unique( array_merge( self::$tag_buffer, $tags ) ) );
-			if ( count( self::$tag_buffer ) > self::TAG_QUEUE_MAX ) {
-				self::$tag_buffer = array_slice( self::$tag_buffer, -self::TAG_QUEUE_MAX );
+			$key      = Util::transient_key( self::TAG_QUEUE );
+			$existing = get_transient( $key );
+			if ( ! is_array( $existing ) ) {
+				$existing = array();
 			}
-			if ( ! in_array( $scope, self::$tag_buffer_scopes, true ) ) {
-				self::$tag_buffer_scopes[] = $scope;
+			// Merge, dedupe, cap.
+			$merged = array_values( array_unique( array_merge( $existing, $tags ) ) );
+			if ( count( $merged ) > self::TAG_QUEUE_MAX ) {
+				$merged = array_slice( $merged, -self::TAG_QUEUE_MAX );
 			}
+			// Include scope as pseudo-tags for OLS raw header fallback.
+			if ( 'private' === $scope && ! in_array( 'private', $merged, true ) ) {
+				$merged[] = 'private';
+			}
+			if ( 'stale' === $scope && ! in_array( 'stale', $merged, true ) ) {
+				$merged[] = 'stale';
+			}
+			set_transient( $key, $merged, MINUTE_IN_SECONDS * 5 );
 			self::maybe_hook_shutdown();
 		}
 
@@ -779,22 +763,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				delete_transient( $key );
 			} else {
 				$tags = array();
-			}
-			// Merge the per-request buffer with the stored queue in this
-			// single flush (one get/delete above for N queue calls).
-			if ( ! empty( self::$tag_buffer ) ) {
-				$tags = array_values( array_unique( array_merge( $tags, self::$tag_buffer ) ) );
-				if ( in_array( 'private', self::$tag_buffer_scopes, true ) && ! in_array( 'private', $tags, true ) ) {
-					$tags[] = 'private';
-				}
-				if ( in_array( 'stale', self::$tag_buffer_scopes, true ) && ! in_array( 'stale', $tags, true ) ) {
-					$tags[] = 'stale';
-				}
-				if ( count( $tags ) > self::TAG_QUEUE_MAX ) {
-					$tags = array_slice( $tags, -self::TAG_QUEUE_MAX );
-				}
-				self::$tag_buffer        = array();
-				self::$tag_buffer_scopes = array();
 			}
 			if ( ! empty( $db_tags ) ) {
 				delete_option( $db_key );
@@ -1406,17 +1374,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 
 			// LS-304: honor preload_settings.excludePreloadCache when enabled.
-			// Static per-request memo of the processed exclude list so the
-			// parse (process_urls + cached_home_url) runs once per request
-			// instead of on every frontend request.
 			if ( $cacheable ) {
 				$options = Util::get_settings();
 				if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
-					static $exclude_urls_memo = null;
-					if ( null === $exclude_urls_memo ) {
-						$exclude_urls_memo = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
-					}
-					$exclude_urls = $exclude_urls_memo;
+					$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
 					$request_uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 					$home_path    = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
 					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
@@ -1548,15 +1509,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return false;
 			}
 			foreach ( $_COOKIE as $key => $value ) {
-				$cookie_name = is_string( $key ) ? sanitize_text_field( wp_unslash( $key ) ) : '';
-				if ( '' === $cookie_name || 0 !== strpos( $cookie_name, 'comment_author_' ) ) {
-					continue;
-				}
-				// Guard the value: an array cookie (?comment_author_x[]=1)
-				// must not read as non-empty, and an empty first match must
-				// not shadow a real commenter cookie later in the jar.
-				if ( is_string( $value ) && '' !== $value ) {
-					return true;
+				$cookie_name = is_string( $key ) ? sanitize_text_field( $key ) : '';
+				if ( '' !== $cookie_name && 0 === strpos( $cookie_name, 'comment_author_' ) ) {
+					return '' !== $value;
 				}
 			}
 			return false;
@@ -1583,14 +1538,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				$hash = md5( wp_parse_url( home_url(), PHP_URL_HOST ) ?? '' );
 			}
 			foreach ( $_COOKIE as $key => $value ) {
-				$cookie_name = is_string( $key ) ? sanitize_text_field( wp_unslash( $key ) ) : '';
-				if ( '' === $cookie_name || 0 !== strpos( $cookie_name, 'wp-postpass_' . $hash ) ) {
-					continue;
-				}
-				// Same guard as is_commenter_request(): array values are
-				// never a match, and empty values do not shadow later hits.
-				if ( is_string( $value ) && '' !== $value ) {
-					return true;
+				$cookie_name = is_string( $key ) ? sanitize_text_field( $key ) : '';
+				if ( '' !== $cookie_name && 0 === strpos( $cookie_name, 'wp-postpass_' . $hash ) ) {
+					return '' !== $value;
 				}
 			}
 			return false;
@@ -1632,19 +1582,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$groups = self::get_vary_groups();
 			if ( ! $groups['role'] && ! $groups['guest'] && ! $groups['mobile'] && ! $groups['webp'] ) {
 				// No active vary groups — clear stale cookie if present.
-				if ( isset( $_COOKIE['_lscache_vary'] ) && ! headers_sent() ) {
-					setcookie(
-						'_lscache_vary',
-						'',
-						array(
-							'expires'  => time() - YEAR_IN_SECONDS,
-							'path'     => COOKIEPATH,
-							'domain'   => COOKIE_DOMAIN,
-							'secure'   => is_ssl(),
-							'httponly' => true,
-							'samesite' => 'Lax',
-						)
-					);
+				if ( isset( $_COOKIE['_lscache_vary'] ) ) {
+					setcookie( '_lscache_vary', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 				}
 				return;
 			}
@@ -1665,19 +1604,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			 * @param string $value 12-char hash.
 			 * @param array  $payload Active vary payload.
 			 */
-			// is_string guard below: an array-valued cookie would otherwise
-			// reach wp_unslash()/sanitize_text_field() as an array and fatal
-			// on PHP 8.2+.
-			$value = (string) apply_filters( 'wppo_litespeed_lscache_vary_value', $value, $payload );
-			// Re-validate after the filter: keep only hex up to 12 chars so
-			// a filter returning ;/whitespace/control bytes cannot
-			// split/poison the cookie value. Bail when empty.
-			$filtered_value = function_exists( 'preg_replace' ) ? preg_replace( '/[^a-f0-9]/', '', strtolower( $value ) ) : '';
-			$value          = is_string( $filtered_value ) ? substr( $filtered_value, 0, 12 ) : '';
-			if ( '' === $value ) {
-				return;
-			}
-			$current = isset( $_COOKIE['_lscache_vary'] ) && is_string( $_COOKIE['_lscache_vary'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['_lscache_vary'] ) ) : '';
+			$value   = (string) apply_filters( 'wppo_litespeed_lscache_vary_value', $value, $payload );
+			$current = isset( $_COOKIE['_lscache_vary'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['_lscache_vary'] ) ) : '';
 			if ( $current !== $value ) {
 				// Never emit setcookie() after headers went out (cron/early
 				// flush races) — PHP would raise a "headers already sent"
@@ -1685,18 +1613,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				if ( function_exists( 'headers_sent' ) && headers_sent() ) {
 					return;
 				}
-				setcookie(
-					'_lscache_vary',
-					$value,
-					array(
-						'expires'  => time() + DAY_IN_SECONDS,
-						'path'     => COOKIEPATH,
-						'domain'   => COOKIE_DOMAIN,
-						'secure'   => is_ssl(),
-						'httponly' => true,
-						'samesite' => 'Lax',
-					)
-				);
+				setcookie( '_lscache_vary', $value, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 			}
 		}
 
@@ -1761,21 +1678,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return;
 			}
 			if ( isset( $_COOKIE['_lscache_vary'] ) ) {
-				// Array form matching the seed path (path/domain/secure/
-				// httponly/SameSite=Lax): deletion must carry the same
-				// attributes as creation or strict browsers keep the cookie.
-				setcookie(
-					'_lscache_vary',
-					'',
-					array(
-						'expires'  => time() - YEAR_IN_SECONDS,
-						'path'     => COOKIEPATH,
-						'domain'   => COOKIE_DOMAIN,
-						'secure'   => is_ssl(),
-						'httponly' => true,
-						'samesite' => 'Lax',
-					)
-				);
+				setcookie( '_lscache_vary', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 			}
 		}
 
@@ -1784,9 +1687,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Internal shim delegating to {@see Header_Emitter::strip_crlf()}
 		 * (issue #905) so pre-existing internal call sites keep working;
-		 * new code should call Header_Emitter directly. Retained (not
-		 * removed) because HeaderEmitterTest covers this delegation as a
-		 * thin BC shim.
+		 * new code should call Header_Emitter directly.
 		 *
 		 * @deprecated NEXT Use Header_Emitter::strip_crlf() directly.
 		 * @since 2.0.0
@@ -2080,135 +1981,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
-		 * Resolve per-post-type TTL override hours (pure).
-		 *
-		 * Testable without WordPress: given the resolved post context and
-		 * the stored overrides map, returns the allowlisted override hours
-		 * or null. Callers resolve $is_singular_ctx via is_singular().
-		 *
-		 * @since NEXT
-		 * @param int|null    $post_id         Resolved post ID or null.
-		 * @param string|null $post_type       Resolved post type or null.
-		 * @param bool        $is_singular_ctx Whether the current context is singular.
-		 * @param mixed       $overrides       Stored ttlOverrides value.
-		 * @return int|null Override hours or null.
-		 */
-		public static function resolve_ttl_override_hours( $post_id, $post_type, bool $is_singular_ctx, $overrides ): ?int {
-			if ( null === $post_id || null === $post_type || ! $is_singular_ctx || ! is_array( $overrides ) || ! isset( $overrides[ $post_type ] ) ) {
-				return null;
-			}
-			$candidate = absint( $overrides[ $post_type ] );
-			if ( in_array( $candidate, array( 0, 1, 6, 12, 24, 48, 168 ), true ) ) {
-				return $candidate;
-			}
-			return null;
-		}
-
-		/**
-		 * Map cacheLife hours to TTL seconds (pure).
-		 *
-		 * 0 means never-expire (one week); otherwise hours × 3600.
-		 *
-		 * @since NEXT
-		 * @param int $hours CacheLife hours.
-		 * @return int TTL seconds.
-		 */
-		public static function map_hours_to_seconds( int $hours ): int {
-			if ( 0 === $hours ) {
-				return defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
-			}
-			return $hours * ( defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
-		}
-
-		/**
-		 * Build the LiteSpeed tag fan-out from resolved facts (pure).
-		 *
-		 * Deterministic assembly behind {@see compute_litespeed_tags_for_purge()}:
-		 * no WordPress calls, so unit tests can cover the tag taxonomy
-		 * without stubbing conditional tags.
-		 *
-		 * @since NEXT
-		 * @param array $facts Resolved facts: is_front, is_home, is_paged, is_singular, post_id, post_type, term_ids, author, date_ymd, blog_id, is_feed, is_rest, is_404.
-		 * @return string[] Tag list (deduplicated, WPPO + MIN included).
-		 */
-		public static function build_litespeed_tags( array $facts ): array {
-			$tags = array( 'WPPO' );
-			if ( ! empty( $facts['is_front'] ) ) {
-				$tags[] = 'F';
-			}
-			if ( ! empty( $facts['is_home'] ) ) {
-				$tags[] = 'H';
-			}
-			if ( ! empty( $facts['is_paged'] ) ) {
-				$tags[] = 'PGS';
-			}
-			if ( ! empty( $facts['is_singular'] ) ) {
-				foreach ( array( 'F', 'H', 'PGS' ) as $required ) {
-					if ( ! in_array( $required, $tags, true ) ) {
-						$tags[] = $required;
-					}
-				}
-			}
-			$post_id = isset( $facts['post_id'] ) ? (int) $facts['post_id'] : 0;
-			if ( ! empty( $facts['is_singular'] ) && $post_id > 0 ) {
-				$tags[] = 'Po.' . $post_id;
-				if ( ! empty( $facts['post_type'] ) ) {
-					$tags[] = 'PT.' . (string) $facts['post_type'];
-				}
-				foreach ( (array) ( $facts['term_ids'] ?? array() ) as $term_id ) {
-					$tags[] = 'T.' . (int) $term_id;
-				}
-				if ( ! empty( $facts['author'] ) ) {
-					$tags[] = 'A.' . (int) $facts['author'];
-				}
-				if ( ! empty( $facts['date_ymd'] ) ) {
-					$tags[] = 'D.' . (string) $facts['date_ymd'];
-				}
-			}
-			if ( ! empty( $facts['blog_id'] ) ) {
-				$tags[] = 'B.' . (int) $facts['blog_id'];
-			}
-			if ( ! empty( $facts['is_feed'] ) ) {
-				$tags[] = 'FD';
-			}
-			if ( ! empty( $facts['is_rest'] ) ) {
-				$tags[] = 'REST';
-			}
-			if ( ! empty( $facts['is_404'] ) ) {
-				$tags[] = 'HTTP.404';
-			}
-			$tags[] = 'MIN';
-			return array_values( array_unique( $tags ) );
-		}
-
-		/**
 		 * Compute the full LiteSpeed tag fan-out for the current request.
 		 *
 		 * @since 2.0.0
 		 * @return string[]
 		 */
 		private static function compute_litespeed_tags_for_purge(): array {
-			$facts = array(
-				'is_front'    => false,
-				'is_home'     => false,
-				'is_paged'    => false,
-				'is_singular' => false,
-				'post_id'     => 0,
-				'post_type'   => '',
-				'term_ids'    => array(),
-				'author'      => 0,
-				'date_ymd'    => '',
-				'blog_id'     => 0,
-				'is_feed'     => false,
-				'is_rest'     => false,
-				'is_404'      => false,
-			);
+			$tags = array( 'WPPO' );
 
 			// F: front page.
 			if ( function_exists( 'is_front_page' ) ) {
 				try {
 					if ( is_front_page() ) {
-						$facts['is_front'] = true;
+						$tags[] = 'F';
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -2218,7 +2003,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( function_exists( 'is_home' ) ) {
 				try {
 					if ( is_home() ) {
-						$facts['is_home'] = true;
+						$tags[] = 'H';
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -2227,74 +2012,95 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// PGS: paged archives (default-included for purge fan-out when
 			// the conditional is unavailable).
 			if ( ! function_exists( 'is_paged' ) ) {
-				$facts['is_paged'] = true;
+				if ( ! in_array( 'PGS', $tags, true ) ) {
+					$tags[] = 'PGS';
+				}
 			} else {
 				try {
-					if ( is_paged() ) {
-						$facts['is_paged'] = true;
+					if ( is_paged() && ! in_array( 'PGS', $tags, true ) ) {
+						$tags[] = 'PGS';
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 			}
+			// Ensure F/H/PGS are always in fan-out for singular invalidation (LSCWP src/tag.cls.php:16).
 			if ( function_exists( 'is_singular' ) ) {
 				try {
-					$facts['is_singular'] = (bool) is_singular();
+					if ( is_singular() ) {
+						if ( ! in_array( 'F', $tags, true ) ) {
+							$tags[] = 'F';
+						}
+						if ( ! in_array( 'H', $tags, true ) ) {
+							$tags[] = 'H';
+						}
+						if ( ! in_array( 'PGS', $tags, true ) ) {
+							$tags[] = 'PGS';
+						}
+					}
 				} catch ( \Throwable $e ) {
-					$facts['is_singular'] = false;
+					unset( $e );
 				}
 			}
 
 			// Singular: Po, PT, T, A, D.
-			if ( $facts['is_singular'] ) {
-				$post_id = function_exists( 'get_queried_object_id' ) ? (int) get_queried_object_id() : 0;
-				if ( $post_id > 0 ) {
-					$post_id = (int) apply_filters( 'wppo_litespeed_tag_post_id', $post_id );
+			if ( function_exists( 'is_singular' ) ) {
+				$is_singular = false;
+				try {
+					$is_singular = is_singular();
+				} catch ( \Throwable $e ) {
+					$is_singular = false;
+				}
+				if ( $is_singular ) {
+					$post_id = function_exists( 'get_queried_object_id' ) ? (int) get_queried_object_id() : 0;
 					if ( $post_id > 0 ) {
-							$facts['post_id'] = $post_id;
+						$post_id = (int) apply_filters( 'wppo_litespeed_tag_post_id', $post_id );
+						if ( $post_id > 0 ) {
+							$tags[] = 'Po.' . $post_id;
 							// PT.
 							$pt = function_exists( 'get_post_type' ) ? get_post_type( $post_id ) : null;
-						if ( $pt ) {
-							$facts['post_type'] = sanitize_text_field( (string) $pt );
-						}
+							if ( $pt ) {
+								$tags[] = 'PT.' . sanitize_text_field( (string) $pt );
+							}
 							// T.* taxonomy terms.
-						if ( function_exists( 'get_object_taxonomies' ) && function_exists( 'wp_get_object_terms' ) && $pt ) {
-							try {
-								$taxes = get_object_taxonomies( $pt, 'names' );
-								if ( ! empty( $taxes ) ) {
-									$terms = wp_get_object_terms( $post_id, $taxes );
-									if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
-										foreach ( $terms as $term ) {
-											if ( isset( $term->term_id ) ) {
-												$facts['term_ids'][] = (int) $term->term_id;
+							if ( function_exists( 'get_object_taxonomies' ) && function_exists( 'wp_get_object_terms' ) && $pt ) {
+								try {
+									$taxes = get_object_taxonomies( $pt, 'names' );
+									if ( ! empty( $taxes ) ) {
+										$terms = wp_get_object_terms( $post_id, $taxes );
+										if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+											foreach ( $terms as $term ) {
+												if ( isset( $term->term_id ) ) {
+													$tags[] = 'T.' . (int) $term->term_id;
+												}
 											}
 										}
 									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
 								}
-							} catch ( \Throwable $e ) {
-								unset( $e );
 							}
-						}
 							// A.
-						if ( function_exists( 'get_post_field' ) ) {
-							try {
-								$author = get_post_field( 'post_author', $post_id );
-								if ( $author ) {
-									$facts['author'] = (int) $author;
+							if ( function_exists( 'get_post_field' ) ) {
+								try {
+									$author = get_post_field( 'post_author', $post_id );
+									if ( $author ) {
+										$tags[] = 'A.' . (int) $author;
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
 								}
-							} catch ( \Throwable $e ) {
-								unset( $e );
 							}
-						}
 							// D. date Ymd.
-						if ( function_exists( 'get_the_date' ) ) {
-							try {
-								$date = get_the_date( 'Ymd', $post_id );
-								if ( $date ) {
-									$facts['date_ymd'] = sanitize_text_field( (string) $date );
+							if ( function_exists( 'get_the_date' ) ) {
+								try {
+									$date = get_the_date( 'Ymd', $post_id );
+									if ( $date ) {
+										$tags[] = 'D.' . sanitize_text_field( (string) $date );
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
 								}
-							} catch ( \Throwable $e ) {
-								unset( $e );
 							}
 						}
 					}
@@ -2307,7 +2113,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					if ( is_multisite() && function_exists( 'get_current_blog_id' ) ) {
 						$bid = (int) get_current_blog_id();
 						if ( $bid > 0 ) {
-							$facts['blog_id'] = $bid;
+							$tags[] = 'B.' . $bid;
 						}
 					}
 				} catch ( \Throwable $e ) {
@@ -2319,28 +2125,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( function_exists( 'is_feed' ) ) {
 				try {
 					if ( is_feed() ) {
-						$facts['is_feed'] = true;
+						$tags[] = 'FD';
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 			}
 			if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
-				$facts['is_rest'] = true;
+				$tags[] = 'REST';
 			} elseif ( isset( $_SERVER['REQUEST_URI'] ) && false !== strpos( sanitize_text_field( (string) wp_unslash( $_SERVER['REQUEST_URI'] ) ), '/wp-json/' ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated
-				$facts['is_rest'] = true;
+				$tags[] = 'REST';
 			}
 			if ( function_exists( 'is_404' ) ) {
 				try {
 					if ( is_404() ) {
-						$facts['is_404'] = true;
+						$tags[] = 'HTTP.404';
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 			}
 
-			return self::build_litespeed_tags( $facts );
+			// MIN: combined/minified assets.
+			$tags[] = 'MIN';
+			// W. widget tags (W.{hash}) are only emitted by the ESI bridge — a
+			// bare 'W.' tag has an empty value and would be a no-op/malformed
+			// entry in X-LiteSpeed-Tag, so it is intentionally not added here.
+
+			$tags = array_values( array_unique( $tags ) );
+
+			/**
+			 * Filter the LiteSpeed tags for current request (fan-out).
+			 *
+			 * @since 2.0.0
+			 * @param string[] $tags Tag list.
+			 * @param string   $scope Cache scope ('public'|'private'|'stale').
+			 */
+			$tags = (array) apply_filters( 'wppo_litespeed_purge_tags', $tags, 'public' );
+
+			return $tags;
 		}
 
 		/**
@@ -2724,8 +2547,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::$purge_tags_memo          = null;
 			self::$hooks_registered         = false;
 			self::$queue_shutdown_hooked    = false;
-			self::$tag_buffer               = array();
-			self::$tag_buffer_scopes        = array();
 
 			// Settings are now read through Util::get_settings()'s per-request
 			// memo (audit #874 finding 4); a reset must also drop that memo so

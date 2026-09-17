@@ -254,6 +254,7 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 				continue;
 			}
 			$prop = new \ReflectionProperty( $class, 'traversal_probe_logged' );
+			$prop->setAccessible( true );
 			$prop->setValue( null, false );
 		}
 	}
@@ -325,6 +326,7 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function read_prop( $instance, string $prop ) {
 		$reflection = new \ReflectionProperty( $instance, $prop );
+		$reflection->setAccessible( true );
 		return $reflection->getValue( $instance );
 	}
 
@@ -339,6 +341,7 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function cache_file_path( Cache $cache, string $type = 'html', string $role_hash = '', string $variant = '' ): string {
 		$method = new \ReflectionMethod( Cache::class, 'get_cache_file_path' );
+		$method->setAccessible( true );
 		return $method->invoke( $cache, $type, $role_hash, $variant );
 	}
 

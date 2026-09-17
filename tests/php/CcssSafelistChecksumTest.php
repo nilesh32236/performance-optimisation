@@ -169,6 +169,7 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( string $method, ...$args ) {
 		$reflection = new ReflectionMethod( Critical_CSS::class, $method );
+		$reflection->setAccessible( true );
 
 		return $reflection->invoke( null, ...$args );
 	}
@@ -1091,8 +1092,11 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		$used_css_path = $used_css->get_used_css_path( 'http://example.com/safelist-sidecar-page/' );
 
 		$get_checksum = new \ReflectionMethod( Used_CSS::class, 'get_checksum_path' );
-		$is_stale     = new \ReflectionMethod( Used_CSS::class, 'is_checksum_stale' );
-		$persist      = new \ReflectionMethod( Used_CSS::class, 'persist_source_checksum' );
+		$get_checksum->setAccessible( true );
+		$is_stale = new \ReflectionMethod( Used_CSS::class, 'is_checksum_stale' );
+		$is_stale->setAccessible( true );
+		$persist = new \ReflectionMethod( Used_CSS::class, 'persist_source_checksum' );
+		$persist->setAccessible( true );
 
 		try {
 			$this->assertNotSame( '', $used_css_path );
@@ -1176,15 +1180,20 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 
 		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 		$prop = new \ReflectionProperty( Main::class, 'options' );
+		$prop->setAccessible( true );
 		$prop->setValue( $main, $options );
 		$prop = new \ReflectionProperty( Main::class, 'image_optimisation' );
+		$prop->setAccessible( true );
 		$prop->setValue( $main, new Image_Optimisation( $options ) );
 		$prop = new \ReflectionProperty( Main::class, 'google_fonts' );
+		$prop->setAccessible( true );
 		$prop->setValue( $main, new Google_Fonts( $options ) );
 		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
+		$prop->setAccessible( true );
 		$prop->setValue( $main, false );
 
 		$method = new \ReflectionMethod( Main::class, 'setup_hooks' );
+		$method->setAccessible( true );
 		$method->invoke( $main );
 
 		return array(
@@ -1335,7 +1344,9 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 
 		$cache_method = new ReflectionMethod( Cache::class, 'get_styles_inline_limit' );
-		$ccss_method  = new ReflectionMethod( Critical_CSS::class, 'get_styles_inline_limit' );
+		$cache_method->setAccessible( true );
+		$ccss_method = new ReflectionMethod( Critical_CSS::class, 'get_styles_inline_limit' );
+		$ccss_method->setAccessible( true );
 
 		$cases = array(
 			'6.8'       => 20000,

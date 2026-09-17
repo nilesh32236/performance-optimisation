@@ -55,24 +55,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * @return void
 		 */
 		public static function reset_asset_cache_for_tests(): void {
-			self::$asset_cache         = null;
-			self::$asset_cache_set     = false;
-			self::$nonce_wildcard_memo = array();
+			self::$asset_cache     = null;
+			self::$asset_cache_set = false;
 		}
-
-		/**
-		 * Per-request memo of confirmed ESI wildcard allowlist keys.
-		 *
-		 * The nonce injector runs on every fragment hydration (including
-		 * valid-nonce hydrations that skip the throttle); the memo skips
-		 * the repeated get_transient() once this request has confirmed (or
-		 * written) the wildcard. Keyed by transient key. Reset by
-		 * reset_asset_cache_for_tests().
-		 *
-		 * @since NEXT
-		 * @var array<string,bool>
-		 */
-		private static $nonce_wildcard_memo = array();
 
 		/**
 		 * Whether ESI is available (Enterprise only).
@@ -161,75 +146,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 */
 		private static function has_header_emitter(): bool {
 			return class_exists( 'PerformanceOptimise\Inc\Header_Emitter' );
-		}
-
-		/**
-		 * Per-IP-per-block fixed-window throttle for the public fragment endpoint.
-		 *
-		 * The handler is registered for nopriv (guests hydrate cart/nonce
-		 * holes through it). Invalid-nonce attempts (60/60s per IP+block)
-		 * and `nonce`-block refreshes (tighter 10/60s per IP+block, since
-		 * each refresh mints a fresh nonce) are throttled, and valid
-		 * hydrations are throttled at a higher bound (120/60s per
-		 * IP+block) so a scraped semi-public nonce cannot grant unlimited
-		 * fragment hits. The bucket is keyed by
-		 * client IP plus block name so one hot block cannot exhaust the
-		 * budget for the others, mirroring
-		 * Rest::is_endpoint_throttled() semantics: 60 hits per 60s; the TTL
-		 * is set on the first increment and later hits re-store with the
-		 * remaining TTL instead of extending it. Fail-open when the transient
-		 * API is unavailable (early boot or unit stubs): the nonce gate still
-		 * applies. REMOTE_ADDR only (never X-Forwarded-For): the header is
-		 * client-controlled and must not mint fresh buckets.
-		 *
-		 * @since NEXT
-		 * @param string $block  Block name scoping the bucket ('' for legacy callers).
-		 * @param int    $limit  Max hits per window.
-		 * @param int    $window Window in seconds.
-		 * @return bool True when throttled.
-		 */
-		private static function is_fragment_throttled( string $block = '', int $limit = 60, int $window = 60 ): bool {
-			if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
-				return false;
-			}
-			try {
-				$ip = '';
-				if ( isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-					$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-				}
-				$key    = Util::transient_key( 'wppo_esi_throttle_' . md5( ( '' !== $ip ? $ip : 'anon' ) . '|' . strtolower( $block ) ) );
-				$bucket = get_transient( $key );
-				$now    = time();
-				if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
-					set_transient(
-						$key,
-						array(
-							'count' => 1,
-							'start' => $now,
-						),
-						$window
-					);
-					return false;
-				}
-				$count = (int) $bucket['count'];
-				if ( $count >= $limit ) {
-					return true;
-				}
-				$elapsed   = $now - (int) $bucket['start'];
-				$remaining = max( 1, min( $window, $window - $elapsed ) );
-				set_transient(
-					$key,
-					array(
-						'count' => $count + 1,
-						'start' => (int) $bucket['start'],
-					),
-					$remaining
-				);
-				return false;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
 		}
 
 		/**
@@ -416,13 +332,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					$raw_deps = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
 					$clean    = array();
 					foreach ( $raw_deps as $dep ) {
-						// Only non-empty strings are valid script deps: a
-						// tampered artifact's true/1 would otherwise enqueue
-						// a bogus '1' dependency.
-						if ( ! is_string( $dep ) ) {
+						if ( ! is_scalar( $dep ) ) {
 							continue;
 						}
-						$dep = trim( $dep );
+						$dep = trim( (string) $dep );
 						if ( '' !== $dep ) {
 							$clean[] = $dep;
 						}
@@ -636,14 +549,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *
 		 * Enterprise: <esi:include src="...">; OLS: <div data-wppo-esi="block" data-nonce="...">
 		 *
-		 * The embedded `wppo_esi` nonce is a per-session CSRF token, not a
-		 * secrecy boundary: placeholders rendered before the static-HTML
-		 * cache is generated are baked into cache files served to guests for
-		 * the nonce lifetime, so the fragment nonce is semi-public by design.
-		 * Authorization must not rest on nonce secrecy alone — the
-		 * `adminbar` block additionally requires `is_user_logged_in()`, which
-		 * is the real boundary, and every fragment passes through wp_kses().
-		 *
 		 * @since 2.0.0
 		 * @param string $block Block name (cart, adminbar, nonce).
 		 * @param array  $attrs Optional attributes.
@@ -662,43 +567,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			 * @param array  $attrs Attributes.
 			 */
 			$block = (string) apply_filters( 'wppo_esi_block', $block, $attrs );
-			// Re-normalize after the filter: a filter returning a long or
-			// path-like string would otherwise create unbounded transient
-			// keys (cache poisoning/key squatting) via transient_key()/md5
-			// and flow into add_query_arg/esc_attr unsanitized.
-			$block = strtolower( sanitize_key( $block ) );
-			if ( '' === $block ) {
-				$block = 'cart';
-			}
 
-			// Fail closed when the nonce API is unavailable: a fallback md5
-			// seed can never verify via wp_verify_nonce(), so embedding it
-			// would render placeholders that 403 forever.
-			if ( ! function_exists( 'wp_create_nonce' ) || ! function_exists( 'wp_verify_nonce' ) ) {
+			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : self::fallback_nonce_seed( $block );
+			// Fail closed per fallback_nonce_seed() contract: an empty seed
+			// means no usable secret exists, so never embed or store an
+			// empty nonce — render an inert marker instead (fragment
+			// verification rejects empty nonces, so hydration stays denied).
+			if ( '' === $nonce ) {
 				return '<!-- wppo-esi:unavailable -->';
 			}
-			$nonce = wp_create_nonce( 'wppo_esi' );
-			// Fail closed per fallback_nonce_seed() contract: an empty nonce
-			// means no usable secret exists, so never embed it — render an
-			// inert marker instead (fragment verification rejects empty
-			// nonces, so hydration stays denied).
-			if ( ! is_string( $nonce ) || '' === $nonce ) {
-				return '<!-- wppo-esi:unavailable -->';
-			}
-			// Wildcard allowlist key only — the per-nonce transients
-			// previously written here were never read by
-			// handle_ajax_fragment() (dead stores/write amplification), so
-			// they are no longer written. Only set when missing, and
-			// memoized per request so N blocks cost at most one transient
-			// read (DB-backed transients).
+			// Store 12h transient blog-prefixed.
+			$transient_key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce . $block ) );
+			set_transient( $transient_key, $nonce, 12 * HOUR_IN_SECONDS );
+			// Also store wildcard allowlist key for wppo_esi_nonces.
 			$wildcard_key = Util::transient_key( 'wppo_esi_nonce_' . $block );
-			if ( empty( self::$nonce_wildcard_memo[ $wildcard_key ] ) ) {
-				$needs_write = ! function_exists( 'get_transient' ) || false === get_transient( $wildcard_key );
-				if ( $needs_write && function_exists( 'set_transient' ) ) {
-					set_transient( $wildcard_key, 1, 12 * HOUR_IN_SECONDS );
-				}
-				self::$nonce_wildcard_memo[ $wildcard_key ] = true;
-			}
+			set_transient( $wildcard_key, 1, 12 * HOUR_IN_SECONDS );
 
 			$src = '';
 			if ( function_exists( 'admin_url' ) ) {
@@ -974,27 +857,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			 * @since 2.0.0
 			 * @param array $tags Allowed tags => attributes map (kses shape).
 			 */
-			$tags = (array) apply_filters( 'wppo_esi_allowed_html', $tags );
-			// Denylist-enforce after the filter: a third-party filter adding
-			// script-capable tags would otherwise be served from the nopriv
-			// ESI endpoint and injected by esi.js for any holder of a
-			// semi-public 12h nonce. Protocols are pinned at the wp_kses()
-			// call site; tags/attrs are pinned here.
-			foreach ( array( 'script', 'iframe', 'object', 'embed', 'link', 'meta', 'style' ) as $denied_tag ) {
-				unset( $tags[ $denied_tag ] );
-			}
-			foreach ( $tags as $tag_name => $tag_attrs ) {
-				if ( ! is_array( $tag_attrs ) ) {
-					continue;
-				}
-				foreach ( array_keys( $tag_attrs ) as $attr_name ) {
-					$attr_lower = strtolower( (string) $attr_name );
-					if ( 0 === strpos( $attr_lower, 'on' ) || 'formaction' === $attr_lower || 'xlink:href' === $attr_lower ) {
-						unset( $tags[ $tag_name ][ $attr_name ] );
-					}
-				}
-			}
-			return $tags;
+			return (array) apply_filters( 'wppo_esi_allowed_html', $tags );
 		}
 
 		/**
@@ -1013,112 +876,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * get_allowed_fragment_html() before it is echoed. Never return raw
 		 * untrusted markup from this endpoint.
 		 *
-		 * ## Nonce model
-		 *
-		 * Every block (including `cart`) requires a valid `wppo_esi` nonce,
-		 * read from the POST body first with a query-string fallback: the
-		 * OLS hydration client (src/esi.js) is POST-only, but Enterprise
-		 * `<esi:include>` server-side sub-requests are always GET, so a
-		 * POST-only read would 403 every Enterprise hydration. The nonce is
-		 * a per-session CSRF token, not a secrecy boundary: placeholders
-		 * rendered before the static-HTML cache is generated are baked into
-		 * cache files served to guests for the nonce lifetime, so the check
-		 * must never be the sole authorization gate (the `adminbar` block
-		 * additionally requires `is_user_logged_in()`, which is the real
-		 * boundary there). The `nonce` block is refreshable without a valid
-		 * presented nonce (rate-limited like invalid attempts) so pages
-		 * served from a stale static-HTML cache — whose baked-in nonce has
-		 * expired — can mint a fresh one instead of 403ing forever.
-		 *
-		 * Throttling runs after verification: invalid-nonce attempts
-		 * (60/60s per IP+block) plus `nonce` refreshes (tighter 10/60s
-		 * per IP+block, fail-closed when the transient API is
-		 * unavailable) plus valid hydrations at a higher bound (120/60s
-		 * per IP+block).
-		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function handle_ajax_fragment(): void {
-			// POST body first (OLS hydration client), query-string fallback
-			// for Enterprise <esi:include> server-side GET sub-requests —
-			// matching the _wpnonce read order below so a mixed-source
-			// request cannot route one source's block against the other's
-			// nonce scope.
 			$block = '';
-			if ( isset( $_POST['block'] ) && is_string( $_POST['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-				$block = strtolower( sanitize_text_field( wp_unslash( $_POST['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			} elseif ( isset( $_GET['block'] ) && is_string( $_GET['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-				$block = strtolower( sanitize_text_field( wp_unslash( $_GET['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			if ( isset( $_GET['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+				$block = strtolower( sanitize_text_field( wp_unslash( $_GET['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
+			} elseif ( isset( $_POST['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+				$block = strtolower( sanitize_text_field( wp_unslash( $_POST['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
 			}
 			if ( '' === $block ) {
 				$block = 'cart';
 			}
 
-			// POST body first (OLS hydration client); query-string fallback
-			// for Enterprise <esi:include> server-side GET sub-requests, whose
-			// src URL carries the _wpnonce embedded by render_esi_placeholder().
+			// Require valid 'wppo_esi' nonce for all blocks except public cart.
+			// POST body only: a query-string nonce would leak into server/proxy logs and Referer headers (src/esi.js is POST-only).
 			$nonce = '';
-			if ( isset( $_POST['_wpnonce'] ) && is_string( $_POST['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			if ( isset( $_POST['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
 				$nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			} elseif ( isset( $_GET['_wpnonce'] ) && is_string( $_GET['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-				$nonce = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			}
-			$nonce_valid = ( '' !== $nonce && function_exists( 'wp_verify_nonce' ) ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
+			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
 
-			$is_nonce_refresh = ( 'nonce' === $block );
-
-			// The nonce-refresh block stays reachable with a stale/expired
-			// presented nonce (stale static-HTML cache recovery), but the
-			// minting oracle is rate-limited per IP+block at a tighter
-			// bound than invalid attempts: a refresh mints a fresh 12h
-			// nonce, so refresh-then-replay must not give unlimited
-			// fragment hits. Fail-closed when the transient API is
-			// unavailable (is_fragment_throttled() fails open): unlimited
-			// minting must not be granted when no bucket can be enforced.
-			if ( $is_nonce_refresh ) {
-				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
-					self::emit_private_fail_closed();
-					if ( function_exists( 'wp_send_json_error' ) ) {
-						wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
-					}
-					return;
-				}
-				if ( self::is_fragment_throttled( $block, 10, 60 ) ) {
-					self::emit_private_fail_closed();
-					if ( function_exists( 'wp_send_json_error' ) ) {
-						wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
-					}
-					return;
-				}
-			} elseif ( ! $nonce_valid ) {
-				// Require a valid 'wppo_esi' nonce for every other block,
-				// including the cart fragment. Guests present the nonce
-				// embedded in the page placeholder, so hydration keeps
-				// working; no block is reachable without proving receipt of
-				// a server-minted placeholder. Only invalid attempts are
-				// throttled (verify-first, throttle-second).
-				if ( self::is_fragment_throttled( $block ) ) {
-					self::emit_private_fail_closed();
-					if ( function_exists( 'wp_send_json_error' ) ) {
-						wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
-					}
-					return;
-				}
+			if ( ! $nonce_valid && 'cart' !== $block && 'nonce' !== $block ) {
 				self::emit_private_fail_closed();
 				if ( function_exists( 'wp_send_json_error' ) ) {
 					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
-				}
-				return;
-				// Valid-nonce hydrations are throttled too, at a higher
-				// bound: placeholder nonces are baked into static-HTML
-				// cache served to guests (semi-public, 12h), so one
-				// scraped valid nonce must not grant unlimited fragment
-				// hits per IP.
-			} elseif ( self::is_fragment_throttled( $block, 120, 60 ) ) {
-				self::emit_private_fail_closed();
-				if ( function_exists( 'wp_send_json_error' ) ) {
-					wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
 				}
 				return;
 			}
@@ -1145,9 +928,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					$fragment = '<div class="wppo-adminbar">adminbar</div>';
 					break;
 				case 'nonce':
-					// Fresh-nonce minting. Reachable without a valid presented
-					// nonce (see the rate-limited refresh gate above) so stale
-					// static-HTML cache pages can recover hydration.
+					// No nonce oracle: only mint a fresh nonce when the caller
+					// presented a valid one; unauthenticated callers get 403.
+					if ( ! $nonce_valid ) {
+						self::emit_private_fail_closed();
+						if ( function_exists( 'wp_send_json_error' ) ) {
+							wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
+						}
+						return;
+					}
 					$fragment = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : '';
 					break;
 				default:
@@ -1187,14 +976,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 						'data'    => array( 'html' => $fragment ),
 					)
 				);
-				// Terminate like the wp_send_json_* path (which dies): extra
-				// theme output or a trailing `0` would otherwise corrupt the
-				// AJAX contract.
-				if ( function_exists( 'wp_die' ) ) {
-					wp_die();
-				} else {
-					die;
-				}
 			}
 		}
 
@@ -1222,35 +1003,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				return $content;
 			}
 
-			// Fail closed when the nonce API is unavailable: a fallback md5
-			// seed can never verify via wp_verify_nonce(), so injecting it
-			// would mint placeholders that 403 forever.
-			if ( ! function_exists( 'wp_create_nonce' ) || ! function_exists( 'wp_verify_nonce' ) ) {
-				return $content;
-			}
-			$nonce = wp_create_nonce( 'wppo_esi' );
+			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : self::fallback_nonce_seed( 'wppo_esi' );
 			// Fail closed per fallback_nonce_seed() contract: never inject
-			// an empty nonce — leave the placeholder untouched so
+			// or store an empty nonce — leave the placeholder untouched so
 			// verification (which rejects empty nonces) stays denied.
-			if ( ! is_string( $nonce ) || '' === $nonce ) {
+			if ( '' === $nonce ) {
 				return $content;
 			}
+			$key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce ) );
+			set_transient( $key, $nonce, 12 * HOUR_IN_SECONDS );
 			// Wildcard allowlist transient for ESI (wppo_-prefixed to avoid
 			// collisions with other plugins on shared object-cache backends).
-			// Per-request memo: this injector runs on every fragment
-			// hydration, so once this request has confirmed (or written) the
-			// wildcard, later hydrations skip the get+set entirely.
 			$wildcard = Util::transient_key( 'wppo_esi_nonces' );
-			if ( empty( self::$nonce_wildcard_memo[ $wildcard ] ) ) {
-				$existing = get_transient( $wildcard );
-				if ( ! is_array( $existing ) ) {
-					$existing = array();
-				}
-				if ( ! in_array( 'wppo_esi', $existing, true ) ) {
-					$existing[] = 'wppo_esi';
-					set_transient( $wildcard, $existing, 12 * HOUR_IN_SECONDS );
-				}
-				self::$nonce_wildcard_memo[ $wildcard ] = true;
+			$existing = get_transient( $wildcard );
+			if ( ! is_array( $existing ) ) {
+				$existing = array();
+			}
+			if ( ! in_array( 'wppo_esi', $existing, true ) ) {
+				$existing[] = 'wppo_esi';
+				set_transient( $wildcard, $existing, 12 * HOUR_IN_SECONDS );
 			}
 
 			// Replace placeholder tokens.
@@ -1355,27 +1126,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				return;
 			}
 
-			// Generic-private fallback reusing the already-resolved
-			// $is_cart/$is_checkout/$is_account above instead of re-calling
-			// should_punch_hole() 4x (each call re-runs is_esi_available()
-			// with has_filter + 2x apply_filters plus conditionals on the
-			// send_headers hot path).
-			$generic_private = $is_cart || $is_checkout || $is_account;
-			if ( ! $generic_private && function_exists( 'is_user_logged_in' ) ) {
-				try {
-					$generic_private = is_user_logged_in();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			if ( ! $generic_private ) {
-				$cart_cookie = isset( $_COOKIE['woocommerce_items_in_cart'] ) && is_string( $_COOKIE['woocommerce_items_in_cart'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_items_in_cart'] ) ) : '';
-				$hash_cookie = isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_cart_hash'] ) ) : '';
-				if ( '' !== $cart_cookie || '' !== $hash_cookie ) {
-					$generic_private = true;
-				}
-			}
-			if ( $generic_private ) {
+			// Also check should_punch_hole for generic private.
+			if ( self::should_punch_hole( 'cart' ) || self::should_punch_hole( 'checkout' ) || self::should_punch_hole( 'account' ) || self::should_punch_hole( 'adminbar' ) ) {
 				self::emit_private_fail_closed();
 				do_action( 'wppo_esi_private_headers_sent', 'private' );
 			}
@@ -1423,13 +1175,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// Always register send_headers for private/no-vary.
 			add_action( 'send_headers', array( self::class, 'handle_send_headers' ), 1 );
 
-			// Only register ESI-specific hooks when the setting + Enterprise
-			// availability gate (is_enabled()) passes. The previous
-			// `!is_enabled() && !is_esi_available()` condition reduced to
-			// `!available`, so on Enterprise the else branch ran even with
-			// the setting disabled — queuing tags and emitting
-			// X-LiteSpeed-Tag despite the toggle.
-			if ( ! self::is_enabled() ) {
+			// Only register ESI-specific hooks when enabled and available.
+			if ( ! self::is_enabled() && ! self::is_esi_available() ) {
 				// OLS fallback: no litespeed_nonce action needed, but the
 				// nonce injector still runs on fragment output (below).
 				add_filter( 'litespeed_esi_nonces', array( self::class, 'filter_esi_nonces' ) );
@@ -1505,9 +1252,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * @return void
 		 */
 		public static function handle_nonce( $action ): void {
-			if ( ! self::is_setting_enabled() ) {
-				return;
-			}
 			if ( ! self::is_esi_available() ) {
 				return;
 			}

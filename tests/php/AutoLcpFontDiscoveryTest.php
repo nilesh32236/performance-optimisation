@@ -30,6 +30,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		$reflection = new \ReflectionClass( Main::class );
 		$main       = $reflection->newInstanceWithoutConstructor();
 		$options    = $reflection->getProperty( 'options' );
+		$options->setAccessible( true );
 		$options->setValue( $main, array( 'preload_settings' => $preload_settings ) );
 		return $main;
 	}
@@ -131,6 +132,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 		$main   = $this->make_main( array( 'autoDiscoverFonts' => true ) );
 		$method = new \ReflectionMethod( Main::class, 'resolve_font_url' );
+		$method->setAccessible( true );
 
 		$this->assertSame(
 			'http://example.com/fonts/root.woff2',
@@ -254,6 +256,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 		$main   = $this->make_main( array( 'autoDiscoverFonts' => true ) );
 		$method = new \ReflectionMethod( Main::class, 'normalize_font_url' );
+		$method->setAccessible( true );
 
 		$first  = $method->invoke( $main, 'http://example.com/fonts/a.woff2?v=1' );
 		$second = $method->invoke( $main, 'http://example.com/fonts/a.woff2?v=2' );
@@ -302,6 +305,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		$image_opt->clear_instance_lcp_memo();
 
 		$prop = new \ReflectionProperty( Image_Optimisation::class, 'current_lcp_url' );
+		$prop->setAccessible( true );
 		$this->assertNull( $prop->getValue( $image_opt ) );
 	}
 
@@ -316,8 +320,9 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 			)
 		);
 		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_srcset_preload_items' );
-		$srcset    = 'http://example.com/a-400.jpg 400w, http://example.com/a-800.jpg 800w, http://example.com/a-1200.jpg 1200w';
-		$items     = $method->invoke( $image_opt, $srcset, 'http://example.com/a.jpg', array( 'maxWidthImgSize' => 5000 ) );
+		$method->setAccessible( true );
+		$srcset = 'http://example.com/a-400.jpg 400w, http://example.com/a-800.jpg 800w, http://example.com/a-1200.jpg 1200w';
+		$items  = $method->invoke( $image_opt, $srcset, 'http://example.com/a.jpg', array( 'maxWidthImgSize' => 5000 ) );
 
 		// Largest widths win (the likely hero, not thumbnails); media is
 		// generated after the slice so coverage stays gapless from 0.
@@ -336,6 +341,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		$image_opt = new Image_Optimisation( array( 'image_optimisation' => array() ) );
 		$method    = new \ReflectionMethod( Image_Optimisation::class, 'is_auto_lcp_rum_satisfied' );
+		$method->setAccessible( true );
 
 		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => false ) ) );
 		$this->assertFalse( $method->invoke( $image_opt ) );
@@ -410,6 +416,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => false ) ) );
 		$image_opt = $this->make_image_opt( array(), array( 'autoLcpPreload' => true ) );
 		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_auto_lcp_preload_data' );
+		$method->setAccessible( true );
 
 		$this->assertSame( array(), $method->invoke( $image_opt ) );
 	}
@@ -425,6 +432,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => true ) ) );
 		$image_opt = $this->make_image_opt( array(), array( 'autoLcpPreload' => true ) );
 		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_auto_lcp_preload_data' );
+		$method->setAccessible( true );
 
 		$items = $method->invoke( $image_opt );
 
@@ -446,6 +454,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => true ) ) );
 		$image_opt = $this->make_image_opt( array(), array( 'autoLcpPreload' => true ) );
 		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_all_preload_data' );
+		$method->setAccessible( true );
 
 		$items = $method->invoke( $image_opt );
 
@@ -463,6 +472,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => true ) ) );
 		$image_opt = $this->make_image_opt( array(), array( 'autoLcpPreload' => true ) );
 		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_auto_lcp_preload_data' );
+		$method->setAccessible( true );
 
 		$this->assertSame( array(), $method->invoke( $image_opt ) );
 	}

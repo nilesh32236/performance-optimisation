@@ -75,6 +75,7 @@ class UsedCssSafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	public function test_compound_popup_selector_is_kept_by_default(): void {
 		$instance  = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
 		$safe_prop = new \ReflectionProperty( Used_CSS::class, 'safelist' );
+		$safe_prop->setAccessible( true );
 		$safe_prop->setValue( $instance, Used_CSS::get_safelist_presets() );
 		$used = array(
 			'tags'    => array(),

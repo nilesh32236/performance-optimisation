@@ -252,10 +252,6 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 		// Util::get_settings() would serve a stale (empty) config cached by
 		// an earlier test and probe tests would miss stored Redis settings.
 		Util::reset_runtime_caches();
-		// The circuit-state memo is per-request static: without a reset an
-		// earlier test's verdict would leak into later tests sharing the
-		// process.
-		Object_Cache::reset_circuit_memo_for_tests();
 
 		$test = $this;
 
@@ -549,7 +545,6 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 			ini_set( 'error_log', $this->old_error_log );
 		}
 
-		Object_Cache::reset_circuit_memo_for_tests();
 		\Brain\Monkey\tearDown();
 		parent::tearDown();
 	}
@@ -609,6 +604,7 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 	private function invoke_dropin( string $method, ...$args ) {
 		$instance = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
 		$ref      = new \ReflectionMethod( 'WP_Object_Cache', $method );
+		$ref->setAccessible( true );
 		return $ref->invoke( $instance, ...$args );
 	}
 
@@ -1039,6 +1035,7 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 
 		$notices = new Admin_Notices();
 		$method  = new \ReflectionMethod( Admin_Notices::class, 'maybe_object_cache_circuit_notice' );
+		$method->setAccessible( true );
 
 		ob_start();
 		$method->invoke( $notices );
@@ -1051,8 +1048,6 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 
 		// Dismissed for this trip: silent.
 		$this->options[ Object_Cache::CIRCUIT_DISMISSED_OPTION ] = $tripped_at;
-		Admin_Notices::reset_memo_cache_for_tests();
-		Object_Cache::reset_circuit_memo_for_tests();
 		ob_start();
 		$method->invoke( $notices );
 		$dismissed_html = (string) ob_get_clean();
@@ -1060,8 +1055,6 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 
 		// A newer trip re-arms the notice.
 		$this->options[ Object_Cache::CIRCUIT_OPTION ]['tripped_at'] = $tripped_at + 100;
-		Admin_Notices::reset_memo_cache_for_tests();
-		Object_Cache::reset_circuit_memo_for_tests();
 		ob_start();
 		$method->invoke( $notices );
 		$rearmed_html = (string) ob_get_clean();
@@ -1074,6 +1067,7 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 	public function test_build_redis_config_merges_stored_defaults(): void {
 		$rest   = new Rest();
 		$method = new \ReflectionMethod( Rest::class, 'build_redis_config' );
+		$method->setAccessible( true );
 
 		$stored = array(
 			'mode'     => 'standalone',

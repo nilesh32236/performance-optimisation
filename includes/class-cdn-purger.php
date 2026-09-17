@@ -25,8 +25,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 	 */
 	class CDN_Purger {
 
-		use Purge_Logger;
-
 		/**
 		 * Name of the constant holding the Cloudflare API token.
 		 *
@@ -256,7 +254,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * @return void
 		 */
 		private static function log_failure( string $service, string $detail ): void {
-			self::log_purge_failure( $service, $detail, 'CDN purge failed', 'wppo_cdn_purge_log_lock', 60 );
+			do_action( 'wppo_debug_log', 'CDN purge failed [' . $service . ']: ' . $detail );
 		}
 	}
 }

@@ -70,10 +70,12 @@ class MainAvailablePostTypesTest extends \PHPUnit\Framework\TestCase {
 		$main = new Main();
 
 		$reflection = new \ReflectionMethod( Main::class, 'add_available_post_types_to_options' );
+		$reflection->setAccessible( true );
 		$reflection->invoke( $main );
 
 		$options_reflection = new \ReflectionProperty( Main::class, 'options' );
-		$options            = $options_reflection->getValue( $main );
+		$options_reflection->setAccessible( true );
+		$options = $options_reflection->getValue( $main );
 
 		return $options['image_optimisation']['availablePostTypes'] ?? null;
 	}

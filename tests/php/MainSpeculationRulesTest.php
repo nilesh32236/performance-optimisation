@@ -37,6 +37,7 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 		$main       = $reflection->newInstanceWithoutConstructor();
 
 		$options = $reflection->getProperty( 'options' );
+		$options->setAccessible( true );
 		$options->setValue(
 			$main,
 			array(
@@ -207,6 +208,7 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 
 		$reflection = new \ReflectionClass( Main::class );
 		$method     = $reflection->getMethod( 'get_speculation_default_override' );
+		$method->setAccessible( true );
 
 		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE=banana' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv
 
@@ -232,6 +234,7 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 
 		$reflection = new \ReflectionClass( Main::class );
 		$method     = $reflection->getMethod( 'get_speculation_default_override' );
+		$method->setAccessible( true );
 
 		$this->assertSame( 'moderate', $method->invoke( $main, $name ) );
 

@@ -142,6 +142,7 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 		$main       = $reflection->newInstanceWithoutConstructor();
 
 		$options = $reflection->getProperty( 'options' );
+		$options->setAccessible( true );
 		$options->setValue(
 			$main,
 			array(
@@ -163,6 +164,7 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 	private function is_url_valid( Main $main, string $url ): bool {
 		$reflection = new \ReflectionClass( Main::class );
 		$method     = $reflection->getMethod( 'is_speculation_list_url_valid' );
+		$method->setAccessible( true );
 		return (bool) $method->invoke( $main, $url );
 	}
 

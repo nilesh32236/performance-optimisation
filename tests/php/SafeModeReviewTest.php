@@ -30,6 +30,7 @@ class SafeModeReviewTest extends \PHPUnit\Framework\TestCase {
 	private function make_main( array $options ): Main {
 		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 		$prop = new \ReflectionProperty( Main::class, 'options' );
+		$prop->setAccessible( true );
 		$prop->setValue( $main, $options );
 		return $main;
 	}
@@ -41,6 +42,7 @@ class SafeModeReviewTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function reset_kill_switch_cache(): void {
 		$prop = new \ReflectionProperty( Main::class, 'delay_disabled_page_cache' );
+		$prop->setAccessible( true );
 		$prop->setValue( null, array() );
 	}
 
@@ -115,7 +117,8 @@ class SafeModeReviewTest extends \PHPUnit\Framework\TestCase {
 
 		$main   = $this->make_main( array( 'file_optimisation' => array() ) );
 		$method = new \ReflectionMethod( Main::class, 'get_delay_js_preset_exclusions' );
-		$list   = $method->invoke( $main );
+		$method->setAccessible( true );
+		$list = $method->invoke( $main );
 
 		$this->assertContains( 'my-safe', $list );
 		$this->assertContains( '42', $list );
@@ -142,7 +145,8 @@ class SafeModeReviewTest extends \PHPUnit\Framework\TestCase {
 
 		$main   = $this->make_main( array( 'file_optimisation' => array() ) );
 		$method = new \ReflectionMethod( Main::class, 'get_delay_js_preset_exclusions' );
-		$list   = $method->invoke( $main );
+		$method->setAccessible( true );
+		$list = $method->invoke( $main );
 
 		$this->assertContains( 'elementor-frontend', $list );
 	}
@@ -159,6 +163,7 @@ class SafeModeReviewTest extends \PHPUnit\Framework\TestCase {
 		$html     = '<html><head></head><body><p>hi</p></body></html>';
 		$instance = new \PerformanceOptimise\Inc\Minify\HTML( $html, array() );
 		$method   = new \ReflectionMethod( \PerformanceOptimise\Inc\Minify\HTML::class, 'safe_minify_css_block' );
+		$method->setAccessible( true );
 
 		$out = $method->invoke( $instance, ' class="x"', 'a { color: red; }' );
 		$this->assertStringStartsWith( '<style', $out );
@@ -206,8 +211,10 @@ class SafeModeReviewTest extends \PHPUnit\Framework\TestCase {
 
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$prop  = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, '' );
 		$prop = new \ReflectionProperty( Cache::class, 'domain' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, '' );
 
 		// Zero/negative IDs and unresolvable permalinks are no-ops, never fatal.

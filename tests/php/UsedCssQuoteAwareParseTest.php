@@ -62,6 +62,7 @@ class UsedCssQuoteAwareParseTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_used_css_static( string $name, array $args = array() ) {
 		$method = new \ReflectionMethod( Used_CSS::class, $name );
+		$method->setAccessible( true );
 		return $method->invokeArgs( null, $args );
 	}
 

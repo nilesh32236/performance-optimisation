@@ -136,6 +136,7 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		$main       = $reflection->newInstanceWithoutConstructor();
 
 		$options = $reflection->getProperty( 'options' );
+		$options->setAccessible( true );
 		$options->setValue(
 			$main,
 			array(
@@ -434,6 +435,7 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 
 		$reflection = new \ReflectionClass( Main::class );
 		$method     = $reflection->getMethod( 'is_speculation_list_url_valid' );
+		$method->setAccessible( true );
 
 		$this->assertTrue( (bool) $method->invoke( $main, 'http://example.com/post/' ) );
 		$this->assertFalse( (bool) $method->invoke( $main, 'http://example.com:8080/post/' ) );

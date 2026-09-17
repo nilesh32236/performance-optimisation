@@ -204,6 +204,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function read_private_prop( Main $main, string $prop ) {
 		$reflection = new \ReflectionProperty( Main::class, $prop );
+		$reflection->setAccessible( true );
 		return $reflection->getValue( $main );
 	}
 
@@ -217,6 +218,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private_method( Main $main, string $name, ...$args ) {
 		$reflection = new \ReflectionMethod( Main::class, $name );
+		$reflection->setAccessible( true );
 		return $reflection->invoke( $main, ...$args );
 	}
 
@@ -1089,6 +1091,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$main       = $reflection->newInstanceWithoutConstructor();
 
 		$prop = $reflection->getProperty( 'options' );
+		$prop->setAccessible( true );
 		$prop->setValue( $main, $options );
 
 		return $main;
@@ -1425,6 +1428,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 		// Set the private exclusion list to empty so every queued handle is deferred.
 		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
 		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
@@ -1478,6 +1482,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
 		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
@@ -1545,6 +1550,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
 		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
@@ -1733,6 +1739,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
 		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
@@ -1832,6 +1839,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
 		return $main;

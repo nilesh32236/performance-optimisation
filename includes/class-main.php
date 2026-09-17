@@ -416,29 +416,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Create the static-cache collaborator with a test seam.
-		 *
-		 * Applies the `wppo_cache_instance` filter so tests (and advanced
-		 * integrations) can stub the Cache collaborator; defaults to
-		 * `new Cache( $options )` preserving current behavior.
-		 *
-		 * @since NEXT
-		 * @param array $options Plugin options passed to Cache.
-		 * @return mixed Cache instance (or filtered stub).
-		 */
-		public static function create_cache( array $options ) {
-			$cache = new Cache( $options );
-			/**
-			 * Filter the Cache collaborator instance.
-			 *
-			 * @since NEXT
-			 * @param mixed $cache   Cache instance.
-			 * @param array $options Plugin options.
-			 */
-			return apply_filters( 'wppo_cache_instance', $cache, $options );
-		}
-
-		/**
 		 * Constructor.
 		 *
 		 * Initializes the class by including necessary files and setting up hooks.
@@ -816,13 +793,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( is_user_logged_in() ) {
 				$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
 				if ( $enable ) {
-					// is_string guard below: an array-valued cookie
-					// (?wppo_role_hash[]=x) would otherwise reach
-					// wp_unslash()/sanitize_text_field() as an array and
-					// fatal on PHP 8.2+.
 					$user        = wp_get_current_user();
 					$hash        = Util::get_role_hash( $user );
-					$cookie_hash = isset( $_COOKIE['wppo_role_hash'] ) && is_string( $_COOKIE['wppo_role_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['wppo_role_hash'] ) ) : null;
+					$cookie_hash = isset( $_COOKIE['wppo_role_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['wppo_role_hash'] ) ) : null;
 					if ( '' !== $hash && ( null === $cookie_hash || $cookie_hash !== $hash ) ) {
 						if ( ! headers_sent() ) {
 							setcookie(
@@ -917,9 +890,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-edge-cache.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-edge-cache.php';
 			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/trait-purge-logger.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/trait-purge-logger.php';
-			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-edge-purger.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-edge-purger.php';
 			}
@@ -951,7 +921,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
 				'Core_Tweaks'            => 'class-core-tweaks.php',
 				'Critical_CSS'           => 'class-critical-css.php',
-				'Css_Safelist'           => 'class-css-safelist.php',
 				'Cron'                   => 'class-cron.php',
 				'Database_Cleanup'       => 'class-database-cleanup.php',
 				'Deactivate'             => 'class-deactivate.php',
@@ -963,7 +932,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Metabox'                => 'class-metabox.php',
 				'Object_Cache'           => 'class-object-cache.php',
 				'Pagespeed'              => 'class-pagespeed.php',
-				'Purge_Logger'           => 'trait-purge-logger.php',
 				'Rest'                   => 'class-rest.php',
 				'RUM'                    => 'class-rum.php',
 				'Sandbox_Preview'        => 'class-sandbox-preview.php',
@@ -1154,13 +1122,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( ! empty( $this->options['cache_settings']['enableCache'] ) ) {
-				$this->cache = self::create_cache( $this->options );
-				if ( method_exists( $this->cache, 'set_image_optimisation' ) ) {
-					$this->cache->set_image_optimisation( $this->image_optimisation );
-				}
-				if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
-					$this->cache->set_google_fonts( $this->google_fonts );
-				}
+				$this->cache = new Cache( $this->options );
+				$this->cache->set_image_optimisation( $this->image_optimisation );
+				$this->cache->set_google_fonts( $this->google_fonts );
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
@@ -1285,13 +1249,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// reassess whether combine_css() should defer to core preload emission
 				// or become an opt-in legacy toggle. No runtime change until then.
 				if ( ! $this->cache ) {
-					$this->cache = self::create_cache( $this->options );
-					if ( method_exists( $this->cache, 'set_image_optimisation' ) ) {
-						$this->cache->set_image_optimisation( $this->image_optimisation );
-					}
-					if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
-						$this->cache->set_google_fonts( $this->google_fonts );
-					}
+					$this->cache = new Cache( $this->options );
+					$this->cache->set_image_optimisation( $this->image_optimisation );
+					$this->cache->set_google_fonts( $this->google_fonts );
 				}
 				add_action( 'wp_enqueue_scripts', array( $this->cache, 'combine_css' ), PHP_INT_MAX );
 				// Post-purge last-good fallback (issue #1275) when the page
@@ -1549,8 +1509,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			$this->register_head_hint_hooks();
-			$this->register_collaborators();
+			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
+			add_action( 'wp_head', array( $this, 'add_speculation_rules' ), 0 );
+			add_filter( 'wp_resource_hints', array( $this, 'add_resource_hints' ), 10, 2 );
+
+			new Metabox();
+			new Cron();
+			new Asset_Manager();
+			new Abilities();
 
 			// Critical CSS hooks. Safe mode (issue #1098) disables stylesheet
 			// deferral in one click while preserving the criticalCSS setting.
@@ -1567,55 +1533,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wppo_generate_ccss', array( 'PerformanceOptimise\Inc\Critical_CSS', 'background_generate' ), 10, 1 );
 			}
 
-			$this->register_background_hooks();
-
-			$this->register_invalidation_hooks();
-
-			add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
-
-			$this->register_integration_hooks();
-		}
-
-		/**
-		 * Register frontend head-hint hooks (preload/preconnect/speculation).
-		 *
-		 * Extracted from {@see setup_hooks()} so hook-group changes stay
-		 * local to one collaborator-concern method.
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		private function register_head_hint_hooks(): void {
-			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
-			add_action( 'wp_head', array( $this, 'add_speculation_rules' ), 0 );
-			add_filter( 'wp_resource_hints', array( $this, 'add_resource_hints' ), 10, 2 );
-		}
-
-		/**
-		 * Instantiate collaborator services (metabox, cron, assets, abilities).
-		 *
-		 * Extracted from {@see setup_hooks()}; keeps Main as a thin
-		 * bootstrapper over collaborator registration.
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		private function register_collaborators(): void {
-			new Metabox();
-			new Cron();
-			new Asset_Manager();
-			new Abilities();
-		}
-
-		/**
-		 * Register background-job hooks (Action Scheduler + save_post queue).
-		 *
-		 * Extracted from {@see setup_hooks()}.
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		private function register_background_hooks(): void {
 			// Register Action Scheduler callback for background image processing.
 			add_action( 'wppo_convert_image_background', array( $this, 'process_background_image' ), 10, 1 );
 
@@ -1630,17 +1547,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Queue used-CSS regeneration when post content changes.
 			add_action( 'save_post', array( $this, 'on_save_post_queue_used_css' ), 10, 3 );
-		}
 
-		/**
-		 * Register cache-invalidation hooks (structural changes).
-		 *
-		 * Extracted from {@see setup_hooks()}.
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		private function register_invalidation_hooks(): void {
 			// Clear all cache on structural changes that invalidate every cached page.
 			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
@@ -1660,17 +1567,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// stale. Fail-open via on_extension_update(); builder-specific
 			// purges stay in Builder_Purge_Watcher.
 			add_action( 'upgrader_process_complete', array( __CLASS__, 'on_extension_update' ), 20, 2 );
-		}
 
-		/**
-		 * Register third-party integration hooks (LiteSpeed sync, ESI bridge).
-		 *
-		 * Extracted from {@see setup_hooks()}.
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		private function register_integration_hooks(): void {
+			add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
+
 			// LS-202: LiteSpeed → WPPO purge sync (litespeed_purged_all/post/purge_finalize).
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'init' ) ) {
 				LiteSpeed_Integration::init();
@@ -4420,35 +4319,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( method_exists( $modules, 'get_print_queue' ) ) {
 				$ids = (array) $modules->get_print_queue();
 			}
-			// Hoisted reflection read (issue #1292 follow-up): reused by
-			// get_module_fetchpriority() so the fallback path pays one
-			// ReflectionObject instead of one per module. A null store is
-			// still "already read" (signalled via func_num_args()) and reused.
-			$registered_store   = null;
-			$store_already_read = false;
 			if ( empty( $ids ) ) {
-				$ids                = $this->get_registered_module_ids( $modules, $registered_store );
-				$store_already_read = true;
+				$ids = $this->get_registered_module_ids( $modules );
 			}
 
-			// Hoist the reflection fallback read once (issue #1292
-			// follow-up): get_module_fetchpriority() would otherwise build a
-			// new ReflectionObject per module when get_registered() is
-			// unavailable. The third/fourth args signal "already read" via
-			// func_num_args() so even a null (unreadable) store is reused.
-			$fallback_ready = ! method_exists( $modules, 'get_registered' );
-			if ( $fallback_ready && ! $store_already_read ) {
-				$registered_store = $this->read_private_module_store( $modules, 'registered' );
-			}
-			// The `all` store backs get_registered_module_ids() when the
-			// `registered` store is empty, so thread it as well: IDs sourced
-			// from `all` would otherwise always miss in
-			// get_module_fetchpriority() and fail open to 'low', clobbering
-			// an explicit 'high' on the old-core path.
-			$all_store = null;
-			if ( $fallback_ready ) {
-				$all_store = $this->read_private_module_store( $modules, 'all' );
-			}
 			foreach ( $ids as $id ) {
 				if ( in_array( (string) $id, $excluded, true ) ) {
 					continue;
@@ -4485,7 +4359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// 'high' and a handle can suppress via falsy; '' skips.
 					//
 					// @since NEXT.
-					$existing = $this->get_module_fetchpriority( $modules, (string) $id, $registered_store, $all_store, $fallback_ready );
+					$existing = $this->get_module_fetchpriority( $modules, (string) $id );
 					if ( is_string( $existing ) && '' !== trim( $existing ) && 'auto' !== strtolower( trim( $existing ) ) ) {
 						continue;
 					}
@@ -4511,20 +4385,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @since 2.0.0
 		 *
-		 * @param object $modules          Script modules instance from wp_script_modules().
-		 * @param string $id               Module id.
-		 * @param mixed  $registered_store Optional pre-read $registered store (hoisted by the
-		 *                                 caller to avoid per-module reflection; pass-through
-		 *                                 even when null so an unreadable store is not re-read).
-		 * @param mixed  $all_store        Optional pre-read $all store used as a fallback
-		 *                                 when the id is absent from the registered store
-		 *                                 (mirrors get_registered_module_ids()).
-		 * @param bool   $fallback_ready   Hoisted `! method_exists( $modules, 'get_registered' )`
-		 *                                 flag so the callee skips the per-module probe.
+		 * @param object $modules Script modules instance from wp_script_modules().
+		 * @param string $id      Module id.
 		 * @return mixed Fetchpriority value, or null when missing/unreadable.
 		 */
-		private function get_module_fetchpriority( object $modules, string $id, $registered_store = null, $all_store = null, bool $fallback_ready = false ): mixed {
-			if ( ! $fallback_ready && method_exists( $modules, 'get_registered' ) ) {
+		private function get_module_fetchpriority( $modules, string $id ) {
+			if ( method_exists( $modules, 'get_registered' ) ) {
 				$entry = $modules->get_registered( $id );
 				if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
 					return $entry['fetchpriority'];
@@ -4534,17 +4400,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				return null;
 			}
-			$registered = func_num_args() >= 3 ? $registered_store : $this->read_private_module_store( $modules, 'registered' );
-			$all        = func_num_args() >= 4 ? $all_store : $this->read_private_module_store( $modules, 'all' );
-			foreach ( array( $registered, $all ) as $store ) {
-				if ( is_array( $store ) && array_key_exists( $id, $store ) ) {
-					$entry = $store[ $id ];
-					if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
-						return $entry['fetchpriority'];
-					}
-					if ( is_object( $entry ) && isset( $entry->fetchpriority ) ) {
-						return $entry->fetchpriority;
-					}
+			$registered = $this->read_private_module_store( $modules, 'registered' );
+			if ( is_array( $registered ) && array_key_exists( $id, $registered ) ) {
+				$entry = $registered[ $id ];
+				if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
+					return $entry['fetchpriority'];
+				}
+				if ( is_object( $entry ) && isset( $entry->fetchpriority ) ) {
+					return $entry->fetchpriority;
 				}
 			}
 			return null;
@@ -4560,19 +4423,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 *
 		 * @param object $modules Script modules instance from wp_script_modules().
-		 * @param mixed  $registered_store Optional out-param receiving the already-read
-		 *                                 `registered` store (even when null/unreadable)
-		 *                                 so callers can hoist it without re-reflecting.
 		 * @return string[] Module ids.
 		 */
-		private function get_registered_module_ids( object $modules, &$registered_store = null ): array {
-			$registered_store = $this->read_private_module_store( $modules, 'registered' );
-			if ( is_array( $registered_store ) && ! empty( $registered_store ) ) {
-				return array_map( 'strval', array_keys( $registered_store ) );
-			}
-			$all_store = $this->read_private_module_store( $modules, 'all' );
-			if ( is_array( $all_store ) && ! empty( $all_store ) ) {
-				return array_map( 'strval', array_keys( $all_store ) );
+		private function get_registered_module_ids( $modules ): array {
+			foreach ( array( 'registered', 'all' ) as $property ) {
+				$store = $this->read_private_module_store( $modules, $property );
+				if ( is_array( $store ) && ! empty( $store ) ) {
+					return array_map( 'strval', array_keys( $store ) );
+				}
 			}
 			return array();
 		}
@@ -4582,8 +4440,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Returns null when the property does not exist or is unreadable instead
 		 * of raising. Public properties are read directly; non-public ones go
-		 * through reflection (no setAccessible() call: it is deprecated on
-		 * PHP 8.5 and a no-op since PHP 8.1, and the plugin requires PHP 8.2+).
+		 * through reflection with setAccessible().
 		 *
 		 * @since 2.0.0
 		 *
@@ -4591,15 +4448,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $property Property name.
 		 * @return mixed Property value, or null when unreadable.
 		 */
-		private function read_private_module_store( object $modules, string $property ): mixed {
+		private function read_private_module_store( $modules, string $property ) {
 			try {
 				$reflection = new \ReflectionObject( $modules );
 				if ( ! $reflection->hasProperty( $property ) ) {
 					return null;
 				}
 				$prop = $reflection->getProperty( $property );
+				$prop->setAccessible( true );
 				return $prop->getValue( $modules );
-			} catch ( \Throwable ) {
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return null;
 			}
 		}
@@ -6750,7 +6609,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
 							$settings = (array) Util::get_settings();
 						}
-						$cache = self::create_cache( $settings );
+						$cache = new Cache( $settings );
 						if ( method_exists( $cache, 'invalidate_single_static_html' ) ) {
 							$cache->invalidate_single_static_html( $post_id );
 						}
@@ -8822,10 +8681,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						unset( $e );
 					}
 				}
-				// is_string-guarded like the ESI cookie reads: an array-valued
-				// cookie must not force suppression (attacker-influenced
-				// cache behavior); only non-empty string values count.
-				if ( ( isset( $_COOKIE['woocommerce_items_in_cart'] ) && is_string( $_COOKIE['woocommerce_items_in_cart'] ) && '' !== $_COOKIE['woocommerce_items_in_cart'] ) || ( isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) && '' !== $_COOKIE['woocommerce_cart_hash'] ) ) {
+				if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
 					return true;
 				}
 				return false;
@@ -9811,9 +9667,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						unset( $e );
 					}
 				}
-				// is_string-guarded like the ESI cookie reads: an array-valued
-				// cookie must not force suppression; only non-empty strings.
-				if ( ( isset( $_COOKIE['woocommerce_items_in_cart'] ) && is_string( $_COOKIE['woocommerce_items_in_cart'] ) && '' !== $_COOKIE['woocommerce_items_in_cart'] ) || ( isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) && '' !== $_COOKIE['woocommerce_cart_hash'] ) ) {
+				if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
 					return true;
 				}
 				return false;

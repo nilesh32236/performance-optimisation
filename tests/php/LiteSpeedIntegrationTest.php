@@ -189,29 +189,17 @@ class LiteSpeedIntegrationTest extends \PHPUnit\Framework\TestCase {
 				return $fallback;
 			}
 		);
-		Functions\when( 'set_transient' )->justReturn( true );
-		Functions\when( 'delete_transient' )->justReturn( true );
-		Functions\when( 'headers_sent' )->justReturn( false );
-		$emitted = array();
-		Functions\when( 'header' )->alias(
-			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- test mock signature must match header().
-			static function ( $header, $replace = true, $code = 0 ) use ( &$emitted ) {
-				$emitted[] = $header;
+		$captured = null;
+		Functions\when( 'set_transient' )->alias(
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- test mock signature must match WP API.
+			function ( $key, $value, $exp ) use ( &$captured ) {
+				$captured = $value;
+				return true;
 			}
 		);
 		LiteSpeed_Integration::queue_purge_tags( array( 'Po.1' ), 'public' );
-		// queue_purge_tags() buffers per request (single transient
-		// round-trip); flush_tag_queue() merges the buffer and emits it as
-		// the X-LiteSpeed-Purge header — assert the fan-out tag there.
-		LiteSpeed_Integration::flush_tag_queue();
-		$found = false;
-		foreach ( $emitted as $header_line ) {
-			if ( false !== strpos( $header_line, 'Po.1' ) && false !== strpos( $header_line, 'B.2' ) ) {
-				$found = true;
-				break;
-			}
-		}
-		$this->assertTrue( $found, 'Expected an X-LiteSpeed-Purge header containing Po.1 and the B.2 fan-out tag.' );
+		$this->assertIsArray( $captured );
+		$this->assertContains( 'B.2', $captured );
 	}
 
 	/**

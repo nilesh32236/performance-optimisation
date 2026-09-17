@@ -96,6 +96,7 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function reset_nextgen_cache(): void {
 		$prop = new ReflectionProperty( LiteSpeed_Integration::class, 'cached_nextgen' );
+		$prop->setAccessible( true );
 		$prop->setValue( null, null );
 	}
 

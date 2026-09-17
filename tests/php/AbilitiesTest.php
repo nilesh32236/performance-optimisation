@@ -39,7 +39,8 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 
 		$abilities = new Abilities();
 
-		$reflection  = new ReflectionMethod( $abilities, 'get_operational_abilities' );
+		$reflection = new ReflectionMethod( $abilities, 'get_operational_abilities' );
+		$reflection->setAccessible( true );
 		$operational = $reflection->invoke( $abilities );
 
 		$db_ability = null;

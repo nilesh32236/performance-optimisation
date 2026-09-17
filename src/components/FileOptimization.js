@@ -5,11 +5,8 @@ import {
 	useEffect,
 	useContext,
 	useCallback,
-	useMemo,
-	memo,
 } from '@wordpress/element';
-import { handleChange, toTextLines } from '../lib/util';
-import useUnsavedChanges, { stableStringify } from '../lib/useUnsavedChanges';
+import { handleChange } from '../lib/util';
 import {
 	apiCall,
 	commitSettingsCache,
@@ -20,6 +17,7 @@ import {
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
+import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -40,91 +38,31 @@ import NoticeBanner from './common/NoticeBanner';
 
 import CriticalCssPanel from './CriticalCssPanel';
 
-// Per-instance row ids (issue #1274 review): a module counter + Date.now()
-// leaks across mounts/tests and is non-deterministic, so each component
-// instance owns a useRef counter seeded once. The generator itself is
-// wrapped in useCallback so child renders do not see a new closure identity
-// every render.
-const useCdnRowId = () => {
-	const ref = useRef( 0 );
-	return useCallback( () => {
-		ref.current += 1;
-		return `cdn-${ ref.current }`;
-	}, [] );
+let cdnRowCounter = 0;
+const cdnRowId = () => {
+	cdnRowCounter += 1;
+	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
 };
 
-// Memoized sub-tab button: without this, the inline onClick/onKeyDown
-// closures in the tab list below recreate every render and force the full
-// subtree to reconcile on each settings keystroke.
-const SubTabButton = memo(
-	( { tab, index, isActive, tabRef, onSelect, onKeyDown } ) => (
-		<button
-			id={ `tab-${ tab.id }` }
-			ref={ tabRef }
-			className={ `wppo-sub-tab${
-				isActive ? ' wppo-sub-tab--active' : ''
-			}` }
-			onClick={ () => onSelect( tab.id ) }
-			onKeyDown={ ( e ) => onKeyDown( e, index ) }
-			type="button"
-			role="tab"
-			tabIndex={ isActive ? 0 : -1 }
-			aria-selected={ isActive }
-			aria-controls={ `panel-${ tab.id }` }
-		>
-			<FontAwesomeIcon icon={ tab.icon } />
-			{ tab.label }
-		</button>
-	)
-);
-
-// Default builder-template exclusions (single source of truth for the
-// normalize fallback and the form defaults below).
-const CCSS_EXCLUDED_DEFAULT = 'fl-builder-template\nelementor_library';
-
-// Normalize the max-retries input the same way PHP sanitizes it
-// (is_numeric whole-value check, (int) truncation, clamped 0..5,
-// fail-open to 5). Number() mirrors PHP is_numeric() except for
-// hex/binary/octal literals (e.g. '0x3'): PHP is_numeric() rejects
-// them, so they are guarded explicitly to fail open to 5.
-// Math.trunc() mirrors the (int) cast for values like '3.7'.
-// Exported for direct Jest coverage.
-// @since NEXT
-export const normalizeRetries = ( value ) => {
-	if ( typeof value === 'number' ) {
-		return Number.isFinite( value )
-			? Math.min( 5, Math.max( 0, Math.trunc( value ) ) )
-			: 5;
+// Newline-delimited third-party/exclude lists: normalise array payloads (from
+// sanitize/process_urls) to textarea strings without nested ternaries.
+const toTextLines = ( value ) => {
+	if ( typeof value === 'string' ) {
+		return value;
 	}
 	if ( Array.isArray( value ) ) {
-		return 5;
+		return value.join( '\n' );
 	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s ) {
-		return 5;
-	}
-	// PHP is_numeric() rejects hex/binary/octal while Number() parses
-	// them, so guard explicitly to keep UI/server parity.
-	if ( /^0[xXoObB]/.test( s ) ) {
-		return 5;
-	}
-	const n = Number( s );
-	if ( ! Number.isFinite( n ) ) {
-		return 5;
-	}
-	return Math.min( 5, Math.max( 0, Math.trunc( n ) ) );
+	return '';
 };
 
 // Normalize the used-CSS delivery mode the same way PHP sanitizes it
 // (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
 // disagrees with the server on a single render (issue #1220).
-// Exported for direct Jest coverage.
-// @since NEXT
-export const normalizeDeliveryMode = ( value ) => {
-	if ( typeof value !== 'string' ) {
-		return 'file';
-	}
-	const mode = value.toLowerCase().trim();
+const normalizeDeliveryMode = ( value ) => {
+	const mode = String( value || 'file' )
+		.toLowerCase()
+		.trim();
 	return [ 'file', 'delay', 'async', 'remove' ].includes( mode )
 		? mode
 		: 'file';
@@ -153,11 +91,6 @@ const FILE_OPT_TEXTAREA_KEYS = [
 	'excludeUnusedCSS',
 	'unusedCSSSafelistExtra',
 	'ccssSafelistExtra',
-	'ccssExcludedPostTypes',
-	// Array-backed multi-select rendered as a single value: normalizing
-	// through toTextLines() keeps backend arrays consistent with the form
-	// instead of resetting to the 'latin' fallback below.
-	'fontSubsetSubsets',
 ];
 
 // Every file-optimisation key synced from incoming props in the baseline +
@@ -172,6 +105,7 @@ const FILE_OPT_SYNC_KEYS = [
 	'excludeCSS',
 	'combineCSS',
 	'excludeCombineCSS',
+	'removeQueryStrings',
 	'minifyHTML',
 	'deferJS',
 	'excludeDeferJS',
@@ -179,7 +113,6 @@ const FILE_OPT_SYNC_KEYS = [
 	'excludeDelayJS',
 	'delayJSCommercePreset',
 	'delayJSBuilderPreset',
-	'delayJSInteractionPreset',
 	'delayJSINPPreset',
 	'delayJSExternalOnly',
 	'delayJSThirdParty',
@@ -199,8 +132,6 @@ const FILE_OPT_SYNC_KEYS = [
 	'criticalCSS',
 	'ccssMaxSize',
 	'ccssSafelistExtra',
-	'ccssExcludedPostTypes',
-	'ccssMaxRetries',
 	'hostGoogleFontsLocally',
 	'fontMetricFallback',
 	'fontSubset',
@@ -241,87 +172,10 @@ const FILE_OPT_SYNC_KEYS = [
 	'removeHTMLComments',
 ];
 
-// Server-side scans run unauthenticated, so they can never carry the
-// admin preview session: strip the preview query args and scan the
-// plain production URL instead of implying a staged measurement.
-//
-// Only absolute http(s) URLs are accepted: relative paths, protocol-
-// relative values and non-http(s) schemes (javascript:, data:, …)
-// return '' so callers can abort instead of forwarding a tampered
-// server-provided preview_url to the resource-intensive scan endpoint.
-// Server-side host allowlisting + rate limiting remains authoritative.
-// Exported for direct Jest coverage.
-// @since NEXT
-export const stripPreviewParams = ( url ) => {
-	if ( ! isSafeHttpUrl( url ) ) {
-		return '';
-	}
-	try {
-		const parsed = new URL( url );
-		parsed.searchParams.delete( 'wppo_preview' );
-		parsed.searchParams.delete( '_wppo_preview_nonce' );
-		return parsed.toString();
-	} catch {
-		return '';
-	}
-};
-
-// Assign stable row ids to CDN-mapping rows.
-//
-// Index-derived ids (`cdn-row-N`) are deterministic across rebuilds, so a
-// parent re-render that syncs raw (id-less) server options over local state
-// reuses the same keys instead of remounting every row and losing focus.
-// Rows created via "Add Mapping" carry counter ids (`cdn-N`) from
-// useCdnRowId and pass through untouched.
-// @since NEXT
-export const withCdnRowIds = ( mapping ) => {
-	const list = Array.isArray( mapping ) ? mapping : [];
-	return list.map( ( entry, index ) => {
-		const base =
-			entry && typeof entry === 'object' && ! Array.isArray( entry )
-				? entry
-				: {};
-		if (
-			( typeof base.id === 'string' && '' !== base.id ) ||
-			typeof base.id === 'number'
-		) {
-			return { ...base };
-		}
-		return { ...base, id: `cdn-row-${ index }` };
-	} );
-};
-
-// Strip client-only CDN row ids before submit/baseline/dirty-compare so the
-// payload never persists synthetic ids server-side and the id-less server
-// baseline compares clean against local state.
-// @since NEXT
-export const stripCdnIds = ( source = {} ) => {
-	if ( ! source || typeof source !== 'object' ) {
-		return source;
-	}
-	if ( ! Array.isArray( source.cdnMapping ) ) {
-		return source;
-	}
-	return {
-		...source,
-		cdnMapping: source.cdnMapping.map( ( entry ) => {
-			if ( ! entry || typeof entry !== 'object' ) {
-				return entry;
-			}
-			if ( ! ( 'id' in entry ) ) {
-				return entry;
-			}
-			const next = { ...entry };
-			delete next.id;
-			return next;
-		} ),
-	};
-};
+// Normalize one file-optimisation options object: textarea-backed keys via
 // toTextLines() (after spread, so backend arrays win correctly), delivery
-// mode via the PHP-mirroring allowlist, CCSS retries clamped 0..5, blank
-// CCSS exclusions reset to the builder defaults (mirroring PHP), font
-// subsets with the 'latin' fallback. Idempotent — safe to run on init,
-// baseline, and sync payloads.
+// mode via the PHP-mirroring allowlist, font subsets with the 'latin'
+// fallback. Idempotent — safe to run on init, baseline, and sync payloads.
 const normalizeFileOpt = ( source = {} ) => {
 	const next = { ...source };
 	for ( const key of FILE_OPT_TEXTAREA_KEYS ) {
@@ -332,34 +186,7 @@ const normalizeFileOpt = ( source = {} ) => {
 	next.usedCSSDeliveryMode = normalizeDeliveryMode(
 		next.usedCSSDeliveryMode
 	);
-	next.ccssMaxRetries = normalizeRetries( next.ccssMaxRetries );
-	// An empty or whitespace-only exclusions string normalizes to the
-	// builder defaults (mirroring PHP, where empty keeps defaults) so the
-	// UI never shows "no exclusions" while the server enforces the builder
-	// defaults (issue #1274 review).
-	if (
-		'string' !== typeof next.ccssExcludedPostTypes ||
-		'' === next.ccssExcludedPostTypes.trim()
-	) {
-		next.ccssExcludedPostTypes = CCSS_EXCLUDED_DEFAULT;
-	}
-	// Fail-open for corrupted cache: a non-array truthy cdnMapping (e.g. a
-	// string) would crash every `.map` render site, so reset to [] here —
-	// the single choke point — instead of guarding each call site.
-	if ( ! Array.isArray( next.cdnMapping ) ) {
-		next.cdnMapping = [];
-	}
 	if ( typeof next.fontSubsetSubsets !== 'string' ) {
-		next.fontSubsetSubsets = 'latin';
-	}
-	// The textarea loop above joins arrays but maps a missing key to '':
-	// restore the 'latin' default for a missing value so backfill matches
-	// the historical default.
-	if (
-		next.fontSubsetSubsets === '' &&
-		( source.fontSubsetSubsets === undefined ||
-			source.fontSubsetSubsets === null )
-	) {
 		next.fontSubsetSubsets = 'latin';
 	}
 	return next;
@@ -395,146 +222,164 @@ const FileOptimization = ( {
 		return tabRefCallbacks.current[ id ];
 	}, [] );
 
-	const cdnRowId = useCdnRowId();
-	// Memoized on the incoming options object identity so local keystroke
-	// renders reuse the derived defaults instead of re-spreading ~70 keys
-	// and re-joining every textarea list on each render.
-	const defaultSettings = useMemo( () => {
-		const base = normalizeFileOpt( {
-			safeMode: options.safeMode !== undefined ? options.safeMode : false,
-			elementorSafeMode:
-				options.elementorSafeMode !== undefined
-					? options.elementorSafeMode
-					: true,
-			minifyJS: false,
-			excludeJS: '',
-			minifyCSS: false,
-			excludeCSS: '',
-			combineCSS: false,
-			excludeCombineCSS: '',
-			minifyHTML: false,
-			deferJS: false,
-			excludeDeferJS: '',
-			delayJS: false,
-			excludeDelayJS: '',
-			delayJSDefaultStrategy:
-				options.delayJSDefaultStrategy || 'interaction',
-			delayJSINPPreset: options.delayJSINPPreset || false,
-			delayJSExternalOnly:
-				options.delayJSExternalOnly !== undefined
-					? options.delayJSExternalOnly
-					: false,
-			delayJSThirdParty:
-				options.delayJSThirdParty !== undefined
-					? options.delayJSThirdParty
-					: false,
-			// Raw values: the single normalizeFileOpt() call below joins
-			// backend arrays via toTextLines(), so no manual calls here.
-			delayJSThirdPartyDenylist: options.delayJSThirdPartyDenylist,
-			delayJSThirdPartyAllowlist: options.delayJSThirdPartyAllowlist,
-			delayJSBuilderPreset:
-				options.delayJSBuilderPreset !== undefined
-					? options.delayJSBuilderPreset
-					: true,
-			delayJSCommercePreset:
-				options.delayJSCommercePreset !== undefined
-					? options.delayJSCommercePreset
-					: true,
-			delayJSInteractionPreset:
-				options.delayJSInteractionPreset !== undefined
-					? options.delayJSInteractionPreset
-					: true,
-			delayJSExcludeUrls:
-				typeof options.delayJSExcludeUrls === 'string'
-					? options.delayJSExcludeUrls
-					: '',
-			usedCSSExcludeUrls:
-				typeof options.usedCSSExcludeUrls === 'string'
-					? options.usedCSSExcludeUrls
-					: '',
-			delayJSIdleList: options.delayJSIdleList || '',
-			delayJSViewportList: options.delayJSViewportList || '',
-			delayJSPriority: options.delayJSPriority || '',
-			delayJSIdleTimeout: options.delayJSIdleTimeout || 3000,
-			removeWooCSSJS: false,
-			excludeUrlToKeepJSCSS: '',
-			removeCssJsHandle: '',
-			enableServerRules: false,
-			criticalCSS: false,
-			ccssMaxSize: options.ccssMaxSize || 20480,
-			ccssSafelistExtra:
-				typeof options.ccssSafelistExtra === 'string'
-					? options.ccssSafelistExtra
-					: '',
-			ccssExcludedPostTypes:
-				typeof options.ccssExcludedPostTypes === 'string'
-					? options.ccssExcludedPostTypes
-					: CCSS_EXCLUDED_DEFAULT,
-			ccssMaxRetries: normalizeRetries( options.ccssMaxRetries ),
-			hostGoogleFontsLocally: false,
-			fontMetricFallback: false,
-			fontSubset: false,
-			fontSubsetSubsets: options.fontSubsetSubsets,
-			cdnURL: '',
-			cdnMapping: options.cdnMapping || [],
-			removeUnusedCSS: false,
-			excludeUnusedCSS: '',
-			unusedCSSSafelistExtra: options.unusedCSSSafelistExtra || '',
-			unusedCSSRegressionGuard:
-				options.unusedCSSRegressionGuard !== undefined
-					? options.unusedCSSRegressionGuard
-					: true,
-			unusedCSSRegressionThreshold:
-				options.unusedCSSRegressionThreshold ?? 20,
-			disableEmojis: false,
-			disableEmbeds: false,
-			disableDashicons: false,
-			disableXMLRPC: false,
-			disableRestApiLinks: false,
-			disableRssFeeds: false,
-			disableShortlinks: false,
-			disableGeneratorTag: false,
-			disableJQueryMigrate: false,
-			disablePasswordStrength: false,
-			disableSelfPingbacks: false,
-			disableRSD: false,
-			disableWLWManifest: false,
-			disableGlobalStyles: false,
-			disableClassicThemeStyles: false,
-			disableWooCartFragments: false,
-			disableRecentCommentsStyle: false,
-			disableCommentReply: false,
-			disableOEmbedDiscovery: false,
-			disableBlockWidgets: false,
-			// Mirrors the pre-6.9 PHP default. PHP always emits the key on WP 6.9+ (where
-			// core loads block assets on demand by default), so this fallback is only used
-			// on older cores and never contradicts the backend default.
-			blockAssetsOnDemand: false,
-			loadAllCoreBlockAssets: false,
-			heartbeatControl: 'default',
-			minifyInlineCSS: false,
-			minifyInlineJS: false,
-			removeHTMLComments: true,
-			...options,
-		} );
-		// Backfill stable row ids so CDN-mapping rows keep identity across
-		// add/remove (index keys would reuse the wrong input state/focus).
-		// Index-derived ids are deterministic across rebuilds, so a synced
-		// raw server payload reuses the same keys instead of remounting
-		// rows and losing focus. All other normalization lives in the
-		// single normalizeFileOpt() call above: one truth to keep in sync.
-		base.cdnMapping = withCdnRowIds( base.cdnMapping );
-		return base;
-	}, [ options ] );
+	const defaultSettings = normalizeFileOpt( {
+		safeMode: options.safeMode !== undefined ? options.safeMode : false,
+		elementorSafeMode:
+			options.elementorSafeMode !== undefined
+				? options.elementorSafeMode
+				: true,
+		minifyJS: false,
+		excludeJS: '',
+		minifyCSS: false,
+		excludeCSS: '',
+		combineCSS: false,
+		excludeCombineCSS: '',
+		minifyHTML: false,
+		deferJS: false,
+		excludeDeferJS: '',
+		delayJS: false,
+		excludeDelayJS: '',
+		delayJSDefaultStrategy: options.delayJSDefaultStrategy || 'interaction',
+		delayJSINPPreset: options.delayJSINPPreset || false,
+		delayJSExternalOnly:
+			options.delayJSExternalOnly !== undefined
+				? options.delayJSExternalOnly
+				: false,
+		delayJSThirdParty:
+			options.delayJSThirdParty !== undefined
+				? options.delayJSThirdParty
+				: false,
+		delayJSThirdPartyDenylist: toTextLines(
+			options.delayJSThirdPartyDenylist
+		),
+		delayJSThirdPartyAllowlist: toTextLines(
+			options.delayJSThirdPartyAllowlist
+		),
+		delayJSBuilderPreset:
+			options.delayJSBuilderPreset !== undefined
+				? options.delayJSBuilderPreset
+				: true,
+		delayJSCommercePreset:
+			options.delayJSCommercePreset !== undefined
+				? options.delayJSCommercePreset
+				: true,
+		delayJSInteractionPreset:
+			options.delayJSInteractionPreset !== undefined
+				? options.delayJSInteractionPreset
+				: true,
+		delayJSExcludeUrls:
+			typeof options.delayJSExcludeUrls === 'string'
+				? options.delayJSExcludeUrls
+				: '',
+		usedCSSExcludeUrls:
+			typeof options.usedCSSExcludeUrls === 'string'
+				? options.usedCSSExcludeUrls
+				: '',
+		delayJSIdleList: options.delayJSIdleList || '',
+		delayJSViewportList: options.delayJSViewportList || '',
+		delayJSPriority: options.delayJSPriority || '',
+		delayJSIdleTimeout: options.delayJSIdleTimeout || 3000,
+		removeWooCSSJS: false,
+		excludeUrlToKeepJSCSS: '',
+		removeCssJsHandle: '',
+		enableServerRules: false,
+		criticalCSS: false,
+		ccssMaxSize: options.ccssMaxSize || 20480,
+		ccssSafelistExtra:
+			typeof options.ccssSafelistExtra === 'string'
+				? options.ccssSafelistExtra
+				: '',
+		hostGoogleFontsLocally: false,
+		fontMetricFallback: false,
+		fontSubset: false,
+		fontSubsetSubsets:
+			typeof options.fontSubsetSubsets === 'string'
+				? options.fontSubsetSubsets
+				: 'latin',
+		cdnURL: '',
+		cdnMapping: options.cdnMapping || [],
+		removeUnusedCSS: false,
+		excludeUnusedCSS: '',
+		unusedCSSSafelistExtra: options.unusedCSSSafelistExtra || '',
+		unusedCSSRegressionGuard:
+			options.unusedCSSRegressionGuard !== undefined
+				? options.unusedCSSRegressionGuard
+				: true,
+		unusedCSSRegressionThreshold:
+			options.unusedCSSRegressionThreshold ?? 20,
+		usedCSSDeliveryMode: options.usedCSSDeliveryMode || 'file',
+		disableEmojis: false,
+		disableEmbeds: false,
+		disableDashicons: false,
+		disableXMLRPC: false,
+		disableRestApiLinks: false,
+		disableRssFeeds: false,
+		disableShortlinks: false,
+		disableGeneratorTag: false,
+		disableJQueryMigrate: false,
+		disablePasswordStrength: false,
+		disableSelfPingbacks: false,
+		disableRSD: false,
+		disableWLWManifest: false,
+		disableGlobalStyles: false,
+		disableClassicThemeStyles: false,
+		disableWooCartFragments: false,
+		disableRecentCommentsStyle: false,
+		disableCommentReply: false,
+		disableOEmbedDiscovery: false,
+		disableBlockWidgets: false,
+		// Mirrors the pre-6.9 PHP default. PHP always emits the key on WP 6.9+ (where
+		// core loads block assets on demand by default), so this fallback is only used
+		// on older cores and never contradicts the backend default.
+		blockAssetsOnDemand: false,
+		loadAllCoreBlockAssets: false,
+		heartbeatControl: 'default',
+		minifyInlineCSS: false,
+		minifyInlineJS: false,
+		removeHTMLComments: true,
+		...options,
+	} );
 
-	// Lazy-init from the memoized defaults: the state initializer runs once,
-	// so later renders never pay the derivation cost through useState.
-	const [ settings, setSettings ] = useState( () => defaultSettings );
-	// Split busy flags: saving the form must not show the Save button as
-	// loading while a background regen runs, nor disable unrelated regen
-	// actions while saving.
-	const [ isSaving, setIsSaving ] = useState( false );
-	const [ isRegenerating, setIsRegenerating ] = useState( false );
+	// Backfill stable row ids so CDN-mapping rows keep identity across
+	// add/remove (index keys would reuse the wrong input state/focus).
+	defaultSettings.cdnMapping = ( defaultSettings.cdnMapping || [] ).map(
+		( entry ) => ( {
+			...entry,
+			id: entry.id ?? cdnRowId(),
+		} )
+	);
+	// String-guard textarea-backed keys AFTER the spread so a non-string
+	// truthy payload (e.g. array from corrupted settings) cannot flow into
+	// a controlled textarea value via the ...options override above.
+	// toTextLines joins array payloads instead of clearing them (#1217 review).
+	defaultSettings.delayJSThirdPartyDenylist = toTextLines(
+		options.delayJSThirdPartyDenylist
+	);
+	defaultSettings.delayJSThirdPartyAllowlist = toTextLines(
+		options.delayJSThirdPartyAllowlist
+	);
+	defaultSettings.delayJSExcludeUrls =
+		typeof options.delayJSExcludeUrls === 'string'
+			? options.delayJSExcludeUrls
+			: '';
+	defaultSettings.usedCSSExcludeUrls =
+		typeof options.usedCSSExcludeUrls === 'string'
+			? options.usedCSSExcludeUrls
+			: '';
+	defaultSettings.ccssSafelistExtra =
+		typeof options.ccssSafelistExtra === 'string'
+			? options.ccssSafelistExtra
+			: '';
+	defaultSettings.fontSubsetSubsets =
+		typeof options.fontSubsetSubsets === 'string'
+			? options.fontSubsetSubsets
+			: 'latin';
+	defaultSettings.usedCSSDeliveryMode = normalizeDeliveryMode(
+		defaultSettings.usedCSSDeliveryMode
+	);
+
+	const [ settings, setSettings ] = useState( defaultSettings );
+	const [ isLoading, setIsLoading ] = useState( false );
 	const [ isPurging, setIsPurging ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 	const {
@@ -700,18 +545,8 @@ const FileOptimization = ( {
 	} );
 	// Hydrate sandbox state when the Scripts tab opens so a staged
 	// experiment from a prior session is visible without re-staging.
-	// Skipped when staged data is already present (e.g. just staged in
-	// this session) so rapid tab toggling does not fire redundant
-	// authenticated calls.
 	useEffect( () => {
 		if ( activeSubTab !== 'scripts' ) {
-			return;
-		}
-		if (
-			sandboxStaged &&
-			typeof sandboxStaged === 'object' &&
-			Object.keys( sandboxStaged ).length > 0
-		) {
 			return;
 		}
 		let cancelled = false;
@@ -743,7 +578,29 @@ const FileOptimization = ( {
 		return () => {
 			cancelled = true;
 		};
-	}, [ activeSubTab, sandboxStaged ] );
+	}, [ activeSubTab ] );
+	// Server-side scans run unauthenticated, so they can never carry the
+	// admin preview session: strip the preview query args and scan the
+	// plain production URL instead of implying a staged measurement.
+	//
+	// Only absolute http(s) URLs are accepted: relative paths, protocol-
+	// relative values and non-http(s) schemes (javascript:, data:, …)
+	// return '' so callers can abort instead of forwarding a tampered
+	// server-provided preview_url to the resource-intensive scan endpoint.
+	// Server-side host allowlisting + rate limiting remains authoritative.
+	const stripPreviewParams = ( url ) => {
+		if ( ! isSafeHttpUrl( url ) ) {
+			return '';
+		}
+		try {
+			const parsed = new URL( url );
+			parsed.searchParams.delete( 'wppo_preview' );
+			parsed.searchParams.delete( '_wppo_preview_nonce' );
+			return parsed.toString();
+		} catch {
+			return '';
+		}
+	};
 	const handleSandboxSave = async () => {
 		setSandboxBusy( true );
 		try {
@@ -929,72 +786,40 @@ const FileOptimization = ( {
 		}
 	};
 	const { setIsDirty } = useContext( UnsavedChangesContext );
-	// Client-only CDN row ids never enter the baseline: the server payload
-	// is id-less, so comparing id-bearing state against an id-bearing
-	// baseline would report a permanent dirty state.
-	const [ baseline, setBaseline ] = useState( () =>
-		stripCdnIds( defaultSettings )
-	);
+	const [ baseline, setBaseline ] = useState( defaultSettings );
 	// Baseline is intentionally derived per-key (not per-object-identity)
 	// so parent re-renders with an identical payload do not reset the form.
-	// A stableStringify deep-compare skips the update when the derived
-	// baseline is deep-equal: reference-type option values (arrays/objects)
-	// change identity on every parent render, so the "identical payload"
-	// claim only holds after a value comparison.
 	// Deps are FILE_OPT_SYNC_KEYS mapped over options (non-literal by design;
 	// the shared key list is the single source of truth).
 	useEffect(
 		() => {
-			const next = stripCdnIds(
+			setBaseline(
 				normalizeFileOpt( { ...defaultSettings, ...options } )
-			);
-			setBaseline( ( prev ) =>
-				stableStringify( prev ) === stableStringify( next )
-					? prev
-					: next
 			);
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		FILE_OPT_SYNC_KEYS.map( ( key ) => options[ key ] )
 	);
-	// Dirty-compare on the id-stripped form state so CDN row bookkeeping
-	// never flags the form dirty on its own.
-	const settingsForCompare = useMemo(
-		() => stripCdnIds( settings ),
-		[ settings ]
-	);
-	useUnsavedChanges( settingsForCompare, baseline );
+	useUnsavedChanges( settings, baseline );
 
 	// Sync local state when parent props change after mount.
-	// Per-key deps (not object identity) plus an empty-options guard plus a
-	// deep-compare skip so parent re-renders with an identical payload — or
-	// a replacement of the global settings object while the user is editing —
-	// do not merge saved values over in-progress edits.
-	// Mirrors PreloadSettings/ImageOptimization.
+	// Per-key deps (not object identity) plus an empty-options guard so
+	// parent re-renders with an identical payload — or a replacement of the
+	// global settings object while the user is editing — do not merge saved
+	// values over in-progress edits. Mirrors PreloadSettings/ImageOptimization.
 	// Deps are FILE_OPT_SYNC_KEYS mapped over options (non-literal by design).
 	useEffect(
 		() => {
 			if ( ! options || Object.keys( options ).length === 0 ) {
 				return;
 			}
-			setSettings( ( prev ) => {
+			setSettings( ( prev ) =>
 				// Shared normalizeFileOpt(): every textarea-backed key routes
 				// through toTextLines() after spread, so backend arrays join
 				// (never drop to '' or reach a controlled textarea), matching
 				// init and baseline (#1217 review, issue #1259 review).
-				const merged = normalizeFileOpt( {
-					...prev,
-					...options,
-				} );
-				// Deterministic index ids re-mint the same keys for the same
-				// order, so synced server rows keep focus instead of
-				// remounting.
-				merged.cdnMapping = withCdnRowIds( merged.cdnMapping );
-				return stableStringify( stripCdnIds( merged ) ) ===
-					stableStringify( stripCdnIds( prev ) )
-					? prev
-					: merged;
-			} );
+				normalizeFileOpt( { ...prev, ...options } )
+			);
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		FILE_OPT_SYNC_KEYS.map( ( key ) => options[ key ] )
@@ -1109,9 +934,7 @@ const FileOptimization = ( {
 		successMessage,
 		errorMessage
 	) => {
-		// Regen-scoped busy flag: the Save button stays interactive while a
-		// background regen runs.
-		setIsRegenerating( true );
+		setIsLoading( true );
 		dismiss();
 
 		try {
@@ -1140,7 +963,7 @@ const FileOptimization = ( {
 				durationMs: 3000,
 			} );
 		} finally {
-			setIsRegenerating( false );
+			setIsLoading( false );
 		}
 	};
 
@@ -1165,12 +988,12 @@ const FileOptimization = ( {
 	};
 
 	const handleRegenerateUsedCSS = async () => {
-		setIsRegenerating( true );
+		setIsLoading( true );
 		dismiss();
 		try {
 			const saveRes = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
-				settings: stripCdnIds( { ...settings } ),
+				settings: { ...settings },
 			} );
 			if ( ! saveRes.success ) {
 				notify( {
@@ -1185,7 +1008,7 @@ const FileOptimization = ( {
 				} );
 				return;
 			}
-			setBaseline( stripCdnIds( { ...settings } ) );
+			setBaseline( { ...settings } );
 			setIsDirty( false );
 			const res = await apiCall( 'used_css_regenerate' );
 			if ( res.success ) {
@@ -1225,7 +1048,7 @@ const FileOptimization = ( {
 				durationMs: 3000,
 			} );
 		} finally {
-			setIsRegenerating( false );
+			setIsLoading( false );
 		}
 	};
 
@@ -1275,165 +1098,19 @@ const FileOptimization = ( {
 		}
 	};
 
-	const [ singlePostId, setSinglePostId ] = useState( '' );
-	const [ singleTemplate, setSingleTemplate ] = useState( '' );
-
-	const handleRegenerateSingleCcss = async ( hash ) => {
-		// Defense-in-depth before hitting the privileged regenerate_ccss
-		// route: trim, cap length, and reject control characters. An empty
-		// input notifies instead of silently returning (dead click).
-		const raw = String( hash ?? singleTemplate ?? '' )
-			.trim()
-			.slice( 0, 200 );
-		if ( '' === raw || /[\u0000-\u001F\u007F]/.test( raw ) ) {
-			notify( {
-				type: 'error',
-				message: __(
-					'Enter a template to regenerate.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-			return;
-		}
-		const template = raw;
-		// Gate feedback on the queued count (issue #1274 review): a
-		// skipped/unknown template returns success with queued:0, which
-		// must surface the server's distinct message (info) instead of
-		// the generic "queued" success toast.
-		setIsRegenerating( true );
-		dismiss();
-		try {
-			const res = await apiCall( 'regenerate_ccss', { template } );
-			// A missing queued key is not an explicit 0: the server always
-			// sends queued on this route, so a missing key means an
-			// unexpected envelope — treat it as success, not as a skip.
-			// Any positive count is success (single-template calls queue
-			// exactly one; >= 1 also covers multi-queue responses).
-			const queued = res?.data?.queued;
-			if (
-				res?.success &&
-				( undefined === queued || Number( queued ) >= 1 )
-			) {
-				notify( {
-					type: 'success',
-					message:
-						res.message ||
-						__(
-							'Critical CSS regeneration queued for template.',
-							'performance-optimisation'
-						),
-					durationMs: 3000,
-				} );
-			} else if ( res?.success ) {
-				notify( {
-					type: 'info',
-					message:
-						res.message ||
-						__(
-							'Template skipped: nothing queued.',
-							'performance-optimisation'
-						),
-					durationMs: 3000,
-				} );
-			} else {
-				notify( {
-					type: 'error',
-					message:
-						res?.message ||
-						__(
-							'Failed to regenerate critical CSS for template.',
-							'performance-optimisation'
-						),
-					durationMs: 3000,
-				} );
-				return;
-			}
-			if ( onCcssRefresh ) {
-				onCcssRefresh();
-			}
-		} catch ( err ) {
-			console.error( 'Failed to regenerate CCSS for template', err );
-			notify( {
-				type: 'error',
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-		} finally {
-			setIsRegenerating( false );
-		}
-	};
-
-	const handleRegenerateSingleUsedCss = async () => {
-		const postId = parseInt( singlePostId, 10 );
-		if ( ! Number.isFinite( postId ) || postId <= 0 ) {
-			notify( {
-				type: 'error',
-				message: __(
-					'Enter a valid post ID to regenerate.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-			return;
-		}
-		setIsRegenerating( true );
-		dismiss();
-		try {
-			const res = await apiCall( 'used_css_regenerate', {
-				post_id: postId,
-			} );
-			notify( {
-				type: res.success ? 'success' : 'error',
-				message:
-					res.message ||
-					( res.success
-						? __(
-								'Used CSS regeneration queued.',
-								'performance-optimisation'
-						  )
-						: __(
-								'Failed to regenerate used CSS.',
-								'performance-optimisation'
-						  ) ),
-				durationMs: 3000,
-			} );
-			if ( res.success ) {
-				refreshUsedCssStatus();
-			}
-		} catch ( err ) {
-			console.error( 'Failed to regenerate used CSS for post.', err );
-			notify( {
-				type: 'error',
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-		} finally {
-			setIsRegenerating( false );
-		}
-	};
-
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
-		setIsSaving( true );
+		setIsLoading( true );
 		dismiss();
 		try {
 			const res = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
-				// Strip client-only CDN row ids: they are React keys, not
-				// settings, and must never persist server-side.
-				settings: stripCdnIds( { ...settings } ),
+				settings: { ...settings },
 			} );
 			if ( res.success ) {
-				setBaseline( stripCdnIds( { ...settings } ) );
+				setBaseline( { ...settings } );
 				setIsDirty( false );
 				notify( {
 					type: 'success',
@@ -1468,70 +1145,61 @@ const FileOptimization = ( {
 				durationMs: 3000,
 			} );
 		} finally {
-			setIsSaving( false );
+			setIsLoading( false );
 		}
 	};
 
-	const subTabs = useMemo(
-		() => [
-			{
-				id: 'assets',
-				label: __( 'Assets', 'performance-optimisation' ),
-				icon: faCode,
-			},
-			{
-				id: 'scripts',
-				label: __( 'Scripts', 'performance-optimisation' ),
-				icon: faRocket,
-			},
-			{
-				id: 'ecommerce',
-				label: __( 'E-Commerce', 'performance-optimisation' ),
-				icon: faStore,
-			},
-			{
-				id: 'network',
-				label: __( 'Network', 'performance-optimisation' ),
-				icon: faServer,
-			},
-			{
-				id: 'core',
-				label: __( 'Core', 'performance-optimisation' ),
-				icon: faShieldAlt,
-			},
-		],
-		[]
-	);
-	const handleSubTabSelect = useCallback( ( id ) => {
-		setActiveSubTab( id );
-	}, [] );
-	const handleSubTabKeyDown = useCallback(
-		( e, index ) => {
-			let nextIndex;
-			if ( e.key === 'ArrowRight' ) {
-				nextIndex = ( index + 1 ) % subTabs.length;
-			} else if ( e.key === 'ArrowLeft' ) {
-				nextIndex = ( index - 1 + subTabs.length ) % subTabs.length;
-			} else if ( e.key === 'Home' ) {
-				nextIndex = 0;
-			} else if ( e.key === 'End' ) {
-				nextIndex = subTabs.length - 1;
-			} else {
-				return;
-			}
-
-			e.preventDefault();
-			const nextTab = subTabs[ nextIndex ];
-			setActiveSubTab( nextTab.id );
-
-			// Move focus to the next button.
-			const nextButton = tabRefs.current[ nextTab.id ];
-			if ( nextButton ) {
-				nextButton.focus();
-			}
+	const subTabs = [
+		{
+			id: 'assets',
+			label: __( 'Assets', 'performance-optimisation' ),
+			icon: faCode,
 		},
-		[ subTabs ]
-	);
+		{
+			id: 'scripts',
+			label: __( 'Scripts', 'performance-optimisation' ),
+			icon: faRocket,
+		},
+		{
+			id: 'ecommerce',
+			label: __( 'E-Commerce', 'performance-optimisation' ),
+			icon: faStore,
+		},
+		{
+			id: 'network',
+			label: __( 'Network', 'performance-optimisation' ),
+			icon: faServer,
+		},
+		{
+			id: 'core',
+			label: __( 'Core', 'performance-optimisation' ),
+			icon: faShieldAlt,
+		},
+	];
+	const handleSubTabKeyDown = ( e, index ) => {
+		let nextIndex;
+		if ( e.key === 'ArrowRight' ) {
+			nextIndex = ( index + 1 ) % subTabs.length;
+		} else if ( e.key === 'ArrowLeft' ) {
+			nextIndex = ( index - 1 + subTabs.length ) % subTabs.length;
+		} else if ( e.key === 'Home' ) {
+			nextIndex = 0;
+		} else if ( e.key === 'End' ) {
+			nextIndex = subTabs.length - 1;
+		} else {
+			return;
+		}
+
+		e.preventDefault();
+		const nextTab = subTabs[ nextIndex ];
+		setActiveSubTab( nextTab.id );
+
+		// Move focus to the next button.
+		const nextButton = tabRefs.current[ nextTab.id ];
+		if ( nextButton ) {
+			nextButton.focus();
+		}
+	};
 
 	return (
 		<div className="wppo-dashboard-view">
@@ -1544,7 +1212,7 @@ const FileOptimization = ( {
 				actions={
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"
-						isLoading={ isSaving }
+						isLoading={ isLoading }
 						onClick={ handleSubmit }
 						label={ __(
 							'Save Settings',
@@ -1564,15 +1232,28 @@ const FileOptimization = ( {
 
 				<div className="wppo-sub-tabs" role="tablist">
 					{ subTabs.map( ( tab, index ) => (
-						<SubTabButton
+						<button
 							key={ tab.id }
-							tab={ tab }
-							index={ index }
-							isActive={ activeSubTab === tab.id }
-							tabRef={ getTabRef( tab.id ) }
-							onSelect={ handleSubTabSelect }
-							onKeyDown={ handleSubTabKeyDown }
-						/>
+							id={ `tab-${ tab.id }` }
+							ref={ getTabRef( tab.id ) }
+							className={ `wppo-sub-tab${
+								activeSubTab === tab.id
+									? ' wppo-sub-tab--active'
+									: ''
+							}` }
+							onClick={ () => setActiveSubTab( tab.id ) }
+							onKeyDown={ ( e ) =>
+								handleSubTabKeyDown( e, index )
+							}
+							type="button"
+							role="tab"
+							tabIndex={ activeSubTab === tab.id ? 0 : -1 }
+							aria-selected={ activeSubTab === tab.id }
+							aria-controls={ `panel-${ tab.id }` }
+						>
+							<FontAwesomeIcon icon={ tab.icon } />
+							{ tab.label }
+						</button>
 					) ) }
 				</div>
 			</FeatureHeader>
@@ -1978,7 +1659,7 @@ const FileOptimization = ( {
 											className="wppo-button wppo-button--secondary wppo-mt-12"
 											onClick={ handleRegenerateUsedCSS }
 											type="button"
-											disabled={ isRegenerating }
+											disabled={ isLoading }
 										>
 											{ __(
 												'Regenerate Used CSS',
@@ -1996,56 +1677,6 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 										</button>
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="wppoSinglePostId"
-											>
-												{ __(
-													'Regenerate Used CSS for Post ID',
-													'performance-optimisation'
-												) }
-											</label>
-											<div className="wppo-inline-row">
-												<input
-													className="wppo-input"
-													type="number"
-													inputMode="numeric"
-													id="wppoSinglePostId"
-													min="1"
-													step="1"
-													placeholder={ __(
-														'123',
-														'performance-optimisation'
-													) }
-													value={ singlePostId }
-													onChange={ ( e ) =>
-														setSinglePostId(
-															e.target.value
-														)
-													}
-												/>
-												<button
-													className="wppo-button wppo-button--secondary"
-													type="button"
-													disabled={ isRegenerating }
-													onClick={
-														handleRegenerateSingleUsedCss
-													}
-												>
-													{ __(
-														'Regenerate Post',
-														'performance-optimisation'
-													) }
-												</button>
-											</div>
-											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
-												{ __(
-													'Builder-template post types are skipped automatically.',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
 									</div>
 								) }
 								{ settings.minifyCSS && (
@@ -2182,123 +1813,6 @@ const FileOptimization = ( {
 												) }
 											</p>
 										</div>
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="ccssExcludedPostTypes"
-											>
-												{ __(
-													'Excluded Post Types (Critical / Used CSS)',
-													'performance-optimisation'
-												) }
-											</label>
-											<textarea
-												className="wppo-textarea wppo-textarea--mono"
-												id="ccssExcludedPostTypes"
-												name="ccssExcludedPostTypes"
-												rows="2"
-												placeholder={ __(
-													'fl-builder-template, elementor_library',
-													'performance-optimisation'
-												) }
-												value={
-													typeof settings.ccssExcludedPostTypes ===
-													'string'
-														? settings.ccssExcludedPostTypes
-														: ''
-												}
-												onChange={ handleChange(
-													setSettings
-												) }
-												aria-describedby="ccssExcludedPostTypes-desc"
-											/>
-											<p
-												id="ccssExcludedPostTypes-desc"
-												className="wppo-text-muted wppo-mt-8 wppo-text-small"
-											>
-												{ __(
-													'One post type per line or comma-separated — builder templates are skipped, never error-looped. Empty keeps the builder defaults.',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="ccssMaxRetries"
-											>
-												{ __(
-													'Critical CSS Max Retries',
-													'performance-optimisation'
-												) }
-											</label>
-											<input
-												className="wppo-input"
-												type="number"
-												inputMode="numeric"
-												id="ccssMaxRetries"
-												name="ccssMaxRetries"
-												min="0"
-												max="5"
-												step="1"
-												value={ normalizeRetries(
-													settings.ccssMaxRetries
-												) }
-												onChange={ handleChange(
-													setSettings
-												) }
-												aria-describedby="ccssMaxRetries-desc"
-											/>
-											<p
-												id="ccssMaxRetries-desc"
-												className="wppo-text-muted wppo-mt-8 wppo-text-small"
-											>
-												{ __(
-													'Consecutive failures before a template is marked failed (0–5, default 5).',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="wppoSingleTemplate"
-											>
-												{ __(
-													'Regenerate Critical CSS for Template',
-													'performance-optimisation'
-												) }
-											</label>
-											<div className="wppo-inline-row">
-												<input
-													className="wppo-input"
-													type="text"
-													id="wppoSingleTemplate"
-													placeholder={ __(
-														'single',
-														'performance-optimisation'
-													) }
-													value={ singleTemplate }
-													onChange={ ( e ) =>
-														setSingleTemplate(
-															e.target.value
-														)
-													}
-												/>
-												<button
-													className="wppo-button wppo-button--secondary"
-													type="button"
-													onClick={ () =>
-														handleRegenerateSingleCcss()
-													}
-												>
-													{ __(
-														'Regenerate Template',
-														'performance-optimisation'
-													) }
-												</button>
-											</div>
-										</div>
 										{ ccssError && (
 											<div className="wppo-notice wppo-notice--error">
 												<span>
@@ -2323,9 +1837,6 @@ const FileOptimization = ( {
 										<CriticalCssPanel
 											status={ ccssStatus }
 											onRegenerate={ handleRegenerateCss }
-											onRegenerateSingle={
-												handleRegenerateSingleCcss
-											}
 										/>
 									</>
 								) }

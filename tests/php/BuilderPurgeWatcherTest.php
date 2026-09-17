@@ -401,6 +401,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'purge_builder_directories' );
+		$method->setAccessible( true );
 
 		$deleted = $method->invoke( $watcher, array( 'elementor', 'divi' ), Builder_Purge_Watcher::get_builder_map() );
 
@@ -422,6 +423,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	public function test_scoped_dir_rejects_dot_segments(): void {
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'scoped_cache_dir' );
+		$method->setAccessible( true );
 
 		$base = '/tmp/wordpress/wp-content/uploads';
 		$this->assertSame( '', $method->invoke( $watcher, $base, '.' ) );
@@ -440,6 +442,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'purge_builder_directories' );
+		$method->setAccessible( true );
 
 		$this->assertSame( array(), $method->invoke( $watcher, array( 'elementor' ), Builder_Purge_Watcher::get_builder_map() ) );
 	}
@@ -466,6 +469,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'purge_builder_directories' );
+		$method->setAccessible( true );
 
 		$deleted = $method->invoke( $watcher, array( 'bricks' ), Builder_Purge_Watcher::get_builder_map() );
 
@@ -491,6 +495,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'fire_builder_regeneration_hooks' );
+		$method->setAccessible( true );
 		$method->invoke( $watcher, array( 'elementor', 'divi' ), Builder_Purge_Watcher::get_builder_map() );
 
 		$this->assertSame( array( 'elementor/core/files/clear_cache' ), $fired );
@@ -1237,6 +1242,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	private function reset_drift_static_flags(): void {
 		foreach ( array( 'drift_suspended', 'drift_handled_this_request' ) as $name ) {
 			$property = new \ReflectionProperty( Builder_Purge_Watcher::class, $name );
+			$property->setAccessible( true );
 			$property->setValue( null, false );
 		}
 	}

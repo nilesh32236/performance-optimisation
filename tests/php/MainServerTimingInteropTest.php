@@ -88,6 +88,7 @@ class MainServerTimingInteropTest extends \PHPUnit\Framework\TestCase {
 		$main                          = $reflection->newInstanceWithoutConstructor();
 
 		$options_prop = $reflection->getProperty( 'options' );
+		$options_prop->setAccessible( true );
 		$options_prop->setValue(
 			$main,
 			array(
@@ -98,6 +99,7 @@ class MainServerTimingInteropTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$template_start_prop = $reflection->getProperty( 'server_timing_template_start' );
+		$template_start_prop->setAccessible( true );
 		$template_start_prop->setValue( $main, 1000000000.5 );
 
 		return $main;
@@ -227,6 +229,7 @@ class MainServerTimingInteropTest extends \PHPUnit\Framework\TestCase {
 		$reflection = new \ReflectionClass( Main::class );
 		$main       = $reflection->newInstanceWithoutConstructor();
 		$options    = $reflection->getProperty( 'options' );
+		$options->setAccessible( true );
 		$options->setValue(
 			$main,
 			array(

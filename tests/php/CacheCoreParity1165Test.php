@@ -62,6 +62,7 @@ class CacheCoreParity1165Test extends \PHPUnit\Framework\TestCase {
 	private function make_cache( array $options = array() ): Cache {
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$prop  = new \ReflectionProperty( Cache::class, 'options' );
+		$prop->setAccessible( true );
 		$prop->setValue( $cache, $options );
 		return $cache;
 	}
@@ -76,6 +77,7 @@ class CacheCoreParity1165Test extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( Cache $cache, string $name, array $args = array() ) {
 		$method = new \ReflectionMethod( $cache, $name );
+		$method->setAccessible( true );
 		return $method->invokeArgs( $cache, $args );
 	}
 

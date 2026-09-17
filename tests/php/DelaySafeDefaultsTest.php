@@ -49,8 +49,10 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	private function make_used_css( array $options, array $safelist ): Used_CSS {
 		$instance = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
 		$prop     = new \ReflectionProperty( Used_CSS::class, 'options' );
+		$prop->setAccessible( true );
 		$prop->setValue( $instance, $options );
 		$safe_prop = new \ReflectionProperty( Used_CSS::class, 'safelist' );
+		$safe_prop->setAccessible( true );
 		$safe_prop->setValue( $instance, $safelist );
 		return $instance;
 	}
@@ -339,7 +341,8 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	public function test_safelist_fixture_matches_production_builtin(): void {
 		$instance = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
 		$prop     = new \ReflectionProperty( Used_CSS::class, 'built_in_safelist' );
-		$builtin  = $prop->getValue( $instance );
+		$prop->setAccessible( true );
+		$builtin = $prop->getValue( $instance );
 
 		foreach ( $this->default_safelist() as $entry ) {
 			$this->assertContains( $entry, $builtin, "Fixture entry {$entry} missing from production built-in safelist." );
@@ -425,6 +428,7 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$init = new \ReflectionMethod( Used_CSS::class, 'init_safelist' );
+		$init->setAccessible( true );
 		$init->invoke( $css );
 
 		$this->assertTrue( $css->is_selector_used( '.my-custom-keep-widget', $this->empty_used() ) );
@@ -432,7 +436,8 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 
 		// The extra entries must have landed in the merged safelist.
 		$safe_prop = new \ReflectionProperty( Used_CSS::class, 'safelist' );
-		$merged    = $safe_prop->getValue( $css );
+		$safe_prop->setAccessible( true );
+		$merged = $safe_prop->getValue( $css );
 		$this->assertContains( '.my-custom-keep-', $merged );
 		$this->assertContains( '.my-other-thing-', $merged );
 	}
@@ -619,6 +624,7 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 
 		$main = new Main();
 		$prop = new \ReflectionProperty( Main::class, 'delay_disabled_for_page' );
+		$prop->setAccessible( true );
 		$prop->setValue( $main, true );
 
 		// phpcs:disable WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.

@@ -30,7 +30,6 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		}
 		unset( $_SERVER['SERVER_SOFTWARE'] );
 		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
-		unset( $_GET['block'], $_GET['_wpnonce'], $_POST['block'], $_POST['_wpnonce'] );
 		parent::tearDown();
 	}
 
@@ -132,7 +131,6 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 				return 'testnonce_' . $action;
 			}
 		);
-		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
 		Functions\when( 'wp_salt' )->justReturn( 'salt123' );
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'esc_attr' )->returnArg();
@@ -153,7 +151,6 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 				return 'testnonce_' . $action;
 			}
 		);
-		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
 		Functions\when( 'wp_salt' )->justReturn( 'salt123' );
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'esc_attr' )->returnArg();
@@ -262,9 +259,8 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 				$captured = $data;
 			}
 		);
-		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
-		$_GET['block']     = 'cart';
-		$_POST['_wpnonce'] = 'nonce123';
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
+		$_GET['block'] = 'cart';
 		LiteSpeed_ESI::handle_ajax_fragment();
 		$this->assertIsArray( $captured );
 		$this->assertArrayHasKey( 'html', $captured );
@@ -282,48 +278,10 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		}
 		$this->assertTrue( $found_private, 'Cache-Control private,no-cache not found' );
 		$this->assertTrue( $found_vary, 'X-LiteSpeed-Cache-Control private,no-vary not found' );
-		unset( $_GET['block'], $_POST['_wpnonce'] );
-	}
-
-	/**
-	 * Security audit: the cart fragment requires a valid wppo_esi nonce
-	 * like every other block — no public nonce-bypass entry point.
-	 */
-	public function test_ajax_handler_cart_requires_nonce(): void {
-		Functions\when( 'headers_sent' )->justReturn( false );
-		Functions\when( 'header' )->alias(
-			static function () {
-			}
-		);
-		Functions\when( 'sanitize_text_field' )->returnArg();
-		Functions\when( 'wp_unslash' )->returnArg();
-		Functions\when( 'get_transient' )->justReturn( false );
-		Functions\when( 'set_transient' )->justReturn( true );
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
-		Functions\when( 'is_multisite' )->justReturn( false );
-
-		$captured_error = null;
-		$captured_code  = null;
-		Functions\when( 'wp_send_json_error' )->alias(
-			static function ( $data, $code ) use ( &$captured_error, &$captured_code ) {
-				$captured_error = $data;
-				$captured_code  = $code;
-			}
-		);
-
-		Functions\when( 'wp_verify_nonce' )->justReturn( false );
-		$_GET['block'] = 'cart';
-		unset( $_POST['_wpnonce'] );
-
-		LiteSpeed_ESI::handle_ajax_fragment();
-
-		$this->assertSame( 403, $captured_code );
-		$this->assertSame( 'Unauthorized', $captured_error['message'] );
-
 		unset( $_GET['block'] );
 	}
 
-	public function test_ajax_handler_invalid_nonce_fails_authorization(): void {
+	public function test_ajax_handler_invalid_nonce_fails_authorization() {
 		global $headers;
 		$headers = array();
 		Functions\when( 'headers_sent' )->justReturn( false );
@@ -347,15 +305,14 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		Functions\when( 'wp_verify_nonce' )->justReturn( false );
-		$_GET['block']     = 'adminbar';
-		$_POST['_wpnonce'] = 'bad-nonce';
+		$_GET['block'] = 'adminbar';
 
 		LiteSpeed_ESI::handle_ajax_fragment();
 
 		$this->assertSame( 403, $captured_code );
 		$this->assertSame( 'Unauthorized', $captured_error['message'] );
 
-		unset( $_GET['block'], $_POST['_wpnonce'] );
+		unset( $_GET['block'] );
 	}
 
 	public function test_ajax_handler_valid_nonce_succeeds() {
@@ -381,117 +338,16 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		// The stub asserts a non-empty nonce reaches verification: a
-		// justReturn(true) stub would pass while production
-		// wp_verify_nonce('') fails, hiding POST-only/empty-nonce regressions.
-		$seen_nonce  = null;
-		$seen_action = null;
-		Functions\when( 'wp_verify_nonce' )->alias(
-			static function ( $nonce, $action ) use ( &$seen_nonce, &$seen_action ) {
-				$seen_nonce  = $nonce;
-				$seen_action = $action;
-				return 1;
-			}
-		);
-		$_GET['block']     = 'adminbar';
-		$_POST['_wpnonce'] = 'test-nonce-value';
+		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
+		$_GET['block'] = 'adminbar';
 
 		LiteSpeed_ESI::handle_ajax_fragment();
 
-		$this->assertSame( 'test-nonce-value', $seen_nonce );
-		$this->assertSame( 'wppo_esi', $seen_action );
 		$this->assertIsArray( $captured );
 		$this->assertArrayHasKey( 'html', $captured );
 		$this->assertStringContainsString( 'adminbar', $captured['html'] );
 
-		unset( $_GET['block'], $_POST['_wpnonce'] );
-	}
-
-	/**
-	 * Enterprise <esi:include> sub-requests are server-side GETs carrying
-	 * the _wpnonce embedded by render_esi_placeholder() in the query string.
-	 * A POST-only nonce read 403s every Enterprise hydration.
-	 */
-	public function test_ajax_handler_get_nonce_succeeds() {
-		Functions\when( 'headers_sent' )->justReturn( false );
-		Functions\when( 'header' )->alias(
-			static function () {
-			}
-		);
-		Functions\when( 'sanitize_text_field' )->returnArg();
-		Functions\when( 'wp_unslash' )->returnArg();
-		Functions\when( 'is_user_logged_in' )->justReturn( true );
-		Functions\when( 'wp_kses' )->returnArg( 1 );
-
-		$captured = null;
-		Functions\when( 'wp_send_json_success' )->alias(
-			static function ( $data ) use ( &$captured ) {
-				$captured = $data;
-			}
-		);
-
-		$seen_nonce = null;
-		Functions\when( 'wp_verify_nonce' )->alias(
-			static function ( $nonce, $action ) use ( &$seen_nonce ) {
-				$seen_nonce = $nonce;
-				return 1;
-			}
-		);
-		$_GET['block']    = 'cart';
-		$_GET['_wpnonce'] = 'enterprise-get-nonce';
-		unset( $_POST['_wpnonce'] );
-
-		LiteSpeed_ESI::handle_ajax_fragment();
-
-		$this->assertSame( 'enterprise-get-nonce', $seen_nonce );
-		$this->assertIsArray( $captured );
-		$this->assertArrayHasKey( 'html', $captured );
-
-		unset( $_GET['block'], $_GET['_wpnonce'] );
-	}
-
-	/**
-	 * Stale static-HTML cache recovery: the nonce block mints a fresh nonce
-	 * even when the presented (baked-in, expired) nonce is invalid, instead
-	 * of 403ing forever with no client recovery path.
-	 */
-	public function test_ajax_handler_nonce_block_refreshes_with_stale_nonce() {
-		Functions\when( 'headers_sent' )->justReturn( false );
-		Functions\when( 'header' )->alias(
-			static function () {
-			}
-		);
-		Functions\when( 'sanitize_text_field' )->returnArg();
-		Functions\when( 'wp_unslash' )->returnArg();
-		Functions\when( 'get_transient' )->justReturn( false );
-		Functions\when( 'set_transient' )->justReturn( true );
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
-		Functions\when( 'is_multisite' )->justReturn( false );
-		Functions\when( 'wp_kses' )->returnArg( 1 );
-
-		$captured = null;
-		Functions\when( 'wp_send_json_success' )->alias(
-			static function ( $data ) use ( &$captured ) {
-				$captured = $data;
-			}
-		);
-
-		Functions\when( 'wp_verify_nonce' )->justReturn( false );
-		Functions\when( 'wp_create_nonce' )->alias(
-			static function ( $action ) {
-				return 'fresh-' . $action;
-			}
-		);
-		$_GET['block']     = 'nonce';
-		$_POST['_wpnonce'] = 'expired-baked-in-nonce';
-
-		LiteSpeed_ESI::handle_ajax_fragment();
-
-		$this->assertIsArray( $captured );
-		$this->assertArrayHasKey( 'html', $captured );
-		$this->assertSame( 'fresh-wppo_esi', $captured['html'] );
-
-		unset( $_GET['block'], $_POST['_wpnonce'] );
+		unset( $_GET['block'] );
 	}
 
 	public function test_handle_send_headers_private_no_vary_on_cart(): void {

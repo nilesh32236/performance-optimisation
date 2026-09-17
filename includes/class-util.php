@@ -147,29 +147,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public const FRONT_PAGE_LCP_OPTION_PREFIX = 'wppo_front_page_lcp_';
 
 		/**
-		 * Shared builder/core preview query-param list.
-		 *
-		 * Single source consumed by {@see is_editor_preview_path()} and every
-		 * serve/store/preload guard so a new builder param added here reaches
-		 * all three layers without regex drift.
-		 *
-		 * @since NEXT
-		 * @var string[]
-		 */
-		public const EDITOR_PREVIEW_PARAMS = array(
-			'elementor-preview',
-			'et_fb',
-			'et_pb_preview',
-			'vc_action',
-			'vc_editable',
-			'bricks',
-			'preview',
-			'preview_id',
-			'customize_changeset_uuid',
-			'customizer',
-		);
-
-		/**
 		 * Get the allowlisted top-level settings keys.
 		 *
 		 * @since 2.0.0
@@ -335,8 +312,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'usedCssRumPriority'           => true,
 					'ccssQueueCap'                 => 5,
 					'ccssGenTimeout'               => 25,
-					'ccssExcludedPostTypes'        => "fl-builder-template\nelementor_library",
-					'ccssMaxRetries'               => 5,
 					'usedCssQueueCap'              => 50,
 					'ccssViewportVariants'         => false,
 					'usedCSSDeliveryMode'          => 'file',
@@ -1036,87 +1011,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Superglobal fallback: query-only callers (Cron passes path only)
 				// still catch `?elementor-preview=` etc. on the current request.
 				if ( empty( $params ) && ( '' === $query_string ) ) {
-					foreach ( self::EDITOR_PREVIEW_PARAMS as $key ) {
+					foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' ) as $key ) {
 						if ( isset( $_GET[ $key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
 							return true;
 						}
 					}
 					return false;
 				}
-				foreach ( self::EDITOR_PREVIEW_PARAMS as $key ) {
+				foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' ) as $key ) {
 					if ( array_key_exists( $key, $params ) ) {
 						return true;
 					}
 				}
 				return false;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return true;
-			}
-		}
-
-		/**
-		 * Whether an absolute URL targets a WooCommerce dynamic route.
-		 *
-		 * Single source for the serve path (Cache), the warm path (Cron) and
-		 * ad-hoc callers: combines the unconditional Store-API / faceted /
-		 * uncacheable-query guards with the safe-mode-gated dynamic-path
-		 * check so preload can never warm a URL the serve path blocks.
-		 * Fail-open: detection failure returns true (treated as dynamic).
-		 *
-		 * @since NEXT
-		 * @param string $url        Absolute URL.
-		 * @param string $query      Optional pre-parsed query string (parsed from $url when '').
-		 * @param string $rest_route Optional pre-parsed rest_route value.
-		 * @return bool True when the URL must not be cached/preloaded.
-		 */
-		public static function is_woo_excluded_url( string $url, string $query = '', string $rest_route = '' ): bool {
-			try {
-				if ( ! is_string( $url ) || '' === trim( $url ) ) {
-					return true;
-				}
-				$path = '';
-				if ( '' === $query ) {
-					if ( function_exists( 'wp_parse_url' ) ) {
-						$path  = (string) wp_parse_url( $url, PHP_URL_PATH );
-						$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
-					} else {
-						$parts = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
-						if ( is_array( $parts ) ) {
-							$path  = isset( $parts['path'] ) ? (string) $parts['path'] : '';
-							$query = isset( $parts['query'] ) ? (string) $parts['query'] : '';
-						}
-					}
-				} else {
-					$path = function_exists( 'wp_parse_url' ) ? (string) wp_parse_url( $url, PHP_URL_PATH ) : '';
-				}
-				if ( '' === $rest_route && '' !== $query ) {
-					$parsed = array();
-					parse_str( $query, $parsed );
-					if ( isset( $parsed['rest_route'] ) && is_string( $parsed['rest_route'] ) ) {
-						$rest_route = $parsed['rest_route'];
-					}
-				}
-				// Unconditional: Store API JSON is never cacheable.
-				if ( self::is_woo_store_api_request( $path, $query, $rest_route ) ) {
-					return true;
-				}
-				// Unconditional: faceted layered-nav queries are dynamic.
-				if ( '' !== $query && method_exists( self::class, 'is_woo_faceted_query' ) && self::is_woo_faceted_query( $query ) ) {
-					return true;
-				}
-				// Unconditional: any other functional query is dynamic.
-				if ( '' !== $query && method_exists( self::class, 'has_uncacheable_query' ) && self::has_uncacheable_query( $query ) ) {
-					return true;
-				}
-				// Gated: cart/checkout/account + custom Woo slugs.
-				if ( method_exists( self::class, 'is_woo_dynamic_path' ) ) {
-					if ( ! self::is_woo_safe_mode_enabled() ) {
-						return false;
-					}
-					return self::is_woo_dynamic_path( $path );
-				}
-				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
@@ -2518,30 +2425,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Build a sanitized preload <link> tag from an args array.
-		 *
-		 * Array/value-object overload so callers cannot silently swap the
-		 * nine positional parameters ($fetchpriority vs $imagesrcset). The
-		 * legacy positional {@see get_preload_link()} delegates here.
-		 *
-		 * @since NEXT
-		 * @param string $href Resource URL.
-		 * @param array  $args Optional args: rel, as, crossorigin, type, media, fetchpriority, imagesrcset, imagesizes.
-		 * @return string Sanitized `<link ...>` tag.
-		 */
-		public static function get_preload_link_args( string $href, array $args = array() ): string {
-			$rel           = isset( $args['rel'] ) ? (string) $args['rel'] : 'preload';
-			$as            = isset( $args['as'] ) ? (string) $args['as'] : '';
-			$crossorigin   = ! empty( $args['crossorigin'] );
-			$type          = isset( $args['type'] ) ? (string) $args['type'] : '';
-			$media         = isset( $args['media'] ) ? (string) $args['media'] : '';
-			$fetchpriority = isset( $args['fetchpriority'] ) ? (string) $args['fetchpriority'] : '';
-			$imagesrcset   = isset( $args['imagesrcset'] ) ? (string) $args['imagesrcset'] : '';
-			$imagesizes    = isset( $args['imagesizes'] ) ? (string) $args['imagesizes'] : '';
-			return self::get_preload_link( $href, $rel, $as, $crossorigin, $type, $media, $fetchpriority, $imagesrcset, $imagesizes );
-		}
-
-		/**
 		 * Normalize and deduplicate a list of URLs.
 		 *
 		 * If given an array, each element is trimmed, duplicates and empty values are removed, and the result is reindexed.
@@ -2724,45 +2607,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)#', '', $path );
 
 			return $host . $path;
-		}
-
-		/**
-		 * Resolve a site URL to an absolute https URL.
-		 *
-		 * Centralizes the protocol-relative / root-relative / home-base
-		 * branches re-implemented across Image_Optimisation, Img_Converter,
-		 * Used_CSS and Critical_CSS so a fix here reaches every pipeline.
-		 *
-		 * @since NEXT
-		 * @param string $url Raw URL.
-		 * @return string Absolute URL or '' when empty/data:.
-		 */
-		public static function normalize_site_url( string $url ): string {
-			$url = trim( $url );
-			if ( '' === $url || 0 === strpos( $url, 'data:' ) ) {
-				return '';
-			}
-			if ( 0 === strpos( $url, '//' ) ) {
-				$url = 'https:' . $url;
-			}
-			if ( 0 === strpos( $url, '/' ) || false === strpos( $url, '://' ) ) {
-				$url = self::cached_home_url() . '/' . ltrim( $url, '/' );
-			}
-			return $url;
-		}
-
-		/**
-		 * Normalize a URL to a stable image/cache key (host + path).
-		 *
-		 * Thin canonical wrapper over {@see normalize_url()} so image and CSS
-		 * pipelines share one key derivation instead of parallel copies.
-		 *
-		 * @since NEXT
-		 * @param string $url Raw URL.
-		 * @return string Normalized key or ''.
-		 */
-		public static function normalize_image_key( string $url ): string {
-			return self::normalize_url( $url );
 		}
 
 		/**
@@ -5128,237 +4972,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Sanitize the LiteSpeed integration `mode` value against its allowlist.
-		 *
-		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}
-		 * so the allowlist lives in one place with its own unit test.
-		 *
-		 * @since NEXT
-		 * @param mixed $value Raw value.
-		 * @return string Allowlisted mode ('auto' fallback).
-		 */
-		public static function sanitize_mode_value( $value ): string {
-			$raw = sanitize_text_field( (string) $value );
-			return in_array( $raw, array( 'auto', 'wppo', 'litespeed', 'standalone' ), true ) ? $raw : 'auto';
-		}
-
-		/**
-		 * Sanitize per-post-type cache TTL overrides.
-		 *
-		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
-		 *
-		 * @since NEXT
-		 * @param array $value Raw overrides.
-		 * @return array Sanitized overrides.
-		 */
-		public static function sanitize_ttl_overrides( $value ): array {
-			$allowed_hours = array( 0, 1, 6, 12, 24, 48, 168 );
-			$allowed_types = array( 'post', 'page', 'product' );
-			$overrides     = array();
-			foreach ( (array) $value as $ptype => $hours ) {
-				$safe_ptype = preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $ptype );
-				if ( '' === $safe_ptype || ! in_array( $safe_ptype, $allowed_types, true ) ) {
-					continue;
-				}
-				if ( '' === $hours || null === $hours ) {
-					continue;
-				}
-				$int_hours = absint( $hours );
-				if ( ! in_array( $int_hours, $allowed_hours, true ) ) {
-					continue;
-				}
-				$overrides[ $safe_ptype ] = $int_hours;
-			}
-			/**
-			 * Filter sanitized TTL overrides.
-			 *
-			 * @since 2.0.0
-			 * @param array $overrides Sanitized overrides.
-			 */
-			return (array) apply_filters( 'wppo_cache_ttl_overrides', $overrides );
-		}
-
-		/**
-		 * Sanitize the one-to-many CDN mapping list.
-		 *
-		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
-		 *
-		 * @since NEXT
-		 * @param array $value Raw mapping entries.
-		 * @return array Sanitized mapping.
-		 */
-		public static function sanitize_cdn_mapping( $value ): array {
-			$max = (int) apply_filters( 'wppo_cdn_mapping_max', 5 );
-			if ( $max < 1 ) {
-				$max = 5;
-			}
-			$mapping = array();
-			$count   = 0;
-			foreach ( (array) $value as $entry ) {
-				if ( ! is_array( $entry ) || $count >= $max ) {
-					continue;
-				}
-				$cdn_url = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
-				if ( '' === $cdn_url ) {
-					continue;
-				}
-				$ori      = isset( $entry['ori'] ) ? esc_url_raw( (string) $entry['ori'] ) : '';
-				$ori_dir  = isset( $entry['ori_dir'] ) ? sanitize_text_field( (string) $entry['ori_dir'] ) : '';
-				$cdn_attr = isset( $entry['cdn_attr'] ) ? sanitize_text_field( (string) $entry['cdn_attr'] ) : '';
-				if ( '' !== $ori_dir ) {
-					$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
-					$valid = array();
-					foreach ( $parts as $p ) {
-						if ( preg_match( '/^[a-zA-Z0-9_\-\/\.\*]+$/', $p ) ) {
-							$valid[] = $p;
-						}
-					}
-					$ori_dir = implode( '|', $valid );
-				}
-				$include_dirs      = isset( $entry['include_dirs'] ) ? sanitize_text_field( (string) $entry['include_dirs'] ) : 'wp-content|wp-includes';
-				$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
-				if ( '' !== $include_filetypes ) {
-					$include_filetypes = strtolower( $include_filetypes );
-					$parts             = array_map( 'trim', explode( ',', $include_filetypes ) );
-					$parts             = array_filter( $parts );
-					$parts             = array_map( fn( $t ) => ltrim( $t, '.' ), $parts );
-					$include_filetypes = implode( ',', $parts );
-				}
-				$data = array(
-					'cdn_url'           => $cdn_url,
-					'include_dirs'      => $include_dirs,
-					'include_filetypes' => $include_filetypes,
-				);
-				if ( '' !== $ori ) {
-					$data['ori'] = $ori;
-				}
-				if ( '' !== $ori_dir ) {
-					$data['ori_dir'] = $ori_dir;
-				}
-				if ( '' !== $cdn_attr ) {
-					$data['cdn_attr'] = $cdn_attr;
-				}
-				if ( isset( $entry['cdn_urls'] ) && is_array( $entry['cdn_urls'] ) ) {
-					$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdn_urls'] ) ) );
-					if ( ! empty( $cdns ) ) {
-						$data['cdn_urls'] = $cdns;
-					}
-				} elseif ( isset( $entry['cdns'] ) && is_array( $entry['cdns'] ) ) {
-					$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdns'] ) ) );
-					if ( ! empty( $cdns ) ) {
-						$data['cdn_urls'] = $cdns;
-					}
-				}
-				/**
-				 * Filter single CDN mapping entry post-sanitize.
-				 *
-				 * @since 2.0.0
-				 * @param array $data Sanitized entry.
-				 */
-				$data      = (array) apply_filters( 'wppo_cdn_mapping_entry', $data );
-				$mapping[] = $data;
-				++$count;
-			}
-			/**
-			 * Filter CDN mapping array.
-			 *
-			 * @since 2.0.0
-			 * @param array $mapping Sanitized mapping.
-			 */
-			return (array) apply_filters( 'wppo_cdn_mapping', $mapping );
-		}
-
-		/**
-		 * Sanitize a scalar settings value with the generic fallback rules.
-		 *
-		 * Extracted from {@see sanitize_settings_recursively()} so the
-		 * key-name heuristic (exclude/preload/delay/url/cdn) is unit-testable
-		 * in isolation and the main loop stays a readable dispatcher.
-		 *
-		 * @since NEXT
-		 * @param string $safe_key Sanitized key.
-		 * @param mixed  $value    Raw value.
-		 * @return mixed Sanitized value.
-		 */
-		public static function sanitize_scalar_setting( string $safe_key, $value ) {
-			if ( is_bool( $value ) ) {
-				return (bool) $value;
-			}
-			if ( is_numeric( $value ) ) {
-				return (int) $value;
-			}
-			if ( in_array( $safe_key, array( 'pagespeed_api_key', 'password' ), true ) ) {
-				return sanitize_text_field( $value );
-			}
-			if ( stripos( $safe_key, 'exclude' ) !== false || stripos( $safe_key, 'preload' ) !== false || stripos( $safe_key, 'delay' ) !== false || stripos( $safe_key, 'list' ) !== false ) {
-				return sanitize_textarea_field( $value );
-			}
-			if ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
-				return esc_url_raw( $value );
-			}
-			return sanitize_text_field( $value );
-		}
-
-		/**
-		 * Map of setting-tab slugs to their dedicated sanitizer methods.
-		 *
-		 * Schema-driven dispatch table for {@see sanitize_settings_recursively()}:
-		 * every tab in {@see get_default_settings()} must appear here so a new
-		 * tab key can never be silently dropped or stored unsanitized.
-		 *
-		 * @since NEXT
-		 * @return array<string,string> Tab slug => sanitizer method name.
-		 */
-		public static function get_settings_sanitizer_map(): array {
-			return array(
-				'cache_settings'        => 'sanitize_cache_settings',
-				'file_optimisation'     => 'sanitize_file_optimisation',
-				'preload_settings'      => 'sanitize_scalar_setting',
-				'image_optimisation'    => 'sanitize_scalar_setting',
-				'performance_audit'     => 'sanitize_scalar_setting',
-				'database_cleanup'      => 'sanitize_scalar_setting',
-				'object_cache'          => 'sanitize_scalar_setting',
-				'litespeed_integration' => 'sanitize_mode_value',
-				'llms_txt'              => 'sanitize_scalar_setting',
-				'od_integration'        => 'sanitize_scalar_setting',
-				'bfcache'               => 'sanitize_scalar_setting',
-				'perf_translations'     => 'sanitize_scalar_setting',
-				'ai_adaptive'           => 'sanitize_scalar_setting',
-				'edge_cache'            => 'sanitize_scalar_setting',
-			);
-		}
-
-		/**
-		 * Sanitize the `cache_settings` tab.
-		 *
-		 * Per-tab entry point delegating to {@see sanitize_settings_recursively()};
-		 * exists so the sanitizer map covers every schema tab with a named,
-		 * testable method.
-		 *
-		 * @since NEXT
-		 * @param array $settings Raw tab settings.
-		 * @return array Sanitized tab settings.
-		 */
-		public static function sanitize_cache_settings( $settings ): array {
-			return self::sanitize_settings_recursively( (array) $settings );
-		}
-
-		/**
-		 * Sanitize the `file_optimisation` tab.
-		 *
-		 * Per-tab entry point delegating to {@see sanitize_settings_recursively()};
-		 * exists so the sanitizer map covers every schema tab with a named,
-		 * testable method.
-		 *
-		 * @since NEXT
-		 * @param array $settings Raw tab settings.
-		 * @return array Sanitized tab settings.
-		 */
-		public static function sanitize_file_optimisation( $settings ): array {
-			return self::sanitize_settings_recursively( (array) $settings );
-		}
-
-		/**
 		 * Sanitizes the settings array recursively.
 		 *
 		 * Shared by every settings entry point (REST API, WP-CLI import/update)
@@ -5385,19 +4998,126 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// LiteSpeed integration — allowlist mode values.
 				if ( 'mode' === $safe_key && ! is_array( $value ) ) {
-					$sanitized[ $safe_key ] = self::sanitize_mode_value( $value );
+					$raw                    = sanitize_text_field( (string) $value );
+					$mode                   = in_array( $raw, array( 'auto', 'wppo', 'litespeed', 'standalone' ), true ) ? $raw : 'auto';
+					$sanitized[ $safe_key ] = $mode;
 					continue;
 				}
 
 				// Cache TTL overrides — per-post-type hours allowlist (0/1/6/12/24/48/168), absint.
 				if ( 'ttlOverrides' === $safe_key && is_array( $value ) ) {
-					$sanitized[ $safe_key ] = self::sanitize_ttl_overrides( $value );
+					$allowed_hours = array( 0, 1, 6, 12, 24, 48, 168 );
+					$allowed_types = array( 'post', 'page', 'product' );
+					$overrides     = array();
+					foreach ( $value as $ptype => $hours ) {
+						$safe_ptype = preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $ptype );
+						if ( '' === $safe_ptype || ! in_array( $safe_ptype, $allowed_types, true ) ) {
+							continue;
+						}
+						if ( '' === $hours || null === $hours ) {
+							continue;
+						}
+						$int_hours = absint( $hours );
+						if ( ! in_array( $int_hours, $allowed_hours, true ) ) {
+							continue;
+						}
+						$overrides[ $safe_ptype ] = $int_hours;
+					}
+					/**
+					 * Filter sanitized TTL overrides.
+					 *
+					 * @since 2.0.0
+					 * @param array $overrides Sanitized overrides.
+					 */
+					$overrides              = (array) apply_filters( 'wppo_cache_ttl_overrides', $overrides );
+					$sanitized[ $safe_key ] = $overrides;
 					continue;
 				}
 
 				// P1 CDN mapping — one-to-many (cdn.cls.php:48 parity).
 				if ( 'cdnMapping' === $safe_key && is_array( $value ) ) {
-					$sanitized[ $safe_key ] = self::sanitize_cdn_mapping( $value );
+					$max = (int) apply_filters( 'wppo_cdn_mapping_max', 5 );
+					if ( $max < 1 ) {
+						$max = 5;
+					}
+					$mapping = array();
+					$count   = 0;
+					foreach ( $value as $entry ) {
+						if ( ! is_array( $entry ) || $count >= $max ) {
+							continue;
+						}
+						$cdn_url = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
+						if ( '' === $cdn_url ) {
+							continue;
+						}
+						$ori      = isset( $entry['ori'] ) ? esc_url_raw( (string) $entry['ori'] ) : '';
+						$ori_dir  = isset( $entry['ori_dir'] ) ? sanitize_text_field( (string) $entry['ori_dir'] ) : '';
+						$cdn_attr = isset( $entry['cdn_attr'] ) ? sanitize_text_field( (string) $entry['cdn_attr'] ) : '';
+						// Validate ori_dir wildcard pattern via wildcard2regex (allow * and |).
+						if ( '' !== $ori_dir ) {
+							$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
+							$valid = array();
+							foreach ( $parts as $p ) {
+								// Allow alphanum, -, _, /, ., *, and wildcards.
+								if ( preg_match( '/^[a-zA-Z0-9_\-\/\.\*]+$/', $p ) ) {
+									$valid[] = $p;
+								}
+							}
+							$ori_dir = implode( '|', $valid );
+						}
+						$include_dirs      = isset( $entry['include_dirs'] ) ? sanitize_text_field( (string) $entry['include_dirs'] ) : 'wp-content|wp-includes';
+						$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
+						if ( '' !== $include_filetypes ) {
+							$include_filetypes = strtolower( $include_filetypes );
+							$parts             = array_map( 'trim', explode( ',', $include_filetypes ) );
+							$parts             = array_filter( $parts );
+							$parts             = array_map( fn( $t ) => ltrim( $t, '.' ), $parts );
+							$include_filetypes = implode( ',', $parts );
+						}
+						$data = array(
+							'cdn_url'           => $cdn_url,
+							'include_dirs'      => $include_dirs,
+							'include_filetypes' => $include_filetypes,
+						);
+						if ( '' !== $ori ) {
+							$data['ori'] = $ori;
+						}
+						if ( '' !== $ori_dir ) {
+							$data['ori_dir'] = $ori_dir;
+						}
+						if ( '' !== $cdn_attr ) {
+							$data['cdn_attr'] = $cdn_attr;
+						}
+						// Support cdns/cdn_urls array (filter-only, round-robin).
+						if ( isset( $entry['cdn_urls'] ) && is_array( $entry['cdn_urls'] ) ) {
+							$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdn_urls'] ) ) );
+							if ( ! empty( $cdns ) ) {
+								$data['cdn_urls'] = $cdns;
+							}
+						} elseif ( isset( $entry['cdns'] ) && is_array( $entry['cdns'] ) ) {
+							$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdns'] ) ) );
+							if ( ! empty( $cdns ) ) {
+								$data['cdn_urls'] = $cdns;
+							}
+						}
+						/**
+						 * Filter single CDN mapping entry post-sanitize.
+						 *
+						 * @since 2.0.0
+						 * @param array $data Sanitized entry.
+						 */
+						$data      = (array) apply_filters( 'wppo_cdn_mapping_entry', $data );
+						$mapping[] = $data;
+						++$count;
+					}
+					/**
+					 * Filter CDN mapping array.
+					 *
+					 * @since 2.0.0
+					 * @param array $mapping Sanitized mapping.
+					 */
+					$mapping                = (array) apply_filters( 'wppo_cdn_mapping', $mapping );
+					$sanitized[ $safe_key ] = $mapping;
 					continue;
 				}
 
@@ -5625,33 +5345,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// the generic `url` branch (esc_url_raw would collapse the
 				// multiple lines). Pinned explicitly so a future reorder of the
 				// generic branches cannot corrupt these lists.
-				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls', 'delayJSThirdPartyDenylist', 'delayJSThirdPartyAllowlist', 'ccssExcludedPostTypes' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls', 'delayJSThirdPartyDenylist', 'delayJSThirdPartyAllowlist' ), true ) && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}
 
+				// Elementor-safe mode (issue #1259) — normalize malformed import
+				// shapes (0/1, '0'/'1', 'false'/'true') to bool so the toggle
+				// check in Main::is_elementor_safe_mode_active() is reliable.
+				// A form-encoded 'false' string would otherwise survive
+				// sanitize_text_field as a truthy non-empty string and read
+				// as ON via !empty(). Unrecognized values fail safe to true
+				// (absent key = enabled), mirroring Sandbox_Preview.
 				if ( 'elementorSafeMode' === $safe_key && ! is_array( $value ) ) {
 					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
 					continue;
 				}
-				// CCSS bounded-retry cap (issue #1274) — int clamped to
-				// 0..5 (0 = fail fast, no retries). Unrecognized values
-				// fail open to 5 so generation keeps its retry budget.
-				if ( 'ccssMaxRetries' === $safe_key ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 5;
-						continue;
-					}
-					$retries                = is_numeric( $value ) ? (int) $value : 5;
-					$sanitized[ $safe_key ] = min( 5, max( 0, $retries ) );
-					continue;
-				}
 
 				if ( is_array( $value ) ) {
 					$sanitized[ $safe_key ] = self::sanitize_settings_recursively( $value );
+				} elseif ( is_bool( $value ) ) {
+					$sanitized[ $safe_key ] = (bool) $value;
+				} elseif ( is_numeric( $value ) ) {
+					$sanitized[ $safe_key ] = (int) $value;
+				} elseif ( in_array( $safe_key, array( 'pagespeed_api_key', 'password' ), true ) ) {
+					$sanitized[ $safe_key ] = sanitize_text_field( $value );
+				} elseif ( stripos( $safe_key, 'exclude' ) !== false || stripos( $safe_key, 'preload' ) !== false || stripos( $safe_key, 'delay' ) !== false || stripos( $safe_key, 'list' ) !== false ) {
+					$sanitized[ $safe_key ] = sanitize_textarea_field( $value );
+				} elseif ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
+					$sanitized[ $safe_key ] = esc_url_raw( $value );
 				} else {
-					$sanitized[ $safe_key ] = self::sanitize_scalar_setting( $safe_key, $value );
+					$sanitized[ $safe_key ] = sanitize_text_field( $value );
 				}
 			}
 			return $sanitized;
@@ -6185,9 +5910,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `imagedestroy()` (see wiki.php.net/rfc/deprecations_php_8_5): on 8.5+
 		 * handles are released by dropping the reference instead of calling the
 		 * close function. Below 8.5 the legacy close path is kept unchanged.
-		 * Note: upstream deprecates `curl_close()` + `curl_share_close()`
-		 * only — not `curl_multi_close()` — but `close_curl_multi_handle()`
-		 * is over-gated the same way for symmetry (fail-open either way).
 		 *
 		 * The optional $php_version parameter exists so PHPUnit (Brain Monkey)
 		 * can exercise both sides of the gate without redefining PHP_VERSION.
@@ -6197,16 +5919,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return bool True on PHP 8.5+, false below.
 		 */
 		public static function is_php85_or_greater( ?string $php_version = null ): bool {
-			static $cached = null;
-			if ( null === $php_version && null !== $cached ) {
-				return $cached;
-			}
 			$version = $php_version ?? PHP_VERSION;
-			$result  = version_compare( $version, '8.5', '>=' );
-			if ( null === $php_version ) {
-				$cached = $result;
-			}
-			return $result;
+			return version_compare( $version, '8.5', '>=' );
 		}
 
 		/**

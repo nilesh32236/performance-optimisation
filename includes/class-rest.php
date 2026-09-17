@@ -388,14 +388,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid remediation mode.', 'performance-optimisation' ) );
 			}
 
-			// Throttle every mutating mode (apply/revert/revert_all all issue
-			// bulk update_option writes); dry_run is read-only and unthrottled.
-			if ( 'dry_run' !== $mode && $this->is_endpoint_throttled( 'autoload_remediate', 5, 60 ) ) {
-				$throttled = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$throttled->header( 'Retry-After', '60' );
-				return $throttled;
-			}
-
 			if ( 'revert' === $mode ) {
 				$option = isset( $params['option'] ) ? sanitize_text_field( $params['option'] ) : '';
 				if ( '' === $option ) {
@@ -813,19 +805,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'type'       => 'object',
 				'properties' => array(
 					'success' => array(
-						'description' => __( 'Whether the request was successful.', 'performance-optimisation' ),
+						'description' => esc_html__( 'Whether the request was successful.', 'performance-optimisation' ),
 						'type'        => 'boolean',
 						'context'     => array( 'view', 'edit' ),
 						'readonly'    => true,
 					),
 					'data'    => array(
-						'description' => __( 'Response data payload.', 'performance-optimisation' ),
+						'description' => esc_html__( 'Response data payload.', 'performance-optimisation' ),
 						'type'        => array( 'object', 'array', 'string', 'boolean', 'null' ),
 						'context'     => array( 'view', 'edit' ),
 						'readonly'    => true,
 					),
 					'message' => array(
-						'description' => __( 'Response message.', 'performance-optimisation' ),
+						'description' => esc_html__( 'Response message.', 'performance-optimisation' ),
 						'type'        => array( 'string', 'null' ),
 						'context'     => array( 'view', 'edit' ),
 						'readonly'    => true,
@@ -880,75 +872,80 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return bool True when throttled.
 		 */
 		private function is_endpoint_throttled( string $endpoint, int $limit = 10, int $window = 60 ): bool {
-			// Fail-open when the transient API is unavailable (unit stubs
-			// without the transient helpers): throttling is best-effort.
-			if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
-				return false;
+			// Per-user/IP key so one actor cannot exhaust the budget for
+			// everyone sharing the endpoint slug.
+			$suffix = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+			if ( 0 === $suffix ) {
+				$suffix = self::throttle_client_suffix();
 			}
-			try {
-				// Per-user/IP key so one actor cannot exhaust the budget for
-				// everyone sharing the endpoint slug.
-				$suffix = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
-				if ( 0 === $suffix ) {
-					$suffix = self::throttle_client_suffix();
-				}
-				$key    = Util::transient_key( 'wppo_throttle_' . ( function_exists( 'sanitize_key' ) ? sanitize_key( $endpoint ) : strtolower( (string) preg_replace( '/[^a-z0-9_-]/i', '', $endpoint ) ) ) . '_' . md5( (string) $suffix ) );
-				$bucket = get_transient( $key );
-				$now    = time();
-				// Fixed window: the TTL is set only on the first increment; later
-				// hits re-store with the remaining TTL instead of extending it.
-				if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
-					set_transient(
-						$key,
-						array(
-							'count' => 1,
-							'start' => $now,
-						),
-						$window
-					);
-					return false;
-				}
-				$count = (int) $bucket['count'];
-				if ( $count >= $limit ) {
-					return true;
-				}
-				// Clamp into [1, $window]: a future-dated (corrupted or tampered)
-				// start would otherwise persist the bucket past one window. Future
-				// starts reset above; the min() cap bounds this call's TTL regardless.
-				$elapsed   = $now - (int) $bucket['start'];
-				$remaining = max( 1, min( $window, $window - $elapsed ) );
+			$key    = Util::transient_key( 'wppo_throttle_' . sanitize_key( $endpoint ) . '_' . md5( (string) $suffix ) );
+			$bucket = get_transient( $key );
+			$now    = time();
+			// Fixed window: the TTL is set only on the first increment; later
+			// hits re-store with the remaining TTL instead of extending it.
+			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
 				set_transient(
 					$key,
 					array(
-						'count' => $count + 1,
-						'start' => (int) $bucket['start'],
+						'count' => 1,
+						'start' => $now,
 					),
-					$remaining
+					$window
 				);
 				return false;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
 			}
+			$count = (int) $bucket['count'];
+			if ( $count >= $limit ) {
+				return true;
+			}
+			// Clamp into [1, $window]: a future-dated (corrupted or tampered)
+			// start would otherwise persist the bucket past one window. Future
+			// starts reset above; the min() cap bounds this call's TTL regardless.
+			$elapsed   = $now - (int) $bucket['start'];
+			$remaining = max( 1, min( $window, $window - $elapsed ) );
+			set_transient(
+				$key,
+				array(
+					'count' => $count + 1,
+					'start' => (int) $bucket['start'],
+				),
+				$remaining
+			);
+			return false;
 		}
 
 		/**
 		 * Client suffix for the anonymous endpoint-throttle bucket.
 		 *
-		 * REMOTE_ADDR only — deliberately no X-Forwarded-For. The header is
-		 * client-controlled, so mixing it into the key lets an attacker
-		 * rotate XFF per request for a fresh bucket and never hit the
-		 * limit. Behind a proxy/CDN this collapses edge-sharing clients
-		 * into one bucket (fail-closed direction: legitimate bursts may
-		 * 429 sooner rather than letting throttling be bypassed); sites
-		 * with a trusted proxy should enforce limits at the edge instead.
+		 * REMOTE_ADDR alone collapses all visitors behind a proxy/CDN edge
+		 * IP into one bucket. The left-most X-Forwarded-For entry (the
+		 * client-facing address added by the first proxy) separates those
+		 * buckets. Only the X-Forwarded-For half is filter_var()-validated;
+		 * REMOTE_ADDR is server-set and kept unvalidated in the hashed key
+		 * (no blind proxy trust: a spoofed header
+		 * can only add buckets, never impersonate another client). Mirrors
+		 * the REMOTE_ADDR-first resolution used by RUM rate limiting.
 		 *
 		 * @since NEXT
 		 * @return string Anon throttle suffix.
 		 */
 		private static function throttle_client_suffix(): string {
 			$remote = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			return '' !== $remote ? $remote : 'anon';
+			$xff    = '';
+			if ( isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) && is_string( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$parts = explode( ',', wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$first = isset( $parts[0] ) ? trim( sanitize_text_field( $parts[0] ) ) : '';
+				if ( '' !== $first ) {
+					if ( function_exists( 'filter_var' ) ) {
+						$valid = filter_var( $first, FILTER_VALIDATE_IP );
+						$xff   = false === $valid ? '' : (string) $valid;
+					} else {
+						$xff = $first;
+					}
+				}
+			}
+			$combined = trim( $remote . '|' . $xff, '|' );
+			return '' !== $combined ? $combined : 'anon';
 		}
 
 		/**
@@ -979,11 +976,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function clear_cache( \WP_REST_Request $request ) {
-			if ( $this->is_endpoint_throttled( 'clear_cache', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
 			$params = $request->get_params();
 			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
 			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
@@ -1410,11 +1402,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function optimise_image( \WP_REST_Request $request ) {
-			if ( $this->is_endpoint_throttled( 'optimise_image', 10, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
 			// Defense-in-depth capability re-check on the conversion/delete
 			// trigger path (the route permission_callback already requires
 			// manage_options). Guarded so unit stubs without the pluggable
@@ -1425,28 +1412,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$params = $request->get_params();
 
-			// Nested-array input (e.g. webp[][x]=1) would throw a TypeError
-			// inside sanitize_text_field() on PHP 8 — keep scalars only and
-			// reject anything else with the 400 invalid-path response below.
-			$raw_webp = isset( $params['webp'] ) ? (array) $params['webp'] : array();
-			$raw_avif = isset( $params['avif'] ) ? (array) $params['avif'] : array();
-			foreach ( array_merge( $raw_webp, $raw_avif ) as $entry ) {
-				if ( ! is_string( $entry ) && ! is_int( $entry ) ) {
-					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
-				}
-			}
-			$webp_images = array_map(
-				static function ( $v ) {
-					return sanitize_text_field( (string) $v );
-				},
-				$raw_webp
-			);
-			$avif_images = array_map(
-				static function ( $v ) {
-					return sanitize_text_field( (string) $v );
-				},
-				$raw_avif
-			);
+			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
+			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
 
 			// If no paths sent from client, fall back to reading pending paths from DB.
 			if ( empty( $webp_images ) && empty( $avif_images ) ) {
@@ -1704,11 +1671,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function delete_optimised_image(): \WP_REST_Response {
-			if ( $this->is_endpoint_throttled( 'delete_optimised_image', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
 			// Defense-in-depth capability re-check on the delete trigger
 			// (the route permission_callback already requires
 			// manage_options). Guarded so unit stubs cannot fatal.
@@ -1763,11 +1725,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function import_settings( \WP_REST_Request $request ) {
-			if ( $this->is_endpoint_throttled( 'import_settings', 10, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
 			$data = $request->get_json_params();
 
 			if ( ! is_array( $data ) ) {
@@ -2019,7 +1976,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				Log::add(
 					sprintf(
 					/* translators: %1$s: Cleanup type, %2$d: Number of items */
-						__( 'Database cleanup (%1$s): %2$d items removed', 'performance-optimisation' ),
+						__( 'Database cleanup (%1$s): %2$d items removed on ', 'performance-optimisation' ),
 						$type,
 						(int) $result
 					)
@@ -2271,9 +2228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return array Sanitized Redis config.
 		 */
 		private function build_redis_config( $params, $defaults = array() ) {
-			// Single source of truth: Object_Cache::ALLOWED_KEYS (local
-			// fallback only when the class is unavailable, e.g. unit stubs).
-			$allowed_keys = class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ? Object_Cache::ALLOWED_KEYS : array( 'mode', 'host', 'port', 'password', 'database', 'timeout', 'prefix', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
+			$allowed_keys = array( 'mode', 'host', 'port', 'password', 'database', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
 			$config       = array();
 
 			foreach ( $allowed_keys as $key ) {
@@ -2339,24 +2294,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					return max( 1, min( 65535, (int) $value ) );
 				case 'database':
 					return max( 0, min( 15, (int) $value ) );
-				case 'timeout':
-					// Clamp to a sane float range: an array/object here
-					// would otherwise flow raw into connect calls and
-					// var_export'ed config (type confusion downstream).
-					if ( is_array( $value ) || is_object( $value ) ) {
-						return 1.0;
-					}
-					return max( 0.1, min( 30.0, (float) $value ) );
-				case 'prefix':
-					// Redis key prefix: charset + length sanitized so it
-					// cannot smuggle whitespace/control sequences into keys
-					// or the var_export'ed drop-in config.
-					if ( ! is_string( $value ) && ! is_numeric( $value ) ) {
-						return '';
-					}
-					$prefix = sanitize_text_field( (string) $value );
-					$prefix = (string) preg_replace( '/[^A-Za-z0-9_\-:]/', '', $prefix );
-					return substr( $prefix, 0, 64 );
 				case 'password':
 					// When WPPO_REDIS_PASSWORD is defined the constant takes
 					// precedence: supplied passwords are dropped unless
@@ -2386,45 +2323,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return string[] An indexed array of sanitized, non-empty node strings.
 		 */
 		private function sanitize_nodes( $nodes ) {
-			$sanitize_node = static function ( $node ) {
-				if ( ! is_string( $node ) && ! is_numeric( $node ) ) {
-					return '';
-				}
-				$candidate = strtolower( trim( sanitize_text_field( (string) $node ) ) );
-				if ( '' === $candidate ) {
-					return '';
-				}
-				// Strip URL schemes and userinfo so entries like
-				// http://169.254.169.254:6379 or user:pass@host cannot pass
-				// to ping()/enable() connection attempts (SSRF/port-scan
-				// inconsistency vs the host/master_name allowlist).
-				if ( false !== strpos( $candidate, '://' ) ) {
-					$parts     = explode( '://', $candidate, 2 );
-					$candidate = $parts[1] ?? '';
-				}
-				if ( false !== strpos( $candidate, '@' ) ) {
-					$parts     = explode( '@', $candidate );
-					$candidate = end( $parts );
-				}
-				$candidate = trim( $candidate, '/' );
-				// Same host allowlist as host/master_name: hostname/IP/socket
-				// path with optional :port — no schemes or userinfo.
-				if ( 1 === preg_match( '/^(?:[a-z0-9](?:[a-z0-9\-\.]{0,251}[a-z0-9])?|\/[\w\/\.\-]+)(?::([0-9]{1,5}))?$/', $candidate, $m ) ) {
-					if ( isset( $m[1] ) && '' !== $m[1] ) {
-						$port = (int) $m[1];
-						if ( $port < 1 || $port > 65535 ) {
-							return '';
-						}
-					}
-					return substr( $candidate, 0, 255 );
-				}
-				return '';
-			};
 			if ( is_array( $nodes ) ) {
-				return array_values( array_filter( array_map( $sanitize_node, $nodes ) ) );
+				return array_values(
+					array_filter(
+						array_map(
+							static function ( $node ) {
+								return ( is_string( $node ) || is_numeric( $node ) ) ? sanitize_text_field( (string) $node ) : '';
+							},
+							$nodes
+						)
+					)
+				);
 			}
-			$single = $sanitize_node( $nodes );
-			return '' !== $single ? array( $single ) : array();
+			$nodes = sanitize_text_field( (string) $nodes );
+			return $nodes ? array( $nodes ) : array();
 		}
 
 		/**
@@ -2934,14 +2846,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$response->header( 'Retry-After', '60' );
 				return $response;
 			}
-			$params = $request->get_params();
-			// Validate the raw post_id before absint(): absint('foo') is 0,
-			// which would fall through to bulk regenerate_all and mass-queue
-			// on a typo (issue #1274 review).
-			$raw_id = $params['post_id'] ?? null;
-			if ( null !== $raw_id && '' !== $raw_id && ! is_numeric( $raw_id ) ) {
-				return $this->send_response( null, false, 400, __( 'Invalid post ID.', 'performance-optimisation' ) );
-			}
+			$params  = $request->get_params();
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
 
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
@@ -2949,32 +2854,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( $post_id ) {
-				// Reject unknown post IDs before enqueueing so junk jobs
-				// never reach the queue (issue #1274 review). get_post()
-				// returns false (not just null) for missing posts.
-				if ( function_exists( 'get_post' ) && ! get_post( $post_id ) ) {
-					return $this->send_response( null, false, 404, __( 'Invalid post ID.', 'performance-optimisation' ) );
-				}
-				// Builder-template skip-and-continue (issue #1274): excluded
-				// post types report skipped instead of queueing (no error loop).
-				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'is_excluded_post' ) ) {
-					try {
-						if ( Used_CSS::is_excluded_post( $post_id ) ) {
-							return $this->send_response(
-								array(
-									'mode'    => 'single',
-									'post_id' => $post_id,
-									'skipped' => true,
-								),
-								true,
-								200,
-								__( 'Skipped: post type is excluded from used-CSS generation.', 'performance-optimisation' )
-							);
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
 				$job_args = array( 'post_id' => $post_id );
 				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
 					return $this->send_response(
@@ -3249,117 +3128,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
 				$response->header( 'Retry-After', '60' );
 				return $response;
-			}
-			// Per-template/per-URL regenerate (issue #1274): an optional
-			// `template` slug (or hash) queues one job; otherwise all.
-			// The raw input is length-capped (defense-in-depth) before the
-			// allowlist lookup in regenerate_single().
-			try {
-				$params = $_request->get_params();
-				if ( array_key_exists( 'template', $params ) ) {
-					// An explicit but empty/non-string template key must
-					// not fall through to bulk regen (issue #1274 review):
-					// it signals a caller bug, so return 0 queued instead
-					// of queueing every template.
-					$raw_param = $params['template'];
-					if ( ! is_string( $raw_param ) || '' === trim( $raw_param ) ) {
-						return $this->send_response(
-							array(
-								'mode'     => 'single',
-								'template' => is_string( $raw_param ) ? sanitize_text_field( substr( trim( $raw_param ), 0, 256 ) ) : '',
-								'queued'   => 0,
-							),
-							false,
-							400,
-							__( 'Invalid template: nothing queued.', 'performance-optimisation' )
-						);
-					}
-					$raw      = substr( trim( $raw_param ), 0, 256 );
-					$template = sanitize_text_field( $raw );
-					// Known-first ordering (issue #1274 review): an unknown
-					// slug returns 404 even while suspended, so typos are
-					// never hidden behind the suspended message. The
-					// single enumeration below is reused by both the known
-					// check and the queue call (no double theme scan).
-					$templates_map = null;
-					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_templates' ) ) {
-						try {
-							$templates_map = Critical_CSS::get_templates();
-						} catch ( \Throwable $e ) {
-							unset( $e );
-							$templates_map = null;
-						}
-					}
-					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_known_template' ) ) {
-						$known = true;
-						try {
-							$known = Critical_CSS::is_known_template( $template, $templates_map );
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
-						if ( ! $known ) {
-							return $this->send_response(
-								array(
-									'mode'     => 'single',
-									'template' => $template,
-									'queued'   => 0,
-								),
-								false,
-								404,
-								__( 'Unknown template: nothing queued.', 'performance-optimisation' )
-							);
-						}
-					}
-					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_deferral_suspended_by_js' ) && Critical_CSS::is_deferral_suspended_by_js() ) {
-						return $this->send_response(
-							array(
-								'mode'     => 'single',
-								'template' => $template,
-								'queued'   => 0,
-							),
-							true,
-							200,
-							__( 'Critical CSS generation is suspended while deferred or delayed JavaScript is enabled.', 'performance-optimisation' )
-						);
-					}
-					$queued = Critical_CSS::regenerate_single( $template, $templates_map );
-					if ( -1 === $queued ) {
-						return $this->send_response(
-							array(
-								'mode'     => 'single',
-								'template' => $template,
-								'queued'   => 0,
-							),
-							false,
-							500,
-							__( 'Scheduler unavailable: nothing queued.', 'performance-optimisation' )
-						);
-					}
-					if ( 1 === $queued ) {
-						return $this->send_response(
-							array(
-								'mode'     => 'single',
-								'template' => $template,
-								'queued'   => 1,
-							),
-							true,
-							202,
-							__( 'Critical CSS regeneration queued for template.', 'performance-optimisation' )
-						);
-					}
-					return $this->send_response(
-						array(
-							'mode'     => 'single',
-							'template' => $template,
-							'queued'   => 0,
-						),
-						true,
-						200,
-						__( 'Template skipped: nothing queued.', 'performance-optimisation' )
-					);
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
 			}
 			$queued = Critical_CSS::regenerate_all();
 
