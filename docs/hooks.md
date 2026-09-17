@@ -382,9 +382,9 @@ add_filter( 'wppo_builder_used_css_full_regen', '__return_true' );
 ---
 
 ### `wppo_exclude_delay_js`
-Filters the list of script handles or URL substrings excluded from JavaScript delay loading.
+Filters the list of script handles or URL substrings excluded from JavaScript delay loading. Applied to the resolved exclusion list after preset merging, so entries added here win over preset contents and per-page preset opt-outs are subtracted afterwards (filter-then-subtract).
 
-Exclusions apply to both halves of delay loading: the handle-level strategy assigned in `Main`, and the HTML rewrite that swaps a `<script>` to `type="wppo/javascript"` with the real source in `wppo-src`. A script is only genuinely eager when neither path rewrites it, so entries added here suppress both. @since NEXT the HTML rewrite honours this filter.
+Exclusions apply to both halves of delay loading: the handle-level strategy assigned in `Main`, and the HTML rewrite that swaps a `<script>` to `type="wppo/javascript"` with the real source in `wppo-src`. A script is only genuinely eager when neither path rewrites it, so entries added here suppress both. @since 2.0.0; @since NEXT the HTML rewrite honours this filter.
 
 **Parameters:**
 - `$exclusions` *(array)* — Array of excluded script handles/URLs.
@@ -1422,14 +1422,6 @@ Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_s
 
 ---
 
-### `wppo_exclude_delay_js`
-Filters the resolved delay-JS exclusion list after preset merging. @since 2.0.0.
-
-**Parameters:**
-- `$preset` *(string[])* — Exclusion patterns.
-
----
-
 ### `wppo_exclude_defer_js`
 Filters the resolved defer-JS exclusion list after preset merging. @since 2.0.0.
 
@@ -1467,6 +1459,46 @@ Filters the delay-JS slider preset exclusions (revslider, swiper, slick, etc.). 
 
 **Parameters:**
 - `$preset` *(string[])* — Slider preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_interaction_exclusions`
+Filters the delay-JS first-click interaction preset exclusions (popup/dialog, mobile-menu, add-to-cart handles). Merged into the global preset when `delayJSInteractionPreset` is on (default). @since 2.0.0.
+
+**Parameters:**
+- `$preset` *(string[])* — Interaction preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_consent_exclusions`
+Filters the delay-JS consent compatibility preset exclusions (CookieYes, Cookiebot, Complianz, Borlabs, OneTrust, etc.). Opt-in via the `delayJSConsentPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Consent preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_analytics_exclusions`
+Filters the delay-JS analytics compatibility preset exclusions (GA4 gtag, Matomo, Plausible, etc.). Opt-in via the `delayJSAnalyticsPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Analytics preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_gallery_exclusions`
+Filters the delay-JS gallery compatibility preset exclusions (PhotoSwipe, Fancybox, Envira, FooGallery, etc.). Opt-in via the `delayJSGalleryPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Gallery preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_jquery_exclusions`
+Filters the delay-JS jQuery legacy preset exclusions (jQuery UI and legacy jQuery plugins; shops stay covered by the commerce preset). Opt-in via the `delayJSJqueryPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — jQuery preset exclusion patterns.
 
 ---
 

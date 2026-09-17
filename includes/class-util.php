@@ -352,6 +352,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJSBuilderPreset'         => true,
 					'delayJSCommercePreset'        => true,
 					'delayJSInteractionPreset'     => true,
+					'delayJSConsentPreset'         => false,
+					'delayJSAnalyticsPreset'       => false,
+					'delayJSGalleryPreset'         => false,
+					'delayJSJqueryPreset'          => false,
 					'delayJSExcludeUrls'           => '',
 					'usedCSSExcludeUrls'           => '',
 					'delayJSIdleList'              => '',
@@ -5472,10 +5476,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
-				// Safe-default delay keys (issue #966) — external-only defaults
-				// off (fail-safe: delay everything unless asked), builder preset
-				// defaults on (fail-safe: never delay builder runtimes).
-				if ( in_array( $safe_key, array( 'delayJSExternalOnly', 'delayJSThirdParty' ), true ) && ! is_array( $value ) ) {
+				// Safe-default delay keys (issues #966 and #1308) — external-only
+				// defaults off (fail-safe: delay everything unless asked),
+				// builder preset defaults on (fail-safe: never delay builder
+				// runtimes), and the four #1308 opt-in compat presets
+				// (consent/analytics/gallery/jquery) default off so upgrades
+				// preserve manual exclusions.
+				if ( in_array(
+					$safe_key,
+					array(
+						'delayJSExternalOnly',
+						'delayJSThirdParty',
+						'delayJSConsentPreset',
+						'delayJSAnalyticsPreset',
+						'delayJSGalleryPreset',
+						'delayJSJqueryPreset',
+					),
+					true
+				) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {
@@ -5485,7 +5503,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
-				if ( in_array( $safe_key, array( 'delayJSBuilderPreset', 'delayJSCommercePreset', 'delayJSInteractionPreset', 'unusedCSSRegressionGuard' ), true ) && ! is_array( $value ) ) {
+				$safe_on_keys = array(
+					'delayJSBuilderPreset',
+					'delayJSCommercePreset',
+					'delayJSInteractionPreset',
+					'unusedCSSRegressionGuard',
+				);
+				if ( in_array( $safe_key, $safe_on_keys, true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {
