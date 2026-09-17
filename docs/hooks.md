@@ -1179,6 +1179,37 @@ Filters the minimum numeric samples before an anomaly arm may fire (trend arm an
 
 ---
 
+### `wppo_ai_css_refresh_enabled`
+Filters whether RUM-triggered CSS refresh may queue jobs (issue #1407). @since NEXT. Default off/suggest-only via `ai_adaptive.css_refresh_on_lcp_regression`; fail-open to false.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether the CSS-refresh opt-in is on.
+
+**Example:**
+```php
+add_filter( 'wppo_ai_css_refresh_enabled', '__return_true' );
+```
+
+---
+
+### `wppo_ai_css_refresh_cooldown_days`
+Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since NEXT. Non-numeric or negative values fail open to the current setting.
+
+**Parameters:**
+- `$days` *(int)* — Cooldown days (default 7, from `ai_adaptive.css_refresh_cooldown_days`; 0 skips the cooldown transient).
+
+---
+
+### `wppo_ai_css_refresh_queued`
+Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since NEXT. Lets the critical-CSS layer hook a template refresh without coupling the bridge to template mapping.
+
+**Parameters:**
+- `$url` *(string)* — Regressed URL.
+- `$post_id` *(int)* — Queued post ID.
+- `$anomaly` *(array)* — The firing LCP anomaly.
+
+---
+
 ### `wppo_speculation_list_urls`
 Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls` + RUM top URLs, same-site validated, cart/checkout/account/query-string/fragment excluded, capped at 10). @since 2.0.0.
 

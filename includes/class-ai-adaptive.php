@@ -1966,11 +1966,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Whether a URL is the site homepage.
+		 *
+		 * Core post-ID lookup returns 0 for the front page, so the queue path
+		 * needs an explicit homepage check before degrading to
+		 * suggestion-only. Comparison is trailing-slash insensitive.
+		 *
+		 * @param string $url Absolute URL.
+		 * @return bool True when the URL is the homepage.
+		 * @since NEXT
+		 */
+		public static function is_homepage_url( string $url ): bool {
+			try {
+				if ( '' === $url ) {
+					return false;
+				}
+				$home = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'cached_home_url' ) ) {
+					$home = Util::cached_home_url( '/' );
+				} elseif ( function_exists( 'home_url' ) ) {
+					$home = home_url( '/' );
+				}
+				if ( ! is_string( $home ) || '' === $home ) {
+					return false;
+				}
+				$normalize = static function ( $value ) {
+					$value = strtolower( trim( (string) $value ) );
+					return rtrim( $value, '/' );
+				};
+				return $normalize( $url ) === $normalize( $home );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Resolve the static front-page post ID, if one is configured.
+		 *
+		 * Fail-open: any failure returns 0 so callers degrade to
+		 * suggestion-only with the distinct `homepage` reason.
+		 *
+		 * @return int Front-page post ID (>0), or 0 when none configured.
+		 * @since NEXT
+		 */
+		public static function resolve_front_page_post_id(): int {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return 0;
+				}
+				$front_id = (int) get_option( 'page_on_front' );
+				return $front_id > 0 ? $front_id : 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
 		 * Resolve a URL to its post ID for single-post used-CSS queueing.
 		 *
 		 * Guarded: returns 0 when url_to_postid() is unavailable or the URL
-		 * maps to no post (e.g. the home page). Callers degrade to
-		 * suggestion-only in that case.
+		 * maps to no post (e.g. the home page when no static front page is
+		 * configured). Homepage URLs with a static front page resolve via
+		 * resolve_front_page_post_id(); other unresolvable URLs degrade to
+		 * suggestion-only with the distinct `homepage` reason.
 		 *
 		 * @param string $url Absolute URL.
 		 * @return int Post ID (>0), or 0 when unresolvable.
@@ -1978,11 +2038,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 */
 		public static function resolve_anomaly_post_id( string $url ): int {
 			try {
-				if ( '' === $url || ! function_exists( 'url_to_postid' ) ) {
+				if ( '' === $url ) {
 					return 0;
 				}
-				$post_id = (int) url_to_postid( $url );
-				return $post_id > 0 ? $post_id : 0;
+				if ( function_exists( 'url_to_postid' ) ) {
+					$post_id = (int) url_to_postid( $url );
+					if ( $post_id > 0 ) {
+						return $post_id;
+					}
+				}
+				// Front-page fallback: url_to_postid() returns 0 for the
+				// homepage, so a configured static front page resolves here.
+				if ( self::is_homepage_url( $url ) ) {
+					return self::resolve_front_page_post_id();
+				}
+				return 0;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return 0;
@@ -2057,14 +2127,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * off/suggest-only). Non-LCP anomalies never queue.
 		 *
 		 * Fail-open by design: toggle-off, unresolvable URL, missing post,
-		 * excluded post type, scheduler absence, enqueue failure, or any
-		 * throwable returns `queued => false` with a machine-readable
-		 * `reason`; last-good CSS is kept (nothing is ever deleted here) so
-		 * output degrades to the current un-refreshed CSS, never fatal.
+		 * homepage without a static front page, excluded post type,
+		 * scheduler absence, enqueue failure, or any throwable returns
+		 * `queued => false` with a machine-readable `reason`; last-good CSS
+		 * is kept (nothing is ever deleted here) so output degrades to the
+		 * current un-refreshed CSS, never fatal. Only singular posts are
+		 * queued: the homepage resolves via the static front page
+		 * (`page_on_front`) and otherwise degrades with reason `homepage`.
 		 *
 		 * Lazy boot: no extra queries unless an LCP regression fired; the
-		 * queue path adds one transient read plus (on trigger) one snapshot
-		 * option write.
+		 * queue path adds one transient read plus (only on an actual queue)
+		 * one snapshot option write. Non-queueing decisions perform no
+		 * option writes, and unresolvable trend keys are never stored in
+		 * the bounded proof option so they cannot evict genuine entries.
 		 *
 		 * @param array    $anomaly Anomaly array from detect_anomalies().
 		 * @param int|null $now Optional current timestamp (tests).
@@ -2081,7 +2156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				'current_lcp' => 0.0,
 			);
 			try {
-				if ( 'lcp' !== ( $anomaly['metric'] ?? 'lcp' ) ) {
+				if ( 'lcp' !== ( $anomaly['metric'] ?? '' ) ) {
 					$fallback['reason'] = 'non-lcp';
 					return $fallback;
 				}
@@ -2097,19 +2172,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$url                     = self::resolve_anomaly_url( $trend_key );
 				$fallback['url']         = $url;
 				if ( '' === $url ) {
-					self::record_css_refresh_snapshot(
-						'unresolved_' . md5( $trend_key ),
-						array(
-							'url'         => '',
-							'trend_key'   => $trend_key,
-							'before_lcp'  => $baseline,
-							'current_lcp' => $current,
-							'queued'      => false,
-							'reason'      => 'unresolvable-url',
-							'queued_at'   => self::anomaly_now( $now ),
-						)
-					);
 					$fallback['reason'] = 'unresolvable-url';
+					return $fallback;
+				}
+				if ( ! self::is_css_refresh_enabled() ) {
+					$fallback['reason'] = 'opt-out';
 					return $fallback;
 				}
 				$cooldown_key = '';
@@ -2122,27 +2189,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					$fallback['reason'] = 'cooldown';
 					return $fallback;
 				}
-				$resolved_now = self::anomaly_now( $now );
-				self::record_css_refresh_snapshot(
-					md5( $url ),
-					array(
-						'url'         => $url,
-						'trend_key'   => $trend_key,
-						'before_lcp'  => $baseline,
-						'current_lcp' => $current,
-						'queued'      => false,
-						'reason'      => self::is_css_refresh_enabled() ? 'pending' : 'opt-out',
-						'queued_at'   => $resolved_now,
-					)
-				);
-				if ( ! self::is_css_refresh_enabled() ) {
-					$fallback['reason'] = 'opt-out';
-					return $fallback;
-				}
+				$resolved_now        = self::anomaly_now( $now );
 				$post_id             = self::resolve_anomaly_post_id( $url );
 				$fallback['post_id'] = $post_id;
 				if ( $post_id <= 0 ) {
-					$fallback['reason'] = 'no-post';
+					$fallback['reason'] = self::is_homepage_url( $url ) ? 'homepage' : 'no-post';
 					return $fallback;
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'is_excluded_post' ) ) {
@@ -2163,7 +2214,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( function_exists( 'as_has_scheduled_action' ) ) {
 					try {
 						if ( as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
-							self::set_css_refresh_cooldown( $cooldown_key, $resolved_now );
 							$fallback['reason'] = 'already-queued';
 							return $fallback;
 						}

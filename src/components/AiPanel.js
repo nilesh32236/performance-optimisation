@@ -331,15 +331,20 @@ const AiPanel = () => {
 	};
 
 	const [ regeneratingMetrics, setRegeneratingMetrics ] = useState( [] );
+	const regenerateKey = ( suggestion ) =>
+		suggestion?.ai_payload?.css_refresh?.post_id ??
+		suggestion?.ai_payload?.css_refresh?.url ??
+		suggestion.metric;
 	const handleRegenerateCss = async ( suggestion ) => {
 		const postId = suggestion?.ai_payload?.css_refresh?.post_id;
 		if ( ! postId ) {
 			return;
 		}
-		if ( regeneratingMetrics.includes( suggestion.metric ) ) {
+		const key = regenerateKey( suggestion );
+		if ( regeneratingMetrics.includes( key ) ) {
 			return;
 		}
-		setRegeneratingMetrics( ( prev ) => [ ...prev, suggestion.metric ] );
+		setRegeneratingMetrics( ( prev ) => [ ...prev, key ] );
 		try {
 			const res = await apiCall( 'used_css_regenerate', {
 				post_id: postId,
@@ -373,7 +378,7 @@ const AiPanel = () => {
 			} );
 		} finally {
 			setRegeneratingMetrics( ( prev ) =>
-				prev.filter( ( metric ) => metric !== suggestion.metric )
+				prev.filter( ( metric ) => metric !== key )
 			);
 		}
 	};
@@ -520,7 +525,7 @@ const AiPanel = () => {
 												handleRegenerateCss( s )
 											}
 											disabled={ regeneratingMetrics.includes(
-												s.metric
+												regenerateKey( s )
 											) }
 											aria-label={ __(
 												'Regenerate used CSS for the regressed URL',
@@ -528,7 +533,7 @@ const AiPanel = () => {
 											) }
 										>
 											{ regeneratingMetrics.includes(
-												s.metric
+												regenerateKey( s )
 											)
 												? __(
 														'Regenerating…',
