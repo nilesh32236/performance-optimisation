@@ -100,16 +100,12 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	private function make_cache( array $options = array(), string $request_uri = '/' ): Cache {
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$prop  = new \ReflectionProperty( Cache::class, 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, $options );
 		$prop = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, WP_CONTENT_DIR . '/cache/wppo' );
 		$prop = new \ReflectionProperty( Cache::class, 'domain' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, 'example.com' );
 		$prop = new \ReflectionProperty( Cache::class, 'request_uri' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, $request_uri );
 		$parsed = wp_parse_url( $request_uri, PHP_URL_PATH );
 		$path   = wp_normalize_path( trim( rawurldecode( (string) $parsed ), '/' ) );
@@ -117,10 +113,8 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 			$path = '';
 		}
 		$prop = new \ReflectionProperty( Cache::class, 'url_path' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, $path );
 		$prop = new \ReflectionProperty( Cache::class, 'cache_ob_level' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, null );
 		return $cache;
 	}
@@ -135,7 +129,6 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( $obj, string $name, array $args = array() ) {
 		$method = new \ReflectionMethod( $obj, $name );
-		$method->setAccessible( true );
 		return $method->invokeArgs( $obj, $args );
 	}
 
@@ -146,7 +139,6 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function set_buffer_enhanced( bool $value ): void {
 		$prop = new \ReflectionProperty( Cache::class, 'buffer_enhanced' );
-		$prop->setAccessible( true );
 		$prop->setValue( null, $value );
 	}
 
@@ -180,16 +172,12 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	private function make_main( array $options = array() ): Main {
 		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 		$prop = new \ReflectionProperty( Main::class, 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue( $main, $options );
 		$prop = new \ReflectionProperty( Main::class, 'image_optimisation' );
-		$prop->setAccessible( true );
 		$prop->setValue( $main, new Image_Optimisation( $options ) );
 		$prop = new \ReflectionProperty( Main::class, 'google_fonts' );
-		$prop->setAccessible( true );
 		$prop->setValue( $main, new Google_Fonts( $options ) );
 		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
-		$prop->setAccessible( true );
 		$prop->setValue( $main, false );
 		return $main;
 	}
@@ -349,7 +337,6 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		$main = $this->make_main( array( 'performance_audit' => array( 'server_timing_enabled' => true ) ) );
 		$main->capture_template_start();
 		$prop = new \ReflectionProperty( Main::class, 'server_timing_template_start' );
-		$prop->setAccessible( true );
 		$this->assertSame( 0.0, $prop->getValue( $main ) );
 
 		Functions\when( 'is_admin' )->justReturn( false );
@@ -407,7 +394,6 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		$cache->start_output_buffer();
 		$this->assertSame( $level_before + 1, ob_get_level() );
 		$prop = new \ReflectionProperty( Cache::class, 'cache_ob_level' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, null );
 		while ( ob_get_level() > $level_before ) {
 			ob_end_clean();
@@ -428,7 +414,6 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		$cache->start_output_buffer();
 		$this->assertSame( $level_before + 1, ob_get_level() );
 		$prop = new \ReflectionProperty( Cache::class, 'cache_ob_level' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, null );
 		while ( ob_get_level() > $level_before ) {
 			ob_end_clean();
@@ -758,22 +743,16 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'do_action' )->justReturn( null );
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$prop  = new \ReflectionProperty( Cache::class, 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, array() );
 		$prop = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, WP_CONTENT_DIR . '/cache/wppo' );
 		$prop = new \ReflectionProperty( Cache::class, 'domain' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, 'example.com' );
 		$prop = new \ReflectionProperty( Cache::class, 'request_uri' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, '/' );
 		$prop = new \ReflectionProperty( Cache::class, 'url_path' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, '' );
 		$method = new \ReflectionMethod( $cache, 'is_not_cacheable' );
-		$method->setAccessible( true );
 		$this->assertTrue( $method->invoke( $cache ) );
 		$this->assertFalse( $cache->is_page_cacheable() );
 		\Brain\Monkey\tearDown();
@@ -831,11 +810,9 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 			'url_path'       => '',
 		) as $name => $value ) {
 			$prop = new \ReflectionProperty( Cache::class, $name );
-			$prop->setAccessible( true );
 			$prop->setValue( $cache, $value );
 		}
 		$method = new \ReflectionMethod( $cache, 'maybe_store_cache' );
-		$method->setAccessible( true );
 		$this->assertFalse( $method->invoke( $cache ) );
 		\Brain\Monkey\tearDown();
 	}

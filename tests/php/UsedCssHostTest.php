@@ -80,7 +80,6 @@ class UsedCssHostTest extends \PHPUnit\Framework\TestCase {
 		$used_css = new Used_CSS();
 
 		$domain_prop = new \ReflectionProperty( Used_CSS::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$this->assertSame( 'example.com', $domain_prop->getValue( $used_css ) );
 		$this->assertTrue( $used_css->is_host_mismatched() );
 		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http://example.com/test-page/' ) );
@@ -104,7 +103,6 @@ class UsedCssHostTest extends \PHPUnit\Framework\TestCase {
 		$used_css = new Used_CSS();
 
 		$domain_prop = new \ReflectionProperty( Used_CSS::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$this->assertSame( 'example.com', $domain_prop->getValue( $used_css ) );
 		$this->assertTrue( $used_css->is_host_mismatched() );
 		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http://example.com/test-page/' ) );
@@ -122,7 +120,6 @@ class UsedCssHostTest extends \PHPUnit\Framework\TestCase {
 		$used_css = new Used_CSS();
 
 		$domain_prop = new \ReflectionProperty( Used_CSS::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$this->assertSame( 'example.com', $domain_prop->getValue( $used_css ) );
 		$this->assertFalse( $used_css->is_host_mismatched() );
 	}
@@ -141,7 +138,6 @@ class UsedCssHostTest extends \PHPUnit\Framework\TestCase {
 		$used_css = new Used_CSS();
 
 		$domain_prop = new \ReflectionProperty( Used_CSS::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$this->assertSame( '', $domain_prop->getValue( $used_css ) );
 		$this->assertFalse( $used_css->is_host_mismatched() );
 		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http://example.com/test-page/' ) );
@@ -179,7 +175,6 @@ class UsedCssHostTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( $used_css->is_host_mismatched() );
 
 		$domain_prop = new \ReflectionProperty( Used_CSS::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$this->assertSame( 'example.com', $domain_prop->getValue( $used_css ) );
 	}
 

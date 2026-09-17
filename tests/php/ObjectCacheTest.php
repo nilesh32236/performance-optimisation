@@ -473,11 +473,9 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 			$instance = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
 
 			$method = new \ReflectionMethod( 'WP_Object_Cache', 'connect_redis' );
-			$method->setAccessible( true );
 			$method->invoke( $instance );
 
 			$prop = new \ReflectionProperty( 'WP_Object_Cache', 'redis_connected' );
-			$prop->setAccessible( true );
 
 			$this->assertFalse( $prop->getValue( $instance ), 'Missing helper must degrade to the in-memory cache, not fatal.' );
 

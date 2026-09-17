@@ -145,7 +145,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		foreach ( array( 'deferred_img_info', 'client_side_processing_state', 'img_info_shutdown_registered' ) as $prop ) {
 			$property = $reflected->getProperty( $prop );
-			$property->setAccessible( true );
 			$property->setValue( null );
 		}
 	}
@@ -359,7 +358,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$converter = $this->make_converter( array( 'forceServerSideConversion' => true ) );
 
 		$method = new ReflectionMethod( Img_Converter::class, 'is_client_side_media_processing' );
-		$method->setAccessible( true );
 
 		$this->assertFalse( $method->invoke( $converter ) );
 	}
@@ -375,7 +373,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$converter = $this->make_converter();
 
 		$method = new ReflectionMethod( Img_Converter::class, 'is_client_side_media_processing' );
-		$method->setAccessible( true );
 
 		$this->assertTrue( $method->invoke( $converter ) );
 	}
@@ -517,7 +514,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$method = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
-		$method->setAccessible( true );
 
 		$converter = $this->make_converter();
 
@@ -563,7 +559,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_image_quality' )->justReturn( 82 );
 
 		$method = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
-		$method->setAccessible( true );
 
 		$converter = $this->make_converter();
 
@@ -622,7 +617,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 75, $reflection->invoke( $converter, 'image/avif', 82 ) );
 	}
@@ -637,7 +631,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 82, $reflection->invoke( $converter, 'image/avif', 82 ) );
 		$this->assertSame( 40, $reflection->invoke( $converter, 'image/jpeg', 40 ) );
@@ -658,7 +651,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame(
 			65,
@@ -699,7 +691,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 82, $reflection->invoke( $converter, 'image/avif', 82 ) );
 		$this->assertSame( 40, $reflection->invoke( $converter, 'image/jpeg', 40 ) );
@@ -719,7 +710,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 82, $reflection->invoke( $converter, 'image/avif', 82 ) );
 		$this->assertSame( 40, $reflection->invoke( $converter, 'image/jpeg', 40 ) );
@@ -732,7 +722,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	public function test_get_source_image_dimensions_parses_size_suffix(): void {
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'get_source_image_dimensions' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame(
 			array(
@@ -758,8 +747,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		$method = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
-		$method->setAccessible( true );
+		$method    = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
 		$converter = $this->make_converter();
 
 		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/sample.jpg', 'webp' ) );
@@ -785,8 +773,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		$method = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
-		$method->setAccessible( true );
+		$method    = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
 		$converter = $this->make_converter();
 
 		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.jpg', 'avif' ) );
@@ -809,8 +796,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		$method = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
-		$method->setAccessible( true );
+		$method    = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
 		$converter = $this->make_converter();
 
 		$this->assertSame( 'none', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.heic', 'webp' ) );
@@ -1211,8 +1197,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		// Prove the raw option is still negative (the branch is reachable).
 		$options_prop = new \ReflectionProperty( Img_Converter::class, 'options' );
-		$options_prop->setAccessible( true );
-		$raw = $options_prop->getValue( $converter )['image_optimisation']['maxLongestEdgePx'];
+		$raw          = $options_prop->getValue( $converter )['image_optimisation']['maxLongestEdgePx'];
 		$this->assertSame( -5, $raw );
 
 		$this->assertSame( 0, $converter->get_longest_edge_cap() );

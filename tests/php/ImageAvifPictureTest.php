@@ -118,7 +118,6 @@ class ImageAvifPictureTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function reset_nextgen_cache(): void {
 		$prop = new ReflectionProperty( LiteSpeed_Integration::class, 'cached_nextgen' );
-		$prop->setAccessible( true );
 		$prop->setValue( null, null );
 	}
 
@@ -185,7 +184,12 @@ class ImageAvifPictureTest extends \PHPUnit\Framework\TestCase {
 		$color = imagecolorallocate( $image, 200, 100, 50 );
 		imagefill( $image, 0, 0, $color );
 		imagepng( $image, $tiny );
-		imagedestroy( $image ); // phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- Test fixture cleanup.
+		// Release via the version-gated helper (no imagedestroy() deprecation on PHP 8.5).
+		// The helper nulls the caller's variable on 8.5+ and runs the legacy
+		// imagedestroy() (a no-op since PHP 8.0) below; unset pins the
+		// version-dependent lifetime so the fixture never relies on it.
+		Util::destroy_gd_image( $image );
+		unset( $image );
 		$this->assertLessThanOrEqual( 5120, filesize( $tiny ), 'Fixture must be under the default threshold' );
 
 		$options = $this->options;

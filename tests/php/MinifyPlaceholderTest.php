@@ -71,7 +71,6 @@ class MinifyPlaceholderTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function read_prop( object $target, string $prop ) {
 		$reflection = new \ReflectionProperty( $target, $prop );
-		$reflection->setAccessible( true );
 		return $reflection->getValue( $target );
 	}
 
@@ -85,7 +84,6 @@ class MinifyPlaceholderTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( object $target, string $name, ...$args ) {
 		$reflection = new \ReflectionMethod( $target, $name );
-		$reflection->setAccessible( true );
 		return $reflection->invoke( $target, ...$args );
 	}
 
@@ -94,7 +92,6 @@ class MinifyPlaceholderTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function force_regex_path(): void {
 		$prop = new \ReflectionProperty( Util::class, 'html_processor_available' );
-		$prop->setAccessible( true );
 		$prop->setValue( null, false );
 	}
 

@@ -37,7 +37,6 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( Cron $cron, string $name, ...$args ) {
 		$reflection = new ReflectionMethod( Cron::class, $name );
-		$reflection->setAccessible( true );
 		return $reflection->invoke( $cron, ...$args );
 	}
 

@@ -96,11 +96,9 @@ class PreloadAutoMigrationTest extends \PHPUnit\Framework\TestCase {
 		$main = ( new ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		$options_prop->setAccessible( true );
 		$options_prop->setValue( $main, array() );
 
 		$method = new ReflectionMethod( Main::class, 'maybe_migrate_preload_auto_defaults' );
-		$method->setAccessible( true );
 		$method->invoke( $main );
 
 		return array( $main, $writes );
@@ -141,8 +139,7 @@ class PreloadAutoMigrationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $persisted['enablePreloadCache'], 'Sibling keys must survive the backfill' );
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		$options_prop->setAccessible( true );
-		$options = $options_prop->getValue( $main );
+		$options      = $options_prop->getValue( $main );
 		$this->assertFalse( $options['preload_settings']['autoLcpPreload'] );
 		$this->assertFalse( $options['preload_settings']['autoDiscoverFonts'] );
 	}

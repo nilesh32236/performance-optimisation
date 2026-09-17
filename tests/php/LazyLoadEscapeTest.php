@@ -152,8 +152,7 @@ class LazyLoadEscapeTest extends \PHPUnit\Framework\TestCase {
 		$iframe_tag = '<iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ" onload="alert(1)" onerror="alert(2)" width="560" height="315" title="t"></iframe>';
 
 		$method = new ReflectionMethod( Image_Optimisation::class, 'generate_video_placeholder' );
-		$method->setAccessible( true );
-		$out = $method->invoke( $image_opt, $iframe_tag, 'https://www.youtube.com/embed/dQw4w9WgXcQ', 'dQw4w9WgXcQ' );
+		$out    = $method->invoke( $image_opt, $iframe_tag, 'https://www.youtube.com/embed/dQw4w9WgXcQ', 'dQw4w9WgXcQ' );
 
 		$this->assertStringContainsString( 'data-wppo-iframe-attrs=', $out );
 
@@ -183,7 +182,6 @@ class LazyLoadEscapeTest extends \PHPUnit\Framework\TestCase {
 	public function test_rest_routes_keep_admin_gating_without_ip_notifier(): void {
 		$rest   = new Rest();
 		$method = new ReflectionMethod( Rest::class, 'get_routes' );
-		$method->setAccessible( true );
 		$routes = $method->invoke( $rest );
 
 		$this->assertIsArray( $routes );

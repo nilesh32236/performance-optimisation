@@ -341,7 +341,6 @@ class CacheRealpathContainmentTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function htaccess_allowed( string $path ): bool {
 		$method = new \ReflectionMethod( Htaccess_Handler::class, 'is_htaccess_write_allowed' );
-		$method->setAccessible( true );
 		return (bool) $method->invoke( null, $path );
 	}
 
@@ -355,7 +354,6 @@ class CacheRealpathContainmentTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function atomic_write( string $path, $fs, array $rules ) {
 		$method = new \ReflectionMethod( Htaccess_Handler::class, 'atomic_write_verified' );
-		$method->setAccessible( true );
 		return $method->invoke( null, $path, $fs, $rules );
 	}
 

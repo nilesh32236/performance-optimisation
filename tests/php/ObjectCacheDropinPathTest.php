@@ -25,7 +25,6 @@ class ObjectCacheDropinPathTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function get_dropin_path( Object_Cache $cache ): string {
 		$ref = new \ReflectionProperty( Object_Cache::class, 'dropin_path' );
-		$ref->setAccessible( true );
 		return (string) $ref->getValue( $cache );
 	}
 

@@ -151,7 +151,6 @@ class DelayThirdPartyTest extends \PHPUnit\Framework\TestCase {
 		$main       = $reflection->newInstanceWithoutConstructor();
 
 		$prop = $reflection->getProperty( 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue( $main, $options );
 
 		return $main;

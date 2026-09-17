@@ -311,7 +311,6 @@ class ObjectCacheOutageFallbackTest extends \PHPUnit\Framework\TestCase {
 
 		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 		$prop = new \ReflectionProperty( Main::class, 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue( $main, array( 'object_cache' => array( 'host' => '127.0.0.1' ) ) );
 
 		$main->maybe_migrate_object_cache_outage_flag();

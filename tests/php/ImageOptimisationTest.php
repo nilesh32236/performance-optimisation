@@ -307,7 +307,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $reflection->invoke( $image_opt ) );
 	}
@@ -331,7 +330,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_manual_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 'https://example.com/wp-content/uploads/pinned.jpg', $reflection->invoke( $image_opt ) );
 	}
@@ -356,7 +354,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_manual_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( '', $reflection->invoke( $image_opt ) );
 	}
@@ -371,7 +368,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_manual_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( '', $reflection->invoke( $image_opt ) );
 	}
@@ -393,7 +389,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 'https://example.com/wp-content/uploads/front.jpg', $reflection->invoke( $image_opt ) );
 	}
@@ -421,7 +416,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( '', $reflection->invoke( $image_opt ) );
 	}
@@ -443,7 +437,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $reflection->invoke( $image_opt ) );
 		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $reflection->invoke( $image_opt ) );
@@ -775,7 +768,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'high', $first['fetchpriority'] );
 
 		$memo = new \ReflectionProperty( Image_Optimisation::class, 'fetchpriority_lcp_url' );
-		$memo->setAccessible( true );
 		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $memo->getValue( $image_opt ) );
 
 		$second = $image_opt->wppo_add_fetchpriority( $attr, $attachment, 'large' );
@@ -935,7 +927,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'generate_svg_base64' );
-		$reflection->setAccessible( true );
 
 		$result = $reflection->invoke( $image_opt, '<img width="999999" height="500000" />' );
 
@@ -958,7 +949,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'generate_svg_base64' );
-		$reflection->setAccessible( true );
 
 		$result = $reflection->invoke( $image_opt, '<img width="800" height="600" />' );
 
@@ -1017,7 +1007,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$buffer .= '<img data-src="http://example.com/wp-content/uploads/lru-0.jpg" />';
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_img_dimensions' );
-		$reflection->setAccessible( true );
 
 		try {
 			$result = $reflection->invoke( $image_opt, $buffer );
@@ -1079,7 +1068,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$image_opt  = new Image_Optimisation( $this->default_options );
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'normalize_image_url' );
-		$reflection->setAccessible( true );
 
 		$url = $reflection->invoke( $image_opt, '/wp-content/uploads/a.jpg' );
 		$reflection->invoke( $image_opt, '/wp-content/uploads/b.jpg' );
@@ -1124,7 +1112,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	public function test_is_valid_lazy_placeholder_candidate_data_allowlist(): void {
 		$image_opt  = new Image_Optimisation( $this->default_options );
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'is_valid_lazy_placeholder_candidate' );
-		$reflection->setAccessible( true );
 
 		// Safe raster image data URLs (with delimiter) are accepted.
 		$this->assertTrue( $reflection->invoke( $image_opt, 'data:image/png;base64,AAAA' ) );
@@ -1469,7 +1456,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	public function test_sanitize_loading_triple_drops_high_with_lazy(): void {
 		$image_opt = new Image_Optimisation( $this->default_options );
 		$method    = new \ReflectionMethod( Image_Optimisation::class, 'sanitize_loading_triple' );
-		$method->setAccessible( true );
 
 		$sanitized = $method->invoke(
 			$image_opt,
@@ -1502,7 +1488,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		}
 		$image_opt = new Image_Optimisation( $this->default_options );
 		$method    = new \ReflectionMethod( Image_Optimisation::class, 'merge_core_loading_attributes' );
-		$method->setAccessible( true );
 
 		$merged = $method->invoke( $image_opt, array( 'src' => 'https://example.com/a.jpg' ), 'wppo-loading-attributes' );
 		$this->assertIsArray( $merged );
@@ -1624,7 +1609,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 'https://example.com/wp-content/uploads/field.jpg', $reflection->invoke( $image_opt ) );
 	}
@@ -1647,7 +1631,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 'https://example.com/wp-content/uploads/heuristic.jpg', $reflection->invoke( $image_opt ) );
 	}
@@ -1670,7 +1653,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
-		$reflection->setAccessible( true );
 
 		$this->assertSame( 'https://example.com/wp-content/uploads/heuristic.jpg', $reflection->invoke( $image_opt ) );
 	}
@@ -2145,7 +2127,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$image_opt  = new Image_Optimisation( $this->default_options );
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_preload_dedup_key' );
-		$reflection->setAccessible( true );
 
 		$http  = $reflection->invoke( $image_opt, 'http://example.com/wp-content/uploads/hero.jpg', '' );
 		$https = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg', '' );
@@ -2266,7 +2247,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = $this->make_auto_alt_instance( false );
 
 		$method = new ReflectionMethod( Image_Optimisation::class, 'maybe_autofill_alt_regex' );
-		$method->setAccessible( true );
 
 		$img_tag = '<img src="https://example.com/my-sunset_photo.jpg"/>';
 		$this->assertSame( $img_tag, $method->invoke( $image_opt, $img_tag, 'https://example.com/my-sunset_photo.jpg' ) );
@@ -2469,7 +2449,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_placeholders_with_tag_processor' );
-		$reflection->setAccessible( true );
 
 		// The first staged sentinel is deterministic (__wppo_ph_0__): plant
 		// the same string in a text node to prove the quoted-only swap
@@ -2503,15 +2482,11 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$url       = 'http://example.com/wp-content/uploads/hero.jpg';
 
 		$scan = new \ReflectionMethod( Image_Optimisation::class, 'buffer_has_image_preload' );
-		$scan->setAccessible( true );
 
 		$direct = new \ReflectionMethod( Image_Optimisation::class, 'buffer_has_image_preload_with_tag_processor' );
-		$direct->setAccessible( true );
 
 		$normalize = new \ReflectionMethod( Image_Optimisation::class, 'normalize_image_url' );
-		$normalize->setAccessible( true );
-		$query = new \ReflectionMethod( Image_Optimisation::class, 'get_url_query' );
-		$query->setAccessible( true );
+		$query     = new \ReflectionMethod( Image_Optimisation::class, 'get_url_query' );
 
 		$needle           = $normalize->invoke( $image_opt, $url );
 		$needle_exact     = $normalize->invoke( $image_opt, $url, false );
@@ -2565,7 +2540,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_img_dimensions_with_tag_processor' );
-		$reflection->setAccessible( true );
 
 		try {
 			// width="auto" is non-numeric: like the regex fallback, the
@@ -2607,7 +2581,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_auto_sizes_with_tag_processor' );
-		$reflection->setAccessible( true );
 
 		$buffer = '<div><p>copy</p></div>'
 			. '<img data-src="http://example.com/a.jpg" data-srcset="http://example.com/a.jpg 100w" width="100" height="100" />'

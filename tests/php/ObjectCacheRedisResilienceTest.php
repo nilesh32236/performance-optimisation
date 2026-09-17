@@ -444,15 +444,12 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 		$instance = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
 
 		$prop = new \ReflectionProperty( 'WP_Object_Cache', 'redis' );
-		$prop->setAccessible( true );
 		$prop->setValue( $instance, $redis );
 
 		$connected = new \ReflectionProperty( 'WP_Object_Cache', 'redis_connected' );
-		$connected->setAccessible( true );
 		$connected->setValue( $instance, true );
 
 		$ref = new \ReflectionMethod( 'WP_Object_Cache', 'verify_prefix_flushed' );
-		$ref->setAccessible( true );
 		return (bool) $ref->invoke( $instance, 'wp_:*' );
 	}
 
