@@ -1267,6 +1267,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * purging builder CSS risks FOUC on popups/dialogs that render in
 		 * hidden containers. Fail-open: any error returns false (no exemption).
 		 *
+		 * Meta verdicts delegate to the memoized
+		 * Main::is_elementor_built_page() (issue #1259) so the combine and
+		 * CCSS pipelines share one meta-read pair — and one strict
+		 * `'builder' === (string) $edit_mode` predicate — instead of each
+		 * fetching and unserializing the large `_elementor_data` blob.
+		 * The `?elementor-preview` bypass applies only when Elementor
+		 * looks active (same gating as the Main detector).
+		 *
 		 * @param int|null $post_id Optional post ID to inspect.
 		 * @return bool True when Elementor handling applies.
 		 * @since NEXT
@@ -1278,25 +1286,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// not-yet-loaded Elementor class must not change the verdict
 				// between call sites, and the combine hot path must not pay an
 				// autoloader scan.
-				if ( class_exists( 'Elementor\Plugin', false ) ) {
-					return true;
-				}
-				if ( function_exists( 'elementor_pro_load_plugin' ) || defined( 'ELEMENTOR_VERSION' ) ) {
-					return true;
-				}
-				if ( null !== $post_id && $post_id > 0 && function_exists( 'get_post_meta' ) ) {
-					$data = get_post_meta( $post_id, '_elementor_data', true );
-					if ( ! empty( $data ) ) {
-						return true;
+				$plugin_active = false;
+				try {
+					if ( class_exists( 'Elementor\Plugin', false ) || defined( 'ELEMENTOR_VERSION' ) || function_exists( 'elementor_pro_load_plugin' ) ) {
+						$plugin_active = true;
 					}
-					if ( function_exists( 'get_post_meta' ) ) {
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( $plugin_active ) {
+					return true;
+				}
+				if ( null !== $post_id && $post_id > 0 ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_elementor_built_page' ) ) {
+						try {
+							if ( Main::is_elementor_built_page( $post_id ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					} elseif ( function_exists( 'get_post_meta' ) ) {
+						// Minimal-boot fallback (Main unavailable): same
+						// strict predicate and tiny-first meta order as the
+						// Main detector so verdicts cannot drift.
 						$edit_mode = get_post_meta( $post_id, '_elementor_edit_mode', true );
-						if ( ! empty( $edit_mode ) ) {
+						if ( 'builder' === (string) $edit_mode ) {
+							return true;
+						}
+						$data = get_post_meta( $post_id, '_elementor_data', true );
+						if ( ! empty( $data ) ) {
 							return true;
 						}
 					}
 				}
-				if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+				if ( $plugin_active && isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
 					return true;
 				}
 				return false;

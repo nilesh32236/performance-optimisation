@@ -92,9 +92,9 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Strict 'builder' comparison: stale non-builder edit_mode values must not bypass.
 	 *
-	 * Note: Critical_CSS::is_elementor_context() treats any non-empty
-	 * _elementor_edit_mode as an Elementor context, so the Main-level strict
-	 * check is what keeps stale values from disabling combine.
+	 * Note: Critical_CSS::is_elementor_context() delegates meta verdicts to
+	 * the memoized Main detector (with a strict minimal-boot fallback), so
+	 * both pipelines share this predicate and cannot drift.
 	 */
 	public function test_strict_builder_meta_check(): void {
 		$this->stub_builder_meta( '', 'yes' );
@@ -130,6 +130,15 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 
 		$_GET['elementor-preview'] = '1'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Test fixture for read-only routing check.
 		$this->assertTrue( Main::looks_like_elementor_request() );
+		unset( $_GET['elementor-preview'] );
+	}
+
+	/**
+	 * Bare preview query vars require Elementor markers (no perf kill-switch).
+	 */
+	public function test_preview_query_requires_plugin_markers(): void {
+		$_GET['elementor-preview'] = '1'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Test fixture for read-only routing check.
+		$this->assertFalse( Main::is_elementor_built_page( null ), 'Bare preview on a non-Elementor site must not disable combine.' );
 		unset( $_GET['elementor-preview'] );
 	}
 
@@ -222,6 +231,20 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 		$flag = new \ReflectionProperty( Builder_Purge_Watcher::class, 'bulk_regen_coalesced' );
 		$flag->setAccessible( true );
 		$this->assertTrue( $flag->getValue(), 'Six distinct posts must trip bulk-regen coalescing (archive fan-out + targeted regen).' );
+	}
+
+	/**
+	 * Unresolvable regen payloads fall back to the deferred drift purge.
+	 */
+	public function test_unresolvable_regen_falls_back_to_drift(): void {
+		$watcher = new WPPO_Test_Elementor_Counting_Watcher();
+		$watcher->on_elementor_css_regen( null );
+		$this->assertSame( array(), $watcher->purged_posts, 'Unresolvable payloads must not purge a wrong URL.' );
+
+		$flag = new \ReflectionProperty( Builder_Purge_Watcher::class, 'drift_handled_this_request' );
+		$flag->setAccessible( true );
+		$this->assertTrue( $flag->getValue(), 'Unresolvable regen must schedule the deferred full purge.' );
+		$flag->setValue( null, false );
 	}
 
 	/**

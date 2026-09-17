@@ -2238,9 +2238,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *                          falls back to get_the_ID() only on singular
 		 *                          views so archives/home never inherit a loop
 		 *                          member's builder verdict).
+		 * @param array    $file_opt Optional `file_optimisation` settings slice,
+		 *                           forwarded to is_elementor_safe_mode_active()
+		 *                           in the fail-safe path so a staged
+		 *                           elementorSafeMode=off stays previewable.
 		 * @return bool True when this looks like an Elementor-built page.
 		 */
-		public static function is_elementor_built_page( ?int $post_id = null ): bool {
+		public static function is_elementor_built_page( ?int $post_id = null, array $file_opt = array() ): bool {
 			try {
 				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_is_elementor_page' ) ) {
 					try {
@@ -2284,13 +2288,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( array_key_exists( $memo_key, self::$elementor_built_memo ) ) {
 					return self::$elementor_built_memo[ $memo_key ];
 				}
-				$result                                  = self::detect_elementor_built_page( $resolved );
+				$result                                  = self::detect_elementor_built_page( $resolved, $file_opt );
 				self::$elementor_built_memo[ $memo_key ] = $result;
 				return $result;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				try {
-					return self::is_elementor_safe_mode_active();
+					return self::is_elementor_safe_mode_active( $file_opt );
 				} catch ( \Throwable $e2 ) {
 					unset( $e2 );
 					return true;
@@ -2305,19 +2309,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * trivial. Plugin presence is probed with cheap markers only
 		 * (class_exists with autoload disabled, version constants,
 		 * builder function markers — zero meta reads), then a SINGLE
-		 * `get_post_meta` pair (`_elementor_data`, `_elementor_edit_mode`)
-		 * decides the verdict. The Critical_CSS::is_elementor_context()
-		 * precedent is deliberately not delegated to here: it performs its
-		 * own meta reads (doubling memcache/DB payload plus the unserialize
-		 * cost of the largest builder meta on the combine hot path) and
-		 * treats any non-empty edit mode as a context, while this path
-		 * requires a strict `'builder' === (string) $edit_mode`
-		 * comparison so stale or third-party `_elementor_edit_mode`
-		 * values never bypass combine.
+		 * `get_post_meta` pair decides the verdict: the tiny
+		 * `_elementor_edit_mode` value is checked first and the large
+		 * `_elementor_data` blob (100KB–1MB, unserialize + memory spike)
+		 * is fetched only on miss, so non-builder pages never pay the
+		 * largest meta cost on the combine hot path. The
+		 * Critical_CSS::is_elementor_context() precedent is deliberately
+		 * not delegated to here: it performs its own meta reads (doubling
+		 * memcache/DB payload plus the unserialize cost of the largest
+		 * builder meta on the combine hot path) and treats any non-empty
+		 * edit mode as a context, while this path requires a strict
+		 * `'builder' === (string) $edit_mode` comparison so stale or
+		 * third-party `_elementor_edit_mode` values never bypass combine.
 		 *
 		 * The `?elementor-preview` check applies uniformly (not only when
 		 * the Critical_CSS class is loaded) so preview URLs behave the
-		 * same in full and minimal boots.
+		 * same in full and minimal boots — but only when Elementor looks
+		 * active (cheap markers above): a bare preview query var on a
+		 * non-Elementor site must not disable combine for any visitor
+		 * appending it (perf-only kill-switch otherwise).
 		 *
 		 * Fail direction: unexpected failure degrades to skip (true) while
 		 * safe mode is on (perf-only cost over broken-layout risk).
@@ -2325,9 +2335,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT
 		 *
 		 * @param int|null $resolved Resolved post ID (or null when unknown).
+		 * @param array    $file_opt Optional `file_optimisation` settings slice,
+		 *                           forwarded to is_elementor_safe_mode_active()
+		 *                           in the fail-safe path so a staged
+		 *                           elementorSafeMode=off stays previewable.
 		 * @return bool True when this looks like an Elementor-built page.
 		 */
-		private static function detect_elementor_built_page( ?int $resolved ): bool {
+		private static function detect_elementor_built_page( ?int $resolved, array $file_opt = array() ): bool {
 			try {
 				// Cheap plugin-active probe only — no meta reads, no autoload
 				// scan (autoload disabled, matching looks_like_elementor_request()).
@@ -2341,21 +2355,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				// Single meta-read pair for the resolved post.
+				// Single meta-read pair for the resolved post: tiny
+				// `_elementor_edit_mode` first, large `_elementor_data`
+				// blob only on miss.
 				if ( null !== $resolved && $resolved > 0 && function_exists( 'get_post_meta' ) ) {
 					try {
-						$data = get_post_meta( $resolved, '_elementor_data', true );
-						if ( ! empty( $data ) ) {
-							return true;
-						}
 						$edit_mode = get_post_meta( $resolved, '_elementor_edit_mode', true );
 						if ( 'builder' === (string) $edit_mode ) {
+							return true;
+						}
+						$data = get_post_meta( $resolved, '_elementor_data', true );
+						if ( ! empty( $data ) ) {
 							return true;
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 						try {
-							return self::is_elementor_safe_mode_active();
+							return self::is_elementor_safe_mode_active( $file_opt );
 						} catch ( \Throwable $e2 ) {
 							unset( $e2 );
 							return true;
@@ -2364,22 +2380,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Plugin active but this post carries no builder meta:
 					// not a builder-built page — unless this is a preview.
 					if ( ! $plugin_active ) {
-						// No plugin markers and no builder meta: only an
-						// explicit preview query can still mark the page.
-						if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-							return true;
-						}
 						return false;
 					}
 				}
-				if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+				// Preview bypass is gated on plugin-active markers: legit
+				// Elementor preview links run on Elementor-active sites
+				// (markers present), while a bare query var on a
+				// non-Elementor site must not disable combine.
+				if ( $plugin_active && isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
 					return true;
 				}
 				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				try {
-					return self::is_elementor_safe_mode_active();
+					return self::is_elementor_safe_mode_active( $file_opt );
 				} catch ( \Throwable $e2 ) {
 					unset( $e2 );
 					return true;
@@ -2413,7 +2428,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! self::is_elementor_safe_mode_active( $file_optimisation ) ) {
 					return false;
 				}
-				return self::is_elementor_built_page( $post_id );
+				return self::is_elementor_built_page( $post_id, $file_optimisation );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				try {

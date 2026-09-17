@@ -337,7 +337,8 @@ Filters whether Elementor-safe mode is active (issue #1259). When on (default), 
 ```php
 add_filter( 'wppo_elementor_safe_mode_enabled', function( $enabled ) {
     // Keep protection on everywhere except a staging host.
-    if ( 'staging.example.com' === $_SERVER['HTTP_HOST'] ) {
+    $host = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+    if ( 'staging.example.com' === $host ) {
         return false;
     }
     return $enabled;

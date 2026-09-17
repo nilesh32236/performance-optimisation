@@ -444,7 +444,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		public function on_builder_drift_save( $post_id, $editor_data ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match the elementor/editor/after_save action.
 			unset( $editor_data );
 			try {
-				$post_id = (int) $post_id;
+				// Shared coercion (not a blind cast): floats and
+				// float-like strings resolve to 0 instead of truncating
+				// to a wrong post, matching resolve_elementor_post_id().
+				$post_id = $this->coerce_post_id( $post_id );
 				if ( $post_id <= 0 ) {
 					return;
 				}
@@ -496,7 +499,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * from the CSS-file object (`get_post_id()` when available), from a
 		 * plain integer first argument, or from the second action payload
 		 * when Elementor passes ($css_file, $post_id); unresolvable payloads
-		 * are ignored. Deduped per request via the shared
+		 * fall back to the deferred full purge (on_builder_drift()) rather
+		 * than silently keeping stale HTML that references renamed or
+		 * deleted post-*.css. Deduped per request via the shared
 		 * $elementor_purged set (bulk regen fires N times; editor saves
 		 * typically fire both after_save and parse_after for the same post;
 		 * the mark lands after the purge attempt so a failed purge is
@@ -516,6 +521,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			try {
 				$post_id = $this->resolve_elementor_post_id( $css_file, $post_id );
 				if ( $post_id <= 0 ) {
+					// Unresolvable payload (e.g. a path/null first arg with
+					// no second payload): fail toward the deferred full
+					// purge (deduped, background) instead of leaving
+					// stale-broken HTML pointing at deleted post-*.css.
+					$this->on_builder_drift();
 					return;
 				}
 				if ( isset( self::$elementor_purged[ $post_id ] ) ) {
@@ -551,6 +561,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		protected function resolve_elementor_post_id( $css_file, $post_id = null ): int {
 			try {
 				if ( is_object( $css_file ) && method_exists( $css_file, 'get_post_id' ) ) {
+					// Foreign method call: guarded on its own since only
+					// this invocation can throw; a throw falls through to
+					// the second-payload fallback below.
 					try {
 						$id = $this->coerce_post_id( $css_file->get_post_id() );
 					} catch ( \Throwable $e ) {
@@ -560,8 +573,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					if ( $id > 0 ) {
 						return $id;
 					}
-				} elseif ( $this->coerce_post_id( $css_file ) > 0 ) {
-					return $this->coerce_post_id( $css_file );
+				} else {
+					$id = $this->coerce_post_id( $css_file );
+					if ( $id > 0 ) {
+						return $id;
+					}
 				}
 				$id = $this->coerce_post_id( $post_id );
 				return $id > 0 ? $id : 0;

@@ -44,9 +44,9 @@ const cdnRowId = () => {
 	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
 };
 
-// Newline-delimited third-party lists: normalise array payloads (from
+// Newline-delimited third-party/exclude lists: normalise array payloads (from
 // sanitize/process_urls) to textarea strings without nested ternaries.
-const toDelayLines = ( value ) => {
+const toTextLines = ( value ) => {
 	if ( typeof value === 'string' ) {
 		return value;
 	}
@@ -125,10 +125,10 @@ const FileOptimization = ( {
 			options.delayJSThirdParty !== undefined
 				? options.delayJSThirdParty
 				: false,
-		delayJSThirdPartyDenylist: toDelayLines(
+		delayJSThirdPartyDenylist: toTextLines(
 			options.delayJSThirdPartyDenylist
 		),
-		delayJSThirdPartyAllowlist: toDelayLines(
+		delayJSThirdPartyAllowlist: toTextLines(
 			options.delayJSThirdPartyAllowlist
 		),
 		delayJSBuilderPreset:
@@ -227,11 +227,11 @@ const FileOptimization = ( {
 	// String-guard textarea-backed keys AFTER the spread so a non-string
 	// truthy payload (e.g. array from corrupted settings) cannot flow into
 	// a controlled textarea value via the ...options override above.
-	// toDelayLines joins array payloads instead of clearing them (#1217 review).
-	defaultSettings.delayJSThirdPartyDenylist = toDelayLines(
+	// toTextLines joins array payloads instead of clearing them (#1217 review).
+	defaultSettings.delayJSThirdPartyDenylist = toTextLines(
 		options.delayJSThirdPartyDenylist
 	);
-	defaultSettings.delayJSThirdPartyAllowlist = toDelayLines(
+	defaultSettings.delayJSThirdPartyAllowlist = toTextLines(
 		options.delayJSThirdPartyAllowlist
 	);
 	defaultSettings.delayJSExcludeUrls =
@@ -397,17 +397,6 @@ const FileOptimization = ( {
 		notify: notifySandbox,
 		dismiss: dismissSandbox,
 	} = useNotice();
-	// Newline-delimited excludes: sanitize/process_urls normalization can
-	// produce arrays, so join them instead of clearing to empty string.
-	const toExcludeLines = ( value ) => {
-		if ( typeof value === 'string' ) {
-			return value;
-		}
-		if ( Array.isArray( value ) ) {
-			return value.join( '\n' );
-		}
-		return '';
-	};
 	const buildStagedFromForm = () => ( {
 		delayJS: !! settings.delayJS,
 		deferJS: !! settings.deferJS,
@@ -420,15 +409,15 @@ const FileOptimization = ( {
 		delayJSExternalOnly: !! settings.delayJSExternalOnly,
 		minifyInlineJS: !! settings.minifyInlineJS,
 		delayJSThirdParty: !! settings.delayJSThirdParty,
-		delayJSThirdPartyDenylist: toDelayLines(
+		delayJSThirdPartyDenylist: toTextLines(
 			settings.delayJSThirdPartyDenylist
 		),
-		delayJSThirdPartyAllowlist: toDelayLines(
+		delayJSThirdPartyAllowlist: toTextLines(
 			settings.delayJSThirdPartyAllowlist
 		),
-		excludeDelayJS: toExcludeLines( settings.excludeDelayJS ),
-		excludeDeferJS: toExcludeLines( settings.excludeDeferJS ),
-		excludeCombineCSS: toExcludeLines( settings.excludeCombineCSS ),
+		excludeDelayJS: toTextLines( settings.excludeDelayJS ),
+		excludeDeferJS: toTextLines( settings.excludeDeferJS ),
+		excludeCombineCSS: toTextLines( settings.excludeCombineCSS ),
 	} );
 	// Hydrate sandbox state when the Scripts tab opens so a staged
 	// experiment from a prior session is visible without re-staging.
@@ -680,10 +669,10 @@ const FileOptimization = ( {
 		setBaseline( {
 			...defaultSettings,
 			...options,
-			delayJSThirdPartyDenylist: toDelayLines(
+			delayJSThirdPartyDenylist: toTextLines(
 				options.delayJSThirdPartyDenylist
 			),
-			delayJSThirdPartyAllowlist: toDelayLines(
+			delayJSThirdPartyAllowlist: toTextLines(
 				options.delayJSThirdPartyAllowlist
 			),
 			delayJSExcludeUrls:
@@ -797,15 +786,15 @@ const FileOptimization = ( {
 			const next = { ...prev, ...options };
 			// String-guard textarea-backed keys so a corrupted non-string
 			// payload cannot reach a controlled textarea value. Third-party
-			// lists join array payloads (toDelayLines) so sync agrees with
+			// lists join array payloads (toTextLines) so sync agrees with
 			// init instead of dropping backend arrays to '' (#1217 review).
 			if ( typeof next.delayJSThirdPartyDenylist !== 'string' ) {
-				next.delayJSThirdPartyDenylist = toDelayLines(
+				next.delayJSThirdPartyDenylist = toTextLines(
 					next.delayJSThirdPartyDenylist
 				);
 			}
 			if ( typeof next.delayJSThirdPartyAllowlist !== 'string' ) {
-				next.delayJSThirdPartyAllowlist = toDelayLines(
+				next.delayJSThirdPartyAllowlist = toTextLines(
 					next.delayJSThirdPartyAllowlist
 				);
 			}

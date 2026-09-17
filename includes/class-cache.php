@@ -909,6 +909,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Sandbox-effective `file_optimisation` slice (issue #1259).
+		 *
+		 * Single choke point for the Elementor-safe-mode slice resolution
+		 * so combine_css() and will_combine_css_inline() cannot drift
+		 * apart. Fail-open to the production slice on any failure.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_opt Production `file_optimisation` slice.
+		 * @return array Effective slice (staged values merged in preview).
+		 */
+		private function get_effective_file_opt_for_elementor( array $file_opt ): array {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
+					$effective = Sandbox_Preview::get_effective_file_optimisation( $file_opt );
+					if ( is_array( $effective ) ) {
+						return $effective;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $file_opt;
+		}
+
+		/**
 		 * Whether CSS combine/inline must be skipped for Elementor-safe mode (issue #1259).
 		 *
 		 * Single choke point for both combine_css() and
@@ -993,13 +1019,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// array-safe (string or array payload).
 			$file_opt_for_combine = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
 			if ( $is_preview ) {
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
-						$file_opt_for_combine = Sandbox_Preview::get_effective_file_optimisation( $file_opt_for_combine );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
+				$file_opt_for_combine = $this->get_effective_file_opt_for_elementor( $file_opt_for_combine );
 			}
 			if ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
 				$exclude_combine_css = Util::process_urls( $file_opt_for_combine['excludeCombineCSS'] );
@@ -1746,17 +1766,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Elementor-safe mode (issue #1259): never inline the combined
 			// file on builder-built pages. Single choke point shared with
 			// combine_css() (see should_bypass_combine_for_elementor()).
+			// Cheap native pre-gate first so the sandbox-effective slice
+			// is resolved only when Elementor looks present — this is the
+			// hottest frontend path for non-Elementor visitors.
 			try {
-				$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
-				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
-					try {
-						$file_opt = Sandbox_Preview::get_effective_file_optimisation( $file_opt );
-					} catch ( \Throwable $e ) {
-						unset( $e );
+				$elementor_ruled_out = class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) && ! Main::looks_like_elementor_request();
+				if ( ! $elementor_ruled_out ) {
+					$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+					$file_opt = $this->get_effective_file_opt_for_elementor( $file_opt );
+					if ( $this->should_bypass_combine_for_elementor( $file_opt ) ) {
+						return false;
 					}
-				}
-				if ( $this->should_bypass_combine_for_elementor( $file_opt ) ) {
-					return false;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
