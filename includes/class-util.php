@@ -6033,6 +6033,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// Imagick memory cap (issue #1346) — int MB clamped to
+				// 32–2048. Unrecognized values fail open to 256 so the OOM
+				// guard stays bounded; a huge stored value can never be
+				// persisted. Pinned before the generic is_numeric branch.
+				if ( 'imagickMemoryLimitMB' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 256;
+						continue;
+					}
+					$limit                  = is_numeric( $value ) ? (int) $value : 256;
+					$sanitized[ $safe_key ] = ( $limit >= 32 && $limit <= 2048 ) ? $limit : 256;
+					continue;
+				}
+
+				// Imagick per-side dimension cap (issue #1346) — int px
+				// clamped to 0–20000 (`0` disables the per-side check; the
+				// area budget still applies). Negatives clamp to 0,
+				// unrecognized values fail open to 8000. Pinned before the
+				// generic is_numeric branch.
+				if ( 'imagickMaxDimensionPx' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 8000;
+						continue;
+					}
+					if ( '' === $value || null === $value || ! is_numeric( $value ) ) {
+						$sanitized[ $safe_key ] = 8000;
+						continue;
+					}
+					$edge                   = (int) $value;
+					$sanitized[ $safe_key ] = $edge < 0 ? 0 : min( 20000, $edge );
+					continue;
+				}
+
 				if ( is_array( $value ) ) {
 					$sanitized[ $safe_key ] = self::sanitize_settings_recursively( $value );
 				} else {

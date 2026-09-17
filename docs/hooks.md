@@ -1725,6 +1725,42 @@ add_filter( 'wppo_max_longest_edge_px', function () {
 
 ---
 
+### `wppo_imagick_memory_limit_bytes`
+Filters the Imagick memory cap in bytes applied via `setResourceLimit()` (MEMORY/MAP, plus DISK at 2×) before every Imagick decode (AVIF fallback, over-budget stills, GIF-to-WebP). @since NEXT.
+
+Untrusted input is coerced fail-open: non-numeric/non-positive filter returns fall back to the 256MB default, and resolved values clamp to 32–2048 MB at read time (matching the pinned `imagickMemoryLimitMB` sanitizer) so a huge value cannot silently disable the OOM guard.
+
+**Parameters:**
+- `$bytes` *(int)* — Cap in bytes. Default from the `image_optimisation.imagickMemoryLimitMB` setting (`256`).
+
+**Example:**
+
+```php
+add_filter( 'wppo_imagick_memory_limit_bytes', function() {
+    return 128 * 1024 * 1024; // 128MB on constrained workers.
+} );
+```
+
+---
+
+### `wppo_imagick_max_dimension_px`
+Filters the per-side Imagick dimension cap in pixels gating every `readImage()` via a header-only `getimagesize()` probe — oversized sources skip (marked failed, original served) before any bitmap is allocated. @since NEXT.
+
+`0` disables the per-side check (the area budget via `get_max_source_pixels()` still applies). Untrusted input is coerced fail-open: non-numeric returns fall back to the 8000 default, negatives clamp to `0`, and resolved values clamp to 0–20000 at read time (matching the pinned `imagickMaxDimensionPx` sanitizer).
+
+**Parameters:**
+- `$cap` *(int)* — Cap in pixels. Default from the `image_optimisation.imagickMaxDimensionPx` setting (`8000`). `0` disables.
+
+**Example:**
+
+```php
+add_filter( 'wppo_imagick_max_dimension_px', function() {
+    return 6000;
+} );
+```
+
+---
+
 ### `wppo_font_metric_fallback_css`
 Filters the generated size-adjust fallback CSS for a font family. @since 2.0.0.
 

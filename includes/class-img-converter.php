@@ -794,9 +794,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( '' === $path || false !== strpos( $path, "\0" ) ) {
 				return false;
 			}
-			if ( ! defined( 'WP_CONTENT_DIR' ) || ! function_exists( 'wp_upload_dir' ) ) {
-				// Without the uploads API the lexical gate already confined
-				// to WP_CONTENT_DIR/wppo; nothing further to resolve against.
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				// Without the content root there is nothing to resolve
+				// against; the lexical gate already confined the target.
 				return true;
 			}
 			$normalize = function ( string $p ): string {
@@ -805,10 +805,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			};
 			$content   = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
 			$roots     = array( $normalize( rtrim( $content, '/' ) . '/wppo' ) );
-			$dir       = wp_upload_dir();
-			$base      = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
-			if ( '' !== $base ) {
-				$roots[] = $normalize( $base );
+			if ( function_exists( 'wp_upload_dir' ) ) {
+				$dir  = wp_upload_dir();
+				$base = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
+				if ( '' !== $base ) {
+					$roots[] = $normalize( $base );
+				}
 			}
 			$contains = function ( string $candidate ) use ( $roots, $normalize ): bool {
 				$candidate = $normalize( $candidate );
@@ -861,10 +863,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! defined( 'WP_CONTENT_DIR' ) || ! function_exists( 'wp_upload_dir' ) ) {
 				return false;
 			}
-			if ( ! self::is_safe_delete_path( $path ) ) {
-				return false;
-			}
-			return self::is_realpath_confined( $path );
+			// is_safe_delete_path() already enforces the lexical gate plus
+			// the realpath re-containment, so no second resolution pass here.
+			return self::is_safe_delete_path( $path );
 		}
 
 		/**
@@ -1230,8 +1231,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * `wppo_imagick_memory_limit_bytes` filter. The filter/setting value
 		 * is untrusted: coerced to a positive int with fallback to the
 		 * default so a 0/negative/non-numeric return can neither disable the
-		 * guard nor block all conversions. Fail-open: probe failures keep
-		 * the 256MB default.
+		 * guard nor block all conversions. Clamped to 32–2048 MB at read
+		 * time (matching the pinned sanitizer) so a huge stored/filtered
+		 * value cannot silently disable the OOM guard. Fail-open: probe
+		 * failures keep the 256MB default.
 		 *
 		 * @since NEXT
 		 *
@@ -1239,6 +1242,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public function get_imagick_memory_limit_bytes(): int {
 			$default = 256 * 1024 * 1024;
+			$min     = 32 * 1024 * 1024;
+			$max     = 2048 * 1024 * 1024;
 			try {
 				$mb = $this->options['image_optimisation']['imagickMemoryLimitMB'] ?? 256;
 				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_imagick_memory_limit_bytes' ) ) {
@@ -1250,14 +1255,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					 */
 					$filtered = apply_filters( 'wppo_imagick_memory_limit_bytes', (int) $mb * 1024 * 1024 );
 					if ( is_numeric( $filtered ) && (int) $filtered > 0 ) {
-						return (int) $filtered;
+						return min( $max, max( $min, (int) $filtered ) );
 					}
 					return $default;
 				}
 				if ( ! is_numeric( $mb ) || (int) $mb < 1 ) {
 					return $default;
 				}
-				return (int) $mb * 1024 * 1024;
+				$clamped = min( 2048, max( 32, (int) $mb ) );
+				return $clamped * 1024 * 1024;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: default cap on probe failure.
 				return $default;
 			}
@@ -1269,7 +1275,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Additive `imagickMaxDimensionPx` setting (default 8000) plus the
 		 * `wppo_imagick_max_dimension_px` filter. `0` disables the per-side
 		 * check (the area budget via get_max_source_pixels() still applies).
-		 * Fail-open: probe failures keep the default.
+		 * Clamped to 0–20000 at read time (matching the pinned sanitizer)
+		 * so an absurd value cannot weaken the guard. Fail-open: probe
+		 * failures keep the default.
 		 *
 		 * @since NEXT
 		 *
@@ -1287,17 +1295,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					 * @param int $cap Cap in pixels. `0` disables the per-side check.
 					 */
 					$filtered = apply_filters( 'wppo_imagick_max_dimension_px', $cap );
-					if ( ! is_scalar( $filtered ) ) {
+					if ( ! is_scalar( $filtered ) || '' === $filtered || null === $filtered || ! is_numeric( $filtered ) ) {
 						return $default;
 					}
 					$filtered = (int) $filtered;
-					return $filtered < 0 ? 0 : $filtered;
+					if ( $filtered < 0 ) {
+						return 0;
+					}
+					return min( 20000, $filtered );
 				}
-				if ( ! is_scalar( $cap ) ) {
+				if ( ! is_scalar( $cap ) || '' === $cap || null === $cap || ! is_numeric( $cap ) ) {
 					return $default;
 				}
 				$cap = (int) $cap;
-				return $cap < 0 ? 0 : $cap;
+				if ( $cap < 0 ) {
+					return 0;
+				}
+				return min( 20000, $cap );
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: default cap on probe failure.
 				return $default;
 			}
@@ -2183,21 +2197,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// Do not hard-clamp Imagick depth to 8-bit — core's
 							// image_max_bit_depth filter (WP 6.8+, Trac #62285)
 							// preserves HDR up to 12-bit by default.
-							$imagick = new \Imagick();
-							// Bound decoded memory + area to the pre-decode pixel
-							// budget so multi-frame GIFs cannot OOM the worker.
-							// Best-effort no-op on Imagick builds without
-							// setResourceLimit; the read below still runs fail-open.
-							$this->apply_imagick_memory_guard( $imagick );
-							// Pre-read dimension cap: refuse oversized GIF
-							// headers before readImage() decodes every frame
-							// into memory. Skip + mark failed, serve original.
+							// Pre-read dimension cap first: refuse oversized GIF
+							// headers before allocating Imagick so oversized
+							// sources skip without a needless object (parity
+							// with the AVIF/overbudget sites). Skip + mark
+							// failed, serve original.
 							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
 							$gif_probe = @getimagesize( $source_image );
 							if ( is_array( $gif_probe ) && isset( $gif_probe[0], $gif_probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $gif_probe[0], (int) $gif_probe[1] ) ) {
 								$this->update_conversion_status( $source_image, 'failed', $format );
 								return false;
 							}
+							$imagick = new \Imagick();
+							// Bound decoded memory + area to the pre-decode pixel
+							// budget so multi-frame GIFs cannot OOM the worker.
+							// Best-effort no-op on Imagick builds without
+							// setResourceLimit; the read below still runs fail-open.
+							$this->apply_imagick_memory_guard( $imagick );
 							$imagick->readImage( $source_image );
 
 							// Longest-edge cap for the GIF-via-Imagick path

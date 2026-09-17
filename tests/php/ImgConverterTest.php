@@ -1385,6 +1385,153 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Realpath re-containment: a symlink inside uploads pointing outside
+	 * passes the lexical gate but must be refused, while a legit file on
+	 * disk stays allowed and traversal stays refused (#1346).
+	 *
+	 * @since NEXT
+	 */
+	public function test_realpath_confinement_refuses_symlink_escape(): void {
+		if ( ! function_exists( 'symlink' ) ) {
+			$this->markTestSkipped( 'symlink() unavailable.' );
+		}
+		$outside = sys_get_temp_dir() . '/wppo-outside-' . uniqid() . '.jpg';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture setup.
+		file_put_contents( $outside, 'outside' );
+		$link = $this->uploads_dir . '/escape-' . uniqid() . '.jpg';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.symlink_symlink -- Test fixture setup.
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Symlink may fail in restricted environments; false is handled below.
+		$linked = @symlink( $outside, $link );
+		try {
+			if ( ! $linked ) {
+				$this->markTestSkipped( 'Cannot create symlinks in this environment.' );
+			}
+			$this->assertFalse( Img_Converter::is_safe_delete_path( $link ), 'Symlink inside uploads pointing outside must be refused' );
+			$this->assertFalse( Img_Converter::is_path_confined_to_uploads( $link ), 'Public probe must agree on the symlink escape' );
+
+			$legit = $this->create_sample_png( 'legit-' . uniqid() . '.png' );
+			$this->assertTrue( Img_Converter::is_safe_delete_path( $legit ), 'Legit uploads file stays allowed' );
+			$this->assertTrue( Img_Converter::is_path_confined_to_uploads( $legit ), 'Public probe allows the legit file' );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( $legit );
+
+			$this->assertFalse( Img_Converter::is_safe_delete_path( $this->uploads_dir . '/../wp-config.php' ), 'Traversal stays refused' );
+			$this->assertFalse( Img_Converter::is_path_confined_to_uploads( '' ), 'Empty path is never confined' );
+		} finally {
+			if ( is_link( $link ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $link );
+			}
+			if ( file_exists( $outside ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $outside );
+			}
+		}
+	}
+
+	/**
+	 * Imagick dimension caps: per-side breaches skip, fitting sources
+	 * pass, corrupt dims are not a skip, and `0` disables the per-side
+	 * check (area budget still applies) (#1346).
+	 *
+	 * @since NEXT
+	 */
+	public function test_exceeds_imagick_dimension_cap_per_side_and_disable(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		$capped = $this->make_converter( array( 'imagickMaxDimensionPx' => 500 ) );
+		$this->assertTrue( $capped->exceeds_imagick_dimension_cap( 600, 100 ), 'Side over the cap must skip' );
+		$this->assertFalse( $capped->exceeds_imagick_dimension_cap( 400, 100 ), 'Fitting source must pass' );
+		$this->assertFalse( $capped->exceeds_imagick_dimension_cap( 0, 100 ), 'Corrupt dims are not an oversize skip' );
+
+		// Disabled per-side cap: 9000x100 (900k px) is well under the
+		// 4Mpx area floor so only the per-side verdict matters here.
+		$off = $this->make_converter( array( 'imagickMaxDimensionPx' => 0 ) );
+		$this->assertFalse( $off->exceeds_imagick_dimension_cap( 9000, 100 ), 'Disabled cap must not skip on side length' );
+	}
+
+	/**
+	 * Imagick memory cap clamps to 32–2048 MB at read time and falls back
+	 * to the 256MB default on untrusted values; huge filter output cannot
+	 * silently disable the OOM guard (#1346).
+	 *
+	 * @since NEXT
+	 */
+	public function test_imagick_memory_limit_clamps_and_fallbacks(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		$mb = 1024 * 1024;
+		$this->assertSame( 256 * $mb, $this->make_converter()->get_imagick_memory_limit_bytes(), 'Default is 256MB' );
+		$this->assertSame( 2048 * $mb, $this->make_converter( array( 'imagickMemoryLimitMB' => 1000000 ) )->get_imagick_memory_limit_bytes(), 'Huge setting clamps to 2048MB' );
+		$this->assertSame( 32 * $mb, $this->make_converter( array( 'imagickMemoryLimitMB' => 1 ) )->get_imagick_memory_limit_bytes(), 'Tiny setting clamps to 32MB' );
+		$this->assertSame( 256 * $mb, $this->make_converter( array( 'imagickMemoryLimitMB' => -5 ) )->get_imagick_memory_limit_bytes(), 'Negative falls back to default' );
+		$this->assertSame( 256 * $mb, $this->make_converter( array( 'imagickMemoryLimitMB' => 'bogus' ) )->get_imagick_memory_limit_bytes(), 'Non-numeric falls back to default' );
+	}
+
+	/**
+	 * Imagick dimension cap clamps to 0–20000 at read time and hostile
+	 * filter output falls back fail-open (#1346).
+	 *
+	 * @since NEXT
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_imagick_dimension_cap_clamps_and_filter_fallback(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		$this->assertSame( 8000, $this->make_converter()->get_imagick_max_dimension_px(), 'Default is 8000px' );
+		$this->assertSame( 20000, $this->make_converter( array( 'imagickMaxDimensionPx' => 100000 ) )->get_imagick_max_dimension_px(), 'Huge setting clamps to 20000px' );
+		$this->assertSame( 0, $this->make_converter( array( 'imagickMaxDimensionPx' => -5 ) )->get_imagick_max_dimension_px(), 'Negative clamps to 0 (disabled)' );
+		$this->assertSame( 8000, $this->make_converter( array( 'imagickMaxDimensionPx' => 'bogus' ) )->get_imagick_max_dimension_px(), 'Non-numeric falls back to default' );
+
+		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_imagick_max_dimension_px' === $hook_name ) {
+					return array( 'hostile' );
+				}
+				if ( 'wppo_imagick_memory_limit_bytes' === $hook_name ) {
+					return 'bogus';
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 8000, $this->make_converter()->get_imagick_max_dimension_px(), 'Non-scalar filter output falls back to default' );
+		$this->assertSame( 256 * 1024 * 1024, $this->make_converter()->get_imagick_memory_limit_bytes(), 'Non-numeric filter output falls back to default' );
+	}
+
+	/**
+	 * Pinned sanitizer branches persist only bounded Imagick caps (#1346).
+	 *
+	 * @since NEXT
+	 */
+	public function test_sanitize_imagick_caps_clamp(): void {
+		$clean = Util::sanitize_settings_recursively(
+			array(
+				'imagickMemoryLimitMB'  => 1000000,
+				'imagickMaxDimensionPx' => 100000,
+			)
+		);
+		$this->assertSame( 256, $clean['imagickMemoryLimitMB'] );
+		$this->assertSame( 20000, $clean['imagickMaxDimensionPx'] );
+
+		$neg = Util::sanitize_settings_recursively(
+			array(
+				'imagickMemoryLimitMB'  => -5,
+				'imagickMaxDimensionPx' => -5,
+			)
+		);
+		$this->assertSame( 256, $neg['imagickMemoryLimitMB'] );
+		$this->assertSame( 0, $neg['imagickMaxDimensionPx'] );
+
+		$ok = Util::sanitize_settings_recursively(
+			array(
+				'imagickMemoryLimitMB'  => 128,
+				'imagickMaxDimensionPx' => 0,
+			)
+		);
+		$this->assertSame( 128, $ok['imagickMemoryLimitMB'] );
+		$this->assertSame( 0, $ok['imagickMaxDimensionPx'] );
+	}
+
+	/**
 	 * Channels-aware pixel budget: 40MP exceeds the fallback budget while
 	 * a normal 12MP image fits, and corrupt (non-positive) dimensions are
 	 * NOT an oversize skip so the caller records `failed` (#1035).
