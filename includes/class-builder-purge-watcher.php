@@ -438,11 +438,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			if ( function_exists( 'doing_action' ) && doing_action( 'upgrader_process_complete' ) ) {
 				return;
 			}
+			self::$drift_handled_this_request = true;
 			try {
 				if ( ! $this->schedule_deferred_drift_purge() ) {
+					// A transient lock-hit stays retryable later in the same
+					// request (issue #1288): the lock may clear and the heal
+					// must retry. Every other schedule failure latches the
+					// per-request dedupe flag since retrying is futile
+					// (no scheduler available / already pending).
+					if ( $this->is_drift_purge_locked() ) {
+						self::$drift_handled_this_request = false;
+					}
 					return;
 				}
-				self::$drift_handled_this_request = true;
 				if ( function_exists( 'do_action' ) ) {
 					/**
 					 * Fires after builder-drift requeue (issue #1023).
@@ -494,6 +502,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				}
 
 				return $scheduled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether the drift-purge transient lock is currently held (issue #1288).
+		 *
+		 * A held lock means another request is handling the purge, so a
+		 * failed schedule stays retryable later in the same request once
+		 * the lock clears. Fail-open: any error reports unlocked.
+		 *
+		 * @since NEXT
+		 * @return bool True when the drift-purge lock transient exists.
+		 */
+		protected function is_drift_purge_locked(): bool {
+			try {
+				return function_exists( 'get_transient' ) && (bool) get_transient( Util::transient_key( self::DRIFT_PURGE_LOCK ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

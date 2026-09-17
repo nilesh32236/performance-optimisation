@@ -53,7 +53,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The watcher registers all four hooks with their expected specs.
+	 * The watcher registers all seven hooks with their expected specs.
 	 */
 	public function test_register_hooks_upgrader_action(): void {
 		$calls = array();
@@ -67,9 +67,12 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$expected = array(
 			array( 'upgrader_process_complete', 10, 2 ),
+			array( 'upgrader_process_complete', 20, 2 ),
 			array( 'elementor/core/files/clear_cache', 10, 0 ),
 			array( 'elementor/editor/after_save', 10, 2 ),
+			array( 'elementor/css-file/post/parse_after', 10, 2 ),
 			array( Builder_Purge_Watcher::DRIFT_PURGE_HOOK, 10, 0 ),
+			array( Builder_Purge_Watcher::UPGRADE_PURGE_HOOK, 10, 1 ),
 		);
 		// Only count watcher hooks: Util::get_settings() lazily registers its
 		// own cache hooks via add_action() in the same process.
@@ -91,7 +94,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 			}
 			$this->assertTrue( $found, sprintf( 'Expected registration for hook %s.', $spec[0] ) );
 		}
-		$this->assertCount( 4, $watcher_calls, 'register() must register exactly the four watcher hooks.' );
+		$this->assertCount( 7, $watcher_calls, 'register() must register exactly the seven watcher hooks.' );
 	}
 
 	/**

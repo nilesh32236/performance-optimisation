@@ -329,11 +329,12 @@ class WPPO_Test_Upgrade_Watcher extends Builder_Purge_Watcher {
 	/**
 	 * Record the derived-cache purge.
 	 *
-	 * @return void
+	 * @return bool
 	 */
-	protected function purge_wppo_derived_caches(): void {
+	protected function purge_wppo_derived_caches(): bool {
 		$this->wppo_purged = true;
 		++$this->purge_count;
+		return true;
 	}
 
 	/**
