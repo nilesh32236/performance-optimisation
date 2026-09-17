@@ -1703,6 +1703,59 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	describe( 'Per-Page Asset Manager (issue #1406)', () => {
+		it( 'renders the manager toggle off by default with no allowlist field', () => {
+			render( <FileOptimization options={ {} } serverRules={ {} } /> );
+			const toggle = screen.getByLabelText(
+				/Enable Per-Page Asset Manager/i
+			);
+			expect( toggle ).not.toBeChecked();
+			expect(
+				screen.queryByLabelText( /Extra Never-Strip Handles/i )
+			).not.toBeInTheDocument();
+		} );
+
+		it( 'reveals the allowlist field when enabled and persists rules via apiCall', async () => {
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				message: 'Settings updated successfully.',
+			} );
+			render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+			fireEvent.click(
+				screen.getByLabelText( /Enable Per-Page Asset Manager/i )
+			);
+			const allowlist = screen.getByLabelText(
+				/Extra Never-Strip Handles/i
+			);
+			fireEvent.change( allowlist, {
+				target: { value: 'keep-me' },
+			} );
+
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: /Save Settings/i } )
+				);
+			} );
+
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						assetManagerEnabled: true,
+						assetManagerAllowlistExtra: 'keep-me',
+					} ),
+				} )
+			);
+			await waitFor( () => {
+				expect(
+					screen.getByText( 'Settings updated successfully.' )
+				).toBeInTheDocument();
+			} );
+		} );
+	} );
+
 	describe( 'withCdnRowIds / stripCdnRowIds', () => {
 		it( 'assigns deterministic index ids and preserves existing ids', () => {
 			const rows = withCdnRowIds( [

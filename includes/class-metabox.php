@@ -549,12 +549,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				}
 			}
 
-			// Process and whitelist disabled scripts and styles.
+			// Process and whitelist disabled scripts and styles. Protected
+			// handles are stripped server-side as well (issue #1406): the
+			// metabox UI only disables the checkbox, so a crafted POST could
+			// otherwise persist jquery-core / admin-bar / cart fragments.
 			$raw_scripts = $this->get_raw_post_array( 'wppo_disabled_scripts' );
 			$raw_styles  = $this->get_raw_post_array( 'wppo_disabled_styles' );
 
-			update_post_meta( $post_id, '_wppo_disabled_scripts', $this->process_disabled_assets( $raw_scripts, $valid_scripts ) );
-			update_post_meta( $post_id, '_wppo_disabled_styles', $this->process_disabled_assets( $raw_styles, $valid_styles ) );
+			$protected_scripts = Asset_Manager::get_protected_scripts();
+			if ( method_exists( 'PerformanceOptimise\Inc\Asset_Manager', 'get_commerce_handles' ) ) {
+				$protected_scripts = array_merge( $protected_scripts, Asset_Manager::get_commerce_handles() );
+			}
+			update_post_meta( $post_id, '_wppo_disabled_scripts', $this->process_disabled_assets( $raw_scripts, $valid_scripts, $protected_scripts ) );
+			update_post_meta( $post_id, '_wppo_disabled_styles', $this->process_disabled_assets( $raw_styles, $valid_styles, Asset_Manager::get_protected_styles() ) );
 
 			// Process per-page delay strategies.
 			$raw_strategies     = $this->get_raw_post_array( 'wppo_delay_strategies' );
@@ -695,28 +702,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 *
 		 * @param array $raw_data      Raw input array from $_POST.
 		 * @param array $valid_handles Array of valid handles for the page.
+		 * @param array $blocked       Array of blocked handles that must never persist (issue #1406).
 		 * @return array Sanitized and whitelisted array of disabled handles.
 		 * @since 2.0.0
+		 * @since NEXT Added $blocked stripping for crafted-POST hardening.
 		 */
-		private function process_disabled_assets( array $raw_data, array $valid_handles ): array {
+		private function process_disabled_assets( array $raw_data, array $valid_handles, array $blocked = array() ): array {
 			if ( empty( $raw_data ) ) {
 				return array();
 			}
 			// Nested-array input (e.g. name[][x]=1) would fatal inside
 			// sanitize_text_field() on PHP 8 — keep scalars only.
-			$scalars   = array_filter(
+			$scalars     = array_filter(
 				$raw_data,
 				static function ( $v ) {
 					return is_string( $v ) || is_int( $v );
 				}
 			);
-			$submitted = array_map(
+			$submitted   = array_map(
 				static function ( $v ) {
 					return sanitize_text_field( (string) $v );
 				},
 				$scalars
 			);
-			return array_intersect( $submitted, $valid_handles );
+			$whitelisted = array_intersect( $submitted, $valid_handles );
+			if ( empty( $blocked ) ) {
+				return array_values( $whitelisted );
+			}
+			return array_values( array_diff( $whitelisted, $blocked ) );
 		}
 
 		/**

@@ -155,6 +155,8 @@ const FILE_OPT_TEXTAREA_KEYS = [
 	'unusedCSSSafelistExtra',
 	'ccssSafelistExtra',
 	'ccssExcludedPostTypes',
+	// Per-page Script & Style Manager extra never-strip handles (issue #1406).
+	'assetManagerAllowlistExtra',
 	// Array-backed multi-select rendered as a single value: normalizing
 	// through toTextLines() keeps backend arrays consistent with the form
 	// instead of resetting to the 'latin' fallback below.
@@ -242,6 +244,9 @@ const FILE_OPT_SYNC_KEYS = [
 	'blockAssetsOnDemand',
 	'loadAllCoreBlockAssets',
 	'heartbeatControl',
+	// Per-page Script & Style Manager kill-switch + extra allowlist (issue #1406).
+	'assetManagerEnabled',
+	'assetManagerAllowlistExtra',
 	'minifyInlineCSS',
 	'minifyInlineJS',
 	'removeHTMLComments',
@@ -640,6 +645,10 @@ const FileOptimization = ( {
 			blockAssetsOnDemand: false,
 			loadAllCoreBlockAssets: false,
 			heartbeatControl: 'default',
+			// Per-page Script & Style Manager (issue #1406): global kill-switch
+			// defaults OFF; extra never-strip handles normalize via toTextLines().
+			assetManagerEnabled: false,
+			assetManagerAllowlistExtra: options.assetManagerAllowlistExtra,
 			minifyInlineCSS: false,
 			minifyInlineJS: false,
 			removeHTMLComments: true,
@@ -2689,6 +2698,69 @@ const FileOptimization = ( {
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
+							</div>
+						</FeatureCard>
+
+						<FeatureCard
+							title={ __(
+								'Per-Page Asset Manager',
+								'performance-optimisation'
+							) }
+							icon={ <FontAwesomeIcon icon={ faCode } /> }
+						>
+							<div className="wppo-field-group">
+								<SwitchField
+									label={ __(
+										'Enable Per-Page Asset Manager',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Allow per-page script/style disables from the post editor Asset Manager metabox. Off by default; cart, checkout and account pages are never stripped.',
+										'performance-optimisation'
+									) }
+									name="assetManagerEnabled"
+									checked={ !! settings.assetManagerEnabled }
+									onChange={ onFieldChange }
+									disabled={ optimizerDisabled }
+								/>
+								{ !! settings.assetManagerEnabled && (
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="assetManagerAllowlistExtra"
+										>
+											{ __(
+												'Extra Never-Strip Handles',
+												'performance-optimisation'
+											) }
+										</label>
+										<textarea
+											className="wppo-textarea wppo-textarea--mono"
+											id="assetManagerAllowlistExtra"
+											name="assetManagerAllowlistExtra"
+											rows="3"
+											placeholder={ __(
+												'e.g. contact-form-7',
+												'performance-optimisation'
+											) }
+											value={
+												settings.assetManagerAllowlistExtra ||
+												''
+											}
+											onChange={ onFieldChange }
+											aria-describedby="assetManagerAllowlistExtra-desc"
+										/>
+										<p
+											id="assetManagerAllowlistExtra-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
+											{ __(
+												'One handle per line. jquery-core, admin bar and cart fragments are always protected, and handles with active dependents are never dequeued.',
+												'performance-optimisation'
+											) }
+										</p>
+									</div>
+								) }
 							</div>
 						</FeatureCard>
 					</div>

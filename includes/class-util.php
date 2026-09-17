@@ -403,6 +403,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'purgeFallbackEnabled'         => false,
 					'builderPurgeWatcher'          => true,
 					'builderPurgeDriftLog'         => true,
+					// Per-page Script & Style Manager (issue #1406): global
+					// kill-switch, default OFF (fail-open: per-post disabled
+					// handles are only dequeued when explicitly enabled).
+					//
+					// @since NEXT.
+					'assetManagerEnabled'          => false,
+					// Extra never-strip handles, one per line (merged with the
+					// protected + commerce-fragment allowlists).
+					//
+					// @since NEXT.
+					'assetManagerAllowlistExtra'   => '',
 				),
 				'preload_settings'      => array(
 					'enablePreloadCache'       => false,
@@ -5979,6 +5990,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
 					}
+					continue;
+				}
+
+				// Per-page Script & Style Manager kill-switch (issue #1406) —
+				// normalize malformed import shapes to bool so a string 'false'
+				// (which is truthy via !empty() at every read site) cannot
+				// silently enable dequeues. Unrecognized values fail safe to
+				// false (manager off, current behavior).
+				//
+				// @since NEXT.
+				if ( 'assetManagerEnabled' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
+					}
+					continue;
+				}
+
+				// Per-page Script & Style Manager extra allowlist (issue #1406)
+				// — one handle per line. Pinned before the generic branches so
+				// the `list` substring always maps to the textarea sanitizer
+				// even if the heuristic order changes.
+				//
+				// @since NEXT.
+				if ( 'assetManagerAllowlistExtra' === $safe_key && ! is_array( $value ) ) {
+					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}
 
