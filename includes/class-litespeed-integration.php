@@ -420,11 +420,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Whether WPPO owns the page cache (is the cache owner).
 		 *
-		 * True when effective_mode === wppo, or when on non-LiteSpeed hosts
-		 * (standalone treated as WPPO-owned for file cache purposes).
-		 *
-		 * On LiteSpeed, standalone is NOT considered WPPO-owned for UI clarity
-		 * (user explicitly said "ignore LS").
+		 * True when effective_mode === wppo. Standalone on LiteSpeed means
+		 * "ignore LS" and is NOT WPPO-owned, so no LS TTL/tags/vary
+		 * cookies are emitted when the user selected standalone. Standalone
+		 * on non-LiteSpeed hosts is WPPO-owned for file-cache purposes
+		 * (there is no LS layer to defer to), preserving the file-cache
+		 * bypass semantics in Cache::maybe_store_cache().
 		 *
 		 * @since 2.0.0
 		 * @return bool True if WPPO is the cache owner.
@@ -432,15 +433,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		public static function is_wppo_cache_owner(): bool {
 			$effective = self::effective_mode();
 
-			// Standalone on LiteSpeed means "ignore LS" → WPPO owns cache.
-			// Standalone on non-LiteSpeed → also WPPO owns cache.
-			// But the spec says standalone = ignore LS → WPPO cache.
-			// So both standalone and wppo are WPPO-owned.
-			if ( self::MODE_STANDALONE === $effective ) {
+			if ( self::MODE_WPPO === $effective ) {
 				return true;
 			}
 
-			return self::MODE_WPPO === $effective;
+			if ( self::MODE_STANDALONE === $effective ) {
+				return ! self::is_litespeed();
+			}
+
+			return false;
 		}
 
 		/**
@@ -651,6 +652,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private static bool $queue_shutdown_hooked = false;
 
 		/**
+		 * Per-request buffer of queued purge tags (not yet persisted).
+		 *
+		 * The queue appends here instead of doing get+set transient I/O
+		 * per call; flush_tag_queue() merges the buffer with the stored
+		 * queue in a single get/delete so ESI handle_nonce + tag emission
+		 * calling queue multiple times per request cost one transient
+		 * round-trip instead of N (write amplification under DB-backed
+		 * transients).
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private static array $tag_buffer = array();
+
+		/**
+		 * Scopes seen in the per-request tag buffer.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private static array $tag_buffer_scopes = array();
+
+		/**
 		 * Queue LiteSpeed purge tags (P3).
 		 *
 		 * Mirrors LSCWP Tag taxonomy (F,H,PGS,Po.{id},PT.{type},T.{id},A.{id},D.,B.{id},W.{id},ESI.,REST,HTTP.{code} + public/private/stale scope).
@@ -705,24 +729,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// inject CRLF into X-LiteSpeed-Purge/Tag headers.
 			$tags = array_values( array_filter( array_map( fn( $t ) => preg_replace( '/[^A-Za-z0-9_\.\-]/', '', (string) $t ), $tags ) ) );
 
-			$key      = Util::transient_key( self::TAG_QUEUE );
-			$existing = get_transient( $key );
-			if ( ! is_array( $existing ) ) {
-				$existing = array();
+			// Buffer per request; the single get/delete happens in
+			// flush_tag_queue() so N queue calls cost one transient
+			// round-trip instead of N get+set pairs.
+			self::$tag_buffer = array_values( array_unique( array_merge( self::$tag_buffer, $tags ) ) );
+			if ( count( self::$tag_buffer ) > self::TAG_QUEUE_MAX ) {
+				self::$tag_buffer = array_slice( self::$tag_buffer, -self::TAG_QUEUE_MAX );
 			}
-			// Merge, dedupe, cap.
-			$merged = array_values( array_unique( array_merge( $existing, $tags ) ) );
-			if ( count( $merged ) > self::TAG_QUEUE_MAX ) {
-				$merged = array_slice( $merged, -self::TAG_QUEUE_MAX );
+			if ( ! in_array( $scope, self::$tag_buffer_scopes, true ) ) {
+				self::$tag_buffer_scopes[] = $scope;
 			}
-			// Include scope as pseudo-tags for OLS raw header fallback.
-			if ( 'private' === $scope && ! in_array( 'private', $merged, true ) ) {
-				$merged[] = 'private';
-			}
-			if ( 'stale' === $scope && ! in_array( 'stale', $merged, true ) ) {
-				$merged[] = 'stale';
-			}
-			set_transient( $key, $merged, MINUTE_IN_SECONDS * 5 );
 			self::maybe_hook_shutdown();
 		}
 
@@ -763,6 +779,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				delete_transient( $key );
 			} else {
 				$tags = array();
+			}
+			// Merge the per-request buffer with the stored queue in this
+			// single flush (one get/delete above for N queue calls).
+			if ( ! empty( self::$tag_buffer ) ) {
+				$tags = array_values( array_unique( array_merge( $tags, self::$tag_buffer ) ) );
+				if ( in_array( 'private', self::$tag_buffer_scopes, true ) && ! in_array( 'private', $tags, true ) ) {
+					$tags[] = 'private';
+				}
+				if ( in_array( 'stale', self::$tag_buffer_scopes, true ) && ! in_array( 'stale', $tags, true ) ) {
+					$tags[] = 'stale';
+				}
+				if ( count( $tags ) > self::TAG_QUEUE_MAX ) {
+					$tags = array_slice( $tags, -self::TAG_QUEUE_MAX );
+				}
+				self::$tag_buffer        = array();
+				self::$tag_buffer_scopes = array();
 			}
 			if ( ! empty( $db_tags ) ) {
 				delete_option( $db_key );
@@ -1374,10 +1406,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 
 			// LS-304: honor preload_settings.excludePreloadCache when enabled.
+			// Static per-request memo of the processed exclude list so the
+			// parse (process_urls + cached_home_url) runs once per request
+			// instead of on every frontend request.
 			if ( $cacheable ) {
 				$options = Util::get_settings();
 				if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
-					$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
+					static $exclude_urls_memo = null;
+					if ( null === $exclude_urls_memo ) {
+						$exclude_urls_memo = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
+					}
+					$exclude_urls = $exclude_urls_memo;
 					$request_uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 					$home_path    = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
 					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
@@ -1629,7 +1668,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// is_string guard below: an array-valued cookie would otherwise
 			// reach wp_unslash()/sanitize_text_field() as an array and fatal
 			// on PHP 8.2+.
-			$value   = (string) apply_filters( 'wppo_litespeed_lscache_vary_value', $value, $payload );
+			$value = (string) apply_filters( 'wppo_litespeed_lscache_vary_value', $value, $payload );
+			// Re-validate after the filter: keep only hex up to 12 chars so
+			// a filter returning ;/whitespace/control bytes cannot
+			// split/poison the cookie value. Bail when empty.
+			$filtered_value = function_exists( 'preg_replace' ) ? preg_replace( '/[^a-f0-9]/', '', strtolower( $value ) ) : '';
+			$value          = is_string( $filtered_value ) ? substr( $filtered_value, 0, 12 ) : '';
+			if ( '' === $value ) {
+				return;
+			}
 			$current = isset( $_COOKIE['_lscache_vary'] ) && is_string( $_COOKIE['_lscache_vary'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['_lscache_vary'] ) ) : '';
 			if ( $current !== $value ) {
 				// Never emit setcookie() after headers went out (cron/early
@@ -1737,7 +1784,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Internal shim delegating to {@see Header_Emitter::strip_crlf()}
 		 * (issue #905) so pre-existing internal call sites keep working;
-		 * new code should call Header_Emitter directly.
+		 * new code should call Header_Emitter directly. Retained (not
+		 * removed) because HeaderEmitterTest covers this delegation as a
+		 * thin BC shim.
 		 *
 		 * @deprecated NEXT Use Header_Emitter::strip_crlf() directly.
 		 * @since 2.0.0
@@ -2597,6 +2646,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::$purge_tags_memo          = null;
 			self::$hooks_registered         = false;
 			self::$queue_shutdown_hooked    = false;
+			self::$tag_buffer               = array();
+			self::$tag_buffer_scopes        = array();
 
 			// Settings are now read through Util::get_settings()'s per-request
 			// memo (audit #874 finding 4); a reset must also drop that memo so

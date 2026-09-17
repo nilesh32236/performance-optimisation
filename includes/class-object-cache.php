@@ -170,6 +170,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		private static $nginx_probe_memo = array();
 
 		/**
+		 * Per-request memo of the circuit-breaker state.
+		 *
+		 * Reading circuit state costs get_option + 2x state-file reads
+		 * (filesystem init + get_contents) + filemtime + get_transient;
+		 * the memo keeps repeated callers (admin notice, get_status,
+		 * probe_recovery, REST, CLI) to one read per request. Reset by
+		 * reset_circuit_memo_for_tests() and invalidated in
+		 * auto_disable_circuit()/clear_circuit_state().
+		 *
+		 * @since NEXT
+		 * @var array|null Null when not yet read this request.
+		 */
+		private static $circuit_state_memo = null;
+
+		/**
+		 * Whether the circuit-state memo has been populated this request.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static $circuit_state_memo_set = false;
+
+		/**
 		 * Suffix of the staging sibling used for atomic Redis config writes.
 		 *
 		 * `write_config_atomic()` stages new config at
@@ -332,23 +355,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$status['last_failure']       = $this->get_last_failure_payload();
 			$status['bypassed']           = self::is_outage_bypassed() || $this->is_outage_flagged();
 
+			// Memoized via is_own_dropin(): the drop-in read (file_exists +
+			// filesystem init + up-to-1MB get_contents) runs once per
+			// request per instance instead of on every get_status() call.
 			if ( file_exists( $this->dropin_path ) ) {
-				$wp_filesystem = Util::init_filesystem();
-
-				if ( is_readable( $this->dropin_path ) && filesize( $this->dropin_path ) < 1048576 ) {
-					if ( $wp_filesystem ) {
-						$content = $wp_filesystem->get_contents( $this->dropin_path );
-					} else {
-						$content = file_get_contents( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-					}
-				}
-
-				if ( isset( $content ) && is_string( $content ) ) {
-					if ( self::is_own_dropin_content( $content ) ) {
-						$status['enabled'] = true;
-					} else {
-						$status['foreign_dropin'] = true;
-					}
+				if ( $this->is_own_dropin() ) {
+					$status['enabled'] = true;
+				} else {
+					$status['foreign_dropin'] = true;
 				}
 			}
 
@@ -432,6 +446,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Reset the per-request circuit-state memo (unit-test helper).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_circuit_memo_for_tests(): void {
+			self::$circuit_state_memo     = null;
+			self::$circuit_state_memo_set = false;
+		}
+
+		/**
 		 * Read the merged circuit-breaker state.
 		 *
 		 * Sources (first non-empty wins per field): the CIRCUIT_OPTION mirror
@@ -444,6 +469,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return array Shape { open: bool, tripped_at: int, reason: string, error_code: string, failures: int }.
 		 */
 		public function get_circuit_state(): array {
+			if ( self::$circuit_state_memo_set && is_array( self::$circuit_state_memo ) ) {
+				return self::$circuit_state_memo;
+			}
 			$state = array(
 				'open'       => false,
 				'tripped_at' => 0,
@@ -521,6 +549,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 			}
 
+			self::$circuit_state_memo     = $state;
+			self::$circuit_state_memo_set = true;
 			return $state;
 		}
 
@@ -608,6 +638,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				),
 				DAY_IN_SECONDS
 			);
+			self::$circuit_state_memo     = null;
+			self::$circuit_state_memo_set = false;
 
 			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
 				System_Info::flush_dropin_cache();
@@ -678,6 +710,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return void
 		 */
 		public function clear_circuit_state(): void {
+			self::$circuit_state_memo     = null;
+			self::$circuit_state_memo_set = false;
 			delete_option( self::CIRCUIT_OPTION );
 			delete_transient( Util::transient_key( self::FAIL_TRANSIENT ) );
 			delete_transient( Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ) );
@@ -734,16 +768,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool True when the drop-in is ours (or absent), false for foreign files.
 		 */
 		private function is_own_dropin(): bool {
+			if ( null !== $this->own_dropin_memo ) {
+				return $this->own_dropin_memo;
+			}
 			if ( ! file_exists( $this->dropin_path ) ) {
+				$this->own_dropin_memo = true;
 				return true;
 			}
 
 			if ( ! is_readable( $this->dropin_path ) ) {
+				$this->own_dropin_memo = false;
 				return false;
 			}
 
 			$size = filesize( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
 			if ( false === $size || $size >= 1048576 ) {
+				$this->own_dropin_memo = false;
 				return false;
 			}
 
@@ -755,10 +795,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			if ( ! is_string( $content ) ) {
+				$this->own_dropin_memo = false;
 				return false;
 			}
 
-			return self::is_own_dropin_content( $content );
+			$this->own_dropin_memo = self::is_own_dropin_content( $content );
+			return $this->own_dropin_memo;
 		}
 
 		/**
@@ -1245,6 +1287,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
 				}
+				// Fast path: the memoized settings already prove the flag is
+				// clear, so skip the extra uncached get_option() on every
+				// Redis success. Only when the memo says possibly-set do the
+				// fresh read below (which matches arm_outage_flag() so clear
+				// never resurrects a concurrently saved tab).
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+						$memo = Util::get_settings();
+						if ( is_array( $memo ) ) {
+							$memo_oc = isset( $memo['object_cache'] ) && is_array( $memo['object_cache'] ) ? $memo['object_cache'] : array();
+							if ( true !== filter_var( $memo_oc['outage_bypassed'] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE ) ) {
+								return;
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 				// allowlist(settings-read-guard): deliberate fresh read — matches
 				// arm_outage_flag() so clear never resurrects a concurrently
 				// saved tab. See tests/php/SettingsReadGuardTest.php.
@@ -1431,7 +1491,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'ABSPATH' ) ) {
 						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						error_log( 'Redis ping exception: ' . str_replace( (string) ABSPATH, '', $e->getMessage() ) );
+						error_log( 'Redis ping exception: ' . self::scrub_redis_message( $e->getMessage() ) );
 					}
 					$error = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
 					self::arm_in_request_bypass( $error );
@@ -2059,7 +2119,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			try {
-				Log::add( sprintf( 'Redis failure (%s): %s', $code, $message ) );
+				Log::add(
+					sprintf(
+						/* translators: %1$s: Redis failure code, %2$s: failure message. */
+						__( 'Redis failure (%1$s): %2$s', 'performance-optimisation' ),
+						$code,
+						$message
+					)
+				);
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -2422,6 +2489,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 					delete_transient( self::NGINX_PROBE_TRANSIENT );
 					delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
+					// Multisite fan-out: the probe verdict is keyed per site
+					// (md5 of the per-site content_url()), so clearing only
+					// the current site would leave siblings stale up to 2h
+					// after an installation-wide enable()/disable().
+					try {
+						if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_sites' ) && function_exists( 'switch_to_blog' ) && function_exists( 'restore_current_blog' ) ) {
+							$sites = get_sites(
+								array(
+									'number' => 500,
+									'fields' => 'ids',
+								)
+							);
+							if ( is_array( $sites ) ) {
+								foreach ( $sites as $site_id ) {
+									$site_id = (int) $site_id;
+									if ( $site_id <= 0 ) {
+										continue;
+									}
+									switch_to_blog( $site_id );
+									try {
+										if ( function_exists( 'content_url' ) ) {
+											$site_url = content_url( self::CONFIG_FILENAME );
+											delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $site_url ) );
+										}
+										delete_transient( self::NGINX_PROBE_TRANSIENT );
+										if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+											delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
+										}
+									} catch ( \Throwable $e ) {
+										unset( $e );
+									} finally {
+										restore_current_blog();
+									}
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

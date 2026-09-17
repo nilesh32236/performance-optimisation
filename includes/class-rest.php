@@ -813,19 +813,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'type'       => 'object',
 				'properties' => array(
 					'success' => array(
-						'description' => esc_html__( 'Whether the request was successful.', 'performance-optimisation' ),
+						'description' => __( 'Whether the request was successful.', 'performance-optimisation' ),
 						'type'        => 'boolean',
 						'context'     => array( 'view', 'edit' ),
 						'readonly'    => true,
 					),
 					'data'    => array(
-						'description' => esc_html__( 'Response data payload.', 'performance-optimisation' ),
+						'description' => __( 'Response data payload.', 'performance-optimisation' ),
 						'type'        => array( 'object', 'array', 'string', 'boolean', 'null' ),
 						'context'     => array( 'view', 'edit' ),
 						'readonly'    => true,
 					),
 					'message' => array(
-						'description' => esc_html__( 'Response message.', 'performance-optimisation' ),
+						'description' => __( 'Response message.', 'performance-optimisation' ),
 						'type'        => array( 'string', 'null' ),
 						'context'     => array( 'view', 'edit' ),
 						'readonly'    => true,
@@ -2386,20 +2386,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return string[] An indexed array of sanitized, non-empty node strings.
 		 */
 		private function sanitize_nodes( $nodes ) {
+			$sanitize_node = static function ( $node ) {
+				if ( ! is_string( $node ) && ! is_numeric( $node ) ) {
+					return '';
+				}
+				$candidate = strtolower( trim( sanitize_text_field( (string) $node ) ) );
+				if ( '' === $candidate ) {
+					return '';
+				}
+				// Strip URL schemes and userinfo so entries like
+				// http://169.254.169.254:6379 or user:pass@host cannot pass
+				// to ping()/enable() connection attempts (SSRF/port-scan
+				// inconsistency vs the host/master_name allowlist).
+				if ( false !== strpos( $candidate, '://' ) ) {
+					$parts     = explode( '://', $candidate, 2 );
+					$candidate = $parts[1] ?? '';
+				}
+				if ( false !== strpos( $candidate, '@' ) ) {
+					$parts     = explode( '@', $candidate );
+					$candidate = end( $parts );
+				}
+				$candidate = trim( $candidate, '/' );
+				// Same host allowlist as host/master_name: hostname/IP/socket
+				// path with optional :port — no schemes or userinfo.
+				if ( 1 === preg_match( '/^(?:[a-z0-9](?:[a-z0-9\-\.]{0,251}[a-z0-9])?|\/[\w\/\.\-]+)(?::([0-9]{1,5}))?$/', $candidate, $m ) ) {
+					if ( isset( $m[1] ) && '' !== $m[1] ) {
+						$port = (int) $m[1];
+						if ( $port < 1 || $port > 65535 ) {
+							return '';
+						}
+					}
+					return substr( $candidate, 0, 255 );
+				}
+				return '';
+			};
 			if ( is_array( $nodes ) ) {
-				return array_values(
-					array_filter(
-						array_map(
-							static function ( $node ) {
-								return ( is_string( $node ) || is_numeric( $node ) ) ? sanitize_text_field( (string) $node ) : '';
-							},
-							$nodes
-						)
-					)
-				);
+				return array_values( array_filter( array_map( $sanitize_node, $nodes ) ) );
 			}
-			$nodes = sanitize_text_field( (string) $nodes );
-			return $nodes ? array( $nodes ) : array();
+			$single = $sanitize_node( $nodes );
+			return '' !== $single ? array( $single ) : array();
 		}
 
 		/**

@@ -132,6 +132,7 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 				return 'testnonce_' . $action;
 			}
 		);
+		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
 		Functions\when( 'wp_salt' )->justReturn( 'salt123' );
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'esc_attr' )->returnArg();
@@ -152,6 +153,7 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 				return 'testnonce_' . $action;
 			}
 		);
+		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
 		Functions\when( 'wp_salt' )->justReturn( 'salt123' );
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'esc_attr' )->returnArg();
@@ -321,7 +323,7 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		unset( $_GET['block'] );
 	}
 
-	public function test_ajax_handler_invalid_nonce_fails_authorization() {
+	public function test_ajax_handler_invalid_nonce_fails_authorization(): void {
 		global $headers;
 		$headers = array();
 		Functions\when( 'headers_sent' )->justReturn( false );

@@ -301,6 +301,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_htaccess_failure_notice(): void {
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return;
 			}
@@ -377,6 +380,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
 			$dismissed  = (int) get_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, 0 );
 			if ( $tripped_at > 0 && $dismissed === $tripped_at ) {
+				return;
+			}
+			// A parked-sibling-only trip can synthesize tripped_at 0
+			// (filemtime unavailable): without this the notice would be
+			// undismissable, reappearing every pageload after dismiss.
+			if ( 0 === $tripped_at && $dismissed > 0 ) {
 				return;
 			}
 
@@ -465,10 +474,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			echo '<div class="notice notice-warning" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation — Redis config exposed', 'performance-optimisation' ) . '</strong> — ';
 			echo esc_html__( 'Your server runs Nginx, which ignores .htaccess deny rules, and wp-content/wppo-redis-config.php appears directly fetchable. It holds no password but discloses Redis topology (hosts, ports, TLS mode).', 'performance-optimisation' ) . ' ';
-			printf(
-				/* translators: %s: Nginx deny rule snippet (a <code> element) */
-				wp_kses( __( 'Add %s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ), array( 'code' => array() ) ),
-				'<code>location = /wp-content/wppo-redis-config.php { deny all; }</code>'
+			echo wp_kses(
+				sprintf(
+					/* translators: %s: Nginx deny rule snippet (a <code> element) */
+					__( 'Add %s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ),
+					'<code>location = /wp-content/wppo-redis-config.php { deny all; }</code>'
+				),
+				array( 'code' => array() )
 			);
 			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
@@ -628,6 +640,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_builder_purge_notice(): void {
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				return;
 			}
