@@ -153,7 +153,7 @@ const ConfirmDialog = ( {
 	}
 
 	return (
-		// eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- overlay click is progressive enhancement; Esc + buttons are the keyboard paths (audit #1354).
+		/* eslint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions -- overlay click is progressive enhancement; Esc + buttons are the keyboard paths (audit #1354). */
 		<div className="wppo-dialog-overlay" onClick={ onCancel }>
 			<div
 				className="wppo-dialog"
@@ -197,6 +197,7 @@ const ConfirmDialog = ( {
 			</div>
 		</div>
 	);
+	/* eslint-enable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions */
 };
 
 export default ConfirmDialog;
