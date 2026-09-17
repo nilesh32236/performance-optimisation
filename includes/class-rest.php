@@ -1216,6 +1216,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['field_lcp_min_samples'] = min( 1000, max( 1, absint( $options['ai_adaptive']['field_lcp_min_samples'] ) ) );
 			}
 
+			// Preserve the RUM-segmented speculation auto-tune keys when the
+			// request omits them (issue #1425): same partial-save hazard as
+			// the field-LCP threshold above — an older client/partial save
+			// must not wipe the opt-in flag or the tuning thresholds.
+			// Normalized like Util::sanitize_settings_recursively() so stored
+			// extremes self-heal instead of persisting verbatim.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_autotune_enabled'] ) && isset( $options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
+				$stored = $options['ai_adaptive']['speculation_autotune_enabled'];
+				if ( is_bool( $stored ) ) {
+					$sanitized_settings['speculation_autotune_enabled'] = $stored;
+				} else {
+					$bool = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized_settings['speculation_autotune_enabled'] = null === $bool ? false : $bool;
+				}
+			}
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_min_samples'] ) && isset( $options['ai_adaptive']['speculation_min_samples'] ) ) {
+				$sanitized_settings['speculation_min_samples'] = min( 1000, max( 1, absint( $options['ai_adaptive']['speculation_min_samples'] ) ) );
+			}
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_max_urls'] ) && isset( $options['ai_adaptive']['speculation_max_urls'] ) ) {
+				$stored_limit                               = is_numeric( $options['ai_adaptive']['speculation_max_urls'] ) ? (int) $options['ai_adaptive']['speculation_max_urls'] : 5;
+				$sanitized_settings['speculation_max_urls'] = min( 5, max( 1, $stored_limit ) );
+			}
+
 			// Preserve the RUM-priority ordering flags when the request omits
 			// them (issue #1059): FileOptimization UI saves post the full tab,
 			// but an older client/partial save must not wipe an opt-out set via

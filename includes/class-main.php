@@ -728,6 +728,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['ai_adaptive']['anomaly_min_samples'] ) ) {
 				$this->options['ai_adaptive']['anomaly_min_samples'] = 10;
 			}
+			// Existing installs whose stored settings predate the RUM-segmented
+			// speculation auto-tune keys (issue #1425) inherit the opt-in-off
+			// defaults in-memory here (no database write on front-end requests);
+			// the persisted values are backfilled once by
+			// maybe_migrate_ai_speculation_autotune() on admin_init. Defaults
+			// keep current behaviour verbatim (auto-tune off, legacy
+			// conservative emission) until explicitly opted in.
+			if ( ! isset( $this->options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
+				$this->options['ai_adaptive']['speculation_autotune_enabled'] = false;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['speculation_min_samples'] ) ) {
+				$this->options['ai_adaptive']['speculation_min_samples'] = 20;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['speculation_max_urls'] ) ) {
+				$this->options['ai_adaptive']['speculation_max_urls'] = 5;
+			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
 				$this->options['edge_cache'] = array();
@@ -1082,6 +1098,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_object_cache_outage_flag' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_ai_speculation_autotune' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_comment_image_hardening' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_builder_watcher' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_third_party_auto' ) );
@@ -2742,6 +2759,89 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * One-time backfill for RUM-segmented speculation auto-tune (issue #1425).
+		 *
+		 * Adds the additive `ai_adaptive.speculation_autotune_enabled`,
+		 * `ai_adaptive.speculation_min_samples`, and
+		 * `ai_adaptive.speculation_max_urls` keys to stored settings that
+		 * predate them. Runs on `admin_init` (not the constructor) so a
+		 * cacheable front-end request never triggers a settings write. Only
+		 * installs missing a key are backfilled (opt-in off, min 20, max 5);
+		 * any stored explicit value is preserved verbatim, and fresh installs
+		 * with no stored option are skipped because the constructor defaults
+		 * already match. Idempotent (key presence is the marker). Uses
+		 * per-site `get_option()` so multisite sites migrate independently
+		 * with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_ai_speculation_autotune(): void {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return;
+				}
+				// Cheap early-return through the already-loaded memo: after
+				// migration completes this avoids one extra option read per
+				// admin page.
+				if ( isset( $this->options['ai_adaptive'] ) && is_array( $this->options['ai_adaptive'] )
+					&& array_key_exists( 'speculation_autotune_enabled', $this->options['ai_adaptive'] )
+					&& array_key_exists( 'speculation_min_samples', $this->options['ai_adaptive'] )
+					&& array_key_exists( 'speculation_max_urls', $this->options['ai_adaptive'] ) ) {
+					return;
+				}
+				// allowlist(settings-read-guard): deliberate direct read — must distinguish
+				// "no stored row" (false) from "stored array", which Util::get_settings()
+				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				$stored = get_option( 'wppo_settings' );
+				if ( ! is_array( $stored ) ) {
+					return;
+				}
+
+				$ai = isset( $stored['ai_adaptive'] ) && is_array( $stored['ai_adaptive'] ) ? $stored['ai_adaptive'] : array();
+
+				$changed = false;
+				if ( ! array_key_exists( 'speculation_autotune_enabled', $ai ) ) {
+					$ai['speculation_autotune_enabled'] = false;
+					$changed                            = true;
+				}
+				if ( ! array_key_exists( 'speculation_min_samples', $ai ) ) {
+					$ai['speculation_min_samples'] = 20;
+					$changed                       = true;
+				}
+				if ( ! array_key_exists( 'speculation_max_urls', $ai ) ) {
+					$ai['speculation_max_urls'] = 5;
+					$changed                    = true;
+				}
+				if ( ! $changed ) {
+					return;
+				}
+
+				$stored['ai_adaptive'] = $ai;
+				Util::save_settings( $stored );
+
+				if ( ! isset( $this->options['ai_adaptive'] ) || ! is_array( $this->options['ai_adaptive'] ) ) {
+					$this->options['ai_adaptive'] = array();
+				}
+				foreach ( array(
+					'speculation_autotune_enabled' => false,
+					'speculation_min_samples'      => 20,
+					'speculation_max_urls'         => 5,
+				) as $key => $default ) {
+					if ( ! array_key_exists( $key, $this->options['ai_adaptive'] ) ) {
+						$this->options['ai_adaptive'][ $key ] = $default;
+					}
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+					Util::set_settings_cache( $stored );
+				}
+				Log::add( __( 'Added default RUM-segmented speculation auto-tune settings (off; manual speculation settings untouched).', 'performance-optimisation' ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

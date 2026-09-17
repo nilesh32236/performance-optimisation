@@ -1060,7 +1060,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 */
 		private static function heuristic_learn( ?array $rum = null, ?array $trends = null ): array {
 			if ( null === $rum ) {
-				$rum = get_option( RUM::OPTION, array() );
+				// RUM-segmented auto-tune (issue #1425): prefer the read-only
+				// per-request memoized aggregate (no queue flush, no transient
+				// writes, per-site option so multisite-safe). Every call is
+				// guarded so minimal installs without the RUM class, without
+				// the read-only accessor, or without get_option() fall back to
+				// the legacy direct read, then to an empty aggregate.
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_aggregate_readonly' ) ) {
+					try {
+						$rum = RUM::get_aggregate_readonly();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$rum = array();
+					}
+				} elseif ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && function_exists( 'get_option' ) ) {
+					try {
+						$rum = get_option( RUM::OPTION, array() );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$rum = array();
+					}
+				} else {
+					$rum = array();
+				}
 			}
 			if ( null === $trends ) {
 				$trends = get_option( Pagespeed::TREND_OPTION, array() );
@@ -1135,6 +1157,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					}
 				)
 			);
+
+			// RUM-segmented auto-tune floor (issue #1425): when the opt-in
+			// auto-tune is on and the aggregate is undersampled (peak
+			// per-path sample count below speculation_min_samples), emit
+			// zero list URLs so the filter renders core defaults only. The
+			// legacy path (auto-tune off) keeps its top-2 behaviour
+			// verbatim. Never touches stored manual settings.
+			if ( ! empty( $prefetch_urls ) ) {
+				try {
+					if ( self::is_speculation_autotune_enabled() ) {
+						$peak = 0;
+						foreach ( $rum as $paths ) {
+							if ( ! is_array( $paths ) ) {
+								continue;
+							}
+							foreach ( $paths as $metrics ) {
+								if ( ! is_array( $metrics ) ) {
+									continue;
+								}
+								foreach ( array( 'lcp', 'ttfb' ) as $metric_key ) {
+									if ( isset( $metrics[ $metric_key ]['n'] ) ) {
+										$peak = max( $peak, (int) $metrics[ $metric_key ]['n'] );
+									}
+								}
+							}
+						}
+						if ( $peak < self::speculation_min_samples() ) {
+							$prefetch_urls = array();
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
 			// Most-frequently disabled handles = least-used (candidates to exclude).
 			$exclude_js  = self::get_disabled_assets( '_wppo_disabled_scripts' );
@@ -2470,6 +2526,148 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Whether RUM-segmented speculation auto-tune is enabled (issue #1425).
+		 *
+		 * Opt-in sub-gate under `ai_adaptive.enabled`: the additive
+		 * `ai_adaptive.speculation_autotune_enabled` setting (default false,
+		 * backfilled by Main::maybe_migrate_ai_speculation_autotune()) must be
+		 * explicitly on. Filterable via `wppo_ai_speculation_autotune_enabled`.
+		 * When off, filter_speculation_rules() and heuristic_learn() keep
+		 * their legacy behaviour verbatim. Fail-safe: any failure returns
+		 * false (legacy path).
+		 *
+		 * @return bool True when the RUM-segmented per-URL auto-tune applies.
+		 * @since NEXT
+		 */
+		public static function is_speculation_autotune_enabled(): bool {
+			try {
+				$settings = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
+				$enabled  = ! empty( $settings['ai_adaptive']['speculation_autotune_enabled'] );
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters whether RUM-segmented speculation auto-tune applies.
+					 *
+					 * @since NEXT
+					 * @param bool $enabled Whether the speculation auto-tune is on.
+					 */
+					return (bool) apply_filters( 'wppo_ai_speculation_autotune_enabled', $enabled );
+				}
+				return (bool) $enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Minimum RUM samples for the speculation auto-tune (issue #1425).
+		 *
+		 * Prefers the additive `ai_adaptive.speculation_min_samples` setting
+		 * (clamped 1-1000, default 20, mirroring `field_lcp_min_samples`);
+		 * falls back to field_lcp_min_samples() so legacy installs without
+		 * the key keep the shared gate. Fail-open to 20.
+		 *
+		 * @return int Minimum samples (>=1).
+		 * @since NEXT
+		 */
+		public static function speculation_min_samples(): int {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['speculation_min_samples'] ) && is_numeric( $settings['ai_adaptive']['speculation_min_samples'] ) ) {
+						$min = (int) $settings['ai_adaptive']['speculation_min_samples'];
+						if ( $min >= 1 && $min <= 1000 ) {
+							return $min;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				$fallback = self::field_lcp_min_samples();
+				if ( $fallback >= 1 ) {
+					return $fallback;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 20;
+		}
+
+		/**
+		 * Maximum per-URL list-rule URLs for the speculation auto-tune (issue #1425).
+		 *
+		 * Reads the additive `ai_adaptive.speculation_max_urls` setting,
+		 * hard-clamped to 1-5 so the speculation JSON delta stays under ~1KB
+		 * (5 URLs x ~150 bytes). Fail-open to 5.
+		 *
+		 * @return int Maximum URLs (1-5).
+		 * @since NEXT
+		 */
+		public static function speculation_max_urls(): int {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['speculation_max_urls'] ) && is_numeric( $settings['ai_adaptive']['speculation_max_urls'] ) ) {
+						$max = (int) $settings['ai_adaptive']['speculation_max_urls'];
+						if ( $max >= 1 && $max <= 5 ) {
+							return $max;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 5;
+		}
+
+		/**
+		 * Trim a candidate list-rule URL set so its JSON delta stays under budget.
+		 *
+		 * The per-URL cap (speculation_max_urls, 1-5) bounds the common case,
+		 * but very long pretty-permalink URLs could still push the delta past
+		 * 1KB; drop trailing (lowest-ranked) URLs until the encoded `urls`
+		 * array fits or a single URL remains. Fail-open: unencodable input
+		 * returns the input unchanged (callers still slice to the max).
+		 *
+		 * @param string[] $urls Candidate absolute URLs (rank-ordered).
+		 * @param int      $budget_bytes Maximum encoded size in bytes.
+		 * @return string[]
+		 * @since NEXT
+		 */
+		public static function trim_speculation_urls_to_budget( array $urls, int $budget_bytes = 1024 ): array {
+			try {
+				$urls = array_values( array_filter( $urls, 'is_string' ) );
+				if ( count( $urls ) <= 1 || $budget_bytes < 1 ) {
+					return $urls;
+				}
+				$encode = null;
+				if ( function_exists( 'wp_json_encode' ) ) {
+					$encode = 'wp_json_encode';
+				} elseif ( function_exists( 'json_encode' ) ) {
+					$encode = 'json_encode';
+				}
+				if ( null === $encode ) {
+					return $urls;
+				}
+				$remaining = count( $urls );
+				while ( $remaining > 1 ) {
+					$encoded = call_user_func( $encode, $urls );
+					if ( ! is_string( $encoded ) || strlen( $encoded ) <= $budget_bytes ) {
+						break;
+					}
+					array_pop( $urls );
+					$remaining = count( $urls );
+				}
+				return $urls;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array_values( array_filter( $urls, 'is_string' ) );
+			}
+		}
+
+		/**
 		 * RUM-gated speculation eagerness state (read-only, fail-open).
 		 *
 		 * Good real-user p75 (LCP at/below `wppo_ai_speculation_lcp_threshold`,
@@ -2880,6 +3078,127 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Build the RUM-segmented auto-tuned list rule (issue #1425).
+		 *
+		 * Strict opt-in path used only when `is_speculation_autotune_enabled()`
+		 * and RUM gating are both on (checked by the caller). Returns the
+		 * rules with one appended bounded per-URL list rule for qualified
+		 * segments, or the input rules unchanged when the segment is
+		 * undersampled (samples below `speculation_min_samples()`) or
+		 * unqualified (poor p75) — i.e. zero AI list rules, core conservative
+		 * document prefetch stands. Returns null only on unexpected failure
+		 * so the caller can fail open to the input rules.
+		 *
+		 * Guarantees: same-origin absolute URLs only (same-site guard),
+		 * cart/checkout/account URLs never listed (commerce-prefix guard,
+		 * applied unconditionally — not just in commerce contexts),
+		 * eagerness coerced to conservative/moderate and additionally capped
+		 * at moderate (a rogue `eager` from the `wppo_ai_speculation_eagerness`
+		 * filter can never reach the markup on this path), URL count capped
+		 * at `speculation_max_urls()` (1-5) with the encoded delta trimmed to
+		 * ~1KB, deduped against existing list-source rules (Main's high-value
+		 * list runs at priority 10, AI at 20), and manual `preload_settings`
+		 * never written. Multisite-safe: per-site RUM aggregate, no transient
+		 * writes, no cross-site URLs.
+		 *
+		 * @param array $rules Incoming speculation rules (core default).
+		 * @return array|null Rules with the auto-tuned list rule appended, the input unchanged, or null on failure.
+		 * @since NEXT
+		 */
+		private static function get_autotuned_speculation_rule( $rules ) {
+			try {
+				if ( ! is_array( $rules ) ) {
+					return null;
+				}
+				$min   = self::speculation_min_samples();
+				$max   = self::speculation_max_urls();
+				$state = self::get_rum_gated_speculation_state( true );
+				if ( ! is_array( $state ) || empty( $state['qualified'] ) ) {
+					return $rules;
+				}
+				if ( ! isset( $state['samples'] ) || (int) $state['samples'] < $min ) {
+					return $rules;
+				}
+				$model      = self::get_model();
+				$model_urls = self::get_prefetch_urls_from_model( is_array( $model ) ? $model : array() );
+				$rum_urls   = self::get_rum_top_speculation_urls( $max );
+				$urls       = array();
+				foreach ( array_merge( $model_urls, $rum_urls ) as $candidate ) {
+					if ( ! is_string( $candidate ) || '' === $candidate ) {
+						continue;
+					}
+					if ( in_array( $candidate, $urls, true ) ) {
+						continue;
+					}
+					$urls[] = $candidate;
+					if ( count( $urls ) >= $max ) {
+						break;
+					}
+				}
+				if ( empty( $urls ) ) {
+					return $rules;
+				}
+				// Unconditional commerce-prefix guard: explicit list rules
+				// bypass href exclude-path filtering, so a RUM/LLM-nominated
+				// /cart/, /checkout/, /my-account/ (or /account/) URL must
+				// never be listed on this path, in any context.
+				try {
+					$excludes = self::get_commerce_exclude_paths();
+					$urls     = array_values(
+						array_filter(
+							$urls,
+							static function ( $url ) use ( $excludes ) {
+								return ! self::is_speculation_commerce_url( $url, $excludes );
+							}
+						)
+					);
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( empty( $urls ) ) {
+					return $rules;
+				}
+				$urls = self::filter_same_site_urls( $urls );
+				$urls = self::dedupe_against_existing_lists( $urls, $rules );
+				if ( empty( $urls ) ) {
+					return $rules;
+				}
+				$urls = array_values( array_slice( $urls, 0, $max ) );
+				$urls = self::trim_speculation_urls_to_budget( $urls, 1024 );
+				if ( empty( $urls ) ) {
+					return $rules;
+				}
+				// Moderate cap: normalize (allowlist rogue values to
+				// conservative, commerce-cap) then downgrade any remaining
+				// `eager` — on this path real-visit data picks exactly which
+				// URLs to prefetch, and prefetch stays capped safe.
+				$eagerness = self::normalize_eagerness( isset( $state['eagerness'] ) ? $state['eagerness'] : 'moderate' );
+				if ( 'eager' === $eagerness ) {
+					$eagerness = 'moderate';
+				}
+				$rules[] = array(
+					'source'    => 'list',
+					'urls'      => $urls,
+					'eagerness' => $eagerness,
+				);
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters AI-injected speculation rules.
+					 *
+					 * @since 2.0.0
+					 * @param array $rules Updated rules.
+					 * @param array $urls AI prefetch URLs.
+					 */
+					return apply_filters( 'wppo_ai_adaptive_speculation_rules', $rules, $urls );
+				}
+				return $rules;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
 		 * Inject AI-learned prefetch URLs into speculation rules.
 		 *
 		 * Hooks into wp_speculation_rules filter (WP 6.8+). Only injects when
@@ -2908,6 +3227,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// Hard suppression: commerce pages, wp-admin, no permalinks.
 			if ( self::is_speculation_hard_suppressed() ) {
 				return $rules;
+			}
+			// RUM-segmented auto-tune (issue #1425, opt-in via
+			// ai_adaptive.speculation_autotune_enabled): qualified RUM
+			// segments emit bounded per-URL `{"source":"list"}` rules picked
+			// from real-visit data (never blanket document prefetch);
+			// undersampled or unqualified segments emit zero list rules so
+			// the core conservative document prefetch stands. Commerce/auth
+			// URLs are never listed, eagerness never exceeds moderate, the
+			// JSON delta is trimmed to ~1KB, and manual
+			// `preload_settings` are only read, never written. Fail-open:
+			// any failure emits nothing (core default rules stand).
+			try {
+				if ( self::is_speculation_autotune_enabled() && self::is_speculation_rum_gating_enabled() ) {
+					$autotune_rules = self::get_autotuned_speculation_rule( $rules );
+					if ( null !== $autotune_rules ) {
+						return $autotune_rules;
+					}
+					return $rules;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 			// Single model read: reused for both prefetch URLs and eagerness.
 			$model      = self::get_model();
