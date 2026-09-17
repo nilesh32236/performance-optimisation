@@ -2179,6 +2179,111 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * @since NEXT
 	 * @return void
 	 */
+	/**
+	 * Test that tampered model attribution values are re-validated at render.
+	 *
+	 * A legacy pre-guard selector or a tampered model option carrying
+	 * markup selectors / cross-origin URLs / non-allowlisted types must
+	 * be skipped instead of rendered verbatim into suggestion copy.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_get_suggestions_skips_tampered_attribution_values(): void {
+		$this->install_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ]    = array(
+			'version'        => 1,
+			'prefetch_urls'  => array(),
+			'exclude_js'     => array(),
+			'exclude_css'    => array(),
+			'eagerness'      => 'conservative',
+			'attributed_lcp' => array(
+				'path'     => '/x',
+				'selector' => '<script>alert(1)</script>',
+				'n'        => 50,
+				'lastSeen' => time(),
+			),
+			'slow_resources' => array(
+				array(
+					'url'         => 'https://evil.com/x.js',
+					'type'        => 'script',
+					'n'           => 50,
+					'avgDuration' => 1000.0,
+					'maxDuration' => 1200.0,
+					'lastSeen'    => time(),
+				),
+				array(
+					'url'         => 'https://example.com/ok.js',
+					'type'        => 'navigation',
+					'n'           => 50,
+					'avgDuration' => 1000.0,
+					'maxDuration' => 1200.0,
+					'lastSeen'    => time(),
+				),
+			),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_lcp_preload' ) );
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' ) );
+	}
+
+	/**
+	 * Test that a stale first slow entry yields to a fresh sibling.
+	 *
+	 * Freshness is checked per entry: when `slow_resources[0]` goes stale
+	 * while a later entry is still fresh, the fresh entry must surface
+	 * instead of emitting nothing.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_get_suggestions_uses_first_fresh_slow_resource(): void {
+		$this->install_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ]    = array(
+			'version'        => 1,
+			'prefetch_urls'  => array(),
+			'exclude_js'     => array(),
+			'exclude_css'    => array(),
+			'eagerness'      => 'conservative',
+			'slow_resources' => array(
+				array(
+					'url'         => 'https://example.com/old.js',
+					'type'        => 'script',
+					'n'           => 50,
+					'avgDuration' => 1000.0,
+					'maxDuration' => 1200.0,
+					'lastSeen'    => time() - ( 2 * DAY_IN_SECONDS ),
+				),
+				array(
+					'url'         => 'https://example.com/new.js',
+					'type'        => 'script',
+					'n'           => 5,
+					'avgDuration' => 900.0,
+					'maxDuration' => 1100.0,
+					'lastSeen'    => time(),
+				),
+			),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$slow        = $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' );
+		$this->assertNotNull( $slow );
+		$this->assertStringContainsString( 'https://example.com/new.js', $slow['value'] );
+	}
+
 	public function test_get_suggestions_omits_attribution_without_model_keys(): void {
 		$this->install_stubs();
 		$this->seed_eager_rum();

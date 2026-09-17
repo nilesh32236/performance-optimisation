@@ -355,6 +355,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private static array $field_lcp_result_memo = array();
 
 		/**
+		 * Per-request memo for top-LCP-selector lookups, keyed by
+		 * normalized path + sample gate.
+		 *
+		 * heuristic_learn() otherwise re-scans the whole memoized
+		 * aggregate once per selector/slow query on top of the segment
+		 * scans; this collapses repeats to one scan per key per request.
+		 *
+		 * @since NEXT
+		 * @var array<string, array|null>
+		 */
+		private static array $top_selector_memo = array();
+
+		/**
+		 * Per-request memo for top-slow-resource lookups, keyed by limit.
+		 *
+		 * @since NEXT
+		 * @var array<string, array>
+		 */
+		private static array $top_slow_memo = array();
+
+		/**
 		 * Per-request memo for the Web Vitals trends option.
 		 *
 		 * Queue ordering calls score_url_lcp() once per candidate URL when
@@ -420,6 +441,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			self::$field_lcp_aggregate   = null;
 			self::$field_lcp_loaded      = false;
 			self::$field_lcp_result_memo = array();
+			self::$top_selector_memo     = array();
+			self::$top_slow_memo         = array();
 			self::$score_trends_memo     = null;
 			self::$score_trends_loaded   = false;
 			self::$top_url_generation    = -1;
@@ -551,39 +574,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				);
 			}
 
-			$token = isset( $params['token'] ) ? sanitize_text_field( (string) $params['token'] ) : '';
-			$path  = isset( $params['path'] ) ? sanitize_text_field( (string) $params['path'] ) : '/';
-			if ( ! self::is_valid_token( $token, $path ) ) {
-				return array(
-					'ok'      => false,
-					'status'  => 401,
-					'message' => __( 'Invalid beacon token.', 'performance-optimisation' ),
-				);
-			}
-
-			// Security (issue #1181): rate limiting trusts REMOTE_ADDR only.
-			// X-Forwarded-For / X-Real-IP are attacker-controlled and must
-			// never bypass limits.
-			$raw_ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-			$ip     = self::normalize_ip( $raw_ip );
-			// Fail closed: an empty/unparseable IP falls back to the site-wide
-			// bucket instead of skipping the throttle (proxies stripping
-			// REMOTE_ADDR must not silently disable rate limiting).
-			if ( '' === $ip ) {
-				if ( self::is_globally_rate_limited() ) {
-					return array(
-						'ok'      => false,
-						'status'  => 429,
-						'message' => __( 'Too many beacons.', 'performance-optimisation' ),
-					);
-				}
-			} elseif ( self::is_rate_limited( $ip ) || self::is_globally_rate_limited() ) {
+			// Security: rate limiting runs BEFORE token validation so
+		// invalid-token beacons still consume throttle budget — otherwise
+		// an attacker could send unlimited 401s for token brute-force /
+		// CPU burn without ever hitting a 429.
+		// Rate limiting trusts REMOTE_ADDR only (issue #1181):
+		// X-Forwarded-For / X-Real-IP are attacker-controlled and must
+		// never bypass limits.
+		$raw_ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$ip     = self::normalize_ip( $raw_ip );
+		// Fail closed: an empty/unparseable IP falls back to the site-wide
+		// bucket instead of skipping the throttle (proxies stripping
+		// REMOTE_ADDR must not silently disable rate limiting).
+		if ( '' === $ip ) {
+			if ( self::is_globally_rate_limited() ) {
 				return array(
 					'ok'      => false,
 					'status'  => 429,
 					'message' => __( 'Too many beacons.', 'performance-optimisation' ),
 				);
 			}
+		} elseif ( self::is_rate_limited( $ip ) || self::is_globally_rate_limited() ) {
+			return array(
+				'ok'      => false,
+				'status'  => 429,
+				'message' => __( 'Too many beacons.', 'performance-optimisation' ),
+			);
+		}
+
+		$token = isset( $params['token'] ) ? sanitize_text_field( (string) $params['token'] ) : '';
+		$path  = isset( $params['path'] ) ? sanitize_text_field( (string) $params['path'] ) : '/';
+		if ( ! self::is_valid_token( $token, $path ) ) {
+			return array(
+				'ok'      => false,
+				'status'  => 401,
+				'message' => __( 'Invalid beacon token.', 'performance-optimisation' ),
+			);
+		}
 
 			$sample = self::sanitize_sample( $params );
 			if ( null === $sample ) {
@@ -866,13 +893,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Atomically increment a beacon throttle counter.
+		 *
+		 * Uses `wp_cache_add()` (SET NX) for creates plus `wp_cache_incr()`
+		 * for updates — the same pattern as `acquire_flush_lock()` — so
+		 * concurrent beacons cannot read the same count and all pass the
+		 * way they can with a get/set read-modify-write. The legacy
+		 * transient is always read (as a floor) and re-mirrored so
+		 * throttle-bucket readers, seeded unit fixtures, and cache-flush
+		 * transitions keep observing the budget. Returns false when no
+		 * atomic backend is available so callers fall back to the
+		 * (documented non-atomic) transient path. Never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $key    Transient key (unprefixed input already passed through Util::transient_key() by callers).
+		 * @param int    $expire Expiration in seconds.
+		 * @return array{0:int,1:int}|false Tuple of (atomic count including this hit, legacy count) or false.
+		 */
+		private static function atomic_throttle_increment( string $key, int $expire ) {
+			try {
+				if ( ! self::has_ext_object_cache() || ! function_exists( 'wp_cache_add' ) || ! function_exists( 'wp_cache_incr' ) ) {
+					return false;
+				}
+				if ( wp_cache_add( $key, 1, 'wppo', $expire ) ) {
+					$count = 1;
+				} else {
+					$incr = wp_cache_incr( $key, 1, 'wppo' );
+					if ( ! is_numeric( $incr ) ) {
+						// Lost race (expiry between add and incr) or a
+						// backend without incr: fall back to the transient
+						// path rather than double-counting or failing open.
+						return false;
+					}
+					$count = (int) $incr;
+				}
+				$legacy = function_exists( 'get_transient' ) ? (int) get_transient( $key ) : 0;
+				return array( $count, $legacy );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Whether the given IP has exceeded the hourly beacon budget.
+		 *
+		 * The atomic object-cache counter is authoritative under
+		 * concurrency; the legacy transient is kept as a floor
+		 * (`max(atomic, legacy + 1)`) and re-mirrored so a mid-window
+		 * cache flush fails closed instead of resetting the budget.
+		 * Fixed-window boundary doubling (at most 2x across the hour
+		 * edge) is accepted; atomicity fixes the concurrent-burst
+		 * bypass, which was the exploitable part.
 		 *
 		 * @param string $ip Client IP address.
 		 * @return bool
 		 */
 		private static function is_rate_limited( string $ip ): bool {
-			$key   = Util::transient_key( 'wppo_rum_ratelimit_' . md5( strtolower( $ip ) ) );
+			$key = Util::transient_key( 'wppo_rum_ratelimit_' . md5( strtolower( $ip ) ) );
+			$hit = self::atomic_throttle_increment( $key, HOUR_IN_SECONDS );
+			if ( false !== $hit ) {
+				list( $count, $legacy ) = $hit;
+				$total                  = max( $count, $legacy + 1 );
+				if ( function_exists( 'set_transient' ) ) {
+					try {
+						set_transient( $key, $total, HOUR_IN_SECONDS );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $total > self::RATE_LIMIT_PER_HOUR;
+			}
 			$count = (int) get_transient( $key );
 			if ( $count >= self::RATE_LIMIT_PER_HOUR ) {
 				return true;
@@ -919,9 +1010,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return bool
 		 */
 		private static function is_globally_rate_limited(): bool {
+			$now = time();
+			// Atomic per-window counter (see atomic_throttle_increment()):
+			// the window rides in the key so concurrent beacons serialize
+			// on incr instead of read-modify-write. The legacy bucket is
+			// kept as a floor and re-mirrored so the throttle-threshold
+			// reader (get_effective_sample_rate()) and seeded fixtures
+			// keep observing the budget.
+			$window     = (int) floor( $now / MINUTE_IN_SECONDS );
+			$atomic_key = Util::transient_key( 'wppo_rum_global_' . $window );
+			$hit        = self::atomic_throttle_increment( $atomic_key, 2 * MINUTE_IN_SECONDS );
+			if ( false !== $hit ) {
+				// The atomic counter lives in the object-cache namespace,
+				// not the transient one, so the legacy bucket read below
+				// doubles as the mirror source of truth.
+				$count  = (int) $hit[0];
+				$key    = Util::transient_key( 'wppo_rum_global' );
+				$bucket = function_exists( 'get_transient' ) ? get_transient( $key ) : false;
+				$start  = $now;
+				$legacy = 0;
+				if ( is_array( $bucket ) && isset( $bucket['count'], $bucket['start'] ) && (int) $bucket['start'] <= $now && ( $now - (int) $bucket['start'] ) < MINUTE_IN_SECONDS ) {
+					$legacy = (int) $bucket['count'];
+					$start  = (int) $bucket['start'];
+				}
+				$total = max( $count, $legacy + 1 );
+				if ( $total > self::GLOBAL_RATE_LIMIT_PER_MINUTE ) {
+					return true;
+				}
+				if ( function_exists( 'set_transient' ) ) {
+					$elapsed   = $now - $start;
+					$remaining = max( 1, min( MINUTE_IN_SECONDS, MINUTE_IN_SECONDS - $elapsed ) );
+					try {
+						set_transient(
+							$key,
+							array(
+								'count' => $total,
+								'start' => $start,
+							),
+							$remaining
+						);
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return false;
+			}
 			$key    = Util::transient_key( 'wppo_rum_global' );
 			$bucket = get_transient( $key );
-			$now    = time();
 			// Fixed window: expiry is set only on the first increment; later
 			// hits re-store with the remaining TTL instead of extending it.
 			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= MINUTE_IN_SECONDS ) {
@@ -1387,7 +1522,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @param mixed $raw Raw selector value.
 		 * @return string Sanitized selector or ''.
 		 */
-		private static function sanitize_lcp_selector( $raw ): string {
+		public static function sanitize_lcp_selector( $raw ): string {
 			try {
 				if ( ! is_string( $raw ) ) {
 					return '';
@@ -1424,7 +1559,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @param mixed $raw Raw initiator type.
 		 * @return string Allowlisted type or ''.
 		 */
-		private static function normalize_slow_resource_type( $raw ): string {
+		public static function normalize_slow_resource_type( $raw ): string {
 			try {
 				if ( ! is_string( $raw ) ) {
 					return '';
@@ -1464,23 +1599,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( ! is_array( $raw ) ) {
 					return $clean;
 				}
-				$sliced = array_slice( $raw, 0, self::SLOW_RESOURCES_MAX_COUNT );
-				foreach ( $sliced as $entry ) {
+				// Iterate the full input (bounded scan) and stop after five
+				// VALID entries: slicing before validation would let five
+				// invalid entries shadow valid ones later in the payload.
+				$scanned = 0;
+				foreach ( $raw as $entry ) {
+					if ( count( $clean ) >= self::SLOW_RESOURCES_MAX_COUNT ) {
+						break;
+					}
+					// Scan bound: a forged beacon must not force unbounded
+					// regex + host-lookup work per sample.
+					if ( ++$scanned > self::SLOW_RESOURCES_MAX_COUNT * 5 ) {
+						break;
+					}
 					if ( ! is_array( $entry ) ) {
 						continue;
 					}
-					$url_raw = $entry['url'] ?? ( $entry['name'] ?? null );
-					if ( ! is_string( $url_raw ) ) {
-						continue;
-					}
-					$url = trim( substr( $url_raw, 0, self::SLOW_RESOURCE_URL_MAX_LENGTH ) );
-					if ( '' === $url || ! self::is_safe_lcp_url( $url ) ) {
-						continue;
-					}
-					$type = self::normalize_slow_resource_type( $entry['type'] ?? ( $entry['initiatorType'] ?? null ) );
-					if ( '' === $type ) {
-						continue;
-					}
+					// Cheap gates first (numeric range, type allowlist) so
+					// invalid entries skip the expensive same-origin URL
+					// validation (regex + home-host lookup) entirely. The
+					// home-host lookup itself is per-request memoized via
+					// Util::cached_home_url(), so no hoisting is needed.
 					$duration_raw = $entry['duration'] ?? null;
 					if ( ! is_scalar( $duration_raw ) || ! is_numeric( $duration_raw ) ) {
 						continue;
@@ -1497,14 +1636,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					if ( $duration <= (float) self::SLOW_RESOURCE_MIN_DURATION_MS ) {
 						continue;
 					}
+					$type = self::normalize_slow_resource_type( $entry['type'] ?? ( $entry['initiatorType'] ?? null ) );
+					if ( '' === $type ) {
+						continue;
+					}
+					$url_raw = $entry['url'] ?? ( $entry['name'] ?? null );
+					if ( ! is_string( $url_raw ) ) {
+						continue;
+					}
+					$url = trim( substr( $url_raw, 0, self::SLOW_RESOURCE_URL_MAX_LENGTH ) );
+					if ( '' === $url || ! self::is_safe_lcp_url( $url ) ) {
+						continue;
+					}
 					$clean[] = array(
 						'url'      => $url,
 						'type'     => $type,
 						'duration' => $duration,
 					);
-					if ( count( $clean ) >= self::SLOW_RESOURCES_MAX_COUNT ) {
-						break;
-					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -1526,11 +1674,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * unsafe. Shared by sanitize_sample() and flush_queue() so a
 		 * directly-written queue transient cannot bypass intake.
 		 *
+		 * Public since NEXT so AI_Adaptive can re-validate stored model
+		 * values at suggestion-render time (defense-in-depth against
+		 * legacy pre-guard rows and tampered model options).
+		 *
 		 * @since NEXT
 		 * @param string $lcp_url Candidate LCP URL (already trimmed + length-capped).
 		 * @return bool True when safe to store.
 		 */
-		private static function is_safe_lcp_url( string $lcp_url ): bool {
+		public static function is_safe_lcp_url( string $lcp_url ): bool {
 			if ( '' === $lcp_url ) {
 				return false;
 			}
@@ -1678,6 +1830,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				// Protocol-relative URLs skip this block: host must be proven below.
 				if ( 0 !== strpos( ltrim( $url ), '//' ) && false === strpos( $url, '://' ) ) {
 					return ! self::is_scheme_like_url( $url );
+				}
+				// Absolute URLs must use http(s) (or inherit it via a
+				// protocol-relative `//host/…` URL, proven by host below):
+				// any other scheme with a matching home host (e.g. a
+				// legacy `ftp://home/…` row) is not same-origin for a
+				// preload `<link>`, matching the intake gate which only
+				// ever stores http(s)/root-relative targets.
+				$ltrimmed = ltrim( $url );
+				if ( 0 !== strpos( $ltrimmed, '//' ) && 0 !== stripos( $ltrimmed, 'http://' ) && 0 !== stripos( $ltrimmed, 'https://' ) ) {
+					return false;
 				}
 				if ( ! function_exists( 'wp_parse_url' ) ) {
 					return false;
@@ -2026,6 +2188,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @param array $all Aggregates.
 		 * @return void
 		 */
+		/**
+		 * Drop the oldest day from an aggregate (halving a lone surviving day).
+		 *
+		 * Single shared eviction step behind both budget phases of
+		 * {@see persist_aggregate()} so the retention policy cannot drift
+		 * between them. Returns false when nothing is left to drop.
+		 *
+		 * @since NEXT
+		 * @param array $all Aggregates (by ref).
+		 * @return bool True when an eviction step was applied.
+		 */
+		private static function drop_oldest_aggregate_day( array &$all ): bool {
+			$oldest_day_key = array_key_first( $all );
+			if ( null === $oldest_day_key ) {
+				return false;
+			}
+			if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
+				$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
+				if ( ! empty( $half ) ) {
+					$all[ $oldest_day_key ] = $half;
+				}
+				return false;
+			}
+			unset( $all[ $oldest_day_key ] );
+			return true;
+		}
+
 		private static function persist_aggregate( array $all ): void {
 			$cutoff = gmdate( 'Y-m-d', time() - ( self::MAX_DAYS * DAY_IN_SECONDS ) );
 			foreach ( array_keys( $all ) as $day_key ) {
@@ -2033,44 +2222,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					unset( $all[ $day_key ] );
 				}
 			}
+			// Phase 1: enforce the path-count budget without serializing —
+			// counting paths is O(buckets) while wp_json_encode() on up to
+			// ~480KB per iteration is not.
 			while ( ! empty( $all ) ) {
 				$total_paths = 0;
 				foreach ( $all as $day_bucket ) {
 					$total_paths += count( is_array( $day_bucket ) ? $day_bucket : array() );
 				}
-				$under_path_budget = $total_paths <= self::MAX_TOTAL_PATHS;
-				if ( ! $under_path_budget ) {
-					$oldest_day_key = array_key_first( $all );
-					if ( null === $oldest_day_key ) {
-						break;
-					}
-					if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
-						$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
-						if ( ! empty( $half ) ) {
-							$all[ $oldest_day_key ] = $half;
-						}
-						break;
-					}
-					unset( $all[ $oldest_day_key ] );
-					continue;
-				}
-				$encoded           = wp_json_encode( $all );
-				$under_byte_budget = false !== $encoded && strlen( (string) $encoded ) <= self::MAX_OPTION_BYTES;
-				if ( $under_byte_budget ) {
+				if ( $total_paths <= self::MAX_TOTAL_PATHS ) {
 					break;
 				}
-				$oldest_day_key = array_key_first( $all );
-				if ( null === $oldest_day_key ) {
+				if ( ! self::drop_oldest_aggregate_day( $all ) ) {
 					break;
 				}
-				if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
-					$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
-					if ( ! empty( $half ) ) {
-						$all[ $oldest_day_key ] = $half;
-					}
+			}
+			// Phase 2: encode once; evict oldest-first only while the byte
+			// budget is actually exceeded.
+			$encoded = wp_json_encode( $all );
+			while ( false !== $encoded && strlen( (string) $encoded ) > self::MAX_OPTION_BYTES && ! empty( $all ) ) {
+				if ( ! self::drop_oldest_aggregate_day( $all ) ) {
 					break;
 				}
-				unset( $all[ $oldest_day_key ] );
+				$encoded = wp_json_encode( $all );
 			}
 			update_option( self::OPTION, $all, false );
 			self::clear_field_lcp_cache();
@@ -2279,47 +2453,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// `slowResources` map counting sanitized sub-resource URLs
 					// with cumulative duration + slowest observation. Accepts
 					// both `slowResources` and legacy `slow_resources` queue
-					// keys. Re-validated here: the queue transient is
-					// user-writable. Fail-open: malformed entries skipped.
-					$queued_slow = $sample['slowResources'] ?? ( $sample['slow_resources'] ?? null );
-					if ( null !== $queued_slow ) {
-						$slow_clean = self::sanitize_slow_resources( $queued_slow );
-						if ( ! empty( $slow_clean ) ) {
-							if ( ! isset( $bucket['slowResources'] ) || ! is_array( $bucket['slowResources'] ) ) {
-								$bucket['slowResources'] = array();
+					// keys, mirroring the intake fallback in
+					// sanitize_sample(): a present-but-invalid primary must
+					// not shadow a valid legacy key. Re-validated here: the
+					// queue transient is user-writable. Fail-open:
+					// malformed entries skipped.
+					$slow_clean = array();
+					if ( array_key_exists( 'slowResources', $sample ) ) {
+						$slow_clean = self::sanitize_slow_resources( $sample['slowResources'] );
+					}
+					if ( empty( $slow_clean ) && array_key_exists( 'slow_resources', $sample ) ) {
+						$slow_clean = self::sanitize_slow_resources( $sample['slow_resources'] );
+					}
+					if ( ! empty( $slow_clean ) ) {
+						if ( ! isset( $bucket['slowResources'] ) || ! is_array( $bucket['slowResources'] ) ) {
+							$bucket['slowResources'] = array();
+						}
+						foreach ( $slow_clean as $slow_entry ) {
+							$slow_url = isset( $slow_entry['url'] ) ? (string) $slow_entry['url'] : '';
+							if ( '' === $slow_url ) {
+								continue;
 							}
-							foreach ( $slow_clean as $slow_entry ) {
-								$slow_url = isset( $slow_entry['url'] ) ? (string) $slow_entry['url'] : '';
-								if ( '' === $slow_url ) {
-									continue;
+							$slow_norm = ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
+								? \PerformanceOptimise\Inc\Util::normalize_url( $slow_url )
+								: '';
+							$slow_key  = '' !== $slow_norm ? $slow_norm : $slow_url;
+							if ( isset( $bucket['slowResources'][ $slow_key ] ) && is_array( $bucket['slowResources'][ $slow_key ] ) ) {
+								++$bucket['slowResources'][ $slow_key ]['n'];
+								$bucket['slowResources'][ $slow_key ]['totalDuration'] = (float) ( $bucket['slowResources'][ $slow_key ]['totalDuration'] ?? 0.0 ) + (float) $slow_entry['duration'];
+								$bucket['slowResources'][ $slow_key ]['maxDuration']   = max( (float) ( $bucket['slowResources'][ $slow_key ]['maxDuration'] ?? 0.0 ), (float) $slow_entry['duration'] );
+								$bucket['slowResources'][ $slow_key ]['lastSeen']      = $ts;
+								if ( isset( $slow_entry['type'] ) ) {
+									$bucket['slowResources'][ $slow_key ]['type'] = $slow_entry['type'];
 								}
-								$slow_norm = ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
-									? \PerformanceOptimise\Inc\Util::normalize_url( $slow_url )
-									: '';
-								$slow_key  = '' !== $slow_norm ? $slow_norm : $slow_url;
-								if ( isset( $bucket['slowResources'][ $slow_key ] ) && is_array( $bucket['slowResources'][ $slow_key ] ) ) {
-									++$bucket['slowResources'][ $slow_key ]['n'];
-									$bucket['slowResources'][ $slow_key ]['totalDuration'] = (float) ( $bucket['slowResources'][ $slow_key ]['totalDuration'] ?? 0.0 ) + (float) $slow_entry['duration'];
-									$bucket['slowResources'][ $slow_key ]['maxDuration']   = max( (float) ( $bucket['slowResources'][ $slow_key ]['maxDuration'] ?? 0.0 ), (float) $slow_entry['duration'] );
-									$bucket['slowResources'][ $slow_key ]['lastSeen']      = $ts;
-									if ( isset( $slow_entry['type'] ) ) {
-										$bucket['slowResources'][ $slow_key ]['type'] = $slow_entry['type'];
-									}
-								} else {
-									$bucket['slowResources'][ $slow_key ] = array(
-										'url'           => $slow_url,
-										'type'          => $slow_entry['type'],
-										'n'             => 1,
-										'totalDuration' => (float) $slow_entry['duration'],
-										'maxDuration'   => (float) $slow_entry['duration'],
-										'lastSeen'      => $ts,
-									);
-								}
+							} else {
+								$bucket['slowResources'][ $slow_key ] = array(
+									'url'           => $slow_url,
+									'type'          => $slow_entry['type'],
+									'n'             => 1,
+									'totalDuration' => (float) $slow_entry['duration'],
+									'maxDuration'   => (float) $slow_entry['duration'],
+									'lastSeen'      => $ts,
+								);
 							}
-							$slow_count = count( $bucket['slowResources'] );
-							if ( $slow_count > self::MAX_SLOW_RESOURCES_PER_PATH ) {
-								self::evict_lowest_n( $bucket['slowResources'], self::MAX_SLOW_RESOURCES_PER_PATH );
-							}
+						}
+						$slow_count = count( $bucket['slowResources'] );
+						if ( $slow_count > self::MAX_SLOW_RESOURCES_PER_PATH ) {
+							self::evict_lowest_n( $bucket['slowResources'], self::MAX_SLOW_RESOURCES_PER_PATH );
 						}
 					}
 
@@ -2399,6 +2579,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				self::persist_aggregate( $all );
 			} finally {
 				self::release_flush_lock();
+			}
+		}
+
+		/**
+		 * Whether a stored `lastSeen` timestamp is still fresh.
+		 *
+		 * Compares on absolute delta so a future-dated timestamp (clock
+		 * skew or a forged queue `_ts`) cannot stay fresh until the clock
+		 * catches up: anything more than FIELD_LCP_STALE_TTL away from
+		 * now in either direction is stale. Single shared home for the
+		 * freshness gates of {@see get_field_lcp_url()},
+		 * {@see get_top_lcp_selector()} and
+		 * {@see get_top_slow_resources()} so they cannot drift apart.
+		 * Fail-open: any failure returns false (stale), never fatal.
+		 *
+		 * @since NEXT
+		 * @param int $last_seen Stored Unix timestamp.
+		 * @param int $now       Current Unix timestamp.
+		 * @return bool True when fresh.
+		 */
+		private static function is_fresh_last_seen( int $last_seen, int $now ): bool {
+			try {
+				if ( $last_seen <= 0 || $now <= 0 ) {
+					return false;
+				}
+				return abs( $now - $last_seen ) <= self::FIELD_LCP_STALE_TTL;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
 		}
 
@@ -2484,7 +2693,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( is_array( $cached_top ) && isset( $cached_top['url'] ) ) {
 					$cached_n    = (int) ( $cached_top['n'] ?? 0 );
 					$cached_seen = (int) ( $cached_top['lastSeen'] ?? 0 );
-					if ( $cached_n >= $min && $cached_seen > 0 && ( time() - $cached_seen ) <= self::FIELD_LCP_STALE_TTL ) {
+					if ( $cached_n >= $min && self::is_fresh_last_seen( $cached_seen, time() ) ) {
 						// Emission-path origin re-check (issue #1180): cached
 						// entries may predate the intake guard. The strict
 						// variant applies here: a preload `<link>` must
@@ -2580,7 +2789,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					self::$field_lcp_result_memo[ $memo_key ] = null;
 					return null;
 				}
-				if ( $top['lastSeen'] <= 0 || ( $now - $top['lastSeen'] ) > self::FIELD_LCP_STALE_TTL ) {
+				if ( ! self::is_fresh_last_seen( isset( $top['lastSeen'] ) ? (int) $top['lastSeen'] : 0, $now ) ) {
 					self::$field_lcp_result_memo[ $memo_key ] = null;
 					return null;
 				}
@@ -2694,6 +2903,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( $min < 1 ) {
 					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 				}
+				// Per-request memo: heuristic_learn() otherwise re-scans the
+				// whole aggregate once per selector/slow query.
+				$memo_key = $normalized_path . '|' . $min;
+				if ( array_key_exists( $memo_key, self::$top_selector_memo ) ) {
+					return self::$top_selector_memo[ $memo_key ];
+				}
 				$all = self::get_memoized_aggregate();
 				if ( ! is_array( $all ) || empty( $all ) ) {
 					return null;
@@ -2739,6 +2954,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				if ( empty( $per_selector ) ) {
+					self::$top_selector_memo[ $memo_key ] = null;
 					return null;
 				}
 				// Pick the selector with the highest per-selector count so
@@ -2751,14 +2967,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				if ( null === $best ) {
+					self::$top_selector_memo[ $memo_key ] = null;
 					return null;
 				}
 				if ( $best['n'] < $min ) {
+					self::$top_selector_memo[ $memo_key ] = null;
 					return null;
 				}
-				if ( $best['lastSeen'] <= 0 || ( $now - $best['lastSeen'] ) > self::FIELD_LCP_STALE_TTL ) {
+				if ( ! self::is_fresh_last_seen( (int) $best['lastSeen'], $now ) ) {
+					self::$top_selector_memo[ $memo_key ] = null;
 					return null;
 				}
+				self::$top_selector_memo[ $memo_key ] = $best;
 				return $best;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2786,10 +3006,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @param int $limit Maximum entries (1–10, defaults to 3).
 		 * @return array<int,array{url:string,type:string,n:int,avgDuration:float,maxDuration:float,lastSeen:int}> Top slow resources.
 		 */
+		/**
+		 * Whether slow-resource row $a outranks row $b (count, then average duration).
+		 *
+		 * Single shared comparator behind the linear top-K selection and
+		 * the final ordering of {@see get_top_slow_resources()} so ranking
+		 * cannot drift between them. Strict: ties outrank neither way and
+		 * keep incumbents.
+		 *
+		 * @since NEXT
+		 * @param array $a Candidate row.
+		 * @param array $b Incumbent row.
+		 * @return bool True when $a ranks strictly above $b.
+		 */
+		private static function slow_row_outranks( array $a, array $b ): bool {
+			$an = isset( $a['n'] ) ? (int) $a['n'] : 0;
+			$bn = isset( $b['n'] ) ? (int) $b['n'] : 0;
+			if ( $an !== $bn ) {
+				return $an > $bn;
+			}
+			$ad = isset( $a['avgDuration'] ) ? (float) $a['avgDuration'] : 0.0;
+			$bd = isset( $b['avgDuration'] ) ? (float) $b['avgDuration'] : 0.0;
+			return $ad > $bd;
+		}
+
 		public static function get_top_slow_resources( int $limit = 3 ): array {
 			try {
 				$limit = max( 1, min( 10, $limit ) );
-				$all   = self::get_memoized_aggregate();
+				// Per-request memo: heuristic_learn() otherwise re-scans the
+				// whole aggregate once per selector/slow query.
+				$memo_key = 'limit_' . $limit;
+				if ( array_key_exists( $memo_key, self::$top_slow_memo ) ) {
+					return self::$top_slow_memo[ $memo_key ];
+				}
+				$all = self::get_memoized_aggregate();
 				if ( ! is_array( $all ) || empty( $all ) ) {
 					return array();
 				}
@@ -2811,6 +3061,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
 								continue;
 							}
+							// Cheap freshness gate first: stale rows skip the
+							// expensive intake-gate regex + host lookups
+							// below (removed resources must not outrank
+							// current ones while waiting for retention
+							// eviction).
+							$entry_seen = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
+							if ( ! self::is_fresh_last_seen( $entry_seen, $now ) ) {
+								continue;
+							}
 							// Re-validate with the intake gate: legacy rows
 							// may carry markup-bearing same-origin values
 							// that the fail-open origin check alone passes.
@@ -2818,11 +3077,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							if ( '' === $read_url || ! self::is_safe_lcp_url( $read_url ) ) {
 								continue;
 							}
-							// Re-allowlist the type: tampered/legacy values
-							// must not flow verbatim to admin copy.
+							// Re-allowlist the type, matching intake: rows
+							// with a tampered/legacy non-allowlisted type
+							// are skipped rather than fabricated as `img`
+							// preload suggestions.
 							$read_type = self::normalize_slow_resource_type( $entry['type'] ?? null );
 							if ( '' === $read_type ) {
-								$read_type = 'img';
+								continue;
 							}
 							$norm    = ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
 								? \PerformanceOptimise\Inc\Util::normalize_url( $entry['url'] )
@@ -2852,36 +3113,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				if ( empty( $merged ) ) {
+					self::$top_slow_memo[ $memo_key ] = array();
 					return array();
 				}
-				$rows = array();
+				// Linear top-K selection (count, then average duration):
+				// the merged map can hold thousands of rows while only
+				// $limit are ever returned, so a full usort is wasteful on
+				// the heuristic_learn() hot path. Freshness was already
+				// enforced per entry above, so only the average remains.
+				$top = array();
 				foreach ( $merged as $row ) {
 					unset( $row['_raw_n'] );
-					// Freshness gate (mirrors the selector read path):
-					// removed resources stop outranking current ones well
-					// before the 14-day retention eviction.
-					$row_seen = isset( $row['lastSeen'] ) ? (int) $row['lastSeen'] : 0;
-					if ( $row_seen <= 0 || ( $now - $row_seen ) > self::FIELD_LCP_STALE_TTL ) {
-						continue;
-					}
 					$row['avgDuration'] = $row['n'] > 0 ? (float) $row['totalDuration'] / (int) $row['n'] : 0.0;
 					unset( $row['totalDuration'] );
-					$rows[] = $row;
+					if ( count( $top ) < $limit ) {
+						$top[] = $row;
+						continue;
+					}
+					$weakest_idx = -1;
+					for ( $i = 0; $i < count( $top ); $i++ ) {
+						if ( self::slow_row_outranks( $row, $top[ $i ] ) && ( -1 === $weakest_idx || self::slow_row_outranks( $top[ $weakest_idx ], $top[ $i ] ) ) ) {
+							$weakest_idx = $i;
+						}
+					}
+					if ( -1 !== $weakest_idx ) {
+						$top[ $weakest_idx ] = $row;
+					}
 				}
 				usort(
-					$rows,
+					$top,
 					static function ( $a, $b ) {
-						$an = isset( $a['n'] ) ? (int) $a['n'] : 0;
-						$bn = isset( $b['n'] ) ? (int) $b['n'] : 0;
-						if ( $an !== $bn ) {
-							return $bn <=> $an;
+						if ( self::slow_row_outranks( $a, $b ) ) {
+							return -1;
 						}
-						$ad = isset( $a['avgDuration'] ) ? (float) $a['avgDuration'] : 0.0;
-						$bd = isset( $b['avgDuration'] ) ? (float) $b['avgDuration'] : 0.0;
-						return $bd <=> $ad;
+						if ( self::slow_row_outranks( $b, $a ) ) {
+							return 1;
+						}
+						return 0;
 					}
 				);
-				return array_slice( array_values( $rows ), 0, $limit );
+				$result                           = array_values( $top );
+				self::$top_slow_memo[ $memo_key ] = $result;
+				return $result;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();

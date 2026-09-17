@@ -732,10 +732,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && defined( 'PerformanceOptimise\Inc\RUM::FIELD_LCP_STALE_TTL' ) ) {
 					$ttl = (int) RUM::FIELD_LCP_STALE_TTL;
 				}
-				if ( $ttl < 0 ) {
+				if ( $ttl <= 0 ) {
 					$ttl = 86400;
 				}
-				return ( time() - $seen ) <= $ttl;
+				// Absolute delta: a future-dated lastSeen (clock skew or a
+				// forged queue _ts) must not stay fresh until the clock
+				// catches up — anything over the TTL away in either
+				// direction is stale.
+				return abs( time() - $seen ) <= $ttl;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -782,18 +786,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( empty( $rows ) ) {
 				return null;
 			}
-			usort(
-				$rows,
-				static function ( $a, $b ) {
-					$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
-					$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
-					if ( $pa === $pb ) {
-						return 0;
-					}
-					return $pa > $pb ? -1 : 1;
+			// Linear max (no full usort to pick one row): highest p75 wins,
+			// ties break toward the higher sample count.
+			$best = null;
+			foreach ( $rows as $row ) {
+				if ( null === $best ) {
+					$best = $row;
+					continue;
 				}
-			);
-			return $rows[0];
+				$p75      = isset( $row['p75'] ) ? (float) $row['p75'] : 0.0;
+				$best_p75 = isset( $best['p75'] ) ? (float) $best['p75'] : 0.0;
+				if ( $p75 === $best_p75 ) {
+					$n      = isset( $row['n'] ) ? (int) $row['n'] : 0;
+					$best_n = isset( $best['n'] ) ? (int) $best['n'] : 0;
+					if ( $n > $best_n ) {
+						$best = $row;
+					}
+					continue;
+				}
+				if ( $p75 > $best_p75 ) {
+					$best = $row;
+				}
+			}
+			return $best;
 		}
 
 		/**
@@ -1333,15 +1348,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$slow_candidates     = array();
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_top_slow_resources' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_top_lcp_selector' ) ) {
-					if ( ! empty( $top_paths ) && is_string( $top_paths[0] ) ) {
-						$top_selector = \PerformanceOptimise\Inc\RUM::get_top_lcp_selector( $top_paths[0] );
-						if ( is_array( $top_selector ) && isset( $top_selector['selector'] ) && is_string( $top_selector['selector'] ) && '' !== $top_selector['selector'] ) {
-							$attributed_selector = array(
-								'path'     => $top_paths[0],
-								'selector' => $top_selector['selector'],
-								'n'        => isset( $top_selector['n'] ) ? (int) $top_selector['n'] : 0,
-								'lastSeen' => isset( $top_selector['lastSeen'] ) ? (int) $top_selector['lastSeen'] : 0,
-							);
+					// Walk every top path to the first qualified selector:
+					// the top-ranked path may carry no attribution while a
+					// lower-ranked one does.
+					if ( ! empty( $top_paths ) && is_array( $top_paths ) ) {
+						foreach ( $top_paths as $candidate_path ) {
+							if ( ! is_string( $candidate_path ) || '' === $candidate_path ) {
+								continue;
+							}
+							$top_selector = \PerformanceOptimise\Inc\RUM::get_top_lcp_selector( $candidate_path );
+							if ( is_array( $top_selector ) && isset( $top_selector['selector'] ) && is_string( $top_selector['selector'] ) && '' !== $top_selector['selector'] ) {
+								$attributed_selector = array(
+									'path'     => $candidate_path,
+									'selector' => $top_selector['selector'],
+									'n'        => isset( $top_selector['n'] ) ? (int) $top_selector['n'] : 0,
+									'lastSeen' => isset( $top_selector['lastSeen'] ) ? (int) $top_selector['lastSeen'] : 0,
+								);
+								break;
+							}
 						}
 					}
 					$slow_rows = \PerformanceOptimise\Inc\RUM::get_top_slow_resources( 3 );
@@ -2311,35 +2335,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$attributed = $model['attributed_lcp'] ?? null;
 				// Models persisted before attribution shipped simply emit no
 				// suggestions for missing keys (fail open).
-				if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] && self::is_fresh_attribution( $attributed ) ) {
-					$attr_path     = isset( $attributed['path'] ) && is_string( $attributed['path'] ) ? $attributed['path'] : '';
-					$attr_selector = $attributed['selector'];
-					/* translators: %1$s LCP selector, %2$s page path. */
-					$attr_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
-					/* translators: %1$s LCP selector, %2$s page path. */
-					$attr_description = sprintf( __( 'AI: Preload hero element %1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
-					$suggestions[]    = array(
-						'metric'      => 'ai_lcp_preload',
-						'value'       => $attr_value,
-						'unit'        => 'string',
-						'status'      => 'needs_improvement',
-						'description' => $attr_description,
-						'fix_action'  => 'open_preload_tab',
-						'ai_payload'  => array(
-							'tab'      => 'preload_settings',
-							'settings' => array(),
-						),
-					);
+				// Render-time re-validation (defense-in-depth): intake and
+				// read paths already gate these values, but a legacy
+				// pre-guard row or a tampered wppo_ai_model option is
+				// re-checked here and skipped on failure instead of being
+				// rendered verbatim into suggestion copy.
+				$rum_validators = class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'sanitize_lcp_selector' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_safe_lcp_url' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'normalize_slow_resource_type' );
+				if ( $rum_validators && is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] && self::is_fresh_attribution( $attributed ) ) {
+					$attr_selector = \PerformanceOptimise\Inc\RUM::sanitize_lcp_selector( $attributed['selector'] );
+					if ( '' !== $attr_selector ) {
+						$attr_path = isset( $attributed['path'] ) && is_string( $attributed['path'] ) && 0 === strpos( $attributed['path'], '/' ) ? $attributed['path'] : '';
+						/* translators: %1$s LCP selector, %2$s page path. */
+						$attr_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
+						/* translators: %1$s LCP selector, %2$s page path. */
+						$attr_description = sprintf( __( 'AI: Preload hero element %1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
+						$suggestions[]    = array(
+							'metric'      => 'ai_lcp_preload',
+							'value'       => $attr_value,
+							'unit'        => 'string',
+							'status'      => 'needs_improvement',
+							'description' => $attr_description,
+							'fix_action'  => 'open_preload_tab',
+							'ai_payload'  => array(
+								'tab'      => 'preload_settings',
+								'settings' => array(),
+							),
+						);
+					}
 				}
 				$slow_list = $model['slow_resources'] ?? array();
-				if ( is_array( $slow_list ) && ! empty( $slow_list ) ) {
-					$slow_first = $slow_list[0];
-					if ( is_array( $slow_first ) && isset( $slow_first['url'] ) && is_string( $slow_first['url'] ) && '' !== $slow_first['url'] && self::is_fresh_attribution( $slow_first ) ) {
-						$slow_type = isset( $slow_first['type'] ) && is_string( $slow_first['type'] ) ? $slow_first['type'] : 'resource';
+				if ( $rum_validators && is_array( $slow_list ) && ! empty( $slow_list ) ) {
+					// Walk to the first fresh, render-valid entry: when
+					// index 0 goes stale its fresher siblings must still
+					// surface instead of emitting nothing.
+					$slow_first = null;
+					foreach ( $slow_list as $slow_candidate ) {
+						if ( ! is_array( $slow_candidate ) || ! isset( $slow_candidate['url'] ) || ! is_string( $slow_candidate['url'] ) || '' === $slow_candidate['url'] ) {
+							continue;
+						}
+						if ( ! self::is_fresh_attribution( $slow_candidate ) ) {
+							continue;
+						}
+						$slow_url = trim( substr( $slow_candidate['url'], 0, 2048 ) );
+						if ( '' === $slow_url || ! \PerformanceOptimise\Inc\RUM::is_safe_lcp_url( $slow_url ) ) {
+							continue;
+						}
+						$slow_type = \PerformanceOptimise\Inc\RUM::normalize_slow_resource_type( $slow_candidate['type'] ?? null );
+						if ( '' === $slow_type ) {
+							continue;
+						}
+						$slow_first = array(
+							'url'  => $slow_url,
+							'type' => $slow_type,
+						);
+						break;
+					}
+					if ( null !== $slow_first ) {
 						/* translators: %1$s resource type, %2$s resource URL. */
-						$slow_value = sprintf( __( '%1$s · %2$s', 'performance-optimisation' ), $slow_type, $slow_first['url'] );
+						$slow_value = sprintf( __( '%1$s · %2$s', 'performance-optimisation' ), $slow_first['type'], $slow_first['url'] );
 						/* translators: %1$s resource type, %2$s resource URL. */
-						$slow_description = sprintf( __( 'AI: Preload slow resource %1$s (%2$s)', 'performance-optimisation' ), $slow_first['url'], $slow_type );
+						$slow_description = sprintf( __( 'AI: Preload slow resource %1$s (%2$s)', 'performance-optimisation' ), $slow_first['url'], $slow_first['type'] );
 						$suggestions[]    = array(
 							'metric'      => 'ai_slow_resource_preload',
 							'value'       => $slow_value,

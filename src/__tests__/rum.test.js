@@ -336,7 +336,7 @@ describe( 'sanitizeSlowResourceEntry', () => {
 		}
 	} );
 
-	it( 'drops entries with disallowed types, bad urls or out-of-range durations', () => {
+	it( 'drops entries with disallowed types, bad urls or negative durations', () => {
 		expect(
 			sanitizeSlowResourceEntry( {
 				name: 'https://example.com/video.mp4',
@@ -365,15 +365,22 @@ describe( 'sanitizeSlowResourceEntry', () => {
 				duration: -5,
 			} )
 		).toBe( null );
+		expect( sanitizeSlowResourceEntry( null ) ).toBe( null );
+		expect( sanitizeSlowResourceEntry( 'nope' ) ).toBe( null );
+	} );
+
+	it( 'clamps extreme durations to RUM_MAX_METRIC_MS like the server', () => {
 		expect(
 			sanitizeSlowResourceEntry( {
 				name: 'https://example.com/a.js',
 				initiatorType: 'script',
 				duration: RUM_MAX_METRIC_MS + 1,
 			} )
-		).toBe( null );
-		expect( sanitizeSlowResourceEntry( null ) ).toBe( null );
-		expect( sanitizeSlowResourceEntry( 'nope' ) ).toBe( null );
+		).toEqual( {
+			name: 'https://example.com/a.js',
+			type: 'script',
+			duration: RUM_MAX_METRIC_MS,
+		} );
 	} );
 } );
 
@@ -414,8 +421,10 @@ describe( 'collectSlowResources', () => {
 	} );
 
 	it( 'falls back to the top-3 slowest when nothing crosses the threshold', () => {
+		// Unsorted fixture: the fallback must sort before slicing so
+		// ResourceTiming insertion order never promotes fast assets.
 		stubResources(
-			[ 100, 90, 80, 70, 60 ].map( ( duration, i ) => ( {
+			[ 60, 100, 70, 90, 80 ].map( ( duration, i ) => ( {
 				name: `https://example.com/a${ i }.js`,
 				initiatorType: 'script',
 				duration,

@@ -179,12 +179,36 @@ export const RUM_MAX_SLOW_RESOURCES = 5;
 
 /**
  * Slow-resource duration threshold (ms): only entries slower than this
- * are considered for the audit. Mirrors the server-side clamp range.
+ * are considered for the audit.
+ *
+ * Client/server contract: this mirrors `RUM::SLOW_RESOURCE_MIN_DURATION_MS`
+ * in includes/class-rum.php (same 300ms value, same `>` comparison —
+ * entries at/below the floor are not slow). The floor is enforced in
+ * `collectSlowResources()` below and re-enforced server-side at intake,
+ * so the pass-through `sanitizeSlowResourceEntry()` / `sanitizeRumValues()`
+ * path intentionally carries no threshold of its own (the server stays
+ * authoritative for forged beacons).
  *
  * @since NEXT
  * @type {number}
  */
 export const RUM_SLOW_RESOURCE_THRESHOLD_MS = 300;
+
+/**
+ * Maximum ResourceTiming entries scanned per beacon for the slow-resource
+ * audit (most-recent first).
+ *
+ * Bounds the synchronous `send()` work on resource-heavy pages (see
+ * `collectSlowResources()`): shaping is O(scanned) and every entry pays
+ * at least the cheap numeric duration gate before any string work.
+ * Best-effort: entries past the cap are never considered, so on extreme
+ * pages the audit degrades to the most recent resources rather than
+ * delaying the beacon.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const RUM_SLOW_RESOURCE_SCAN_MAX = 500;
 
 /**
  * Allowlisted resource initiator types for the slow-resource audit.
@@ -255,9 +279,67 @@ export const deriveLcpSelector = ( element ) => {
 };
 
 /**
+ * Validate an LCP element selector attribution value.
+ *
+ * Single shared gate behind `sanitizeRumValues()` and the LCP observer
+ * (replacing the previous dummy `sanitizeRumValues( { lcp: 1, ... } )`
+ * re-validation calls): compact `tag#id`/`.class` selector, strict
+ * charset, markup/breakout rejection mirroring the server-side
+ * `RUM::sanitize_lcp_selector()` gate. Fail-open: returns null when
+ * invalid so callers omit the field.
+ *
+ * @since NEXT
+ * @param {*} raw Raw selector value.
+ * @return {string|null} Sanitized selector or null.
+ */
+export const isValidLcpSelector = ( raw ) => {
+	try {
+		if (
+			typeof raw !== 'string' ||
+			! raw ||
+			raw.length > RUM_MAX_LCP_SELECTOR_LENGTH
+		) {
+			return null;
+		}
+		// NOTE: the {1,256} length gate mirrors RUM_MAX_LCP_SELECTOR_LENGTH
+		// above (and RUM::LCP_SELECTOR_MAX_LENGTH server-side) — update all
+		// three together when bumping the cap.
+		if ( ! /^[a-z0-9#._\-\s:~+[\]=']{1,256}$/i.test( raw ) ) {
+			return null;
+		}
+		if (
+			raw.indexOf( '<' ) !== -1 ||
+			raw.indexOf( '>' ) !== -1 ||
+			raw.indexOf( '"' ) !== -1 ||
+			raw.indexOf( '`' ) !== -1
+		) {
+			return null;
+		}
+		const lower = raw.toLowerCase();
+		if (
+			lower.indexOf( 'javascript:' ) !== -1 ||
+			lower.indexOf( 'vbscript:' ) !== -1 ||
+			lower.indexOf( 'data:' ) !== -1
+		) {
+			return null;
+		}
+		return raw.slice( 0, RUM_MAX_LCP_SELECTOR_LENGTH );
+	} catch {
+		return null;
+	}
+};
+
+/**
  * Normalize one slow-resource entry to the beacon shape.
  *
  * Fail-open: returns null for malformed entries so callers drop them.
+ * The cheap numeric duration gate runs first so fast/invalid entries on
+ * resource-heavy pages skip all URL/type string work. Durations above
+ * `RUM_MAX_METRIC_MS` clamp (not drop) to mirror the server-side
+ * `RUM::SLOW_RESOURCE_MAX_DURATION_MS` clamp — both sides agree extreme
+ * observer values cap at 60000ms; negatives/non-finite are dropped.
+ * No slow floor here by design (see `RUM_SLOW_RESOURCE_THRESHOLD_MS`):
+ * the threshold lives in `collectSlowResources()` and server-side.
  *
  * @since NEXT
  * @param {*} entry Raw resource-timing entry.
@@ -268,6 +350,11 @@ export const sanitizeSlowResourceEntry = ( entry ) => {
 		if ( ! entry || typeof entry !== 'object' ) {
 			return null;
 		}
+		const rawDuration = Number( entry.duration );
+		if ( ! Number.isFinite( rawDuration ) || rawDuration < 0 ) {
+			return null;
+		}
+		const duration = Math.min( Math.round( rawDuration ), RUM_MAX_METRIC_MS );
 		const name = entry.name;
 		if (
 			typeof name !== 'string' ||
@@ -289,18 +376,10 @@ export const sanitizeSlowResourceEntry = ( entry ) => {
 		if ( RUM_ALLOWED_RESOURCE_TYPES.indexOf( type ) === -1 ) {
 			return null;
 		}
-		const duration = Number( entry.duration );
-		if (
-			! Number.isFinite( duration ) ||
-			duration < 0 ||
-			duration > RUM_MAX_METRIC_MS
-		) {
-			return null;
-		}
 		return {
 			name: name.slice( 0, 2048 ),
 			type,
-			duration: Math.round( duration ),
+			duration,
 		};
 	} catch {
 		return null;
@@ -313,8 +392,11 @@ export const sanitizeSlowResourceEntry = ( entry ) => {
  * Guarded on `performance.getEntriesByType`; entries slower than
  * `RUM_SLOW_RESOURCE_THRESHOLD_MS` are kept (or the top-3 slowest when
  * none cross the threshold), capped at `RUM_MAX_SLOW_RESOURCES`, with a
- * ~1.5KB JSON budget check that drops the fastest-first (keeping the
- * slowest) on overflow.
+ * best-effort ~1.5KB JSON budget trim that keeps the slowest on overflow.
+ * The shaping scan covers at most the `RUM_SLOW_RESOURCE_SCAN_MAX` most
+ * recent entries and the whole collector runs synchronously in `send()`,
+ * so budget trimming is a single length estimate plus one slice (never a
+ * re-stringify loop) to keep the pagehide/hidden path cheap.
  * Returns an empty array when the API is absent so callers omit the field.
  *
  * @since NEXT
@@ -328,12 +410,31 @@ export const collectSlowResources = () => {
 		) {
 			return [];
 		}
-		const entries = performance.getEntriesByType( 'resource' );
+		let entries = null;
+		try {
+			entries = performance.getEntriesByType( 'resource' );
+		} catch {
+			return [];
+		}
 		if ( ! entries || typeof entries.length !== 'number' ) {
 			return [];
 		}
+		// Bound the synchronous scan on resource-heavy pages: only the
+		// most recent entries are considered (older resources are less
+		// likely to gate the current LCP).
+		let scan = entries;
+		if ( entries.length > RUM_SLOW_RESOURCE_SCAN_MAX ) {
+			try {
+				scan = Array.prototype.slice.call(
+					entries,
+					entries.length - RUM_SLOW_RESOURCE_SCAN_MAX
+				);
+			} catch {
+				return [];
+			}
+		}
 		const shaped = [];
-		for ( const entry of entries ) {
+		for ( const entry of scan ) {
 			const clean = sanitizeSlowResourceEntry( entry );
 			if ( clean ) {
 				shaped.push( clean );
@@ -349,24 +450,27 @@ export const collectSlowResources = () => {
 			( item ) => item.duration > RUM_SLOW_RESOURCE_THRESHOLD_MS
 		);
 		if ( ! candidates.length ) {
-			candidates = shaped.slice( 0, 3 );
+			// Fallback keeps the slowest three: sort before slicing so
+			// ResourceTiming insertion order never promotes fast assets.
+			candidates = shaped
+				.slice()
+				.sort( ( a, b ) => b.duration - a.duration )
+				.slice( 0, 3 );
+		} else {
+			candidates.sort( ( a, b ) => b.duration - a.duration );
 		}
-		candidates.sort( ( a, b ) => b.duration - a.duration );
 		candidates = candidates.slice( 0, RUM_MAX_SLOW_RESOURCES );
-		// Payload budget: keep JSON under ~1.5KB, drop fastest-first (keep slowest) on overflow.
+		// Payload budget: keep JSON under ~1.5KB with a single length
+		// estimate plus one trim (keep slowest) — no re-stringify loop
+		// on the pagehide path.
 		let encoded = '';
 		try {
 			encoded = JSON.stringify( candidates );
 		} catch {
 			return [];
 		}
-		while ( encoded.length > 1536 && candidates.length > 1 ) {
-			candidates = candidates.slice( 0, candidates.length - 1 );
-			try {
-				encoded = JSON.stringify( candidates );
-			} catch {
-				return [];
-			}
+		if ( encoded.length > 1536 && candidates.length > 1 ) {
+			candidates = candidates.slice( 0, 1 );
 		}
 		return candidates;
 	} catch {
@@ -422,28 +526,12 @@ export const sanitizeRumValues = ( raw ) => {
 		clean.lcpUrl = raw.lcpUrl;
 	}
 	// LCP element selector attribution (issue #1311): compact
-	// `tag#id`/`.class` selector, <=256 chars, strict charset. Omitted
-	// when absent so the p75-only path is unchanged.
-	// NOTE: the {1,256} length gate mirrors RUM_MAX_LCP_SELECTOR_LENGTH
-	// above (and RUM::LCP_SELECTOR_MAX_LENGTH server-side) — update all
-	// three together when bumping the cap.
-	if (
-		typeof raw.lcpSelector === 'string' &&
-		raw.lcpSelector &&
-		raw.lcpSelector.length <= RUM_MAX_LCP_SELECTOR_LENGTH &&
-		/^[a-z0-9#._\-\s:~+[\]=']{1,256}$/i.test( raw.lcpSelector ) &&
-		raw.lcpSelector.indexOf( '<' ) === -1 &&
-		raw.lcpSelector.indexOf( '>' ) === -1 &&
-		raw.lcpSelector.indexOf( '"' ) === -1 &&
-		raw.lcpSelector.indexOf( '`' ) === -1 &&
-		raw.lcpSelector.toLowerCase().indexOf( 'javascript:' ) === -1 &&
-		raw.lcpSelector.toLowerCase().indexOf( 'vbscript:' ) === -1 &&
-		raw.lcpSelector.toLowerCase().indexOf( 'data:' ) === -1
-	) {
-		clean.lcpSelector = raw.lcpSelector.slice(
-			0,
-			RUM_MAX_LCP_SELECTOR_LENGTH
-		);
+	// `tag#id`/`.class` selector validated via the shared
+	// `isValidLcpSelector()` gate. Omitted when absent so the p75-only
+	// path is unchanged.
+	const checkedSelector = isValidLcpSelector( raw.lcpSelector );
+	if ( checkedSelector ) {
+		clean.lcpSelector = checkedSelector;
 	}
 	// Slow-resource audit (issue #1311): array of <=5 shaped entries.
 	// Malformed entries are dropped; the key is omitted when empty.
@@ -615,11 +703,20 @@ export const sanitizeRumValues = ( raw ) => {
 		try {
 			const slow = collectSlowResources();
 			if ( Array.isArray( slow ) && slow.length ) {
-				const budgeted = sanitizeRumValues( {
-					lcp: 1,
-					slowResources: slow,
-				} ).slowResources;
-				if ( Array.isArray( budgeted ) && budgeted.length ) {
+				// Re-validate through the slow-resource sanitizer directly
+				// (the collector output is already shaped; this only
+				// guards against future collector changes).
+				const budgeted = [];
+				for ( const item of slow ) {
+					const cleanEntry = sanitizeSlowResourceEntry( item );
+					if ( cleanEntry ) {
+						budgeted.push( cleanEntry );
+					}
+					if ( budgeted.length >= RUM_MAX_SLOW_RESOURCES ) {
+						break;
+					}
+				}
+				if ( budgeted.length ) {
 					extra.slowResources = budgeted;
 				}
 			}
@@ -701,17 +798,10 @@ export const sanitizeRumValues = ( raw ) => {
 				// never xpath or outerHTML). Guarded + fail-open: absent
 				// element or derivation failure omits the field.
 				try {
-					if (
-						typeof PerformanceObserver !== 'undefined' &&
-						last &&
-						last.element
-					) {
+					if ( last && last.element ) {
 						const selector = deriveLcpSelector( last.element );
 						if ( selector ) {
-							const checked = sanitizeRumValues( {
-								lcp: 1,
-								lcpSelector: selector,
-							} ).lcpSelector;
+							const checked = isValidLcpSelector( selector );
 							if ( checked ) {
 								values.lcpSelector = checked;
 							} else {

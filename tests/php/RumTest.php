@@ -1408,7 +1408,6 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
 
 		$method = new \ReflectionMethod( RUM::class, 'append_to_queue_atomic' );
-		$method->setAccessible( true );
 
 		$result = array( true, 0 );
 		for ( $i = 0; $i < 105; $i++ ) {
@@ -1517,7 +1516,6 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		try {
 			$method = new \ReflectionMethod( RUM::class, 'append_to_queue_atomic' );
-			$method->setAccessible( true );
 
 			$first = $method->invoke(
 				null,
@@ -1997,5 +1995,129 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$rows = RUM::get_top_slow_resources( 3 );
 		$this->assertCount( 1, $rows );
 		$this->assertSame( 'https://example.com/new.js', $rows[0]['url'] );
+	}
+
+	/**
+	 * Test that rate limiting runs before token validation.
+	 *
+	 * An invalid-token beacon from an exhausted IP must hit the 429, not
+	 * the 401, so brute-force token probes still consume throttle budget.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_rate_limits_before_token_validation(): void {
+		$this->install_stubs();
+		// Exercise the transient fallback path for determinism.
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		$_SERVER['REMOTE_ADDR']         = '203.0.113.77';
+
+		$key                      = Util::transient_key( 'wppo_rum_ratelimit_' . md5( '203.0.113.77' ) );
+		$this->transients[ $key ] = RUM::RATE_LIMIT_PER_HOUR;
+
+		$result = RUM::collect(
+			array(
+				'token' => 'forged-token',
+				'path'  => '/',
+				'lcp'   => 1000,
+			)
+		);
+
+		$this->assertFalse( $result['ok'] );
+		$this->assertSame( 429, $result['status'] );
+	}
+
+	/**
+	 * Test that the flush path falls back to the legacy slow key.
+	 *
+	 * Mirroring the intake fallback: a present-but-invalid `slowResources`
+	 * queue value must not shadow a valid legacy `slow_resources` value.
+	 *
+	 * @since NEXT
+	 */
+	public function test_flush_falls_back_to_legacy_slow_key_when_primary_invalid(): void {
+		$this->install_stubs();
+		// Transient queue path for determinism: the shared object-cache
+		// queue may hold residue from earlier tests in the same process.
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+
+		$this->transients[ Util::transient_key( 'wppo_rum_queue' ) ] = array(
+			array(
+				'path'           => '/fallback',
+				'lcp'            => 1500,
+				'_ts'            => time(),
+				'slowResources'  => 'garbage-string-sanitizes-empty',
+				'slow_resources' => array(
+					array(
+						'name'          => 'https://example.com/legacy.js',
+						'initiatorType' => 'script',
+						'duration'      => 800,
+					),
+				),
+			),
+		);
+
+		RUM::flush_queue();
+
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( 'slowResources', $data[ $today ]['/fallback'] );
+		$row = reset( $data[ $today ]['/fallback']['slowResources'] );
+		$this->assertSame( 'https://example.com/legacy.js', $row['url'] );
+	}
+
+	/**
+	 * Test that the read path skips rows with non-allowlisted types.
+	 *
+	 * Matching intake (which drops them): a tampered/legacy row whose
+	 * type fails the allowlist must not surface as a fabricated `img`
+	 * preload suggestion.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_top_slow_resources_skips_unknown_types(): void {
+		$this->install_stubs();
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/a' => array(
+					'slowResources' => array(
+						'example.com/nav'  => array(
+							'url'           => 'https://example.com/nav',
+							'type'          => 'navigation',
+							'n'             => 99,
+							'totalDuration' => 99000.0,
+							'maxDuration'   => 1000.0,
+							'lastSeen'      => time(),
+						),
+						'example.com/ok.js' => array(
+							'url'           => 'https://example.com/ok.js',
+							'type'          => 'script',
+							'n'             => 2,
+							'totalDuration' => 2000.0,
+							'maxDuration'   => 1100.0,
+							'lastSeen'      => time(),
+						),
+					),
+				),
+			),
+		);
+
+		$rows = RUM::get_top_slow_resources( 3 );
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'https://example.com/ok.js', $rows[0]['url'] );
+		$this->assertSame( 'script', $rows[0]['type'] );
 	}
 }
