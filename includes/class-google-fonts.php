@@ -549,6 +549,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 						$cached = $direct;
 					}
 				}
+				// Post-read bound (audit #1338 review): the file could have
+				// grown between stat and read; never slurp an oversized cache
+				// into the strpos scan.
+				if ( is_string( $cached ) && strlen( $cached ) > 1024 * 1024 ) {
+					set_transient( $fail_key, 1, self::backoff_ttl() );
+					return false;
+				}
 				if ( is_string( $cached ) && false === strpos( $cached, 'fonts.gstatic.com' ) ) {
 					return true;
 				}

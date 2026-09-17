@@ -2752,8 +2752,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Audit #1338: no REST-layer pre-check — queue_scan() resolves the
 			// winner's ID internally (unique insert + re-query), so a separate
 			// as_has_scheduled_action() here paid an extra scheduler read.
-			// already_queued stays in the shape (always false: dedup is
-			// internal now) so external pollers never see it go undefined.
+			// Contract note: already_queued stays in the shape but is always
+			// false now — dedup happens inside queue_scan() and the REST layer
+			// can no longer distinguish a fresh enqueue from a deduped winner
+			// without re-introducing the query. Pollers must key off job_id
+			// (always the actionable job) rather than already_queued.
 			$job_id = Pagespeed::queue_scan( $url, $strategy );
 
 			return $this->send_response(

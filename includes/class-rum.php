@@ -405,6 +405,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 */
 		public static function clear_field_lcp_cache(): void {
 			self::$field_lcp_aggregate   = null;
+			// Stored-LCP memo shares the same invalidation: a mid-request
+			// PageSpeed store must be visible to later same-request readers.
+			self::$stored_lcp_memo       = array();
 			self::$field_lcp_loaded      = false;
 			self::$field_lcp_result_memo = array();
 			self::$score_trends_memo     = null;
@@ -2876,6 +2879,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Store one memo entry with a drop-oldest cap.
+		 *
+		 * Bounds per-process growth when admin/CLI code resolves many
+		 * distinct paths (audit #1338 review).
+		 *
+		 * @since NEXT
+		 * @param string $memo_key Memo bucket key.
+		 * @param string $value    LCP URL (or '' for a negative).
+		 * @return void
+		 */
+		private static function memo_store_lcp( string $memo_key, string $value ): void {
+			self::$stored_lcp_memo[ $memo_key ] = $value;
+			if ( count( self::$stored_lcp_memo ) > 30 ) {
+				self::$stored_lcp_memo = array_slice( self::$stored_lcp_memo, -30, null, true );
+			}
+		}
+
+		/**
 		 * Read-only lookup of the stored PageSpeed LCP candidate for a page.
 		 *
 		 * Single shared implementation of the PageSpeed priorities used by
@@ -2935,7 +2956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 									// cross-origin tier value is skipped so a
 									// later same-origin tier can still win.
 									if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
-										self::$stored_lcp_memo[ $memo_key ] = $meta_lcp;
+										self::memo_store_lcp( $memo_key, $meta_lcp );
 										return $meta_lcp;
 									}
 								}
@@ -2954,7 +2975,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							foreach ( $strategies as $strategy ) {
 								$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
 								if ( ! empty( $front_lcp ) && is_string( $front_lcp ) && self::is_same_origin_url( $front_lcp ) ) {
-									self::$stored_lcp_memo[ $memo_key ] = $front_lcp;
+									self::memo_store_lcp( $memo_key, $front_lcp );
 									return $front_lcp;
 								}
 							}
@@ -2966,15 +2987,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 				// Priority 3: Transient keyed by strategy + URL hash.
 				if ( ! function_exists( 'get_transient' ) ) {
-					self::$stored_lcp_memo[ $memo_key ] = '';
+					self::memo_store_lcp( $memo_key, '' );
 					return '';
 				}
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
-					self::$stored_lcp_memo[ $memo_key ] = '';
+					self::memo_store_lcp( $memo_key, '' );
 					return '';
 				}
 				if ( ! function_exists( 'untrailingslashit' ) || ! function_exists( 'esc_url_raw' ) ) {
-					self::$stored_lcp_memo[ $memo_key ] = '';
+					self::memo_store_lcp( $memo_key, '' );
 					return '';
 				}
 				try {
@@ -2985,11 +3006,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						$lookup_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::cached_home_url() . $norm_path ) );
 					}
 				} catch ( \Throwable $e ) {
-					self::$stored_lcp_memo[ $memo_key ] = '';
+					self::memo_store_lcp( $memo_key, '' );
 					return '';
 				}
 				if ( '' === $lookup_url ) {
-					self::$stored_lcp_memo[ $memo_key ] = '';
+					self::memo_store_lcp( $memo_key, '' );
 					return '';
 				}
 				foreach ( $strategies as $strategy ) {
@@ -3000,14 +3021,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						continue;
 					}
 					if ( ! empty( $transient ) && is_string( $transient ) && self::is_same_origin_url( $transient ) ) {
-						self::$stored_lcp_memo[ $memo_key ] = $transient;
+						self::memo_store_lcp( $memo_key, $transient );
 						return $transient;
 					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			self::$stored_lcp_memo[ $memo_key ] = '';
+			self::memo_store_lcp( $memo_key, '' );
 			return '';
 		}
 

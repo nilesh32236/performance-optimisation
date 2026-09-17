@@ -499,8 +499,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			self::$heuristic_lcp_memo     = array();
 			// Commit-then-clear (audit #1338 review): long-lived processes
 			// that clear between pages must not silently drop buffered alts.
+			// Memo resets to array() (never null): get_derived_alt_map()
+			// passes it to array_key_exists(), which TypeErrors on null.
 			self::commit_derived_alt_map();
-			self::$derived_alt_memo      = null;
+			self::$derived_alt_memo      = array();
 			self::$deferred_alt_entries  = array();
 			self::$alt_commit_registered = false;
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'clear_request_memo' ) ) {
@@ -5249,7 +5251,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( array_key_exists( $blog_id, self::$derived_alt_memo ) && is_array( self::$derived_alt_memo[ $blog_id ] ) ) {
 					return self::$derived_alt_memo[ $blog_id ];
 				}
-				if ( function_exists( 'wp_cache_get' ) ) {
+				// Manual object-cache layer only without a persistent backend:
+				// with one, get_transient() already hits wp_cache, so a second
+				// namespaced read is a redundant round-trip (audit #1338 review).
+				$use_manual_cache = function_exists( 'wp_using_ext_object_cache' ) ? ! wp_using_ext_object_cache() : true;
+				if ( $use_manual_cache && function_exists( 'wp_cache_get' ) ) {
 					$hit = wp_cache_get( Util::transient_key( 'wppo_derived_alt_map' ), 'wppo' );
 					if ( is_array( $hit ) ) {
 						self::$derived_alt_memo[ $blog_id ] = $hit;
@@ -5259,9 +5265,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( function_exists( 'get_transient' ) ) {
 					$map = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
 					$map = is_array( $map ) ? $map : array();
-					// Populate the object cache so the next cold path in this
-					// request (or a persistent-cache backend) skips the second read.
-					if ( function_exists( 'wp_cache_set' ) ) {
+					// Populate the manual layer on transient hit (same
+					// non-persistent-backend condition as above).
+					if ( $use_manual_cache && function_exists( 'wp_cache_set' ) ) {
 						wp_cache_set( Util::transient_key( 'wppo_derived_alt_map' ), $map, 'wppo', DAY_IN_SECONDS );
 					}
 					self::$derived_alt_memo[ $blog_id ] = $map;
@@ -5288,9 +5294,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private static function set_derived_alt_map_entry( string $src, string $title ): void {
 			try {
+				// Truncate frontend-controlled keys/values so 200 multi-KB
+				// entries cannot inflate the persistent transient.
+				$src = substr( $src, 0, 2048 );
+				$title = substr( $title, 0, 200 );
+				if ( '' === $src ) {
+					return;
+				}
 				$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 				if ( ! isset( self::$deferred_alt_entries[ $blog_id ] ) || ! is_array( self::$deferred_alt_entries[ $blog_id ] ) ) {
 					self::$deferred_alt_entries[ $blog_id ] = array();
+				// Cap blog buckets drop-oldest: a long-lived process touching
+				// unbounded sites must not grow the buffer per site.
+				if ( count( self::$deferred_alt_entries ) > 10 ) {
+					self::$deferred_alt_entries = array_slice( self::$deferred_alt_entries, -10, null, true );
+				}
 				}
 				self::$deferred_alt_entries[ $blog_id ][ $src ] = $title;
 				// Cap each blog bucket drop-oldest so unbounded galleries cannot
@@ -5318,49 +5336,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		public static function commit_derived_alt_map(): void {
 			try {
-				if ( empty( self::$deferred_alt_entries ) ) {
-					return;
-				}
-				$buffered                   = self::$deferred_alt_entries;
-				self::$deferred_alt_entries = array();
-				// Re-arm: entries buffered after this drain (long-lived
-				// processes, manual commits in tests) must re-register.
-				self::$alt_commit_registered = false;
-				$current_blog                = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-				foreach ( $buffered as $blog_id => $entries ) {
-					if ( ! is_array( $entries ) || empty( $entries ) ) {
-						continue;
+				// Drain loop: entries buffered mid-commit (another shutdown
+				// callback, long-lived worker) re-register below via the
+				// setter instead of being stranded with no pending hook.
+				do {
+					if ( empty( self::$deferred_alt_entries ) ) {
+						break;
 					}
-					$blog_id  = (int) $blog_id;
-					$switched = false;
-					if ( $blog_id !== $current_blog && function_exists( 'switch_to_blog' ) ) {
-						switch_to_blog( $blog_id );
-						$switched = function_exists( 'restore_current_blog' );
+					$buffered                   = self::$deferred_alt_entries;
+					self::$deferred_alt_entries = array();
+					// Re-arm: entries buffered after this drain (long-lived
+					// processes, manual commits in tests) must re-register.
+					self::$alt_commit_registered = false;
+					$current_blog                = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+					// Best-effort concurrency note: this is an unlocked
+					// read-modify-write like the original per-image writes;
+					// two concurrent shutdowns can lost-update, but each
+					// carries the full merged map so the loss window is one
+					// request, not N.
+					foreach ( $buffered as $blog_id => $entries ) {
+						if ( ! is_array( $entries ) || empty( $entries ) ) {
+							continue;
+						}
+						$blog_id  = (int) $blog_id;
+						$switched = false;
+						if ( $blog_id !== $current_blog && function_exists( 'switch_to_blog' ) ) {
+							switch_to_blog( $blog_id );
+							$switched = function_exists( 'restore_current_blog' );
+						}
+						try {
+							$key = Util::transient_key( 'wppo_derived_alt_map' );
+							$map = self::get_derived_alt_map();
+							foreach ( $entries as $src => $title ) {
+								$map[ $src ] = $title;
+							}
+							if ( count( $map ) > 200 ) {
+								$map = array_slice( $map, -200, 200, true );
+							}
+							self::$derived_alt_memo[ $blog_id ] = $map;
+							$use_manual_cache = function_exists( 'wp_using_ext_object_cache' ) ? ! wp_using_ext_object_cache() : true;
+							if ( $use_manual_cache && function_exists( 'wp_cache_set' ) ) {
+								wp_cache_set( $key, $map, 'wppo', DAY_IN_SECONDS );
+							}
+							if ( function_exists( 'set_transient' ) ) {
+								set_transient( $key, $map, DAY_IN_SECONDS );
+							}
+						} catch ( \Throwable $inner ) {
+							unset( $inner );
+						} finally {
+							// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- restore_current_blog() must run even when the per-blog write throws; guarded by function_exists above.
+							if ( $switched ) {
+								restore_current_blog();
+							}
+						}
 					}
-					try {
-						$key = Util::transient_key( 'wppo_derived_alt_map' );
-						$map = self::get_derived_alt_map();
-						foreach ( $entries as $src => $title ) {
-							$map[ $src ] = $title;
-						}
-						if ( count( $map ) > 200 ) {
-							$map = array_slice( $map, -200, 200, true );
-						}
-						self::$derived_alt_memo[ $blog_id ] = $map;
-						if ( function_exists( 'wp_cache_set' ) ) {
-							wp_cache_set( $key, $map, 'wppo', DAY_IN_SECONDS );
-						}
-						if ( function_exists( 'set_transient' ) ) {
-							set_transient( $key, $map, DAY_IN_SECONDS );
-						}
-					} catch ( \Throwable $inner ) {
-						unset( $inner );
-					} finally {
-						// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- restore_current_blog() must run even when the per-blog write throws; guarded by function_exists above.
-						if ( $switched ) {
-							restore_current_blog();
-						}
-					}
+				} while ( ! empty( self::$deferred_alt_entries ) );
+				// Late entries re-register through the normal setter path.
+				if ( ! empty( self::$deferred_alt_entries ) && ! self::$alt_commit_registered && function_exists( 'add_action' ) ) {
+					add_action( 'shutdown', array( __CLASS__, 'commit_derived_alt_map' ) );
+					self::$alt_commit_registered = true;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
