@@ -583,13 +583,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @param string $html The HTML content to minify.
 		 * @return string Minified HTML content.
 		 * @since 1.0.0
+		 * @since NEXT Fail-open: canonical null-guard plus unconditional placeholder/canonical restore (issue #1344).
 		 */
 		private function minify_html( string $html ): string {
-			$html = $this->modify_canonical_link( $html );
+			$original = $html;
 
-			$content_array = $this->extract_and_preserve_scripts_template( $html );
-			$html          = $content_array[0];
-			$scripts       = $content_array[1];
+			try {
+				$modified = $this->modify_canonical_link( $html );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $original;
+			}
+			// PCRE failure returns null: fail open to the original input so
+			// the $pre_minify fallback and unconditional restore below run.
+			if ( ! is_string( $modified ) ) {
+				return $original;
+			}
+			$html = $modified;
+
+			try {
+				$content_array = $this->extract_and_preserve_scripts_template( $html );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $original;
+			}
+			if ( ! is_array( $content_array ) || ! isset( $content_array[0], $content_array[1] ) || ! is_string( $content_array[0] ) || ! is_array( $content_array[1] ) ) {
+				return $original;
+			}
+			$html    = $content_array[0];
+			$scripts = $content_array[1];
 
 			// Placeholder-carrying buffer: restored unconditionally below so a
 			// mid-minify throwable can never leak namespaced tokens or drop
@@ -609,7 +631,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					try {
 						$html = $this->get_html_min()->minify( $html );
 					} catch ( \Throwable $e ) {
-						do_action( 'wppo_debug_log', 'WPPO HTML minify failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+						try {
+							if ( function_exists( 'do_action' ) ) {
+								do_action( 'wppo_debug_log', 'WPPO HTML minify failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+							}
+						} catch ( \Throwable $ignored ) {
+							unset( $ignored );
+						}
 					}
 				}
 			} catch ( \Throwable $e ) {

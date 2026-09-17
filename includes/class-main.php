@@ -8733,7 +8733,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! is_string( $path ) || '' === $path ) {
 					return '';
 				}
+				// Intentionally strict: literal ".." over-blocks exotic but
+				// legitimate names like my..theme.css. Safe direction (skips
+				// optimization, availability-only).
 				if ( false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+					return '';
+				}
+				// Mirror Util::get_local_path(): single-decode and re-check so
+				// %2e%2e/%00 payloads cannot smuggle past the literal checks.
+				$decoded = rawurldecode( $path );
+				if ( false !== strpos( $decoded, "\0" ) || false !== strpos( $decoded, '..' ) ) {
 					return '';
 				}
 				if ( ! defined( 'ABSPATH' ) || ! is_string( ABSPATH ) || '' === ABSPATH ) {
@@ -8762,6 +8771,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! function_exists( 'realpath' ) ) {
 					return '';
 				}
+				// Fallback only when Util::validate_minify_path() is unavailable
+				// (stale deploy); intentionally a strict ABSPATH + WP_CONTENT_DIR
+				// subset of the shared gate — never widen beyond it here.
 				$real = realpath( $local );
 				if ( ! is_string( $real ) || '' === $real ) {
 					return '';
@@ -12736,22 +12748,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Checks if a file is already minified (shared helper for CSS/JS).
 		 *
 		 * @since 1.5.1
+		 * @since NEXT Hardened with realpath() containment; hostile/out-of-root paths return true fail-open (issue #1344).
 		 *
 		 * @param  string $file_path Path to the file.
 		 * @param  string $type      Asset type ('css' or 'js').
-		 * @return bool True if the file is minified, false otherwise.
+		 * @return bool True when minified OR when the path is rejected by containment (fail-open skip).
 		 */
 		private function is_file_minified( $file_path, $type ) {
 			if ( empty( $file_path ) || ! is_string( $file_path ) ) {
 				return true;
 			}
 
+			// Pure-string fast path before any stat: a .min name is skipped
+			// regardless of containment, so short-circuit first.
+			try {
+				if ( $this->is_minified_asset_name( $file_path, (string) $type ) ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// Containment: only stat files under WP_CONTENT_DIR/ABSPATH so a
 			// poisoned wppo_* filter returning an absolute path cannot cause
 			// arbitrary local file stat/read. Symlinks are resolved via
-			// realpath() (guarded) so a link inside the content dir pointing
-			// outside is refused; non-existent paths keep the string-prefix
-			// check so the fail-open verdict is unchanged.
+			// realpath() (guarded, memoized) so a link inside the content dir
+			// pointing outside is refused; non-existent paths keep the
+			// string-prefix verdict so the fail-open skip is unchanged.
+			// Intentionally strict: literal ".." over-blocks exotic names like
+			// my..theme.css (safe direction: skips optimization only).
 			if ( false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
 				return true;
 			}
@@ -12759,16 +12784,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $trimmed ) ) {
 				return true;
 			}
+			if ( 0 === stripos( $trimmed, 'data:' ) || 0 === stripos( $trimmed, 'phar:' ) ) {
+				return true;
+			}
+			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#i', $trimmed ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $trimmed ) ) {
+				return true;
+			}
+			// Shared-gate verdict first: a single auditable allow-list so the
+			// three containment copies cannot drift. Fail-open skip on reject.
+			if ( class_exists( Util::class ) && method_exists( Util::class, 'is_minify_path_allowed' ) ) {
+				try {
+					if ( ! Util::is_minify_path_allowed( $file_path ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
+			}
 			try {
-				$normalize = function_exists( 'wp_normalize_path' )
+				static $content_root = null;
+				static $abspath_root = null;
+				if ( null === $content_root ) {
+					$content_root = ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) ? ( function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) WP_CONTENT_DIR ) : str_replace( '\\', '/', (string) WP_CONTENT_DIR ) ) : '';
+				}
+				if ( null === $abspath_root ) {
+					$abspath_root = ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) ? ( function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) ABSPATH ) : str_replace( '\\', '/', (string) ABSPATH ) ) : '';
+				}
+				$normalize     = function_exists( 'wp_normalize_path' )
 					? static function ( string $p ): string {
 						return wp_normalize_path( $p );
 					}
 					: static function ( string $p ): string {
 						return str_replace( '\\', '/', $p );
 					};
-				$candidate = $file_path;
-				if ( function_exists( 'realpath' ) ) {
+				$resolved_path = $file_path;
+				if ( class_exists( Util::class ) && method_exists( Util::class, 'memoized_realpath' ) ) {
+					try {
+						$memo_resolved = Util::memoized_realpath( $file_path );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$memo_resolved = false;
+					}
+					if ( is_string( $memo_resolved ) && '' !== $memo_resolved ) {
+						$resolved_path = $memo_resolved;
+					}
+				} elseif ( function_exists( 'realpath' ) ) {
 					try {
 						$resolved = realpath( $file_path );
 					} catch ( \Throwable $e ) {
@@ -12776,23 +12837,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$resolved = false;
 					}
 					if ( is_string( $resolved ) && '' !== $resolved ) {
-						$candidate = $resolved;
+						$resolved_path = $resolved;
 					}
 				}
-				$normalized = $normalize( $candidate );
+				$normalized = $normalize( $resolved_path );
 				if ( false !== strpos( $normalized, "\0" ) ) {
 					return true;
 				}
 				$allowed = false;
-				if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
-					$content = $normalize( (string) WP_CONTENT_DIR );
-					if ( $normalized === $content || 0 === strpos( $normalized, rtrim( $content, '/' ) . '/' ) ) {
+				if ( '' !== $content_root ) {
+					if ( $normalized === $content_root || 0 === strpos( $normalized, rtrim( $content_root, '/' ) . '/' ) ) {
 						$allowed = true;
 					}
 				}
-				if ( ! $allowed && defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
-					$base = $normalize( (string) ABSPATH );
-					if ( $normalized === $base || 0 === strpos( $normalized, rtrim( $base, '/' ) . '/' ) ) {
+				if ( ! $allowed && '' !== $abspath_root ) {
+					if ( $normalized === $abspath_root || 0 === strpos( $normalized, rtrim( $abspath_root, '/' ) . '/' ) ) {
 						$allowed = true;
 					}
 				}
@@ -12800,14 +12859,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return true;
 				}
 				// Stat the resolved path so the containment verdict and the
-				// subsequent read cannot diverge via a symlink swap.
-				$file_path = $candidate;
+				// subsequent read cannot diverge via a simple symlink swap.
+				// Note: a symlink-swap race between this check and the
+				// read/stat below remains (separate syscalls; would need
+				// O_NOFOLLOW/fstat revalidation to close). Requires a local
+				// file-write primitive; recorded as accepted residual.
+				$file_path = $resolved_path;
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return true;
-			}
-
-			if ( $this->is_minified_asset_name( $file_path, $type ) ) {
 				return true;
 			}
 
@@ -12853,21 +12912,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$line_count  = 0;
 			$total_chars = 0;
 			$max_lines   = 50;
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
-			$line = fgets( $handle );
-			while ( false !== $line ) {
-				++$line_count;
-				$total_chars += strlen( $line );
-				if ( $line_count >= $max_lines ) {
-					break;
-				}
+			try {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
 				$line = fgets( $handle );
+				while ( false !== $line ) {
+					++$line_count;
+					$total_chars += strlen( $line );
+					if ( $line_count >= $max_lines ) {
+						break;
+					}
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
+					$line = fgets( $handle );
+				}
+			} finally {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_flock
+				flock( $handle, LOCK_UN );
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+				fclose( $handle );
 			}
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_flock
-			flock( $handle, LOCK_UN );
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
-			fclose( $handle );
 
 			$avg_line_length = $total_chars / max( 1, $line_count );
 			$threshold       = 'css' === $type ? 500 : 1000;

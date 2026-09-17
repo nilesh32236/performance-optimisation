@@ -1746,6 +1746,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		private static array $purge_fallback_memo = array();
 
 		/**
+		 * Per-blog memo for minify allow-roots (see get_minify_allowed_roots()).
+		 *
+		 * The roots are request-stable (constants + uploads basedir + filter);
+		 * memoizing avoids re-running wp_upload_dir() + apply_filters() per
+		 * queued asset (20-50/page). Keyed by blog ID (multisite-safe).
+		 *
+		 * @var array<int, string[]>
+		 * @since NEXT
+		 */
+		private static array $minify_roots_memo = array();
+
+		/**
+		 * Per-request memo for realpath() resolutions on the minify hot path.
+		 *
+		 * Shares one stat per distinct path across get_local_path(),
+		 * validate_minify_path(), and is_file_minified() callers so a
+		 * 30-asset page does not pay duplicate stats per handle. False
+		 * verdicts (unresolvable paths) are memoized too.
+		 *
+		 * @var array<string, string|false>
+		 * @since NEXT
+		 */
+		private static array $realpath_memo = array();
+
+		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
 		 * Also clears the canonical-host and normalized-host memos, which
@@ -1775,6 +1800,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			self::clear_settings_cache();
 			self::clear_permalink_cache();
 			self::reset_action_scheduler_unique_cache();
+			self::$minify_roots_memo = array();
+			self::$realpath_memo     = array();
 		}
 
 		/**
@@ -2106,11 +2133,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Guarded, memoized realpath() for the minify hot path.
+		 *
+		 * Shares one stat per distinct path per request across
+		 * get_local_path() and validate_minify_path() so each minifiable
+		 * handle pays a single resolution. Never throws; returns false when
+		 * resolution is unavailable or fails.
+		 *
+		 * @since NEXT
+		 * @param string $path Candidate path.
+		 * @return string|false Resolved path, or false.
+		 */
+		public static function memoized_realpath( string $path ) {
+			if ( array_key_exists( $path, self::$realpath_memo ) ) {
+				return self::$realpath_memo[ $path ];
+			}
+			$resolved = false;
+			if ( function_exists( 'realpath' ) ) {
+				try {
+					$resolved = realpath( $path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$resolved = false;
+				}
+				if ( ! is_string( $resolved ) || '' === $resolved ) {
+					$resolved = false;
+				}
+			}
+			self::$realpath_memo[ $path ] = $resolved;
+			return $resolved;
+		}
+
+		/**
 		 * Gets the local file path from a URL.
 		 *
 		 * @param string $url The URL to process.
 		 * @return string The local file path.
 		 * @since 1.0.0
+		 * @since NEXT Symlink-escape refusal for existing files; fail-closed when resolution fails (issue #1344).
 		 */
 		public static function get_local_path( string $url ): string {
 			// Reject NUL bytes and stream wrappers before URL parsing so
@@ -2166,6 +2226,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			// Build the full local path and verify it stays within ABSPATH.
+			// Guarded for drop-in/early contexts where ABSPATH may be undefined.
+			if ( ! defined( 'ABSPATH' ) || ! is_string( ABSPATH ) || '' === ABSPATH ) {
+				return '';
+			}
 			$normalized_abspath = wp_normalize_path( ABSPATH );
 			$full_path          = wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );
 
@@ -2177,30 +2241,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			// Symlink confinement: when the mapped file exists, resolve it via
-			// realpath() (guarded) and refuse links escaping the content tree.
-			// Non-existent paths keep the string-prefix verdict above so the
-			// happy-path mapping is byte-identical. Fail-open: any resolver
-			// error keeps the string-checked path.
-			if ( function_exists( 'realpath' ) ) {
-				try {
-					$resolved = realpath( $full_path );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$resolved = false;
+			// realpath() (guarded, memoized) and refuse links escaping the
+			// content tree. Non-existent paths keep the string-prefix verdict
+			// above so the happy-path mapping is byte-identical. Fail-closed:
+			// when the target exists but resolution fails (permissions,
+			// open_basedir, transient I/O) refuse rather than returning the
+			// unresolved string-checked path to file_get_contents/filesize.
+			$resolved = self::memoized_realpath( $full_path );
+			if ( is_string( $resolved ) && '' !== $resolved ) {
+				$normalized_resolved = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $resolved ) : str_replace( '\\', '/', $resolved );
+				if ( false !== strpos( $normalized_resolved, "\0" ) ) {
+					return '';
 				}
-				if ( is_string( $resolved ) && '' !== $resolved ) {
-					$normalized_resolved = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $resolved ) : str_replace( '\\', '/', $resolved );
-					if ( false !== strpos( $normalized_resolved, "\0" ) ) {
-						return '';
-					}
-					// Exact-match the root itself (realpath() strips the
-					// trailing slash) or require the trailing-slash prefix
-					// so sibling directories cannot match.
-					$abspath_base = rtrim( $normalized_abspath, '/' );
-					if ( $normalized_resolved !== $abspath_base && 0 !== strpos( $normalized_resolved, $abspath_base . '/' ) ) {
-						return '';
-					}
+				// Exact-match the root itself (realpath() strips the
+				// trailing slash) or require the trailing-slash prefix
+				// so sibling directories cannot match.
+				$abspath_base = rtrim( $normalized_abspath, '/' );
+				if ( $normalized_resolved !== $abspath_base && 0 !== strpos( $normalized_resolved, $abspath_base . '/' ) ) {
+					return '';
 				}
+			} elseif ( file_exists( $full_path ) ) {
+				return '';
 			}
 
 			return $full_path;
@@ -2219,6 +2280,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since NEXT
 		 */
 		public static function get_minify_allowed_roots(): array {
+			$blog_id = self::current_blog_id();
+			if ( isset( self::$minify_roots_memo[ $blog_id ] ) ) {
+				return self::$minify_roots_memo[ $blog_id ];
+			}
 			$defaults = array();
 
 			if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
@@ -2270,11 +2335,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 					$sanitized = array_values( array_unique( array_filter( $sanitized ) ) );
 					if ( ! empty( $sanitized ) ) {
+						self::$minify_roots_memo[ $blog_id ] = $sanitized;
 						return $sanitized;
 					}
 				}
 			}
 
+			self::$minify_roots_memo[ $blog_id ] = $defaults;
 			return $defaults;
 		}
 
@@ -2282,12 +2349,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Whether a minify/combine source path is allowed to be read.
 		 *
 		 * Single auditable gate: rejects non-string/empty input, NUL bytes,
-		 * literal "..", stream wrappers (php://, file://, expect://,
-		 * phar://, data:, and any other "scheme:" prefix), and ".php"
-		 * targets; resolves symlinks via realpath() (guarded) and requires
-		 * the resolved path to sit inside one of
-		 * {@see Util::get_minify_allowed_roots()} with a trailing-slash
-		 * boundary so sibling-prefix directories cannot match.
+		 * literal and single-decoded "..", stream wrappers (php://, file://,
+		 * expect://, phar://, data:, and any other "scheme:" prefix), and
+		 * non-asset extensions (allowlist: css, js); resolves symlinks via
+		 * realpath() (guarded, memoized) and requires the resolved path to
+		 * sit inside one of {@see Util::get_minify_allowed_roots()} (union
+		 * of literal and realpath-resolved roots so symlinked docroots keep
+		 * working) with a trailing-slash boundary so sibling-prefix
+		 * directories cannot match.
 		 *
 		 * Never emits file bytes and never fatals — callers fail open to
 		 * uncombined/unoptimised output.
@@ -2323,6 +2392,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 
+			// Mirror get_local_path(): single-decode and re-check so an
+			// encoded traversal/NUL payload cannot smuggle past the literal
+			// checks above. Double-encoding stays literal and harmless.
+			$decoded = rawurldecode( $path );
+			if ( false !== strpos( $decoded, "\0" ) || false !== strpos( $decoded, '..' ) ) {
+				return '';
+			}
+
 			$trimmed = ltrim( $path );
 			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $trimmed ) ) {
 				return '';
@@ -2334,17 +2411,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 
-			if ( 'php' === strtolower( pathinfo( $path, PATHINFO_EXTENSION ) ) ) {
+			// Asset-extension allowlist: only css/js may be served into
+			// publicly combined output, so wp-config.php.bak, .sql, .env,
+			// .log, .phtml, .php5, .phar, .htaccess, etc. inside allowed
+			// roots can never be disclosed via this gate.
+			$ext = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+			if ( ! in_array( $ext, array( 'css', 'js' ), true ) ) {
 				return '';
 			}
 
-			if ( function_exists( 'realpath' ) ) {
-				$resolved = realpath( $path );
-				if ( false === $resolved ) {
-					return '';
-				}
-			} else {
-				$resolved = $path;
+			$resolved = self::memoized_realpath( $path );
+			if ( ! is_string( $resolved ) || '' === $resolved ) {
+				return '';
 			}
 
 			if ( function_exists( 'wp_normalize_path' ) ) {
@@ -2357,7 +2435,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 
-			foreach ( self::get_minify_allowed_roots() as $root ) {
+			// Gate against the union of literal and realpath-resolved roots:
+			// when ABSPATH/WP_CONTENT_DIR/uploads themselves are symlinks
+			// (atomic-deploy current->releases, Docker bind-mounts), the
+			// resolved candidate would otherwise miss the literal prefix and
+			// silently disable minify/combine. Fall back to literal roots
+			// when a root cannot be resolved.
+			$roots          = self::get_minify_allowed_roots();
+			$expanded_roots = array();
+			foreach ( $roots as $root ) {
+				if ( ! is_string( $root ) || '' === $root ) {
+					continue;
+				}
+				$expanded_roots[] = $root;
+				$resolved_root    = self::memoized_realpath( $root );
+				if ( is_string( $resolved_root ) && '' !== $resolved_root ) {
+					$expanded_roots[] = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $resolved_root ) : str_replace( '\\', '/', $resolved_root );
+				}
+			}
+			$expanded_roots = array_values( array_unique( array_filter( $expanded_roots ) ) );
+
+			foreach ( $expanded_roots as $root ) {
 				if ( ! is_string( $root ) || '' === $root ) {
 					continue;
 				}
@@ -2875,6 +2973,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * falling back to `wp_generate_password()` (sanitized to alphanumerics)
 		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
 		 * failure degrades to a static fallback namespace (fail-open).
+		 * Note: the non-CSPRNG tail is an accepted residual — on the PHP 8.2+
+		 * floor `random_bytes()` is always available, so the fallback only
+		 * runs when the CSPRNG itself throws.
 		 *
 		 * @since 2.0.0
 		 * @return string Non-empty namespace string.
