@@ -967,14 +967,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				// leave the tag untouched.
 				$manual_third_party_on = ! empty( $file_opt_for_preview['delayJSThirdParty'] );
 				$auto_third_party_on   = ! empty( $file_opt_for_preview['delayJSThirdPartyAuto'] );
+				// Auto-match verdict, reused by get_delay_strategy_for_inline()
+				// below so each tag pays a single auto-pattern scan (not two:
+				// gate + strategy). Null when auto mode is off.
+				$auto_matched = null;
 				if ( ! $skip_delay && ( $manual_third_party_on || $auto_third_party_on ) ) {
 					try {
 						$is_candidate = false;
 						if ( $manual_third_party_on ) {
 							$is_candidate = self::is_third_party_delay_candidate( (string) $attributes, (string) $content, $file_opt_for_preview );
 						}
-						if ( ! $is_candidate && $auto_third_party_on ) {
-							$is_candidate = self::is_third_party_auto_delay_candidate( (string) $attributes, (string) $content, $file_opt_for_preview );
+						if ( $auto_third_party_on ) {
+							$auto_matched = self::is_third_party_auto_delay_candidate( (string) $attributes, (string) $content, $file_opt_for_preview );
+							$is_candidate = $is_candidate || $auto_matched;
 						}
 						$skip_delay = ! $is_candidate;
 					} catch ( \Throwable $e ) {
@@ -1117,7 +1122,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 							$attributes .= ' data-wppo-delay-exec="defer"';
 						}
 					}
-					$strategy = $this->get_delay_strategy_for_inline( $attributes, $content, $file_opt_for_preview );
+					// The gate verdict above is reused so auto-matched tags do
+					// not pay a second pattern scan here.
+					$strategy = $this->get_delay_strategy_for_inline( $attributes, $content, $file_opt_for_preview, $auto_matched );
 					if ( 'interaction' !== $strategy ) {
 						$attributes .= ' data-wppo-delay-strategy="' . esc_attr( $strategy ) . '"';
 					}
@@ -1165,14 +1172,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Determine delay strategy for an inline script.
 		 *
+		 * Contract: callers must gate on is_third_party_auto_delay_candidate()
+		 * first; this resolver does NOT re-check the allowlist or the
+		 * builder/commerce exclusions. Pass the gate verdict via
+		 * $is_auto_matched to avoid a second pattern scan; null means
+		 * "not precomputed" and falls back to matching here.
+		 *
 		 * @since 2.0.0
 		 *
-		 * @param string $attributes Script tag attributes string.
-		 * @param string $content    Inline script content.
-		 * @param array  $file_opt   Optional effective file_optimisation slice (preview-aware).
+		 * @param string    $attributes      Script tag attributes string.
+		 * @param string    $content         Inline script content.
+		 * @param array     $file_opt        Optional effective file_optimisation slice (preview-aware).
+		 * @param bool|null $is_auto_matched Optional precomputed auto-candidate verdict.
 		 * @return string Strategy: 'interaction', 'idle', or 'viewport'.
 		 */
-		private function get_delay_strategy_for_inline( string $attributes, string $content, array $file_opt = array() ): string {
+		private function get_delay_strategy_for_inline( string $attributes, string $content, array $file_opt = array(), ?bool $is_auto_matched = null ): string {
 			$search_in = $attributes . ' ' . $content;
 			if ( null !== $this->delay_idle_re ) {
 				try {
@@ -1235,8 +1249,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					if ( empty( $slice ) && isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ) {
 						$slice = $this->options['file_optimisation'];
 					}
-					if ( ! empty( $slice['delayJSThirdPartyAuto'] ) && self::markup_matches_third_party_auto_patterns( $attributes, $content ) ) {
-						return 'idle';
+					if ( ! empty( $slice['delayJSThirdPartyAuto'] ) ) {
+						if ( true === $is_auto_matched ) {
+							return 'idle';
+						}
+						if ( null === $is_auto_matched && self::markup_matches_third_party_auto_patterns( $attributes, $content ) ) {
+							return 'idle';
+						}
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -1538,18 +1557,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Whether markup matches the curated auto third-party patterns (#1314).
 		 *
-		 * Lazily boots the pattern list via Main when available (single source
-		 * of truth); fails open to false when Main is unavailable or on any
-		 * error. The matcher itself lazy-boots, so callers must gate on the
-		 * auto toggle first.
+		 * Matches patterns against the parsed src only (parity with
+		 * Main::matches_third_party_auto_pattern()): scripts without src stay
+		 * eager, and a vendor string merely mentioned in inline content never
+		 * qualifies. Lazily boots the pattern list via Main when available
+		 * (single source of truth); fails open to false when Main is
+		 * unavailable or on any error. The matcher itself lazy-boots, so
+		 * callers must gate on the auto toggle first.
+		 *
+		 * Handle-vs-markup limitation: the buffered path has no script handle,
+		 * so handle-keyword matches only apply on the script_loader_tag path
+		 * (Main); buffered matching is src-substring only.
 		 *
 		 * @since NEXT
 		 * @param string $attributes Script attributes string.
-		 * @param string $content    Inline script content.
+		 * @param string $content    Inline script content (ignored; kept for signature parity).
 		 * @return bool True on match.
 		 */
 		private static function markup_matches_third_party_auto_patterns( string $attributes, string $content ): bool {
 			try {
+				// Quick-reject scripts without src before booting the pattern
+				// list or scanning content (pure-inline tags stay eager and
+				// never pay the pattern scan; avoids copying large inline
+				// bodies into a haystack).
+				if ( false === strpos( $attributes, 'src' ) ) {
+					return false;
+				}
+				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $matches ) ) {
+					return false;
+				}
+				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
+				if ( '' === $src ) {
+					return false;
+				}
+				unset( $content );
 				$patterns = array();
 				if ( class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_third_party_auto_patterns' ) ) {
 					try {
@@ -1562,10 +1603,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				if ( empty( $patterns ) ) {
 					return false;
 				}
-				$haystack = $attributes . ' ' . $content;
 				foreach ( $patterns as $pattern ) {
 					$pattern = trim( (string) $pattern );
-					if ( '' !== $pattern && false !== stripos( $haystack, $pattern ) ) {
+					if ( '' !== $pattern && false !== stripos( $src, $pattern ) ) {
 						return true;
 					}
 				}
@@ -1581,21 +1621,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 *
 		 * Mirrors Main::is_delay_third_party_auto_candidate() for buffered
 		 * HTML: scripts without src stay eager; builder/commerce contexts
-		 * never auto-delay (unconditional); the user allowlist (settings plus
-		 * the `wppo_delay_js_third_party_allowlist` filter, mirroring
-		 * Main::get_delay_js_third_party_allowlist()) always wins; then the
-		 * curated auto patterns decide. Manual exclusions and per-page
+		 * never auto-delay (unconditional); the user allowlist (via the shared
+		 * Main::get_delay_js_third_party_allowlist_for_slice() helper, so
+		 * allowlist semantics stay in one place) always wins against the src;
+		 * then the curated auto patterns decide. The buffered path has no
+		 * handle, so allowlist/pattern matching is src-substring only (a
+		 * handle-only keyword exempts on the script_loader_tag path but not
+		 * here — documented limitation). Manual exclusions and per-page
 		 * overrides are applied by the caller, so auto patterns merge
 		 * additively. Fail-open to false on any error.
 		 *
 		 * @since NEXT
 		 * @param string $attributes Script attributes string.
-		 * @param string $content    Inline script content.
+		 * @param string $content    Inline script content (ignored except for signature parity).
 		 * @param array  $file_opt   Effective file_optimisation slice.
 		 * @return bool True when the script should be delayed in auto mode.
 		 */
 		private static function is_third_party_auto_delay_candidate( string $attributes, string $content, array $file_opt ): bool {
 			try {
+				// Quick-reject scripts without src before allowlist/pattern
+				// work (pure-inline tags stay eager).
+				if ( false === strpos( $attributes, 'src' ) ) {
+					return false;
+				}
 				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $matches ) ) {
 					return false;
 				}
@@ -1608,66 +1656,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				if ( self::is_delay_excluded_context() ) {
 					return false;
 				}
-				$haystack = $attributes . ' ' . $content;
-				// User allowlist wins. The settings-derived list is built
-				// first and passed into the filter (mirroring
-				// Main::get_delay_js_third_party_allowlist()) so filters
-				// written as array_merge($list, [...]) keep the user's
-				// textarea entries on this path too.
-				$settings_allowlist = array();
-				$allow_raw          = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
-				if ( is_string( $allow_raw ) && '' !== trim( $allow_raw ) ) {
-					$settings_allowlist = (array) Util::process_urls( str_replace( ',', "\n", $allow_raw ) );
-				} elseif ( is_array( $allow_raw ) ) {
-					$settings_allowlist = array_values(
-						array_filter(
-							array_map(
-								static function ( $v ): string {
-									return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
-								},
-								$allow_raw
-							),
-							static function ( $v ): bool {
-								return '' !== trim( (string) $v );
+				unset( $content );
+				// User allowlist wins (src-substring on this path). Shared
+				// helper keeps semantics identical to Main and memoizes the
+				// parse per request keyed by the raw value.
+				$allowlist = array();
+				if ( class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_third_party_allowlist_for_slice' ) ) {
+					try {
+						$allowlist = Main::get_delay_js_third_party_allowlist_for_slice( $file_opt );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$allowlist = array();
+					}
+				} else {
+					$allow_raw = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
+					if ( is_string( $allow_raw ) && '' !== trim( $allow_raw ) ) {
+						$allowlist = (array) Util::process_urls( str_replace( ',', "\n", $allow_raw ) );
+					} elseif ( is_array( $allow_raw ) ) {
+						$allowlist = Util::coerce_string_list( $allow_raw );
+					}
+					if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_allowlist' ) ) {
+						try {
+							$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $allowlist );
+							if ( is_array( $filtered ) ) {
+								$allowlist = Util::coerce_string_list( $filtered );
 							}
-						)
-					);
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					} else {
+						$allowlist = Util::coerce_string_list( $allowlist );
+					}
 				}
-				foreach ( $settings_allowlist as $allowed ) {
+				foreach ( $allowlist as $allowed ) {
 					$allowed = trim( (string) $allowed );
-					if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
+					if ( '' !== $allowed && false !== stripos( $src, $allowed ) ) {
 						return false;
 					}
 				}
-				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_allowlist' ) ) {
-					try {
-						$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $settings_allowlist );
-						if ( is_array( $filtered ) ) {
-							$coerced = array_values(
-								array_filter(
-									array_map(
-										static function ( $v ): string {
-											return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
-										},
-										$filtered
-									),
-									static function ( $v ): bool {
-										return '' !== trim( (string) $v );
-									}
-								)
-							);
-							foreach ( $coerced as $allowed ) {
-								$allowed = trim( (string) $allowed );
-								if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
-									return false;
-								}
-							}
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				return self::markup_matches_third_party_auto_patterns( $attributes, $content );
+				return self::markup_matches_third_party_auto_patterns( $attributes, '' );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

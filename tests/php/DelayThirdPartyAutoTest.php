@@ -478,4 +478,27 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( array(), $writes, 'Migration must not write when the key exists' );
 	}
+
+	/**
+	 * A valid empty array from the filter is honored and disables auto mode.
+	 */
+	public function test_auto_patterns_empty_array_disables(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook ) {
+				return 'wppo_delay_js_third_party_auto_patterns' === $hook;
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value = null ) {
+				if ( 'wppo_delay_js_third_party_auto_patterns' === $hook ) {
+					return array();
+				}
+				return $value;
+			}
+		);
+
+		$this->assertSame( array(), Main::get_delay_js_third_party_auto_patterns() );
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for candidate tests.
+		$this->assertFalse( Main::matches_third_party_auto_pattern( 'site-metrics', '<script src="https://www.googletagmanager.com/gtm.js"></script>' ) );
+	}
 }

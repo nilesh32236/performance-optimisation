@@ -2564,6 +2564,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Coerce an untrusted string list (e.g. filter output) to a clean list.
+		 *
+		 * Drops non-string/non-numeric entries (instead of casting arrays to
+		 * "Array"), trims, drops empties, dedupes, and reindexes. Single
+		 * shared helper for the delay-JS third-party allowlist mirrors in
+		 * Main and Minify\HTML so allowlist semantics stay in one place.
+		 *
+		 * @param mixed $raw Untrusted list value.
+		 * @return string[] Clean list.
+		 * @since NEXT
+		 */
+		public static function coerce_string_list( $raw ): array {
+			if ( ! is_array( $raw ) ) {
+				return array();
+			}
+			$mapped   = array_map(
+				static function ( $val ): string {
+					return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+				},
+				$raw
+			);
+			$filtered = array_filter(
+				$mapped,
+				static function ( $val ): bool {
+					return '' !== trim( (string) $val );
+				}
+			);
+			return array_values( array_unique( $filtered ) );
+		}
+
+		/**
 		 * Check whether a URL matches any of the exclusion rules.
 		 *
 		 * Both the URL being checked and each exclusion rule are normalized with

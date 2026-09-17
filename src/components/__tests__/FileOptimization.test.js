@@ -1046,7 +1046,7 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
-	it( 'hides the auto-delay toggle until third-party mode is on', () => {
+	it( 'shows the auto-delay toggle standalone when third-party mode is off', () => {
 		render(
 			<FileOptimization
 				options={ { delayJS: true, delayJSThirdParty: false } }
@@ -1057,9 +1057,11 @@ describe( 'FileOptimization Component', () => {
 		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
 		fireEvent.click( scriptsTab );
 
+		// Auto mode is an independent OR with manual mode on the backend, so
+		// the toggle renders standalone (auto-only is a supported state).
 		expect(
-			screen.queryByLabelText( /Auto-delay known third parties/i )
-		).not.toBeInTheDocument();
+			screen.getByLabelText( /Auto-delay known third parties/i )
+		).toBeInTheDocument();
 	} );
 
 	it( 'toggles Remove HTML Comments switch', () => {

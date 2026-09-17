@@ -3142,28 +3142,24 @@ const FileOptimization = ( {
 															) }
 														</p>
 													</div>
-													<SwitchField
-														label={ __(
-															'Auto-delay known third parties when idle',
-															'performance-optimisation'
-														) }
-														description={ __(
-															'One-click deferral of known third-party vendors (analytics, ads, social, chat, embeds) until the browser is idle — same load-when-idle behavior as the idle list. Your allowlist and exclusions still win, and builders plus cart, checkout and account stay excluded.',
-															'performance-optimisation'
-														) }
-														name="delayJSThirdPartyAuto"
-														checked={
-															settings.delayJSThirdPartyAuto
-														}
-														onChange={ handleChange(
-															setSettings
-														) }
-														disabled={
-															optimizerDisabled
-														}
-													/>
 												</>
 											) }
+											<SwitchField
+												label={ __(
+													'Auto-delay known third parties when idle',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'One-click deferral of known third-party vendors (analytics, ads, social, chat, embeds) until the browser is idle — same load-when-idle behavior as the idle list. Works on its own or together with the manual third-party mode above. Your allowlist and exclusions still win, and builders plus cart, checkout and account stay excluded.',
+													'performance-optimisation'
+												) }
+												name="delayJSThirdPartyAuto"
+												checked={
+													settings.delayJSThirdPartyAuto
+												}
+												onChange={ onFieldChange }
+												disabled={ optimizerDisabled }
+											/>
 											<SwitchField
 												label={ __(
 													'Builder safe preset',
