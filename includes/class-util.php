@@ -542,7 +542,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'varnishPurgeUrls' => 'array',
 				),
 				'file_optimisation'  => array(
-					'removeQueryStrings'    => 'scalar',
 					'removeWooCSSJS'        => 'scalar',
 					'excludeUrlToKeepJSCSS' => 'scalar',
 					'removeCssJsHandle'     => 'scalar',

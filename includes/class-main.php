@@ -1085,10 +1085,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_comment_image_hardening' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_builder_watcher' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_third_party_auto' ) );
-			// One-time activity-log notice on admin_init.
-			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
-				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
-			}
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
@@ -1437,13 +1433,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Removed (#925): the legacy file_optimisation.removeQueryStrings path
 			// (strip_static_query_strings() on script/style_loader_src) is gone.
-			// `?ver=` IS the cache-busting mechanism (fingerprinting); a stored
-			// legacy value is ignored (fail-open, `?ver` always preserved) with a
-			// one-time activity-log notice on admin_init.
-			if ( ! empty( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
-				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
-			}
-
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
 				add_filter( 'style_loader_tag', array( $this->google_fonts, 'process_style_tag' ), 9, 3 );
 			}
@@ -2975,37 +2964,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 		}
 
-		/**
-		 * One-time notice for the removed removeQueryStrings path (#925).
-		 *
-		 * The legacy `file_optimisation.removeQueryStrings` option is ignored
-		 * (fail-open): `?ver=` is always preserved. Logs once to the activity
-		 * log and sets a non-autoloaded flag option so later requests skip the
-		 * log write. Never alters asset URLs; never fatals when the log table
-		 * or option APIs are unavailable.
-		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never pays for the flag lookup.
-		 *
-		 * @since 2.0.0
-		 * @return void
-		 */
-		public function maybe_notify_remove_query_strings_removal(): void {
-			$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
-			if ( empty( $file_opt['removeQueryStrings'] ) ) {
-				return;
-			}
-			if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
-				return;
-			}
-			if ( get_option( 'wppo_remove_query_strings_deprecated_logged', false ) ) {
-				return;
-			}
-			if ( class_exists( Log::class ) && function_exists( '__' ) ) {
-				Log::add( __( 'The legacy "Remove Query Strings" option was removed; ?ver= query strings are now always preserved for correct cache-busting.', 'performance-optimisation' ) );
-			}
-			update_option( 'wppo_remove_query_strings_deprecated_logged', true, false );
-		}
 
 		/**
 		 * Automatically try to fix WP_CACHE if it is missing or disabled.
