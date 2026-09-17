@@ -3512,15 +3512,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Extract inline `<style>` bodies and stylesheet hrefs via the HTML API.
 		 *
 		 * Streaming counterpart of the DOMDocument block inside {@see generate()}:
-		 * walks `WP_HTML_Processor` tokens with a deadline poll on every token
-		 * (the synchronous `DOMDocument::loadHTML()` parse it replaces has no
-		 * mid-parse poll) and an HTML5-spec parse of malformed markup (missing
-		 * closers, SVG, nested tables). Returns null on any failure so the
-		 * caller keeps the unchanged DOMDocument path (WP 6.2-6.8 parity).
+		 * walks `WP_HTML_Processor` tokens with a deadline poll every 16
+		 * tokens (plus one up-front check, so an already-expired budget
+		 * aborts without walking) and an HTML5-spec parse of malformed
+		 * markup (missing closers, SVG, nested tables). Returns null on any
+		 * failure so the caller keeps the unchanged DOMDocument path
+		 * (WP 6.2-6.8 parity).
 		 *
 		 * Only document-ordered discovery happens here; stylesheet fetching
 		 * stays in `generate()` so both paths share one fetch budget.
 		 * Per-URL/per-template extraction only; no cross-site state.
+		 *
+		 * Parity notes: `<link>` discovery requires the whole `rel` value
+		 * to equal `stylesheet` case-insensitively (trim + single
+		 * comparison), mirroring the DOM `//link[@rel="stylesheet"]`
+		 * exact-match intent while following the HTML spec (ASCII
+		 * case-insensitive `rel`); multi-token values such as
+		 * `alternate stylesheet` are therefore excluded on both paths.
+		 * The single intentional widening is case-folding: `REL="STYLESHEET"`
+		 * is collected by the stream (spec-correct, browsers match it) but
+		 * missed by the case-sensitive XPath. Inline `<style>` bodies keep
+		 * raw token text on both paths (`<style>` is rawtext: neither the
+		 * stream's `serialize_token()` nor DOM `textContent` decodes
+		 * entities, and comment markers stay literal), so no
+		 * decode/strip step is needed for parity.
 		 *
 		 * @since NEXT
 		 *
@@ -3530,10 +3545,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *                                                            document-ordered hrefs, or null to take the DOM path.
 		 */
 		private static function extract_css_sources_with_processor( string $html, ?float $deadline ): ?array {
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'supports_serialize_token' ) ) {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'should_use_html_processor' ) ) {
 				return null;
 			}
-			if ( ! \PerformanceOptimise\Inc\Util::supports_serialize_token() ) {
+			if ( ! \PerformanceOptimise\Inc\Util::should_use_html_processor() ) {
 				return null;
 			}
 			if ( ! class_exists( 'WP_HTML_Processor' ) ) {
@@ -3563,8 +3578,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$in_style      = false;
 				$style_buffer  = '';
 				$inline_capped = false;
+				// Fail-open up front: an already-exhausted budget never pays
+				// for even the streaming walk (mirrors the DOM-path re-check).
+				if ( self::generation_expired( $deadline ) ) {
+					return null;
+				}
+				$tokens_seen = 0;
 				while ( $processor->next_token() ) {
-					if ( self::generation_expired( $deadline ) ) {
+					// Poll every 16 tokens (counter & mask): deadline precision
+					// loss is negligible for a ~120s budget and avoids a
+					// microtime() syscall per token on large pages.
+					++$tokens_seen;
+					if ( 0 === ( $tokens_seen & 15 ) && self::generation_expired( $deadline ) ) {
 						return null;
 					}
 					if ( '#tag' !== $processor->get_token_type() ) {
@@ -3580,6 +3605,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							$in_style     = true;
 							$style_buffer = '';
 						} elseif ( $in_style ) {
+							// `<style>` is rawtext on both paths: keep the raw
+							// token text so it matches DOM `textContent`
+							// (neither decodes entities).
 							$in_style     = false;
 							$content      = trim( $style_buffer );
 							$style_buffer = '';
@@ -3600,15 +3628,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					if ( ! is_string( $rel ) || '' === $rel ) {
 						continue;
 					}
-					$is_stylesheet = false;
-					$tokens        = preg_split( '/\s+/', strtolower( $rel ) );
-					foreach ( is_array( $tokens ) ? $tokens : array() as $token ) {
-						if ( 'stylesheet' === $token ) {
-							$is_stylesheet = true;
-							break;
-						}
-					}
-					if ( ! $is_stylesheet ) {
+					// Parity with `//link[@rel="stylesheet"]`: the whole rel
+					// value must equal `stylesheet` (case-insensitive trim).
+					// Multi-token values (`alternate stylesheet`,
+					// `stylesheet preload`) are excluded on both paths.
+					$rel_norm = strtolower( trim( (string) $rel ) );
+					if ( 'stylesheet' !== $rel_norm ) {
 						continue;
 					}
 					$href = $processor->get_attribute( 'href' );
@@ -3629,6 +3654,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 			// Malformed pages may never close <style>: DOMDocument auto-closes
 			// the element, so flush the trailing buffer for parity.
+			// Raw text like the closed-block path above (rawtext parity).
 			if ( $in_style ) {
 				$content = trim( $style_buffer );
 				if ( '' !== $content && ! $inline_capped ) {

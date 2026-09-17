@@ -5,7 +5,8 @@
  * Covers Critical_CSS::extract_css_sources_with_processor(): parity with the
  * DOMDocument discovery block in generate() on a malformed-HTML fixture
  * suite (missing closers, SVG, nested tables), mid-walk deadline polls,
- * byte-cap handling, skip-handle filtering, and the Util capability alias.
+ * byte-cap handling, skip-handle filtering, rel exact-match parity,
+ * entity-decoded style bodies, and the Util capability probe.
  *
  * @package PerformanceOptimise\Tests
  */
@@ -210,12 +211,71 @@ class CriticalCssHtmlProcessorTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The capability alias delegates to the canonical processor probe.
+	 * The canonical processor probe is available with the HTML API stub.
 	 *
 	 * @return void
 	 */
-	public function test_supports_serialize_token_delegates_to_probe(): void {
+	public function test_html_processor_probe_is_available_with_stub(): void {
 		$this->assertTrue( Util::should_use_html_processor() );
-		$this->assertSame( Util::should_use_html_processor(), Util::supports_serialize_token() );
+	}
+
+	/**
+	 * Multi-token rel values are excluded on both paths (exact-match parity).
+	 *
+	 * Guards the token-contains divergence: `alternate stylesheet` and
+	 * `stylesheet preload` must not enter the source set on either path.
+	 *
+	 * @return void
+	 */
+	public function test_extraction_excludes_multi_token_rel_values(): void {
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- HTML fixture string.
+		$html = '<link rel="alternate stylesheet" href="http://example.com/alt.css">'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- HTML fixture string.
+			. '<link rel="stylesheet preload" href="http://example.com/both.css">'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- HTML fixture string.
+			. '<link rel="stylesheet" href="http://example.com/exact.css">';
+
+		$expected = $this->extract_via_dom( $html );
+		$actual   = $this->extract( $html, microtime( true ) + 30 );
+
+		$this->assertNotNull( $actual );
+		$this->assertSame( array( 'http://example.com/exact.css' ), $actual['source_urls'] );
+		$this->assertSame( $expected['source_urls'], $actual['source_urls'] );
+	}
+
+	/**
+	 * Uppercase rel is collected by the stream (spec-correct widening).
+	 *
+	 * HTML `rel` is ASCII case-insensitive so browsers treat
+	 * `REL="STYLESHEET"` as a stylesheet; the case-sensitive DOM XPath
+	 * misses it. This single case-fold is the only intentional stream/DOM
+	 * divergence and is documented on the extractor.
+	 *
+	 * @return void
+	 */
+	public function test_extraction_collects_uppercase_rel_case_insensitively(): void {
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- HTML fixture string.
+		$actual = $this->extract( '<link rel="STYLESHEET" href="http://example.com/upper.css">', microtime( true ) + 30 );
+
+		$this->assertNotNull( $actual );
+		$this->assertSame( array( 'http://example.com/upper.css' ), $actual['source_urls'] );
+	}
+
+	/**
+	 * Rawtext style bodies match DOM (neither side decodes entities).
+	 *
+	 * `<style>` is rawtext: entities and comment markers stay literal in
+	 * both `serialize_token()` output and DOM `textContent`, so the stream
+	 * keeps the raw buffer with no decode/strip step.
+	 *
+	 * @return void
+	 */
+	public function test_extraction_decodes_entities_like_dom(): void {
+		$html     = '<style>p::after{content:"&gt; &amp;"}/* &lt;tag&gt; */</style>';
+		$expected = $this->extract_via_dom( $html );
+		$actual   = $this->extract( $html, microtime( true ) + 30 );
+
+		$this->assertNotNull( $actual );
+		$this->assertSame( $expected['inline_css'], $actual['inline_css'] );
 	}
 }
