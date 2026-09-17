@@ -566,6 +566,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 						$cached = $direct;
 					}
 				}
+				// Post-read cap: growth between the filesize() gate and the
+				// read must not defeat the 512KB cap — treat over-cap reads
+				// as unconverged and regenerate below.
+				if ( is_string( $cached ) && strlen( $cached ) > self::MAX_CACHED_CSS_BYTES ) {
+					$cached = null;
+				}
 				if ( is_string( $cached ) && false === strpos( $cached, 'fonts.gstatic.com' ) ) {
 					return true;
 				}
@@ -818,6 +824,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 
 			$tmp = $dest . '.tmp.' . wp_rand();
 
+			// Early abort: a truthful Content-Length over the 5MB cap skips
+			// the full network+disk download. The post-download size gate
+			// below stays as the backstop for lying/missing lengths.
+			try {
+				if ( function_exists( 'wp_remote_head' ) && function_exists( 'wp_remote_retrieve_header' ) && function_exists( 'is_wp_error' ) ) {
+					$head = wp_remote_head(
+						$url,
+						array(
+							'timeout'    => 10,
+							'user-agent' => self::CHROME_UA,
+						)
+					);
+					if ( ! is_wp_error( $head ) ) {
+						$declared = (int) wp_remote_retrieve_header( $head, 'content-length' );
+						if ( $declared > self::MAX_FONT_FILE_BYTES ) {
+							set_transient( $fail_key, 1, self::backoff_ttl() );
+							return false;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			$response = wp_remote_get(
 				$url,
 				array(
@@ -858,6 +888,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return false;
 			}
+			// Content check: an error/HTML body from a compromised or
+			// MITM'd fonts.gstatic.com response must not be persisted as
+			// .woff2 and served same-origin. Validate the woff2 magic
+			// bytes (finfo MIME first, signature fallback).
+			if ( ! self::is_valid_font_file( $tmp ) ) {
+				if ( file_exists( $tmp ) ) {
+					wp_delete_file( $tmp );
+				}
+				set_transient( $fail_key, 1, self::backoff_ttl() );
+				return false;
+			}
 
 			$result = rename( $tmp, $dest ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
 			if ( ! $result ) {
@@ -873,6 +914,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			}
 
 			return file_exists( $dest );
+		}
+
+		/**
+		 * Whether a downloaded file looks like a real font file.
+		 *
+		 * Guards against persisting an error/HTML body as .woff2: prefers
+		 * the finfo MIME check (font MIME or generic octet-stream, which
+		 * some builds report for woff2), with a woff2/woff magic-signature
+		 * fallback when finfo is unavailable. Fail-closed: any unreadable
+		 * or unrecognized file returns false.
+		 *
+		 * @since NEXT
+		 * @param string $path Local temp file path.
+		 * @return bool True when the file looks like a font.
+		 */
+		private static function is_valid_font_file( string $path ): bool {
+			try {
+				if ( ! is_string( $path ) || '' === $path || ! file_exists( $path ) || ! is_readable( $path ) ) {
+					return false;
+				}
+				if ( function_exists( 'finfo_open' ) ) {
+					$finfo = finfo_open( FILEINFO_MIME_TYPE );
+					if ( false !== $finfo ) {
+						try {
+							$mime = finfo_file( $finfo, $path );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$mime = false;
+						}
+						Util::close_finfo_handle( $finfo );
+						if ( is_string( $mime ) && '' !== $mime ) {
+							if ( in_array( $mime, array( 'font/woff', 'font/woff2', 'font/ttf', 'font/otf', 'font/collection', 'application/font-woff', 'application/font-woff2', 'application/octet-stream' ), true ) ) {
+								return true;
+							}
+							// Otherwise fall through to the magic-signature
+							// check below (authoritative): finfo databases
+							// vary across builds, so a non-allowlisted MIME
+							// alone must not reject a real font — while an
+							// HTML error body can never match a font
+							// signature and stays rejected.
+						}
+					}
+				}
+				$head = file_get_contents( $path, false, null, 0, 16 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local magic-byte probe of the downloaded font temp file.
+				if ( ! is_string( $head ) || strlen( $head ) < 4 ) {
+					return false;
+				}
+				// woff2 "wOF2", woff "wOFF", TrueType 0x00010000, OTTO (CFF).
+				return (
+					0 === strpos( $head, 'wOF2' ) ||
+					0 === strpos( $head, 'wOFF' ) ||
+					0 === strpos( $head, "\x00\x01\x00\x00" ) ||
+					0 === strpos( $head, 'OTTO' ) ||
+					0 === strpos( $head, 'true' ) ||
+					0 === strpos( $head, 'typ1' )
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**

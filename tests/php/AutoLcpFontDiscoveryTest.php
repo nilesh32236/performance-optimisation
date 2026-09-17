@@ -22,6 +22,30 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
 
 	/**
+	 * Backed-up OD stub globals (install_auto_lcp_stubs() setUp parity).
+	 *
+	 * @var array
+	 */
+	private $od_globals_backup = array();
+
+	/**
+	 * Restore OD stub globals leaked by install_auto_lcp_stubs().
+	 *
+	 * @return void
+	 */
+	protected function tearDown(): void {
+		foreach ( $this->od_globals_backup as $key => $existed ) {
+			if ( $existed ) {
+				$GLOBALS[ $key ] = $this->od_globals_backup[ $key . '_value' ];
+			} else {
+				unset( $GLOBALS[ $key ] );
+			}
+		}
+		$this->od_globals_backup = array();
+		parent::tearDown();
+	}
+
+	/**
 	 * Build a Main instance without invoking the constructor.
 	 *
 	 * @param array $preload_settings preload_settings option value.
@@ -382,7 +406,14 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_transient' )->justReturn( false );
 		// Order-independent: OdBridgeTest in the same process may leave OD
 		// metrics behind; empty both globals so the OD tier deterministically
-		// misses unless a test seeds od_metrics_stub itself.
+		// misses unless a test seeds od_metrics_stub itself. Back up first
+		// so tearDown() can restore (no cross-test leakage).
+		foreach ( array( 'od_metrics_stub', 'od_url_metrics' ) as $od_key ) {
+			if ( ! array_key_exists( $od_key, $this->od_globals_backup ) ) {
+				$this->od_globals_backup[ $od_key ]            = array_key_exists( $od_key, $GLOBALS );
+				$this->od_globals_backup[ $od_key . '_value' ] = $GLOBALS[ $od_key ] ?? null;
+			}
+		}
 		$GLOBALS['od_metrics_stub'] = array();
 		$GLOBALS['od_url_metrics']  = array();
 	}

@@ -86,6 +86,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 */
 		private static function read_template( string $filename ): string {
 			try {
+				// Allowlist guard: only the two shipped templates may be
+				// read, so a future variable caller cannot turn this into
+				// an arbitrary local read emitted into worker JS.
+				$filename = basename( $filename );
+				if ( ! in_array( $filename, array( 'cloudflare-worker.js', 'bunny-edge.js' ), true ) ) {
+					return '';
+				}
 				$template_path = WPPO_PLUGIN_PATH . 'templates/' . $filename;
 				if ( ! file_exists( $template_path ) || ! is_readable( $template_path ) ) {
 					return '';
@@ -96,7 +103,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 					return '';
 				}
 				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-				return is_string( $content ) ? $content : '';
+				// Post-read cap: a concurrent replace/symlink swap between
+				// stat and read must not load an oversized body.
+				if ( ! is_string( $content ) || '' === $content || strlen( $content ) > self::MAX_TEMPLATE_BYTES ) {
+					return '';
+				}
+				return $content;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';

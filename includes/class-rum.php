@@ -508,6 +508,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			add_action( 'update_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
 			add_action( 'add_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
 			add_action( 'delete_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
+			// The stored-LCP memo caches site-scoped postmeta/options/
+			// transients, so flush it on site switches too.
+			add_action( 'switch_blog', array( self::class, 'clear_field_lcp_cache' ) );
 		}
 
 		/**
@@ -819,6 +822,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$slug = (string) preg_replace( '/[^a-z0-9_-]/', '', $slug );
 				return substr( $slug, 0, 64 );
 			} catch ( \Throwable $e ) {
+				unset( $e );
 				return '';
 			}
 		}
@@ -1296,6 +1300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				return strtolower( (string) wp_parse_url( $home_url, PHP_URL_HOST ) );
 			} catch ( \Throwable $e ) {
+				unset( $e );
 				return '';
 			}
 		}
@@ -2917,8 +2922,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return string Memo key.
 		 */
 		private static function stored_lcp_memo_key( ?string $path ): string {
+			// Blog-scoped: postmeta/options/transients are site-scoped, so
+			// a mid-request switch_blog() must not serve site A's memoized
+			// LCP URL to site B.
+			$blog = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 			if ( null !== $path ) {
-				return 'path:' . $path;
+				return 'path:' . $blog . ':' . $path;
 			}
 			$post_part  = '0';
 			$front_part = '0';
@@ -2935,7 +2944,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return 'current:' . $post_part . ':' . $front_part;
+			return 'current:' . $blog . ':' . $post_part . ':' . $front_part;
 		}
 
 		/**
@@ -2967,15 +2976,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 								try {
 									$all_meta = get_post_meta( $post_id );
 									if ( is_array( $all_meta ) ) {
-										$handled_single_call = true;
-										foreach ( $strategies as $strategy ) {
-											$values   = $all_meta[ '_wppo_lcp_image_url_' . $strategy ] ?? '';
-											$meta_lcp = is_array( $values ) ? ( $values[0] ?? '' ) : $values;
-											// Same-origin only (issue #1180): a
-											// cross-origin tier value is skipped so a
-											// later same-origin tier can still win.
-											if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
-												return $meta_lcp;
+										// Page-builder posts can carry 50-200KB
+										// of postmeta; materializing all of it
+										// to read two keys costs more than two
+										// narrow keyed reads without a
+										// persistent object cache, so fall
+										// through to the per-key path.
+										if ( count( $all_meta ) <= 100 ) {
+											$handled_single_call = true;
+											foreach ( $strategies as $strategy ) {
+												$values   = $all_meta[ '_wppo_lcp_image_url_' . $strategy ] ?? '';
+												$meta_lcp = is_array( $values ) ? ( $values[0] ?? '' ) : $values;
+												// Same-origin only (issue #1180): a
+												// cross-origin tier value is skipped so a
+												// later same-origin tier can still win.
+												if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
+													return $meta_lcp;
+												}
 											}
 										}
 									}
@@ -3035,6 +3052,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						$lookup_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::cached_home_url() . $norm_path ) );
 					}
 				} catch ( \Throwable $e ) {
+					unset( $e );
 					return '';
 				}
 				if ( '' === $lookup_url ) {
@@ -3045,6 +3063,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					try {
 						$transient = get_transient( $transient_key );
 					} catch ( \Throwable $e ) {
+						unset( $e );
 						continue;
 					}
 					if ( ! empty( $transient ) && is_string( $transient ) && self::is_same_origin_url( $transient ) ) {

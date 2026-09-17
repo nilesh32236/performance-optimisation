@@ -469,6 +469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			self::$heuristic_lcp_memo     = array();
 			self::$derived_alt_map_memo   = null;
 			self::$derived_alt_map_dirty  = false;
+			self::$parent_title_cache     = array();
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'clear_request_memo' ) ) {
 				try {
 					\PerformanceOptimise\Inc\OD_Bridge::clear_request_memo();
@@ -5230,6 +5231,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private static $derived_alt_shutdown_registered = false;
 
 		/**
+		 * Per-request cache of resolved parent-post titles keyed by src.
+		 *
+		 * Class property (not a function-static) so clear_runtime_caches()
+		 * can flush it on switch_blog / cache-clear and in tests.
+		 * attachment_url_to_postid()/get_the_title() are site-dependent,
+		 * so entries are namespaced by blog ID. Bounded at 200 entries
+		 * (drop-oldest) like the persistent derived-alt map.
+		 *
+		 * @var array<string, string>
+		 * @since NEXT
+		 */
+		private static $parent_title_cache = array();
+
+		/**
 		 * Read the bounded persistent src-to-title map for derived alt text.
 		 *
 		 * The map is memoized per request: the first call reads
@@ -5279,6 +5294,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private static function set_derived_alt_map_entry( string $src, string $title ): void {
 			try {
+				// Bound the persisted map: truncate unbounded $src keys
+				// (full URLs) and $title values at entry time (the 125-char
+				// cap elsewhere is output-only), so 200 long-URL entries
+				// cannot bloat the per-site transient/object cache.
+				$src = substr( trim( $src ), 0, 512 );
+				if ( function_exists( 'mb_substr' ) ) {
+					$title = mb_substr( trim( $title ), 0, 125 );
+				} else {
+					$title = substr( trim( $title ), 0, 125 );
+				}
+				if ( '' === $src ) {
+					return;
+				}
 				$map = self::get_derived_alt_map();
 				if ( array_key_exists( $src, $map ) && $map[ $src ] === $title ) {
 					return;
@@ -5322,18 +5350,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			try {
 				$key  = Util::transient_key( 'wppo_derived_alt_map' );
 				$memo = self::$derived_alt_map_memo;
+				// Drop poisoned non-string entries from the memo so a
+				// polluted in-memory map cannot be persisted and warn
+				// downstream readers.
+				$memo = array_filter(
+					$memo,
+					static function ( $value, $map_key ): bool {
+						return is_string( $map_key ) && is_string( $value );
+					},
+					ARRAY_FILTER_USE_BOTH
+				);
 				$live = null;
 				if ( function_exists( 'wp_cache_get' ) ) {
 					$hit = wp_cache_get( $key, 'wppo' );
 					if ( is_array( $hit ) ) {
-						$live = $hit;
+						$live = array_filter(
+							$hit,
+							static function ( $value, $map_key ): bool {
+								return is_string( $map_key ) && is_string( $value );
+							},
+							ARRAY_FILTER_USE_BOTH
+						);
 					}
 				}
 				if ( null === $live && function_exists( 'get_transient' ) ) {
 					$stored = get_transient( $key );
-					$live   = is_array( $stored ) ? $stored : array();
+					$live   = is_array( $stored ) ? array_filter(
+						$stored,
+						static function ( $value, $map_key ): bool {
+							return is_string( $map_key ) && is_string( $value );
+						},
+						ARRAY_FILTER_USE_BOTH
+					) : array();
 				}
 				$merged = is_array( $live ) ? array_merge( $live, $memo ) : $memo;
+				// Re-assert recency for overwritten keys: array_merge()
+				// keeps them at their original old position, so a slice on
+				// a full map could truncate the just-updated entry while
+				// stale tail entries survive.
+				foreach ( array_keys( $memo ) as $memo_key ) {
+					if ( array_key_exists( $memo_key, $merged ) ) {
+						$memo_value = $merged[ $memo_key ];
+						unset( $merged[ $memo_key ] );
+						$merged[ $memo_key ] = $memo_value;
+					}
+				}
 				if ( count( $merged ) > 200 ) {
 					$merged = array_slice( $merged, -200, 200, true );
 				}
@@ -5373,13 +5434,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			if ( '' === $alt && function_exists( 'wp_get_post_parent_id' ) && function_exists( 'get_the_title' ) && function_exists( 'attachment_url_to_postid' ) ) {
 				try {
-					static $parent_title_cache = array();
-					if ( ! array_key_exists( $src, $parent_title_cache ) ) {
+					$blog_id   = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+					$cache_key = $blog_id . '|' . $src;
+					if ( ! array_key_exists( $cache_key, self::$parent_title_cache ) ) {
 						// Check the bounded persistent map first so repeat page
 						// views do not re-run attachment lookups per image.
 						$persistent = self::get_derived_alt_map();
 						if ( array_key_exists( $src, $persistent ) ) {
-							$parent_title_cache[ $src ] = $persistent[ $src ];
+							self::$parent_title_cache[ $cache_key ] = $persistent[ $src ];
 						} else {
 							// Resolve the image's own attachment so the fallback title
 							// comes from the attachment's parent post, not the global
@@ -5390,12 +5452,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							if ( function_exists( 'sanitize_text_field' ) ) {
 								$title = sanitize_text_field( (string) $title );
 							}
-							$parent_title_cache[ $src ] = is_string( $title ) ? trim( $title ) : '';
-							self::set_derived_alt_map_entry( $src, $parent_title_cache[ $src ] );
+							self::$parent_title_cache[ $cache_key ] = is_string( $title ) ? trim( $title ) : '';
+							self::set_derived_alt_map_entry( $src, self::$parent_title_cache[ $cache_key ] );
+						}
+						if ( count( self::$parent_title_cache ) > 200 ) {
+							self::$parent_title_cache = array_slice( self::$parent_title_cache, -200, 200, true );
 						}
 					}
-					if ( '' !== $parent_title_cache[ $src ] ) {
-						$alt = $parent_title_cache[ $src ];
+					if ( '' !== self::$parent_title_cache[ $cache_key ] ) {
+						$alt = self::$parent_title_cache[ $cache_key ];
 					}
 				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through with empty alt.
 				}

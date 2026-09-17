@@ -1571,6 +1571,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							);
 						}
 						$snapshot_complete = true;
+						// Wanted dedup keys for the capped batch: once all are
+						// seen the snapshot is sufficient and pagination can
+						// stop early instead of deserializing up to 10x1000
+						// rows to replace at most 100 per-item checks.
+						$wanted_keys = array();
+						foreach ( $webp_images as $wanted_image ) {
+							$wanted_path = $this->resolve_optimise_source_path( $wanted_image, $normalized_abspath );
+							if ( '' !== $wanted_path ) {
+								$wanted_keys[ $wanted_path . '|webp' ] = true;
+							}
+						}
+						foreach ( $avif_images as $wanted_image ) {
+							$wanted_path = $this->resolve_optimise_source_path( $wanted_image, $normalized_abspath );
+							if ( '' !== $wanted_path ) {
+								$wanted_keys[ $wanted_path . '|avif' ] = true;
+							}
+						}
 						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 						for ( $as_page = 0; $as_page < 10; $as_page++ ) {
 							$query            = array(
@@ -1581,7 +1598,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								'offset'   => $as_page * 1000,
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
-							if ( ! is_array( $existing_actions ) || empty( $existing_actions ) ) {
+							if ( ! is_array( $existing_actions ) ) {
+								// Query failure (false/WP_Error on transient DB
+								// error): not "genuinely none" — keep the
+								// per-item fail-safe fallbacks enabled.
+								$snapshot_complete = false;
+								break;
+							}
+							if ( empty( $existing_actions ) ) {
 								break;
 							}
 							foreach ( $existing_actions as $action ) {
@@ -1595,6 +1619,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								}
 								if ( is_array( $action_args ) && isset( $action_args[0]['source_path'], $action_args[0]['format'] ) ) {
 									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
+								}
+							}
+							if ( ! empty( $wanted_keys ) ) {
+								$all_seen = true;
+								foreach ( $wanted_keys as $wanted_key => $unused ) {
+									if ( ! isset( $scheduled[ $wanted_key ] ) ) {
+										$all_seen = false;
+										break;
+									}
+								}
+								unset( $unused );
+								if ( $all_seen ) {
+									break;
 								}
 							}
 							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
@@ -2737,8 +2774,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// re-query, so no REST-layer as_has_scheduled_action()
 			// pre-check is needed (it cost an extra scheduler read per
 			// scan request). A returned ID covers both fresh and
-			// already-queued jobs; 0 unambiguously means the scheduler
-			// could not enqueue or find a pending job.
+			// already-queued jobs.
 			$job_id = Pagespeed::queue_scan( $url, $strategy );
 
 			if ( $job_id > 0 ) {
@@ -2751,6 +2787,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					true,
 					202
 				);
+			}
+
+			// A 0 return is ambiguous on two paths: a fast-completed winner
+			// (result transient already readable while the pending/running
+			// re-query misses it) and old Action Scheduler installs without
+			// the lookup APIs (find_pending_job_id() always returns 0). A
+			// correctly-deduped scan must not surface as scheduler failure
+			// in the SPA, so check the completed result first, then fall
+			// back to 202 when a job is still scheduled but unlocatable.
+			try {
+				if ( false !== Pagespeed::get_results( $url, $strategy ) ) {
+					return $this->send_response(
+						array(
+							'url'      => $url,
+							'strategy' => $strategy,
+						),
+						true,
+						202
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action(
+					Pagespeed::AS_HOOK,
+					array(
+						array(
+							'url'      => $url,
+							'strategy' => $strategy,
+						),
+					),
+					Pagespeed::AS_GROUP
+				) ) {
+					return $this->send_response(
+						array(
+							'url'      => $url,
+							'strategy' => $strategy,
+						),
+						true,
+						202
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 
 			return $this->send_response( null, false, 500, __( 'Could not queue the PageSpeed scan.', 'performance-optimisation' ) );

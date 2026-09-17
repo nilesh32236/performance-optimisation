@@ -2407,13 +2407,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return false;
 				}
 				// Legacy fallback: pre-fix installs cached the verdict under
-				// the network-global key (or the raw per-URL key without the
-				// blog prefix). Honour it (and migrate it to the
+				// the raw per-URL key (without the blog prefix) or the
+				// network-global key. Honour them (and migrate to the
 				// blog-prefixed per-URL key) so upgrading does not force a
-				// re-probe storm.
-				$legacy = get_transient( self::NGINX_PROBE_TRANSIENT );
+				// re-probe storm. The legacy per-URL key is checked first:
+				// on multisite with a shared object cache the global key
+				// may hold another site's verdict and must not be
+				// persisted into this site's prefixed per-URL key.
+				$legacy = get_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
 				if ( 'exposed' !== $legacy && 'safe' !== $legacy ) {
-					$legacy = get_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
+					$legacy = get_transient( self::NGINX_PROBE_TRANSIENT );
 				}
 				if ( 'exposed' === $legacy || 'safe' === $legacy ) {
 					$migrated                             = ( 'exposed' === $legacy );
@@ -2498,13 +2501,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					// after an installation-wide enable()/disable().
 					try {
 						if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_sites' ) && function_exists( 'switch_to_blog' ) && function_exists( 'restore_current_blog' ) ) {
-							$sites = get_sites(
-								array(
-									'number' => 500,
-									'fields' => 'ids',
-								)
-							);
-							if ( is_array( $sites ) ) {
+							// Paginated fan-out: networks over 500 sites must
+							// not leave siblings stale up to 2h. Loop with an
+							// offset until a short page.
+							$fanout_offset = 0;
+							do {
+								$sites = get_sites(
+									array(
+										'number' => 500,
+										'offset' => $fanout_offset,
+										'fields' => 'ids',
+									)
+								);
+								if ( ! is_array( $sites ) || empty( $sites ) ) {
+									break;
+								}
+								$fanout_offset += count( $sites );
 								foreach ( $sites as $site_id ) {
 									$site_id = (int) $site_id;
 									if ( $site_id <= 0 ) {
@@ -2528,7 +2540,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 										restore_current_blog();
 									}
 								}
-							}
+								// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop over the site list.
+								if ( count( $sites ) < 500 ) {
+									break;
+								}
+							} while ( true );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );

@@ -241,8 +241,9 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 		$this->stub_remote(
 			static function ( $url, $args ) use ( $font_url ) {
 				if ( $font_url === $url && ! empty( $args['filename'] ) ) {
+					// Stream a realistic woff2 magic signature (is_valid_font_file() rejects non-font bodies).
 					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture streams the body like WP would.
-					file_put_contents( $args['filename'], 'WOFF2DATA' );
+					file_put_contents( $args['filename'], "wOF2\x00\x00\x00\x00DATA" );
 				}
 				return array(
 					'response' => array( 'code' => 200 ),
