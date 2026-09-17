@@ -2068,7 +2068,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * @since NEXT Toggles-off still excludes the stable RUM/OD hero so
 	 * the same response never lazy-loads its own preload.
 	 */
-	public function test_field_lcp_candidate_lazy_loaded_when_toggles_off(): void {
+	public function test_field_lcp_candidate_eager_when_toggles_off(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'get_the_ID' )->justReturn( 0 );

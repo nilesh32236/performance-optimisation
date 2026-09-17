@@ -3341,14 +3341,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * `image_optimisation.autoPreloadLCP` or
 		 * `preload_settings.autoLcpPreload` is enabled. When either is on,
 		 * the CCSS-path hint (wp_head:0) yields so exactly one preload
-		 * prints. The signal-driven automatic path (issue #1369) needs no
-		 * yield here: the CCSS path claims the URL in the pipeline's
-		 * shared dedup set, so the later pipeline run skips the duplicate
-		 * and exactly one hint prints either way. Fail-open: any failure
-		 * returns false (CCSS path emits normally).
+		 * prints. Intentionally toggle-gated: the signal-driven automatic
+		 * path (issue #1369, toggles off) is not covered here, so this
+		 * returns false for it by design.
+		 *
+		 * Exactly-one for that automatic path rests on the shared dedup
+		 * set, not on a yield: the CCSS path claims the URL via
+		 * Image_Optimisation::mark_preload_emitted() and the later
+		 * pipeline run skips duplicates via
+		 * Image_Optimisation::has_emitted_preload() (wp_head:0 runs before
+		 * wp_head:1), so one hint prints either way while both emitters
+		 * are enabled and share that set. If CCSS is disabled the pipeline
+		 * emits alone; if the sets ever diverge a duplicate hint is
+		 * possible but harmless (browsers coalesce identical preloads).
+		 * Fail-open: any failure returns false (CCSS path emits normally).
 		 *
 		 * @return bool True when the image pipeline will preload the LCP hero.
 		 * @since NEXT
+		 * @see \PerformanceOptimise\Inc\Image_Optimisation::has_emitted_preload()
+		 * @see \PerformanceOptimise\Inc\Image_Optimisation::mark_preload_emitted()
 		 */
 		private static function is_image_pipeline_lcp_preload_active(): bool {
 			try {

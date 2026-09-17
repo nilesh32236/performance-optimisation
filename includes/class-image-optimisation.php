@@ -4477,15 +4477,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Resolve the LCP-candidate URL excluded from lazy load (memoized per instance).
 		 *
-		 * Gated on the LCP toggles so default lazy behaviour is unchanged when
-		 * all LCP features are off: the field-measured branch needs
-		 * `fieldLcpOverride`, the stored-PageSpeed branch (shared read-only
-		 * lookup, no new scans) needs `autoPreloadLCP` or `prioritizeLCP`.
-		 * The manual per-post picker (`_wppo_lcp_preload_url`) is exempt from
-		 * the gate — pinning the hero is explicit opt-in, so the pinned URL
-		 * is always excluded from lazy load with width/height preserved.
-		 * Returns an empty string when no branch applies or nothing resolves.
-		 * Fail-open: any failure returns an empty string, never fatal.
+		 * The manual per-post picker (`_wppo_lcp_preload_url`) is always
+		 * excluded from lazy load with width/height preserved — pinning
+		 * the hero is explicit opt-in. Automatic tiers are toggle-gated,
+		 * with one exception (issue #1369): a stable RUM-field / OD
+		 * real-visit hero stays eager even when all LCP toggles are off,
+		 * mirroring the automatic preload so the same response never
+		 * lazy-loads its own preload. That exception is filterable via
+		 * `wppo_auto_lcp_preload` (filtered off means no automatic
+		 * exclusion), and the per-post `_wppo_disable_auto_lcp` meta
+		 * suppresses every automatic tier. Returns an empty string when
+		 * no branch applies or nothing resolves. Fail-open: any failure
+		 * returns an empty string, never fatal.
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
@@ -4494,6 +4497,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `add_delay_load_img()` stays in parity with
 		 * `maybe_preload_hero_image()` (which resolves with the buffer);
 		 * without a buffer only the manual + OD + stored tiers apply.
+		 * @since NEXT Signal-driven automatic exclusion with toggles off
+		 * (issue #1369), filterable via `wppo_auto_lcp_preload`.
 		 * @param array       $image_optimisation Image optimisation settings.
 		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
 		 * @return string The candidate URL, or empty string when none applies.
@@ -4546,6 +4551,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 							return $signal;
 						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Global automation off switch (issue #1369 review): when
+				// `wppo_auto_lcp_preload` is filtered off, no automatic
+				// tier may keep a hero eager — manual already returned
+				// above, so fail-closed to '' to stay coupled with the
+				// suppressed preload. Fail-open (allowed) falls through
+				// to the toggle-gated chain.
+				try {
+					if ( ! $this->is_auto_lcp_preload_allowed() ) {
+						if ( null === $buffer ) {
+							$this->lazy_lcp_exclusion_url     = '';
+							$this->lazy_lcp_exclusion_url_key = $memo_key;
+						}
+						return '';
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -4962,7 +4984,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// Empty input resolves the stable signal candidate;
 					// get_stable_signal_lcp_url() already honours the
 					// per-post disable. An explicit URL is explicit
-					// opt-in and is unaffected by the disable.
+					// opt-in and is unaffected by the disable. The
+					// signal-resolved path honours the `wppo_auto_lcp_preload`
+					// off switch (issue #1369); explicit URLs bypass it.
+					try {
+						if ( ! $this->is_auto_lcp_preload_allowed() ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					$img_url = $this->get_stable_signal_lcp_url();
 				}
 				if ( '' === $img_url ) {
@@ -7163,9 +7194,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// a stable RUM-field / OD hero still stamps high even
 					// when the toggle is off. Filterable via
 					// `wppo_auto_lcp_preload`; no signal means no stamp.
+					// Manual opt-in always proceeds so the resolver can
+					// stamp it even with no stable signal or a disabled
+					// filter (same manual-wins rule as preload/lazy).
 					try {
-						if ( ! $this->is_auto_lcp_preload_allowed() || '' === $this->get_stable_signal_lcp_url() ) {
-							return $attr;
+						$manual_gate = $this->get_manual_lcp_url();
+						if ( ! is_string( $manual_gate ) || '' === $manual_gate ) {
+							if ( ! $this->is_auto_lcp_preload_allowed() || '' === $this->get_stable_signal_lcp_url() ) {
+								return $attr;
+							}
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -7286,17 +7323,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Resolve the LCP candidate for the render-time fetchpriority filter, memoized per page.
 		 *
-		 * Same chain as the filter needs on every image render (manual
-		 * picker + Optimization Detective via `resolve_od_only_lcp_url()`,
-		 * then the stored chain via `get_current_lcp_url()`, then the
-		 * stability-gated signal tier via `get_stable_signal_lcp_url()`
-		 * (issue #1369 so the automatic fetchpriority path stamps the
-		 * same hero it preloads), but resolved
-		 * at most once per page: the result is cached in
-		 * `$fetchpriority_lcp_url` keyed by `get_lcp_memo_key()` so a page
-		 * with N images pays the OD/manual chain once instead of N times.
-		 * The DOM-heuristic tier is skipped (no buffer in filter context).
-		 * Fail-open to ''.
+		 * Manual picker wins first in every mode (explicit opt-in). When
+		 * `image_optimisation.prioritizeLCPImages` is off, only the stability-gated signal tier via
+		 * `get_stable_signal_lcp_url()` (RUM-field first, then OD, issue
+		 * #1369) applies so the automatic fetchpriority path stamps the
+		 * same hero it preloads and keeps eager (never the OD-only-first
+		 * stored chain, which can disagree on RUM-field vs OD). When the
+		 * toggle is on, the legacy chain (manual + Optimization Detective
+		 * via `resolve_od_only_lcp_url()`, then the stored chain via
+		 * `get_current_lcp_url()`, then the signal tier) applies to stay
+		 * in parity with `resolve_auto_lcp_url()`. When the
+		 * `wppo_auto_lcp_preload` filter disables automation, only the
+		 * manual picker resolves. Resolved at most once per page: the
+		 * result is cached in `$fetchpriority_lcp_url` keyed by
+		 * `get_lcp_memo_key()` so a page with N images pays the chain
+		 * once instead of N times. The DOM-heuristic tier is skipped (no
+		 * buffer in filter context). Fail-open to ''.
 		 *
 		 * @since NEXT
 		 * @return string The validated LCP image URL, or empty string.
@@ -7308,6 +7350,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			$this->fetchpriority_lcp_url = '';
 			$this->fetchpriority_lcp_key = $memo_key;
+			try {
+				$auto_allowed = $this->is_auto_lcp_preload_allowed();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$auto_allowed = true;
+			}
+			if ( ! $auto_allowed ) {
+				// Global automation off switch: manual opt-in still stamps.
+				try {
+					$manual = $this->get_manual_lcp_url();
+					if ( is_string( $manual ) && '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_allowed_hero_preload_url( $manual ) ) {
+						$this->fetchpriority_lcp_url = $manual;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return $this->fetchpriority_lcp_url;
+			}
+			try {
+				$image_optimisation = $this->options['image_optimisation'] ?? array();
+				$toggle_on          = ! empty( $image_optimisation['prioritizeLCPImages'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$toggle_on = false;
+			}
+			if ( ! $toggle_on ) {
+				// Toggles-off automatic path (issue #1369): manual wins,
+				// otherwise the stable signal only — same hero as
+				// get_auto_lcp_preload_data() and
+				// get_lazy_lcp_exclusion_url() so preload/eager/high stay
+				// coupled on one URL.
+				try {
+					$manual = $this->get_manual_lcp_url();
+					if ( is_string( $manual ) && '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_allowed_hero_preload_url( $manual ) ) {
+						$this->fetchpriority_lcp_url = $manual;
+						return $this->fetchpriority_lcp_url;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					$signal = $this->get_stable_signal_lcp_url();
+					if ( is_string( $signal ) && '' !== $signal && $this->is_image_lcp_url( $signal ) && $this->is_allowed_hero_preload_url( $signal ) ) {
+						$this->fetchpriority_lcp_url = $signal;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return $this->fetchpriority_lcp_url;
+			}
 			try {
 				$lcp_url = $this->resolve_od_only_lcp_url();
 				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
@@ -8742,8 +8834,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// stays in parity with
 				// `resolve_auto_lcp_url()`/`get_current_lcp_url()`: opting out
 				// yields neither preload nor eager exclusion from OD data.
+				// The `wppo_auto_lcp_preload` off switch (issue #1369) also
+				// gates this automatic exclusion so a filtered-off response
+				// never keeps an eager hero without its preload.
 				$od_lcp_normalized = '';
-				if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+				$od_auto_allowed   = true;
+				try {
+					$od_auto_allowed = $this->is_auto_lcp_preload_allowed();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$od_auto_allowed = true;
+				}
+				if ( $od_auto_allowed && class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 					try {
 						if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
 							$od_lcp = '';
