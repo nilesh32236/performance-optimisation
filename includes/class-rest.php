@@ -388,6 +388,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid remediation mode.', 'performance-optimisation' ) );
 			}
 
+			// Throttle every mutating mode (apply/revert/revert_all all issue
+			// bulk update_option writes); dry_run is read-only and unthrottled.
+			if ( 'dry_run' !== $mode && $this->is_endpoint_throttled( 'autoload_remediate', 5, 60 ) ) {
+				$throttled = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$throttled->header( 'Retry-After', '60' );
+				return $throttled;
+			}
+
 			if ( 'revert' === $mode ) {
 				$option = isset( $params['option'] ) ? sanitize_text_field( $params['option'] ) : '';
 				if ( '' === $option ) {
@@ -413,11 +421,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$limit = max( 1, min( Database_Cleanup::AUTOLOAD_LIMIT_MAX, $limit ) );
 
 			if ( 'apply' === $mode ) {
-				if ( $this->is_endpoint_throttled( 'autoload_remediate', 5, 60 ) ) {
-					$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-					$response->header( 'Retry-After', '60' );
-					return $response;
-				}
 				$result               = Database_Cleanup::remediate_autoload( $threshold, $limit );
 				$result['remediated'] = Database_Cleanup::get_remediated_options();
 				return $this->send_response( $result );
@@ -932,35 +935,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Client suffix for the anonymous endpoint-throttle bucket.
 		 *
-		 * REMOTE_ADDR alone collapses all visitors behind a proxy/CDN edge
-		 * IP into one bucket. The left-most X-Forwarded-For entry (the
-		 * client-facing address added by the first proxy) separates those
-		 * buckets. Only the X-Forwarded-For half is filter_var()-validated;
-		 * REMOTE_ADDR is server-set and kept unvalidated in the hashed key
-		 * (no blind proxy trust: a spoofed header
-		 * can only add buckets, never impersonate another client). Mirrors
-		 * the REMOTE_ADDR-first resolution used by RUM rate limiting.
+		 * REMOTE_ADDR only — deliberately no X-Forwarded-For. The header is
+		 * client-controlled, so mixing it into the key lets an attacker
+		 * rotate XFF per request for a fresh bucket and never hit the
+		 * limit. Behind a proxy/CDN this collapses edge-sharing clients
+		 * into one bucket (fail-closed direction: legitimate bursts may
+		 * 429 sooner rather than letting throttling be bypassed); sites
+		 * with a trusted proxy should enforce limits at the edge instead.
 		 *
 		 * @since NEXT
 		 * @return string Anon throttle suffix.
 		 */
 		private static function throttle_client_suffix(): string {
 			$remote = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			$xff    = '';
-			if ( isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) && is_string( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-				$parts = explode( ',', wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-				$first = isset( $parts[0] ) ? trim( sanitize_text_field( $parts[0] ) ) : '';
-				if ( '' !== $first ) {
-					if ( function_exists( 'filter_var' ) ) {
-						$valid = filter_var( $first, FILTER_VALIDATE_IP );
-						$xff   = false === $valid ? '' : (string) $valid;
-					} else {
-						$xff = $first;
-					}
-				}
-			}
-			$combined = trim( $remote . '|' . $xff, '|' );
-			return '' !== $combined ? $combined : 'anon';
+			return '' !== $remote ? $remote : 'anon';
 		}
 
 		/**
@@ -2031,7 +2019,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				Log::add(
 					sprintf(
 					/* translators: %1$s: Cleanup type, %2$d: Number of items */
-						__( 'Database cleanup (%1$s): %2$d items removed on ', 'performance-optimisation' ),
+						__( 'Database cleanup (%1$s): %2$d items removed', 'performance-optimisation' ),
 						$type,
 						(int) $result
 					)
@@ -2283,7 +2271,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return array Sanitized Redis config.
 		 */
 		private function build_redis_config( $params, $defaults = array() ) {
-			$allowed_keys = array( 'mode', 'host', 'port', 'password', 'database', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
+			// Single source of truth: Object_Cache::ALLOWED_KEYS (local
+			// fallback only when the class is unavailable, e.g. unit stubs).
+			$allowed_keys = class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ? Object_Cache::ALLOWED_KEYS : array( 'mode', 'host', 'port', 'password', 'database', 'timeout', 'prefix', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
 			$config       = array();
 
 			foreach ( $allowed_keys as $key ) {

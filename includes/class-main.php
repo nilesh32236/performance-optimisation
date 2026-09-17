@@ -783,9 +783,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( is_user_logged_in() ) {
 				$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
 				if ( $enable ) {
+					// is_string guard below: an array-valued cookie
+					// (?wppo_role_hash[]=x) would otherwise reach
+					// wp_unslash()/sanitize_text_field() as an array and
+					// fatal on PHP 8.2+.
 					$user        = wp_get_current_user();
 					$hash        = Util::get_role_hash( $user );
-					$cookie_hash = isset( $_COOKIE['wppo_role_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['wppo_role_hash'] ) ) : null;
+					$cookie_hash = isset( $_COOKIE['wppo_role_hash'] ) && is_string( $_COOKIE['wppo_role_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['wppo_role_hash'] ) ) : null;
 					if ( '' !== $hash && ( null === $cookie_hash || $cookie_hash !== $hash ) ) {
 						if ( ! headers_sent() ) {
 							setcookie(

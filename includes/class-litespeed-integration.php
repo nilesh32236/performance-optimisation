@@ -1615,8 +1615,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			 * @param string $value 12-char hash.
 			 * @param array  $payload Active vary payload.
 			 */
+			// is_string guard below: an array-valued cookie would otherwise
+			// reach wp_unslash()/sanitize_text_field() as an array and fatal
+			// on PHP 8.2+.
 			$value   = (string) apply_filters( 'wppo_litespeed_lscache_vary_value', $value, $payload );
-			$current = isset( $_COOKIE['_lscache_vary'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['_lscache_vary'] ) ) : '';
+			$current = isset( $_COOKIE['_lscache_vary'] ) && is_string( $_COOKIE['_lscache_vary'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['_lscache_vary'] ) ) : '';
 			if ( $current !== $value ) {
 				// Never emit setcookie() after headers went out (cron/early
 				// flush races) — PHP would raise a "headers already sent"
@@ -1700,7 +1703,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return;
 			}
 			if ( isset( $_COOKIE['_lscache_vary'] ) ) {
-				setcookie( '_lscache_vary', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+				// Array form matching the seed path (path/domain/secure/
+				// httponly/SameSite=Lax): deletion must carry the same
+				// attributes as creation or strict browsers keep the cookie.
+				setcookie(
+					'_lscache_vary',
+					'',
+					array(
+						'expires'  => time() - YEAR_IN_SECONDS,
+						'path'     => COOKIEPATH,
+						'domain'   => COOKIE_DOMAIN,
+						'secure'   => is_ssl(),
+						'httponly' => true,
+						'samesite' => 'Lax',
+					)
+				);
 			}
 		}
 

@@ -141,12 +141,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const CONFIG_FILENAME = 'wppo-redis-config.php';
 
 		/**
-		 * Transient (blog-prefixed) caching the Nginx exposure probe verdict.
+		 * Transient caching the Nginx exposure probe verdict.
+		 *
+		 * Network-global (deliberately NOT blog-prefixed): the config file
+		 * lives in the shared WP_CONTENT_DIR, so one probe serves every site
+		 * on multisite instead of paying N loopbacks, and one clear call
+		 * invalidates the single verdict.
 		 *
 		 * @since NEXT
 		 * @var string
 		 */
 		public const NGINX_PROBE_TRANSIENT = 'wppo_nginx_config_probe';
+
+		/**
+		 * Per-request memo of the Nginx exposure probe verdict.
+		 *
+		 * Null means "not yet probed this request" (distinct from a probed
+		 * false), so admin_notices fan-out and repeated callers share one
+		 * loopback at most. Reset by clear_nginx_probe_cache().
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static $nginx_probe_memo = null;
 
 		/**
 		 * Suffix of the staging sibling used for atomic Redis config writes.
@@ -2265,19 +2282,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * the password, but it discloses topology (hosts, ports, TLS mode,
 		 * sentinel/cluster layout).
 		 *
-		 * Detection is a loopback HTTP probe of the public config URL: 200
-		 * means fetchable (the ABSPATH guard exits with an empty 200 body,
-		 * which still proves reachability). The verdict is cached in a
-		 * transient (1h when exposed so a fresh deny rule clears the notice
-		 * promptly, 12h when safe). Fail-open throughout: any missing API,
-		 * missing file, non-Nginx server, or probe error returns false so
-		 * admins are never nagged without evidence.
+		 * Detection is a loopback HTTP probe of the public config URL with
+		 * redirects followed (an http→https/login/maintenance redirect chain
+		 * is resolved instead of misread as safe). A 200 alone is not
+		 * trusted: catch-all 200 themes/WAF pages are filtered by body
+		 * markers — an executed config exits via the ABSPATH guard with an
+		 * empty 200 body, while a raw-served config leaks `<?php` /
+		 * wppo-redis markers; any other 200 body is treated as safe. The
+		 * verdict is cached in a network-global transient (1h when exposed
+		 * so a fresh deny rule clears the notice promptly, 2h when safe so
+		 * a safe→exposed flip surfaces quickly) plus a per-request memo so
+		 * repeated callers share one loopback at most. Fail-open
+		 * throughout: any missing API, missing file, non-Nginx server, or
+		 * probe error returns false WITHOUT caching, so a blocked loopback
+		 * (WP_Error) stays "unknown" and re-probes next time instead of
+		 * pinning a stale safe verdict.
 		 *
 		 * @since NEXT
 		 * @return bool True when the config file looks directly fetchable.
 		 */
 		public static function is_nginx_config_exposed(): bool {
 			try {
+				if ( null !== self::$nginx_probe_memo ) {
+					return self::$nginx_probe_memo;
+				}
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) || 'nginx' !== Server_Rules::get_server_type() ) {
 					return false;
 				}
@@ -2288,33 +2316,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
 					return false;
 				}
-				$cached = get_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
+				$cached = get_transient( self::NGINX_PROBE_TRANSIENT );
 				if ( 'exposed' === $cached ) {
+					self::$nginx_probe_memo = true;
 					return true;
 				}
 				if ( 'safe' === $cached ) {
+					self::$nginx_probe_memo = false;
 					return false;
 				}
-				if ( ! function_exists( 'content_url' ) || ! function_exists( 'wp_remote_get' ) || ! function_exists( 'wp_remote_retrieve_response_code' ) || ! function_exists( 'is_wp_error' ) ) {
+				if ( ! function_exists( 'content_url' ) || ! function_exists( 'wp_remote_get' ) || ! function_exists( 'wp_remote_retrieve_response_code' ) || ! function_exists( 'wp_remote_retrieve_body' ) || ! function_exists( 'is_wp_error' ) ) {
 					return false;
 				}
 				$url      = content_url( '/' . self::CONFIG_FILENAME );
 				$response = wp_remote_get(
 					$url,
 					array(
-						'timeout'     => 5,
-						'redirection' => 0,
+						'timeout'     => 3,
+						'redirection' => 5,
 					)
 				);
 				if ( is_wp_error( $response ) ) {
+					// Unknown, not safe: never cache transport failures.
 					return false;
 				}
-				$exposed = 200 === (int) wp_remote_retrieve_response_code( $response );
+				$exposed = false;
+				if ( 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+					$body    = trim( (string) wp_remote_retrieve_body( $response ) );
+					$exposed = (
+						'' === $body ||
+						false !== stripos( $body, '<?php' ) ||
+						false !== stripos( $body, 'wppo-redis' ) ||
+						false !== stripos( $body, 'wppo_redis' )
+					);
+				}
 				set_transient(
-					Util::transient_key( self::NGINX_PROBE_TRANSIENT ),
+					self::NGINX_PROBE_TRANSIENT,
 					$exposed ? 'exposed' : 'safe',
-					$exposed ? HOUR_IN_SECONDS : 12 * HOUR_IN_SECONDS
+					$exposed ? HOUR_IN_SECONDS : 2 * HOUR_IN_SECONDS
 				);
+				self::$nginx_probe_memo = $exposed;
 				return $exposed;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2326,14 +2367,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Drop the cached Nginx exposure probe verdict.
 		 *
 		 * Called after protect/enable/disable flows so the next admin
-		 * pageload re-probes instead of serving a stale verdict.
+		 * pageload re-probes instead of serving a stale verdict. Clears the
+		 * network-global key plus the legacy blog-prefixed key (pre-fix
+		 * installs), and resets the per-request memo. Never called from the
+		 * notice dismiss path: one admin's dismiss must not force a
+		 * re-probe for everyone else.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function clear_nginx_probe_cache(): void {
 			try {
+				self::$nginx_probe_memo = null;
 				if ( function_exists( 'delete_transient' ) ) {
+					delete_transient( self::NGINX_PROBE_TRANSIENT );
 					delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
 				}
 			} catch ( \Throwable $e ) {

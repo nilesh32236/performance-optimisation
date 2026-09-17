@@ -118,14 +118,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			}
 
 			if ( 'nginx_redis_config' === $key ) {
-				update_user_meta( get_current_user_id(), 'wppo_nginx_redis_config_dismissed', 1 );
-				if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
-					try {
-						Object_Cache::clear_nginx_probe_cache();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
+				// Timestamped dismissal that re-arms after 14 days (mirrors
+				// the circuit notice re-arm). The shared probe cache is
+				// deliberately left alone: one admin's dismiss must not force
+				// a re-probe for everyone else.
+				update_user_meta( get_current_user_id(), 'wppo_nginx_redis_config_dismissed', time() );
 			}
 
 			wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );
@@ -320,9 +317,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * (`wp-content/wppo-redis-config.php`, topology but no password) is
 		 * directly fetchable. Renders only when the loopback probe in
 		 * Object_Cache::is_nginx_config_exposed() has evidence (verdict
-		 * cached in a transient, so no probe runs on every pageload).
-		 * Dismissible per user; re-enabling Redis re-probes via a cleared
-		 * probe cache.
+		 * cached in a transient plus a per-request memo, so no probe runs
+		 * on every pageload). Dismissible per user with a 14-day re-arm;
+		 * re-enabling Redis re-probes via a cleared probe cache.
+		 *
+		 * Screen-gated like maybe_review_notice(): the check (user-meta
+		 * dismiss + probe + file_exists + server-type detection) runs only
+		 * on the plugin, plugins, and update-core screens instead of every
+		 * wp-admin pageload.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -332,9 +334,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			$user_id = get_current_user_id();
-			if ( $user_id && get_user_meta( $user_id, 'wppo_nginx_redis_config_dismissed', true ) ) {
-				return;
+			if ( function_exists( 'get_current_screen' ) ) {
+				try {
+					$screen = get_current_screen();
+					$base   = ( is_object( $screen ) && isset( $screen->base ) && is_string( $screen->base ) ) ? $screen->base : '';
+					if ( '' !== $base && ! in_array( $base, array( 'toplevel_page_performance-optimisation', 'plugins', 'update-core' ), true ) ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$user_id = function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0;
+			if ( $user_id ) {
+				$dismissed = (int) get_user_meta( $user_id, 'wppo_nginx_redis_config_dismissed', true );
+				if ( 1 === $dismissed ) {
+					// Legacy permanent flag (pre-timestamp): migrate to a
+					// timestamp so the notice re-arms instead of hiding
+					// a future safe→exposed flip forever.
+					update_user_meta( $user_id, 'wppo_nginx_redis_config_dismissed', time() );
+					return;
+				}
+				if ( $dismissed > 1 && ( time() - $dismissed ) < ( 14 * DAY_IN_SECONDS ) ) {
+					return;
+				}
 			}
 
 			try {
@@ -483,7 +507,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			$names = implode( ', ', array_map( 'esc_html', $found ) );
+			// Escape exactly once at output: the raw labels are imploded here
+			// and the single esc_html() below does the escaping.
+			$names = implode( ', ', $found );
 
 			echo '<div class="notice notice-info is-dismissible" role="status" aria-live="polite"><p>';
 			echo esc_html__( 'You have another page caching plugin active:', 'performance-optimisation' ) . ' ' . esc_html( $names ) . '. ';
