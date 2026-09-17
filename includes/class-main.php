@@ -570,7 +570,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// memory + per-side dimensions so hostile/oversized images skip
 			// instead of OOMing the worker. In-memory only here (no
 			// front-end DB write); persisted via update_settings/REST.
-			// Multisite-safe: per-site wppo_settings only.
+			// Multisite-safe: per-site wppo_settings only. The is_array
+			// guard rebuilds a corrupted image_optimisation block (string/
+			// int from a bad import) instead of fataling on nested write.
+			if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
+				$this->options['image_optimisation'] = array();
+			}
 			if ( ! isset( $this->options['image_optimisation']['imagickMemoryLimitMB'] ) ) {
 				$this->options['image_optimisation']['imagickMemoryLimitMB'] = 256;
 			}

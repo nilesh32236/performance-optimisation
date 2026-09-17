@@ -1726,12 +1726,12 @@ add_filter( 'wppo_max_longest_edge_px', function () {
 ---
 
 ### `wppo_imagick_memory_limit_bytes`
-Filters the Imagick memory cap in bytes applied via `setResourceLimit()` (MEMORY/MAP, plus DISK capped independently at 2GB) before every Imagick decode (AVIF fallback, over-budget stills, GIF-to-WebP). @since NEXT.
+Filters the Imagick memory cap in bytes applied via `setResourceLimit()` (MEMORY/MAP, plus DISK as `min( 2 × memory, 2GB )` — e.g. a 32MB setting yields a 64MB DISK cap, not 2GB) before every Imagick decode (AVIF fallback, over-budget stills, GIF-to-WebP). @since NEXT.
 
-Untrusted input is coerced fail-open: non-numeric/non-positive filter returns fall back to the 256MB default, and resolved values clamp to 32–2048 MB at read time (matching the pinned `imagickMemoryLimitMB` sanitizer) so a huge value cannot silently disable the OOM guard.
+Untrusted input is coerced fail-open: non-numeric/non-positive filter returns fall back to the 256MB default, and resolved values clamp to 32–2048 MB at read time (matching the pinned `imagickMemoryLimitMB` sanitizer) so a huge value cannot silently disable the OOM guard. The filter runs only when a listener is attached (`has_filter()` guard); otherwise the `image_optimisation.imagickMemoryLimitMB` setting applies — an attached filter overrides the setting.
 
 **Parameters:**
-- `$bytes` *(int)* — Cap in bytes. Default from the `image_optimisation.imagickMemoryLimitMB` setting (`256`).
+- `$bytes` *(int)* — Cap in bytes. Default `268435456` (256 × 1024 × 1024) from the `image_optimisation.imagickMemoryLimitMB` setting (`256`).
 
 **Example:**
 
