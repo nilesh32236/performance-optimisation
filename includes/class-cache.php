@@ -328,6 +328,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private string $current_role_hash = '';
 
 		/**
+		 * Held pre-render single-flier locks for this request, keyed by lock key.
+		 *
+		 * The WP 6.9+ filter/action split renders in
+		 * {@see process_buffer_for_cache()} but persists in
+		 * {@see stash_cache()}; the winner holds its render lock across both
+		 * callbacks so concurrent misses do not duplicate the expensive
+		 * process_buffer_only() pipeline. Released in stash_cache() (finally)
+		 * or on render failure; TTL (2-5s) bounds any leak when stash never
+		 * runs. Values are owner tokens for owner-checked release.
+		 *
+		 * @var array<string,string>
+		 * @since NEXT
+		 */
+		private array $html_render_locks = array();
+
+		/**
 		 * Whether the DONOTCACHEPAGE marker has been written for this request.
 		 *
 		 * Ensures the marker write and stale-file purge happen at most once per request.
@@ -2261,6 +2277,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
 			$ob_callback = function ( $buffer ) use ( $file_path ) {
+				// Pre-render single-flier gate (legacy path renders + saves in
+				// one closure): losers serve dynamic unprocessed instead of
+				// duplicating the pipeline. Fail-open renders normally.
+				if ( '' !== (string) $file_path ) {
+					$render_lock = $this->try_acquire_html_render_lock( (string) $file_path );
+					if ( false === $render_lock ) {
+						return $buffer;
+					}
+				}
 				try {
 					$buffer = $this->process_buffer_only( $buffer );
 					$this->save_processed_buffer( $buffer, $file_path );
@@ -2271,6 +2296,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					// discard the response and leave the buffer dangling).
 					do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
 					return $buffer;
+				} finally {
+					if ( '' !== (string) $file_path ) {
+						$this->release_html_render_lock( (string) $file_path );
+					}
 				}
 			};
 
@@ -2401,7 +2430,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$this->current_role_hash = $this->get_logged_in_role_hash();
 
-			return $this->process_buffer_only( $filtered_output );
+			// Pre-render single-flier gate: only one concurrent miss pays the
+			// expensive process_buffer_only() pipeline (image/CDN/used-CSS/
+			// minify); losers serve the unprocessed dynamic response without
+			// waiting. Fail-open: lock failures render normally.
+			$file_path = $this->get_cache_file_path( 'html', $this->current_role_hash );
+			if ( '' !== $file_path ) {
+				$render_lock = $this->try_acquire_html_render_lock( $file_path );
+				if ( false === $render_lock ) {
+					return $filtered_output;
+				}
+			}
+
+			try {
+				return $this->process_buffer_only( $filtered_output );
+			} catch ( \Throwable $e ) {
+				// Fail open and free the flier slot so the next request can
+				// render instead of stalling behind this failure.
+				if ( isset( $file_path ) && '' !== $file_path ) {
+					$this->release_html_render_lock( $file_path );
+				}
+				do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				return $filtered_output;
+			}
 		}
 
 		/**
@@ -2428,7 +2479,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$role_hash = ! empty( $this->current_role_hash ) ? $this->current_role_hash : $this->get_logged_in_role_hash();
 			$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
-			$this->save_processed_buffer( $output, $file_path );
+			try {
+				$this->save_processed_buffer( $output, $file_path );
+			} finally {
+				// Free the pre-render flier slot held by
+				// process_buffer_for_cache(); no-op for waiters.
+				if ( '' !== $file_path ) {
+					$this->release_html_render_lock( $file_path );
+				}
+			}
 		}
 
 		/**
@@ -3153,6 +3212,200 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 			return true;
+		}
+
+		/**
+		 * Blog-aware pre-render single-flier lock key for an HTML cache file.
+		 *
+		 * Distinct from the `wppo_cache_write_` post-render write key in
+		 * {@see save_cache_files()} so render contention and write
+		 * interleaving never cross-talk. Multisite-safe via
+		 * {@see Util::transient_key()} (blog-ID prefix); domain-based cache
+		 * paths keep per-site files isolated.
+		 *
+		 * @since NEXT
+		 * @param string $file_path Resolved HTML cache file path.
+		 * @return string Lock key ('' when the path is empty).
+		 */
+		private function html_render_lock_key( string $file_path ): string {
+			if ( '' === $file_path ) {
+				return '';
+			}
+			try {
+				return Util::transient_key( 'wppo_cache_render_' . md5( $file_path ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Whether a pre-render lock key is currently held by another worker.
+		 *
+		 * Read-back probe used to distinguish genuine contention from a
+		 * failed acquire with nobody holding the lock (fail-open render).
+		 * Best-effort: any error means "not observably locked".
+		 *
+		 * @since NEXT
+		 * @param string $lock_key Blog-aware lock key.
+		 * @return bool True when another worker observably holds the lock.
+		 */
+		private function is_html_render_locked( string $lock_key ): bool {
+			if ( '' === $lock_key ) {
+				return false;
+			}
+			try {
+				if ( function_exists( 'wp_cache_get' ) ) {
+					$current = wp_cache_get( $lock_key, 'wppo' );
+					if ( false !== $current && null !== $current && '' !== $current ) {
+						return true;
+					}
+				}
+				if ( function_exists( 'get_transient' ) ) {
+					$current = get_transient( $lock_key );
+					if ( false !== $current ) {
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
+		 * Try to become the single flier that renders this HTML cache file.
+		 *
+		 * Non-blocking: one non-blocking acquire, then a single jittered
+		 * backoff + retry so a just-finished holder lets this worker reuse
+		 * the fresh file instead of duplicating the render. Returns an owner
+		 * token on win (tracked in $html_render_locks for release in
+		 * {@see stash_cache()}), a fail-open owner when the guard is off,
+		 * the path is empty, or no lock infrastructure exists (render without
+		 * a held lock — never blocks caching), or false when another worker
+		 * observably holds the lock (caller serves dynamic unprocessed).
+		 * Never fatal; never white-screens.
+		 *
+		 * @since NEXT
+		 * @param string $file_path Resolved HTML cache file path.
+		 * @return string|false Owner token (render), or false (skip render, serve dynamic).
+		 */
+		private function try_acquire_html_render_lock( string $file_path ): string|false {
+			try {
+				$no_lock_owner = '';
+				try {
+					$no_lock_owner = Util::generate_stampede_owner();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$no_lock_owner = 'wppo-render-' . (string) microtime( true );
+				}
+				if ( '' === $file_path ) {
+					return $no_lock_owner;
+				}
+				$guard_enabled = true;
+				try {
+					$guard_enabled = Util::is_stampede_guard_enabled();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$guard_enabled = true;
+				}
+				if ( ! $guard_enabled ) {
+					return $no_lock_owner;
+				}
+				$lock_key = $this->html_render_lock_key( $file_path );
+				if ( '' === $lock_key ) {
+					return $no_lock_owner;
+				}
+				// Re-entrant within this request (filter then stash share the
+				// winner): already the flier, keep rendering without re-locking.
+				if ( isset( $this->html_render_locks[ $lock_key ] ) ) {
+					return $this->html_render_locks[ $lock_key ];
+				}
+				if ( ! function_exists( 'wp_cache_add' ) && ! function_exists( 'get_transient' ) ) {
+					return $no_lock_owner;
+				}
+				$ttl = 5;
+				try {
+					$ttl = Util::stampede_lock_ttl();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$ttl = 5;
+				}
+				$owner = '';
+				try {
+					$owner = Util::generate_stampede_owner();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$owner = $no_lock_owner;
+				}
+				if ( '' !== $owner && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'acquire_stampede_lock' ) ) {
+					if ( Util::acquire_stampede_lock( $lock_key, $owner, $ttl ) ) {
+						$this->html_render_locks[ $lock_key ] = $owner;
+						return $owner;
+					}
+				}
+				// Acquire failed with nobody observably holding the lock
+				// (e.g. transient write failure): fail open and render rather
+				// than skip caching forever.
+				if ( ! $this->is_html_render_locked( $lock_key ) ) {
+					return '' !== $owner ? $owner : $no_lock_owner;
+				}
+				// Contended: jittered backoff + single retry so a
+				// just-finishing holder is reused instead of duplicating work.
+				try {
+					Util::stampede_jittered_sleep_us( 50000, 50000 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$retry_owner = '';
+				try {
+					$retry_owner = Util::generate_stampede_owner();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$retry_owner = $no_lock_owner;
+				}
+				if ( '' !== $retry_owner && Util::acquire_stampede_lock( $lock_key, $retry_owner, $ttl ) ) {
+					$this->html_render_locks[ $lock_key ] = $retry_owner;
+					return $retry_owner;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				try {
+					return Util::generate_stampede_owner();
+				} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open render must never throw.
+					return 'wppo-render-fallback';
+				}
+			}
+		}
+
+		/**
+		 * Release a held pre-render single-flier lock (owner-checked, fail-open).
+		 *
+		 * Only releases locks tracked in $html_render_locks for this request,
+		 * so a slow worker never deletes a successor's lock. No-op when
+		 * nothing is tracked for the file (fail-open owner path, waiter path,
+		 * or guard off). Never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $file_path Resolved HTML cache file path.
+		 * @return void
+		 */
+		private function release_html_render_lock( string $file_path ): void {
+			try {
+				$lock_key = $this->html_render_lock_key( $file_path );
+				if ( '' === $lock_key || ! isset( $this->html_render_locks[ $lock_key ] ) ) {
+					return;
+				}
+				$owner = $this->html_render_locks[ $lock_key ];
+				unset( $this->html_render_locks[ $lock_key ] );
+				if ( '' === $owner ) {
+					return;
+				}
+				Util::release_stampede_lock( $lock_key, $owner );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

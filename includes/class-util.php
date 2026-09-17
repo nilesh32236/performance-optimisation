@@ -4062,6 +4062,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$fs->delete( $tmp );
 					return false;
 				}
+				// Durability best-effort: fsync the renamed file so a crash
+				// cannot leave a zero-length/torn index.html for the
+				// advanced-cache.php drop-in readfile() path. Local files
+				// only (FTP/SSH transports skip silently); failures are
+				// swallowed — the write already succeeded. Never fatal.
+				try {
+					if ( is_readable( $path ) && function_exists( 'fopen' ) ) {
+						$fh = @fopen( $path, 'rb' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen,WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort durability fsync only; write itself uses WP_Filesystem.
+						if ( false !== $fh ) {
+							if ( function_exists( 'fflush' ) ) {
+								@fflush( $fh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fflush,WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort durability fsync only.
+							}
+							if ( function_exists( 'fsync' ) ) {
+								@fsync( $fh ); // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.fsyncFound,WordPress.PHP.NoSilencedErrors.Discouraged -- Guarded by function_exists() for PHP 8.1+; best-effort durability only.
+							}
+							if ( function_exists( 'fclose' ) ) {
+								@fclose( $fh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose,WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort durability teardown only.
+							}
+						}
+					}
+				} catch ( \Throwable $fsync_ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- fsync is best-effort; the atomic rename already succeeded.
+					unset( $fsync_ignored );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				try {
@@ -4827,6 +4850,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Sleep a base delay plus a random jitter (microseconds).
+		 *
+		 * Thundering-herd spread for stampede waiters: concurrent losers do
+		 * not wake in lockstep to hammer the fresh key at once. Fail-open
+		 * no-op when `usleep()` is unavailable; never fatal.
+		 *
+		 * @since NEXT
+		 * @param int $base_us   Base sleep in microseconds (>= 0).
+		 * @param int $jitter_us Maximum extra random sleep in microseconds (>= 0).
+		 * @return void
+		 */
+		public static function stampede_jittered_sleep_us( int $base_us, int $jitter_us ): void {
+			$base_us   = max( 0, $base_us );
+			$jitter_us = max( 0, $jitter_us );
+			if ( 0 === $base_us && 0 === $jitter_us ) {
+				return;
+			}
+			try {
+				$extra = 0;
+				if ( $jitter_us > 0 ) {
+					if ( function_exists( 'wp_rand' ) ) {
+						$extra = (int) wp_rand( 0, $jitter_us );
+					} else {
+						// phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Jitter only when wp_rand() is unavailable; exact distribution does not matter.
+						$extra = mt_rand( 0, $jitter_us );
+					}
+					if ( $extra < 0 ) {
+						$extra = 0;
+					} elseif ( $extra > $jitter_us ) {
+						$extra = $jitter_us;
+					}
+				}
+				if ( function_exists( 'usleep' ) ) {
+					usleep( $base_us + $extra );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Generate a unique stampede lock owner token.
 		 *
 		 * Prefers `wp_generate_uuid4()` with a `uniqid() + mt_rand()` fallback
@@ -5233,13 +5297,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			// Another worker rebuilds: bounded retry on the fresh key, then stale.
+			// Jittered so concurrent waiters do not wake in lockstep.
 			for ( $i = 0; $i < $retries; $i++ ) {
-				if ( $retry_delay_us > 0 && function_exists( 'usleep' ) ) {
-					try {
-						usleep( $retry_delay_us );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
+				if ( $retry_delay_us > 0 ) {
+					self::stampede_jittered_sleep_us( $retry_delay_us, $retry_delay_us );
 				}
 				$cached = $read_cached( $key );
 				if ( false !== $cached ) {
