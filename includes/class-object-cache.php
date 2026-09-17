@@ -2038,11 +2038,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					// a bare `Require all denied` is Apache 2.4-only syntax and a
 					// server without mod_authz_core answers 500 for the whole
 					// wp-content tree rather than ignoring the directive.
-					$rule = array(
-						// FilesMatch (audit #1357) covers the .wppo-bak backup and
+					// FilesMatch (audit #1357) covers the .wppo-bak backup and
 					// tmp staging siblings too: a crash between backup creation
 					// and the post-success sweep must not leave topology source
 					// fetchable as plain text.
+					$rule = array(
 					'<FilesMatch "^wppo-redis-config\\.php(\\.wppo-bak|\\.tmp.*)?$">',
 						'<IfModule mod_authz_core.c>',
 						'Require all denied',
