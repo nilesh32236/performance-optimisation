@@ -1580,7 +1580,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			} elseif ( function_exists( 'wp_hash' ) ) {
 				$hash = wp_hash( 'postpass' );
 			} else {
-				$hash = md5( (string) ( wp_parse_url( home_url(), PHP_URL_HOST ) ?: '' ) ); // Audit #1362: ?: catches the documented false return too (?? only catches null).
+				// Audit #1362: guard the documented false return (?? only catches null).
+				$cookie_host = wp_parse_url( home_url(), PHP_URL_HOST );
+				$hash = md5( is_string( $cookie_host ) ? $cookie_host : '' );
 			}
 			foreach ( $_COOKIE as $key => $value ) {
 				$cookie_name = is_string( $key ) ? sanitize_text_field( wp_unslash( $key ) ) : '';

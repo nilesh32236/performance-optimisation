@@ -307,12 +307,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 				foreach ( $results as $key => $val ) {
 					if ( is_wp_error( $val ) ) {
-						WP_CLI::warning( sprintf( __( ' - %s: %s', 'performance-optimisation' ), sanitize_text_field( (string) $key ), $val->get_error_message() ) );
+						WP_CLI::warning( sprintf( __( ' - %1$s: %2$s', 'performance-optimisation' ), sanitize_text_field( (string) $key ), $val->get_error_message() ) );
 						continue;
 					}
 					$count  = (int) $val;
 					$total += $count;
-					WP_CLI::log( sprintf( __( ' - %s: %d cleaned', 'performance-optimisation' ), sanitize_text_field( (string) $key ), $count ) );
+					WP_CLI::log( sprintf( __( ' - %1$s: %2$d cleaned', 'performance-optimisation' ), sanitize_text_field( (string) $key ), $count ) );
 				}
 
 				/* translators: %d: Total items removed */
@@ -1019,7 +1019,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * @return void
 		 */
 		public function pagespeed( array $args, array $assoc_args ): void {
-			$action   = $args[0] ?? 'scan';
+			$action = $args[0] ?? 'scan';
 			// Audit #1362: sanitize CLI input; gate strategy to the allowlist.
 			$url      = isset( $assoc_args['url'] ) ? esc_url_raw( (string) $assoc_args['url'] ) : Util::cached_home_url();
 			$strategy = isset( $assoc_args['strategy'] ) && in_array( $assoc_args['strategy'], array( 'mobile', 'desktop' ), true ) ? $assoc_args['strategy'] : 'mobile';

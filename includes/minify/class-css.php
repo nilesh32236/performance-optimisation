@@ -64,7 +64,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @param string $file_path  Path to the CSS file to be minified.
 		 * @param string $cache_dir  Directory where the minified file will be cached.
 		 */
-		public function __construct( string $file_path, string $cache_dir ) { // Audit #1362: typed per docblock.
+		public function __construct( string $file_path, string $cache_dir ) {
+			// Audit #1362: typed per docblock.
 			// Traversal-safe by construction (issue #1179): the shared
 			// Util::validate_minify_path() gate rejects ../, NUL bytes,
 			// stream wrappers, and .php targets, resolves symlinks via
