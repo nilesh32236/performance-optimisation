@@ -194,6 +194,38 @@ class CssJsSafeModeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Failed save clears the fresh slice (no masked success).
+	 */
+	public function test_record_offender_save_failure_clears_fresh_slice(): void {
+		$stored = array( 'file_optimisation' => array( 'combineOffenders' => array() ) );
+		Functions\when( 'get_option' )->justReturn( $stored );
+		Functions\when( 'update_option' )->justReturn( false );
+		Util::clear_settings_cache();
+		$fresh = array( 'sentinel' => true );
+		$this->assertFalse( Main::record_combine_offender( 'https://example.com/nosave/', 'lost-handle', $fresh ) );
+		$this->assertNull( $fresh );
+	}
+
+	/**
+	 * Handles canonicalize to lowercase so REST + direct callers converge.
+	 */
+	public function test_record_offender_normalizes_handle_case(): void {
+		$stored = array( 'file_optimisation' => array( 'combineOffenders' => array() ) );
+		Functions\when( 'get_option' )->justReturn( $stored );
+		$saved = null;
+		Functions\when( 'update_option' )->alias(
+			static function ( $key, $value ) use ( &$saved ) {
+				$saved = $value;
+				return true;
+			}
+		);
+		Util::clear_settings_cache();
+		$this->assertTrue( Main::record_combine_offender( 'https://example.com/case/', 'Mixed-Case_HANDLE' ) );
+		$key = md5( Main::normalize_combine_offender_url( 'https://example.com/case/' ) );
+		$this->assertSame( array( 'mixed-case_handle' ), $saved['file_optimisation']['combineOffenders'][ $key ]['handles'] );
+	}
+
+	/**
 	 * Malformed staged cssJsSafeMode fail-safes to true (matches Util).
 	 */
 	public function test_sandbox_malformed_safe_mode_fails_safe_true(): void {

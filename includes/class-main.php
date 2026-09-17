@@ -2659,9 +2659,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Returns the first half (ceil) as the next suspect set so repeated
 		 * reports converge within ~log2(n) <= 3 purges for typical builder
 		 * bundles. Pure helper: no WP calls, fail-open to the input list.
-		 * Production-wired: the `combine_isolate` REST endpoint returns this
-		 * subset as `next_suspects` alongside the persisted `excluded` list
-		 * so reporters know which half to re-test next.
+		 * Production-wired: the `combine_isolate` REST endpoint bisects the
+		 * *remaining* suspects (full handle list minus already-excluded) and
+		 * returns that subset as `next_suspects`; when the caller omits the
+		 * full list it degrades to a re-test hint bisected from the excluded
+		 * set (see REST `get_combine_bisect_targets()`).
 		 *
 		 * @since NEXT
 		 *
@@ -2690,9 +2692,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * further reports are ignored once `purges >= 3` and isolation
 		 * always converges within 3 purges). URLs are normalized via
 		 * `normalize_combine_offender_url()` before hashing so slash /
-		 * case / fragment variants share one entry. Writes via
-		 * `Util::save_settings()` (per-site option, multisite-safe) and
-		 * fails open (false) when WP functions are unavailable. Never fatal.
+		 * case / fragment variants share one entry. Handles are canonicalized
+		 * to lowercase `sanitize_key()` form (capped at 128 chars) so REST
+		 * and direct callers converge on one entry per logical handle.
+		 * Writes via `Util::save_settings()` (per-site option,
+		 * multisite-safe) and fails open (false) when WP functions are
+		 * unavailable. Never fatal.
 		 *
 		 * @since NEXT
 		 *
@@ -2701,13 +2706,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param array|null $fresh_slice Optional. Receives the post-write
 		 *                                `file_optimisation` slice so callers
 		 *                                (REST) can read back exclusions
-		 *                                without a second settings read.
+		 *                                without a second settings read. Only
+		 *                                populated when the save succeeds
+		 *                                (null otherwise) so callers never
+		 *                                mistake unsaved state for persisted.
 		 * @return bool True when the exclusion was persisted (or already stored).
 		 */
 		public static function record_combine_offender( string $url, string $handle, ?array &$fresh_slice = null ): bool {
 			try {
-				$url    = self::normalize_combine_offender_url( trim( $url ) );
+				$url = self::normalize_combine_offender_url( trim( $url ) );
+				// Canonical handle form (issue #1404 follow-up): the REST path
+				// lowercases via sanitize_key() while direct (Cache/CLI)
+				// callers passed the raw trimmed handle, so the same logical
+				// handle could persist in two cases. Normalize here so both
+				// paths converge to one lowercase entry (substr cap mirrors
+				// the REST bound so over-long handles converge too).
 				$handle = trim( $handle );
+				if ( function_exists( 'sanitize_key' ) ) {
+					$handle = (string) sanitize_key( $handle );
+				} else {
+					$handle = (string) preg_replace( '/[^a-zA-Z0-9_\-]/', '', $handle ); // phpcs:ignore WordPress.WP.AlternativeFunctions -- Fallback when sanitize_key is unavailable (unit tests, early boot).
+				}
+				$handle = substr( strtolower( $handle ), 0, 128 );
 				if ( '' === $url || '' === $handle ) {
 					return false;
 				}
@@ -2751,8 +2771,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'purges'  => $purges + 1,
 				);
 				$settings['file_optimisation']['combineOffenders'] = $map;
-				$fresh_slice                                       = $settings['file_optimisation'];
-				return (bool) Util::save_settings( $settings );
+				// Only hand back the slice on a successful save: assigning it
+				// beforehand would let callers (REST duplicate-path) report
+				// success from unsaved in-memory state, masking a failed
+				// persistence (admin believes isolation stuck, next request
+				// loses it). The early-return paths above need no save (the
+				// slice already reflects persisted state), so they are
+				// unaffected.
+				$saved       = (bool) Util::save_settings( $settings );
+				$fresh_slice = $saved ? $settings['file_optimisation'] : null;
+				return $saved;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

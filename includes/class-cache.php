@@ -1500,6 +1500,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( in_array( $handle, $exclude_combine_css, true ) ) {
 				return true;
 			}
+			// Offender handles persist canonical-lowercase (see
+			// Main::record_combine_offender()); compare handles
+			// case-insensitively so a mixed-case enqueued handle still honors
+			// its isolation. Fail direction is safe (skip combining).
+			$needle = strtolower( trim( (string) $handle ) );
+			if ( '' !== $needle ) {
+				foreach ( $exclude_combine_css as $candidate ) {
+					if ( ( is_string( $candidate ) || is_numeric( $candidate ) ) && strtolower( trim( (string) $candidate ) ) === $needle ) {
+						return true;
+					}
+				}
+			}
 			foreach ( $exclude_combine_css as $exclude_css ) {
 				if ( '' !== $exclude_css && false !== strpos( $src, $exclude_css ) ) {
 					return true;

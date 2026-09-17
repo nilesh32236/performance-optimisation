@@ -3642,11 +3642,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Isolate a combine offender for a URL (issue #1404).
 		 *
 		 * POST params `url` + `handle` persist a per-URL exclusion (max 3
-		 * handles per URL via `Main::record_combine_offender()`). The
-		 * response also carries `next_suspects` computed with
-		 * `Main::bisect_combine_handles()` so reporters converge within 3
-		 * purges. Fail-open: never fatal; production assets keep serving
-		 * on failure.
+		 * handles per URL via `Main::record_combine_offender()`). An optional
+		 * `handles` array param carries the full combined-handle list for the
+		 * page; when present, `next_suspects` bisects the *remaining* (not
+		 * yet excluded) suspects so reporters converge within 3 purges.
+		 * Without `handles`, `next_suspects` is a re-test hint bisected from
+		 * the already-excluded list (advisory only). Fail-open: never fatal;
+		 * production assets keep serving on failure.
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
@@ -3699,7 +3701,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							$next = array();
 							if ( method_exists( 'PerformanceOptimise\Inc\Main', 'bisect_combine_handles' ) ) {
 								try {
-									$next = Main::bisect_combine_handles( $stored );
+									$next = Main::bisect_combine_handles( $this->get_combine_bisect_targets( $params, $stored ) );
 								} catch ( \Throwable $e ) {
 									unset( $e );
 								}
@@ -3729,7 +3731,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$next_suspects = array();
 			if ( method_exists( 'PerformanceOptimise\Inc\Main', 'bisect_combine_handles' ) ) {
 				try {
-					$next_suspects = Main::bisect_combine_handles( $excluded );
+					$next_suspects = Main::bisect_combine_handles( $this->get_combine_bisect_targets( $params, $excluded ) );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -3740,6 +3742,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'next_suspects' => $next_suspects,
 				)
 			);
+		}
+
+		/**
+		 * Resolve the bisection target list for a combine-isolate report (issue #1404).
+		 *
+		 * When the caller passes the full combined-handle list (`handles`
+		 * param), already-excluded handles are subtracted so bisection advances
+		 * over the *remaining* suspects. Without that param the excluded list
+		 * itself is returned, i.e. `next_suspects` degrades to a re-test hint.
+		 * Fail-open to `$excluded` on any error. Pure helper: no writes.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array    $params   Request params (may carry `handles`).
+		 * @param string[] $excluded Already-excluded handles for the URL.
+		 * @return string[] Handles to bisect next.
+		 */
+		private function get_combine_bisect_targets( array $params, array $excluded ): array {
+			try {
+				if ( ! isset( $params['handles'] ) || ! is_array( $params['handles'] ) ) {
+					return $excluded;
+				}
+				$clean = array();
+				foreach ( array_slice( $params['handles'], 0, 100 ) as $candidate ) {
+					if ( ! is_string( $candidate ) ) {
+						continue;
+					}
+					$candidate = function_exists( 'wp_unslash' ) ? wp_unslash( $candidate ) : $candidate; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; sanitized below, never persisted.
+					$candidate = function_exists( 'sanitize_key' ) ? sanitize_key( trim( (string) $candidate ) ) : strtolower( trim( (string) preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $candidate ) ) );
+					$candidate = substr( strtolower( trim( (string) $candidate ) ), 0, 128 );
+					if ( '' !== $candidate ) {
+						$clean[] = $candidate;
+					}
+				}
+				$clean = array_values( array_unique( $clean ) );
+				if ( empty( $clean ) ) {
+					return $excluded;
+				}
+				$remaining = array_values( array_diff( $clean, $excluded ) );
+				return ! empty( $remaining ) ? $remaining : $excluded;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $excluded;
+			}
 		}
 
 		/**
