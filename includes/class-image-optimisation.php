@@ -702,6 +702,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Release a previously claimed hero preload slot.
+		 *
+		 * Companion to `claim_hero_preload_slot()` (issue #1312 review): when
+		 * link-tag generation fails after the claim (empty tag), the claim is
+		 * released so the sibling emitter may still emit exactly one preload
+		 * instead of being suppressed into zero. Fail-open: never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $url   The raw hero URL.
+		 * @param string $media The preload media attribute ('' for buffer companions).
+		 * @return void
+		 */
+		private static function release_hero_preload_slot( string $url, string $media = '' ): void {
+			try {
+				unset( self::$preload_emitted[ self::build_preload_dedup_key( $url, $media ) ] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Whether a preload candidate lives on the configured CDN.
 		 *
 		 * Origin allowlist companion to `is_same_origin_preload_url()` (issue
@@ -865,11 +886,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * Final lazy/high invariant sweep (issue #1312): `loading="lazy"` plus
 		 * `fetchpriority="high"` is an invalid priority signal that delays LCP.
-		 * Any `<img>` carrying `fetchpriority="high"` is forced to
-		 * `loading="eager"` (the high hint wins) so the pair is never emitted
-		 * together, on mobile or desktop, without touching layout (no CLS: only
-		 * the loading/fetchpriority attributes change). Fail-open: any failure
-		 * returns the buffer unchanged.
+		 * Any `<img>` or `<iframe>` carrying `fetchpriority="high"` is forced
+		 * to `loading="eager"` (the high hint wins) so the pair is never
+		 * emitted together, on mobile or desktop, without touching layout
+		 * (no CLS: only the loading/fetchpriority attributes change).
+		 * Fail-open: any failure returns the buffer unchanged.
 		 *
 		 * @since NEXT
 		 * @param string $buffer The HTML buffer.
@@ -882,7 +903,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				if ( ! $this->is_html_api_available() ) {
 					$result = preg_replace_callback(
-						'#<img\b[^>]*>#i',
+						'#<(?:img|iframe)\b[^>]*>#i',
 						function ( $matches ) {
 							$tag = $matches[0];
 							if ( false === stripos( $tag, 'fetchpriority' ) ) {
@@ -903,7 +924,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				$tags    = new \WP_HTML_Tag_Processor( $buffer );
 				$changed = false;
-				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+				while ( $tags->next_tag() ) {
+					$tag_name = $tags->get_tag();
+					if ( ! is_string( $tag_name ) ) {
+						continue;
+					}
+					$tag_name = strtoupper( $tag_name );
+					if ( 'IMG' !== $tag_name && 'IFRAME' !== $tag_name ) {
+						continue;
+					}
 					$priority = $tags->get_attribute( 'fetchpriority' );
 					if ( ! is_string( $priority ) || 'high' !== strtolower( trim( $priority ) ) ) {
 						continue;
@@ -7652,6 +7681,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$imagesizes
 				);
 				if ( '' === $link_tag ) {
+					// Link generation failed after the slot claim: release the
+					// claim so the sibling emitter may still emit (issue #1312
+					// review — claim-before-emit would otherwise suppress the
+					// sibling into zero preloads instead of one).
+					self::release_hero_preload_slot( $lcp_url, '' );
 					return $buffer;
 				}
 				if ( false !== stripos( $buffer, '</head>' ) ) {
@@ -8073,6 +8107,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Adds `<style>`-block fallback for stylesheet heroes.
+		 * @since NEXT Adds a pre-6.2 regex fallback for inline `style=""`
+		 * heroes when the HTML API is unavailable.
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string The hero background image URL, or empty string.
@@ -8092,6 +8128,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							continue;
 						}
 						$style = $tags->get_attribute( 'style' );
+						if ( ! is_string( $style ) || '' === $style || false === stripos( $style, 'background' ) ) {
+							continue;
+						}
+						$bg_url = '';
+						if ( preg_match( '#background(?:-image)?\s*:[^;]*?url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)#i', $style, $m ) ) {
+							$bg_url = trim( $m[1] );
+						}
+						if ( '' === $bg_url || 0 === stripos( $bg_url, 'data:' ) || 0 === stripos( $bg_url, 'blob:' ) || 0 === stripos( $bg_url, 'javascript:' ) ) {
+							continue;
+						}
+						if ( 0 === strpos( $bg_url, '//' ) ) {
+							$bg_url = 'https:' . $bg_url;
+						} elseif ( 0 === strpos( $bg_url, '/' ) || false === strpos( $bg_url, '://' ) ) {
+							$bg_url = Util::cached_home_url() . '/' . ltrim( $bg_url, '/' );
+						}
+						return $bg_url;
+					}
+				}
+				// Pre-6.2 regex fallback (issue #1312 review): when the HTML
+				// API is unavailable the Tag Processor scan above is skipped
+				// entirely, so inline `style=""` heroes are matched with a
+				// lightweight style-attribute scan mirroring the same
+				// background url() extraction. Fail-open to the
+				// `<style>`-block fallback below.
+				if ( ! $this->is_html_api_available() && false !== strpos( $buffer, 'style=' ) ) {
+					$inline_styles = array();
+					if ( preg_match_all( '#\bstyle\s*=\s*(["\'])(.*?)\1#is', $buffer, $inline_matches ) && isset( $inline_matches[2] ) ) {
+						$inline_styles = $inline_matches[2];
+					}
+					foreach ( $inline_styles as $style ) {
 						if ( ! is_string( $style ) || '' === $style || false === stripos( $style, 'background' ) ) {
 							continue;
 						}
@@ -8233,12 +8299,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 			$hero_url = $this->get_css_hero_url_from_buffer( $buffer );
+			// Hoisted computed-URL fetch (issue #1312 review): the filter fires
+			// at most once per call — reused for both the empty-scan fallback
+			// and the mismatch-override check below instead of invoking
+			// side-effecting callbacks twice.
+			$computed_url = null;
 			if ( '' === $hero_url ) {
 				try {
-					$hero_url = $this->get_computed_css_hero_url( $buffer );
+					$computed_url = $this->get_computed_css_hero_url( $buffer );
 				} catch ( \Throwable $e ) {
 					unset( $e );
-					$hero_url = '';
+					$computed_url = '';
+				}
+				if ( is_string( $computed_url ) ) {
+					$hero_url = $computed_url;
 				}
 			}
 			if ( '' === $hero_url ) {
@@ -8248,12 +8322,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// Computed server-side context wins when it is itself an allowed
 				// hero: prefer it over a mismatched buffer scan so stylesheet
 				// heroes missed by the scan still preload exactly once.
-				try {
-					$computed = $this->get_computed_css_hero_url( $buffer );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$computed = '';
+				if ( null === $computed_url ) {
+					try {
+						$computed_url = $this->get_computed_css_hero_url( $buffer );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$computed_url = '';
+					}
 				}
+				$computed = is_string( $computed_url ) ? $computed_url : '';
 				if ( '' === $computed || $this->normalize_image_url( $computed ) !== $this->normalize_image_url( $lcp_url ) ) {
 					return $buffer;
 				}
@@ -8267,6 +8344,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			$link_tag = Util::get_preload_link( $lcp_url, 'preload', 'image', false, Util::get_image_mime_type( $lcp_url ), '', 'high' );
 			if ( '' === $link_tag ) {
+				// Link generation failed after the slot claim: release the claim
+				// so the sibling emitter may still emit (issue #1312 review).
+				self::release_hero_preload_slot( $lcp_url, '' );
 				return $buffer;
 			}
 			$head_pos = stripos( $buffer, '</head>' );
