@@ -321,8 +321,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Whether a source image looks like a hero/LCP candidate.
 		 *
 		 * Fail-open filename heuristic only (no DB/HTTP, zero queries):
-		 * matches `hero`, `lcp`, `cover`, `featured`, or `banner` in the
-		 * basename. Multisite-safe: per-site file paths only, no
+		 * matches `hero`, `lcp`, `cover`, `featured`, or `banner` as
+		 * delimiter-separated tokens in the filename stem (start, `.`,
+		 * `_`, `-` boundaries) so `recovery.jpg`/`discover.png` do not
+		 * false-positive. Multisite-safe: per-site file paths only, no
 		 * cross-site state is read.
 		 *
 		 * @since NEXT
@@ -338,8 +340,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( '' === $base ) {
 				return false;
 			}
-			foreach ( array( 'hero', 'lcp', 'cover', 'featured', 'banner' ) as $needle ) {
-				if ( false !== strpos( $base, $needle ) ) {
+			$stem = strtolower( (string) pathinfo( $base, PATHINFO_FILENAME ) );
+			if ( '' === $stem ) {
+				return false;
+			}
+			foreach ( array( '/(^|[._-])hero([._-]|$)/', '/(^|[._-])lcp([._-]|$)/', '/(^|[._-])cover([._-]|$)/', '/(^|[._-])featured([._-]|$)/', '/(^|[._-])banner([._-]|$)/' ) as $pattern ) {
+				if ( 1 === preg_match( $pattern, $stem ) ) {
 					return true;
 				}
 			}
@@ -1423,9 +1429,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * `wppo_smart_quality_value` return wins outright, while
 		 * `jpeg_quality` / `wp_editor_set_quality` filters (already honoured
 		 * inside the core resolution chain) suppress the offsets so the
-		 * filtered base is used verbatim. Invalid filter results fail open
-		 * to the current flat rule. Small files keep skipping downstream in
-		 * `convert_image()` via `should_skip_small_file()`.
+		 * filtered base is used verbatim. Note: those two core filters are
+		 * registered by many themes/plugins, so on such sites the heuristic
+		 * offsets are intentionally a no-op (a WP_DEBUG notice is logged).
+		 * Invalid filter results fail open to the current flat rule. Small
+		 * files keep skipping downstream in `convert_image()` via
+		 * `should_skip_small_file()`.
 		 *
 		 * Format authority lives in `resolve_output_format()`, which defers to
 		 * core's `image_editor_output_format` filter (guarded by `has_filter()`
@@ -1461,7 +1470,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$gd_avif_available = function_exists( 'imageavif' ) && version_compare( PHP_VERSION, '8.2', '>=' );
 				if ( $gd_avif_available || self::is_imagick_avif_available() ) {
 					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
-					$base         = min( 100, max( 1, max( 1, $webp_quality - 20 ) ) );
+					$base         = min( 100, max( 1, $webp_quality - 20 ) );
 				} else {
 					$base = $this->resolve_encode_quality( 'image/webp', 82, $size );
 				}
@@ -1475,16 +1484,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			// Explicit numeric override wins over the heuristic when valid.
+			// The effective size (derived from the `-WxH` suffix when `$size`
+			// is empty) and the source path are passed so consumers can make
+			// role-aware decisions.
+			$effective_size = $size;
+			if ( empty( $effective_size ) && '' !== $source_image ) {
+				$effective_size = $this->get_source_image_dimensions( $source_image );
+			}
 			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_smart_quality_value' ) ) {
 				/**
 				 * Filter the resolved smart quality value.
 				 *
 				 * @since NEXT
-				 * @param int    $quality Base quality before size/role offsets.
-				 * @param string $mime    Output MIME type.
-				 * @param array  $size    Source dimensions ('width'/'height').
+				 * @param int    $quality      Base quality before size/role offsets.
+				 * @param string $mime         Output MIME type.
+				 * @param array  $effective_size Effective source dimensions ('width'/'height'), derived from the `-WxH` suffix when `$size` is empty.
+				 * @param string $source_image Source filesystem path (may be empty).
 				 */
-				$override = apply_filters( 'wppo_smart_quality_value', $base, $mime, $size );
+				$override = apply_filters( 'wppo_smart_quality_value', $base, $mime, $effective_size, $source_image );
 				if ( is_scalar( $override ) ) {
 					$override = (int) $override;
 					if ( 1 <= $override && 100 >= $override ) {
@@ -1497,14 +1514,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Existing core quality filters already shaped `$base` via the
 			// resolution chain above; honour them verbatim by skipping the
-			// heuristic offsets.
+			// heuristic offsets. Core `jpeg_quality` /
+			// `wp_editor_set_quality` filters are common in themes/plugins,
+			// so this path is a documented no-op for offsets; a WP_DEBUG
+			// notice is logged to keep the suppression visible.
 			if ( function_exists( 'has_filter' ) && ( has_filter( 'jpeg_quality' ) || has_filter( 'wp_editor_set_quality' ) ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( 'error_log' ) ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only notice documenting the documented offset suppression.
+					error_log( 'WPPO: smart quality offsets suppressed by jpeg_quality/wp_editor_set_quality filter; using filtered base quality.' );
+				}
 				return $base;
-			}
-
-			$effective_size = $size;
-			if ( empty( $effective_size ) && '' !== $source_image ) {
-				$effective_size = $this->get_source_image_dimensions( $source_image );
 			}
 			$size_offset = self::get_smart_quality_size_offset( $effective_size );
 			$role_offset = '' !== $source_image ? self::get_smart_quality_role_offset( $source_image ) : 0;
@@ -3661,6 +3680,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				update_option( 'wppo_img_scan_cursor', min( array_map( 'intval', $tail_ids ) ), false );
 			}
 			$all_ids = array_merge( is_array( $head_ids ) ? $head_ids : array(), is_array( $tail_ids ) ? $tail_ids : array() );
+			// Prime post + postmeta caches BEFORE hero probing so the
+			// get_attached_file() calls inside order_queue_hero_first() and
+			// the loop below hit warm caches instead of issuing per-ID
+			// post/postmeta lookups.
+			$prime_ids = array_map( 'intval', (array) $all_ids );
+			if ( ! empty( $prime_ids ) ) {
+				try {
+					if ( function_exists( '_prime_post_caches' ) ) {
+						_prime_post_caches( $prime_ids, false, false );
+					}
+					if ( function_exists( 'update_postmeta_cache' ) ) {
+						update_postmeta_cache( $prime_ids );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			// Hero-first ordering (issue #1387): hero candidates convert
 			// before bulk library items so LCP-adjacent outputs exist
 			// earlier. Fail-open: unchanged order when unresolvable.
@@ -3677,23 +3713,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			);
 
 			$queued = 0;
-
-			// Prime post + postmeta caches for the batch so the per-ID
-			// get_attached_file() calls below do not each issue post and
-			// postmeta lookups.
-			$prime_ids = array_map( 'intval', (array) $all_ids );
-			if ( ! empty( $prime_ids ) ) {
-				try {
-					if ( function_exists( '_prime_post_caches' ) ) {
-						_prime_post_caches( $prime_ids, false, false );
-					}
-					if ( function_exists( 'update_postmeta_cache' ) ) {
-						update_postmeta_cache( $prime_ids );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
 
 			foreach ( $all_ids as $attachment_id ) {
 				$file = get_attached_file( (int) $attachment_id );
