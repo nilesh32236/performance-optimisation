@@ -468,11 +468,15 @@ const App = () => {
 		] );
 
 		// Audit #1354 review: locals may be null when their want* flag
-		// was false — abort via refs, never possibly-null locals.
+		// was false. Snapshot the live controllers so cleanup never
+		// dereferences a null local or a stale ref.
+		const liveActivities = activitiesControllerRef.current;
+		const liveRules = rulesControllerRef.current;
+		const liveCcss = ccssControllerRef.current;
 		return () => {
-			activitiesControllerRef.current?.abort();
-			rulesControllerRef.current?.abort();
-			ccssControllerRef.current?.abort();
+			liveActivities?.abort();
+			liveRules?.abort();
+			liveCcss?.abort();
 		};
 		// Intentionally minimal deps: hasFetched* refs (not state) gate
 		// re-fetches, so effect-written state (recentActivities, serverRules)
