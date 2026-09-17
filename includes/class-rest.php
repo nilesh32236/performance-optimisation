@@ -1538,6 +1538,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				// store check below only runs when the snapshot is incomplete
 				// (>10k pending rows) or unavailable/failed, so a typical batch
 				// pays only the bounded snapshot queries.
+				// Known race (documented, benign): a job enqueued after the
+				// snapshot double-enqueues this batch; a job completing
+				// between snapshot and loop causes a false-positive skip that
+				// the next run heals. Skipping the probe when complete is
+				// intentional — the waste is one duplicate job, not data loss.
 				$scheduled          = array();
 				$scheduled_complete = false;
 				if ( function_exists( 'as_get_scheduled_actions' ) ) {
@@ -1557,6 +1562,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								'status'   => $statuses,
 								'per_page' => 1000,
 								'offset'   => $as_page * 1000,
+								'orderby'  => 'date',
+								'order'    => 'ASC',
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
 							if ( ! is_array( $existing_actions ) || empty( $existing_actions ) ) {

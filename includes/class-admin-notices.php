@@ -70,6 +70,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		private static $dropin_memo = null;
 
 		/**
+		 * Per-request memo of the .htaccess failure flag.
+		 *
+		 * The flag is rarely set but admin_notices renders on every
+		 * wp-admin pageload — read the transient once. Reset by
+		 * reset_memo_cache_for_tests().
+		 *
+		 * @since NEXT
+		 * @var bool|null Null when not yet read this request.
+		 */
+		private static $htaccess_failure_memo = null;
+
+		/**
 		 * Reset the per-request memos (unit-test helper).
 		 *
 		 * Mirrors LiteSpeed_Integration::reset_cache(): PHPUnit runs many
@@ -83,6 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			self::$circuit_state_memo     = null;
 			self::$circuit_state_memo_set = false;
 			self::$dropin_memo            = null;
+			self::$htaccess_failure_memo  = null;
 		}
 
 		/**
@@ -310,12 +323,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			// Per-request memo: the flag is rarely set but admin_notices
 			// renders on every wp-admin pageload — read the transient once.
-			static $has_failure = null;
 			try {
-				if ( null === $has_failure ) {
-					$has_failure = Htaccess_Handler::has_htaccess_failure();
+				if ( null === self::$htaccess_failure_memo ) {
+					self::$htaccess_failure_memo = Htaccess_Handler::has_htaccess_failure();
 				}
-				if ( ! $has_failure ) {
+				if ( ! self::$htaccess_failure_memo ) {
 					return;
 				}
 			} catch ( \Throwable $e ) {
@@ -708,7 +720,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$activation_time = get_option( 'wppo_activation_time' );
 			if ( false === $activation_time ) {
-				update_option( 'wppo_activation_time', time() );
+				update_option( 'wppo_activation_time', time(), false );
 				return;
 			}
 

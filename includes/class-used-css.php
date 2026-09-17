@@ -3107,8 +3107,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// site issues a bounded set of store queries instead of one per
 			// 200-post cursor batch. $lookup_ok disambiguates "none scheduled"
 			// from "lookup unavailable/failed", gating the per-post fallback.
-			$scheduled = array();
-			$lookup_ok = false;
+			$scheduled           = array();
+			$lookup_ok           = false;
+			$snapshot_complete   = false;
+			$scheduled_cache_key = Util::transient_key( 'wppo_used_css_scheduled' );
 			// Hoisted unique probe first (issue #1310 review): on AS 4.x
 			// the atomic unique insert below dedupes by itself, so the
 			// full pending snapshot (up to 5 pages x 1000 rows + JSON
@@ -3125,7 +3127,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// skipped enqueue (deduped next run); the atomic unique path
 				// above is unaffected. Every cache/store access is fail-open
 				// so a backend error keeps the per-row backstop below.
-				$scheduled_cache_key = Util::transient_key( 'wppo_used_css_scheduled' );
+				// Only complete snapshots are cached, so a cache hit implies
+				// completeness; truncated snapshots keep the per-row backstop.
 				try {
 					$cached_scheduled = get_transient( $scheduled_cache_key );
 				} catch ( \Throwable ) {
@@ -3135,8 +3138,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					foreach ( $cached_scheduled as $cached_post_id ) {
 						$scheduled[ (int) $cached_post_id ] = true;
 					}
-					$lookup_ok = true;
+					$lookup_ok         = true;
+					$snapshot_complete = true;
 				} else {
+					$as_statuses = array( 'pending', 'in-progress' );
+					if ( class_exists( 'ActionScheduler_Store' ) ) {
+						$as_statuses = array(
+							\ActionScheduler_Store::STATUS_PENDING,
+							\ActionScheduler_Store::STATUS_RUNNING,
+						);
+					}
 					try {
 						$as_offset   = 0;
 						$as_per_page = 1000;
@@ -3146,13 +3157,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 								array(
 									'hook'     => 'wppo_used_css_generate',
 									'group'    => 'performance_optimisation',
-									'status'   => 'pending',
+									'status'   => $as_statuses,
 									'per_page' => $as_per_page,
 									'offset'   => $as_offset,
+									'orderby'  => 'date',
+									'order'    => 'ASC',
 								),
 								'ARRAY_A'
 							);
 							if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
+								$snapshot_complete = true;
 								break;
 							}
 							foreach ( $batch_actions as $action ) {
@@ -3170,16 +3184,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							}
 						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 							if ( count( $batch_actions ) < $as_per_page ) {
+								$snapshot_complete = true;
 								break;
 							}
 							$as_offset += $as_per_page;
 						}
 						$lookup_ok = true;
 					} catch ( \Throwable ) {
-						$scheduled = array();
-						$lookup_ok = false;
+						$scheduled         = array();
+						$lookup_ok         = false;
+						$snapshot_complete = false;
 					}
-					if ( $lookup_ok ) {
+					if ( $lookup_ok && $snapshot_complete ) {
 						try {
 							set_transient( $scheduled_cache_key, array_keys( $scheduled ), 5 * MINUTE_IN_SECONDS );
 						} catch ( \Throwable $transient_error ) {
@@ -3293,7 +3309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					// so the per-row pre-check below only runs when unique
 					// inserts are unsupported (saves N SELECTs per batch).
 					$use_unique = $run_use_unique;
-					if ( ! $use_unique && ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+					if ( ! $use_unique && ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
 						$scheduled[ $post_id ] = true;
 						continue;
 					}
@@ -3353,6 +3369,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			if ( $queued > 0 ) {
+				// Invalidate the 5-min scheduled-post cache: it was built
+				// before this run's enqueues and completed jobs stay cached,
+				// so a second run within TTL would double-enqueue new posts
+				// and skip requeue of finished jobs.
+				try {
+					delete_transient( $scheduled_cache_key );
+				} catch ( \Throwable $transient_error ) {
+					unset( $transient_error );
+				}
 				Log::add(
 					sprintf(
 						/* translators: %d: Number of jobs */

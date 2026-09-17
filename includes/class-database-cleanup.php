@@ -1198,24 +1198,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$autoload_values = self::get_autoloadable_values();
 			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
 
-			// Fetch a slightly wider window than $limit: PHP-side exclusions
-			// below (core options, already-remediated) would otherwise silently
-			// hide candidates sitting below the SQL LIMIT cutoff. Prefix-class
-			// exclusions (transients, oEmbed, wppo_*) are pushed into SQL so
-			// fewer rows enter the LENGTH() + ORDER BY filesort; the window is
-			// capped at limit+100 (max 600 rows) instead of limit*5.
+			// Fetch in limit+100 windows with offset pagination: PHP-side
+			// exclusions below (filterable core list, already-remediated)
+			// cannot go to SQL and could otherwise silently hide candidates
+			// sitting below a single LIMIT cutoff. Prefix-class exclusions
+			// (transients, oEmbed, wppo_*) are pushed into SQL so fewer rows
+			// enter the LENGTH() + ORDER BY filesort. Bounded to 5 windows
+			// (max ~3000 scanned rows) so large sites cannot loop unbounded.
 			$fetch = $limit + 100;
-
+			$rows  = array();
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
-			$rows = $wpdb->get_results(
-				$wpdb->prepare( // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; LIKE exclusions passed via spread args.
-					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $fetch, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- $placeholders is count-derived; LIKE exclusions passed via spread args.
-					...array_merge( $autoload_values, array( '\_transient\_%', '\_site\_transient\_%', '\_oembed\_%', 'wppo\_%', $threshold ) )
-				),
-				ARRAY_A
-			);
+			for ( $window = 0; $window < 5; $window++ ) {
+				$offset = $window * $fetch;
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query, windowed pagination.
+				$window_rows = $wpdb->get_results(
+					$wpdb->prepare( // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; LIKE exclusions passed via spread args.
+						"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $fetch . ' OFFSET ' . (int) $offset, // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; LIKE exclusions passed via spread args.
+						...array_merge( $autoload_values, array( '\_transient\_%', '\_site\_transient\_%', '\_oembed\_%', 'wppo\_%', $threshold ) )
+					),
+					ARRAY_A
+				);
+				if ( ! is_array( $window_rows ) || empty( $window_rows ) ) {
+					break;
+				}
+				foreach ( $window_rows as $window_row ) {
+					$rows[] = $window_row;
+				}
+				if ( count( $window_rows ) < $fetch ) {
+					break;
+				}
+				// Stop early once enough raw rows are buffered to plausibly
+				// yield $limit accepted rows after PHP-side exclusions.
+				if ( count( $rows ) >= $fetch + $limit ) {
+					break;
+				}
+			}
 
-			if ( ! is_array( $rows ) ) {
+			if ( ! is_array( $rows ) || empty( $rows ) ) {
 				return array();
 			}
 

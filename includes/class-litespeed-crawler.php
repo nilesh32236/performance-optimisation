@@ -483,6 +483,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				 */
 				$urls = (array) apply_filters( 'wppo_crawler_urls', $urls );
 				$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls );
+				// Mirror the normal-path defense-in-depth: a code-level
+				// filter could return external or oversized lists, so
+				// re-sanitize + cap even on the deadline early return.
+				$urls = array_values( array_unique( array_filter( array_map( 'esc_url_raw', $urls ) ) ) );
+				if ( count( $urls ) > $cap ) {
+					$urls = array_slice( $urls, 0, $cap );
+				}
 				return $urls;
 			}
 
@@ -684,16 +691,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			 */
 			$disable_curl = (bool) apply_filters( 'wppo_crawler_disable_curl', false );
 			if ( ! function_exists( 'curl_multi_init' ) || $disable_curl ) {
-				$success  = 0;
-				$failed   = 0;
-				$deadline = microtime( true ) + 15;
+				$success          = 0;
+				$failed           = 0;
+				$skipped_deadline = 0;
+				$deadline         = microtime( true ) + 15;
 				foreach ( $requests as $req ) {
 					// Bound worst-case runtime like the curl_multi path: once
-					// the 15s wall-clock budget is spent, the remainder counts
-					// as failed (matching per-request failure semantics) so a
-					// large URL x variant matrix cannot exceed the PHP limit.
+					// the 15s wall-clock budget is spent, unattempted work
+					// counts as skipped (deferred), not failed, so the
+					// failed metric only reflects requests that actually ran.
 					if ( microtime( true ) >= $deadline ) {
-						++$failed;
+						++$skipped_deadline;
 						continue;
 					}
 					$resp = wp_remote_get(
@@ -714,7 +722,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				return array(
 					'success' => $success,
 					'failed'  => $failed,
-					'skipped' => $skipped_blacklist,
+					'skipped' => $skipped_blacklist + $skipped_deadline,
 				);
 			}
 
@@ -812,6 +820,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				}
 			} while ( $active && CURLM_OK === $status && microtime( true ) < $deadline );
 
+			// Unattempted remainder (still queued or in-flight past the
+			// deadline) counts as skipped, matching the wp_remote_get
+			// fallback, so success+failed+skipped tallies every request.
+			$skipped_deadline = count( $queue ) + count( $handles );
 			// Cleanup remaining.
 			foreach ( $handles as $ch ) {
 				curl_multi_remove_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle -- crawler requires curl_multi
@@ -825,7 +837,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			return array(
 				'success' => $success,
 				'failed'  => $failed,
-				'skipped' => $skipped_blacklist,
+				'skipped' => $skipped_blacklist + $skipped_deadline,
 			);
 		}
 

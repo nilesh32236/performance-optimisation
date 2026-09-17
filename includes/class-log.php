@@ -117,7 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 
 			if ( ! is_string( $activity ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( '_doing_it_wrong' ) ) {
-					_doing_it_wrong( __METHOD__, __( 'Log::add() expects a string activity description; non-string values are ignored.', 'performance-optimisation' ), 'NEXT' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- _doing_it_wrong() handles output escaping internally; pre-escaping corrupts non-HTML contexts.
+					_doing_it_wrong( __METHOD__, __( 'Log::add() expects a string activity description; non-string values are ignored.', 'performance-optimisation' ), defined( 'WPPO_VERSION' ) ? WPPO_VERSION : '1.0.0' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- _doing_it_wrong() handles output escaping internally; pre-escaping corrupts non-HTML contexts.
 				}
 				return;
 			}
@@ -162,8 +162,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					// second always produce distinct salts (issue #882 review).
 					update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
 				} else {
-					self::$activity_cache_version = (int) get_option( 'wppo_activity_cache_version', 0 ) + 1;
-					update_option( 'wppo_activity_cache_version', self::$activity_cache_version, false );
+					// Best-effort bump: concurrent Log::add() calls can lose
+					// an increment (read-modify-write). Re-read after the
+					// write so the per-request memo never trails the stored
+					// version; a lost increment only risks a stale activity
+					// page, never data loss.
+					update_option( 'wppo_activity_cache_version', (int) get_option( 'wppo_activity_cache_version', 0 ) + 1, false );
+					self::$activity_cache_version = (int) get_option( 'wppo_activity_cache_version', 0 );
 				}
 			}
 		}
@@ -204,7 +209,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			}
 
 			if ( false === $data ) {
-				/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
+				/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching */
 				// Direct query is required for custom table operations.
 
 				// Get total number of activities.

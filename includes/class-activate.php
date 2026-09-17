@@ -117,7 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			$has_activation_time = (bool) get_option( 'wppo_activation_time' );
 			if ( ! $has_activation_time ) {
-				update_option( 'wppo_activation_time', time() );
+				update_option( 'wppo_activation_time', time(), false );
 			}
 
 			// Record the current version so fresh installs skip the one-time
@@ -142,10 +142,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			self::maybe_seed_settings();
 			self::create_activity_log_table();
-			Img_Converter::migrate_img_info_autoload();
-			RUM::migrate_rum_autoload();
-			Pagespeed::migrate_trends_autoload();
-			self::migrate_settings_autoload();
+			// Flag-guarded migrator (runs once): covers img_info, RUM,
+			// trends, and wppo_settings autoload flips. maybe_run_upgrades()
+			// early-returns on fresh installs before its own migrate call,
+			// so fresh installs are covered here without re-running.
+			self::maybe_migrate_option_autoload();
 			self::maybe_run_upgrades( ! $has_activation_time );
 		}
 
