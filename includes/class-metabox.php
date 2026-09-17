@@ -621,7 +621,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			// Per-page compat preset opt-out (#1308). Checkbox-only (no JS);
 			// allowlisted slugs so arbitrary meta values can never be stored.
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$raw_presets_off = $this->get_raw_post_array( 'wppo_delay_presets_off' );
 			$allowed_presets = array( 'consent', 'analytics', 'gallery', 'jquery' );
 			$presets_off     = array();
@@ -642,7 +642,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				update_post_meta( $post_id, '_wppo_delay_presets_off', $presets_off );
 			}
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$raw_notes = $this->get_raw_post_string( 'wppo_delay_notes' );
 			$notes     = is_string( $raw_notes ) ? sanitize_textarea_field( $raw_notes ) : '';
 			if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {

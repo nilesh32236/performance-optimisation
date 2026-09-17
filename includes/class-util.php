@@ -5503,7 +5503,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
-				if ( in_array( $safe_key, array( 'delayJSBuilderPreset', 'delayJSCommercePreset', 'delayJSInteractionPreset', 'unusedCSSRegressionGuard' ), true ) && ! is_array( $value ) ) {
+				$safe_on_keys = array(
+					'delayJSBuilderPreset',
+					'delayJSCommercePreset',
+					'delayJSInteractionPreset',
+					'unusedCSSRegressionGuard',
+				);
+				if ( in_array( $safe_key, $safe_on_keys, true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {

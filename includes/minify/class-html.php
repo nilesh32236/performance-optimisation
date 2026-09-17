@@ -112,6 +112,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private ?string $delay_exclude_re = null;
 
 		/**
+		 * Precompiled alternations for idle/viewport strategy lists.
+		 *
+		 * One preg_match per tag replaces the O(list) strpos scans in
+		 * get_delay_strategy_for_inline(). Null when the list is empty.
+		 *
+		 * @since NEXT
+		 * @var string|null
+		 */
+		private ?string $delay_idle_re = null;
+
+		/**
+		 * Precompiled alternation for the viewport strategy list.
+		 *
+		 * @since NEXT
+		 * @var string|null
+		 */
+		private ?string $delay_viewport_re = null;
+
+		/**
+		 * Precompiled alternation for all priority keys.
+		 *
+		 * Quick-reject gate in get_delay_priority_for_inline(): a single
+		 * preg_match decides whether the linear level-resolution loop runs.
+		 *
+		 * @since NEXT
+		 * @var string|null
+		 */
+		private ?string $delay_priority_re = null;
+
+		/**
 		 * Handles/URLs to load via requestIdleCallback.
 		 *
 		 * @since 2.0.0
@@ -213,8 +243,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			// a loop. Snapshot the pre-compat list so the per-page opt-out below
 			// can protect manual/safe entries.
 			$delay_enabled = ! empty( $this->options['file_optimisation']['delayJS'] );
-			$pre_compat    = $this->exclude_delay_js;
-			if ( $delay_enabled && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_compat_preset_map' ) && method_exists( Main::class, 'get_delay_js_compat_preset_exclusions' ) ) {
+			// Base preset parity (#1308 review): the external path always starts
+			// from Main::get_delay_js_base_preset_exclusions() (recaptcha/stripe/
+			// gtag/analytics/gtm, …), so the inline path must merge it too —
+			// otherwise inline base fragments get delayed while handles stay
+			// eager. Merged before the $pre_compat snapshot so opt-outs cannot
+			// strip overlapping base strings inline that stay protected
+			// externally. Fail-open: errors keep the manual/safe list.
+			$has_base_api = class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_base_preset_exclusions' );
+			if ( $has_base_api ) {
+				try {
+					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_base_preset_exclusions() );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			$pre_compat     = $this->exclude_delay_js;
+			$has_compat_api = class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_compat_preset_map' ) && method_exists( Main::class, 'get_delay_js_compat_preset_exclusions' );
+			if ( $delay_enabled && $has_compat_api ) {
 				$chunks = array();
 				foreach ( Main::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
 					try {
@@ -275,7 +321,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			// overlapping entries (e.g. gtag, jquery) stay eager. Singular-only
 			// to match Main::apply_per_page_delay_config() parity: archives/home
 			// never re-delay inline scripts while the external path does not.
-			if ( $delay_enabled && class_exists( Main::class ) && method_exists( Main::class, 'get_page_disabled_delay_presets' ) && method_exists( Main::class, 'get_delay_js_compat_preset_exclusions' ) ) {
+			$has_opt_out_api = class_exists( Main::class ) && method_exists( Main::class, 'get_page_disabled_delay_presets' ) && method_exists( Main::class, 'get_delay_js_compat_preset_exclusions' );
+			if ( $delay_enabled && $has_opt_out_api ) {
 				try {
 					$is_singular = ! function_exists( 'is_singular' ) || is_singular();
 					if ( $is_singular ) {
@@ -359,11 +406,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				if ( count( $parts ) === 2 ) {
 					$handle = trim( $parts[0] );
 					$level  = strtolower( trim( $parts[1] ) );
-					if ( in_array( $level, array( 'high', 'normal', 'low' ), true ) ) {
+					if ( '' !== $handle && in_array( $level, array( 'high', 'normal', 'low' ), true ) ) {
 						$this->delay_js_priority[ $handle ] = $level;
 					}
 				}
 			}
+
+			// Precompile strategy/priority alternations once (see props above).
+			$this->delay_idle_re     = self::compile_delay_exclude_re( $this->delay_js_idle_list );
+			$this->delay_viewport_re = self::compile_delay_exclude_re( $this->delay_js_viewport_list );
+			$this->delay_priority_re = self::compile_delay_exclude_re( array_keys( $this->delay_js_priority ) );
 
 			$this->minified_html = $this->minify_html( $html );
 		}
@@ -408,6 +460,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 				restore_error_handler();
 				return false === $valid ? null : $re;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Build a per-request cache key for third-party allow/deny settings.
+		 *
+		 * JSON-based (never serialize()) so the WordPress serialize() sniff
+		 * stays clean; nested arrays encode deterministically. Returns null
+		 * when the values cannot be encoded (callers skip the cache).
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $allow_raw Allowlist raw setting value.
+		 * @param mixed $extra_raw Denylist raw setting value.
+		 * @return string|null Cache key.
+		 */
+		private static function third_party_settings_key( $allow_raw, $extra_raw ): ?string {
+			try {
+				$encode = static function ( $v ): string {
+					if ( is_string( $v ) ) {
+						return 's:' . $v;
+					}
+					if ( is_array( $v ) ) {
+						$flat = array();
+						foreach ( $v as $item ) {
+							$flat[] = is_string( $item ) || is_numeric( $item ) ? (string) $item : gettype( $item );
+						}
+						if ( function_exists( 'wp_json_encode' ) ) {
+							$json = wp_json_encode( $flat );
+							return is_string( $json ) ? 'j:' . $json : 'a:' . implode( "\0", $flat );
+						}
+						return 'a:' . implode( "\0", $flat );
+					}
+					return gettype( $v ) . ':' . ( is_scalar( $v ) ? (string) $v : gettype( $v ) );
+				};
+				return md5( $encode( $allow_raw ) . "\0" . $encode( $extra_raw ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return null;
@@ -936,6 +1027,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					try {
 						static $staged_excludes_cache = null;
 						static $staged_excludes_key   = null;
+						static $staged_excludes_re    = null;
 						$staged_raw                   = $file_opt_for_preview['excludeDelayJS'];
 						if ( is_string( $staged_raw ) ) {
 							$staged_key = $staged_raw;
@@ -947,16 +1039,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						if ( null === $staged_excludes_cache || $staged_key !== $staged_excludes_key ) {
 							$staged_excludes_cache = Util::process_urls( $staged_raw );
 							$staged_excludes_key   = $staged_key;
+							$staged_excludes_re    = self::compile_delay_exclude_re( (array) $staged_excludes_cache );
 						}
-						$staged_lines = $staged_excludes_cache;
-						foreach ( $staged_lines as $exclude ) {
-							$exclude = trim( (string) $exclude );
-							if ( '' === $exclude ) {
-								continue;
+						$staged_hit = null;
+						if ( null !== $staged_excludes_re ) {
+							try {
+								$staged_hit = preg_match( $staged_excludes_re, (string) $attributes . "\0" . (string) $content );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$staged_hit = false;
 							}
-							if ( false !== strpos( $attributes, $exclude ) || false !== strpos( $content, $exclude ) ) {
+							if ( 1 === $staged_hit ) {
 								$should_exclude = true;
-								break;
+							}
+						}
+						if ( ! $should_exclude && ( null === $staged_excludes_re || false === $staged_hit ) ) {
+							$staged_lines = $staged_excludes_cache;
+							foreach ( $staged_lines as $exclude ) {
+								$exclude = trim( (string) $exclude );
+								if ( '' === $exclude ) {
+									continue;
+								}
+								if ( false !== strpos( $attributes, $exclude ) || false !== strpos( $content, $exclude ) ) {
+									$should_exclude = true;
+									break;
+								}
 							}
 						}
 					} catch ( \Throwable $e ) {
@@ -1053,14 +1160,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 */
 		private function get_delay_strategy_for_inline( string $attributes, string $content ): string {
 			$search_in = $attributes . ' ' . $content;
-			foreach ( $this->delay_js_idle_list as $pattern ) {
-				if ( false !== strpos( $search_in, $pattern ) ) {
+			if ( null !== $this->delay_idle_re ) {
+				try {
+					$hit = preg_match( $this->delay_idle_re, $search_in );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$hit = false;
+				}
+				if ( 1 === $hit ) {
 					return 'idle';
 				}
+				if ( false === $hit ) {
+					foreach ( $this->delay_js_idle_list as $pattern ) {
+						if ( false !== strpos( $search_in, $pattern ) ) {
+							return 'idle';
+						}
+					}
+				}
+			} else {
+				foreach ( $this->delay_js_idle_list as $pattern ) {
+					if ( false !== strpos( $search_in, $pattern ) ) {
+						return 'idle';
+					}
+				}
 			}
-			foreach ( $this->delay_js_viewport_list as $pattern ) {
-				if ( false !== strpos( $search_in, $pattern ) ) {
+			if ( null !== $this->delay_viewport_re ) {
+				try {
+					$hit = preg_match( $this->delay_viewport_re, $search_in );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$hit = false;
+				}
+				if ( 1 === $hit ) {
 					return 'viewport';
+				}
+				if ( false === $hit ) {
+					foreach ( $this->delay_js_viewport_list as $pattern ) {
+						if ( false !== strpos( $search_in, $pattern ) ) {
+							return 'viewport';
+						}
+					}
+				}
+			} else {
+				foreach ( $this->delay_js_viewport_list as $pattern ) {
+					if ( false !== strpos( $search_in, $pattern ) ) {
+						return 'viewport';
+					}
 				}
 			}
 			return $this->delay_js_default_strategy;
@@ -1076,7 +1221,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @return string Priority: 'high', 'normal', or 'low'.
 		 */
 		private function get_delay_priority_for_inline( string $attributes, string $content ): string {
+			if ( empty( $this->delay_js_priority ) ) {
+				return 'normal';
+			}
 			$search_in = $attributes . ' ' . $content;
+			// Quick-reject gate: skip the linear level-resolution loop when
+			// no priority key appears in the tag at all.
+			if ( null !== $this->delay_priority_re ) {
+				try {
+					$hit = preg_match( $this->delay_priority_re, $search_in );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$hit = false;
+				}
+				if ( 0 === $hit ) {
+					return 'normal';
+				}
+			}
 			foreach ( $this->delay_js_priority as $pattern => $level ) {
 				if ( false !== strpos( $search_in, $pattern ) ) {
 					return $level;
@@ -1168,35 +1329,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					return false;
 				}
 				$haystack = $attributes . ' ' . $content;
+				// Per-request parse cache (#1308 review): Util::process_urls()
+				// on the allow/deny textarea settings plus home_url()/host
+				// parsing ran once per <script> tag (O(T x (P+F+H))). The
+				// parsed settings lists are keyed by the raw setting values
+				// so identical tags reuse one parse per request; filters and
+				// host detection still run per tag (fail-open).
+				static $tp_parse_cache = array();
+				$allow_raw             = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
+				$extra_raw             = $file_opt['delayJSThirdPartyDenylist'] ?? '';
+				$tp_key                = self::third_party_settings_key( $allow_raw, $extra_raw );
+				if ( null !== $tp_key && isset( $tp_parse_cache[ $tp_key ] ) ) {
+					$settings_allowlist = $tp_parse_cache[ $tp_key ]['allow'];
+					$extra_parsed       = $tp_parse_cache[ $tp_key ]['extra'];
+				} else {
+					$settings_allowlist = array();
+					if ( is_string( $allow_raw ) && '' !== trim( $allow_raw ) ) {
+						// Normalize commas: process_urls() splits on newlines only.
+						$allow_normalized   = str_replace( ',', "\n", $allow_raw );
+						$settings_allowlist = (array) Util::process_urls( $allow_normalized );
+					} elseif ( is_array( $allow_raw ) ) {
+						// Same coerce/dedupe guard as Main: non-string/non-numeric
+						// entries map to '' then empties are filtered, so a
+						// nested-array filter return never becomes "Array".
+						$settings_allowlist = array_values(
+							array_filter(
+								array_map(
+									static function ( $v ): string {
+										return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
+									},
+									$allow_raw
+								),
+								static function ( $v ): bool {
+									return '' !== trim( (string) $v );
+								}
+							)
+						);
+					}
+					$extra_parsed = array();
+					if ( is_string( $extra_raw ) && '' !== trim( $extra_raw ) ) {
+						$extra_parsed = (array) Util::process_urls( str_replace( ',', "\n", $extra_raw ) );
+					} elseif ( is_array( $extra_raw ) ) {
+						$extra_parsed = array_values(
+							array_filter(
+								array_map(
+									static function ( $v ): string {
+										return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
+									},
+									$extra_raw
+								),
+								static function ( $v ): bool {
+									return '' !== trim( (string) $v );
+								}
+							)
+						);
+					}
+					if ( null !== $tp_key ) {
+						$tp_parse_cache[ $tp_key ] = array(
+							'allow' => $settings_allowlist,
+							'extra' => $extra_parsed,
+						);
+					}
+				}
 				// User allowlist wins. The settings-derived list is built
 				// first and passed into the filter (mirroring
 				// Main::get_delay_js_third_party_allowlist()) so filters
 				// written as array_merge($list, [...]) keep the user's
 				// textarea entries on this path too (#1217 review).
-				$settings_allowlist = array();
-				$allow_raw          = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
-				if ( is_string( $allow_raw ) && '' !== trim( $allow_raw ) ) {
-					// Normalize commas: process_urls() splits on newlines only.
-					$allow_normalized   = str_replace( ',', "\n", $allow_raw );
-					$settings_allowlist = (array) Util::process_urls( $allow_normalized );
-				} elseif ( is_array( $allow_raw ) ) {
-					// Same coerce/dedupe guard as Main: non-string/non-numeric
-					// entries map to '' then empties are filtered, so a
-					// nested-array filter return never becomes "Array".
-					$settings_allowlist = array_values(
-						array_filter(
-							array_map(
-								static function ( $v ): string {
-									return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
-								},
-								$allow_raw
-							),
-							static function ( $v ): bool {
-								return '' !== trim( (string) $v );
-							}
-						)
-					);
-				}
 				foreach ( $settings_allowlist as $allowed ) {
 					$allowed = trim( (string) $allowed );
 					if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
@@ -1233,7 +1432,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						unset( $e );
 					}
 				}
-				// Curated denylist + user additions.
+				// Curated denylist + user additions (user part reused from cache).
 				$denylist = array();
 				if ( class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_third_party_denylist' ) ) {
 					try {
@@ -1243,28 +1442,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						$denylist = array();
 					}
 				}
-				$extra = $file_opt['delayJSThirdPartyDenylist'] ?? '';
-				if ( is_string( $extra ) && '' !== trim( $extra ) ) {
-					// Normalize commas: process_urls() splits on newlines only.
-					$denylist = array_merge( $denylist, (array) Util::process_urls( str_replace( ',', "\n", $extra ) ) );
-				} elseif ( is_array( $extra ) ) {
-					// Same coerce guard as above (no bare strval).
-					$denylist = array_merge(
-						$denylist,
-						array_values(
-							array_filter(
-								array_map(
-									static function ( $v ): string {
-										return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
-									},
-									$extra
-								),
-								static function ( $v ): bool {
-									return '' !== trim( (string) $v );
-								}
-							)
-						)
-					);
+				if ( ! empty( $extra_parsed ) ) {
+					$denylist = array_merge( $denylist, $extra_parsed );
 				}
 				foreach ( $denylist as $entry ) {
 					$entry = trim( (string) $entry );

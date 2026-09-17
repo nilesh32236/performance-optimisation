@@ -5465,22 +5465,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( in_array( $handle, $exclusions, true ) ) {
 				return true;
 			}
-			foreach ( $exclusions as $pattern ) {
-				$pattern = (string) $pattern;
-				if ( '' === $pattern ) {
+			// Precomputed dash/underscore variants (#1308 review): the
+			// suffixed strings are built once per resolved exclusion list
+			// instead of concatenating per handle, and overlong variants are
+			// skipped before strpos. Still O(H x P) per handle but without
+			// repeated string building.
+			static $variant_cache = array();
+			static $variant_key   = null;
+			$handle_len           = strlen( $handle );
+			$list_key             = md5( implode( "\0", array_map( 'strval', (array) $exclusions ) ) );
+			if ( null !== $list_key && $list_key === $variant_key && isset( $variant_cache[ $list_key ] ) ) {
+				$variants = $variant_cache[ $list_key ];
+			} else {
+				$variants = array();
+				foreach ( $exclusions as $pattern ) {
+					$pattern = (string) $pattern;
+					if ( '' === $pattern ) {
+						continue;
+					}
+					// Pure-prefix entries (trailing '-' or '_', mirroring the
+					// used-CSS safelist): e.g. 'et_' excludes 'et_core_api_shortcodes'.
+					$last = substr( $pattern, -1 );
+					if ( '_' === $last || '-' === $last ) {
+						$variants[] = array( $pattern, false );
+						continue;
+					}
+					// Dash/underscore-delimited variants: 'oxygen' excludes
+					// 'oxygen-foo', 'vc_tta' excludes 'vc_tta-custom'. Word
+					// boundaries alone cannot express this because '_' is a word
+					// character, so the separator check comes first.
+					$variants[] = array( $pattern . '-', true );
+					$variants[] = array( $pattern . '_', true );
+				}
+				if ( null !== $list_key ) {
+					$variant_cache = array( $list_key => $variants );
+					$variant_key   = $list_key;
+				}
+			}
+			foreach ( $variants as $variant ) {
+				list( $needle, $delimited ) = $variant;
+				if ( strlen( $needle ) > $handle_len ) {
 					continue;
 				}
-				// Pure-prefix entries (trailing '-' or '_', mirroring the
-				// used-CSS safelist): e.g. 'et_' excludes 'et_core_api_shortcodes'.
-				$last = substr( $pattern, -1 );
-				if ( ( '_' === $last || '-' === $last ) && 0 === strpos( $handle, $pattern ) ) {
-					return true;
+				if ( ! $delimited ) {
+					if ( 0 === strpos( $handle, $needle ) ) {
+						return true;
+					}
+					continue;
 				}
-				// Dash/underscore-delimited variants: 'oxygen' excludes
-				// 'oxygen-foo', 'vc_tta' excludes 'vc_tta-custom'. Word
-				// boundaries alone cannot express this because '_' is a word
-				// character, so the separator check comes first.
-				if ( 0 === strpos( $handle, $pattern . '-' ) || 0 === strpos( $handle, $pattern . '_' ) ) {
+				if ( 0 === strpos( $handle, $needle ) ) {
 					return true;
 				}
 			}
@@ -5951,9 +5984,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// base/manual protections. Manual exclusions and safe presets are
 			// re-protected below. Fail-open: meta read errors apply no opt-out.
 			// Early-bail: all four presets default off, so the common case skips
-			// the post-meta lookup entirely.
+			// the post-meta lookup entirely. When delay itself is off, the
+			// strategy/priority metas below are irrelevant — skip all reads.
+			$file_opt = $this->options['file_optimisation'] ?? array();
+			if ( empty( $file_opt['delayJS'] ) ) {
+				return;
+			}
 			$compat_map = self::get_delay_js_compat_preset_map();
-			$file_opt   = $this->options['file_optimisation'] ?? array();
 			$any_on     = false;
 			foreach ( $compat_map as $setting_key => $map_slug ) {
 				if ( ! empty( $file_opt[ $setting_key ] ) ) {
@@ -7452,7 +7489,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT
 		 * @return string[]
 		 */
-		private static function get_delay_js_base_preset_exclusions(): array {
+		public static function get_delay_js_base_preset_exclusions(): array {
 			return array(
 				'recaptcha',
 				'google-recaptcha',
@@ -7503,8 +7540,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private static function get_delay_js_protected_exclusions( array $file_opt ): array {
 			try {
-				$protected = array( 'wppo-lazyload', 'data-wppo-preserve' );
-				if ( ! empty( $file_opt['excludeDelayJS'] ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+				$protected    = array( 'wppo-lazyload', 'data-wppo-preserve' );
+				$has_util_api = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' );
+				$has_excludes = ! empty( $file_opt['excludeDelayJS'] );
+				if ( $has_excludes && $has_util_api ) {
 					try {
 						$protected = array_merge( $protected, (array) Util::process_urls( $file_opt['excludeDelayJS'] ) );
 					} catch ( \Throwable $e ) {
@@ -7586,15 +7625,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Lazy-booted: matchers run only when their preset is enabled.
 			// Per-preset try/catch: a throw on one preset must not abort the
 			// remaining presets (inner getters already fail open per preset).
+			// Chunk-collect plus a single merge (consistent with the per-page
+			// opt-out and Minify\HTML paths) instead of O(k^2) merges.
+			$compat_chunks = array();
 			foreach ( self::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
 				try {
 					if ( ! empty( $this->options['file_optimisation'][ $setting_key ] ) ) {
-						$preset = array_merge( $preset, self::get_delay_js_compat_preset_exclusions( $slug ) );
+						$compat_chunks[] = self::get_delay_js_compat_preset_exclusions( $slug );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					continue;
 				}
+			}
+			if ( ! empty( $compat_chunks ) ) {
+				$preset = array_merge( $preset, ...$compat_chunks );
 			}
 			// Breaker presets ship deduped via array_unique (#1037) so builder +
 			// commerce + user excludes never double-process; string-only values.
