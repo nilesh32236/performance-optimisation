@@ -50,6 +50,13 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 	private array $option_store = array();
 
 	/**
+	 * Last candidate SQL seen by the wpdb mock (assert prefix exclusions).
+	 *
+	 * @var string
+	 */
+	public string $last_candidate_query = '';
+
+	/**
 	 * Rows returned by the wpdb mock for candidate queries.
 	 *
 	 * @var array<int, array<string, mixed>>
@@ -152,8 +159,18 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 				if ( is_string( $query ) && false !== strpos( $query, 'timeout_value' ) ) {
 					return $this->test->get_export_rows();
 				}
-				$rows      = $this->test->get_candidate_rows();
-				$threshold = ! empty( $this->last_args ) ? (int) end( $this->last_args ) : 0;
+				$this->test->last_candidate_query = is_string( $query ) ? $query : '';
+				$rows = $this->test->get_candidate_rows();
+				// Threshold is the first integer bound arg (autoload flags
+				// are strings; LIKE patterns were appended after it in
+				// audit #1325, so end() is no longer reliable).
+				$threshold = 0;
+				foreach ( $this->last_args as $arg ) {
+					if ( is_int( $arg ) ) {
+						$threshold = $arg;
+						break;
+					}
+				}
 				if ( $threshold > 0 ) {
 					$rows = array_values(
 						array_filter(
@@ -292,6 +309,16 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 	public function write_option( string $name, $value ): void {
 		$this->option_store[ $name ]    = $value;
 		$this->updated_options[ $name ] = $value;
+	}
+
+	/**
+	 * Candidate SQL pre-filters transient/oEmbed/wppo prefixes (audit #1325)
+	 * so fewer rows enter the filesort.
+	 */
+	public function test_candidate_query_excludes_noisy_prefixes_in_sql(): void {
+		Database_Cleanup::plan_autoload_remediation( 1024, 100 );
+		$this->assertStringContainsString( 'NOT LIKE', $this->last_candidate_query );
+		$this->assertStringContainsString( 'option_name NOT LIKE', $this->last_candidate_query );
 	}
 
 	/**

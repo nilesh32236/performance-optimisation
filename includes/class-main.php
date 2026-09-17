@@ -3122,6 +3122,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				Cache::clear_cache();
 			}
 
+			// One-time repair (audit #1325): legacy wppo_settings rows
+			// created with autoload=yes keep the multi-tab array in
+			// alloptions on every page load. Flip the flag in place (a
+			// value-identical update_option() would early-return without
+			// touching autoload, so update the row directly).
+			try {
+				global $wpdb;
+				if ( isset( $wpdb->options ) ) {
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- one-time version-gated repair of a single known option row; value untouched.
+					$wpdb->query(
+						$wpdb->prepare(
+							"UPDATE {$wpdb->options} SET autoload = %s WHERE option_name = %s AND autoload <> %s",
+							'no',
+							'wppo_settings',
+							'no'
+						)
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			update_option( 'wppo_version', WPPO_VERSION, false );
 		}
 

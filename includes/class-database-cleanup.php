@@ -1199,15 +1199,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
 
 			// Fetch a wider window than $limit: PHP-side exclusions below (core,
-			// transients, oEmbed, wppo_*, already-remediated) would otherwise
-			// silently hide candidates sitting below the SQL LIMIT cutoff.
-			$fetch = max( $limit * 5, $limit + 100 );
+			// already-remediated) would otherwise silently hide candidates
+			// sitting below the SQL LIMIT cutoff. Prefix exclusions
+			// (transients, oEmbed, wppo_*) are pushed into SQL (audit #1325)
+			// so fewer rows enter the filesort; the PHP checks stay as
+			// defense in depth.
+			$fetch = $limit + 100;
 
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $fetch, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-					...array_merge( $autoload_values, array( $threshold ) )
+					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND LENGTH(option_value) >= %d AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s ORDER BY opt_size DESC LIMIT " . (int) $fetch, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					...array_merge(
+						$autoload_values,
+						array(
+							$threshold,
+							$wpdb->esc_like( '_transient_' ) . '%',
+							$wpdb->esc_like( '_site_transient_' ) . '%',
+							$wpdb->esc_like( '_oembed_' ) . '%',
+							$wpdb->esc_like( 'wppo_' ) . '%',
+						)
+					)
 				),
 				ARRAY_A
 			);
