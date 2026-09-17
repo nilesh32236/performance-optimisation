@@ -2,6 +2,8 @@
 
 **If you add or change anything that affects how an agent works in this repo, update this file.**
 
+**Agents must read `wppo-agent-rules.md` first — it is the watchdog above all loop prompts (ESI stays, merge safety, cadence, verification order).**
+
 ---
 
 ## Quick start
