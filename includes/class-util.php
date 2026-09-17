@@ -5366,6 +5366,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Coalesce concurrent alloptions loads behind a stampede lock.
+		 *
+		 * Forty concurrent cold `alloptions` misses each hit the database via
+		 * `wp_load_alloptions()` unless they are collapsed: this wrapper runs
+		 * `$rebuild` (normally the single database query) under
+		 * {@see get_with_stampede_lock()} so exactly one worker rebuilds while
+		 * the rest wait a bounded interval (retries × delay, defaults ≈ 8 ×
+		 * 50ms) and then serve the fresh or stale copy. Fail-open throughout:
+		 * lock/Redis failures serve stale or dynamic uncached — never fatal.
+		 *
+		 * Multisite-safe: the coalescing key is blog-qualified via
+		 * {@see transient_key()}, so site A's miss never serves site B's
+		 * options and there is no cross-site leakage.
+		 *
+		 * @since NEXT
+		 * @param callable $rebuild Zero-arg rebuild callback performing the single database query. Returning false or WP_Error means "not cacheable" (stale served when available).
+		 * @param array    $args    Optional overrides for `ttl`, `stale_ttl`, `lock_ttl`, `retries`, `retry_delay_us`, and `group` (see get_with_stampede_lock()).
+		 * @return mixed Fresh value, stale fallback, rebuild result, or false on total miss failure.
+		 */
+		public static function get_alloptions_with_stampede_lock( callable $rebuild, array $args = array() ): mixed {
+			$key      = self::transient_key( 'wppo_alloptions' );
+			$defaults = array(
+				'ttl'            => 5 * ( defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS : 60 ),
+				'stale_ttl'      => defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400,
+				'retries'        => 8,
+				'retry_delay_us' => 50000,
+			);
+			$merged   = array_merge( $defaults, is_array( $args ) ? $args : array() );
+			try {
+				return self::get_with_stampede_lock( $key, $rebuild, $merged );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				try {
+					return $rebuild();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			}
+		}
+
+		/**
 		 * Compute a stable 12-char hex hash of a user's sorted roles, salted
 		 * with the site's secret to prevent cookie forgery.
 		 *
