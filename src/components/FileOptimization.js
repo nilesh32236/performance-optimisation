@@ -44,9 +44,9 @@ const cdnRowId = () => {
 	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
 };
 
-// Newline-delimited third-party lists: normalise array payloads (from
+// Newline-delimited third-party/exclude lists: normalise array payloads (from
 // sanitize/process_urls) to textarea strings without nested ternaries.
-const toDelayLines = ( value ) => {
+const toTextLines = ( value ) => {
 	if ( typeof value === 'string' ) {
 		return value;
 	}
@@ -66,6 +66,130 @@ const normalizeDeliveryMode = ( value ) => {
 	return [ 'file', 'delay', 'async', 'remove' ].includes( mode )
 		? mode
 		: 'file';
+};
+
+// Textarea-backed file-optimisation keys: newline-delimited lists the backend
+// may return as arrays (via sanitize/process_urls). Every one normalises
+// through toTextLines() so a backend array can never reach a controlled
+// textarea or be dropped to '' inconsistently between init, baseline, and
+// sync (issue #1259 review).
+const FILE_OPT_TEXTAREA_KEYS = [
+	'excludeJS',
+	'excludeCSS',
+	'excludeCombineCSS',
+	'excludeDeferJS',
+	'excludeDelayJS',
+	'delayJSThirdPartyDenylist',
+	'delayJSThirdPartyAllowlist',
+	'delayJSExcludeUrls',
+	'usedCSSExcludeUrls',
+	'delayJSIdleList',
+	'delayJSViewportList',
+	'delayJSPriority',
+	'excludeUrlToKeepJSCSS',
+	'removeCssJsHandle',
+	'excludeUnusedCSS',
+	'unusedCSSSafelistExtra',
+	'ccssSafelistExtra',
+];
+
+// Every file-optimisation key synced from incoming props in the baseline +
+// sync effects below. Single source of truth for both dep arrays so adding a
+// setting needs one edit, not three (issue #1259 review).
+const FILE_OPT_SYNC_KEYS = [
+	'safeMode',
+	'elementorSafeMode',
+	'minifyJS',
+	'excludeJS',
+	'minifyCSS',
+	'excludeCSS',
+	'combineCSS',
+	'excludeCombineCSS',
+	'removeQueryStrings',
+	'minifyHTML',
+	'deferJS',
+	'excludeDeferJS',
+	'delayJS',
+	'excludeDelayJS',
+	'delayJSCommercePreset',
+	'delayJSBuilderPreset',
+	'delayJSINPPreset',
+	'delayJSExternalOnly',
+	'delayJSThirdParty',
+	'delayJSThirdPartyDenylist',
+	'delayJSThirdPartyAllowlist',
+	'delayJSExcludeUrls',
+	'usedCSSExcludeUrls',
+	'delayJSDefaultStrategy',
+	'delayJSIdleList',
+	'delayJSViewportList',
+	'delayJSPriority',
+	'delayJSIdleTimeout',
+	'removeWooCSSJS',
+	'excludeUrlToKeepJSCSS',
+	'removeCssJsHandle',
+	'enableServerRules',
+	'criticalCSS',
+	'ccssMaxSize',
+	'ccssSafelistExtra',
+	'hostGoogleFontsLocally',
+	'fontMetricFallback',
+	'fontSubset',
+	'fontSubsetSubsets',
+	'cdnURL',
+	'cdnMapping',
+	'removeUnusedCSS',
+	'excludeUnusedCSS',
+	'unusedCSSSafelistExtra',
+	'unusedCSSRegressionGuard',
+	'unusedCSSRegressionThreshold',
+	'usedCSSDeliveryMode',
+	'disableEmojis',
+	'disableEmbeds',
+	'disableDashicons',
+	'disableXMLRPC',
+	'disableRestApiLinks',
+	'disableRssFeeds',
+	'disableShortlinks',
+	'disableGeneratorTag',
+	'disableJQueryMigrate',
+	'disablePasswordStrength',
+	'disableSelfPingbacks',
+	'disableRSD',
+	'disableWLWManifest',
+	'disableGlobalStyles',
+	'disableClassicThemeStyles',
+	'disableWooCartFragments',
+	'disableRecentCommentsStyle',
+	'disableCommentReply',
+	'disableOEmbedDiscovery',
+	'disableBlockWidgets',
+	'blockAssetsOnDemand',
+	'loadAllCoreBlockAssets',
+	'heartbeatControl',
+	'minifyInlineCSS',
+	'minifyInlineJS',
+	'removeHTMLComments',
+];
+
+// Normalize one file-optimisation options object: textarea-backed keys via
+// toTextLines() (after spread, so backend arrays win correctly), delivery
+// mode via the PHP-mirroring allowlist, font subsets with the 'latin'
+// fallback. Idempotent — safe to run on init, baseline, and sync payloads.
+const normalizeFileOpt = ( source = {} ) => {
+	const next = { ...source };
+	for ( const key of FILE_OPT_TEXTAREA_KEYS ) {
+		if ( key in next ) {
+			next[ key ] = toTextLines( next[ key ] );
+		}
+	}
+	next.usedCSSDeliveryMode = normalizeDeliveryMode(
+		next.usedCSSDeliveryMode
+	);
+	if ( typeof next.fontSubsetSubsets !== 'string' ) {
+		next.fontSubsetSubsets = 'latin';
+	}
+	return next;
 };
 
 const FileOptimization = ( {
@@ -98,8 +222,12 @@ const FileOptimization = ( {
 		return tabRefCallbacks.current[ id ];
 	}, [] );
 
-	const defaultSettings = {
+	const defaultSettings = normalizeFileOpt( {
 		safeMode: options.safeMode !== undefined ? options.safeMode : false,
+		elementorSafeMode:
+			options.elementorSafeMode !== undefined
+				? options.elementorSafeMode
+				: true,
 		minifyJS: false,
 		excludeJS: '',
 		minifyCSS: false,
@@ -121,10 +249,10 @@ const FileOptimization = ( {
 			options.delayJSThirdParty !== undefined
 				? options.delayJSThirdParty
 				: false,
-		delayJSThirdPartyDenylist: toDelayLines(
+		delayJSThirdPartyDenylist: toTextLines(
 			options.delayJSThirdPartyDenylist
 		),
-		delayJSThirdPartyAllowlist: toDelayLines(
+		delayJSThirdPartyAllowlist: toTextLines(
 			options.delayJSThirdPartyAllowlist
 		),
 		delayJSBuilderPreset:
@@ -210,7 +338,7 @@ const FileOptimization = ( {
 		minifyInlineJS: false,
 		removeHTMLComments: true,
 		...options,
-	};
+	} );
 
 	// Backfill stable row ids so CDN-mapping rows keep identity across
 	// add/remove (index keys would reuse the wrong input state/focus).
@@ -223,11 +351,11 @@ const FileOptimization = ( {
 	// String-guard textarea-backed keys AFTER the spread so a non-string
 	// truthy payload (e.g. array from corrupted settings) cannot flow into
 	// a controlled textarea value via the ...options override above.
-	// toDelayLines joins array payloads instead of clearing them (#1217 review).
-	defaultSettings.delayJSThirdPartyDenylist = toDelayLines(
+	// toTextLines joins array payloads instead of clearing them (#1217 review).
+	defaultSettings.delayJSThirdPartyDenylist = toTextLines(
 		options.delayJSThirdPartyDenylist
 	);
-	defaultSettings.delayJSThirdPartyAllowlist = toDelayLines(
+	defaultSettings.delayJSThirdPartyAllowlist = toTextLines(
 		options.delayJSThirdPartyAllowlist
 	);
 	defaultSettings.delayJSExcludeUrls =
@@ -393,21 +521,11 @@ const FileOptimization = ( {
 		notify: notifySandbox,
 		dismiss: dismissSandbox,
 	} = useNotice();
-	// Newline-delimited excludes: sanitize/process_urls normalization can
-	// produce arrays, so join them instead of clearing to empty string.
-	const toExcludeLines = ( value ) => {
-		if ( typeof value === 'string' ) {
-			return value;
-		}
-		if ( Array.isArray( value ) ) {
-			return value.join( '\n' );
-		}
-		return '';
-	};
 	const buildStagedFromForm = () => ( {
 		delayJS: !! settings.delayJS,
 		deferJS: !! settings.deferJS,
 		combineCSS: !! settings.combineCSS,
+		elementorSafeMode: !! settings.elementorSafeMode,
 		// Staging must mirror what the preview renderer consumes:
 		// safe_minify_js reads delayJSExternalOnly and minifyInlineJS from
 		// the effective slice, so omitting them would silently drop the
@@ -415,15 +533,15 @@ const FileOptimization = ( {
 		delayJSExternalOnly: !! settings.delayJSExternalOnly,
 		minifyInlineJS: !! settings.minifyInlineJS,
 		delayJSThirdParty: !! settings.delayJSThirdParty,
-		delayJSThirdPartyDenylist: toDelayLines(
+		delayJSThirdPartyDenylist: toTextLines(
 			settings.delayJSThirdPartyDenylist
 		),
-		delayJSThirdPartyAllowlist: toDelayLines(
+		delayJSThirdPartyAllowlist: toTextLines(
 			settings.delayJSThirdPartyAllowlist
 		),
-		excludeDelayJS: toExcludeLines( settings.excludeDelayJS ),
-		excludeDeferJS: toExcludeLines( settings.excludeDeferJS ),
-		excludeCombineCSS: toExcludeLines( settings.excludeCombineCSS ),
+		excludeDelayJS: toTextLines( settings.excludeDelayJS ),
+		excludeDeferJS: toTextLines( settings.excludeDeferJS ),
+		excludeCombineCSS: toTextLines( settings.excludeCombineCSS ),
 	} );
 	// Hydrate sandbox state when the Scripts tab opens so a staged
 	// experiment from a prior session is visible without re-staging.
@@ -671,111 +789,17 @@ const FileOptimization = ( {
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	// Baseline is intentionally derived per-key (not per-object-identity)
 	// so parent re-renders with an identical payload do not reset the form.
-	useEffect( () => {
-		setBaseline( {
-			...defaultSettings,
-			...options,
-			delayJSThirdPartyDenylist: toDelayLines(
-				options.delayJSThirdPartyDenylist
-			),
-			delayJSThirdPartyAllowlist: toDelayLines(
-				options.delayJSThirdPartyAllowlist
-			),
-			delayJSExcludeUrls:
-				typeof options.delayJSExcludeUrls === 'string'
-					? options.delayJSExcludeUrls
-					: '',
-			usedCSSExcludeUrls:
-				typeof options.usedCSSExcludeUrls === 'string'
-					? options.usedCSSExcludeUrls
-					: '',
-			ccssSafelistExtra:
-				typeof options.ccssSafelistExtra === 'string'
-					? options.ccssSafelistExtra
-					: '',
-			fontSubsetSubsets:
-				typeof options.fontSubsetSubsets === 'string'
-					? options.fontSubsetSubsets
-					: 'latin',
-			usedCSSDeliveryMode: normalizeDeliveryMode(
-				options.usedCSSDeliveryMode
-			),
-		} );
+	// Deps are FILE_OPT_SYNC_KEYS mapped over options (non-literal by design;
+	// the shared key list is the single source of truth).
+	useEffect(
+		() => {
+			setBaseline(
+				normalizeFileOpt( { ...defaultSettings, ...options } )
+			);
+		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [
-		options.safeMode,
-		options.minifyJS,
-		options.excludeJS,
-		options.minifyCSS,
-		options.excludeCSS,
-		options.combineCSS,
-		options.excludeCombineCSS,
-		options.removeQueryStrings,
-		options.minifyHTML,
-		options.deferJS,
-		options.excludeDeferJS,
-		options.delayJS,
-		options.excludeDelayJS,
-		options.delayJSCommercePreset,
-		options.delayJSBuilderPreset,
-		options.delayJSINPPreset,
-		options.delayJSExternalOnly,
-		options.delayJSThirdParty,
-		options.delayJSThirdPartyDenylist,
-		options.delayJSThirdPartyAllowlist,
-		options.delayJSExcludeUrls,
-		options.usedCSSExcludeUrls,
-		options.delayJSDefaultStrategy,
-		options.delayJSIdleList,
-		options.delayJSViewportList,
-		options.delayJSPriority,
-		options.delayJSIdleTimeout,
-		options.removeWooCSSJS,
-		options.excludeUrlToKeepJSCSS,
-		options.removeCssJsHandle,
-		options.enableServerRules,
-		options.criticalCSS,
-		options.ccssMaxSize,
-		options.ccssSafelistExtra,
-		options.hostGoogleFontsLocally,
-		options.fontMetricFallback,
-		options.fontSubset,
-		options.fontSubsetSubsets,
-		options.cdnURL,
-		options.cdnMapping,
-		options.removeUnusedCSS,
-		options.excludeUnusedCSS,
-		options.unusedCSSSafelistExtra,
-		options.unusedCSSRegressionGuard,
-		options.unusedCSSRegressionThreshold,
-		options.usedCSSDeliveryMode,
-		options.disableEmojis,
-		options.disableEmbeds,
-		options.disableDashicons,
-		options.disableXMLRPC,
-		options.disableRestApiLinks,
-		options.disableRssFeeds,
-		options.disableShortlinks,
-		options.disableGeneratorTag,
-		options.disableJQueryMigrate,
-		options.disablePasswordStrength,
-		options.disableSelfPingbacks,
-		options.disableRSD,
-		options.disableWLWManifest,
-		options.disableGlobalStyles,
-		options.disableClassicThemeStyles,
-		options.disableWooCartFragments,
-		options.disableRecentCommentsStyle,
-		options.disableCommentReply,
-		options.disableOEmbedDiscovery,
-		options.disableBlockWidgets,
-		options.blockAssetsOnDemand,
-		options.loadAllCoreBlockAssets,
-		options.heartbeatControl,
-		options.minifyInlineCSS,
-		options.minifyInlineJS,
-		options.removeHTMLComments,
-	] );
+		FILE_OPT_SYNC_KEYS.map( ( key ) => options[ key ] )
+	);
 	useUnsavedChanges( settings, baseline );
 
 	// Sync local state when parent props change after mount.
@@ -783,118 +807,23 @@ const FileOptimization = ( {
 	// parent re-renders with an identical payload — or a replacement of the
 	// global settings object while the user is editing — do not merge saved
 	// values over in-progress edits. Mirrors PreloadSettings/ImageOptimization.
-	useEffect( () => {
-		if ( ! options || Object.keys( options ).length === 0 ) {
-			return;
-		}
-		setSettings( ( prev ) => {
-			const next = { ...prev, ...options };
-			// String-guard textarea-backed keys so a corrupted non-string
-			// payload cannot reach a controlled textarea value. Third-party
-			// lists join array payloads (toDelayLines) so sync agrees with
-			// init instead of dropping backend arrays to '' (#1217 review).
-			if ( typeof next.delayJSThirdPartyDenylist !== 'string' ) {
-				next.delayJSThirdPartyDenylist = toDelayLines(
-					next.delayJSThirdPartyDenylist
-				);
+	// Deps are FILE_OPT_SYNC_KEYS mapped over options (non-literal by design).
+	useEffect(
+		() => {
+			if ( ! options || Object.keys( options ).length === 0 ) {
+				return;
 			}
-			if ( typeof next.delayJSThirdPartyAllowlist !== 'string' ) {
-				next.delayJSThirdPartyAllowlist = toDelayLines(
-					next.delayJSThirdPartyAllowlist
-				);
-			}
-			if ( typeof next.delayJSExcludeUrls !== 'string' ) {
-				next.delayJSExcludeUrls = '';
-			}
-			if ( typeof next.usedCSSExcludeUrls !== 'string' ) {
-				next.usedCSSExcludeUrls = '';
-			}
-			if ( typeof next.ccssSafelistExtra !== 'string' ) {
-				next.ccssSafelistExtra = '';
-			}
-			if ( typeof next.fontSubsetSubsets !== 'string' ) {
-				next.fontSubsetSubsets = 'latin';
-			}
-			next.usedCSSDeliveryMode = normalizeDeliveryMode(
-				next.usedCSSDeliveryMode
+			setSettings( ( prev ) =>
+				// Shared normalizeFileOpt(): every textarea-backed key routes
+				// through toTextLines() after spread, so backend arrays join
+				// (never drop to '' or reach a controlled textarea), matching
+				// init and baseline (#1217 review, issue #1259 review).
+				normalizeFileOpt( { ...prev, ...options } )
 			);
-			return next;
-		} );
+		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [
-		options.safeMode,
-		options.minifyJS,
-		options.excludeJS,
-		options.minifyCSS,
-		options.excludeCSS,
-		options.combineCSS,
-		options.excludeCombineCSS,
-		options.removeQueryStrings,
-		options.minifyHTML,
-		options.deferJS,
-		options.excludeDeferJS,
-		options.delayJS,
-		options.excludeDelayJS,
-		options.delayJSCommercePreset,
-		options.delayJSBuilderPreset,
-		options.delayJSINPPreset,
-		options.delayJSExternalOnly,
-		options.delayJSThirdParty,
-		options.delayJSThirdPartyDenylist,
-		options.delayJSThirdPartyAllowlist,
-		options.delayJSExcludeUrls,
-		options.usedCSSExcludeUrls,
-		options.delayJSDefaultStrategy,
-		options.delayJSIdleList,
-		options.delayJSViewportList,
-		options.delayJSPriority,
-		options.delayJSIdleTimeout,
-		options.removeWooCSSJS,
-		options.excludeUrlToKeepJSCSS,
-		options.removeCssJsHandle,
-		options.enableServerRules,
-		options.criticalCSS,
-		options.ccssMaxSize,
-		options.ccssSafelistExtra,
-		options.hostGoogleFontsLocally,
-		options.fontMetricFallback,
-		options.fontSubset,
-		options.fontSubsetSubsets,
-		options.cdnURL,
-		options.cdnMapping,
-		options.removeUnusedCSS,
-		options.excludeUnusedCSS,
-		options.unusedCSSSafelistExtra,
-		options.unusedCSSRegressionGuard,
-		options.unusedCSSRegressionThreshold,
-		options.usedCSSDeliveryMode,
-		options.disableEmojis,
-		options.disableEmbeds,
-		options.disableDashicons,
-		options.disableXMLRPC,
-		options.disableRestApiLinks,
-		options.disableRssFeeds,
-		options.disableShortlinks,
-		options.disableGeneratorTag,
-		options.disableJQueryMigrate,
-		options.disablePasswordStrength,
-		options.disableSelfPingbacks,
-		options.disableRSD,
-		options.disableWLWManifest,
-		options.disableGlobalStyles,
-		options.disableClassicThemeStyles,
-		options.disableWooCartFragments,
-		options.disableRecentCommentsStyle,
-		options.disableCommentReply,
-		options.disableOEmbedDiscovery,
-		options.disableBlockWidgets,
-		options.blockAssetsOnDemand,
-		options.loadAllCoreBlockAssets,
-		options.heartbeatControl,
-		options.minifyInlineCSS,
-		options.minifyInlineJS,
-		options.removeHTMLComments,
-	] );
+		FILE_OPT_SYNC_KEYS.map( ( key ) => options[ key ] )
+	);
 
 	// INP-first preset (#932): one-click idle + viewport delay with 60s
 	// heartbeat. Enabling fills delayJS/strategy/heartbeat client-side (only
@@ -2229,10 +2158,33 @@ const FileOptimization = ( {
 											) }
 									</div>
 								</div>
+								<SwitchField
+									label={ __(
+										'Elementor-safe mode — builder-proof by default',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Keep Combine CSS off on Elementor-built pages and auto-purge the page cache when Elementor regenerates its CSS. Stage risky changes via Sandbox preview before promoting.',
+										'performance-optimisation'
+									) }
+									name="elementorSafeMode"
+									checked={ !! settings.elementorSafeMode }
+									onChange={ handleChange( setSettings ) }
+									disabled={ optimizerDisabled }
+								/>
+								{ !! settings.elementorSafeMode && (
+									<NoticeBanner
+										type="info"
+										message={ __(
+											'Elementor-safe mode is on — Combine CSS steps aside on builder pages and Elementor CSS regens auto-purge the affected page.',
+											'performance-optimisation'
+										) }
+									/>
+								) }
 								<div className="wppo-field wppo-sandbox-preview">
 									<p className="wppo-field-label">
 										{ __(
-											'Sandbox preview — test Delay / Defer / Combine safely',
+											'Sandbox preview — test Delay / Defer / Combine / Elementor-safe safely',
 											'performance-optimisation'
 										) }
 									</p>

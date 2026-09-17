@@ -215,6 +215,85 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		private static bool $drift_handled_this_request = false;
 
 		/**
+		 * Per-request set of already-purged Elementor post IDs (issue #1259).
+		 *
+		 * Bulk Elementor regen (global style change, import) fires
+		 * elementor/css-file/post/parse_after N times, and an editor save
+		 * typically fires both elementor/editor/after_save and parse_after
+		 * for the same post. Each purge costs a Cache + settings read,
+		 * get_permalink, filesystem deletes, a Used-CSS requeue, and
+		 * stats-bump writes — so both handlers share this set and skip a
+		 * post already purged this request.
+		 *
+		 * @since NEXT
+		 * @var array<int,bool>
+		 */
+		private static array $elementor_purged = array();
+
+		/**
+		 * Shared Cache instance for per-post purges (issue #1259).
+		 *
+		 * Bulk Elementor regen fires N times per request; reusing one
+		 * instance avoids N settings reads + N Cache constructions.
+		 * Reset by reset_elementor_purge_memo() for test isolation.
+		 *
+		 * @since NEXT
+		 * @var mixed|null
+		 */
+		private static $shared_purge_cache = null;
+
+		/**
+		 * Whether the bulk-regen archive fan-out was already scheduled.
+		 *
+		 * Set once per request when the purged set grows past the bulk
+		 * threshold so N distinct posts schedule exactly one deferred
+		 * full purge (archive/home coverage) and one targeted Used-CSS
+		 * regen instead of N per-post scheduler writes.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $bulk_regen_coalesced = false;
+
+		/**
+		 * Distinct-post threshold for bulk-regen coalescing (issue #1259).
+		 *
+		 * At or below this many distinct posts the per-post fast path
+		 * (single-URL purge + Used_CSS::requeue_for_post()) applies;
+		 * beyond it the deferred full purge + targeted regen own the
+		 * remaining work (archive fan-out + scheduler stampede guard).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const BULK_REGEN_THRESHOLD = 5;
+
+		/**
+		 * Reset the Elementor per-request purge set (for tests).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_elementor_purge_memo(): void {
+			self::$elementor_purged     = array();
+			self::$shared_purge_cache   = null;
+			self::$bulk_regen_coalesced = false;
+		}
+
+		/**
+		 * Reset the drift-signal per-request state (for tests).
+		 *
+		 * Named reset so tests never reach into private statics via
+		 * reflection to clear the drift dedupe flag.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_drift_state(): void {
+			self::$drift_handled_this_request = false;
+		}
+
+		/**
 		 * Register the upgrader hook plus builder-drift hooks.
 		 *
 		 * Drift hooks (issue #1023) listen to Elementor asset-regen signals
@@ -229,6 +308,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			add_action( 'upgrader_process_complete', array( $this, 'on_any_upgrade' ), 20, 2 );
 			add_action( 'elementor/core/files/clear_cache', array( $this, 'on_builder_drift' ), 10, 0 );
 			add_action( 'elementor/editor/after_save', array( $this, 'on_builder_drift_save' ), 10, 2 );
+			// Elementor-safe mode (issue #1259): per-post CSS-regen signal.
+			// Fired by Elementor after a post CSS file is (re)generated; the
+			// callback purges that post's static HTML cache so stale HTML
+			// never points at renamed/deleted post-*.css. Registered
+			// unconditionally — WP tolerates unknown hooks, and the callback
+			// is fully guarded so non-Elementor sites pay nothing. Two
+			// accepted args so the resolvable post ID is not dropped when
+			// Elementor passes ($css_file, $post_id).
+			add_action( 'elementor/css-file/post/parse_after', array( $this, 'on_elementor_css_regen' ), 10, 2 );
 			add_action( self::DRIFT_PURGE_HOOK, array( $this, 'run_deferred_drift_purge' ), 10, 0 );
 			add_action( self::UPGRADE_PURGE_HOOK, array( $this, 'run_deferred_upgrade_purge' ), 10, 1 );
 		}
@@ -350,9 +438,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * the save bumps the modification time, so the post-modification
 		 * freshness check (issue #1107) still requeues genuine changes
 		 * while repeat signals without changes are skipped (returns false,
-		 * no action fired). Source-CSS drift with no post edit is healed
-		 * lazily by process_buffer() on the next visit. Missing variants
-		 * fail open to queueing. This is the post-scoped fast path.
+		 * no action fired). Global source-CSS drift with no post edit is
+		 * owned by the deferred full purge (on_builder_drift() →
+		 * DRIFT_PURGE_HOOK): cached archives served by advanced-cache.php
+		 * never boot WordPress, so they cannot heal lazily on HITs.
+		 * Missing variants fail open to queueing. This is the post-scoped fast path.
 		 * The post-less elementor/core/files/clear_cache signal handled by
 		 * on_builder_drift() has no post context and schedules a background
 		 * full-site purge instead. The wppo_builder_drift_requeue action fires
@@ -367,13 +457,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		public function on_builder_drift_save( $post_id, $editor_data ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match the elementor/editor/after_save action.
 			unset( $editor_data );
 			try {
-				$post_id = (int) $post_id;
+				// Shared coercion (not a blind cast): floats and
+				// float-like strings resolve to 0 instead of truncating
+				// to a wrong post, matching resolve_elementor_post_id().
+				$post_id = $this->coerce_post_id( $post_id );
 				if ( $post_id <= 0 ) {
 					return;
 				}
+				// Elementor-safe mode (issue #1259): an editor save renames or
+				// deletes uploads/elementor/css/post-*.css, so purge this
+				// post's static HTML cache alongside the Used-CSS requeue.
+				// Purge failures degrade to uncached dynamic, never stale-broken.
+				// Shares the per-request dedupe set with on_elementor_css_regen():
+				// an editor save typically fires both signals for the same post.
+				// Dedupe is marked AFTER the purge attempt so a failed purge is
+				// retried by the second signal instead of skipped (purge is
+				// fail-open; marking before would poison the retry).
+				if ( isset( self::$elementor_purged[ $post_id ] ) ) {
+					return;
+				}
+				if ( self::$bulk_regen_coalesced ) {
+					// A deferred full purge is already scheduled and owns
+					// the remaining work (archive fan-out + background
+					// targeted regen): record dedupe and skip per-post file
+					// I/O for posts past the coalescing threshold.
+					self::$elementor_purged[ $post_id ] = true;
+					return;
+				}
+				$this->purge_post_static_cache( $post_id );
+				self::$elementor_purged[ $post_id ] = true;
+				$this->maybe_coalesce_bulk_regen();
 				$queued = false;
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
-					$queued = Used_CSS::requeue_for_post( $post_id );
+					$queued = $this->requeue_used_css_for_elementor_post( $post_id );
 				}
 				if ( ! $queued ) {
 					return;
@@ -388,6 +504,264 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					 */
 					do_action( 'wppo_builder_drift_requeue', $post_id );
 				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Handle Elementor per-post CSS regeneration (issue #1259).
+		 *
+		 * Fired by Elementor's `elementor/css-file/post/parse_after` action
+		 * after a post CSS file is (re)generated. Purges that post's static
+		 * HTML cache so stale HTML never references renamed or deleted
+		 * `uploads/elementor/css/post-*.css` files (no post-css 404s), and
+		 * requeues Used-CSS for the post best-effort. The post ID is resolved
+		 * from the CSS-file object (`get_post_id()` when available), from a
+		 * plain integer first argument, or from the second action payload
+		 * when Elementor passes ($css_file, $post_id); unresolvable payloads
+		 * fall back to the deferred full purge (on_builder_drift()) rather
+		 * than silently keeping stale HTML that references renamed or
+		 * deleted post-*.css. Deduped per request via the shared
+		 * $elementor_purged set (bulk regen fires N times; editor saves
+		 * typically fire both after_save and parse_after for the same post;
+		 * the mark lands after the purge attempt so a failed purge is
+		 * retried by the next signal). Past BULK_REGEN_THRESHOLD distinct
+		 * posts the deferred full purge + targeted Used-CSS regen take over
+		 * (archive fan-out + scheduler stampede guard).
+		 * Fully guarded and fail-open: any failure degrades to uncached
+		 * dynamic output, never stale-broken pages or fatal errors.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $css_file Elementor post CSS-file object or post ID.
+		 * @param mixed $post_id  Optional second action payload (post ID) when Elementor passes two args.
+		 * @return void
+		 */
+		public function on_elementor_css_regen( $css_file, $post_id = null ): void {
+			try {
+				$post_id = $this->resolve_elementor_post_id( $css_file, $post_id );
+				if ( $post_id <= 0 ) {
+					// Unresolvable payload (e.g. a path/null first arg with
+					// no second payload): fail toward the deferred full
+					// purge (deduped, background) instead of leaving
+					// stale-broken HTML pointing at deleted post-*.css.
+					$this->on_builder_drift();
+					return;
+				}
+				if ( isset( self::$elementor_purged[ $post_id ] ) ) {
+					return;
+				}
+				if ( self::$bulk_regen_coalesced ) {
+					// Same coalesced fast-skip as on_builder_drift_save():
+					// the scheduled deferred full purge owns archives and
+					// the background targeted regen owns Used-CSS.
+					self::$elementor_purged[ $post_id ] = true;
+					return;
+				}
+				// Dedupe is marked AFTER the purge attempt so a failed purge
+				// is retried by a later signal for the same post.
+				$this->purge_post_static_cache( $post_id );
+				self::$elementor_purged[ $post_id ] = true;
+				$this->maybe_coalesce_bulk_regen();
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+					$this->requeue_used_css_for_elementor_post( $post_id );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Resolve an Elementor CSS-regen payload to a post ID (issue #1259).
+		 *
+		 * Accepts the CSS-file object (via `get_post_id()`), an int, or a
+		 * digit-only numeric string for either payload. Floats and
+		 * float-like strings ('12.9', 12.9) are rejected: a blind (int) cast
+		 * would truncate them and purge the wrong post's URL.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $css_file CSS-file object or post ID.
+		 * @param mixed $post_id  Optional second action payload (post ID fallback).
+		 * @return int Post ID, or 0 when unresolvable.
+		 */
+		protected function resolve_elementor_post_id( $css_file, $post_id = null ): int {
+			try {
+				if ( is_object( $css_file ) && method_exists( $css_file, 'get_post_id' ) ) {
+					// Foreign method call: guarded on its own since only
+					// this invocation can throw; a throw falls through to
+					// the second-payload fallback below.
+					try {
+						$id = $this->coerce_post_id( $css_file->get_post_id() );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$id = 0;
+					}
+					if ( $id > 0 ) {
+						return $id;
+					}
+				} else {
+					$id = $this->coerce_post_id( $css_file );
+					if ( $id > 0 ) {
+						return $id;
+					}
+				}
+				$id = $this->coerce_post_id( $post_id );
+				return $id > 0 ? $id : 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Coerce a scalar payload to a post ID (issue #1259).
+		 *
+		 * Only ints and digit-only strings (after trim) are accepted; floats,
+		 * float-like strings, bools, arrays, and objects without get_post_id()
+		 * resolve to 0 so a truncated cast can never purge the wrong URL.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $value Raw payload.
+		 * @return int Post ID, or 0 when not a clean integer payload.
+		 */
+		private function coerce_post_id( $value ): int {
+			if ( is_int( $value ) ) {
+				return $value > 0 ? $value : 0;
+			}
+			if ( is_string( $value ) ) {
+				$trimmed = trim( $value );
+				if ( '' !== $trimmed && ctype_digit( $trimmed ) ) {
+					$id = (int) $trimmed;
+					return $id > 0 ? $id : 0;
+				}
+			}
+			return 0;
+		}
+
+		/**
+		 * Purge a single post's static HTML + derived CSS caches (issue #1259).
+		 *
+		 * Uses the domain-based single-URL purge path
+		 * (`Cache::invalidate_single_static_html()`), which is inherently
+		 * multisite-safe. Fail-open: missing Cache class or any error simply
+		 * leaves the cache as-is (full CSS keeps serving). One shared Cache
+		 * instance is reused across all per-post purges in the request so
+		 * bulk regen (N distinct posts) pays one settings read + one
+		 * construction instead of N.
+		 *
+		 * Scope note: only the post permalink's `index.html` plus sidecars
+		 * are deleted here — home, post-type/date archives, taxonomy pages,
+		 * and translated permalinks embedding the same `post-*.css` URL are
+		 * NOT fanned out per post (bounded per-edit cost). Cached
+		 * archives served by advanced-cache.php never boot WordPress, so
+		 * they cannot heal lazily via process_buffer() on HITs: archive
+		 * coverage after bulk regen is owned by the deferred full-purge
+		 * path (`elementor/core/files/clear_cache` → DRIFT_PURGE_HOOK),
+		 * which maybe_coalesce_bulk_regen() schedules once the purged set
+		 * grows past BULK_REGEN_THRESHOLD.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int  $post_id Post ID whose cache must be purged.
+		 * @param bool $bump_stats Whether to bump dashboard stats. Bulk-regen
+		 *                         callers pass false: the deferred full purge
+		 *                         bumps once instead of N inline option writes.
+		 * @return void
+		 */
+		protected function purge_post_static_cache( int $post_id, bool $bump_stats = true ): void {
+			try {
+				if ( $post_id <= 0 ) {
+					return;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+					return;
+				}
+				$cache = self::$shared_purge_cache;
+				if ( ! is_object( $cache ) || ! method_exists( $cache, 'invalidate_single_static_html' ) ) {
+					$settings = array();
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+						try {
+							$settings = (array) Util::get_settings();
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+					$cache = new Cache( $settings );
+					if ( ! method_exists( $cache, 'invalidate_single_static_html' ) ) {
+						return;
+					}
+					self::$shared_purge_cache = $cache;
+				}
+				$cache->invalidate_single_static_html( $post_id, $bump_stats );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Requeue Used-CSS for one Elementor post, coalesced for bulk regen (issue #1259).
+		 *
+		 * Fast path (at or below BULK_REGEN_THRESHOLD distinct posts):
+		 * per-post Used_CSS::requeue_for_post(). Beyond the threshold the
+		 * deferred full purge (scheduled by maybe_coalesce_bulk_regen())
+		 * owns the remaining work — its background callback runs the
+		 * targeted regen off the editor request — so per-post calls after
+		 * coalescing are skipped instead of stalling the save with a
+		 * 40-post query plus up to 20 freshness probes inline.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $post_id Post ID whose Used-CSS must be requeued.
+		 * @return bool True when a job was queued or already scheduled.
+		 */
+		protected function requeue_used_css_for_elementor_post( int $post_id ): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+					return false;
+				}
+				if ( self::$bulk_regen_coalesced ) {
+					return true;
+				}
+				return (bool) Used_CSS::requeue_for_post( $post_id );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Schedule the deferred full purge once bulk regen is detected (issue #1259).
+		 *
+		 * Per-post purges above cover single-post permalinks only; cached
+		 * home/archives served by advanced-cache.php never boot WordPress
+		 * and would keep referencing renamed `post-*.css` files. When the
+		 * purged set grows past BULK_REGEN_THRESHOLD, the post-less
+		 * deferred full purge (on_builder_drift() → DRIFT_PURGE_HOOK) is
+		 * scheduled once per request to fan out to those archives.
+		 * Fail-open: scheduling failures are swallowed.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		protected function maybe_coalesce_bulk_regen(): void {
+			try {
+				if ( self::$bulk_regen_coalesced ) {
+					return;
+				}
+				if ( count( self::$elementor_purged ) <= self::BULK_REGEN_THRESHOLD ) {
+					return;
+				}
+				self::$bulk_regen_coalesced = true;
+				// Deferred only: on_builder_drift() schedules the background
+				// full purge, whose callback (purge_wppo_derived_caches())
+				// runs the targeted Used-CSS regen off the editor request.
+				// No inline request_targeted_regen() here — it costs a
+				// 40-post query plus up to 20 freshness probes synchronously
+				// in the save action that tripped the threshold.
+				$this->on_builder_drift();
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

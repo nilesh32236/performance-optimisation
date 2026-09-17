@@ -340,6 +340,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJS'                      => false,
 					'delayJSSafeMode'              => true,
 					'safeMode'                     => false,
+					'elementorSafeMode'            => true,
 					'sandboxStaged'                => array(),
 					'combineCSS'                   => false,
 					'excludeJS'                    => '',
@@ -5344,6 +5345,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// generic branches cannot corrupt these lists.
 				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls', 'delayJSThirdPartyDenylist', 'delayJSThirdPartyAllowlist' ), true ) && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
+					continue;
+				}
+
+				// Elementor-safe mode (issue #1259) — normalize malformed import
+				// shapes (0/1, '0'/'1', 'false'/'true') to bool so the toggle
+				// check in Main::is_elementor_safe_mode_active() is reliable.
+				// A form-encoded 'false' string would otherwise survive
+				// sanitize_text_field as a truthy non-empty string and read
+				// as ON via !empty(). Unrecognized values fail safe to true
+				// (absent key = enabled), mirroring Sandbox_Preview.
+				if ( 'elementorSafeMode' === $safe_key && ! is_array( $value ) ) {
+					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
 					continue;
 				}
 

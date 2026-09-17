@@ -984,15 +984,45 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Provide builder preview/edit query params.
 	 *
+	 * Note: `elementor-preview` is intentionally absent here — a bare
+	 * preview query var without Elementor markers must NOT disable delay-JS
+	 * (ungated, any visitor could append it). Covered by
+	 * test_delay_not_excluded_by_bare_elementor_preview() below.
+	 *
 	 * @return array<string, array{string, string}>
 	 */
 	public static function builder_param_provider(): array {
 		return array(
-			'elementor' => array( 'elementor-preview', '123' ),
-			'divi'      => array( 'et_fb', '1' ),
-			'wpbakery'  => array( 'vc_action', 'vc_inline' ),
-			'bricks'    => array( 'bricks', 'run' ),
+			'divi'     => array( 'et_fb', '1' ),
+			'wpbakery' => array( 'vc_action', 'vc_inline' ),
+			'bricks'   => array( 'bricks', 'run' ),
 		);
+	}
+
+	/**
+	 * Test that a bare ?elementor-preview (no Elementor markers) is not an
+	 * excluded delay context (issue #1259 review).
+	 *
+	 * Mirrors the gated preview bypass in detect_elementor_built_page():
+	 * legit preview links run on Elementor-active sites (markers present),
+	 * while a bare query var on a non-Elementor site must not disable
+	 * delay-JS for any visitor appending it.
+	 */
+	public function test_delay_not_excluded_by_bare_elementor_preview(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		$_GET['elementor-preview'] = '123';
+
+		$main = new Main();
+
+		$this->assertFalse( $main->is_delay_excluded_context(), 'Bare ?elementor-preview without Elementor markers must not disable delay-JS.' );
+
+		$this->reset_delay_guard_superglobals();
 	}
 
 	/**
