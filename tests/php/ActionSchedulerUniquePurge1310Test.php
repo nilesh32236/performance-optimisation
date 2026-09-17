@@ -82,7 +82,12 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Legacy scheduler path: deduped jobs return 0 without enqueueing.
+	 *
+	 * Runs in a separate process so the legacy scheduler stubs do not leak
+	 * into later test files (Brain Monkey declarations persist per process).
 	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
 	public function test_unique_helper_legacy_dedup_returns_zero(): void {
 		Functions\when( 'as_has_scheduled_action' )->justReturn( true );
 		Functions\expect( 'as_enqueue_async_action' )->never();
@@ -92,7 +97,12 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Legacy scheduler path: no duplicate present, falls back to the
 	 * 3-argument enqueue and returns its ID.
+	 *
+	 * Runs in a separate process so the legacy scheduler stubs do not leak
+	 * into later test files (Brain Monkey declarations persist per process).
 	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
 	public function test_unique_helper_legacy_enqueue_fallback(): void {
 		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
 		$calls = array();
@@ -114,7 +124,12 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Legacy single-action path: falls back to the 4-argument schedule call.
+	 *
+	 * Runs in a separate process so the legacy scheduler stubs do not leak
+	 * into later test files (Brain Monkey declarations persist per process).
 	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
 	public function test_unique_single_helper_legacy_schedule_fallback(): void {
 		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
 		$calls = array();
@@ -359,8 +374,8 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * regenerate_single() on a scheduler failure (0 with nothing pending)
-	 * returns 0 without asserting phantom `queued` status.
+	 * Scheduler failure (0 with nothing pending) makes regenerate_single()
+	 * return 0 without asserting phantom `queued` status.
 	 *
 	 * Runs in a separate process with a legacy-shaped scheduler stub whose
 	 * schedule call returns 0 and whose lookup reports nothing pending.
@@ -395,7 +410,7 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 		);
 		$transients = array();
 		\Brain\Monkey\Functions\when( 'set_transient' )->alias(
-			static function ( $key, $value, $expiration = 0 ) use ( &$transients ) {
+			static function ( $key, $value, $expiration = 0 ) use ( &$transients ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$transients[ $key ] = $value;
 				return true;
 			}

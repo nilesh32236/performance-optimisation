@@ -588,14 +588,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'cloudflareZoneId'     => 'scalar',
 					'bunnyPullZoneId'      => 'scalar',
 				),
-			'database_cleanup'   => array(
-				'dbSchedule'         => 'scalar',
-				'dbRevMaxAge'        => 'scalar',
-				'dbRevKeepLatest'    => 'scalar',
-				'dbOptimize'         => 'scalar',
-				'autoloadThreshold'  => 'scalar',
-				'purgeFailedActions' => 'scalar',
-			),
+				'database_cleanup'   => array(
+					'dbSchedule'         => 'scalar',
+					'dbRevMaxAge'        => 'scalar',
+					'dbRevKeepLatest'    => 'scalar',
+					'dbOptimize'         => 'scalar',
+					'autoloadThreshold'  => 'scalar',
+					'purgeFailedActions' => 'scalar',
+				),
 				// Mirrors Object_Cache::ALLOWED_KEYS. `password` is stripped by
 				// the REST layer but may survive in imported/legacy payloads.
 				// `outage_bypassed` is the additive persistent outage status

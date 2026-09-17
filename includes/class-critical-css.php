@@ -1123,22 +1123,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				return;
 			}
-		// Gate the status on the verified schedule outcome (issue #1310
-		// review): only assert `queued` when the retry insert returned an
-		// ID or a job is verifiably pending; on scheduler failure mark
-		// `failed` instead, otherwise inline_ccss() skips re-queueing for
-		// the TTL while no backing job will ever run.
-		$retry = self::schedule_ccss_retry( $template_hash, $attempts );
-		try {
-			if ( $retry['pending'] ) {
-				self::set_status_cache( $template_hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
-			} else {
-				self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+			// Gate the status on the verified schedule outcome (issue #1310
+			// review): only assert `queued` when the retry insert returned an
+			// ID or a job is verifiably pending; on scheduler failure mark
+			// `failed` instead, otherwise inline_ccss() skips re-queueing for
+			// the TTL while no backing job will ever run.
+			$retry = self::schedule_ccss_retry( $template_hash, $attempts );
+			try {
+				if ( $retry['pending'] ) {
+					self::set_status_cache( $template_hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+				} else {
+					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
-		} catch ( \Throwable $e ) {
-			unset( $e );
 		}
-	}
 
 		/**
 		 * Schedule a later retry for a timed-out CCSS generation (issue #1235).
