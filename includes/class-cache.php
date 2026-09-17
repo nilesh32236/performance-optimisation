@@ -2422,7 +2422,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// from tag-verified occurrences (an href substring inside a
 				// script string, preload, or comment before `</head>` must
 				// not suppress the hoist), never from a raw substring search.
-				$candidates = array();
+				// An href already present in head still has its late body
+				// duplicates cut (without re-insertion) so head+body copies
+				// cannot linger as duplicates.
+				$candidates  = array();
+				$dedupe_only = array();
 				foreach ( $hrefs as $href ) {
 					if ( $href === $library_href ) {
 						continue;
@@ -2433,16 +2437,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( false === stripos( $href, 'wp-block-' ) && false === stripos( $href, '/blocks/' ) ) {
 						continue;
 					}
-					if ( isset( $candidates[ $href ] ) ) {
+					if ( isset( $candidates[ $href ] ) || isset( $dedupe_only[ $href ] ) ) {
 						continue;
 					}
-					// Already in head: leave it (avoids duplicating the handle).
+					// Already in head: cut late duplicates only (never re-insert,
+					// avoids duplicating the handle).
 					if ( $this->is_href_in_head_link( $buffer, $href, $head_close ) ) {
+						$dedupe_only[ $href ] = true;
 						continue;
 					}
 					$candidates[ $href ] = true;
 				}
-				if ( empty( $candidates ) ) {
+				if ( empty( $candidates ) && empty( $dedupe_only ) ) {
 					return $buffer;
 				}
 				// Anchor: resolve the block-library href to its actual
@@ -2457,12 +2463,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// to distinct tags. Every late occurrence is cut; only the
 				// first per href is re-inserted, so a duplicated body tag
 				// cannot clone the handle into head.
-				$ranges   = array();
-				$moved    = array();
-				$inserted = array();
-				foreach ( array_keys( $candidates ) as $href ) {
-					$offset = $head_close;
-					$guard  = 0;
+				$ranges    = array();
+				$moved     = array();
+				$inserted  = array();
+				$all_hrefs = array_merge( array_keys( $candidates ), array_keys( $dedupe_only ) );
+				foreach ( $all_hrefs as $href ) {
+					$is_dedupe = isset( $dedupe_only[ $href ] );
+					$offset    = $head_close;
+					$guard     = 0;
 					while ( $guard < 50 ) {
 						++$guard;
 						$range = $this->find_link_tag_for_href( $buffer, $href, $offset );
@@ -2470,7 +2478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							break;
 						}
 						$ranges[] = $range;
-						if ( ! isset( $inserted[ $href ] ) ) {
+						if ( ! $is_dedupe && ! isset( $inserted[ $href ] ) ) {
 							$inserted[ $href ] = true;
 							$moved[]           = $range[2];
 						}
@@ -2484,9 +2492,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					return $buffer;
 				}
 				// Single-pass cut + insert: sort ascending, splice once, and
-				// place the moved tags directly after the library link tag
-				// (which sits before every late range, so its end offset is
-				// unaffected by the cut).
+				// place the moved tags directly after the library link tag.
+				// The anchor must precede every late range: if a theme prints
+				// block-library itself after `</head>`, the splice cursor
+				// would skip late ranges before the anchor while inserting
+				// moved copies (duplication), so bail out unchanged instead.
 				usort(
 					$ranges,
 					static function ( $a, $b ) {
@@ -2496,6 +2506,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						return ( $a[0] < $b[0] ) ? -1 : 1;
 					}
 				);
+				foreach ( $ranges as $range ) {
+					if ( $range[0] <= $library_range[1] ) {
+						return $buffer;
+					}
+				}
 				$result  = substr( $buffer, 0, $library_range[1] + 1 );
 				$result .= implode( '', $moved );
 				$cursor  = $library_range[1] + 1;
@@ -2539,9 +2554,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( false === $href_pos ) {
 					return null;
 				}
-				$before    = substr( $buffer, 0, $href_pos );
-				$tag_start = ( '' !== $before ) ? strrpos( $before, '<' ) : false;
-				$tag_end   = strpos( $buffer, '>', $href_pos );
+				// Bounded backward scan: only the last 2KB before the href
+				// can hold the opening `<link`; avoids copying the full
+				// buffer prefix on every probe for large cache-miss HTML.
+				$window_start = ( $href_pos > 2048 ) ? $href_pos - 2048 : 0;
+				$window       = substr( $buffer, $window_start, $href_pos - $window_start );
+				$rel_pos      = ( '' !== $window ) ? strrpos( $window, '<' ) : false;
+				$tag_start    = ( false !== $rel_pos ) ? $window_start + $rel_pos : false;
+				$tag_end      = strpos( $buffer, '>', $href_pos );
 				if ( false === $tag_start || false === $tag_end || $tag_end <= $tag_start ) {
 					return null;
 				}
@@ -2583,9 +2603,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function process_buffer_only( $buffer ) {
 			// Mid-template cancel safety (issue #1386): a cancelled core
-			// buffer can deliver a non-string (false/null) into the filter.
-			// Fail open to an empty string: never fatal, never a TypeError
-			// into the image/CDN/minify pipeline.
+			// buffer can deliver a non-string (false/null). This private
+			// helper fails open to an empty string; the public wrappers
+			// (process_buffer_for_cache / process_used_css_only /
+			// prioritize_lcp_in_buffer) own the $output-fallback convention
+			// and restore the best-available HTML, so this path must only be
+			// reached via those wrappers on the public filter chain.
 			if ( ! is_string( $buffer ) ) {
 				return '';
 			}
