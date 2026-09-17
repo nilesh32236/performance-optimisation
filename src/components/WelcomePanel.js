@@ -50,8 +50,7 @@ export const getStepAriaLabel = ( step, isActive, isWoo, visibleLabel ) => {
 	// STEPS labels are render-time functions; accept plain strings too so
 	// callers/tests passing literal steps keep working.
 	const rawLabel = step?.label;
-	const label =
-		'function' === typeof rawLabel ? rawLabel() : rawLabel ?? '';
+	const label = 'function' === typeof rawLabel ? rawLabel() : rawLabel ?? '';
 	const visible = typeof visibleLabel === 'string' ? visibleLabel : '';
 	if ( visible ) {
 		if ( isActive ) {
