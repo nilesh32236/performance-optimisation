@@ -146,7 +146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 *
 		 * @return void
 		 */
-		public function disable_emojis() {
+		public function disable_emojis(): void {
 			remove_action( 'wp_head', 'print_emoji_detection_script', 7 );
 			remove_action( 'admin_print_scripts', 'print_emoji_detection_script' );
 			remove_action( 'wp_print_styles', 'print_emoji_styles' );
@@ -212,7 +212,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 *
 		 * @return void
 		 */
-		public function disable_embeds() {
+		public function disable_embeds(): void {
 			remove_action( 'rest_api_init', 'wp_oembed_register_route' );
 			add_filter( 'embed_oembed_discover', '__return_false' );
 			remove_filter( 'oembed_dataparse', 'wp_filter_oembed_result', 10 );
@@ -260,7 +260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 *
 		 * @return void
 		 */
-		public function disable_dashicons() {
+		public function disable_dashicons(): void {
 			if ( ! is_user_logged_in() ) {
 				wp_deregister_style( 'dashicons' );
 			}

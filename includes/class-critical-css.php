@@ -2813,6 +2813,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Async loadCSS fallback snippet as a script tag (audit #1392).
+		 *
+		 * Single canonical copy: two output paths shared one hand-maintained
+		 * string that drifted independently. Timer handles clear on
+		 * pagehide/beforeunload (audit #1077 finding 5).
+		 *
+		 * @since NEXT
+		 * @return string Inline loader script tag.
+		 */
+		private static function loadcss_loader_tag(): string {
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline loadCSS polyfill; no registered handle exists.
+			return '<script>!function(e){"use strict";var T=[],c=function(h){var i=T.indexOf(h);if(i>-1){T.splice(i,1)}clearTimeout(h)},n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a);var h=setTimeout(function(){c(h),r.media=o||"all"},0);T.push(h),r.onload=function(){c(h),r.media=o||"all"}};e.wppoLoadCSS=n;var f=function(){for(var i=0;i<T.length;i++){clearTimeout(T[i])}T.length=0};e.addEventListener("pagehide",f),e.addEventListener("beforeunload",f)}(window);</script>' . "\n";
+		}
+
+		/**
 		 * Whether a strict Content-Security-Policy blocks raw inline scripts.
 		 *
 		 * Mirrors Used_CSS::has_strict_csp() for the header layer (audit
@@ -4910,7 +4925,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 					// Timer handles are tracked so the media-swap fallback is
 					// cleared on pagehide/beforeunload (audit #1077 finding 5).
-					echo '<script>!function(e){"use strict";var T=[],c=function(h){var i=T.indexOf(h);if(i>-1){T.splice(i,1)}clearTimeout(h)},n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a);var h=setTimeout(function(){c(h),r.media=o||"all"},0);T.push(h),r.onload=function(){c(h),r.media=o||"all"}};e.wppoLoadCSS=n;var f=function(){for(var i=0;i<T.length;i++){clearTimeout(T[i])}T.length=0};e.addEventListener("pagehide",f),e.addEventListener("beforeunload",f)}(window);</script>' . "\n";
+					echo self::loadcss_loader_tag();
 					return;
 				}
 				$cap   = self::get_ccss_max_size();
@@ -5011,7 +5026,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// critical CSS is generated in the background. Timer handles
 				// are tracked so the media-swap fallback is cleared on
 				// pagehide/beforeunload (audit #1077 finding 5).
-				echo '<script>!function(e){"use strict";var T=[],c=function(h){var i=T.indexOf(h);if(i>-1){T.splice(i,1)}clearTimeout(h)},n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a);var h=setTimeout(function(){c(h),r.media=o||"all"},0);T.push(h),r.onload=function(){c(h),r.media=o||"all"}};e.wppoLoadCSS=n;var f=function(){for(var i=0;i<T.length;i++){clearTimeout(T[i])}T.length=0};e.addEventListener("pagehide",f),e.addEventListener("beforeunload",f)}(window);</script>' . "\n";
+				echo self::loadcss_loader_tag();
 			}
 		}
 
