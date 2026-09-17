@@ -8726,26 +8726,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function resolve_local_stylesheet_path( string $abs_src ): string {
 			try {
+				if ( false !== strpos( $abs_src, "\0" ) ) {
+					return '';
+				}
 				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $abs_src, PHP_URL_PATH ) : parse_url( $abs_src, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
 				if ( ! is_string( $path ) || '' === $path ) {
 					return '';
 				}
-				$local = ( defined( 'ABSPATH' ) ? (string) ABSPATH : '' ) . ltrim( $path, '/' );
+				if ( false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+					return '';
+				}
+				if ( ! defined( 'ABSPATH' ) || ! is_string( ABSPATH ) || '' === ABSPATH ) {
+					return '';
+				}
+				$local = (string) ABSPATH . ltrim( $path, '/' );
 				if ( function_exists( 'wp_normalize_path' ) ) {
 					$local = wp_normalize_path( $local );
+				} else {
+					$local = str_replace( '\\', '/', $local );
+				}
+				if ( false !== strpos( $local, "\0" ) || false !== strpos( $local, '..' ) ) {
+					return '';
+				}
+				// Shared realpath() + allow-root gate (WP_CONTENT_DIR, ABSPATH,
+				// uploads; multisite-safe). Fail-open: mismatch skips the asset.
+				if ( class_exists( Util::class ) && method_exists( Util::class, 'validate_minify_path' ) ) {
+					try {
+						$validated = Util::validate_minify_path( $local );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return '';
+					}
+					return is_string( $validated ) ? $validated : '';
+				}
+				if ( ! function_exists( 'realpath' ) ) {
+					return '';
 				}
 				$real = realpath( $local );
-				if ( ! is_string( $real ) ) {
+				if ( ! is_string( $real ) || '' === $real ) {
 					return '';
 				}
 				if ( function_exists( 'wp_normalize_path' ) ) {
 					$real = wp_normalize_path( $real );
+				} else {
+					$real = str_replace( '\\', '/', $real );
 				}
-				$base = ( function_exists( 'wp_normalize_path' ) && defined( 'ABSPATH' ) ) ? wp_normalize_path( (string) ABSPATH ) : (string) ( defined( 'ABSPATH' ) ? ABSPATH : '' );
-				if ( '' === $base || 0 !== strpos( $real, rtrim( $base, '/' ) . '/' ) ) {
-					return '';
+				$roots = array();
+				if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+					$roots[] = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) WP_CONTENT_DIR ) : str_replace( '\\', '/', (string) WP_CONTENT_DIR );
 				}
-				return $real;
+				$roots[] = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) ABSPATH ) : str_replace( '\\', '/', (string) ABSPATH );
+				foreach ( $roots as $root ) {
+					if ( ! is_string( $root ) || '' === $root ) {
+						continue;
+					}
+					$prefix = rtrim( $root, '/' ) . '/';
+					if ( $real === $root || 0 === strpos( $real, $prefix ) ) {
+						return $real;
+					}
+				}
+				return '';
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';
@@ -12708,11 +12748,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Containment: only stat files under WP_CONTENT_DIR/ABSPATH so a
 			// poisoned wppo_* filter returning an absolute path cannot cause
-			// arbitrary local file stat/read.
-			$normalized = wp_normalize_path( $file_path );
-			$content    = wp_normalize_path( (string) WP_CONTENT_DIR );
-			$base       = wp_normalize_path( (string) ABSPATH );
-			if ( 0 !== strpos( $normalized, $content . '/' ) && 0 !== strpos( $normalized, $base ) ) {
+			// arbitrary local file stat/read. Symlinks are resolved via
+			// realpath() (guarded) so a link inside the content dir pointing
+			// outside is refused; non-existent paths keep the string-prefix
+			// check so the fail-open verdict is unchanged.
+			if ( false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
+				return true;
+			}
+			$trimmed = ltrim( $file_path );
+			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $trimmed ) ) {
+				return true;
+			}
+			try {
+				$normalize = function_exists( 'wp_normalize_path' )
+					? static function ( string $p ): string {
+						return wp_normalize_path( $p );
+					}
+					: static function ( string $p ): string {
+						return str_replace( '\\', '/', $p );
+					};
+				$candidate = $file_path;
+				if ( function_exists( 'realpath' ) ) {
+					try {
+						$resolved = realpath( $file_path );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$resolved = false;
+					}
+					if ( is_string( $resolved ) && '' !== $resolved ) {
+						$candidate = $resolved;
+					}
+				}
+				$normalized = $normalize( $candidate );
+				if ( false !== strpos( $normalized, "\0" ) ) {
+					return true;
+				}
+				$allowed = false;
+				if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+					$content = $normalize( (string) WP_CONTENT_DIR );
+					if ( $normalized === $content || 0 === strpos( $normalized, rtrim( $content, '/' ) . '/' ) ) {
+						$allowed = true;
+					}
+				}
+				if ( ! $allowed && defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+					$base = $normalize( (string) ABSPATH );
+					if ( $normalized === $base || 0 === strpos( $normalized, rtrim( $base, '/' ) . '/' ) ) {
+						$allowed = true;
+					}
+				}
+				if ( ! $allowed ) {
+					return true;
+				}
+				// Stat the resolved path so the containment verdict and the
+				// subsequent read cannot diverge via a symlink swap.
+				$file_path = $candidate;
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return true;
 			}
 

@@ -2176,6 +2176,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 
+			// Symlink confinement: when the mapped file exists, resolve it via
+			// realpath() (guarded) and refuse links escaping the content tree.
+			// Non-existent paths keep the string-prefix verdict above so the
+			// happy-path mapping is byte-identical. Fail-open: any resolver
+			// error keeps the string-checked path.
+			if ( function_exists( 'realpath' ) ) {
+				try {
+					$resolved = realpath( $full_path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$resolved = false;
+				}
+				if ( is_string( $resolved ) && '' !== $resolved ) {
+					$normalized_resolved = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $resolved ) : str_replace( '\\', '/', $resolved );
+					if ( false !== strpos( $normalized_resolved, "\0" ) ) {
+						return '';
+					}
+					// Exact-match the root itself (realpath() strips the
+					// trailing slash) or require the trailing-slash prefix
+					// so sibling directories cannot match.
+					$abspath_base = rtrim( $normalized_abspath, '/' );
+					if ( $normalized_resolved !== $abspath_base && 0 !== strpos( $normalized_resolved, $abspath_base . '/' ) ) {
+						return '';
+					}
+				}
+			}
+
 			return $full_path;
 		}
 

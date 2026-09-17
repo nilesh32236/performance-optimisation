@@ -591,20 +591,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$html          = $content_array[0];
 			$scripts       = $content_array[1];
 
-			if ( ! empty( $this->options['file_optimisation']['minifyInlineCSS'] ) ) {
-				$html = $this->minify_inline_css( $html );
-			}
+			// Placeholder-carrying buffer: restored unconditionally below so a
+			// mid-minify throwable can never leak namespaced tokens or drop
+			// preserved scripts. Fail-open to unoptimised HTML on failure.
+			$pre_minify = $html;
 
-			if ( ! empty( $this->options['file_optimisation']['minifyInlineJS'] ) || ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
-				$html = $this->minify_inline_js( $html );
-			}
-
-			if ( ! empty( $this->options['file_optimisation']['minifyHTML'] ) ) {
-				try {
-					$html = $this->get_html_min()->minify( $html );
-				} catch ( \Throwable $e ) {
-					do_action( 'wppo_debug_log', 'WPPO HTML minify failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+			try {
+				if ( ! empty( $this->options['file_optimisation']['minifyInlineCSS'] ) ) {
+					$html = $this->minify_inline_css( $html );
 				}
+
+				if ( ! empty( $this->options['file_optimisation']['minifyInlineJS'] ) || ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
+					$html = $this->minify_inline_js( $html );
+				}
+
+				if ( ! empty( $this->options['file_optimisation']['minifyHTML'] ) ) {
+					try {
+						$html = $this->get_html_min()->minify( $html );
+					} catch ( \Throwable $e ) {
+						do_action( 'wppo_debug_log', 'WPPO HTML minify failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				try {
+					if ( function_exists( 'do_action' ) ) {
+						do_action( 'wppo_debug_log', 'WPPO HTML minify failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+					}
+				} catch ( \Throwable $ignored ) {
+					unset( $ignored );
+				}
+				$html = $pre_minify;
 			}
 
 			if ( ! empty( $scripts ) ) {
