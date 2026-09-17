@@ -818,7 +818,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
-		 * Channels-aware( int $width, int $height, int $channels = 4 ): bool {
+		 * Channels-aware pre-decode pixel-budget check against the PHP memory limit.
+		 *
+		 * Estimates `width * height * channels` bytes (1 byte per channel)
+		 * and refuses when it exceeds half the PHP `memory_limit`, leaving
+		 * headroom for the GD bitmap plus encoder overhead. Falls back to the
+		 * `wppo_max_source_pixels` budget when the limit is unlimited or
+		 * unknown. Fail-open direction: oversize returns true (caller skips
+		 * the decode and serves the original), never fatal.
+		 *
+		 * @since 2.0.0
+		 *
+		 * @param int $width    Source width in pixels.
+		 * @param int $height   Source height in pixels.
+		 * @param int $channels Channel count (clamped to 1-4, default 4).
+		 * @return bool True when the image exceeds the budget and must be skipped.
+		 */
+		public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
 			if ( $width <= 0 || $height <= 0 ) {
 				// Corrupt headers (non-positive dimensions) are not an
 				// oversize skip: return false so the caller falls through
