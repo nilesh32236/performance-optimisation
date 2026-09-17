@@ -72,7 +72,9 @@ const Tooltip = ( { content, children, label } ) => {
 						role: 'button',
 						tabIndex: '0',
 						'aria-expanded': visible,
-						...( ( label || typeof content !== 'string' ) && { 'aria-describedby': id } ),
+						...( ( label || typeof content !== 'string' ) && {
+							'aria-describedby': id,
+						} ),
 						'aria-label':
 							label ||
 							( typeof content === 'string'

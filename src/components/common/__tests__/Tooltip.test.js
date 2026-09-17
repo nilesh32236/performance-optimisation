@@ -106,7 +106,7 @@ describe( 'Tooltip', () => {
 		expect( tooltipContainer ).toHaveAttribute( 'role', 'button' );
 		expect( tooltipContainer ).toHaveAttribute( 'tabindex', '0' );
 		expect( tooltipContainer ).toHaveAttribute( 'aria-expanded', 'false' );
-		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
+		expect( tooltipContainer ).not.toHaveAttribute( 'aria-describedby' );
 
 		fireEvent.keyDown( tooltipContainer, { key: 'Enter' } );
 		expect( tooltipContainer ).toHaveAttribute( 'aria-expanded', 'true' );
