@@ -1989,6 +1989,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( file_exists( $this->config_path ) ) {
 				$wp_filesystem->delete( $this->config_path );
 			}
+			// Sweep backup/tmp orphans too (audit #1357): disable() must not
+			// leave topology-disclosing siblings behind.
+			$this->sweep_orphan_config_tmp( $wp_filesystem );
 			// Config removed — the exposure question is moot; drop any cached
 			// probe verdict with it.
 			self::clear_nginx_probe_cache();
@@ -2036,7 +2039,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					// server without mod_authz_core answers 500 for the whole
 					// wp-content tree rather than ignoring the directive.
 					$rule = array(
-						'<Files "wppo-redis-config.php">',
+						// FilesMatch (audit #1357) covers the .wppo-bak backup and
+					// tmp staging siblings too: a crash between backup creation
+					// and the post-success sweep must not leave topology source
+					// fetchable as plain text.
+					'<FilesMatch "^wppo-redis-config\\.php(\\.wppo-bak|\\.tmp.*)?$">',
 						'<IfModule mod_authz_core.c>',
 						'Require all denied',
 						'</IfModule>',
@@ -2044,7 +2051,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						'Order allow,deny',
 						'Deny from all',
 						'</IfModule>',
-						'</Files>',
+						'</FilesMatch>',
 					);
 					insert_with_markers( $htaccess, self::CONFIG_HTACCESS_MARKER, $rule );
 				}

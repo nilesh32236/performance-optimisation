@@ -3938,9 +3938,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Whether a stylesheet URL is safe to request server-side.
 		 *
 		 * Guards the Critical CSS generator against SSRF: only http(s) URLs are
-		 * accepted, restricted to hosts that either pass core validation, belong
-		 * to this site, or are explicitly allowlisted via the
-		 * wppo_ccss_allowed_stylesheet_host filter.
+		 * accepted, restricted to hosts that belong to this site or are
+		 * explicitly allowlisted via the
+		 * wppo_ccss_allowed_stylesheet_host filter (default-deny).
 		 *
 		 * @param string $url The stylesheet URL.
 		 * @return bool True when safe to fetch.
@@ -3973,7 +3973,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return true;
 			}
 
-			return false !== wp_http_validate_url( $url );
+			// Audit #1357: no wp_http_validate_url() fallback — syntax
+			// validity is not safety. Non-same-site hosts fetch only via
+			// the explicit allowlist above (default-deny).
+			return false;
 		}
 
 		/**

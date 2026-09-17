@@ -273,9 +273,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			$path        = defined( 'COOKIEPATH' ) ? COOKIEPATH : '/';
 			$domain      = defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '';
 			$site_path   = defined( 'SITECOOKIEPATH' ) ? SITECOOKIEPATH : $path;
-			setcookie( $cookie_name, ' ', time() - YEAR_IN_SECONDS, $path, $domain, false, false );
-			if ( $site_path !== $path ) {
-				setcookie( $cookie_name, ' ', time() - YEAR_IN_SECONDS, $site_path, $domain, false, false );
+			// Audit #1357: clear with both secure=false and secure=true — the
+			// clear hook carries no user id to re-derive is_logged_in_cookie_secure(),
+			// and a Secure cookie is not removed by a non-Secure clear.
+			foreach ( array_unique( array( $path, $site_path ) ) as $clear_path ) {
+				setcookie( $cookie_name, ' ', time() - YEAR_IN_SECONDS, $clear_path, $domain, false, false );
+				setcookie( $cookie_name, ' ', time() - YEAR_IN_SECONDS, $clear_path, $domain, true, false );
 			}
 		}
 
