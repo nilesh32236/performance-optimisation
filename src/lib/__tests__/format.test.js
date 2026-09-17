@@ -16,6 +16,14 @@ describe( 'format helpers (lib/format.js)', () => {
 			expect( formatMs( NaN ) ).toBe( '—' );
 			expect( formatMs( undefined ) ).toBe( '—' );
 		} );
+
+		it( 'renders missing telemetry as em-dash, not 0 ms', () => {
+			expect( formatMs( null ) ).toBe( '—' );
+			expect( formatMs( '' ) ).toBe( '—' );
+			expect( formatMs( '   ' ) ).toBe( '—' );
+			expect( formatMs( false ) ).toBe( '—' );
+			expect( formatMs( [] ) ).toBe( '—' );
+		} );
 	} );
 
 	describe( 'formatPercent', () => {
@@ -25,6 +33,12 @@ describe( 'format helpers (lib/format.js)', () => {
 
 		it( 'passes through 0-100 values', () => {
 			expect( formatPercent( 75 ) ).toBe( '75%' );
+		} );
+
+		it( 'honours an explicit ratio option instead of range-sniffing', () => {
+			expect( formatPercent( 0.5, { ratio: false } ) ).toBe( '0.5%' );
+			expect( formatPercent( 0.5, { ratio: true } ) ).toBe( '50%' );
+			expect( formatPercent( 75, { ratio: false } ) ).toBe( '75%' );
 		} );
 
 		it( 'falls back for non-finite input', () => {
@@ -47,6 +61,13 @@ describe( 'format helpers (lib/format.js)', () => {
 			expect( formatBytesShared( -1 ) ).toBe( '—' );
 			expect( formatBytesShared( NaN ) ).toBe( '—' );
 		} );
+
+		it( 'renders missing sizes as em-dash, not 0 B', () => {
+			expect( formatBytesShared( null ) ).toBe( '—' );
+			expect( formatBytesShared( '' ) ).toBe( '—' );
+			expect( formatBytesShared( false ) ).toBe( '—' );
+			expect( formatBytesShared( [] ) ).toBe( '—' );
+		} );
 	} );
 
 	describe( 'savingsPercent', () => {
@@ -62,6 +83,12 @@ describe( 'format helpers (lib/format.js)', () => {
 			expect( savingsPercent( 1000, 1200 ) ).toBeNull();
 			expect( savingsPercent( 0, 0 ) ).toBeNull();
 			expect( savingsPercent( NaN, 10 ) ).toBeNull();
+		} );
+
+		it( 'rejects booleans and arrays instead of coercing', () => {
+			expect( savingsPercent( true, 1 ) ).toBeNull();
+			expect( savingsPercent( 1000, [ 500 ] ) ).toBeNull();
+			expect( savingsPercent( [ 1000 ], 500 ) ).toBeNull();
 		} );
 	} );
 } );

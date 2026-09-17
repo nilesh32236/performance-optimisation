@@ -16,7 +16,10 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 	faTimesCircle: { iconName: 'times-circle' },
 } ) );
 
-import CriticalCssPanel, { normalizeCcssEntry } from '../CriticalCssPanel';
+import CriticalCssPanel, {
+	normalizeCcssEntry,
+	statusConfigFor,
+} from '../CriticalCssPanel';
 
 describe( 'CriticalCssPanel', () => {
 	it( 'renders the empty state when no templates exist', () => {
@@ -83,8 +86,19 @@ describe( 'CriticalCssPanel', () => {
 		);
 	} );
 
-	it( 'does not throw when onRegenerate rejects', async () => {
+	it( 'rethrows bulk failures so the parent owns feedback', async () => {
 		const onRegenerate = jest.fn().mockRejectedValue( new Error( 'boom' ) );
+		// Harness mimics the parent (FileOptimization handleRegenerateCss
+		// via withNotification): it awaits the child and owns the banner,
+		// proving the child rethrew instead of notifying a second time.
+		let caught = null;
+		const catchingParent = async () => {
+			try {
+				await onRegenerate();
+			} catch ( err ) {
+				caught = err;
+			}
+		};
 		const errorSpy = jest
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
@@ -92,7 +106,7 @@ describe( 'CriticalCssPanel', () => {
 		render(
 			<CriticalCssPanel
 				status={ { abcdef1234567890: 'ready' } }
-				onRegenerate={ onRegenerate }
+				onRegenerate={ catchingParent }
 			/>
 		);
 
@@ -101,6 +115,11 @@ describe( 'CriticalCssPanel', () => {
 		await waitFor( () =>
 			expect( onRegenerate ).toHaveBeenCalledTimes( 1 )
 		);
+		await waitFor( () =>
+			expect( caught && caught.message ).toBe( 'boom' )
+		);
+		// Single-owner feedback: no error banner is rendered by the panel itself.
+		expect( screen.queryByRole( 'alert' ) ).not.toBeInTheDocument();
 
 		errorSpy.mockRestore();
 	} );
@@ -114,6 +133,108 @@ describe( 'CriticalCssPanel', () => {
 		);
 
 		expect( screen.getByText( 'Not Generated' ) ).toBeInTheDocument();
+	} );
+
+	it( 'renders skipped and failed badges', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					aaaa1111bbbb2222: {
+						status: 'skipped',
+						label: 'Builder',
+					},
+					cccc3333dddd4444: { status: 'failed', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect( screen.getByText( 'Skipped' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Failed' ) ).toBeInTheDocument();
+	} );
+
+	it( 'renders processing and done badges', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					aaaa1111bbbb2222: {
+						status: 'processing',
+						label: 'Builder',
+					},
+					cccc3333dddd4444: { status: 'done', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect( screen.getByText( 'Processing' ) ).toBeInTheDocument();
+		expect( screen.getAllByText( 'Generated' ).length ).toBeGreaterThan(
+			0
+		);
+	} );
+
+	it( 'logs single-regen failures without rethrowing (parent owns feedback)', async () => {
+		const onRegenerateSingle = jest.fn( async () => {
+			throw new Error( 'nope' );
+		} );
+		// Harness mimics the parent (FileOptimization): it notifies
+		// internally and owns the banner; the child only logs, proving no
+		// second banner and no unhandled rejection for the same click.
+		let caught = null;
+		const catchingParent = async ( hash ) => {
+			try {
+				await onRegenerateSingle( hash );
+			} catch ( err ) {
+				caught = err;
+			}
+		};
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'failed', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+				onRegenerateSingle={ catchingParent }
+			/>
+		);
+
+		fireEvent.click( screen.getByText( 'Regenerate' ) );
+
+		await waitFor( () =>
+			expect( onRegenerateSingle ).toHaveBeenCalledWith(
+				'abcdef1234567890'
+			)
+		);
+		expect( caught && caught.message ).toBe( 'nope' );
+		// Single-owner feedback: no error banner is rendered by the panel itself.
+		expect( screen.queryByRole( 'alert' ) ).not.toBeInTheDocument();
+
+		errorSpy.mockRestore();
+	} );
+
+	it( 'resolves onRegenerateSingle success without notifying', async () => {
+		const onRegenerateSingle = jest.fn().mockResolvedValue( undefined );
+
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'failed', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+				onRegenerateSingle={ onRegenerateSingle }
+			/>
+		);
+
+		fireEvent.click( screen.getByText( 'Regenerate' ) );
+
+		await waitFor( () =>
+			expect( onRegenerateSingle ).toHaveBeenCalledTimes( 1 )
+		);
+		expect( screen.queryByRole( 'alert' ) ).not.toBeInTheDocument();
 	} );
 } );
 
@@ -155,5 +276,57 @@ describe( 'normalizeCcssEntry', () => {
 			size: 1234,
 			truncated: true,
 		} );
+	} );
+
+	it( 'nulls non-finite sizes and coerces truncated', () => {
+		expect(
+			normalizeCcssEntry( 'abcdef1234567890', {
+				status: 'done',
+				label: 'Single',
+				size: Number.NaN,
+			} ).size
+		).toBeNull();
+		expect(
+			normalizeCcssEntry( 'abcdef1234567890', {
+				status: 'done',
+				label: 'Single',
+				size: 2048,
+				truncated: 1,
+			} ).truncated
+		).toBe( true );
+	} );
+} );
+
+describe( 'statusConfigFor', () => {
+	it( 'resolves known keys and falls back for inherited keys', () => {
+		expect( statusConfigFor( 'skipped' ).label ).toBe( 'Skipped' );
+		expect( statusConfigFor( '__proto__' ).label ).toBe( 'Not Generated' );
+		expect( statusConfigFor( 'mystery' ).label ).toBe( 'Not Generated' );
+	} );
+
+	it( 'renders the empty state for non-object status', () => {
+		render( <CriticalCssPanel status="oops" onRegenerate={ jest.fn() } /> );
+
+		expect(
+			screen.getByText(
+				'No templates found. Save settings and regenerate.'
+			)
+		).toBeInTheDocument();
+	} );
+
+	it( 'labels per-template regenerate buttons for screen readers', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'failed', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+				onRegenerateSingle={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.getByRole( 'button', { name: 'Regenerate Home' } )
+		).toBeInTheDocument();
 	} );
 } );

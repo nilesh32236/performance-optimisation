@@ -2,7 +2,7 @@
  * Tests for lib/util helpers.
  */
 
-import { handleChange, formatBytes } from '../util';
+import { handleChange, formatBytes, toTextLines } from '../util';
 
 describe( 'handleChange', () => {
 	it( 'updates a text field value by name', () => {
@@ -111,11 +111,13 @@ describe( 'handleChange', () => {
 } );
 
 describe( 'formatBytes', () => {
-	it( 'formats zero, negative and non-numeric input as "0 B"', () => {
+	it( 'formats actual zero as "0 B" and invalid input as fallback', () => {
 		expect( formatBytes( 0 ) ).toBe( '0 B' );
-		expect( formatBytes( -10 ) ).toBe( '0 B' );
-		expect( formatBytes( NaN ) ).toBe( '0 B' );
-		expect( formatBytes( undefined ) ).toBe( '0 B' );
+		expect( formatBytes( -10 ) ).toBe( '—' );
+		expect( formatBytes( NaN ) ).toBe( '—' );
+		expect( formatBytes( undefined ) ).toBe( '—' );
+		expect( formatBytes( false ) ).toBe( '—' );
+		expect( formatBytes( [] ) ).toBe( '—' );
 	} );
 
 	it( 'formats byte counts below 1 KB', () => {
@@ -133,5 +135,27 @@ describe( 'formatBytes', () => {
 	it( 'formats GB values and coerces numeric strings', () => {
 		expect( formatBytes( 1024 ** 3 ) ).toBe( '1.0 GB' );
 		expect( formatBytes( '2048' ) ).toBe( '2.0 KB' );
+	} );
+} );
+
+describe( 'toTextLines', () => {
+	it( 'passes strings through unchanged', () => {
+		expect( toTextLines( 'a\nb' ) ).toBe( 'a\nb' );
+		expect( toTextLines( '' ) ).toBe( '' );
+	} );
+
+	it( 'joins arrays with newlines', () => {
+		expect( toTextLines( [ 'a', 'b' ] ) ).toBe( 'a\nb' );
+		expect( toTextLines( [] ) ).toBe( '' );
+	} );
+
+	it( 'stringifies finite numbers, empties null and undefined', () => {
+		expect( toTextLines( 42 ) ).toBe( '42' );
+		expect( toTextLines( null ) ).toBe( '' );
+		expect( toTextLines( undefined ) ).toBe( '' );
+	} );
+
+	it( 'filters non-string items instead of rendering [object Object]', () => {
+		expect( toTextLines( [ 'a', { a: 1 }, 2, null ] ) ).toBe( 'a\n2' );
 	} );
 } );

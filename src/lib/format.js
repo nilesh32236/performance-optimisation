@@ -11,7 +11,36 @@
  * @param {*} value Numeric value.
  * @return {string} Formatted value or '—' fallback.
  */
+/**
+ * True when a metric value counts as missing.
+ *
+ * Null, undefined, booleans, arrays, and blank strings render the '—'
+ * fallback instead of a coerced number (e.g. true → 1, [] → 0).
+ *
+ * @since NEXT
+ * @param {*} value Raw value.
+ * @return {boolean} Whether to render the fallback.
+ */
+const isMissingMetric = ( value ) => {
+	if ( value === null || value === undefined ) {
+		return true;
+	}
+	if ( typeof value === 'boolean' ) {
+		return true;
+	}
+	if ( Array.isArray( value ) ) {
+		return true;
+	}
+	if ( typeof value === 'string' && '' === value.trim() ) {
+		return true;
+	}
+	return false;
+};
+
 export const formatMs = ( value ) => {
+	if ( isMissingMetric( value ) ) {
+		return '—';
+	}
 	const num = Number( value );
 	if ( ! Number.isFinite( num ) ) {
 		return '—';
@@ -22,32 +51,52 @@ export const formatMs = ( value ) => {
 /**
  * Format a 0-1 ratio or 0-100 number as percent.
  *
- * Heuristic: finite values in [0, 1] are treated as ratios (0.5 → "50%").
- * Callers holding a genuine percent in that range (e.g. 0.5%) must scale to
- * basis points or pass a consistent 0-100 scale — there is no opt-out flag
- * by design so call sites stay comparable.
+ * By default finite values in [0, 1] are treated as ratios (0.5 → "50%").
+ * Pass an explicit `{ ratio: true|false }` to opt out of range-sniffing when
+ * the caller holds a genuine small percent (e.g. 0.5%): `{ ratio: false }`
+ * formats the value as-is, `{ ratio: true }` always scales by 100. Omitting
+ * the option keeps the legacy heuristic for backward compatibility.
  *
  * @since NEXT
- * @param {*} value Numeric value (ratio 0-1 or percent 0-100).
+ * @param {*}       value           Numeric value (ratio 0-1 or percent 0-100).
+ * @param {Object}  [options]       Formatting options.
+ * @param {boolean} [options.ratio] Explicit ratio flag; omit for heuristic.
  * @return {string} Formatted value or '—' fallback.
  */
-export const formatPercent = ( value ) => {
+export const formatPercent = ( value, options = {} ) => {
+	if ( isMissingMetric( value ) ) {
+		return '—';
+	}
 	const num = Number( value );
 	if ( ! Number.isFinite( num ) ) {
 		return '—';
 	}
-	const pct = num <= 1 && num >= 0 ? num * 100 : num;
+	let pct;
+	if ( typeof options.ratio === 'boolean' ) {
+		pct = options.ratio ? num * 100 : num;
+	} else {
+		pct = num <= 1 && num >= 0 ? num * 100 : num;
+	}
 	return `${ Math.round( pct * 10 ) / 10 }%`;
 };
 
 /**
  * Format bytes.
  *
+ * Non-i18n background/metric counterpart to the localised `formatBytes`
+ * in lib/util.js. UI code must use `formatBytes` (lib/util); background and
+ * metric-only contexts (dashboards, logs, non-DOM summaries where
+ * translation is handled elsewhere) use this helper. The two intentionally
+ * differ in rounding/caps/fallback — do not mix them in one view.
+ *
  * @since NEXT
  * @param {*} value Numeric value.
  * @return {string} Formatted value or '—' fallback.
  */
 export const formatBytesShared = ( value ) => {
+	if ( isMissingMetric( value ) ) {
+		return '—';
+	}
 	const num = Number( value );
 	if ( ! Number.isFinite( num ) || num < 0 ) {
 		return '—';
@@ -74,6 +123,13 @@ export const formatBytesShared = ( value ) => {
  * @return {number|null} Percent saved, or null when not computable.
  */
 export const savingsPercent = ( original, optimized ) => {
+	// Reject booleans/arrays before Number(): bare Number() coerces true → 1
+	// and [5] → 5, which would return a phantom 100%/0% on partial payloads.
+	for ( const raw of [ original, optimized ] ) {
+		if ( typeof raw === 'boolean' || Array.isArray( raw ) ) {
+			return null;
+		}
+	}
 	const before = Number( original );
 	const after = Number( optimized );
 	if (

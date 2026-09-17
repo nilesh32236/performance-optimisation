@@ -1,5 +1,5 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { useState } from '@wordpress/element';
+import { memo, useMemo, useState } from '@wordpress/element';
 import {
 	faCheckCircle,
 	faExclamationTriangle,
@@ -8,20 +8,38 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
-import useNotice from '../lib/useNotice';
-import NoticeBanner from './common/NoticeBanner';
 import { formatBytes } from '../lib/util';
 
+const READY_CONFIG = {
+	icon: faCheckCircle,
+	className: 'wppo-badge--success',
+	label: __( 'Generated', 'performance-optimisation' ),
+};
+
+// Length of the hash prefix shown when an entry has no label.
+const HASH_PREFIX_LEN = 8;
+
+// Factory for the pending-style badges (queued/pending/processing share one
+// icon + className; only the label differs). Single source so a future
+// icon/class change needs one edit.
+const pendingConfig = ( label ) => ( {
+	icon: faClock,
+	className: 'wppo-badge--info',
+	label,
+} );
+
 const STATUS_CONFIG = {
-	ready: {
-		icon: faCheckCircle,
-		className: 'wppo-badge--success',
-		label: __( 'Generated', 'performance-optimisation' ),
-	},
-	pending: {
-		icon: faClock,
-		className: 'wppo-badge--info',
-		label: __( 'Pending', 'performance-optimisation' ),
+	ready: READY_CONFIG,
+	// Copy (issue #1274 review): done === ready today, but a shared
+	// reference would let a future mutation hit both entries.
+	done: { ...READY_CONFIG },
+	queued: pendingConfig( __( 'Queued', 'performance-optimisation' ) ),
+	pending: pendingConfig( __( 'Pending', 'performance-optimisation' ) ),
+	processing: pendingConfig( __( 'Processing', 'performance-optimisation' ) ),
+	skipped: {
+		icon: faExclamationTriangle,
+		className: 'wppo-badge--warning',
+		label: __( 'Skipped', 'performance-optimisation' ),
 	},
 	failed: {
 		icon: faTimesCircle,
@@ -48,7 +66,8 @@ const STATUS_CONFIG = {
  */
 export const normalizeCcssEntry = ( hash, entry ) => {
 	const safeHash = typeof hash === 'string' ? hash : String( hash ?? '' );
-	const fallbackLabel = ( safeHash ? safeHash.substring( 0, 8 ) : '?' ) + '…';
+	const fallbackLabel =
+		( safeHash ? safeHash.substring( 0, HASH_PREFIX_LEN ) : '?' ) + '…';
 	if ( typeof entry === 'string' ) {
 		return {
 			statusKey: entry || 'none',
@@ -89,46 +108,71 @@ export const normalizeCcssEntry = ( hash, entry ) => {
  * @param {*} statusKey Raw status key.
  * @return {{icon: *, className: string, label: string}} Badge config.
  */
-const statusConfigFor = ( statusKey ) => {
+export const statusConfigFor = ( statusKey ) => {
 	const hasOwn = Object.hasOwn
 		? Object.hasOwn( STATUS_CONFIG, statusKey )
 		: Object.prototype.hasOwnProperty.call( STATUS_CONFIG, statusKey );
 	return hasOwn ? STATUS_CONFIG[ statusKey ] : STATUS_CONFIG.none;
 };
 
-const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
+const CriticalCssPanel = ( {
+	status = {},
+	onRegenerate,
+	onRegenerateSingle,
+} ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
-	const { notice, notify, dismiss } = useNotice();
+	const [ singleBusy, setSingleBusy ] = useState( null );
+	// No local useNotice/NoticeBanner here (issue #1274 review): the
+	// parent (FileOptimization via withNotification) is the single
+	// feedback owner; this panel logs locally and rethrows.
 
 	const handleRegenerate = async () => {
 		setIsRegenerating( true );
 		try {
 			await onRegenerate();
 		} catch ( err ) {
+			// Single-owner feedback (mirrors handleRegenerateSingle): the
+			// parent handleRegenerateCss via withNotification owns the
+			// banner, so log locally and rethrow instead of notifying a
+			// second time for the same click.
 			console.error( 'Failed to regenerate CCSS', err );
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to regenerate Critical CSS.',
-					'performance-optimisation'
-				),
-			} );
+			throw err;
 		} finally {
 			setIsRegenerating( false );
 		}
 	};
 
-	const entries = Object.entries( status );
+	const handleRegenerateSingle = async ( hash ) => {
+		if ( ! onRegenerateSingle ) {
+			return;
+		}
+		setSingleBusy( hash );
+		try {
+			await onRegenerateSingle( hash );
+		} catch ( err ) {
+			// No rethrow: the parent (FileOptimization
+			// handleRegenerateSingleCcss) notifies internally and owns the
+			// banner, and the click site here has no catch — rethrowing
+			// would only risk an unhandled rejection with no UI benefit.
+			console.error( 'Failed to regenerate CCSS for template', err );
+		} finally {
+			setSingleBusy( null );
+		}
+	};
+
+	const entries = useMemo( () => {
+		if (
+			! status ||
+			typeof status !== 'object' ||
+			Array.isArray( status )
+		) {
+			return [];
+		}
+		return Object.entries( status );
+	}, [ status ] );
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
-			{ notice && (
-				<NoticeBanner
-					type={ notice.type }
-					message={ notice.message }
-					onDismiss={ dismiss }
-				/>
-			) }
 			<div className="wppo-field-label">
 				{ __( 'Critical CSS Status', 'performance-optimisation' ) }
 			</div>
@@ -139,7 +183,10 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 				) }
 			</p>
 			{ entries.length > 0 ? (
-				<div className="wppo-ccss-status-list wppo-mb-16">
+				<div
+					className="wppo-ccss-status-list wppo-mb-16"
+					aria-live="polite"
+				>
 					{ entries.map( ( [ hash, entry ] ) => {
 						const normalized = normalizeCcssEntry( hash, entry );
 						const { statusKey, label, size, truncated } =
@@ -181,6 +228,29 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 									<FontAwesomeIcon icon={ config.icon } />
 									{ config.label }
 								</span>
+								{ onRegenerateSingle && (
+									<button
+										className="wppo-button wppo-button--secondary wppo-button--small"
+										type="button"
+										disabled={ singleBusy === hash }
+										aria-label={ sprintf(
+											/* translators: %s: template label. */
+											__(
+												'Regenerate %s',
+												'performance-optimisation'
+											),
+											label
+										) }
+										onClick={ () =>
+											handleRegenerateSingle( hash )
+										}
+									>
+										{ __(
+											'Regenerate',
+											'performance-optimisation'
+										) }
+									</button>
+								) }
 							</div>
 						);
 					} ) }
@@ -203,4 +273,4 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 	);
 };
 
-export default CriticalCssPanel;
+export default memo( CriticalCssPanel );

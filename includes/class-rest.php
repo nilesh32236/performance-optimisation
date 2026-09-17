@@ -2846,7 +2846,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$response->header( 'Retry-After', '60' );
 				return $response;
 			}
-			$params  = $request->get_params();
+			$params = $request->get_params();
+			// Validate the raw post_id before absint(): absint('foo') is 0,
+			// which would fall through to bulk regenerate_all and mass-queue
+			// on a typo (issue #1274 review).
+			$raw_id = $params['post_id'] ?? null;
+			if ( null !== $raw_id && '' !== $raw_id && ! is_numeric( $raw_id ) ) {
+				return $this->send_response( null, false, 400, __( 'Invalid post ID.', 'performance-optimisation' ) );
+			}
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
 
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
@@ -2854,6 +2861,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( $post_id ) {
+				// Reject unknown post IDs before enqueueing so junk jobs
+				// never reach the queue (issue #1274 review). get_post()
+				// returns false (not just null) for missing posts.
+				if ( function_exists( 'get_post' ) && ! get_post( $post_id ) ) {
+					return $this->send_response( null, false, 404, __( 'Invalid post ID.', 'performance-optimisation' ) );
+				}
+				// Builder-template skip-and-continue (issue #1274): excluded
+				// post types report skipped instead of queueing (no error loop).
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'is_excluded_post' ) ) {
+					try {
+						if ( Used_CSS::is_excluded_post( $post_id ) ) {
+							return $this->send_response(
+								array(
+									'mode'    => 'single',
+									'post_id' => $post_id,
+									'skipped' => true,
+								),
+								true,
+								200,
+								__( 'Skipped: post type is excluded from used-CSS generation.', 'performance-optimisation' )
+							);
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				$job_args = array( 'post_id' => $post_id );
 				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
 					return $this->send_response(
@@ -3128,6 +3161,117 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
 				$response->header( 'Retry-After', '60' );
 				return $response;
+			}
+			// Per-template/per-URL regenerate (issue #1274): an optional
+			// `template` slug (or hash) queues one job; otherwise all.
+			// The raw input is length-capped (defense-in-depth) before the
+			// allowlist lookup in regenerate_single().
+			try {
+				$params = $_request->get_params();
+				if ( array_key_exists( 'template', $params ) ) {
+					// An explicit but empty/non-string template key must
+					// not fall through to bulk regen (issue #1274 review):
+					// it signals a caller bug, so return 0 queued instead
+					// of queueing every template.
+					$raw_param = $params['template'];
+					if ( ! is_string( $raw_param ) || '' === trim( $raw_param ) ) {
+						return $this->send_response(
+							array(
+								'mode'     => 'single',
+								'template' => is_string( $raw_param ) ? sanitize_text_field( substr( trim( $raw_param ), 0, 256 ) ) : '',
+								'queued'   => 0,
+							),
+							false,
+							400,
+							__( 'Invalid template: nothing queued.', 'performance-optimisation' )
+						);
+					}
+					$raw      = substr( trim( $raw_param ), 0, 256 );
+					$template = sanitize_text_field( $raw );
+					// Known-first ordering (issue #1274 review): an unknown
+					// slug returns 404 even while suspended, so typos are
+					// never hidden behind the suspended message. The
+					// single enumeration below is reused by both the known
+					// check and the queue call (no double theme scan).
+					$templates_map = null;
+					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_templates' ) ) {
+						try {
+							$templates_map = Critical_CSS::get_templates();
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$templates_map = null;
+						}
+					}
+					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_known_template' ) ) {
+						$known = true;
+						try {
+							$known = Critical_CSS::is_known_template( $template, $templates_map );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+						if ( ! $known ) {
+							return $this->send_response(
+								array(
+									'mode'     => 'single',
+									'template' => $template,
+									'queued'   => 0,
+								),
+								false,
+								404,
+								__( 'Unknown template: nothing queued.', 'performance-optimisation' )
+							);
+						}
+					}
+					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_deferral_suspended_by_js' ) && Critical_CSS::is_deferral_suspended_by_js() ) {
+						return $this->send_response(
+							array(
+								'mode'     => 'single',
+								'template' => $template,
+								'queued'   => 0,
+							),
+							true,
+							200,
+							__( 'Critical CSS generation is suspended while deferred or delayed JavaScript is enabled.', 'performance-optimisation' )
+						);
+					}
+					$queued = Critical_CSS::regenerate_single( $template, $templates_map );
+					if ( -1 === $queued ) {
+						return $this->send_response(
+							array(
+								'mode'     => 'single',
+								'template' => $template,
+								'queued'   => 0,
+							),
+							false,
+							500,
+							__( 'Scheduler unavailable: nothing queued.', 'performance-optimisation' )
+						);
+					}
+					if ( 1 === $queued ) {
+						return $this->send_response(
+							array(
+								'mode'     => 'single',
+								'template' => $template,
+								'queued'   => 1,
+							),
+							true,
+							202,
+							__( 'Critical CSS regeneration queued for template.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response(
+						array(
+							'mode'     => 'single',
+							'template' => $template,
+							'queued'   => 0,
+						),
+						true,
+						200,
+						__( 'Template skipped: nothing queued.', 'performance-optimisation' )
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 			$queued = Critical_CSS::regenerate_all();
 

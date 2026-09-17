@@ -8,7 +8,13 @@ import {
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
-import FileOptimization from '../FileOptimization';
+import FileOptimization, {
+	normalizeRetries,
+	normalizeDeliveryMode,
+	stripPreviewParams,
+	withCdnRowIds,
+	stripCdnIds,
+} from '../FileOptimization';
 
 // Mock the API request (sandbox perf test goes through the validated
 // runPerformanceScan wrapper; keep the real isValidScanUrl so validation
@@ -1544,6 +1550,45 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	describe( 'normalizeRetries', () => {
+		it( 'clamps valid values to 0..5 with truncation', () => {
+			expect( normalizeRetries( 3 ) ).toBe( 3 );
+			expect( normalizeRetries( '3.7' ) ).toBe( 3 );
+			expect( normalizeRetries( '+3' ) ).toBe( 3 );
+			expect( normalizeRetries( '1e2' ) ).toBe( 5 );
+			expect( normalizeRetries( 99 ) ).toBe( 5 );
+			expect( normalizeRetries( -2 ) ).toBe( 0 );
+			expect( normalizeRetries( 0 ) ).toBe( 0 );
+		} );
+
+		it( 'fails open to 5 on missing or malformed input', () => {
+			expect( normalizeRetries( undefined ) ).toBe( 5 );
+			expect( normalizeRetries( '' ) ).toBe( 5 );
+			expect( normalizeRetries( 'abc' ) ).toBe( 5 );
+			expect( normalizeRetries( [ '3' ] ) ).toBe( 5 );
+			expect( normalizeRetries( NaN ) ).toBe( 5 );
+		} );
+
+		it( 'rejects hex/binary/octal like PHP is_numeric', () => {
+			expect( normalizeRetries( '0x3' ) ).toBe( 5 );
+			expect( normalizeRetries( '0b101' ) ).toBe( 5 );
+			expect( normalizeRetries( '0o17' ) ).toBe( 5 );
+		} );
+	} );
+
+	describe( 'normalizeDeliveryMode', () => {
+		it( 'accepts allowlisted string modes case-insensitively', () => {
+			expect( normalizeDeliveryMode( 'Delay' ) ).toBe( 'delay' );
+			expect( normalizeDeliveryMode( ' async ' ) ).toBe( 'async' );
+		} );
+
+		it( 'fails open to file for non-strings and unknown modes', () => {
+			expect( normalizeDeliveryMode( [ 'delay' ] ) ).toBe( 'file' );
+			expect( normalizeDeliveryMode( 42 ) ).toBe( 'file' );
+			expect( normalizeDeliveryMode( 'eager' ) ).toBe( 'file' );
+		} );
+	} );
+
 	it( 'shows the SPA-visible last-purge reason and safe preview link', async () => {
 		global.wppoSettings.upgradePurge = {
 			last_purge: { reason: 'plugin akismet/akismet.php', time: 123 },
@@ -1563,5 +1608,44 @@ describe( 'FileOptimization Component', () => {
 			'href',
 			'https://example.com/?wppo_nocache=1'
 		);
+	} );
+
+	describe( 'stripPreviewParams', () => {
+		it( 'strips preview args from absolute http(s) URLs', () => {
+			expect(
+				stripPreviewParams(
+					'https://example.com/?wppo_preview=1&_wppo_preview_nonce=abc&p=1'
+				)
+			).toBe( 'https://example.com/?p=1' );
+		} );
+
+		it( 'rejects non-http(s) and relative URLs', () => {
+			expect( stripPreviewParams( 'javascript:alert(1)' ) ).toBe( '' );
+			expect( stripPreviewParams( '/relative/path' ) ).toBe( '' );
+			expect( stripPreviewParams( '' ) ).toBe( '' );
+		} );
+	} );
+
+	describe( 'withCdnRowIds / stripCdnIds', () => {
+		it( 'assigns deterministic index ids and preserves existing ids', () => {
+			const rows = withCdnRowIds( [
+				{ cdn_url: 'a' },
+				{ cdn_url: 'b', id: 'cdn-9' },
+			] );
+			expect( rows[ 0 ].id ).toBe( 'cdn-row-0' );
+			expect( rows[ 1 ].id ).toBe( 'cdn-9' );
+			expect( withCdnRowIds( 'corrupt' ) ).toEqual( [] );
+		} );
+
+		it( 'strips client ids without touching other keys', () => {
+			const stripped = stripCdnIds( {
+				cdnURL: 'x',
+				cdnMapping: [ { id: 'cdn-row-0', cdn_url: 'a' } ],
+			} );
+			expect( stripped ).toEqual( {
+				cdnURL: 'x',
+				cdnMapping: [ { cdn_url: 'a' } ],
+			} );
+		} );
 	} );
 } );

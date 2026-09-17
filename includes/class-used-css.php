@@ -2393,8 +2393,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 					return 0;
 				}
-				// Note: de-duplication via as_has_scheduled_action() lives
-				// inside requeue_for_post(); no existence check is needed here.
+				// Hoisted scheduler snapshot (issue #1274 review): one
+				// as_get_scheduled_actions() query serves the whole
+				// targeted pass; requeue_for_post() consults the hint map
+				// instead of one as_has_scheduled_action() per post.
+				// Fail-open: an unavailable/failed lookup passes null so
+				// each post falls back to the per-post check.
+				$scheduled_hints = null;
+				if ( function_exists( 'as_get_scheduled_actions' ) ) {
+					try {
+						$batch_actions = as_get_scheduled_actions(
+							array(
+								'hook'     => 'wppo_used_css_generate',
+								'group'    => 'performance_optimisation',
+								'per_page' => 1000,
+								'status'   => 'pending',
+							),
+							'ARRAY_A'
+						);
+						if ( is_array( $batch_actions ) ) {
+							$scheduled_hints = array();
+							foreach ( $batch_actions as $action ) {
+								if ( ! is_array( $action ) ) {
+									continue;
+								}
+								$action_args = $action['args'] ?? null;
+								if ( is_string( $action_args ) ) {
+									$decoded     = json_decode( $action_args, true );
+									$action_args = is_array( $decoded ) ? $decoded : null;
+								}
+								if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
+									$scheduled_hints[ (int) $action_args['post_id'] ] = true;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$scheduled_hints = null;
+					}
+				}
 				$instance = new self( $options );
 				if ( $instance->is_targeted_regen_cooled_down() ) {
 					return 0;
@@ -2434,7 +2471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						continue;
 					}
 					try {
-						if ( self::requeue_for_post( $post_id ) ) {
+						if ( self::requeue_for_post( $post_id, $scheduled_hints, $instance ) ) {
 							++$queued;
 						}
 					} catch ( \Throwable $e ) {
@@ -2479,20 +2516,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * failure, or exception reports stale so work is never dropped on
 		 * uncertainty.
 		 *
-		 * @param int    $post_id      Post ID.
-		 * @param string $modified_gmt Post modification time (GMT, Y-m-d H:i:s).
+		 * @param int         $post_id      Post ID.
+		 * @param string      $modified_gmt Post modification time (GMT, Y-m-d H:i:s).
+		 * @param string|null $permalink Optional pre-resolved permalink (scan path passes its batch map so the URL is resolved once per post, not twice).
 		 * @return bool True when regeneration can be skipped for this post.
 		 * @since NEXT
 		 */
-		private function is_variant_fresh_for_post( int $post_id, string $modified_gmt ): bool {
+		private function is_variant_fresh_for_post( int $post_id, string $modified_gmt, ?string $permalink = null ): bool {
 			try {
 				if ( $post_id <= 0 || '' === $modified_gmt || '0000-00-00 00:00:00' === $modified_gmt ) {
 					return false;
 				}
-				if ( ! function_exists( 'get_permalink' ) ) {
-					return false;
+				if ( null === $permalink ) {
+					if ( ! function_exists( 'get_permalink' ) ) {
+						return false;
+					}
+					$permalink = get_permalink( $post_id );
 				}
-				$permalink = get_permalink( $post_id );
 				if ( ! is_string( $permalink ) || '' === $permalink ) {
 					return false;
 				}
@@ -2510,6 +2550,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				if ( $mtime < $modified ) {
 					return false;
+				}
+				// Scan-path fast lane: cron/scheduler contexts have no
+				// $wp_styles queue (no source signal for this request), so
+				// the sidecar checksum probe cannot detect anything the
+				// mtime check missed — skip the file_get_contents and let
+				// process_buffer() heal source-CSS drift lazily on visit.
+				if ( empty( $GLOBALS['wp_styles']->queue ?? array() ) ) {
+					return true;
 				}
 				return ! $this->is_checksum_stale( $variant_path );
 			} catch ( \Throwable $e ) {
@@ -2529,11 +2577,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * enqueue. No-op when removeUnusedCSS is off or Action Scheduler
 		 * is unavailable.
 		 *
-		 * @param int $post_id Post ID to requeue.
+		 * @param int        $post_id Post ID to requeue.
+		 * @param array|null $scheduled_hints Optional hoisted pending-job map (post ID => true); null falls back to per-post lookup.
+		 * @param self|null  $instance Optional hoisted instance (shares parsed safelist/memo across loop calls).
 		 * @return bool True when a job was queued or already scheduled; false when skipped as fresh or on failure.
 		 * @since 2.0.0
+		 * @since NEXT Optional $scheduled_hints for batched targeted regen.
+		 * @since NEXT Optional $instance to avoid per-post re-construction.
 		 */
-		public static function requeue_for_post( int $post_id ): bool {
+		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null, ?self $instance = null ): bool {
 			if ( $post_id <= 0 ) {
 				return false;
 			}
@@ -2542,11 +2594,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 					return false;
 				}
-				if ( ! function_exists( 'as_has_scheduled_action' ) || ! function_exists( 'as_enqueue_async_action' ) ) {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 					return false;
 				}
 				$args = array( 'post_id' => $post_id );
-				if ( as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
+				// Hoisted snapshot hint (issue #1274 review): the targeted
+				// regen path passes one as_get_scheduled_actions() snapshot
+				// so N posts cost one query instead of N
+				// as_has_scheduled_action() reads.
+				if ( null !== $scheduled_hints && isset( $scheduled_hints[ $post_id ] ) ) {
+					return true;
+				}
+				if ( function_exists( 'as_has_scheduled_action' ) && ( null === $scheduled_hints ) && as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
 					return true;
 				}
 				try {
@@ -2557,7 +2616,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							$modified_gmt = $post->post_modified_gmt;
 						}
 					}
-					if ( '' !== $modified_gmt && ( new self( $options ) )->is_variant_fresh_for_post( $post_id, $modified_gmt ) ) {
+					if ( '' !== $modified_gmt && ( $instance ?? new self( $options ) )->is_variant_fresh_for_post( $post_id, $modified_gmt ) ) {
 						return false;
 					}
 				} catch ( \Throwable $e ) {
@@ -2583,10 +2642,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * option reads only.
 		 *
 		 * @since 2.0.0
-		 * @param int[] $post_ids Post IDs in FIFO order.
+		 * @param int[]              $post_ids Post IDs in FIFO order.
+		 * @param array<int, string> $permalinks Optional pre-resolved post ID => permalink map (scan path builds it once per batch so ordering + freshness share one get_permalink() per post).
+		 * @param array|null         $priority Optional hoisted RUM path-LCP priority map (regenerate_all fetches once per run; null fetches per call).
+		 * @param array|null         $trends Optional hoisted PageSpeed trends (null fetches per call).
 		 * @return int[] Ordered post IDs (same entries).
 		 */
-		public static function order_post_ids_by_rum_priority( array $post_ids ): array {
+		public static function order_post_ids_by_rum_priority( array $post_ids, array $permalinks = array(), ?array $priority = null, ?array $trends = null ): array {
 			try {
 				if ( count( $post_ids ) < 2 ) {
 					return array_values( array_map( 'intval', $post_ids ) );
@@ -2608,16 +2670,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! function_exists( 'get_permalink' ) ) {
 					return $post_ids;
 				}
-				$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				// Hoisted signals (issue #1274 review): regenerate_all()
+				// passes one priority/trends snapshot per run; direct
+				// callers passing null still fetch once per call.
+				if ( null === $priority ) {
+					$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				}
 				// Fetch trends once for the whole ordering pass instead of once
 				// per post inside score_url_lcp() (issue #1059 review). A
 				// trend-only site (no RUM samples yet) must still prioritize,
 				// so only fall back to FIFO when both signals are empty.
-				$trends = null;
-				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
-					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
-					if ( ! is_array( $trends ) ) {
-						$trends = array();
+				if ( null === $trends ) {
+					$trends = null;
+					if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+						$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+						if ( ! is_array( $trends ) ) {
+							$trends = array();
+						}
 					}
 				}
 				if ( empty( $priority ) && empty( $trends ) ) {
@@ -2625,7 +2694,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				$scores = array();
 				foreach ( $post_ids as $post_id ) {
-					$permalink          = get_permalink( $post_id );
+					if ( array_key_exists( $post_id, $permalinks ) ) {
+						$permalink = $permalinks[ $post_id ];
+					} else {
+						$permalink = get_permalink( $post_id );
+					}
 					$scores[ $post_id ] = ( is_string( $permalink ) && '' !== $permalink ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $permalink, $priority, $trends ) : 0.0;
 				}
 				$has_signal = false;
@@ -2909,6 +2982,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$post_types = get_post_types( array( 'public' => true ), 'names' );
 			$post_types = array_diff( $post_types, array( 'attachment' ) );
+			// Builder-template exclusion (issue #1274): library templates
+			// are never rendered standalone — skip them so regen never
+			// wastes queries + CPU fetching them. Additive setting with
+			// filter extensibility; fail-open to previous behaviour.
+			try {
+				$excluded   = self::get_excluded_post_types();
+				$post_types = array_diff( $post_types, $excluded );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 
 			$queued  = 0;
 			$batch   = 200;
@@ -2985,6 +3068,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
 			$scan_ok = true;
 			$capped  = false;
+			// Hoisted RUM/trends snapshot (issue #1274 review): one read
+			// per run instead of one per 200-row batch inside the ordering
+			// helper. Fail-open: lookup failure passes nulls so the helper
+			// falls back to its own per-call fetch/FIFO behaviour.
+			$run_priority = null;
+			$run_trends   = null;
+			$signals_ok   = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) ) {
+					$run_priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+					$run_trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( ! is_array( $run_trends ) ) {
+						$run_trends = array();
+					}
+				}
+				$signals_ok = true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$signals_ok = false;
+			}
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
 				$prepare_args   = array_values( $post_types );
@@ -3020,7 +3125,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					break;
 				}
 
-				$batch_ids = self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ) );
+				// One permalink resolution per post per batch: the map is
+				// shared by RUM-priority ordering and the freshness check
+				// below instead of each pass calling get_permalink()
+				// separately (issue #1274 review).
+				$permalink_map = array();
+				if ( function_exists( 'get_permalink' ) ) {
+					foreach ( $post_ids as $pid ) {
+						try {
+							$resolved = get_permalink( (int) $pid );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$resolved = false;
+						}
+						$permalink_map[ (int) $pid ] = is_string( $resolved ) ? $resolved : '';
+					}
+				}
+				$batch_ids = $signals_ok
+					? self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ), $permalink_map, is_array( $run_priority ) ? $run_priority : array(), is_array( $run_trends ) ? $run_trends : array() )
+					: self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ), $permalink_map );
 
 				foreach ( $batch_ids as $post_id ) {
 					// Per-run cap: stop enqueueing once the cap is reached
@@ -3037,7 +3160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						$scheduled[ $post_id ] = true;
 						continue;
 					}
-					if ( isset( $modified[ $post_id ] ) && '' !== $modified[ $post_id ] && $this->is_variant_fresh_for_post( $post_id, $modified[ $post_id ] ) ) {
+					if ( isset( $modified[ $post_id ] ) && '' !== $modified[ $post_id ] && $this->is_variant_fresh_for_post( $post_id, $modified[ $post_id ], $permalink_map[ $post_id ] ?? null ) ) {
 						continue;
 					}
 					try {
@@ -3086,13 +3209,95 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Builder-template post types excluded from used-CSS generation (issue #1274).
+		 *
+		 * Shares the additive `file_optimisation.ccssExcludedPostTypes`
+		 * setting (and the `wppo_ccss_excluded_post_types` filter) with
+		 * Critical_CSS so both pipelines skip the same non-renderable
+		 * builder templates — the CCSS-named key/filter is the intentional
+		 * shared contract (kept for backward compatibility), not a naming
+		 * accident. Fail-open: any error returns the built-in defaults.
+		 * Used-CSS retries are intentionally out of scope: exclusion is a
+		 * skip-and-continue (never queued), so no retry counter exists on
+		 * this pipeline.
+		 *
+		 * @return string[] Excluded post type slugs.
+		 * @since NEXT
+		 */
+		public static function get_excluded_post_types(): array {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_excluded_post_types' ) ) {
+					return Critical_CSS::get_excluded_post_types();
+				}
+				$defaults = array( 'fl-builder-template', 'elementor_library' );
+				$options  = Util::get_settings();
+				$raw      = $options['file_optimisation']['ccssExcludedPostTypes'] ?? null;
+				// Thin delegation to the shared parser so validation rules
+				// live in exactly one place (issue #1274 review). Raw is
+				// passed through so array values are preserved, not dropped.
+				$parsed = ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'parse_excluded_slugs' ) )
+					? Critical_CSS::parse_excluded_slugs( $raw )
+					: array();
+				// Additive merge with empty-fallback, mirroring
+				// Critical_CSS::get_excluded_post_types().
+				return array() !== $parsed ? array_values( array_unique( array_merge( $defaults, $parsed ) ) ) : $defaults;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array( 'fl-builder-template', 'elementor_library' );
+			}
+		}
+
+		/**
+		 * Whether a post ID belongs to an excluded builder-template type (issue #1274).
+		 *
+		 * Single delegation point so REST and worker call sites never
+		 * hand-roll their own strtolower/in_array copies.
+		 *
+		 * Fail-open: unknown posts, missing APIs, or any error returns
+		 * false (generate as before).
+		 *
+		 * @param int $post_id Post ID.
+		 * @return bool True when the post should be skipped.
+		 * @since NEXT
+		 */
+		public static function is_excluded_post( int $post_id ): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_excluded_post' ) ) {
+					return Critical_CSS::is_excluded_post( $post_id );
+				}
+				if ( $post_id <= 0 || ! function_exists( 'get_post_type' ) ) {
+					return false;
+				}
+				$post_type = get_post_type( $post_id );
+				if ( ! is_string( $post_type ) || '' === $post_type ) {
+					return false;
+				}
+				return in_array( strtolower( trim( $post_type ) ), self::get_excluded_post_types(), true );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Process a single page for used-CSS generation (Action Scheduler callback).
+		 *
+		 * Builder-template post types are skipped without fetching (issue #1274).
 		 *
 		 * @param int $post_id The post ID.
 		 * @return void
 		 * @since 1.9.0
 		 */
 		public static function process_background( int $post_id ): void {
+			// Builder-template skip-and-continue (issue #1274): never fetch
+			// non-renderable library templates for used CSS.
+			try {
+				if ( self::is_excluded_post( $post_id ) ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			$permalink = get_permalink( $post_id );
 			if ( ! $permalink ) {
 				return;
