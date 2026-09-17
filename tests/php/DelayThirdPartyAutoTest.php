@@ -269,6 +269,25 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Allowlist entries naming element attributes (not URL substrings)
+	 * exempt on the auto path too (parity with the manual path).
+	 */
+	public function test_auto_candidate_allowlist_matches_attributes(): void {
+		$this->stub_delay_guard_env();
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'delayJSThirdPartyAllowlist' => "my-gtm-loader\n",
+				),
+			)
+		);
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for candidate tests.
+		$tag = '<script id="my-gtm-loader" src="https://www.googletagmanager.com/gtm.js?id=GTM-X"></script>';
+		$this->assertFalse( $main->is_delay_third_party_auto_candidate( $tag, 'site-metrics' ) );
+	}
+
+	/**
 	 * First-party scripts stay eager in auto mode (no generic cross-origin rule).
 	 */
 	public function test_auto_candidate_first_party_stays_eager(): void {
