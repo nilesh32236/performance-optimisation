@@ -542,7 +542,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'varnishPurgeUrls' => 'array',
 				),
 				'file_optimisation'  => array(
-					'removeQueryStrings'    => 'scalar',
+					'removeQueryStrings'    => 'scalar', // Pruned #1373: legacy clients may still post it; sanitized then dropped on save.
 					'removeWooCSSJS'        => 'scalar',
 					'excludeUrlToKeepJSCSS' => 'scalar',
 					'removeCssJsHandle'     => 'scalar',

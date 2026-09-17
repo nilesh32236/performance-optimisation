@@ -5,9 +5,10 @@
  * @package PerformanceOptimise\Tests
  */
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Source-level absence assertions read local files.
+
 use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\Util;
-use Brain\Monkey\Actions;
 use Brain\Monkey\Functions;
 
 /**
@@ -162,109 +163,37 @@ class MainLegacyQueryStringsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * A stored legacy `true` value must schedule only the one-time removal
-	 * notice — never asset-URL filters — so `?ver` survives rendering.
+	 * The removal shim is gone (audit #1373): no notify method, no
+	 * admin_init registration — legacy keys simply do nothing.
 	 */
-	public function test_legacy_option_schedules_notice_not_asset_filters(): void {
-		$this->stub_main_construction( array( 'removeQueryStrings' => true ) );
-
-		$main = new Main();
-
-		$this->assertNotFalse(
-			Actions\has( 'admin_init', array( $main, 'maybe_notify_remove_query_strings_removal' ) ),
-			'Legacy opt-in must schedule only the one-time removal notice on admin_init'
-		);
-	}
-
-	/**
-	 * Default installs must not schedule the removal notice.
-	 */
-	public function test_default_state_schedules_no_notice(): void {
-		$this->stub_main_construction( array() );
-
-		$main = new Main();
-
+	public function test_removal_shim_fully_removed(): void {
 		$this->assertFalse(
-			Actions\has( 'admin_init', array( $main, 'maybe_notify_remove_query_strings_removal' ) ),
-			'Default installs must not schedule the removal notice'
+			method_exists( Main::class, 'maybe_notify_remove_query_strings_removal' ),
+			'Notify shim must be removed (#1373)'
 		);
 	}
 
 	/**
-	 * Build a Main instance without invoking the constructor.
-	 *
-	 * @param array $file_opt file_optimisation options to seed.
-	 * @return Main
+	 * No registration of the removed shim survives (source-level, mirroring
+	 * VersionGuardTest: constructing Main under Brain Monkey cannot
+	 * register array-callback hooks).
 	 */
-	private function make_main( array $file_opt ): Main {
-		$reflection = new \ReflectionClass( Main::class );
-		$main       = $reflection->newInstanceWithoutConstructor();
-
-		$options = $reflection->getProperty( 'options' );
-		$options->setValue(
-			$main,
-			array( 'file_optimisation' => $file_opt )
+	public function test_legacy_option_schedules_nothing(): void {
+		$source = (string) file_get_contents( dirname( __DIR__, 2 ) . '/includes/class-main.php' );
+		$this->assertStringNotContainsString(
+			'maybe_notify_remove_query_strings_removal',
+			$source,
+			'No removal notice registration may survive'
 		);
-
-		return $main;
 	}
 
 	/**
-	 * The one-time removal notice must log once and then stay silent.
+	 * Legacy stored keys still succeed through sanitization (fail-open).
 	 */
-	public function test_removal_notice_logs_once(): void {
-		$flag    = 'wppo_remove_query_strings_deprecated_logged';
-		$options = array();
-		Functions\when( 'get_option' )->alias(
-			static function ( $name, $fallback = false ) use ( &$options, $flag ) {
-				return array_key_exists( $name, $options ) ? $options[ $name ] : $fallback;
-			}
+	public function test_legacy_key_still_succeeds(): void {
+		$sanitized = Util::sanitize_settings_recursively(
+			array( 'file_optimisation' => array( 'removeQueryStrings' => true ) )
 		);
-		Functions\when( 'update_option' )->alias(
-			static function ( $name, $value, $autoload = null ) use ( &$options ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				$options[ $name ] = $value;
-				return true;
-			}
-		);
-		Functions\when( 'wp_kses_post' )->returnArg();
-
-		global $wpdb;
-
-		$main = $this->make_main( array( 'removeQueryStrings' => true ) );
-
-		$main->maybe_notify_remove_query_strings_removal();
-		$this->assertSame( 1, $wpdb->insert_calls, 'Legacy opt-in must produce a one-time activity log entry' );
-		$this->assertTrue( $options[ $flag ], 'One-time flag must be persisted as non-fatal bookkeeping' );
-
-		$main->maybe_notify_remove_query_strings_removal();
-		$this->assertSame( 1, $wpdb->insert_calls, 'Second call must stay silent once the flag is set' );
-	}
-
-	/**
-	 * Without a stored legacy value the notice must be a no-op (no I/O at all).
-	 */
-	public function test_removal_notice_is_noop_without_legacy_value(): void {
-		$reads  = 0;
-		$writes = 0;
-		Functions\when( 'get_option' )->alias(
-			static function ( $name, $fallback = false ) use ( &$reads ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				++$reads;
-				return $fallback;
-			}
-		);
-		Functions\when( 'update_option' )->alias(
-			static function ( $name, $value, $autoload = null ) use ( &$writes ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				++$writes;
-				return true;
-			}
-		);
-
-		global $wpdb;
-
-		$this->make_main( array() )->maybe_notify_remove_query_strings_removal();
-
-		$this->assertSame( 0, $reads, 'Default installs must not pay for a flag lookup' );
-		$this->assertSame( 0, $writes );
-		$this->assertSame( 0, $wpdb->insert_calls );
+		$this->assertTrue( is_array( $sanitized ), 'Legacy input must not fatal sanitization' );
 	}
 }
