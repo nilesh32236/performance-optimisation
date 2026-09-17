@@ -145,11 +145,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			if ( ! in_array( $key, $allowed, true ) ) {
 				return;
 			}
-			if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'wppo_dismiss_notice_' . $key ) ) {
+
+			// Capability-first (audit #1329): short-circuit unauthorized actors
+			// before spending verification work, and avoid leaking a
+			// nonce-validity oracle to low-privilege users. Dismissal stays
+			// idempotent via the wp_safe_redirect() below.
+			if ( ! current_user_can( 'manage_options' ) ) {
 				return;
 			}
-
-			if ( ! current_user_can( 'manage_options' ) ) {
+			if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'wppo_dismiss_notice_' . $key ) ) {
 				return;
 			}
 

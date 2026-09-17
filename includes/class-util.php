@@ -4127,7 +4127,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Optional `php -l` against the on-disk tmp file only (never the
 			// live file). Skipped when the tmp path is not a real readable
 			// file — e.g. under WP_Filesystem transports or unit-test mocks.
-			if ( '' !== $tmp_file_for_lint && function_exists( 'escapeshellarg' ) && defined( 'PHP_BINARY' ) && '' !== (string) constant( 'PHP_BINARY' ) ) {
+			// Audit #1329: both shell-outs in this plugin (`php -l` here,
+			// `nproc` in LiteSpeed_Crawler::get_load_limit()) use hardcoded
+			// commands with escapeshellarg() args only — future editors must
+			// never interpolate variables into these commands. Hardened hosts
+			// can disable this lint shell-out entirely via the filter below.
+			/**
+			 * Filter whether the atomic PHP writer may shell out to `php -l`.
+			 *
+			 * @since NEXT
+			 * @param bool $allow True to allow the guarded `php -l` syntax check.
+			 */
+			$allow_php_lint = function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_allow_php_lint_exec', true ) : true;
+			if ( $allow_php_lint && '' !== $tmp_file_for_lint && function_exists( 'escapeshellarg' ) && defined( 'PHP_BINARY' ) && '' !== (string) constant( 'PHP_BINARY' ) ) {
 				$disabled = '';
 				if ( function_exists( 'ini_get' ) ) {
 					$disabled = (string) ini_get( 'disable_functions' );

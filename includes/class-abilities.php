@@ -578,11 +578,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Permission callback for all abilities.
 		 *
+		 * Capability gate plus CSRF hardening for cookie-authenticated HTTP
+		 * transports (audit #1329): when a `wp_rest` nonce is presented it must
+		 * verify (mirroring Rest::permission_callback()); a cookie-authenticated
+		 * session presenting no valid nonce is denied. Non-cookie callers
+		 * (server-side PHP, WP-CLI, cron, application-password REST) carry no
+		 * nonce and keep the capability gate so read-only `can_*` checks and
+		 * operational abilities keep working outside the browser.
+		 *
 		 * @since 2.0.0
+		 * @since NEXT Added wp_rest nonce verification for cookie-authenticated HTTP calls.
 		 * @return bool Whether the current user can manage options.
 		 */
 		public static function permission_check(): bool {
-			return current_user_can( 'manage_options' );
+			if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
+				return false;
+			}
+
+			$nonce = '';
+			if ( isset( $_SERVER['HTTP_X_WP_NONCE'] ) && is_string( $_SERVER['HTTP_X_WP_NONCE'] ) ) {
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- Raw header path (headers are not slashed by WP); unslashed where available, sanitized below, mirroring Rest::permission_callback().
+				$nonce = function_exists( 'wp_unslash' ) ? (string) wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] ) : (string) $_SERVER['HTTP_X_WP_NONCE'];
+			} elseif ( isset( $_REQUEST['_wpnonce'] ) && is_string( $_REQUEST['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- This is the nonce gate; the value is verified below.
+				// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput -- This is the nonce gate; unslashed where available, sanitized and verified below.
+				$nonce = function_exists( 'wp_unslash' ) ? (string) wp_unslash( $_REQUEST['_wpnonce'] ) : (string) $_REQUEST['_wpnonce'];
+			}
+			$nonce = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $nonce ) : $nonce;
+
+			// A presented nonce must verify — fail closed on mismatch.
+			if ( '' !== $nonce ) {
+				if ( ! function_exists( 'wp_verify_nonce' ) ) {
+					return true;
+				}
+				return (bool) wp_verify_nonce( $nonce, 'wp_rest' );
+			}
+
+			// No nonce presented: deny cookie-authenticated HTTP sessions (the
+			// CSRF-reachable transport), identified by a live session token.
+			// Everything else (server-side, CLI, cron, non-cookie REST auth)
+			// keeps the capability gate. Core's own rest_cookie_check_errors()
+			// already enforces this for wp-abilities/v1; this closes the gap
+			// for any other cookie-authenticated transport.
+			if ( function_exists( 'wp_get_session_token' ) ) {
+				try {
+					if ( '' !== (string) wp_get_session_token() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			return true;
 		}
 
 		/**

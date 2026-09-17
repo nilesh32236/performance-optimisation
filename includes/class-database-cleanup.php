@@ -227,6 +227,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Contract: $select_sql must be already-prepared internal SQL (never
 		 * pass user input); callers are the hardcoded clean_* methods only.
+		 * Future editors: never interpolate variables into $select_sql — dynamic
+		 * values belong in the prepared DELETEs below, and table/column names
+		 * are constrained by the allowlists (audit #1329).
 		 * Destructive methods must only be reached via authorized callers
 		 * (REST manage_options, cron, WP-CLI) — direct PHP calls bypass
 		 * authorization.

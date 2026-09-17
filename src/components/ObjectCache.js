@@ -506,6 +506,30 @@ const ObjectCache = ( { options = {} } ) => {
 						</div>
 					</div>
 				) }
+				{ /* Audit #1329: the Redis config file holds no password but
+					discloses topology; Apache/OLS and IIS are shielded
+					automatically while Nginx needs a server-level rule. */ }
+				<div className="wppo-notice wppo-notice--info">
+					<FontAwesomeIcon icon={ faExclamationCircle } />
+					<div>
+						<strong>
+							{ __(
+								'Nginx servers need a manual rule',
+								'performance-optimisation'
+							) }
+						</strong>
+						<p>
+							{ __(
+								'If your server runs Nginx, .htaccess deny rules are ignored. Protect wp-content/wppo-redis-config.php with this server-block rule:',
+								'performance-optimisation'
+							) }{ ' ' }
+							<code>
+								location = /wp-content/wppo-redis-config.php
+								{ ' { deny all; }' }
+							</code>
+						</p>
+					</div>
+				</div>
 			</div>
 
 			{ cacheStatus.telemetry && cacheStatus.enabled && (

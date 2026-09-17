@@ -153,8 +153,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			} else {
 				// nproc*2 fallback when available and not filtered — respects LSCWP crawler.cls.php:684 lane.
 				// Default stays 4.0 for backward compat; operators can expose nproc*2 via filter wppo_crawler_load_limit.
-				$use_nproc = (bool) apply_filters( 'wppo_crawler_use_nproc', false );
-				if ( $use_nproc && function_exists( 'shell_exec' ) ) {
+				// Audit #1329: the shell-out below runs a hardcoded command with no
+				// arguments — future editors must never interpolate variables into
+				// it. Honours disable_functions so hardened hosts stay shell-free.
+				$use_nproc      = (bool) apply_filters( 'wppo_crawler_use_nproc', false );
+				$shell_disabled = false;
+				if ( function_exists( 'ini_get' ) ) {
+					$shell_disabled_list = array_map( 'trim', explode( ',', strtolower( (string) ini_get( 'disable_functions' ) ) ) );
+					$shell_disabled      = in_array( 'shell_exec', $shell_disabled_list, true );
+				}
+				if ( $use_nproc && function_exists( 'shell_exec' ) && ! $shell_disabled ) {
 					$nproc_raw = @shell_exec( 'nproc 2>/dev/null' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec -- nproc fallback for load limit
 					if ( is_string( $nproc_raw ) && '' !== trim( $nproc_raw ) && is_numeric( trim( $nproc_raw ) ) ) {
 						$nproc = (int) trim( $nproc_raw );
