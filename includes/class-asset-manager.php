@@ -87,7 +87,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 *
 		 * @since 1.1.0
 		 */
-		public function dequeue_selected_assets() {
+		public function dequeue_selected_assets(): void {
+			// Audit #1392: typed per convention.
 			$is_sandbox_preview = false;
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_sandbox_preview_active' ) ) {
@@ -146,7 +147,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 *
 		 * @since 1.1.0
 		 */
-		public function capture_page_assets() {
+		public function capture_page_assets(): void {
+			// Audit #1392: typed per convention.
 			if ( is_admin() ) {
 				return;
 			}

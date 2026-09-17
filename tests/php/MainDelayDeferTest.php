@@ -406,6 +406,32 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Audit #1392: defer generation split — the legacy path rewrites the
+	 * tag string (WP 6.2) while the modern path leaves the tag for the
+	 * core 6.3+ strategy API. Pins both halves so a fix applied to only
+	 * one path is caught by the other half failing.
+	 */
+	public function test_defer_modern_and_legacy_paths_agree(): void {
+		$this->stub_main_construction( array( 'deferJS' => true ) );
+
+		$main = new Main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for defer parity test.
+		$tag    = '<script src="https://example.com/app.js" id="app-js"></script>';
+		$modern = $main->add_defer_attribute( $tag, 'app' );
+		$legacy = $main->add_defer_attribute_legacy( $tag, 'app' );
+
+		// Legacy rewrites exactly one defer attribute...
+		$this->assertSame( 1, substr_count( $legacy, ' defer' ) );
+		// ...while modern leaves the tag for core strategy registration.
+		$this->assertSame( $tag, $modern );
+		// Both skip already-deferred tags (fill-gaps-only parity).
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for defer parity test.
+		$deferred = '<script src="https://example.com/app.js" defer></script>';
+		$this->assertSame( $deferred, $main->add_defer_attribute_legacy( $deferred, 'app' ) );
+	}
+
+	/**
 	 * #1089: a tag with no type attribute still receives the delay marker.
 	 *
 	 * WP 6.3+ omits type="text/javascript" for defer/async-strategy scripts, so

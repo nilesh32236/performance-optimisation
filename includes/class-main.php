@@ -1321,9 +1321,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$combine_for_registration = true;
 			}
 			if ( $combine_for_registration ) {
-				// TODO(#624): when WP 7.2 removes concatenation in favour of preloads,
-				// reassess whether combine_css() should defer to core preload emission
-				// or become an opt-in legacy toggle. No runtime change until then.
+				// NOTE(#624, audit #1392): reassess combine_css() only when WP 7.2
+				// concatenation behaviour is confirmed — speculative until then.
+				// No runtime change.
 				if ( ! $this->cache ) {
 					$this->cache = self::create_cache( $this->options );
 					if ( method_exists( $this->cache, 'set_image_optimisation' ) ) {
