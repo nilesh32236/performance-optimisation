@@ -863,20 +863,27 @@ const FileOptimization = ( {
 	} );
 	// Hydrate sandbox state when the Scripts tab opens so a staged
 	// experiment from a prior session is visible without re-staging.
-	// Skipped when staged data is already present (e.g. just staged in
-	// this session) so rapid tab toggling does not fire redundant
-	// authenticated calls.
+	// A ref guard (not sandboxStaged identity) skips refetching after a
+	// promote/discard reset to {} so the effect depends only on
+	// activeSubTab and does not refire on every staged-object change.
+	const sandboxHydratedRef = useRef( false );
+	// Unmount guard for sandbox save/promote/discard handlers so state is
+	// never set after unmount mid-request (audit #1354).
+	const isMountedRef = useRef( true );
+	useEffect( () => {
+		isMountedRef.current = true;
+		return () => {
+			isMountedRef.current = false;
+		};
+	}, [] );
 	useEffect( () => {
 		if ( activeSubTab !== 'scripts' ) {
 			return;
 		}
-		if (
-			sandboxStaged &&
-			typeof sandboxStaged === 'object' &&
-			Object.keys( sandboxStaged ).length > 0
-		) {
+		if ( sandboxHydratedRef.current ) {
 			return;
 		}
+		sandboxHydratedRef.current = true;
 		let cancelled = false;
 		( async () => {
 			try {
@@ -907,13 +914,16 @@ const FileOptimization = ( {
 		return () => {
 			cancelled = true;
 		};
-	}, [ activeSubTab, sandboxStaged ] );
+	}, [ activeSubTab ] );
 	const handleSandboxSave = async () => {
 		setSandboxBusy( true );
 		try {
 			const res = await apiCall( 'sandbox_save', {
 				settings: buildStagedFromForm(),
 			} );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			if ( res && res.success ) {
 				setSandboxStaged( res.data ? res.data.staged || {} : {} );
 				try {
@@ -922,6 +932,9 @@ const FileOptimization = ( {
 						{},
 						'GET'
 					);
+					if ( ! isMountedRef.current ) {
+						return;
+					}
 					if ( status && status.success && status.data ) {
 						setSandboxPreviewUrl( status.data.preview_url || '' );
 					}
@@ -945,6 +958,9 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch {
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notifySandbox( {
 				type: 'error',
 				message: __(
@@ -953,7 +969,9 @@ const FileOptimization = ( {
 				),
 			} );
 		} finally {
-			setSandboxBusy( false );
+			if ( isMountedRef.current ) {
+				setSandboxBusy( false );
+			}
 		}
 	};
 	const handleSandboxPromote = async () => {
@@ -2199,10 +2217,10 @@ const FileOptimization = ( {
 													id="wppoSinglePostId"
 													min="1"
 													step="1"
-													placeholder={ __(
-														'123',
-														'performance-optimisation'
-													) }
+													// Numeric example is locale-independent: never
+													// pass through __() where translators could
+													// break it.
+													placeholder="123"
 													value={ singlePostId }
 													onChange={ ( e ) =>
 														setSinglePostId(
@@ -2891,15 +2909,20 @@ const FileOptimization = ( {
 													) }
 												</a>
 											) : (
-												<span
+												<button
+													type="button"
 													className="wppo-button wppo-button--secondary"
-													aria-disabled="true"
+													disabled={ true }
+													title={ __(
+														'The staged preview URL is invalid and cannot be opened.',
+														'performance-optimisation'
+													) }
 												>
 													{ __(
 														'Open admin preview',
 														'performance-optimisation'
 													) }
-												</span>
+												</button>
 											) ) }
 										<button
 											type="button"

@@ -25,19 +25,25 @@ const PAD_Y = 26;
 /**
  * Builds an SVG polyline points string from a numeric series.
  *
+ * Non-numeric API values are coerced and filtered first so a malformed
+ * performance entry cannot yield NaN coordinates (audit #1354); an empty
+ * series renders no polyline.
+ *
  * @param {Array<number>} values Series of numeric values (0–100).
  * @return {string} Points string for an SVG polyline.
  */
 const buildPoints = ( values ) => {
-	if ( ! values || values.length < 1 ) {
+	const clean = ( Array.isArray( values ) ? values : [] )
+		.map( Number )
+		.filter( Number.isFinite );
+	if ( clean.length < 1 ) {
 		return '';
 	}
-	const max = Math.max( ...values, 100 );
-	const min = Math.min( ...values, 0 );
+	const max = Math.max( ...clean, 100 );
+	const min = Math.min( ...clean, 0 );
 	const range = max - min || 1;
-	const stepX =
-		( SPARK_WIDTH - PAD_X * 2 ) / Math.max( values.length - 1, 1 );
-	return values
+	const stepX = ( SPARK_WIDTH - PAD_X * 2 ) / Math.max( clean.length - 1, 1 );
+	return clean
 		.map( ( value, index ) => {
 			const x = PAD_X + index * stepX;
 			const y =

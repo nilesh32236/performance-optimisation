@@ -43,6 +43,11 @@ export const CheckboxOption = ( {
 	const uid = useId();
 	const id = idProp ?? uid;
 	const descriptionId = description ? `desc-${ id }` : undefined;
+	// A caller passing textareaValue without onTextareaChange would render
+	// a controlled-without-onChange (read-only) textarea and trip React's
+	// warning (audit #1354): default to a no-op and mark read-only instead.
+	const handleTextareaChange = onTextareaChange ?? ( () => {} );
+	const isTextareaReadOnly = ! onTextareaChange;
 
 	return (
 		<div
@@ -77,8 +82,9 @@ export const CheckboxOption = ( {
 								placeholder={ textareaPlaceholder || '' }
 								aria-label={ textareaPlaceholder || label }
 								name={ textareaName }
-								value={ textareaValue }
-								onChange={ onTextareaChange }
+								value={ textareaValue ?? '' }
+								onChange={ handleTextareaChange }
+								readOnly={ isTextareaReadOnly }
 							/>
 						</div>
 					) }

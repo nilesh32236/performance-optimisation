@@ -41,7 +41,18 @@ const FALLBACK_ALLOWED_KEYS = [
 	'litespeed_integration',
 	'llms_txt',
 ];
-const ALLOWED_IMPORT_KEYS =
+/**
+ * Resolve the allowed settings-file top-level keys at call time.
+ *
+ * wppoSettings may be localised after this module is imported, so a
+ * module-scope snapshot would stay stale (audit #1354). Reads the live
+ * global on every call with the static fallback for pre-localisation
+ * contexts (e.g. Jest without wppoSettings).
+ *
+ * @since 2.0.0
+ * @return {string[]} Allowed top-level keys.
+ */
+const getAllowedImportKeys = () =>
 	typeof wppoSettings !== 'undefined' &&
 	Array.isArray( wppoSettings.allowedSettingsKeys ) &&
 	wppoSettings.allowedSettingsKeys.length
@@ -67,13 +78,14 @@ const MAX_IMPORT_DEPTH = 10;
  * Maximum top-level keys accepted in an imported settings file.
  *
  * Mirrors the enforced invariant in validateImportData(): every top-level
- * key must be in ALLOWED_IMPORT_KEYS, so the cap is the allowlist length —
- * not an independent limit. Nested objects/arrays use
- * MAX_IMPORT_NESTED_KEYS instead.
+ * key must be allowlisted, so the cap is the allowlist length — not an
+ * independent limit. Resolved lazily via getAllowedImportKeys() (module
+ * scope would go stale when wppoSettings localises after import).
+ * Nested objects/arrays use MAX_IMPORT_NESTED_KEYS instead.
  *
  * @since 2.0.0
  */
-const MAX_IMPORT_TOP_KEYS = ALLOWED_IMPORT_KEYS.length;
+const getMaxImportTopKeys = () => getAllowedImportKeys().length;
 
 /**
  * Maximum keys/entries accepted in a nested object or array inside an
@@ -105,13 +117,14 @@ const validateImportData = ( data ) => {
 	if ( keys.length === 0 ) {
 		return false;
 	}
-	if ( keys.length > MAX_IMPORT_TOP_KEYS ) {
+	if ( keys.length > getMaxImportTopKeys() ) {
 		return false;
 	}
+	const allowedKeys = getAllowedImportKeys();
 	return keys.every( ( key ) => {
 		if (
 			isPollutionKey( key ) ||
-			! ALLOWED_IMPORT_KEYS.includes( key ) ||
+			! allowedKeys.includes( key ) ||
 			typeof data[ key ] !== 'object' ||
 			data[ key ] === null ||
 			Array.isArray( data[ key ] )
@@ -819,6 +832,7 @@ const PluginSetting = ( { options } ) => {
 					),
 				} );
 				setIsImporting( false );
+				resetFileInput();
 			}
 		};
 		reader.readAsText( selectedFile );
@@ -953,6 +967,11 @@ const PluginSetting = ( { options } ) => {
 											<div className="wppo-activity-text">
 												{ entry.activity }
 											</div>
+											{ entry.created_at && (
+												<time className="wppo-activity-time">
+													{ entry.created_at }
+												</time>
+											) }
 										</li>
 									) ) }
 								</ul>
@@ -1328,7 +1347,7 @@ const PluginSetting = ( { options } ) => {
 								<input
 									type="file"
 									id="import-config"
-									accept="application/json"
+									accept="application/json,.json"
 									onChange={ handleFileSelection }
 									ref={ fileInputRef }
 									className="wppo-input"
@@ -1388,9 +1407,10 @@ export {
 	redactSecrets,
 	isValidImportValue,
 	isPollutionKey,
+	getAllowedImportKeys,
+	getMaxImportTopKeys,
 	MAX_IMPORT_BYTES,
 	MAX_IMPORT_DEPTH,
-	MAX_IMPORT_TOP_KEYS,
 	MAX_IMPORT_NESTED_KEYS,
 	SECRET_KEY_PATTERN,
 };

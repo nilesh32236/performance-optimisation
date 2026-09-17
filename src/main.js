@@ -21,6 +21,28 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	const fallbackTimers = new Set();
 
 	/**
+	 * Shared AbortController for admin-bar clear-cache requests.
+	 *
+	 * Mirrors the hydrationController pattern in src/esi.js: navigation-time
+	 * aborts are expected and the catch below stays silent for AbortError so
+	 * no error notice fires after the user leaves the page (audit #1354).
+	 */
+	let requestController = null;
+	const getRequestSignal = () => {
+		if (
+			'undefined' === typeof AbortController ||
+			! requestController ||
+			requestController.signal.aborted
+		) {
+			if ( 'undefined' === typeof AbortController ) {
+				return undefined;
+			}
+			requestController = new AbortController();
+		}
+		return requestController.signal;
+	};
+
+	/**
 	 * Extract a safe log message from an error without leaking response
 	 * bodies. Server error objects can embed settings/status payloads and
 	 * console output persists for any extension/devtools user, so only the
@@ -64,6 +86,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				'X-WP-Nonce': wppoObject.nonce,
 			},
 			body: JSON.stringify( payload ),
+			signal: getRequestSignal(),
 		} )
 			.then( ( response ) => {
 				if ( ! response.ok ) {
@@ -109,6 +132,11 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				} );
 			} )
 			.catch( ( error ) => {
+				// Navigation-time aborts are expected — stay silent instead
+				// of logging and rethrowing into a detached page.
+				if ( error && error.name === 'AbortError' ) {
+					return new Promise( () => {} );
+				}
 				console.error(
 					`Error calling ${ endpointPath }: `,
 					getErrorLogMessage( error )
@@ -284,6 +312,9 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	window.addEventListener( 'pagehide', () => {
 		fallbackTimers.forEach( ( timer ) => clearTimeout( timer ) );
 		fallbackTimers.clear();
+		if ( requestController ) {
+			requestController.abort();
+		}
 	} );
 
 	const clearAllCacheBtn = document.querySelector(

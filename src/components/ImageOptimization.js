@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -213,7 +213,7 @@ const ImageOptimization = ( { options = {} } ) => {
 	const [ isApplyingLcp, setIsApplyingLcp ] = useState( false );
 
 	useEffect( () => {
-		let cancelled = false;
+		const controller = new AbortController();
 		setIsCandidateLoading( true );
 		// Promise.resolve() so a mocked apiCall resolving to undefined
 		// (and any sync throw) still lands in the fail-open path.
@@ -225,11 +225,12 @@ const ImageOptimization = ( { options = {} } ) => {
 				apiCall(
 					'lcp_preload_candidate?path=' + encodeURIComponent( '/' ),
 					{},
-					'GET'
+					'GET',
+					controller.signal
 				)
 			)
 			.then( ( res ) => {
-				if ( cancelled ) {
+				if ( controller.signal.aborted ) {
 					return;
 				}
 				if (
@@ -243,17 +244,19 @@ const ImageOptimization = ( { options = {} } ) => {
 					setLcpCandidateSource( res.data.source || '' );
 				}
 			} )
-			.catch( () => {
+			.catch( ( err ) => {
 				// Fail-open: no candidate is not an error state; the manual
-				// per-post picker path still works.
+				// per-post picker path still works. Aborts stay silent.
+				if ( err?.name === 'AbortError' || controller.signal.aborted ) {
+				}
 			} )
 			.finally( () => {
-				if ( ! cancelled ) {
+				if ( ! controller.signal.aborted ) {
 					setIsCandidateLoading( false );
 				}
 			} );
 		return () => {
-			cancelled = true;
+			controller.abort();
 		};
 	}, [] );
 
@@ -297,14 +300,16 @@ const ImageOptimization = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( error ) {
+			console.error(
+				'Failed applying LCP candidate:',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
-				message:
-					( error && error.message ) ||
-					__(
-						'Could not apply the LCP preload.',
-						'performance-optimisation'
-					),
+				message: __(
+					'Could not apply the LCP preload.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {
@@ -422,6 +427,7 @@ const ImageOptimization = ( { options = {} } ) => {
 			e.preventDefault();
 		}
 		setIsLoading( true );
+		dismiss();
 		try {
 			const res = await apiCall( 'update_settings', {
 				tab: 'image_optimisation',
@@ -454,11 +460,16 @@ const ImageOptimization = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( error ) {
+			console.error(
+				'Failed saving image optimisation settings:',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
-				message:
-					error.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {

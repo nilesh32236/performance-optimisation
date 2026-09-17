@@ -4,6 +4,7 @@ import {
 	useId,
 	useCallback,
 	useContext,
+	useRef,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
@@ -117,6 +118,15 @@ const ObjectCache = ( { options = {} } ) => {
 	} );
 	const [ confirmDisable, setConfirmDisable ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	// Unmount guard for handleAction(): skips setState/notify after unmount
+	// mid-action instead of setting state on an unmounted component.
+	const isMountedRef = useRef( true );
+	useEffect( () => {
+		isMountedRef.current = true;
+		return () => {
+			isMountedRef.current = false;
+		};
+	}, [] );
 
 	const fetchStatus = useCallback(
 		async ( signal ) => {
@@ -250,6 +260,9 @@ const ObjectCache = ( { options = {} } ) => {
 					: { mode: settings.mode } ),
 			};
 			const res = await apiCall( 'object_cache', payload );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 
 			if ( ! res?.success ) {
 				notify( {
@@ -278,6 +291,9 @@ const ObjectCache = ( { options = {} } ) => {
 			) {
 				await fetchStatus();
 			}
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: 'success',
 				message:
@@ -286,6 +302,9 @@ const ObjectCache = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} catch ( err ) {
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			console.error(
 				'Object cache action failed:',
 				getErrorLogMessage( err )
@@ -296,7 +315,9 @@ const ObjectCache = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setActiveAction( null );
+			if ( isMountedRef.current ) {
+				setActiveAction( null );
+			}
 		}
 	};
 

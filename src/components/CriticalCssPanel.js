@@ -11,11 +11,14 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { formatBytes } from '../lib/util';
 import { getErrorLogMessage } from '../lib/apiRequest';
 
-const READY_CONFIG = {
+// Status-label map is built at call time (not module scope) so translations
+// resolve against the current locale instead of freezing at import
+// (audit #1354). Icons/classNames are static; only labels go through __().
+const getReadyConfig = () => ( {
 	icon: faCheckCircle,
 	className: 'wppo-badge--success',
 	label: __( 'Generated', 'performance-optimisation' ),
-};
+} );
 
 // Length of the hash prefix shown when an entry has no label.
 const HASH_PREFIX_LEN = 8;
@@ -29,29 +32,34 @@ const pendingConfig = ( label ) => ( {
 	label,
 } );
 
-const STATUS_CONFIG = {
-	ready: READY_CONFIG,
-	// Copy (issue #1274 review): done === ready today, but a shared
-	// reference would let a future mutation hit both entries.
-	done: { ...READY_CONFIG },
-	queued: pendingConfig( __( 'Queued', 'performance-optimisation' ) ),
-	pending: pendingConfig( __( 'Pending', 'performance-optimisation' ) ),
-	processing: pendingConfig( __( 'Processing', 'performance-optimisation' ) ),
-	skipped: {
-		icon: faExclamationTriangle,
-		className: 'wppo-badge--warning',
-		label: __( 'Skipped', 'performance-optimisation' ),
-	},
-	failed: {
-		icon: faTimesCircle,
-		className: 'wppo-badge--error',
-		label: __( 'Failed', 'performance-optimisation' ),
-	},
-	none: {
-		icon: faExclamationTriangle,
-		className: 'wppo-badge--warning',
-		label: __( 'Not Generated', 'performance-optimisation' ),
-	},
+const getStatusConfig = () => {
+	const ready = getReadyConfig();
+	return {
+		ready,
+		// Copy (issue #1274 review): done === ready today, but a shared
+		// reference would let a future mutation hit both entries.
+		done: { ...ready },
+		queued: pendingConfig( __( 'Queued', 'performance-optimisation' ) ),
+		pending: pendingConfig( __( 'Pending', 'performance-optimisation' ) ),
+		processing: pendingConfig(
+			__( 'Processing', 'performance-optimisation' )
+		),
+		skipped: {
+			icon: faExclamationTriangle,
+			className: 'wppo-badge--warning',
+			label: __( 'Skipped', 'performance-optimisation' ),
+		},
+		failed: {
+			icon: faTimesCircle,
+			className: 'wppo-badge--error',
+			label: __( 'Failed', 'performance-optimisation' ),
+		},
+		none: {
+			icon: faExclamationTriangle,
+			className: 'wppo-badge--warning',
+			label: __( 'Not Generated', 'performance-optimisation' ),
+		},
+	};
 };
 
 /**
@@ -110,10 +118,11 @@ export const normalizeCcssEntry = ( hash, entry ) => {
  * @return {{icon: *, className: string, label: string}} Badge config.
  */
 export const statusConfigFor = ( statusKey ) => {
+	const config = getStatusConfig();
 	const hasOwn = Object.hasOwn
-		? Object.hasOwn( STATUS_CONFIG, statusKey )
-		: Object.prototype.hasOwnProperty.call( STATUS_CONFIG, statusKey );
-	return hasOwn ? STATUS_CONFIG[ statusKey ] : STATUS_CONFIG.none;
+		? Object.hasOwn( config, statusKey )
+		: Object.prototype.hasOwnProperty.call( config, statusKey );
+	return hasOwn ? config[ statusKey ] : config.none;
 };
 
 const CriticalCssPanel = ( {

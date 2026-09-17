@@ -33,6 +33,7 @@ const LoadingSubmitButton = ( {
 			className={ className }
 			disabled={ isDisabled }
 			aria-busy={ isLoading }
+			aria-live="polite"
 		>
 			{ isLoading && (
 				<FontAwesomeIcon
@@ -42,13 +43,11 @@ const LoadingSubmitButton = ( {
 					className="wppo-mr-8"
 				/>
 			) }
-			{ isLoading ? (
-				<span role="status" aria-live="polite">
-					{ loadingLabel || label || children }
-				</span>
-			) : (
-				<span>{ label || children }</span>
-			) }
+			<span>
+				{ isLoading
+					? loadingLabel || label || children
+					: label || children }
+			</span>
 		</button>
 	);
 };

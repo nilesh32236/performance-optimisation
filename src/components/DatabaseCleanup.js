@@ -203,12 +203,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				);
 				notify( {
 					type: 'error',
-					message:
-						error?.message ||
-						__(
-							'Failed to load counts.',
-							'performance-optimisation'
-						),
+					message: __(
+						'Failed to load counts.',
+						'performance-optimisation'
+					),
 					durationMs: 5000,
 				} );
 			} finally {
@@ -275,9 +273,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			);
 			notify( {
 				type: 'error',
-				message:
-					err?.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {
@@ -332,11 +331,22 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					response.message ||
 					__( 'Cleanup failed.', 'performance-optimisation' );
 				if ( failures ) {
+					// Map backend slugs to translated labels for display;
+					// the raw slugs go to console.error only.
+					console.error(
+						'Database cleanup failures:',
+						Object.keys( failures ).join( ', ' )
+					);
+					const failureLabels = Object.keys( failures ).map(
+						( slug ) =>
+							CLEANUP_TYPES.find( ( item ) => item.key === slug )
+								?.label || slug
+					);
 					errorMsg +=
 						' ' +
 						__( 'Failures:', 'performance-optimisation' ) +
 						' ' +
-						Object.keys( failures ).join( ', ' );
+						failureLabels.join( ', ' );
 				}
 				notify( {
 					type: 'error',
@@ -409,6 +419,8 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				link.download = truncated
 					? `wppo-expired-transients-partial-${ EXPORT_LIMIT }.json`
 					: 'wppo-expired-transients.json';
+				// Imperative download helper: object URLs are revoked right
+				// after the click so no blob URL leaks on repeated exports.
 				document.body.appendChild( link );
 				link.click();
 				link.remove();
@@ -418,8 +430,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 						type: 'warning',
 						message: sprintf(
 							// translators: %1$d is the number exported, %2$d is the export limit.
-							__(
+							_n(
+								'Exported first %1$d of more than %2$d expired transient (truncated). Purge and re-export for the rest.',
 								'Exported first %1$d of more than %2$d expired transients (truncated). Purge and re-export for the rest.',
+								count,
 								'performance-optimisation'
 							),
 							count,
@@ -738,6 +752,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								}
 								disabled={ isCleanDisabled }
 								isLoading={ loading[ item.key ] }
+								aria-disabled={ isCleanDisabled }
+								aria-describedby={
+									isCleanDisabled && count === 0
+										? `wppo-clean-disabled-${ item.key }`
+										: undefined
+								}
 								label={ __(
 									'Clean',
 									'performance-optimisation'
@@ -786,14 +806,15 @@ const DatabaseCleanup = ( { options = {} } ) => {
 													'performance-optimisation'
 												) }
 											>
+												{ cleanButton }
 												<span
-													tabIndex={ 0 }
-													aria-label={ __(
+													id={ `wppo-clean-disabled-${ item.key }` }
+													className="screen-reader-text"
+												>
+													{ __(
 														'No items to clean',
 														'performance-optimisation'
 													) }
-												>
-													{ cleanButton }
 												</span>
 											</Tooltip>
 										) : (

@@ -38,6 +38,20 @@ const InfoRow = ( { label, value } ) => (
 );
 
 /**
+ * Humanise a machine key (snake_case/kebab-case) for display when no
+ * translated label exists, instead of rendering the raw key (audit #1354).
+ *
+ * @param {string} key Raw data key.
+ * @return {string} Human-readable label.
+ */
+const humanizeKey = ( key ) =>
+	String( key ?? '' )
+		.replace( /[_-]+/g, ' ' )
+		.replace( /\s+/g, ' ' )
+		.trim()
+		.replace( /^./, ( c ) => c.toUpperCase() ) || '—';
+
+/**
  * A labelled table of InfoRow items.
  *
  * @param {Object} props
@@ -58,7 +72,7 @@ const InfoTable = ( { title, data, labels = {} } ) => {
 					{ Object.entries( data ).map( ( [ key, value ] ) => (
 						<InfoRow
 							key={ key }
-							label={ labels[ key ] || key }
+							label={ labels[ key ] || humanizeKey( key ) }
 							value={ value }
 						/>
 					) ) }
@@ -209,7 +223,11 @@ const SystemInfo = () => {
 
 			{ /* Error state */ }
 			{ notice && (
-				<NoticeBanner type={ notice.type } message={ notice.message } />
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
 			) }
 
 			{ /* Results — two-column grid of tables */ }

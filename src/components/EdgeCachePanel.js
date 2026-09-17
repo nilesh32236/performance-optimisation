@@ -7,6 +7,8 @@ import {
 } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { apiCall, patchSettingsCache } from '../lib/apiRequest';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faGlobe } from '@fortawesome/free-solid-svg-icons';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
@@ -145,7 +147,7 @@ const EdgeCachePanel = () => {
 	return (
 		<FeatureCard
 			title={ __( 'Edge HTML Cache', 'performance-optimisation' ) }
-			icon={ <i className="fas fa-globe"></i> }
+			icon={ <FontAwesomeIcon icon={ faGlobe } aria-hidden="true" /> }
 		>
 			{ notice && (
 				<NoticeBanner

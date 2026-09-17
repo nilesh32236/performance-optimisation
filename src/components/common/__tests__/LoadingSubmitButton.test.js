@@ -67,11 +67,17 @@ describe( 'LoadingSubmitButton', () => {
 		expect( button ).toHaveAttribute( 'aria-busy', 'true' );
 	} );
 
-	it( 'has no live region when idle and announces loading text while loading', () => {
+	it( 'announces loading text from the button live region while loading', () => {
 		const { rerender } = render(
 			<LoadingSubmitButton label="Submit" loadingLabel="Saving..." />
 		);
-		expect( screen.queryByRole( 'status' ) ).not.toBeInTheDocument();
+		// The live region lives on the button itself (not nested inside the
+		// disabled control, where announcements are unreliable).
+		const button = screen.getByRole( 'button', { name: /Submit/i } );
+		expect( button ).toHaveAttribute( 'aria-live', 'polite' );
+		expect(
+			button.querySelector( '[role="status"]' )
+		).not.toBeInTheDocument();
 
 		rerender(
 			<LoadingSubmitButton
@@ -80,8 +86,10 @@ describe( 'LoadingSubmitButton', () => {
 				loadingLabel="Saving..."
 			/>
 		);
-		const liveRegion = screen.getByRole( 'status' );
-		expect( liveRegion ).toBeInTheDocument();
-		expect( liveRegion ).toHaveTextContent( 'Saving...' );
+		const loadingButton = screen.getByRole( 'button', {
+			name: /Saving\.\.\./i,
+		} );
+		expect( loadingButton ).toHaveAttribute( 'aria-live', 'polite' );
+		expect( loadingButton ).toHaveTextContent( 'Saving...' );
 	} );
 } );

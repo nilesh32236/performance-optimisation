@@ -50,12 +50,18 @@ const LlmsPanel = () => {
 			: null
 	);
 	useEffect( () => {
+		// Saving guard (mirrors EdgeCachePanel): never clobber in-flight
+		// user edits when the global resyncs mid-save.
+		if ( saving ) {
+			return;
+		}
 		const s =
 			typeof wppoSettings !== 'undefined'
 				? wppoSettings?.settings?.llms_txt || {}
 				: {};
 		setEnabled( !! s.enabled );
 		setSource( s.source || 'both' );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ llmsKey ] );
 
 	const homeUrl =
@@ -66,6 +72,7 @@ const LlmsPanel = () => {
 
 	const handleSave = async () => {
 		setSaving( true );
+		dismiss();
 		try {
 			const response = await apiCall( 'update_settings', {
 				tab: 'llms_txt',

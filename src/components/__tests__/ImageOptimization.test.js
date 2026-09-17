@@ -14,6 +14,9 @@ import { apiCall } from '../../lib/apiRequest';
 // Mock the API request
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
+	getErrorLogMessage: jest.fn( ( error ) =>
+		error instanceof Error ? error.message : String( error )
+	),
 } ) );
 
 describe( 'ImageOptimization Component', () => {
@@ -311,7 +314,8 @@ describe( 'ImageOptimization Component', () => {
 		expect( apiCall ).toHaveBeenCalledWith(
 			'lcp_preload_candidate?path=' + encodeURIComponent( '/' ),
 			{},
-			'GET'
+			'GET',
+			expect.any( AbortSignal )
 		);
 	} );
 
@@ -436,7 +440,11 @@ describe( 'ImageOptimization Component', () => {
 		} );
 
 		await waitFor( () => {
-			expect( screen.getByText( /Network error/i ) ).toBeInTheDocument();
+			// Raw backend errors stay out of the UI; users see the
+			// translated fallback while the raw error is logged.
+			expect(
+				screen.getByText( /Could not apply the LCP preload/i )
+			).toBeInTheDocument();
 		} );
 	} );
 

@@ -4,6 +4,8 @@ import {
 	useCallback,
 	useRef,
 	useMemo,
+	lazy,
+	Suspense,
 } from '@wordpress/element';
 import {
 	apiCall,
@@ -29,21 +31,25 @@ import SwitchField from './common/SwitchField';
 import CheckboxOption from './common/CheckboxOption';
 import NoticeBanner from './common/NoticeBanner';
 import PerformanceAudit from './PerformanceAudit';
-import PageSpeedPanel from './PageSpeedPanel';
-import WebVitalsTrends from './WebVitalsTrends';
-import WebVitalsRum from './WebVitalsRum';
-import SuggestionsPanel from './SuggestionsPanel';
-import SystemInfo from './SystemInfo';
-import AutoloadedOptions from './AutoloadedOptions';
-import LlmsPanel from './LlmsPanel';
-import AiPanel from './AiPanel';
-import EdgeCachePanel from './EdgeCachePanel';
+// Below-fold panels are code-split so the initial admin bundle stays lean
+// (audit #1354). Above-fold cards (PerformanceAudit, WelcomePanel,
+// ImageOptimizationCard, RecentActivityCard) stay static.
+const PageSpeedPanel = lazy( () => import( './PageSpeedPanel' ) );
+const WebVitalsTrends = lazy( () => import( './WebVitalsTrends' ) );
+const WebVitalsRum = lazy( () => import( './WebVitalsRum' ) );
+const SuggestionsPanel = lazy( () => import( './SuggestionsPanel' ) );
+const SystemInfo = lazy( () => import( './SystemInfo' ) );
+const AutoloadedOptions = lazy( () => import( './AutoloadedOptions' ) );
+const LlmsPanel = lazy( () => import( './LlmsPanel' ) );
+const AiPanel = lazy( () => import( './AiPanel' ) );
+const EdgeCachePanel = lazy( () => import( './EdgeCachePanel' ) );
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
 import { __, sprintf } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
+import { formatBytes } from '../lib/util';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faServer,
@@ -224,7 +230,7 @@ const Dashboard = ( {
 
 	// Initialize state
 	const [ state, setState ] = useState( {
-		totalCacheSize: getWppoSettings( 'cache_size', '0 B' ),
+		totalCacheSize: getWppoSettings( 'cache_size', formatBytes( 0 ) ),
 		totalJs: getWppoSettings( 'total_js_css.js', 0 ),
 		totalCss: getWppoSettings( 'total_js_css.css', 0 ),
 		imageInfo: normalizeImageInfo( getWppoSettings( 'image_info', {} ) ),
@@ -597,7 +603,7 @@ const Dashboard = ( {
 						} );
 						refreshUpgradePurgeStatus();
 						updateState( {
-							totalCacheSize: '0 B',
+							totalCacheSize: formatBytes( 0 ),
 							totalJs: 0,
 							totalCss: 0,
 						} );
@@ -614,7 +620,11 @@ const Dashboard = ( {
 						} );
 					}
 				} )
-				.catch( () =>
+				.catch( ( err ) => {
+					console.error(
+						'Failed to clear cache:',
+						getErrorLogMessage( err )
+					);
 					notify( {
 						type: 'error',
 						message: __(
@@ -622,8 +632,8 @@ const Dashboard = ( {
 							'performance-optimisation'
 						),
 						durationMs: 5000,
-					} )
-				)
+					} );
+				} )
 				.finally( () => handleLoading( 'clear_cache', false ) );
 		},
 		[ handleLoading, updateState, notify, refreshUpgradePurgeStatus ]
@@ -691,7 +701,11 @@ const Dashboard = ( {
 					}
 				}
 			} )
-			.catch( () =>
+			.catch( ( err ) => {
+				console.error(
+					'Image optimisation failed:',
+					getErrorLogMessage( err )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -699,8 +713,8 @@ const Dashboard = ( {
 						'performance-optimisation'
 					),
 					durationMs: 5000,
-				} )
-			)
+				} );
+			} )
 			.finally( () => {
 				submittingRef.current = false;
 				handleLoading( 'optimize_images', false );
@@ -2237,36 +2251,50 @@ const Dashboard = ( {
 					onUrlChange={ handleAuditUrlChange }
 				/>
 
-				{ /* Phase 2 — SuggestionsPanel sits directly below PerformanceAudit (v1.6.0) */ }
-				{ allSuggestions.length > 0 && (
-					<SuggestionsPanel
-						suggestions={ allSuggestions }
-						onNavigate={ onNavigate }
+				{ /* Below-fold panels load on demand via code-splitting. */ }
+				<Suspense
+					fallback={
+						<div className="wppo-loading-placeholder">
+							<span>
+								{ __(
+									'Loading panels…',
+									'performance-optimisation'
+								) }
+							</span>
+						</div>
+					}
+				>
+					{ /* Phase 2 — SuggestionsPanel sits directly below PerformanceAudit (v1.6.0) */ }
+					{ allSuggestions.length > 0 && (
+						<SuggestionsPanel
+							suggestions={ allSuggestions }
+							onNavigate={ onNavigate }
+						/>
+					) }
+
+					{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
+					<PageSpeedPanel
+						url={ auditUrl }
+						onSuggestionsReady={ setPagespeedSuggestions }
 					/>
-				) }
 
-				{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
-				<PageSpeedPanel
-					url={ auditUrl }
-					onSuggestionsReady={ setPagespeedSuggestions }
-				/>
+					{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
+					<WebVitalsTrends url={ auditUrl } />
 
-				{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
-				<WebVitalsTrends url={ auditUrl } />
+					{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
+					<WebVitalsRum />
 
-				{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
-				<WebVitalsRum />
+					{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
+					<AutoloadedOptions />
 
-				{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
-				<AutoloadedOptions />
+					<LlmsPanel />
 
-				<LlmsPanel />
+					<AiPanel />
 
-				<AiPanel />
+					<EdgeCachePanel />
 
-				<EdgeCachePanel />
-
-				<SystemInfo />
+					<SystemInfo />
+				</Suspense>
 			</div>
 
 			{ /* Image optimization + activity log */ }

@@ -154,7 +154,7 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
-	it( 'renders fallback label for unknown keys and omits missing sections in InfoTable', async () => {
+	it( 'renders humanised fallback label for unknown keys and omits missing sections in InfoTable', async () => {
 		global.wppoSettings = { translations: {} };
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: true,
@@ -175,7 +175,11 @@ describe( 'SystemInfo Component', () => {
 		fireEvent.click( loadButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'unknown_key' ) ).toBeInTheDocument();
+			// Raw snake_case keys are humanised instead of rendered verbatim.
+			expect( screen.getByText( 'Unknown key' ) ).toBeInTheDocument();
+			expect(
+				screen.queryByText( 'unknown_key' )
+			).not.toBeInTheDocument();
 			expect( screen.queryByText( 'Database' ) ).not.toBeInTheDocument();
 			expect( screen.queryByText( 'WordPress' ) ).not.toBeInTheDocument();
 		} );

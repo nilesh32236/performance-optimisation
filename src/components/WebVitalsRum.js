@@ -110,8 +110,15 @@ const WebVitalsRum = () => {
 
 	const fmtMs = ( value ) =>
 		value === null || value === undefined ? '—' : formatMs( value );
-	const fmtCls = ( value ) =>
-		value === null || value === undefined ? '—' : value.toFixed( 3 );
+	const fmtCls = ( value ) => {
+		if ( value === null || value === undefined ) {
+			return '—';
+		}
+		// The API may return a string CLS value; coerce before toFixed so a
+		// non-numeric payload renders the fallback instead of throwing.
+		const num = Number( value );
+		return Number.isFinite( num ) ? num.toFixed( 3 ) : '—';
+	};
 
 	let body;
 	if ( notice ) {

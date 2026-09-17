@@ -499,7 +499,7 @@ describe( 'PreloadSettings Component', () => {
 
 		await waitFor( () => {
 			expect(
-				screen.getByText( /queued: 3, done: 7, failed: 1/i )
+				screen.getByText( /Preload progress — 3 queued, 7 done, 1 failed/i )
 			).toBeInTheDocument();
 		} );
 		expect(

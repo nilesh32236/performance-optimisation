@@ -129,9 +129,13 @@ let pendingRefresh = null;
  * guard) so multiple simultaneous 403s share a single admin-ajax round-trip.
  *
  * @since 1.6.0
+ * @since NEXT Accepts an optional AbortSignal so a refresh started before
+ * unmount can be cancelled instead of mutating wppoSettings.nonce after
+ * the caller is gone (audit #1354).
+ * @param {AbortSignal} [signal] Optional AbortSignal for cancellation.
  * @return {Promise<string>} The refreshed nonce string.
  */
-const refreshNonce = async () => {
+const refreshNonce = async ( signal ) => {
 	if ( pendingRefresh ) {
 		return pendingRefresh;
 	}
@@ -149,6 +153,7 @@ const refreshNonce = async () => {
 					action: 'wppo_get_nonce',
 					nonce: wppoSettings.nonce_refresh,
 				} ),
+				signal,
 			} );
 			if ( ! res.ok ) {
 				throw new Error(
@@ -283,7 +288,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				! isRetrying &&
 				( response.status === 401 || response.status === 403 )
 			) {
-				const freshNonce = await refreshNonce();
+				const freshNonce = await refreshNonce( signal );
 				const retryResponse = await doFetch( freshNonce );
 				return handleResponse( retryResponse, true );
 			}
@@ -306,7 +311,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 					'Nonce retry failed — authentication error persists.'
 				);
 			}
-			const freshNonce = await refreshNonce();
+			const freshNonce = await refreshNonce( signal );
 			const retryResponse = await doFetch( freshNonce );
 			return handleResponse( retryResponse, true );
 		}

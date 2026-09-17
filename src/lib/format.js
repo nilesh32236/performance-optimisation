@@ -1,8 +1,15 @@
 /**
  * Shared metric formatting helpers (single source for ms/percent/bytes).
  *
+ * Units are composed through sprintf() with translatable patterns — the
+ * same treatment as formatBytes() in lib/util.js — so translators can
+ * reorder or adapt unit suffixes instead of receiving hardcoded English
+ * template literals (audit #1354).
+ *
  * @since NEXT
  */
+
+import { __, sprintf } from '@wordpress/i18n';
 
 /**
  * Format milliseconds.
@@ -45,7 +52,11 @@ export const formatMs = ( value ) => {
 	if ( ! Number.isFinite( num ) ) {
 		return '—';
 	}
-	return `${ Math.round( num ) } ms`;
+	return sprintf(
+		/* translators: %d: milliseconds value. */
+		__( '%d ms', 'performance-optimisation' ),
+		Math.round( num )
+	);
 };
 
 /**
@@ -77,7 +88,12 @@ export const formatPercent = ( value, options = {} ) => {
 	} else {
 		pct = num <= 1 && num >= 0 ? num * 100 : num;
 	}
-	return `${ Math.round( pct * 10 ) / 10 }%`;
+	const pctStr = String( Math.round( pct * 10 ) / 10 );
+	return sprintf(
+		/* translators: %s: percent value (number only, no % sign). */
+		__( '%s%%', 'performance-optimisation' ),
+		pctStr
+	);
 };
 
 /**
@@ -101,17 +117,33 @@ export const formatBytesShared = ( value ) => {
 	if ( ! Number.isFinite( num ) || num < 0 ) {
 		return '—';
 	}
+	/* translators: 1: size value, 2: unit. */
+	const pattern = __( '%1$s %2$s', 'performance-optimisation' );
 	if ( num < 1024 ) {
-		return `${ Math.round( num ) } B`;
+		return sprintf(
+			pattern,
+			String( Math.round( num ) ),
+			__( 'B', 'performance-optimisation' )
+		);
 	}
-	const units = [ 'KB', 'MB', 'GB', 'TB', 'PB' ];
+	const units = [
+		__( 'KB', 'performance-optimisation' ),
+		__( 'MB', 'performance-optimisation' ),
+		__( 'GB', 'performance-optimisation' ),
+		__( 'TB', 'performance-optimisation' ),
+		__( 'PB', 'performance-optimisation' ),
+	];
 	let size = num / 1024;
 	let unit = 0;
 	while ( size >= 1024 && unit < units.length - 1 ) {
 		size /= 1024;
 		unit++;
 	}
-	return `${ Math.round( size * 10 ) / 10 } ${ units[ unit ] }`;
+	return sprintf(
+		pattern,
+		String( Math.round( size * 10 ) / 10 ),
+		units[ unit ]
+	);
 };
 
 /**

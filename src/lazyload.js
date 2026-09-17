@@ -106,7 +106,7 @@ const AUTO_SIZES_SUPPORTED = ( () => {
 		probe.remove();
 		return supported;
 	} catch ( _e ) {
-		console.warn( 'WPPO: auto-sizes probe failed', _e );
+		console.warn( 'WPPO: auto-sizes probe failed', getLogMessage( _e ) );
 	}
 	return false;
 } )();
@@ -1105,7 +1105,10 @@ async function loadScripts() {
 			}
 		}
 
-		setTimeout( () => {
+		// Schedule the post-script image flush on a tracked handle so
+		// teardownLazyload() can cancel it before it re-creates observers.
+		loadImagesTimer = setTimeout( () => {
+			loadImagesTimer = null;
 			loadImages();
 		}, 200 );
 	} )();
@@ -1249,14 +1252,10 @@ observeViewportScripts();
 
 // Only register interaction event listeners if there are scripts using interaction strategy.
 if ( delayedScripts.length > 0 && hasInteractionScripts( delayedScripts ) ) {
-	const triggerEvents = [
-		'mouseenter',
-		'mousedown',
-		'mouseover',
-		'touchstart',
-		'scroll',
-		'keydown',
-	];
+	// mouseover subsumes mouseenter (both fire on the same first pointer
+	// entry), so the pair only duplicated document listeners for one flush
+	// (audit #1354). mousedown covers click-driven engagement.
+	const triggerEvents = [ 'mousedown', 'touchstart', 'scroll', 'keydown' ];
 	const loadHandler = () => {
 		triggerEvents.forEach( ( event ) =>
 			document.removeEventListener( event, loadHandler )
@@ -1325,6 +1324,28 @@ let backgroundObserver = null;
 let nativePlaceholderObserver = null;
 
 /**
+ * Module-local handle for the deferred loadImages() flush scheduled by
+ * loadScripts().
+ *
+ * Tracked so teardownLazyload() (pagehide/beforeunload) can cancel it —
+ * otherwise the timer could re-create observers after teardown (audit #1354).
+ *
+ * @type {ReturnType<typeof setTimeout>|null}
+ */
+let loadImagesTimer = null;
+
+/**
+ * Module-local handles for video placeholder load-fallback timers.
+ *
+ * The 30s fallback captures el/iframe; untracked timers pin those DOM nodes
+ * until they fire. Tracked here so teardownLazyload() clears them, and the
+ * callback additionally guards on el.isConnected (audit #1354).
+ *
+ * @type {Set<ReturnType<typeof setTimeout>>}
+ */
+const videoFallbackTimers = new Set();
+
+/**
  * Module-local handle for the safety-scan interval.
  *
  * The id is mirrored to window.wppoSafetyScanId for backward compatibility
@@ -1369,6 +1390,12 @@ const clearSafetyScan = () => {
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
 	clearSafetyScan();
+	if ( loadImagesTimer !== null ) {
+		clearTimeout( loadImagesTimer );
+		loadImagesTimer = null;
+	}
+	videoFallbackTimers.forEach( ( timer ) => clearTimeout( timer ) );
+	videoFallbackTimers.clear();
 	if ( scriptRemovalObserver ) {
 		scriptRemovalObserver.disconnect();
 		scriptRemovalObserver = null;
@@ -2861,7 +2888,15 @@ const initVideoPlaceholders = () => {
 			iframe.allow = 'autoplay; fullscreen';
 			iframe.allowFullscreen = true;
 			iframe.loading = 'lazy';
-			iframe.title = 'YouTube video player';
+			// Localizable via the PHP-provided script module data
+			// (script_module_data_wppo-lazyload filter, `videoPlayerTitle`);
+			// falls back to English when untranslated (audit #1354).
+			iframe.title =
+				moduleData &&
+				'string' === typeof moduleData.videoPlayerTitle &&
+				moduleData.videoPlayerTitle
+					? moduleData.videoPlayerTitle
+					: 'YouTube video player';
 			iframe.style.cssText =
 				'position:absolute;inset:0;width:100%;height:100%;border:0;';
 
@@ -2957,12 +2992,19 @@ const initVideoPlaceholders = () => {
 
 			iframe.addEventListener( 'load', onLoad );
 
-			// Fallback: show iframe even if load event never fires
-			setTimeout( () => {
+			// Fallback: show iframe even if load event never fires. Tracked so
+			// teardownLazyload() can cancel it (no pinned DOM nodes), and
+			// guarded on el.isConnected so a detached placeholder is untouched.
+			const fallbackTimer = setTimeout( () => {
+				videoFallbackTimers.delete( fallbackTimer );
+				if ( ! el.isConnected ) {
+					return;
+				}
 				if ( el.contains( iframe ) && iframe.style.opacity !== '1' ) {
 					onLoad();
 				}
 			}, 30000 );
+			videoFallbackTimers.add( fallbackTimer );
 		};
 
 		el.addEventListener( 'click', loadVideo );

@@ -43,7 +43,7 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		jest.isolateModules( () => {
 			require( '../lazyload' );
 		} );
-		document.dispatchEvent( new Event( 'mouseover' ) );
+		document.dispatchEvent( new Event( 'mousedown' ) );
 		return Promise.resolve();
 	};
 

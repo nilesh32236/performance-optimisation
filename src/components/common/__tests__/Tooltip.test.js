@@ -128,10 +128,21 @@ describe( 'Tooltip', () => {
 			'.wppo-tooltip-container'
 		);
 
-		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
+		// Hidden tooltips are aria-hidden and unreferenced so AT cannot
+		// resolve a hidden node; hovering wires aria-describedby.
+		expect( tooltipContainer ).not.toHaveAttribute( 'aria-describedby' );
 		expect( tooltipContainer ).not.toHaveAttribute( 'role' );
+		expect(
+			container.querySelector( '.wppo-tooltip-content' )
+		).toHaveAttribute( 'aria-hidden', 'true' );
 		expect(
 			screen.getByRole( 'button', { name: /Hover Me/i } )
 		).toBeInTheDocument();
+
+		fireEvent.mouseEnter( tooltipContainer );
+		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
+		expect(
+			container.querySelector( '.wppo-tooltip-content' )
+		).toHaveAttribute( 'aria-hidden', 'false' );
 	} );
 } );

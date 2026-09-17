@@ -34,7 +34,7 @@ import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 import NoticeBanner from './common/NoticeBanner';
 
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 // apiKeyConfigured is now derived inside the component for reactivity.
 
@@ -97,7 +97,16 @@ const scoreStatus = ( score ) => {
 const ScoreGauge = ( { label, score } ) => {
 	const status = scoreStatus( score );
 	return (
-		<div className={ `wppo-score-gauge wppo-score-gauge--${ status }` }>
+		<div
+			className={ `wppo-score-gauge wppo-score-gauge--${ status }` }
+			role="img"
+			aria-label={ sprintf(
+				/* translators: 1: metric label, 2: score. */
+				__( '%1$s score: %2$d', 'performance-optimisation' ),
+				label,
+				score
+			) }
+		>
 			<div className="wppo-score-gauge__circle">
 				<span className="wppo-score-gauge__value">{ score }</span>
 			</div>

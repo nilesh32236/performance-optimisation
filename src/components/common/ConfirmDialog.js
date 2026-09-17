@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from '@wordpress/element';
+import { useEffect, useRef, useCallback, useId } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 
@@ -33,6 +33,9 @@ const ConfirmDialog = ( {
 	const confirmBtnRef = useRef( null );
 	const focusableRef = useRef( [] );
 	const previouslyFocusedRef = useRef( null );
+	// Unique title id per instance so two simultaneously mounted dialogs
+	// never produce duplicate ids / mislabelled dialogs (audit #1354).
+	const titleId = useId();
 
 	const handleKeyDown = useCallback(
 		( e ) => {
@@ -44,7 +47,15 @@ const ConfirmDialog = ( {
 			// cannot escape the modal in single-control edge cases (e.g. a
 			// disabled button leaving one tab stop).
 			if ( e.key === 'Tab' && dialogRef.current ) {
-				const focusable = focusableRef.current;
+				// Rebuilt live on every keydown so dynamic children added
+				// while open (e.g. async detail lists) join the trap cycle
+				// instead of leaving a stale list (audit #1354).
+				const focusable = Array.from(
+					dialogRef.current.querySelectorAll(
+						'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+					)
+				);
+				focusableRef.current = focusable;
 				if ( focusable.length === 0 ) {
 					return;
 				}
@@ -88,7 +99,9 @@ const ConfirmDialog = ( {
 		} else {
 			focusableRef.current = [];
 		}
-	}, [ isOpen ] );
+		// Children included so async content added while open refreshes the
+		// trap list (the keydown handler also rebuilds live per press).
+	}, [ isOpen, children ] );
 
 	useEffect( () => {
 		if ( isOpen && confirmBtnRef.current ) {
@@ -157,10 +170,10 @@ const ConfirmDialog = ( {
 				ref={ dialogRef }
 				role="dialog"
 				aria-modal="true"
-				aria-labelledby="wppo-dialog-title"
+				aria-labelledby={ titleId }
 				onClick={ ( e ) => e.stopPropagation() }
 			>
-				<h3 id="wppo-dialog-title">
+				<h3 id={ titleId }>
 					<FontAwesomeIcon
 						icon={ faExclamationTriangle }
 						aria-hidden="true"

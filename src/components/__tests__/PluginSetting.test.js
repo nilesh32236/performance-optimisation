@@ -32,7 +32,8 @@ import PluginSetting, {
 	validateImportData,
 	isValidImportValue,
 	isPollutionKey,
-	MAX_IMPORT_TOP_KEYS,
+	getAllowedImportKeys,
+	getMaxImportTopKeys,
 } from '../PluginSetting';
 import { apiCall, fetchRecentActivities } from '../../lib/apiRequest';
 
@@ -504,15 +505,33 @@ describe( 'PluginSetting', () => {
 	} );
 
 	it( 'caps top-level import keys at the allowlist length', () => {
-		expect( MAX_IMPORT_TOP_KEYS ).toBeGreaterThan( 0 );
+		expect( getMaxImportTopKeys() ).toBeGreaterThan( 0 );
+		expect( getMaxImportTopKeys() ).toBe( getAllowedImportKeys().length );
 		expect(
 			validateImportData( { file_optimisation: { minifyJS: true } } )
 		).toBe( true );
 	} );
 
+	it( 'resolves the allowlist lazily from the live wppoSettings', () => {
+		global.wppoSettings = {
+			...global.wppoSettings,
+			allowedSettingsKeys: [ 'file_optimisation', 'custom_tab' ],
+		};
+		expect( getAllowedImportKeys() ).toEqual( [
+			'file_optimisation',
+			'custom_tab',
+		] );
+		expect( validateImportData( { custom_tab: { enabled: true } } ) ).toBe(
+			true
+		);
+		expect(
+			validateImportData( { database_cleanup: { enabled: true } } )
+		).toBe( false );
+	} );
+
 	it( 'rejects over-cap and unknown-key import payloads', () => {
 		const overCap = {};
-		for ( let i = 0; i < MAX_IMPORT_TOP_KEYS + 1; i++ ) {
+		for ( let i = 0; i < getMaxImportTopKeys() + 1; i++ ) {
 			overCap[ `unknown_key_${ i }` ] = {};
 		}
 		expect( validateImportData( overCap ) ).toBe( false );

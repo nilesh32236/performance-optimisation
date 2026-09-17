@@ -192,12 +192,56 @@ export const getWooRuleRemediation = ( kind, pass ) => {
 /**
  * Run the read-only WooCommerce cache self-test with an AbortSignal.
  *
- * Thin shared wrapper so both call sites hit the same endpoint + signal
- * contract; AbortController creation, timeout, and stale-run guards stay
- * with the calling component (which owns its refs).
+ * Enforces WOO_SELF_TEST_TIMEOUT_MS internally (combined with the caller
+ * signal) so a hung request cannot depend on each caller remembering to
+ * implement the timeout itself (audit #1354).
  *
  * @since NEXT
  * @param {AbortSignal} [signal] Optional AbortSignal for cancellation.
  * @return {Promise<Object>} Resolved self-test response.
  */
-export const runWooSelfTest = ( signal ) => fetchWooCacheSelfTest( signal );
+export const runWooSelfTest = ( signal ) => {
+	let timeoutSignal = null;
+	try {
+		if ( 'function' === typeof AbortSignal.timeout ) {
+			timeoutSignal = AbortSignal.timeout( WOO_SELF_TEST_TIMEOUT_MS );
+		}
+	} catch {
+		timeoutSignal = null;
+	}
+	if ( ! timeoutSignal ) {
+		return fetchWooCacheSelfTest( signal );
+	}
+	if ( ! signal ) {
+		return fetchWooCacheSelfTest( timeoutSignal );
+	}
+	try {
+		if ( 'function' === typeof AbortSignal.any ) {
+			return fetchWooCacheSelfTest(
+				AbortSignal.any( [ signal, timeoutSignal ] )
+			);
+		}
+	} catch {
+		// Fall through to the manual race below.
+	}
+	// Fallback for runtimes without AbortSignal.any: race the caller signal
+	// against the timeout via a linked controller.
+	const controller = new AbortController();
+	const onAbort = () => controller.abort( signal.reason );
+	if ( signal.aborted ) {
+		controller.abort( signal.reason );
+	} else {
+		signal.addEventListener( 'abort', onAbort, { once: true } );
+	}
+	timeoutSignal.addEventListener(
+		'abort',
+		() => {
+			signal.removeEventListener( 'abort', onAbort );
+			controller.abort( timeoutSignal.reason );
+		},
+		{ once: true }
+	);
+	return fetchWooCacheSelfTest( controller.signal ).finally( () => {
+		signal.removeEventListener( 'abort', onAbort );
+	} );
+};

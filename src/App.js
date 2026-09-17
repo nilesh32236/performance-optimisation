@@ -340,23 +340,52 @@ const App = () => {
 	}, [] );
 
 	useEffect( () => {
-		if ( activitiesControllerRef.current ) {
-			activitiesControllerRef.current.abort();
-		}
-		const activitiesController = new AbortController();
-		activitiesControllerRef.current = activitiesController;
+		// Only create/abort the controller for a fetch that will actually
+		// run (audit #1354): recreating all three on every tab change
+		// aborted unrelated in-flight rules/CCSS requests even when the
+		// hasFetched guards made the other fetches no-ops.
+		const willFetchActivities =
+			( activeTab === 'overview' ||
+				activeTab === 'dashboard' ||
+				recentActivities.length === 0 ) &&
+			! hasFetchedActivities.current;
+		const willFetchRules = ! ( serverRules || hasFetchedRules.current );
+		const willFetchCcss = ! (
+			hasFetchedCcss.current && 0 === ccssRefreshTrigger
+		);
 
-		if ( rulesControllerRef.current ) {
-			rulesControllerRef.current.abort();
+		let activitiesController = null;
+		if ( willFetchActivities ) {
+			if ( activitiesControllerRef.current ) {
+				activitiesControllerRef.current.abort();
+			}
+			activitiesController = new AbortController();
+			activitiesControllerRef.current = activitiesController;
+		} else {
+			activitiesController = activitiesControllerRef.current;
 		}
-		const rulesController = new AbortController();
-		rulesControllerRef.current = rulesController;
 
-		if ( ccssControllerRef.current ) {
-			ccssControllerRef.current.abort();
+		let rulesController = null;
+		if ( willFetchRules ) {
+			if ( rulesControllerRef.current ) {
+				rulesControllerRef.current.abort();
+			}
+			rulesController = new AbortController();
+			rulesControllerRef.current = rulesController;
+		} else {
+			rulesController = rulesControllerRef.current;
 		}
-		const ccssController = new AbortController();
-		ccssControllerRef.current = ccssController;
+
+		let ccssController = null;
+		if ( willFetchCcss ) {
+			if ( ccssControllerRef.current ) {
+				ccssControllerRef.current.abort();
+			}
+			ccssController = new AbortController();
+			ccssControllerRef.current = ccssController;
+		} else {
+			ccssController = ccssControllerRef.current;
+		}
 
 		const fetchActivities = async () => {
 			if (
@@ -457,9 +486,15 @@ const App = () => {
 		] );
 
 		return () => {
-			activitiesController.abort();
-			rulesController.abort();
-			ccssController.abort();
+			if ( willFetchActivities && activitiesController ) {
+				activitiesController.abort();
+			}
+			if ( willFetchRules && rulesController ) {
+				rulesController.abort();
+			}
+			if ( willFetchCcss && ccssController ) {
+				ccssController.abort();
+			}
 		};
 		// Intentionally minimal deps: hasFetched* refs (not state) gate
 		// re-fetches, so effect-written state (recentActivities, serverRules)

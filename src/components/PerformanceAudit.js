@@ -218,7 +218,9 @@ const MetricOverview = ( { result } ) => (
 				<Tooltip content={ METRIC_INFO.load_time() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
-				{ result.load_time } s
+				{ Number.isFinite( Number( result.load_time ) )
+					? `${ result.load_time } s`
+					: '--' }
 			</span>
 			<div className="wppo-audit-overview-card__status">
 				<StatusBadge
@@ -232,7 +234,9 @@ const MetricOverview = ( { result } ) => (
 				<Tooltip content={ METRIC_INFO.ttfb() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
-				{ result.ttfb } ms
+				{ Number.isFinite( Number( result.ttfb ) )
+					? `${ result.ttfb } ms`
+					: '--' }
 			</span>
 			<div className="wppo-audit-overview-card__status">
 				<StatusBadge

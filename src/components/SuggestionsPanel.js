@@ -23,7 +23,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import StatusBadge from './common/StatusBadge';
 
-import { __ } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 
 /**
  * Maps fix_action values to WPPO sidebar tab names.
@@ -73,7 +73,95 @@ const SuggestionIcon = ( { status } ) => {
 };
 
 /**
+ * Format a count-based custom unit with _n() plural handling.
+ *
+ * Custom units not listed here must arrive pre-formatted from the server
+ * (audit #1354). Returns null when the value is not a finite number or the
+ * unit is not a known countable noun.
+ *
+ * @since NEXT
+ * @param {*}      value Metric value.
+ * @param {string} unit  Unit label.
+ * @return {string|null} Formatted display string, or null.
+ */
+const formatCountableUnit = ( value, unit ) => {
+	const count = Number( value );
+	if ( ! Number.isFinite( count ) ) {
+		return null;
+	}
+	switch ( String( unit ).toLowerCase() ) {
+		case 'requests':
+			return sprintf(
+				/* translators: %d: number of requests. */
+				_n(
+					'%d request',
+					'%d requests',
+					count,
+					'performance-optimisation'
+				),
+				count
+			);
+		case 'assets':
+			return sprintf(
+				/* translators: %d: number of assets. */
+				_n(
+					'%d asset',
+					'%d assets',
+					count,
+					'performance-optimisation'
+				),
+				count
+			);
+		case 'items':
+			return sprintf(
+				/* translators: %d: number of items. */
+				_n( '%d item', '%d items', count, 'performance-optimisation' ),
+				count
+			);
+		case 'images':
+			return sprintf(
+				/* translators: %d: number of images. */
+				_n(
+					'%d image',
+					'%d images',
+					count,
+					'performance-optimisation'
+				),
+				count
+			);
+		case 'scripts':
+			return sprintf(
+				/* translators: %d: number of scripts. */
+				_n(
+					'%d script',
+					'%d scripts',
+					count,
+					'performance-optimisation'
+				),
+				count
+			);
+		case 'resources':
+			return sprintf(
+				/* translators: %d: number of resources. */
+				_n(
+					'%d resource',
+					'%d resources',
+					count,
+					'performance-optimisation'
+				),
+				count
+			);
+		default:
+			return null;
+	}
+};
+
+/**
  * Format a suggestion value for display.
+ *
+ * Custom units not covered by the explicit branches above or COUNTABLE_UNITS
+ * must arrive pre-formatted from the server — the fallthrough renders them
+ * as-is with no pluralization.
  *
  * @param {*}      value Metric value.
  * @param {string} unit  Unit label.
@@ -128,6 +216,12 @@ export const formatValue = ( value, unit ) => {
 	}
 	if ( unit === 'ms' ) {
 		return `${ Math.round( value ) }ms`;
+	}
+	if ( typeof unit === 'string' ) {
+		const countable = formatCountableUnit( value, unit );
+		if ( countable !== null ) {
+			return countable;
+		}
 	}
 	return `${ value } ${ unit }`;
 };

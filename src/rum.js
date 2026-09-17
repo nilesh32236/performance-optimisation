@@ -503,6 +503,25 @@ export const sanitizeRumValues = ( raw ) => {
 		}
 	};
 
+	// Named so send() can detach it once the beacon is sent — otherwise it
+	// keeps firing send() on every hidden transition after the fact.
+	const onVisibilityChange = () => {
+		if ( document.visibilityState === 'hidden' ) {
+			send();
+		}
+	};
+
+	const detachVisibilityListener = () => {
+		try {
+			document.removeEventListener(
+				'visibilitychange',
+				onVisibilityChange
+			);
+		} catch {
+			// Listener removal unavailable; send() still guards on sent.
+		}
+	};
+
 	const send = () => {
 		if ( sent ) {
 			return;
@@ -519,6 +538,7 @@ export const sanitizeRumValues = ( raw ) => {
 				scheduleTimerId = null;
 			}
 			disconnectObservers();
+			detachVisibilityListener();
 			return;
 		}
 		// Cap metric magnitudes client-side (mirrors the server-side
@@ -541,6 +561,7 @@ export const sanitizeRumValues = ( raw ) => {
 			scheduleTimerId = null;
 		}
 		disconnectObservers();
+		detachVisibilityListener();
 
 		// Field LCP device × template segmentation (issue #986): attach
 		// optional device/template dimensions fail-open. Detection failures
@@ -782,11 +803,7 @@ export const sanitizeRumValues = ( raw ) => {
 		window.addEventListener( 'load', scheduleSend, { once: true } );
 	}
 
-	document.addEventListener( 'visibilitychange', () => {
-		if ( document.visibilityState === 'hidden' ) {
-			send();
-		}
-	} );
+	document.addEventListener( 'visibilitychange', onVisibilityChange );
 	window.addEventListener(
 		'pagehide',
 		() => {

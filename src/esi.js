@@ -320,14 +320,18 @@ const applyFragmentToElement = ( el, frag ) => {
  * loading label forever. Mirrors the applyFragmentToElement() ARIA cleanup
  * and leaves a translated failure label in place of the loading label.
  *
+ * Keeps role="status" with aria-live="polite" so the failure label remains
+ * exposed to assistive technology (audit #1354: a role-less aria-label is
+ * ignored). Only aria-busy is cleared.
+ *
  * @since 2.0.0
  * @param {HTMLElement} el Placeholder element.
  * @return {void}
  */
 const markElementFailed = ( el ) => {
 	el.removeAttribute( 'aria-busy' );
-	el.removeAttribute( 'aria-live' );
-	el.removeAttribute( 'role' );
+	el.setAttribute( 'role', 'status' );
+	el.setAttribute( 'aria-live', 'polite' );
 	el.setAttribute(
 		'aria-label',
 		__( 'Embedded content failed to load.', 'performance-optimisation' )
@@ -478,6 +482,35 @@ const requestEsiFragment = async ( block, nonce, signal ) => {
 };
 
 /**
+ * Extract a safe log message without leaking response payloads.
+ *
+ * Hydration errors can embed fragment HTML; console output persists in
+ * devtools, so only the message is logged, never the full error object.
+ * Mirrors getLogMessage() in src/lazyload.js; kept local so this bundle
+ * stays standalone.
+ *
+ * @since NEXT
+ * @param {*} err Caught error value.
+ * @return {string} Safe message string.
+ */
+const getErrorLogMessage = ( err ) => {
+	if ( err instanceof Error ) {
+		return err.message || 'Unknown error';
+	}
+	if ( 'string' === typeof err ) {
+		return err.slice( 0, 500 ) || 'Unknown error';
+	}
+	if ( err === null || 'undefined' === typeof err ) {
+		return 'Unknown error';
+	}
+	try {
+		return String( err ).slice( 0, 500 );
+	} catch {
+		return 'Unknown error';
+	}
+};
+
+/**
  * Hydrate a single placeholder element.
  *
  * @since 2.0.0
@@ -511,8 +544,9 @@ export const hydrateElement = async ( el, signal ) => {
 			__(
 				'WPPO ESI hydration failed; embedded content could not be loaded.',
 				'performance-optimisation'
-			),
-			err
+			) +
+				' ' +
+				getErrorLogMessage( err )
 		);
 		markElementFailed( el );
 	}
@@ -525,19 +559,23 @@ export const hydrateElement = async ( el, signal ) => {
  * fetch; the sanitized fragment is fanned out (cloned per extra element)
  * so N identical blocks produce one network request.
  *
+ * The placeholder list is queried inside run() (at frame time) rather than
+ * before requestAnimationFrame, so placeholders inserted between scheduling
+ * and the frame are still hydrated (audit #1354).
+ *
  * @since 2.0.0
  * @param {AbortSignal|undefined} signal Optional abort signal.
  * @return {void}
  */
 export const hydrateESIPlaceholders = ( signal ) => {
-	const els = document.querySelectorAll( '[data-wppo-esi]' );
-	if ( ! els.length ) {
-		return;
-	}
 	const activeSignal = isAbortSignal( signal )
 		? signal
 		: getHydrationSignal();
 	const run = () => {
+		const els = document.querySelectorAll( '[data-wppo-esi]' );
+		if ( ! els.length ) {
+			return;
+		}
 		const groups = new Map();
 		els.forEach( ( el ) => {
 			const info = readBlockInfo( el );
@@ -581,8 +619,9 @@ export const hydrateESIPlaceholders = ( signal ) => {
 						__(
 							'WPPO ESI hydration failed; embedded content could not be loaded.',
 							'performance-optimisation'
-						),
-						err
+						) +
+							' ' +
+							getErrorLogMessage( err )
 					);
 					targets.forEach( ( el ) => markElementFailed( el ) );
 				}
@@ -592,8 +631,9 @@ export const hydrateESIPlaceholders = ( signal ) => {
 				__(
 					'WPPO ESI hydration failed; embedded content could not be loaded.',
 					'performance-optimisation'
-				),
-				err
+				) +
+					' ' +
+					getErrorLogMessage( err )
 			);
 		} );
 	};
