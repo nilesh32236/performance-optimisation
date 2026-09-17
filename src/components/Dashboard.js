@@ -1457,10 +1457,10 @@ const Dashboard = ( {
 						className="wppo-select"
 						id="wppoCacheLife"
 						name="cacheLife"
-					value={ cacheLife }
-					onChange={ handleCacheLifeChange }
-					aria-describedby="wppoCacheLife-desc"
-				>
+						value={ cacheLife }
+						onChange={ handleCacheLifeChange }
+						aria-describedby="wppoCacheLife-desc"
+					>
 						<option value={ 0 }>
 							{ __( 'Never expire', 'performance-optimisation' ) }
 						</option>
