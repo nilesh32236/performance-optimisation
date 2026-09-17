@@ -1332,11 +1332,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 						'error'  => __( 'Invalid post ID.', 'performance-optimisation' ),
 					);
 				}
-				if ( ! function_exists( 'as_has_scheduled_action' ) || ! as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
-					as_enqueue_async_action(
-						'wppo_used_css_generate',
-						array( 'post_id' => $post_id ),
-						'performance_optimisation'
+				// Atomic-first on AS 4.x (issue #1408): the `$unique` insert dedupes
+				// hook+args+group in the store, closing the check-then-act race.
+				// A 0 return is ambiguous (deduped vs failure): re-probe the guard
+				// once so a foreign winner still reports queued while a real
+				// scheduler failure reports an error instead of a phantom job.
+				$job_args = array( 'post_id' => $post_id );
+				$job_id   = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+				if ( 0 === $job_id ) {
+					$already_pending = false;
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$already_pending = false;
+						}
+					}
+					if ( $already_pending ) {
+						return array( 'queued' => 1 );
+					}
+					return array(
+						'queued' => 0,
+						'error'  => __( 'Used CSS regeneration could not be queued.', 'performance-optimisation' ),
 					);
 				}
 				return array( 'queued' => 1 );

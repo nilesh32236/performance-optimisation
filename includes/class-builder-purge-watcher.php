@@ -484,11 +484,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				$ttl       = defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS + 30 : 90;
 				$scheduled = false;
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
+					// Atomic-first on AS 4.x (issue #1408): the `$unique` insert
+					// dedupes the fixed empty-args hook+group in the store,
+					// closing the check-then-act race. The legacy guard survives
+					// inside the helper for older schedulers.
+					$job_id = Util::enqueue_unique_async_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' );
+					if ( $job_id > 0 ) {
+						$scheduled = true;
+					} else {
+						// A 0 is deduped-or-failed; either way no new job runs,
+						// so report false and keep the schedule retryable.
 						return false;
 					}
-					as_enqueue_async_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' );
-					$scheduled = true;
 				} elseif ( function_exists( 'wp_schedule_single_event' ) ) {
 					if ( function_exists( 'wp_next_scheduled' ) && wp_next_scheduled( self::DRIFT_PURGE_HOOK ) ) {
 						return false;
@@ -1515,11 +1522,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			unset( $reason );
 			try {
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
+					// Atomic-first on AS 4.x (issue #1408): see
+					// schedule_deferred_drift_purge() — the `$unique` insert
+					// dedupes the fixed empty-args hook+group in the store.
+					$job_id = Util::enqueue_unique_async_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' );
+					if ( $job_id > 0 ) {
 						return true;
 					}
-					as_enqueue_async_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' );
-					return true;
+					// A 0 is deduped-or-failed: probe once so an already-pending
+					// purge still reports true (enqueued-or-pending contract)
+					// while a real scheduler failure falls through to WP-Cron.
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							if ( as_has_scheduled_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
 				}
 				if ( function_exists( 'wp_schedule_single_event' ) ) {
 					if ( function_exists( 'wp_next_scheduled' ) && wp_next_scheduled( self::UPGRADE_PURGE_HOOK, array() ) ) {

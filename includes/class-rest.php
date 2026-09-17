@@ -1633,6 +1633,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 				// Schedule background jobs via Action Scheduler with deduplication.
+				// Atomic-first on AS 4.x (issue #1408): Util::enqueue_unique_async_action()
+				// passes the explicit `$unique` flag so hook+args+group dedupe happens
+				// atomically in the store — no racy check-then-act and no per-item
+				// as_has_scheduled_action() SELECT (saves N queries per bulk request).
+				// The snapshot above stays as an in-flight/in-request map only; a 0
+				// return means deduped-or-failed and is never counted as queued.
 				foreach ( $webp_images as $webp_image ) {
 					$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
@@ -1647,17 +1653,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
-							$scheduled[ $dedup_key ] = true;
-							continue;
-						}
-						as_enqueue_async_action(
+						$job_id                  = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
 						$scheduled[ $dedup_key ] = true;
-						++$jobs_queued;
+						if ( $job_id > 0 ) {
+							++$jobs_queued;
+						}
 					}
 				}
 
@@ -1675,17 +1679,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
-							$scheduled[ $dedup_key ] = true;
-							continue;
-						}
-						as_enqueue_async_action(
+						$job_id                  = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
 						$scheduled[ $dedup_key ] = true;
-						++$jobs_queued;
+						if ( $job_id > 0 ) {
+							++$jobs_queued;
+						}
 					}
 				}
 
@@ -3028,22 +3030,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 				$job_args = array( 'post_id' => $post_id );
-				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
-					return $this->send_response(
-						array(
-							'mode'    => 'single',
-							'post_id' => $post_id,
-						),
-						true,
-						202,
-						__( 'Used CSS regeneration already queued.', 'performance-optimisation' )
-					);
+				// Atomic-first on AS 4.x (issue #1408): the `$unique` insert dedupes
+				// hook+args+group in the store, closing the check-then-act race where
+				// two concurrent requests both passed as_has_scheduled_action() and
+				// double-queued. A 0 return is ambiguous (deduped vs failure), so
+				// re-probe the guard once to report "already queued" honestly.
+				$job_id = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+				if ( 0 === $job_id ) {
+					$already_pending = false;
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$already_pending = false;
+						}
+					}
+					if ( $already_pending ) {
+						return $this->send_response(
+							array(
+								'mode'    => 'single',
+								'post_id' => $post_id,
+							),
+							true,
+							202,
+							__( 'Used CSS regeneration already queued.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response( null, false, 500, __( 'Used CSS regeneration could not be queued.', 'performance-optimisation' ) );
 				}
-				as_enqueue_async_action(
-					'wppo_used_css_generate',
-					$job_args,
-					'performance_optimisation'
-				);
 				return $this->send_response(
 					array(
 						'mode'    => 'single',
