@@ -1435,6 +1435,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
 				return true;
 			}
+			// Disk-safe guard (issue #1428): randomized per-request query
+			// values (?ver=<timestamp|uniqid|rand>) churn the combined
+			// output and can blow the file-count cap — exclude them from
+			// combining. Guarded by the additive cacheRandomizedQueryGuard
+			// setting (default on) and filterable via
+			// wppo_exclude_randomized_from_combine. Fail-open: guard
+			// failures fall through to the explicit exclusion list.
+			try {
+				$guard_on = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_cap_settings' ) ) {
+					$cap      = self::get_cache_cap_settings();
+					$guard_on = ! empty( $cap['randomized_guard'] );
+				}
+				if ( $guard_on && is_string( $src ) && '' !== $src && self::is_randomized_query_asset( $src ) ) {
+					$excluded = true;
+					if ( function_exists( 'apply_filters' ) ) {
+						$excluded = (bool) apply_filters( 'wppo_exclude_randomized_from_combine', true, $handle, $src );
+					}
+					if ( $excluded ) {
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			if ( empty( $exclude_combine_css ) ) {
 				return false;
 			}
@@ -6175,18 +6200,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Additive `cache_settings` keys (issue #1162): `cacheMaxSizeMB`
 		 * (default 512), `cacheSizeWarnRatio` (default 0.8),
-		 * `cacheSizeEnforce` (default true). Missing or malformed stored
+		 * `cacheSizeEnforce` (default true). Disk-safe slice (issue #1428):
+		 * `cacheMaxFiles` (default 5000, clamp 100-100000) and
+		 * `cacheRandomizedQueryGuard` (default true). Missing or malformed stored
 		 * values fall back to defaults; enforcement never blocks the
 		 * frontend — the cap only warns first, then evicts oldest entries.
 		 *
 		 * @since NEXT
-		 * @return array{max_mb:int,warn_ratio:float,enforce:bool}
+		 * @return array{max_mb:int,warn_ratio:float,enforce:bool,max_files:int,randomized_guard:bool}
 		 */
 		public static function get_cache_cap_settings(): array {
 			$defaults = array(
-				'max_mb'     => 512,
-				'warn_ratio' => 0.8,
-				'enforce'    => true,
+				'max_mb'           => 512,
+				'warn_ratio'       => 0.8,
+				'enforce'          => true,
+				'max_files'        => 5000,
+				'randomized_guard' => true,
 			);
 			try {
 				$settings = array();
@@ -6210,6 +6239,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$parsed = filter_var( $settings['cacheSizeEnforce'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 					if ( null !== $parsed ) {
 						$defaults['enforce'] = $parsed;
+					}
+				}
+				if ( isset( $settings['cacheMaxFiles'] ) && is_numeric( $settings['cacheMaxFiles'] ) ) {
+					$max_files = (int) $settings['cacheMaxFiles'];
+					if ( $max_files >= 100 && $max_files <= 100000 ) {
+						$defaults['max_files'] = $max_files;
+					}
+				}
+				if ( array_key_exists( 'cacheRandomizedQueryGuard', $settings ) ) {
+					$parsed = filter_var( $settings['cacheRandomizedQueryGuard'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					if ( null !== $parsed ) {
+						$defaults['randomized_guard'] = $parsed;
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -6250,19 +6291,112 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Total cached-page file count for the current domain.
+		 *
+		 * Fail-open: returns 0 when the filesystem or directory is
+		 * unavailable. Shares the single-walk {@see calculate_directory_stats()}
+		 * enumeration with {@see get_cache_size_bytes()} so cap accounting
+		 * and eviction never drift.
+		 *
+		 * @since NEXT
+		 * @return int File count, or 0 on failure.
+		 */
+		public static function get_cache_file_count(): int {
+			try {
+				$instance = new self();
+				if ( ! $instance->get_filesystem() ) {
+					return 0;
+				}
+				$dir = trailingslashit( $instance->cache_root_dir );
+				if ( '' !== $instance->domain ) {
+					$dir .= $instance->domain;
+				}
+				if ( ! $instance->filesystem->is_dir( $dir ) ) {
+					return 0;
+				}
+				$stats = $instance->calculate_directory_stats( $dir );
+				return max( 0, (int) ( $stats['count'] ?? 0 ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Whether an asset URL carries a randomized per-request query value.
+		 *
+		 * Matches `?ver=<timestamp|uniqid|rand>`-style churn that would
+		 * regenerate combined output on every request and defeat the
+		 * file-count cap. Fail-open: any parse failure returns false.
+		 * Filterable via `wppo_exclude_randomized_from_combine`.
+		 *
+		 * @since NEXT
+		 * @param string $src Asset src URL.
+		 * @return bool True when the query looks randomized.
+		 */
+		public static function is_randomized_query_asset( string $src ): bool {
+			try {
+				$src = trim( $src );
+				if ( '' === $src ) {
+					return false;
+				}
+				$query = '';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parts = wp_parse_url( $src, PHP_URL_QUERY );
+					$query = is_string( $parts ) ? $parts : '';
+				} elseif ( function_exists( 'parse_url' ) ) {
+					$parts = parse_url( $src, PHP_URL_QUERY ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+					$query = is_string( $parts ) ? $parts : '';
+				}
+				if ( '' === $query ) {
+					return false;
+				}
+				$randomized_keys = array( 'ver', 'version', 'v', 't', 'ts', 'timestamp', 'time', 'rand', 'random', 'nonce', '_' );
+				$pairs           = explode( '&', $query );
+				foreach ( $pairs as $pair ) {
+					$kv    = explode( '=', $pair, 2 );
+					$key   = strtolower( trim( (string) ( $kv[0] ?? '' ) ) );
+					$value = trim( (string) ( $kv[1] ?? '' ) );
+					if ( '' === $value || ! in_array( $key, $randomized_keys, true ) ) {
+						continue;
+					}
+					$decoded = function_exists( 'urldecode' ) ? urldecode( $value ) : $value;
+					// Long digit runs (timestamps), long hex (uniqid/md5), or mixed alnum tokens.
+					if ( 1 === preg_match( '/^\d{8,}$/', $decoded ) ) {
+						return true;
+					}
+					if ( 1 === preg_match( '/^[0-9a-f]{10,}$/i', $decoded ) ) {
+						return true;
+					}
+					if ( 1 === preg_match( '/^[0-9a-z]{12,}$/i', $decoded ) && 1 === preg_match( '/[0-9]/', $decoded ) && 1 === preg_match( '/[a-z]/i', $decoded ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Warn-before-enforce cap status for the current domain cache.
 		 *
 		 * States: `ok` (under warn threshold), `warn` (over warn threshold
 		 * but under cap, or over cap with enforcement off), `over` (over cap
 		 * with enforcement on). Never fatal; all failures report `ok`.
+		 * Both cap dimensions (bytes + file count) feed the state; either
+		 * dimension can push `ok` to `warn`/`over`.
 		 *
 		 * @since NEXT
-		 * @return array{bytes:int,cap_bytes:int,warn_bytes:int,state:string,enforce:bool,max_mb:int}
+		 * @return array{bytes:int,cap_bytes:int,warn_bytes:int,state:string,enforce:bool,max_mb:int,files:int,cap_files:int,warn_files:int}
 		 */
 		public static function get_cache_cap_status(): array {
 			$cap        = self::get_cache_cap_settings();
 			$cap_bytes  = $cap['max_mb'] * 1024 * 1024;
 			$warn_bytes = (int) ( $cap_bytes * $cap['warn_ratio'] );
+			$cap_files  = (int) $cap['max_files'];
+			$warn_files = (int) ( $cap_files * $cap['warn_ratio'] );
 			$status     = array(
 				'bytes'      => 0,
 				'cap_bytes'  => $cap_bytes,
@@ -6270,13 +6404,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				'state'      => 'ok',
 				'enforce'    => $cap['enforce'],
 				'max_mb'     => $cap['max_mb'],
+				'files'      => 0,
+				'cap_files'  => $cap_files,
+				'warn_files' => $warn_files,
 			);
 			try {
 				$bytes           = self::get_cache_size_bytes();
+				$files           = self::get_cache_file_count();
 				$status['bytes'] = $bytes;
-				if ( $bytes >= $cap_bytes ) {
+				$status['files'] = $files;
+				$over_bytes      = $bytes >= $cap_bytes;
+				$over_files      = $files >= $cap_files;
+				if ( $over_bytes || $over_files ) {
 					$status['state'] = $cap['enforce'] ? 'over' : 'warn';
-				} elseif ( $bytes >= $warn_bytes ) {
+				} elseif ( $bytes >= $warn_bytes || $files >= $warn_files ) {
 					$status['state'] = 'warn';
 				}
 				// Surface a persisted warning flag so the SPA can render it
@@ -6300,14 +6441,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Warn-before-enforce size-cap check after a cache write.
+		 * Warn-before-enforce size+count cap check after a cache write.
 		 *
 		 * Throttled to at most one directory walk per 5 minutes via a
 		 * transient lock so frontend writes stay cheap. When usage passes
-		 * the warn threshold a warning transient is set (honest UI signal);
-		 * when usage passes the cap and enforcement is on, the oldest
-		 * entries are evicted until back under the cap. Never blocks the
-		 * frontend: every failure path returns silently.
+		 * either warn threshold (bytes or file count) a warning transient
+		 * is set (honest UI signal + admin alert); when usage passes
+		 * either cap and enforcement is on, the oldest entries are evicted
+		 * until back under both caps. Never blocks the frontend: every
+		 * failure path returns silently.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -6326,26 +6468,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( false !== get_transient( $lock_key ) ) {
 					return;
 				}
-				set_transient( $lock_key, 1, 5 * MINUTE_IN_SECONDS );
+				$lock_ttl = defined( 'MINUTE_IN_SECONDS' ) ? 5 * MINUTE_IN_SECONDS : 300;
+				set_transient( $lock_key, 1, $lock_ttl );
 
 				$status   = self::get_cache_cap_status();
 				$bytes    = (int) $status['bytes'];
+				$files    = (int) ( $status['files'] ?? 0 );
 				$warn_key = Util::transient_key( 'wppo_cache_size_warning' );
-				if ( $bytes >= (int) $status['warn_bytes'] ) {
-					set_transient( $warn_key, 1, 12 * HOUR_IN_SECONDS );
+				$warned   = $bytes >= (int) $status['warn_bytes'] || $files >= (int) ( $status['warn_files'] ?? PHP_INT_MAX );
+				if ( $warned ) {
+					$warn_ttl = defined( 'HOUR_IN_SECONDS' ) ? 12 * HOUR_IN_SECONDS : 43200;
+					set_transient( $warn_key, 1, $warn_ttl );
 				} else {
-					delete_transient( $warn_key );
+					if ( function_exists( 'delete_transient' ) ) {
+						delete_transient( $warn_key );
+					}
 					return;
 				}
-				if ( $bytes < (int) $status['cap_bytes'] ) {
+				if ( $bytes < (int) $status['cap_bytes'] && $files < (int) ( $status['cap_files'] ?? PHP_INT_MAX ) ) {
 					return;
 				}
 				if ( empty( $status['enforce'] ) ) {
 					return;
 				}
+				$evicted = false;
 				$to_free = $bytes - (int) $status['cap_bytes'];
 				if ( $to_free > 0 ) {
 					self::evict_oldest_cache_entries( $to_free );
+					$evicted = true;
+				}
+				$cap_files = (int) ( $status['cap_files'] ?? 0 );
+				if ( $cap_files > 0 && $files >= $cap_files ) {
+					self::evict_oldest_cache_files_by_count( $files - $cap_files + 1 );
+					$evicted = true;
+				}
+				if ( $evicted ) {
 					self::bump_stats_cache();
 				}
 			} catch ( \Throwable $e ) {
@@ -6400,6 +6557,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				unset( $e );
 			}
 			return max( 0, $freed );
+		}
+
+		/**
+		 * Evict oldest cached pages until the file count drops by the given amount.
+		 *
+		 * Oldest-mtime-first via the shared {@see collect_cache_entries_by_age()}
+		 * enumeration so byte-cap and file-count-cap eviction can never drift.
+		 * Bounded to 2000 deletions per run. Fail-open: filesystem failures
+		 * stop silently.
+		 *
+		 * @since NEXT
+		 * @param int $files_to_free Minimum entries to remove.
+		 * @return int Entries actually removed (best effort).
+		 */
+		public static function evict_oldest_cache_files_by_count( int $files_to_free ): int {
+			$removed = 0;
+			try {
+				if ( $files_to_free <= 0 ) {
+					return 0;
+				}
+				$instance = new self();
+				if ( ! $instance->get_filesystem() ) {
+					return 0;
+				}
+				$dir = trailingslashit( $instance->cache_root_dir );
+				if ( '' !== $instance->domain ) {
+					$dir .= $instance->domain;
+				}
+				$entries = $instance->collect_cache_entries_by_age( $dir );
+				if ( empty( $entries ) ) {
+					return 0;
+				}
+				usort(
+					$entries,
+					static function ( $a, $b ) {
+						return ( (int) ( $a['mtime'] ?? 0 ) ) <=> ( (int) ( $b['mtime'] ?? 0 ) );
+					}
+				);
+				$budget = min( count( $entries ), 2000, max( 0, $files_to_free ) );
+				for ( $i = 0; $i < $budget; ++$i ) {
+					$file = (string) ( $entries[ $i ]['path'] ?? '' );
+					if ( '' === $file || ! $instance->is_path_contained( $file ) ) {
+						continue;
+					}
+					$instance->delete_cache_files( $file );
+					++$removed;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return max( 0, $removed );
 		}
 
 		/**

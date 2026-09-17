@@ -4141,6 +4141,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
+			// Disk-safe slice (issue #1428): cached-page file count for the
+			// dashboard size/count surface. Fail-open to 0; multisite-safe
+			// via Util::transient_key().
+			$cache_count = 0;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_stats' ) ) {
+					if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+						$cached_stats = wp_cache_get_salted( 'wppo_cache_stats', 'wppo', $cache_salt );
+						if ( is_array( $cached_stats ) && isset( $cached_stats['count'] ) ) {
+							$cache_count = (int) $cached_stats['count'];
+						} else {
+							$stats       = Cache::get_cache_stats();
+							$cache_count = (int) ( $stats['cached_pages'] ?? 0 );
+						}
+					} else {
+						$cached_count = get_transient( Util::transient_key( 'wppo_cache_count' ) );
+						if ( false !== $cached_count && is_numeric( $cached_count ) ) {
+							$cache_count = (int) $cached_count;
+						} else {
+							$stats       = Cache::get_cache_stats();
+							$cache_count = (int) ( $stats['cached_pages'] ?? 0 );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$cache_count = 0;
+			}
+
 			// Clone options and redact sensitive keys before exposing to the client.
 			$safe_options = $this->options;
 			if ( isset( $safe_options['performance_audit']['pagespeed_api_key'] ) ) {
@@ -4170,6 +4199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'show_welcome'                         => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
 					'image_info'                           => $image_info,
 					'cache_size'                           => $cache_size,
+					'cache_count'                          => $cache_count,
 					'total_js_css'                         => $total_js_css,
 					// Read-only WP 7.1+ client-side media processing state. Evaluated
 					// here (after Image_Optimisation has registered the opt-out filter)
@@ -12600,6 +12630,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// to avoid the expensive Util::get_local_path() computation.
 			if ( ! $this->should_optimise_for_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) ) {
 				return $tag;
+			}
+
+			// Disk-safe guard (issue #1428): randomized per-request query
+			// values (?ver=<timestamp|uniqid|rand>) are excluded from the
+			// minify pipeline so they cannot churn minified output against
+			// the file-count cap. Guarded by cacheRandomizedQueryGuard
+			// (default on), filterable via wppo_exclude_randomized_from_combine.
+			try {
+				$guard_on = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_cap_settings' ) ) {
+					$cap      = Cache::get_cache_cap_settings();
+					$guard_on = ! empty( $cap['randomized_guard'] );
+				}
+				if ( $guard_on && class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'is_randomized_query_asset' ) && Cache::is_randomized_query_asset( (string) $src ) ) {
+					$excluded = function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_exclude_randomized_from_combine', true, $handle, $src ) : true;
+					if ( $excluded ) {
+						return $tag;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 
 			$local_path = Util::get_local_path( $src );

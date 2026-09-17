@@ -195,18 +195,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Honest preload progress counters for the SPA.
 		 *
+		 * Bytes-aware (issue #1428): the payload carries `cache_bytes` /
+		 * `cache_files` from the static cache, and the status never reports
+		 * `complete` on a zero-byte run (queue drained but nothing cached —
+		 * e.g. all URLs skipped/failed to write). Such runs are downgraded
+		 * to `running` so the dashboard never shows a lying completed badge
+		 * and `preload_resume` can recover. A `stalled` flag marks a
+		 * `running` queue untouched for 30+ minutes. Fail-open: cache
+		 * failures leave counters untouched.
+		 *
 		 * @since NEXT
-		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[]}
+		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[],cache_bytes:int,cache_files:int,stalled:bool}
 		 */
 		public static function get_preload_status(): array {
-			$queue = self::get_preload_queue();
+			$queue  = self::get_preload_queue();
+			$status = (string) $queue['status'];
+			$queued = count( $queue['queued'] );
+			$done   = (int) $queue['done'];
+			$failed = count( $queue['failed'] );
+			$total  = (int) $queue['total'];
+			$bytes  = 0;
+			$files  = 0;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_size_bytes' ) ) {
+					$bytes = \PerformanceOptimise\Inc\Cache::get_cache_size_bytes();
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_file_count' ) ) {
+					$files = \PerformanceOptimise\Inc\Cache::get_cache_file_count();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Zero-byte guard: a drained queue with no cached bytes is not
+			// complete — the run produced nothing (skips/off-host/failures).
+			try {
+				if ( 'complete' === $status && $total > 0 && $bytes <= 0 ) {
+					$status = $queued > 0 || $failed > 0 ? 'running' : 'idle';
+					if ( 'idle' !== $status && 0 === $queued && 0 === $failed && $done > 0 ) {
+						// Fully drained but zero-byte: keep resumable.
+						$status = 'running';
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Stalled detection: running with pending work but no queue
+			// mutation for 30+ minutes (e.g. killed mid-run).
+			$stalled = false;
+			try {
+				$updated = (int) ( $queue['updated_at'] ?? 0 );
+				$now     = function_exists( 'time' ) ? time() : 0;
+				if ( 'running' === $status && ( $queued > 0 || $failed > 0 ) && $updated > 0 && $now > $updated && ( $now - $updated ) >= 1800 ) {
+					$stalled = true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			return array(
-				'queued'      => count( $queue['queued'] ),
-				'done'        => (int) $queue['done'],
-				'failed'      => count( $queue['failed'] ),
-				'total'       => (int) $queue['total'],
-				'status'      => (string) $queue['status'],
+				'queued'      => $queued,
+				'done'        => $done,
+				'failed'      => $failed,
+				'total'       => $total,
+				'status'      => $status,
 				'failed_urls' => array_values( array_slice( $queue['failed'], 0, 50 ) ),
+				'cache_bytes' => max( 0, (int) $bytes ),
+				'cache_files' => max( 0, (int) $files ),
+				'stalled'     => $stalled,
 			);
 		}
 

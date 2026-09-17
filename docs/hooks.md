@@ -596,6 +596,26 @@ add_filter( 'wppo_exclude_minification', function( $exclude, $file_path, $handle
 
 ---
 
+### `wppo_exclude_randomized_from_combine`
+Filters whether a randomized query-string asset (`?ver=<timestamp|uniqid|rand>`) stays excluded from the combine/minify pipeline (issue #1428). Default `true` when the `cacheRandomizedQueryGuard` setting is on. Return `false` to force-combine a matching asset.
+
+**Parameters:**
+- `$excluded` *(bool)* — Default `true` for randomized matches.
+- `$handle` *(string)* — Registered script or style handle.
+- `$src` *(string)* — Asset src URL.
+
+**Example:**
+```php
+add_filter( 'wppo_exclude_randomized_from_combine', function( $excluded, $handle, $src ) {
+    if ( 'my-versioned-app' === $handle ) {
+        return false; // Combine despite the randomized ver.
+    }
+    return $excluded;
+}, 10, 3 );
+```
+
+---
+
 ### `wppo_minify_allowed_roots`
 Filters the allow-listed filesystem roots for minify/combine file serving (issue #1179). Every combine source path is canonicalized with `realpath()` and must resolve inside one of these roots (trailing-slash boundary) before any file bytes are read; out-of-root, symlink-escaped, wrapper-based, NUL-bearing, `..`-bearing, and `.php` targets are rejected and the asset degrades to its uncombined form. Guarded by `has_filter()` — the filter only runs when a listener is present; invalid or empty filtered values fall back to the defaults. @since NEXT.
 

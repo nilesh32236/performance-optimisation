@@ -507,13 +507,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'total'       => 0,
 				'status'      => 'idle',
 				'failed_urls' => array(),
+				'cache_bytes' => 0,
+				'cache_files' => 0,
+				'stalled'     => false,
 			);
 			$cache   = array(
-				'bytes'     => 0,
-				'cap_bytes' => 0,
-				'state'     => 'ok',
-				'enforce'   => true,
-				'max_mb'    => 0,
+				'bytes'      => 0,
+				'cap_bytes'  => 0,
+				'state'      => 'ok',
+				'enforce'    => true,
+				'max_mb'     => 0,
+				'files'      => 0,
+				'cap_files'  => 0,
+				'warn_files' => 0,
 			);
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'get_preload_status' ) ) {
