@@ -376,6 +376,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function get_safelist_presets(): array {
+			if ( class_exists( 'PerformanceOptimise\Inc\Css_Safelist' ) ) {
+				return Css_Safelist::get_elementor_presets();
+			}
 			return array(
 				'.elementor-',
 				'.elementor-popup-',
@@ -2923,6 +2926,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since NEXT
 		 */
 		public static function passes_elementor_smoke( string $html, string $purged_css ): bool {
+			if ( class_exists( 'PerformanceOptimise\Inc\Css_Safelist' ) ) {
+				return Css_Safelist::passes_elementor_smoke( $html, $purged_css );
+			}
 			try {
 				if ( '' === $html ) {
 					return true;

@@ -7696,6 +7696,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Normalized host + path, or empty string.
 		 */
 		private static function normalize_image_url_static( string $url, bool $strip_size_suffix = true ): string {
+			if ( $strip_size_suffix && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+				// Canonical key derivation lives in Util::normalize_image_key()
+				// so image and CSS pipelines share one implementation.
+				try {
+					return Util::normalize_image_key( $url );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			$url = trim( $url );
 
 			if ( '' === $url ) {

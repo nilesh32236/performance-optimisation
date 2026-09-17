@@ -416,6 +416,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Create the static-cache collaborator with a test seam.
+		 *
+		 * Applies the `wppo_cache_instance` filter so tests (and advanced
+		 * integrations) can stub the Cache collaborator; defaults to
+		 * `new Cache( $options )` preserving current behavior.
+		 *
+		 * @since NEXT
+		 * @param array $options Plugin options passed to Cache.
+		 * @return mixed Cache instance (or filtered stub).
+		 */
+		public static function create_cache( array $options ) {
+			$cache = new Cache( $options );
+			/**
+			 * Filter the Cache collaborator instance.
+			 *
+			 * @since NEXT
+			 * @param mixed $cache   Cache instance.
+			 * @param array $options Plugin options.
+			 */
+			return apply_filters( 'wppo_cache_instance', $cache, $options );
+		}
+
+		/**
 		 * Constructor.
 		 *
 		 * Initializes the class by including necessary files and setting up hooks.
@@ -890,6 +913,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-edge-cache.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-edge-cache.php';
 			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/trait-purge-logger.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/trait-purge-logger.php';
+			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-edge-purger.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-edge-purger.php';
 			}
@@ -921,6 +947,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
 				'Core_Tweaks'            => 'class-core-tweaks.php',
 				'Critical_CSS'           => 'class-critical-css.php',
+				'Css_Safelist'           => 'class-css-safelist.php',
 				'Cron'                   => 'class-cron.php',
 				'Database_Cleanup'       => 'class-database-cleanup.php',
 				'Deactivate'             => 'class-deactivate.php',
@@ -932,6 +959,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Metabox'                => 'class-metabox.php',
 				'Object_Cache'           => 'class-object-cache.php',
 				'Pagespeed'              => 'class-pagespeed.php',
+				'Purge_Logger'           => 'trait-purge-logger.php',
 				'Rest'                   => 'class-rest.php',
 				'RUM'                    => 'class-rum.php',
 				'Sandbox_Preview'        => 'class-sandbox-preview.php',
@@ -1122,9 +1150,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( ! empty( $this->options['cache_settings']['enableCache'] ) ) {
-				$this->cache = new Cache( $this->options );
-				$this->cache->set_image_optimisation( $this->image_optimisation );
-				$this->cache->set_google_fonts( $this->google_fonts );
+				$this->cache = self::create_cache( $this->options );
+				if ( method_exists( $this->cache, 'set_image_optimisation' ) ) {
+					$this->cache->set_image_optimisation( $this->image_optimisation );
+				}
+				if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
+					$this->cache->set_google_fonts( $this->google_fonts );
+				}
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
@@ -1249,9 +1281,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// reassess whether combine_css() should defer to core preload emission
 				// or become an opt-in legacy toggle. No runtime change until then.
 				if ( ! $this->cache ) {
-					$this->cache = new Cache( $this->options );
-					$this->cache->set_image_optimisation( $this->image_optimisation );
-					$this->cache->set_google_fonts( $this->google_fonts );
+					$this->cache = self::create_cache( $this->options );
+					if ( method_exists( $this->cache, 'set_image_optimisation' ) ) {
+						$this->cache->set_image_optimisation( $this->image_optimisation );
+					}
+					if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
+						$this->cache->set_google_fonts( $this->google_fonts );
+					}
 				}
 				add_action( 'wp_enqueue_scripts', array( $this->cache, 'combine_css' ), PHP_INT_MAX );
 				// Post-purge last-good fallback (issue #1275) when the page
@@ -1509,14 +1545,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
-			add_action( 'wp_head', array( $this, 'add_speculation_rules' ), 0 );
-			add_filter( 'wp_resource_hints', array( $this, 'add_resource_hints' ), 10, 2 );
-
-			new Metabox();
-			new Cron();
-			new Asset_Manager();
-			new Abilities();
+			$this->register_head_hint_hooks();
+			$this->register_collaborators();
 
 			// Critical CSS hooks. Safe mode (issue #1098) disables stylesheet
 			// deferral in one click while preserving the criticalCSS setting.
@@ -1533,6 +1563,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wppo_generate_ccss', array( 'PerformanceOptimise\Inc\Critical_CSS', 'background_generate' ), 10, 1 );
 			}
 
+			$this->register_background_hooks();
+
+			$this->register_invalidation_hooks();
+
+			add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
+
+			$this->register_integration_hooks();
+		}
+
+		/**
+		 * Register frontend head-hint hooks (preload/preconnect/speculation).
+		 *
+		 * Extracted from {@see setup_hooks()} so hook-group changes stay
+		 * local to one collaborator-concern method.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function register_head_hint_hooks(): void {
+			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
+			add_action( 'wp_head', array( $this, 'add_speculation_rules' ), 0 );
+			add_filter( 'wp_resource_hints', array( $this, 'add_resource_hints' ), 10, 2 );
+		}
+
+		/**
+		 * Instantiate collaborator services (metabox, cron, assets, abilities).
+		 *
+		 * Extracted from {@see setup_hooks()}; keeps Main as a thin
+		 * bootstrapper over collaborator registration.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function register_collaborators(): void {
+			new Metabox();
+			new Cron();
+			new Asset_Manager();
+			new Abilities();
+		}
+
+		/**
+		 * Register background-job hooks (Action Scheduler + save_post queue).
+		 *
+		 * Extracted from {@see setup_hooks()}.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function register_background_hooks(): void {
 			// Register Action Scheduler callback for background image processing.
 			add_action( 'wppo_convert_image_background', array( $this, 'process_background_image' ), 10, 1 );
 
@@ -1547,7 +1626,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Queue used-CSS regeneration when post content changes.
 			add_action( 'save_post', array( $this, 'on_save_post_queue_used_css' ), 10, 3 );
+		}
 
+		/**
+		 * Register cache-invalidation hooks (structural changes).
+		 *
+		 * Extracted from {@see setup_hooks()}.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function register_invalidation_hooks(): void {
 			// Clear all cache on structural changes that invalidate every cached page.
 			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
@@ -1567,9 +1656,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// stale. Fail-open via on_extension_update(); builder-specific
 			// purges stay in Builder_Purge_Watcher.
 			add_action( 'upgrader_process_complete', array( __CLASS__, 'on_extension_update' ), 20, 2 );
+		}
 
-			add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
-
+		/**
+		 * Register third-party integration hooks (LiteSpeed sync, ESI bridge).
+		 *
+		 * Extracted from {@see setup_hooks()}.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function register_integration_hooks(): void {
 			// LS-202: LiteSpeed → WPPO purge sync (litespeed_purged_all/post/purge_finalize).
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'init' ) ) {
 				LiteSpeed_Integration::init();
@@ -6609,7 +6706,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
 							$settings = (array) Util::get_settings();
 						}
-						$cache = new Cache( $settings );
+						$cache = self::create_cache( $settings );
 						if ( method_exists( $cache, 'invalidate_single_static_html' ) ) {
 							$cache->invalidate_single_static_html( $post_id );
 						}
