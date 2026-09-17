@@ -425,6 +425,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 			'wppo_page_cron_batch',
 			'wppo_generate_static_page',
 			'wppo_generate_static_url',
+			'wppo_preload_url_batch',
 			'wppo_img_conversion',
 			'wppo_database_cleanup_cron',
 			'wppo_web_vitals_rescan',

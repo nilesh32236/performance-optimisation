@@ -118,16 +118,25 @@ const METRIC_INFO = {
 /**
  * Derive a status string from a numeric value and thresholds.
  *
- * @param {number} value The metric value.
+ * Missing or non-numeric telemetry (undefined, null, NaN, non-finite)
+ * renders 'unknown' instead of 'poor' so absent fields never show red.
+ * Matches lib/status.js scoreToStatus() semantics; StatusBadge already
+ * renders the 'unknown' variant.
+ *
+ * @param {*}      value The metric value.
  * @param {number} good  Upper bound for 'good'.
  * @param {number} poor  Lower bound for 'poor'.
  * @return {string} Status string.
  */
 const numericStatus = ( value, good, poor ) => {
-	if ( value <= good ) {
+	const num = Number( value );
+	if ( ! Number.isFinite( num ) ) {
+		return 'unknown';
+	}
+	if ( num <= good ) {
 		return 'good';
 	}
-	if ( value <= poor ) {
+	if ( num <= poor ) {
 		return 'needs_improvement';
 	}
 	return 'poor';
@@ -136,10 +145,22 @@ const numericStatus = ( value, good, poor ) => {
 /**
  * Derive a status string from a boolean pass/fail value.
  *
- * @param {boolean} passing Whether the check passed.
- * @return {string} 'good' or 'poor'.
+ * Non-boolean telemetry (undefined, null, numbers, strings) renders
+ * 'unknown' instead of 'poor' so absent checks never show red. Matches
+ * lib/status.js boolToStatus() semantics.
+ *
+ * @param {*} passing Whether the check passed.
+ * @return {string} 'good', 'poor' or 'unknown'.
  */
-const boolStatus = ( passing ) => ( passing ? 'good' : 'poor' );
+const boolStatus = ( passing ) => {
+	if ( passing === true ) {
+		return 'good';
+	}
+	if ( passing === false ) {
+		return 'poor';
+	}
+	return 'unknown';
+};
 
 /**
  * A single row in the results table with optional tooltip.
