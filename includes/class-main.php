@@ -1118,6 +1118,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// (which would otherwise silently stop cache generation), and
 				// never stacks on top of an active core buffer.
 				add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
+				// Post-purge last-good fallback (issue #1275): Nginx falls
+				// through to index.php?wppo_purge_fallback=$uri on a miss
+				// under the cache path; this 302s to the retained sibling
+				// fallback when one exists. Self-gated (no-op when disabled).
+				// has_action() guard: the combine-only branch below registers
+				// the same callback, and WP would dedupe today but a future
+				// second Cache instance or priority change must not double-fire.
+				if ( ! has_action( 'template_redirect', array( $this->cache, 'maybe_serve_purge_fallback' ) ) ) {
+					add_action( 'template_redirect', array( $this->cache, 'maybe_serve_purge_fallback' ), 1 );
+				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 				// Per-page delay kill-switch single-URL purge (#1037, extended #1098):
 				// programmatic `_wppo_delay_disabled` / `_wppo_defer_disabled` /
@@ -1224,6 +1234,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->cache->set_google_fonts( $this->google_fonts );
 				}
 				add_action( 'wp_enqueue_scripts', array( $this->cache, 'combine_css' ), PHP_INT_MAX );
+				// Post-purge last-good fallback (issue #1275) when the page
+				// cache itself is off but combined CSS is on: same self-gated
+				// miss handler as the enableCache branch above (guarded so
+				// both branches never double-register).
+				if ( ! has_action( 'template_redirect', array( $this->cache, 'maybe_serve_purge_fallback' ) ) ) {
+					add_action( 'template_redirect', array( $this->cache, 'maybe_serve_purge_fallback' ), 1 );
+				}
 				// Emit the combined-CSS preload after combine_css() has populated it,
 				// before core prints the stylesheet <link> at wp_head priority 8.
 				add_action( 'wp_head', array( $this->cache, 'maybe_preload_combine_css' ), 1 );

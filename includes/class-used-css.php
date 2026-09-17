@@ -1796,7 +1796,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
-		 * Delete used-CSS files. If URL is provided, delete per-page; otherwise delete all.
+		 * Map a used-CSS path to its sibling last-good fallback path.
+		 *
+		 * Thin wrapper over {@see Util::get_purge_fallback_path_for()} so the
+		 * used-CSS purge/miss path can be unit-tested via this surface.
+		 * `used-css.css` maps to `fallback.css` in the same directory (and
+		 * `used-css.{mobile,desktop}.css` to their own variant fallbacks);
+		 * paths that already point at a fallback file map to `''` (loop guard).
+		 *
+		 * @param string $file_path Absolute used-CSS file path.
+		 * @return string Sibling fallback path, or '' when not applicable.
+		 *
+		 * @since NEXT
+		 */
+		public static function get_purge_fallback_path( string $file_path ): string {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					return '';
+				}
+				return Util::get_purge_fallback_path_for( $file_path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Retain a last-good fallback copy before a used-CSS file is purged.
+		 *
+		 * Thin wrapper over {@see Util::retain_purge_fallback_file()} (the
+		 * single shared implementation — see also
+		 * `Cache::retain_purge_fallback()`). Viewport variants
+		 * (`used-css.mobile.css` / `used-css.desktop.css`) map to their own
+		 * `fallback.mobile.css` / `fallback.desktop.css` so variant misses
+		 * never cross-serve. No-op when disabled, on containment failure,
+		 * or when the file is missing/empty. Never throws.
+		 *
+		 * Serving is owned by `Cache::get_purge_fallback_response()` /
+		 * `Cache::maybe_serve_purge_fallback()` (used-CSS files live under
+		 * the same cache tree, so the Cache resolver covers them); this
+		 * class only retains.
+		 *
+		 * @param string $file_path The used-CSS file about to be deleted.
+		 * @return void
+		 *
+		 * @since NEXT
+		 */
+		private function retain_purge_fallback( string $file_path ): void {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					return;
+				}
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return;
+				}
+				Util::retain_purge_fallback_file(
+					$fs,
+					function ( string $path ): bool {
+						return $this->is_path_contained( $path );
+					},
+					$file_path
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		// NOTE (issue #1275): miss serving is owned by
+		// Cache::get_purge_fallback_response() /
+		// Cache::maybe_serve_purge_fallback() — used-CSS files live under
+		// the same cache tree, so no second resolver exists here by design
+		// (a divergent copy was removed; this class only retains).
+
+		/**
+		 * Delete used-CSS file(s) for a URL or all URLs.
 		 *
 		 * @param string|null $url Optional URL to delete specific page used-CSS.
 		 * @return bool True on success.
@@ -1825,6 +1899,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! $fs ) {
 					return false;
 				}
+				// Post-purge fallback (issue #1275): retain the last-good
+				// copy before deleting so a first hit pre-regen stays styled
+				// (302). No-op when the gate is off. Bulk deletes
+				// (delete_all_used_css) only remove used-css* names, so
+				// retained fallback.css siblings survive them untouched.
+				$this->retain_purge_fallback( $file_path );
 				// Drop the checksum sidecar alongside the variant so a
 				// re-generation re-baselines instead of comparing against a
 				// checksum for deleted output (issue #1038).
@@ -1873,6 +1953,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( '' === $variant_path || ! $this->is_path_contained( $variant_path ) ) {
 						continue;
 					}
+					// Post-purge fallback (issue #1275): retain each
+					// viewport variant before deleting so variant-URL
+					// misses have a retained copy like the single file.
+					$this->retain_purge_fallback( $variant_path );
 					try {
 						$checksum_path = $this->get_checksum_path( $variant_path );
 					} catch ( \Throwable $e ) {
@@ -1909,18 +1993,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return true;
 			}
 
-			$success   = true;
-			$dir_queue = array( $root );
-			while ( ! empty( $dir_queue ) ) {
-				$current = array_shift( $dir_queue );
-				$entries = $fs->dirlist( $current );
+			$success = true;
+			// Head-index queue (O(1) dequeue) with a visited-dir budget so
+			// a huge tree cannot cost O(n) memmoves per dequeue nor walk
+			// unboundedly — mirrors the bounded snapshot queue in Cache.
+			$dir_queue   = array( array( $root, 0 ) );
+			$head        = 0;
+			$visited     = 0;
+			$max_dirs    = 2000;
+			$max_depth   = 20;
+			$root_slash  = rtrim( $root, '/' ) . '/';
+			$queue_total = count( $dir_queue );
+			while ( $head < $queue_total && $visited < $max_dirs ) {
+				$current = $dir_queue[ $head ];
+				++$head;
+				++$visited;
+				$dir   = (string) $current[0];
+				$depth = (int) $current[1];
+				if ( $depth > $max_depth ) {
+					continue;
+				}
+				$entries = $fs->dirlist( $dir );
 				if ( ! is_array( $entries ) ) {
 					continue;
 				}
 				foreach ( $entries as $name => $entry ) {
-					$full_path = trailingslashit( $current ) . $name;
+					$full_path = trailingslashit( $dir ) . $name;
 					if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
-						$dir_queue[] = $full_path;
+						$dir_queue[] = array( $full_path, $depth + 1 );
+						$queue_total = count( $dir_queue );
 					} else {
 						$purge_names = array( self::USED_CSS_FILENAME, self::USED_CSS_FILENAME . '.sha256' );
 						foreach ( self::VIEWPORT_VARIANTS as $variant ) {
@@ -1928,6 +2029,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							$purge_names[] = 'used-css.' . $variant . '.css.sha256';
 						}
 						if ( in_array( $name, $purge_names, true ) ) {
+							// Post-purge fallback (issue #1275): retain each
+							// live used-css base before deleting so a full
+							// wipe keeps last-good instead of only the
+							// previous fallback generation. No-op when off.
+							if ( '.sha256' !== substr( (string) $name, -7 ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'retain_purge_fallback_file' ) ) {
+								try {
+									Util::retain_purge_fallback_file(
+										$fs,
+										function ( string $path ) use ( $root_slash ): bool {
+											if ( '' === $path || false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+												return false;
+											}
+											return 0 === strpos( $path, $root_slash );
+										},
+										$full_path
+									);
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
 							if ( ! $fs->delete( $full_path ) ) {
 								$success = false;
 							}

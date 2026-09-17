@@ -242,6 +242,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				}
 			}
 
+			// Post-purge last-good fallback (issue #1275): on a miss under the
+			// cache path, redirect to the retained sibling fallback at the
+			// Nginx layer (no PHP boot, no second client RTT beyond the
+			// redirect itself). Variant-specific misses resolve to their own
+			// variant fallback; Cache::maybe_serve_purge_fallback()
+			// (template_redirect, self-gated) stays registered as the
+			// fallback path for stacks where the named location is not used.
+			// Gated (default off). Nginx-only serving scope: Apache output is
+			// unchanged, so on Apache the retained fallback files have no
+			// serving path — retention there is bounded, harmless dead weight
+			// (a few small sibling copies) kept so enabling Nginx later, or
+			// switching stacks, needs no re-purge.
+			$purge_fallback = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_purge_fallback_enabled' ) ) {
+					$purge_fallback = Util::is_purge_fallback_enabled();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$purge_fallback = false;
+			}
+
+			if ( $purge_fallback ) {
+				if ( ! empty( $rules ) ) {
+					$rules[] = '';
+				}
+				$rules[] = '# WPPO purge fallback (stability) — serve last-good fallback with redirect on miss under the cache path';
+				$rules[] = '# PHP handler Cache::maybe_serve_purge_fallback() (template_redirect, self-gated) remains as fallback. Nginx-only serving scope.';
+				$rules[] = '# --- server context (place inside your existing server { } block) ---';
+				$rules[] = 'location ~* ^/wp-content/cache/wppo/.*\.(css|js)(\.(gz|br))?$ {';
+				$rules[] = '    try_files $uri $uri/ @wppo_fallback;';
+				$rules[] = '}';
+				$rules[] = 'location @wppo_fallback {';
+				$rules[] = '    # Never cache the fallback redirect itself: without no-store,';
+				$rules[] = '    # browsers/proxies may keep redirecting to fallback.* after the base regenerates.';
+				$rules[] = '    add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;';
+				$rules[] = '    # Loop guard: a missing fallback.* itself falls through here too —';
+				$rules[] = '    # rewriting it onto itself would 302-loop forever (PHP has the same guard).';
+				$rules[] = '    if ($uri ~* "/fallback(\\.(mobile|desktop))?\\.(css|js)(\\.(gz|br))?$") { return 404; }';
+				$rules[] = '    # Variant-specific fallbacks first (used-CSS mobile/desktop CSS + JS), then generic.';
+				$rules[] = '    # Note: compressed-variant misses beside a live base are best-effort here —';
+				$rules[] = '    # the PHP handler (Cache::maybe_serve_purge_fallback) applies the live-base guard precisely.';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.mobile\.css(\.(gz|br))?$ $1fallback.mobile.css redirect;';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.desktop\.css(\.(gz|br))?$ $1fallback.desktop.css redirect;';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.mobile\.js(\.(gz|br))?$ $1fallback.mobile.js redirect;';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.desktop\.js(\.(gz|br))?$ $1fallback.desktop.js redirect;';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.(css|js)(\.(gz|br))?$ $1fallback.$2 redirect;';
+				$rules[] = '}';
+				/**
+				 * Filter nginx purge-fallback rules.
+				 *
+				 * @since NEXT
+				 * @param string[] $rules Nginx configuration lines.
+				 */
+				$rules = (array) apply_filters( 'wppo_nginx_purge_fallback_rules', $rules );
+			}
+
 			$rules_str = implode( "\n", $rules );
 
 			/**
