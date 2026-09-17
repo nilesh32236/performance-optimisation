@@ -11,6 +11,9 @@ describe( 'useAbortableFetch', () => {
 		expect( isAbortError( abort ) ).toBe( true );
 		expect( isAbortError( new Error( 'x' ) ) ).toBe( false );
 		expect( isAbortError( null ) ).toBe( false );
+		const domAbort = new Error( 'aborted' );
+		domAbort.code = 20;
+		expect( isAbortError( domAbort ) ).toBe( true );
 	} );
 
 	it( 'useIsMounted is true while mounted', () => {

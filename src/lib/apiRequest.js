@@ -96,14 +96,13 @@ let pendingRefresh = null;
  * guard) so multiple simultaneous 403s share a single admin-ajax round-trip.
  *
  * @since 1.6.0
- * @param {AbortSignal|undefined} signal Optional abort signal (audit #1354).
  * @return {Promise<string>} The refreshed nonce string.
  */
-const refreshNonce = async ( signal ) => {
+const refreshNonce = async () => {
 	// Audit #1354 review: restore the shared-promise guard — concurrent
-	// 403s share one round-trip. (A caller-specific signal cannot abort
-	// the shared fetch; callers needing cancellation pass their signal
-	// to apiCall(), which aborts its own request.)
+	// 403s share one round-trip. Audit #1420: the shared fetch deliberately
+	// takes NO caller signal — one component unmounting must not abort the
+	// nonce refresh for all concurrent waiters.
 	if ( pendingRefresh ) {
 		return pendingRefresh;
 	}
@@ -114,7 +113,6 @@ const refreshNonce = async ( signal ) => {
 		try {
 			const res = await fetch( wppoSettings.ajaxUrl, {
 				method: 'POST',
-				signal: signal || undefined,
 				headers: {
 					'Content-Type': 'application/x-www-form-urlencoded',
 				},
@@ -256,7 +254,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				! isRetrying &&
 				( response.status === 401 || response.status === 403 )
 			) {
-				const freshNonce = await refreshNonce( signal );
+				const freshNonce = await refreshNonce();
 				const retryResponse = await doFetch( freshNonce );
 				return handleResponse( retryResponse, true );
 			}
@@ -279,7 +277,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 					'Nonce retry failed — authentication error persists.'
 				);
 			}
-			const freshNonce = await refreshNonce( signal );
+			const freshNonce = await refreshNonce();
 			const retryResponse = await doFetch( freshNonce );
 			return handleResponse( retryResponse, true );
 		}
@@ -423,13 +421,42 @@ export const buildAction = ( action, params = {} ) => {
  * @param {boolean} allowEmpty Whether '' is accepted (list endpoints).
  * @return {void}
  */
+/**
+ * User-facing validation message with translations lookup (audit #1420).
+ *
+ * Reads wppoSettings.translations with an English fallback so validation
+ * rejections are localizable like other UI notice strings.
+ *
+ * @since NEXT
+ * @param {string} key      Translations key.
+ * @param {string} fallback English fallback.
+ * @return {string} Translated or fallback message.
+ */
+const translatedError = ( key, fallback ) => {
+	try {
+		const map =
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.translations
+				: null;
+		if ( map && typeof map[ key ] === 'string' && map[ key ] !== '' ) {
+			return map[ key ];
+		}
+	} catch {
+		// Fall through to English.
+	}
+	return fallback;
+};
+
 export const assertScanUrl = ( url, allowEmpty = false ) => {
 	if ( allowEmpty && ( url === '' || url === undefined || url === null ) ) {
 		return;
 	}
 	if ( ! isValidScanUrl( url ) ) {
 		throw new Error(
-			'Invalid scan URL: must be a same-origin http(s) URL.'
+			translatedError(
+				'invalidScanUrl',
+				'Invalid scan URL: must be a same-origin http(s) URL.'
+			)
 		);
 	}
 };
@@ -446,8 +473,14 @@ export const assertScanStrategy = ( strategy, allowEmpty = false ) => {
 	if ( ! isValidScanStrategy( strategy, allowEmpty ) ) {
 		throw new Error(
 			allowEmpty
-				? "Invalid strategy: must be 'mobile', 'desktop' or ''."
-				: "Invalid strategy: must be 'mobile' or 'desktop'."
+				? translatedError(
+						'invalidScanStrategyEmpty',
+						"Invalid strategy: must be 'mobile', 'desktop' or ''."
+				  )
+				: translatedError(
+						'invalidScanStrategy',
+						"Invalid strategy: must be 'mobile' or 'desktop'."
+				  )
 		);
 	}
 };

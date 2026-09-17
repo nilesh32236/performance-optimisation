@@ -1,4 +1,5 @@
 import { apiCall } from './apiRequest';
+import { __ } from '@wordpress/i18n';
 
 /**
  * Shared database-cleanup counts cache.
@@ -88,7 +89,12 @@ export const createDbCountsCache = ( {
 					return { ...response.data };
 				}
 				throw new Error(
-					response?.message || 'Failed to load counts.'
+					response?.message ||
+						// Audit #1420: localizable thrown message.
+						__(
+							'Failed to load counts.',
+							'performance-optimisation'
+						)
 				);
 			} );
 			localInflight = request.finally( () => {

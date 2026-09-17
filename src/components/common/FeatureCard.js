@@ -22,7 +22,8 @@ const FeatureCard = ( {
 			<div className="wppo-feature-card__header">
 				{ title && (
 					<h3>
-						{ icon }
+						{ /* Audit #1420: decorative icon hidden from AT. */ }
+						<span aria-hidden="true">{ icon }</span>
 						{ title }
 					</h3>
 				) }
