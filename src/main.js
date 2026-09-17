@@ -50,9 +50,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			}
 		}
 		try {
-			return (
-				redactLogSecrets( message ) || 'Unknown error'
-			).slice( 0, 500 );
+			return ( redactLogSecrets( message ) || 'Unknown error' ).slice(
+				0,
+				500
+			);
 		} catch {
 			return 'Unknown error';
 		}

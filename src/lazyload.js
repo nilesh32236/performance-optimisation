@@ -33,7 +33,10 @@ const getLogMessage = ( err ) => {
 		}
 	}
 	try {
-		return ( redactLogSecrets( message ) || 'Unknown error' ).slice( 0, 500 );
+		return ( redactLogSecrets( message ) || 'Unknown error' ).slice(
+			0,
+			500
+		);
 	} catch {
 		return 'Unknown error';
 	}
@@ -379,9 +382,9 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
  * sanitizers so tightening the token shape in one cannot miss the other.
  *
  * @since NEXT
- * @param {string}   value      Raw attribute value.
- * @param {RegExp}   split      Split pattern.
- * @param {Set}      allowedSet Allowlisted tokens.
+ * @param {string} value      Raw attribute value.
+ * @param {RegExp} split      Split pattern.
+ * @param {Set}    allowedSet Allowlisted tokens.
  * @return {Array} Kept tokens.
  */
 const sanitizeTokenList = ( value, split, allowedSet ) =>
@@ -390,9 +393,7 @@ const sanitizeTokenList = ( value, split, allowedSet ) =>
 		.map( ( token ) => token.trim().toLowerCase() )
 		.filter(
 			( token ) =>
-				token &&
-				/^[a-z-]+$/.test( token ) &&
-				allowedSet.has( token )
+				token && /^[a-z-]+$/.test( token ) && allowedSet.has( token )
 		);
 
 /**

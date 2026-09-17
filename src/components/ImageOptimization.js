@@ -90,8 +90,7 @@ const coerceLongestEdge = ( value, fallback ) => {
 // init + baseline-sync; a new value needs one edit now).
 // @since NEXT
 const derivePlaceholderType = ( opts ) =>
-	opts.placeholderType ??
-	( opts.replacePlaceholderWithSVG ? 'svg' : 'none' );
+	opts.placeholderType ?? ( opts.replacePlaceholderWithSVG ? 'svg' : 'none' );
 
 const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {

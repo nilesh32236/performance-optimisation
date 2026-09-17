@@ -1,11 +1,7 @@
 /**
  * Tests for the shared abortable-fetch helpers (audit #1401).
  */
-import {
-	useIsMounted,
-	isAbortError,
-	runAbortable,
-} from '../useAbortableFetch';
+import { useIsMounted, isAbortError, runAbortable } from '../useAbortableFetch';
 import { renderHook } from '@testing-library/react';
 
 describe( 'useAbortableFetch', () => {

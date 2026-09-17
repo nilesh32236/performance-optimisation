@@ -116,7 +116,6 @@ const METRIC_INFO = {
 		),
 };
 
-
 /**
  * Format a metric value with a unit, falling back to an em dash when
  * the field is absent (audit #1354: avoids rendering "undefined s/ms").
@@ -133,7 +132,6 @@ const fmtMetric = ( value, unit ) => {
 	}
 	return `${ num } ${ unit }`;
 };
-
 
 /**
  * A single row in the results table with optional tooltip.

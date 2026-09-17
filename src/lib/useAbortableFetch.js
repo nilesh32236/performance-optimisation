@@ -33,8 +33,7 @@ export const useIsMounted = () => {
  * @param {*} error Caught error value.
  * @return {boolean} True for AbortError.
  */
-export const isAbortError = ( error ) =>
-	error?.name === 'AbortError';
+export const isAbortError = ( error ) => error?.name === 'AbortError';
 
 /**
  * Run an async task guarded by a fresh AbortController.
@@ -49,9 +48,7 @@ export const isAbortError = ( error ) =>
  */
 export const runAbortable = ( task ) => {
 	const controller =
-		typeof AbortController !== 'undefined'
-			? new AbortController()
-			: null;
+		typeof AbortController !== 'undefined' ? new AbortController() : null;
 	const promise = task( controller ? controller.signal : undefined );
 	return {
 		promise,

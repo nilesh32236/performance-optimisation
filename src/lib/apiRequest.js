@@ -49,7 +49,6 @@ export const getWppoSettings = ( path, fallback = {} ) => {
 	return current === undefined ? fallback : current;
 };
 
-
 /**
  * Extract a safe log message from an error without leaking response bodies.
  *

@@ -413,7 +413,14 @@ const PluginSetting = ( { options } ) => {
 	// payload building and post-save side effects.
 	const savePerformanceAudit = async (
 		settingsPatch,
-		{ setSaving, successNotice, errorNotice, catchNotice, logLabel, onSuccess }
+		{
+			setSaving,
+			successNotice,
+			errorNotice,
+			catchNotice,
+			logLabel,
+			onSuccess,
+		}
 	) => {
 		setSaving( true );
 		dismissApiKey();
@@ -489,25 +496,34 @@ const PluginSetting = ( { options } ) => {
 			{
 				setSaving: setSavingMonitoring,
 				successNotice: () =>
-					( invalidUrls.length > 0
+					invalidUrls.length > 0
 						? {
-							type: 'warning',
-							message: sprintf(
-								/* translators: 1: number of skipped URLs, 2: comma-separated list of skipped URLs */
-								__(
-									'Monitoring settings saved. Skipped %1$s invalid URL(s): %2$s.',
+								type: 'warning',
+								message: sprintf(
+									/* translators: 1: number of skipped URLs, 2: comma-separated list of skipped URLs */
+									__(
+										'Monitoring settings saved. Skipped %1$s invalid URL(s): %2$s.',
+										'performance-optimisation'
+									),
+									invalidUrls.length,
+									invalidUrls.join( ', ' )
+								),
+						  }
+						: {
+								type: 'success',
+								message: __(
+									'Monitoring settings saved.',
 									'performance-optimisation'
 								),
-								invalidUrls.length,
-								invalidUrls.join( ', ' )
-							),
-						}
-						: {
-							type: 'success',
-							message: __( 'Monitoring settings saved.', 'performance-optimisation' ),
-						} ),
-				errorNotice: __( 'Failed to save monitoring settings.', 'performance-optimisation' ),
-				catchNotice: __( 'Error saving monitoring settings.', 'performance-optimisation' ),
+						  },
+				errorNotice: __(
+					'Failed to save monitoring settings.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
+					'Error saving monitoring settings.',
+					'performance-optimisation'
+				),
 				logLabel: 'Save monitoring error:',
 				onSuccess: () => {
 					if ( invalidUrls.length > 0 ) {
@@ -531,10 +547,19 @@ const PluginSetting = ( { options } ) => {
 				setSaving: setSavingAutoRescan,
 				successNotice: {
 					type: 'success',
-					message: __( 'Auto-rescan frequency saved.', 'performance-optimisation' ),
+					message: __(
+						'Auto-rescan frequency saved.',
+						'performance-optimisation'
+					),
 				},
-				errorNotice: __( 'Failed to save auto-rescan frequency.', 'performance-optimisation' ),
-				catchNotice: __( 'Error saving auto-rescan frequency.', 'performance-optimisation' ),
+				errorNotice: __(
+					'Failed to save auto-rescan frequency.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
+					'Error saving auto-rescan frequency.',
+					'performance-optimisation'
+				),
 				logLabel: 'Save auto-rescan error:',
 				onSuccess: () => {
 					setBaseline( ( prev ) => ( { ...prev, autoRescan } ) );
@@ -553,8 +578,14 @@ const PluginSetting = ( { options } ) => {
 					type: 'success',
 					message: __( 'API key saved.', 'performance-optimisation' ),
 				},
-				errorNotice: __( 'Failed to save API key.', 'performance-optimisation' ),
-				catchNotice: __( 'Error saving API key.', 'performance-optimisation' ),
+				errorNotice: __(
+					'Failed to save API key.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
+					'Error saving API key.',
+					'performance-optimisation'
+				),
 				logLabel: 'Save API key error:',
 				onSuccess: () => {
 					setNewApiKey( '' );
