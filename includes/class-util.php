@@ -286,6 +286,267 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Valid one-click optimization preset names.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const OPTIMIZATION_PRESET_NAMES = array( 'safe', 'balanced', 'aggressive' );
+
+		/**
+		 * Fail-safe keys that presets must never turn off.
+		 *
+		 * Balanced/Aggressive flip risky pipeline keys on, but these guards
+		 * stay forced ON so builder previews, commerce flows, and the delay
+		 * safe-mode can never be disabled by a one-click preset (fail-safe).
+		 * Per-page exclusions (postmeta) are untouched by presets by design.
+		 *
+		 * @since NEXT
+		 * @return array<string, array<string, bool>> Guards keyed by tab.
+		 */
+		public static function get_preset_safety_guards(): array {
+			return array(
+				'cache_settings'    => array(
+					'wooSafeMode' => true,
+				),
+				'file_optimisation' => array(
+					'delayJSSafeMode'       => true,
+					'delayJSBuilderPreset'  => true,
+					'delayJSCommercePreset' => true,
+					'elementorSafeMode'     => true,
+				),
+			);
+		}
+
+		/**
+		 * One-click Safe / Balanced / Aggressive preset definitions.
+		 *
+		 * Each preset maps to existing `wppo_settings` keys only (additive,
+		 * no schema break). Safe mirrors the safe-by-default fresh-install
+		 * baseline (page cache only); Balanced adds low-risk wins (HTML/CSS
+		 * minify, defer, lazy load, preload cache, RUM); Aggressive enables
+		 * the full pipeline with the safety guards from
+		 * {@see self::get_preset_safety_guards()} forced ON.
+		 *
+		 * @since NEXT
+		 * @return array<string, array<string, array<string, mixed>>> Preset name => tab => key => value.
+		 */
+		public static function get_optimization_presets(): array {
+			return array(
+				'safe'       => array(
+					'cache_settings'     => array(
+						'enableCache' => true,
+					),
+					'file_optimisation'  => array(
+						'minifyHTML'        => false,
+						'minifyJS'          => false,
+						'minifyCSS'         => false,
+						'deferJS'           => false,
+						'delayJS'           => false,
+						'combineCSS'        => false,
+						'removeUnusedCSS'   => false,
+						'criticalCSS'       => false,
+						'delayJSSafeMode'   => true,
+						'elementorSafeMode' => true,
+					),
+					'image_optimisation' => array(
+						'lazyLoadImages' => true,
+					),
+					'preload_settings'   => array(
+						'enablePreloadCache' => false,
+					),
+				),
+				'balanced'   => array(
+					'cache_settings'     => array(
+						'enableCache' => true,
+					),
+					'file_optimisation'  => array(
+						'minifyHTML'        => true,
+						'minifyJS'          => false,
+						'minifyCSS'         => true,
+						'deferJS'           => true,
+						'delayJS'           => false,
+						'combineCSS'        => false,
+						'removeUnusedCSS'   => false,
+						'criticalCSS'       => false,
+						'delayJSSafeMode'   => true,
+						'elementorSafeMode' => true,
+					),
+					'image_optimisation' => array(
+						'lazyLoadImages'           => true,
+						'lazyLoadBackgroundImages' => true,
+					),
+					'preload_settings'   => array(
+						'enablePreloadCache' => true,
+					),
+					'performance_audit'  => array(
+						'rum_enabled' => true,
+					),
+				),
+				'aggressive' => array(
+					'cache_settings'     => array(
+						'enableCache' => true,
+					),
+					'file_optimisation'  => array(
+						'minifyHTML'            => true,
+						'minifyJS'              => true,
+						'minifyCSS'             => true,
+						'deferJS'               => true,
+						'delayJS'               => true,
+						'combineCSS'            => true,
+						'removeUnusedCSS'       => false,
+						'criticalCSS'           => true,
+						'delayJSSafeMode'       => true,
+						'delayJSBuilderPreset'  => true,
+						'delayJSCommercePreset' => true,
+						'elementorSafeMode'     => true,
+					),
+					'image_optimisation' => array(
+						'lazyLoadImages'           => true,
+						'lazyLoadBackgroundImages' => true,
+					),
+					'preload_settings'   => array(
+						'enablePreloadCache' => true,
+					),
+					'performance_audit'  => array(
+						'rum_enabled' => true,
+					),
+				),
+			);
+		}
+
+		/**
+		 * Diff a preset against the current settings (preview before apply).
+		 *
+		 * Fail-open: unknown preset names or failures return an empty diff,
+		 * never fatal. Only keys present in the preset definition are
+		 * compared; per-page exclusions (postmeta) are never part of the diff.
+		 *
+		 * @since NEXT
+		 * @param string     $preset  Preset name (safe|balanced|aggressive).
+		 * @param array|null $current Optional current settings (defaults to get_settings()).
+		 * @return array[] List of {tab, key, from, to} entries that would change.
+		 */
+		public static function get_preset_diff( string $preset, ?array $current = null ): array {
+			try {
+				$presets = self::get_optimization_presets();
+				if ( ! isset( $presets[ $preset ] ) ) {
+					return array();
+				}
+				if ( null === $current ) {
+					$current = self::get_settings();
+				}
+				if ( ! is_array( $current ) ) {
+					$current = array();
+				}
+				$diff = array();
+				foreach ( $presets[ $preset ] as $tab => $keys ) {
+					if ( ! is_array( $keys ) ) {
+						continue;
+					}
+					$stored_tab = ( isset( $current[ $tab ] ) && is_array( $current[ $tab ] ) ) ? $current[ $tab ] : array();
+					foreach ( $keys as $key => $to ) {
+						$from = $stored_tab[ $key ] ?? null;
+						if ( $from !== $to ) {
+							$diff[] = array(
+								'tab'  => $tab,
+								'key'  => $key,
+								'from' => $from,
+								'to'   => $to,
+							);
+						}
+					}
+				}
+				// Safety guards are forced ON at apply time: surface any
+				// guard that would flip as part of the preview diff.
+				foreach ( self::get_preset_safety_guards() as $tab => $keys ) {
+					$stored_tab = ( isset( $current[ $tab ] ) && is_array( $current[ $tab ] ) ) ? $current[ $tab ] : array();
+					foreach ( $keys as $key => $to ) {
+						$from = $stored_tab[ $key ] ?? null;
+						if ( true === $to && false === $from ) {
+							$diff[] = array(
+								'tab'  => $tab,
+								'key'  => $key,
+								'from' => $from,
+								'to'   => $to,
+							);
+						}
+					}
+				}
+				return $diff;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Apply a one-click optimization preset on top of the current settings.
+		 *
+		 * Snapshots a restore point before overwriting (single-slot,
+		 * fail-open) and forces the safety guards ON. Unknown preset names
+		 * or write failures leave the prior settings intact and return null.
+		 *
+		 * @since NEXT
+		 * @param string $preset Preset name (safe|balanced|aggressive).
+		 * @return array|null {preset, settings, diff} on success, null on failure.
+		 */
+		public static function apply_optimization_preset( string $preset ): ?array {
+			try {
+				$presets = self::get_optimization_presets();
+				if ( ! isset( $presets[ $preset ] ) ) {
+					return null;
+				}
+				$current = self::get_settings();
+				if ( ! is_array( $current ) ) {
+					$current = array();
+				}
+				$merged = $current;
+				foreach ( $presets[ $preset ] as $tab => $keys ) {
+					if ( ! is_array( $keys ) ) {
+						continue;
+					}
+					$base           = ( isset( $merged[ $tab ] ) && is_array( $merged[ $tab ] ) ) ? $merged[ $tab ] : array();
+					$merged[ $tab ] = array_merge( $base, $keys );
+				}
+				foreach ( self::get_preset_safety_guards() as $tab => $keys ) {
+					$base = ( isset( $merged[ $tab ] ) && is_array( $merged[ $tab ] ) ) ? $merged[ $tab ] : array();
+					foreach ( $keys as $key => $to ) {
+						$base[ $key ] = $to;
+					}
+					$merged[ $tab ] = $base;
+				}
+				if ( $merged === $current ) {
+					return array(
+						'preset'   => $preset,
+						'settings' => $current,
+						'diff'     => array(),
+					);
+				}
+				try {
+					self::take_settings_snapshot( $current );
+				} catch ( \Throwable $snapshot_error ) {
+					unset( $snapshot_error );
+				}
+				$before  = $current;
+				$updated = self::save_settings( $merged );
+				self::set_settings_cache( $merged );
+				if ( ! $updated && $before !== $merged ) {
+					self::set_settings_cache( $before );
+					return null;
+				}
+				return array(
+					'preset'   => $preset,
+					'settings' => $merged,
+					'diff'     => self::get_preset_diff( $preset, $before ),
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
 		 * Get default settings structure for fresh installs.
 		 *
 		 * Single source of truth for Main::__construct() defaults,
@@ -1748,8 +2009,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
-		 * Also clears the canonical-host and normalized-host memos, which
-		 * are host-related state derived from the same stubs.
+		 * Also clears the canonical-host, normalized-host, and same-site
+		 * home-host memos, which are host-related state derived from the
+		 * same stubs.
 		 *
 		 * @since 2.0.0
 		 */
@@ -1757,6 +2019,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			self::$home_url_cache        = array();
 			self::$canonical_host_cache  = array();
 			self::$normalized_host_cache = array();
+			self::$same_site_home_host   = array();
 		}
 
 		/**

@@ -251,6 +251,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'ai_suggestions',
 			'settings_snapshot',
 			'restore_settings',
+			'optimization_presets',
+			'apply_preset',
 			'sandbox_preview',
 			'sandbox_save',
 			'sandbox_promote',
@@ -259,8 +261,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge routes).
-		$this->assertCount( 43, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge + 2 preset routes).
+		$this->assertCount( 45, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
@@ -1667,6 +1669,137 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			$store['wppo_settings'],
 			'Current settings must stay intact when no snapshot exists'
 		);
+	}
+
+	/**
+	 * Test that apply_preset rejects unknown preset names with a 400 (issue #1368).
+	 */
+	public function test_apply_preset_rejects_invalid_preset(): void {
+		$request  = new WP_REST_Request( array( 'preset' => 'turbo' ) );
+		$response = $this->rest->apply_optimization_preset( $request );
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+	}
+
+	/**
+	 * Test that apply_preset merges the preset, snapshots the prior settings,
+	 * and forces the fail-safe guards ON (issue #1368).
+	 */
+	public function test_apply_preset_applies_and_snapshots(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$store = array(
+			'wppo_settings' => array(
+				'cache_settings'    => array(
+					'enableCache' => false,
+					'wooSafeMode' => false,
+				),
+				'file_optimisation' => array(
+					'minifyHTML'      => false,
+					'delayJSSafeMode' => false,
+				),
+			),
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+
+		$request  = new WP_REST_Request( array( 'preset' => 'balanced' ) );
+		$response = $this->rest->apply_optimization_preset( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertSame( 'balanced', $data['data']['preset'] );
+		$this->assertTrue( $store['wppo_settings']['cache_settings']['enableCache'], 'Balanced must turn the page cache on' );
+		$this->assertTrue( $store['wppo_settings']['cache_settings']['wooSafeMode'], 'wooSafeMode guard must be forced ON' );
+		$this->assertTrue( $store['wppo_settings']['file_optimisation']['delayJSSafeMode'], 'delayJSSafeMode guard must be forced ON' );
+		$this->assertArrayHasKey( 'wppo_settings_snapshot', $store, 'Apply must snapshot the prior settings' );
+		$this->assertFalse( $store['wppo_settings_snapshot']['settings']['cache_settings']['enableCache'], 'Snapshot must hold the prior settings' );
+	}
+
+	/**
+	 * Test that get_optimization_presets returns every preset with a diff preview (issue #1368).
+	 */
+	public function test_get_optimization_presets_returns_diffs(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$response = $this->rest->get_optimization_presets( new WP_REST_Request() );
+
+		$this->assertSame( 200, $response->get_status() );
+		$presets = $response->get_data()['data']['presets'];
+		$this->assertSame( array( 'safe', 'balanced', 'aggressive' ), array_keys( $presets ) );
+		foreach ( $presets as $name => $payload ) {
+			$this->assertArrayHasKey( 'settings', $payload, "Preset {$name} must expose its settings" );
+			$this->assertArrayHasKey( 'diff', $payload, "Preset {$name} must expose a diff preview" );
+			$this->assertIsArray( $payload['diff'] );
+		}
+	}
+
+	/**
+	 * Test that get_optimization_presets rejects unknown preset names (issue #1368).
+	 */
+	public function test_get_optimization_presets_rejects_invalid_preset(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$request  = new WP_REST_Request( array( 'preset' => 'turbo' ) );
+		$response = $this->rest->get_optimization_presets( $request );
+
+		$this->assertSame( 400, $response->get_status() );
+	}
+
+	/**
+	 * Test that get_suggestions always carries the guided next_action and
+	 * server_type keys, even with no cached scan (issue #1368).
+	 */
+	public function test_get_suggestions_includes_next_action_and_server_type(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' );
+			}
+		);
+		Functions\when( 'has_filter' )->justReturn( false );
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test stub mirrors the bootstrap alias.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		// Same-site gate: wp_http_validate_url() may persist eval-defined
+		// from an earlier suite (returning null post-tearDown), so pin it.
+		Functions\when( 'wp_http_validate_url' )->alias(
+			static function ( $url ) {
+				return $url;
+			}
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) {
+				// No cached telemetry and no RUM aggregate.
+				return $fallback;
+			}
+		);
+		Functions\when( 'get_transient' )->justReturn( false );
+
+		$response = $this->rest->get_suggestions( new WP_REST_Request() );
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data()['data'];
+		$this->assertArrayHasKey( 'suggestions', $data );
+		$this->assertArrayHasKey( 'next_action', $data, 'Suggestions must carry the guided next action' );
+		$this->assertArrayHasKey( 'server_type', $data, 'Suggestions must carry the detected server type' );
+		$this->assertNull( $data['next_action'], 'Empty RUM must yield a null next action' );
+		$this->assertContains( $data['server_type'], array( 'apache', 'nginx', 'litespeed', 'other' ) );
 	}
 }
 

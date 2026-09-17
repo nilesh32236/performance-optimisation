@@ -644,6 +644,37 @@ export const fetchServerRules = ( signal ) => {
 };
 
 /**
+ * Retrieve the Safe / Balanced / Aggressive preset definitions with a diff
+ * preview of each against the current settings.
+ *
+ * @since NEXT
+ * @param {string}      [preset] Optional preset name to narrow the response.
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
+ * @return {Promise<Object>} Resolved presets payload.
+ */
+export const fetchOptimizationPresets = ( preset = '', signal ) => {
+	const action =
+		preset && typeof preset === 'string'
+			? buildAction( 'optimization_presets', { preset } )
+			: 'optimization_presets';
+	return apiCall( action, {}, 'GET', signal );
+};
+
+/**
+ * Apply a Safe / Balanced / Aggressive preset in one click.
+ *
+ * The server snapshots a restore point before overwriting; a failed apply
+ * leaves the prior settings intact.
+ *
+ * @since NEXT
+ * @param {string} preset Preset name (safe|balanced|aggressive).
+ * @return {Promise<Object>} Resolved apply payload ({preset, settings, diff}).
+ */
+export const applyOptimizationPreset = ( preset ) => {
+	return apiCall( 'apply_preset', { preset } );
+};
+
+/**
  * Run the verifiable WooCommerce cart/checkout cache-exclusion self-test.
  *
  * Read-only GET proving cart/checkout/account bypass the static HTML cache

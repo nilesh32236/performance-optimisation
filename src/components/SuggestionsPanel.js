@@ -28,10 +28,12 @@ import { __ } from '@wordpress/i18n';
 /**
  * Maps fix_action values to WPPO sidebar tab names.
  * Must stay in sync with App.js sidebarItems names.
+ * Exported so GuidedNextStep can navigate to the same tab for the single
+ * RUM-driven next action.
  *
  * @type {Object.<string, string>}
  */
-const FIX_ACTION_TAB_MAP = {
+export const FIX_ACTION_TAB_MAP = {
 	open_object_cache_tab: 'objectCache',
 	open_image_optimization_tab: 'imageOptimization',
 	open_file_optimization_tab: 'fileOptimization',
