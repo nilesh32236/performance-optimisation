@@ -103,6 +103,12 @@ export const useSaveSettings = ( {
 } ) => {
 	const [ isSaving, setIsSaving ] = useState( false );
 
+	// Mirror getSettings in a ref: callers pass inline () => settings
+	// arrows, so listing it in deps would churn the save identity every
+	// render and defeat memoization of memoized submit buttons.
+	const getSettingsRef = useRef( getSettings );
+	getSettingsRef.current = getSettings;
+
 	const save = useCallback(
 		async ( event ) => {
 			if ( event ) {
@@ -114,7 +120,9 @@ export const useSaveSettings = ( {
 			}
 			try {
 				const settings =
-					typeof getSettings === 'function' ? getSettings() : {};
+					typeof getSettingsRef.current === 'function'
+						? getSettingsRef.current()
+						: {};
 				const payload =
 					typeof buildPayload === 'function'
 						? buildPayload( settings )
@@ -124,7 +132,11 @@ export const useSaveSettings = ( {
 					settings: payload,
 				} );
 				if ( res && res.success ) {
-					setBaseline( payload );
+					// Baseline stores the canonical settings shape (what the
+					// next getSettings() returns), not the built payload:
+					// when buildPayload strips/renames fields the two shapes
+					// diverge and isDirty would stick true after a save.
+					setBaseline( settings );
 					if ( typeof setIsDirty === 'function' ) {
 						setIsDirty( false );
 					}
@@ -173,7 +185,6 @@ export const useSaveSettings = ( {
 		},
 		[
 			tab,
-			getSettings,
 			setBaseline,
 			setIsDirty,
 			notify,

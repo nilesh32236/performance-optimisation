@@ -13,15 +13,15 @@
 /**
  * Validate a scan URL client-side before it reaches the resource-intensive
  * performance_scan / pagespeed_scan endpoints. Requires an absolute http(s)
- * URL and, when wppoSettings.homeUrl is available, same-origin with the site.
- * Server-side host allowlisting + per-user/IP rate limiting remains
- * authoritative.
+ * URL that is same-origin with the site. Server-side host allowlisting +
+ * per-user/IP rate limiting remains authoritative.
  *
- * When homeUrl is absent (e.g. a test harness or a direct mount before
- * localisation), the origin check is skipped and any absolute http(s) URL is
- * accepted: failing closed here would brick legitimate scans, and the server
- * gate remains authoritative. Callers needing a strict gate should assert
- * homeUrl presence themselves.
+ * Fails closed when wppoSettings.homeUrl is absent: without a known site
+ * origin there is nothing to compare against, and failing open would let a
+ * tampered-or-missing homeUrl forward off-origin URLs to expensive endpoints
+ * before the server rejects them. PHP always localises homeUrl in the admin
+ * SPA, so the closed gate only bites harnesses that must set homeUrl
+ * themselves (see the apiRequest/FileOptimization test setups).
  *
  * @since 2.0.0
  * @param {string} url Raw scan URL.
@@ -44,14 +44,15 @@ export const isValidScanUrl = ( url ) => {
 	}
 	try {
 		if (
-			typeof wppoSettings !== 'undefined' &&
-			wppoSettings &&
-			wppoSettings.homeUrl
+			typeof wppoSettings === 'undefined' ||
+			! wppoSettings ||
+			! wppoSettings.homeUrl
 		) {
-			const home = new URL( wppoSettings.homeUrl );
-			if ( parsed.origin !== home.origin ) {
-				return false;
-			}
+			return false;
+		}
+		const home = new URL( wppoSettings.homeUrl );
+		if ( parsed.origin !== home.origin ) {
+			return false;
 		}
 	} catch {
 		return false;
@@ -80,8 +81,13 @@ export const SCAN_STRATEGIES = [ 'mobile', 'desktop' ];
  * @return {string} Action path with query string.
  */
 export const buildAction = ( action, params = {} ) => {
+	// Fail fast on non-object params: Object.entries() on a string/number
+	// would iterate characters/indices into junk query keys.
+	if ( ! params || typeof params !== 'object' ) {
+		return action;
+	}
 	const search = new URLSearchParams();
-	for ( const [ key, value ] of Object.entries( params ?? {} ) ) {
+	for ( const [ key, value ] of Object.entries( params ) ) {
 		if ( value === undefined || value === null || value === '' ) {
 			continue;
 		}

@@ -16,6 +16,9 @@ describe( 'API Request library', () => {
 			ajaxUrl: 'http://test.com/wp-admin/admin-ajax.php',
 			nonce: 'testnonce',
 			nonce_refresh: 'testnonce_refresh',
+			// Production PHP always localises homeUrl; isValidScanUrl
+			// fails closed without it, so the harness mirrors prod.
+			homeUrl: 'https://example.com',
 			settings: {},
 		};
 		global.fetch = jest.fn();
@@ -1026,10 +1029,18 @@ describe( 'API Request library', () => {
 				'server_rules'
 			);
 		} );
+
+		it( 'returns the bare action for non-object params', async () => {
+			const { buildAction } = await import( '../apiRequest' );
+			expect( buildAction( 'server_rules', 'page=2' ) ).toBe(
+				'server_rules'
+			);
+			expect( buildAction( 'server_rules', 42 ) ).toBe( 'server_rules' );
+		} );
 	} );
 
 	describe( 'assert helpers', () => {
-		it( 'assertScanUrl accepts absolute http(s) URLs', async () => {
+		it( 'assertScanUrl accepts same-origin http(s) URLs', async () => {
 			const { assertScanUrl } = await import( '../apiRequest' );
 			expect( () =>
 				assertScanUrl( 'https://example.com/' )
@@ -1038,6 +1049,19 @@ describe( 'API Request library', () => {
 				'Invalid scan URL'
 			);
 			expect( () => assertScanUrl( '' ) ).toThrow( 'Invalid scan URL' );
+		} );
+
+		it( 'assertScanUrl fails closed when homeUrl is absent', async () => {
+			const { assertScanUrl } = await import( '../apiRequest' );
+			const savedHomeUrl = global.wppoSettings.homeUrl;
+			delete global.wppoSettings.homeUrl;
+			try {
+				expect( () => assertScanUrl( 'https://example.com/' ) ).toThrow(
+					'Invalid scan URL'
+				);
+			} finally {
+				global.wppoSettings.homeUrl = savedHomeUrl;
+			}
 		} );
 
 		it( 'assertScanUrl allowEmpty accepts empty, undefined and null', async () => {
@@ -1112,6 +1136,11 @@ describe( 'API Request library', () => {
 			expect( Object.isFrozen( global.wppoSettings.settings ) ).toBe(
 				true
 			);
+			// Matches patchSettingsCache(): nested tab objects are frozen
+			// too, so no path can mutate shared global state.
+			expect(
+				Object.isFrozen( global.wppoSettings.settings.cache )
+			).toBe( true );
 		} );
 
 		it( 'ignores non-object payloads', () => {

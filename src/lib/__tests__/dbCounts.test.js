@@ -4,9 +4,11 @@ import {
 	setDbCountsTtl,
 	createDbCountsCache,
 } from '../dbCounts';
-import { apiCall } from '../apiRequest';
+import { apiCall } from '../apiClient';
 
-jest.mock( '../apiRequest', () => ( {
+// dbCounts.js imports apiCall from ../apiClient (not the ../apiRequest
+// barrel) to avoid barrel coupling, so the mock targets that module.
+jest.mock( '../apiClient', () => ( {
 	apiCall: jest.fn(),
 } ) );
 

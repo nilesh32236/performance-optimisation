@@ -88,13 +88,15 @@ const SuggestionIcon = ( { status } ) => {
  * @return {string} Formatted display string.
  */
 export const formatValue = ( value, unit ) => {
+	// The list branch runs before the missing-metric guard: isMissingMetric()
+	// treats every array as missing, which would render '—' for real lists.
+	if ( unit === 'list' && Array.isArray( value ) ) {
+		return value.length ? value.join( ', ' ) : '—';
+	}
 	if ( isMissingMetric( value ) ) {
 		return '—';
 	}
 	if ( unit === 'list' ) {
-		if ( Array.isArray( value ) ) {
-			return value.join( ', ' );
-		}
 		return String( value );
 	}
 	if ( unit === 'string' ) {

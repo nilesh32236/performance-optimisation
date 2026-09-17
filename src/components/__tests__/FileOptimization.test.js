@@ -35,6 +35,9 @@ describe( 'FileOptimization Component', () => {
 		global.wppoSettings = {
 			apiUrl: 'https://example.com/wp-json/performance-optimisation/v1/',
 			nonce: 'test-nonce',
+			// Production PHP always localises homeUrl; isValidScanUrl
+			// fails closed without it, so the harness mirrors prod.
+			homeUrl: 'http://example.com',
 			settings: {},
 			translations: {},
 		};

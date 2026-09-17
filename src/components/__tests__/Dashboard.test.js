@@ -9,13 +9,33 @@ import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
 
+// dbCounts.js imports apiCall from ../apiClient (not the ../apiRequest
+// barrel), so the transport mock lives on apiClient and the barrel reuses
+// the same fn — one mock serves both Dashboard's direct apiCall calls and
+// the real getDbCounts() mount path.
+jest.mock( '../../lib/apiClient', () => ( {
+	apiCall: jest.fn(),
+} ) );
 jest.mock( '../../lib/apiRequest', () => {
 	const actual = jest.requireActual( '../../lib/apiRequest' );
+	const client = jest.requireMock( '../../lib/apiClient' );
 	return {
 		...actual,
-		apiCall: jest.fn(),
+		apiCall: client.apiCall,
 		fetchWebVitalsTrends: jest.fn(),
 		fetchWooCacheSelfTest: jest.fn(),
+	};
+} );
+
+// Dashboard calls runWooSelfTest (lib/wooSelfTest), which wraps
+// fetchWooCacheSelfTest with its own timeout/abort controller. Mock the
+// wrapper — the unit under test — so the component/test contract cannot
+// drift again when the wrapper's internal async hops change.
+jest.mock( '../../lib/wooSelfTest', () => {
+	const actual = jest.requireActual( '../../lib/wooSelfTest' );
+	return {
+		...actual,
+		runWooSelfTest: jest.fn(),
 	};
 } );
 
@@ -125,6 +145,7 @@ import {
 	fetchWebVitalsTrends,
 	fetchWooCacheSelfTest,
 } from '../../lib/apiRequest';
+import { runWooSelfTest } from '../../lib/wooSelfTest';
 import { clearDbCountsCache } from '../../lib/dbCounts';
 
 /**
@@ -170,6 +191,7 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValue( { success: true, data: {} } );
 		fetchWebVitalsTrends.mockResolvedValue( { success: true, data: {} } );
 		fetchWooCacheSelfTest.mockResolvedValue( { success: true, data: {} } );
+		runWooSelfTest.mockResolvedValue( { success: true, data: {} } );
 	} );
 
 	it( 'renders stats and the welcome panel', async () => {
@@ -622,7 +644,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+		runWooSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: true,
@@ -656,9 +678,7 @@ describe( 'Dashboard', () => {
 			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
 		);
 
-		await waitFor( () =>
-			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
-		);
+		await waitFor( () => expect( runWooSelfTest ).toHaveBeenCalled() );
 		expect( screen.getByText( '/cart/' ) ).toBeInTheDocument();
 		expect( screen.getByText( '/checkout/' ) ).toBeInTheDocument();
 		expect( screen.getAllByText( 'Bypassed (pass)' ) ).toHaveLength( 2 );
@@ -674,7 +694,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+		runWooSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: true,
@@ -688,9 +708,7 @@ describe( 'Dashboard', () => {
 			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
 		);
 
-		await waitFor( () =>
-			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
-		);
+		await waitFor( () => expect( runWooSelfTest ).toHaveBeenCalled() );
 		// Inconclusive info notice — never a FAIL warning with no evidence.
 		expect(
 			screen.getByText(
@@ -708,7 +726,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+		runWooSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: true,
@@ -730,9 +748,7 @@ describe( 'Dashboard', () => {
 			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
 		);
 
-		await waitFor( () =>
-			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
-		);
+		await waitFor( () => expect( runWooSelfTest ).toHaveBeenCalled() );
 		expect( screen.getByText( '/cart/' ) ).toBeInTheDocument();
 		expect(
 			screen.getByText( 'Inconclusive (re-run)' )
@@ -747,7 +763,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+		runWooSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: true,
@@ -791,9 +807,7 @@ describe( 'Dashboard', () => {
 			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
 		);
 
-		await waitFor( () =>
-			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
-		);
+		await waitFor( () => expect( runWooSelfTest ).toHaveBeenCalled() );
 		expect(
 			screen.getByText( 'Fragment probes (query-string):' )
 		).toBeInTheDocument();
@@ -811,7 +825,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+		runWooSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: true,
@@ -856,9 +870,7 @@ describe( 'Dashboard', () => {
 			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
 		);
 
-		await waitFor( () =>
-			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
-		);
+		await waitFor( () => expect( runWooSelfTest ).toHaveBeenCalled() );
 		expect(
 			screen.getByText( 'Preload probes (faceted URLs skipped):' )
 		).toBeInTheDocument();
@@ -878,7 +890,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+		runWooSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: false,
@@ -913,7 +925,7 @@ describe( 'Dashboard', () => {
 
 			await flushDashboardMount();
 
-			fetchWooCacheSelfTest.mockRejectedValueOnce(
+			runWooSelfTest.mockRejectedValueOnce(
 				new Error( 'network error' )
 			);
 
@@ -1034,7 +1046,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+		runWooSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: true,

@@ -10,12 +10,21 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import DatabaseCleanup from '../DatabaseCleanup';
 
-// Mock the API request
-jest.mock( '../../lib/apiRequest', () => ( {
+// Mock the API request. dbCounts.js imports apiCall from ../apiClient (not
+// the ../apiRequest barrel), so the transport mock lives on apiClient and
+// the barrel reuses the same fn — one mock serves both the component's
+// direct apiCall calls and the real getDbCounts() path.
+jest.mock( '../../lib/apiClient', () => ( {
 	apiCall: jest.fn(),
-	getErrorLogMessage: ( error ) =>
-		error instanceof Error ? error.message : String( error ),
 } ) );
+jest.mock( '../../lib/apiRequest', () => {
+	const client = jest.requireMock( '../../lib/apiClient' );
+	return {
+		apiCall: client.apiCall,
+		getErrorLogMessage: ( error ) =>
+			error instanceof Error ? error.message : String( error ),
+	};
+} );
 
 import { apiCall } from '../../lib/apiRequest';
 import { clearDbCountsCache } from '../../lib/dbCounts';

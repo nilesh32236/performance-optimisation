@@ -10,7 +10,7 @@
  */
 
 import { isAuthErrorCode } from './authErrors';
-import { getErrorLogMessage } from './logMessage';
+import { getLogMessage as getErrorLogMessage } from './logMessage';
 import { commitSettingsCache } from './settingsCache';
 
 let pendingRefresh = null;

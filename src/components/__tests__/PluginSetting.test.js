@@ -203,6 +203,9 @@ describe( 'PluginSetting', () => {
 	it( 'saves server timing and high-value URLs', async () => {
 		global.wppoSettings = {
 			performance_audit: { pagespeedApiKeyConfigured: false },
+			// isValidScanUrl fails closed without homeUrl (production PHP
+			// always localises it), so the harness mirrors prod.
+			homeUrl: 'http://example.com',
 			settings: {
 				performance_audit: {
 					server_timing_enabled: false,

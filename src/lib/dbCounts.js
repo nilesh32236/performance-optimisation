@@ -1,4 +1,4 @@
-import { apiCall } from './apiRequest';
+import { apiCall } from './apiClient';
 
 /**
  * Shared database-cleanup counts cache.
@@ -6,6 +6,17 @@ import { apiCall } from './apiRequest';
  * Dashboard and DatabaseCleanup previously issued the identical
  * `database_cleanup_counts` GET with no shared cache; this module memoizes
  * one in-flight promise with a short TTL so tab navigation reuses data.
+ *
+ * The import comes from `./apiClient` (not the `./apiRequest` barrel) to
+ * match `scanApi.js` and keep the refactor's barrel decoupling: a future
+ * barrel → dbCounts import would otherwise create a cycle.
+ *
+ * In-flight dedup intentionally keys on signal identity: two concurrent
+ * getDbCounts() calls with different AbortSignals issue two GETs instead of
+ * sharing one promise, so aborting one caller's signal can never reject an
+ * unrelated component's in-flight request. The duplicate-request cost on
+ * concurrent distinct-signal mounts is the accepted trade-off for that
+ * abort isolation (pinned by dbCounts.test.js).
  *
  * @since 2.0.0
  */

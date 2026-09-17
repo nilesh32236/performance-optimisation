@@ -59,6 +59,9 @@ export const getWppoSettings = ( path, fallback = {} ) => {
  * Single choke point for the frozen-global mutation previously inlined in
  * apiCall() and copied across AiPanel/EdgeCachePanel/LlmsPanel. Freezing
  * keeps every component reading the live global on the same snapshot.
+ * The top-level object and each nested tab object are frozen (one level
+ * deep) to match patchSettingsCache(), so no path can mutate shared
+ * global state that another path assumes frozen.
  *
  * Contract verified in includes/class-rest.php: both `update_settings` and
  * `restore_settings` respond with the full merged `wppo_settings` option
@@ -75,6 +78,12 @@ export const commitSettingsCache = ( payload ) => {
 		return;
 	}
 	if ( payload && typeof payload === 'object' ) {
+		for ( const key of Object.keys( payload ) ) {
+			const tab = payload[ key ];
+			if ( tab && typeof tab === 'object' ) {
+				Object.freeze( tab );
+			}
+		}
 		wppoSettings.settings = Object.freeze( payload );
 	}
 };
