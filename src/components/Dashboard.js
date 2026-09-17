@@ -15,6 +15,7 @@ import {
 	WOO_SELF_TEST_TIMEOUT_MS,
 	formatWooSummary,
 	getWooCheckState,
+	getWooRuleRemediation,
 	getWooSelfTestNotice,
 	shouldShowWooFixCta,
 } from '../lib/wooSelfTest';
@@ -1752,6 +1753,17 @@ const Dashboard = ( {
 												)
 											) }
 										</span>
+										{ check?.pass === false && (
+											<>
+												{ ' — ' }
+												<span className="wppo-text-muted wppo-text-small">
+													{ getWooRuleRemediation(
+														'route',
+														check?.pass
+													) }
+												</span>
+											</>
+										) }
 									</li>
 								) ) }
 							</ul>
@@ -1795,6 +1807,72 @@ const Dashboard = ( {
 															)
 														) }
 													</span>
+													{ check?.pass === false && (
+														<>
+															{ ' — ' }
+															<span className="wppo-text-muted wppo-text-small">
+																{ getWooRuleRemediation(
+																	'fragment',
+																	check?.pass
+																) }
+															</span>
+														</>
+													) }
+												</li>
+											)
+										) }
+									</ul>
+								</>
+							) }
+						{ Array.isArray( wooSelfTest.editor_checks ) &&
+							wooSelfTest.editor_checks.length > 0 && (
+								<>
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'Editor bypass probes (admin + previews):',
+											'performance-optimisation'
+										) }
+									</p>
+									<ul
+										className="wppo-woo-self-test"
+										aria-label={ __(
+											'Editor bypass probes (admin + previews)',
+											'performance-optimisation'
+										) }
+									>
+										{ wooSelfTest.editor_checks.map(
+											( check, index ) => (
+												<li
+													key={ `${
+														check?.url ?? 'editor'
+													}-${ index }` }
+												>
+													<span>{ check?.url }</span>
+													{ ' — ' }
+													<span>
+														{ getWooCheckCopy(
+															check?.pass,
+															__(
+																'Bypassed (pass)',
+																'performance-optimisation'
+															),
+															__(
+																'Cacheable (fail)',
+																'performance-optimisation'
+															)
+														) }
+													</span>
+													{ check?.pass === false && (
+														<>
+															{ ' — ' }
+															<span className="wppo-text-muted wppo-text-small">
+																{ getWooRuleRemediation(
+																	'editor',
+																	check?.pass
+																) }
+															</span>
+														</>
+													) }
 												</li>
 											)
 										) }
@@ -1839,6 +1917,17 @@ const Dashboard = ( {
 															)
 														) }
 													</span>
+													{ check?.pass === false && (
+														<>
+															{ ' — ' }
+															<span className="wppo-text-muted wppo-text-small">
+																{ getWooRuleRemediation(
+																	'preload',
+																	check?.pass
+																) }
+															</span>
+														</>
+													) }
 												</li>
 											)
 										) }
@@ -1883,6 +1972,17 @@ const Dashboard = ( {
 															)
 														) }
 													</span>
+													{ check?.pass === false && (
+														<>
+															{ ' — ' }
+															<span className="wppo-text-muted wppo-text-small">
+																{ getWooRuleRemediation(
+																	'cart',
+																	check?.pass
+																) }
+															</span>
+														</>
+													) }
 												</li>
 											)
 										) }

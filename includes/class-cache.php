@@ -2788,6 +2788,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the current response carries a Set-Cookie header.
+		 *
+		 * Commerce-safety store refusal (issue #1307): a response carrying
+		 * Set-Cookie (Woo session, auth, consent) is per-visitor dynamic and
+		 * must never be persisted to the static file cache. The pre-boot
+		 * drop-in cannot inspect response headers at serve time, so this
+		 * write-path check is the enforcement point. Cheap: one
+		 * function_exists plus one headers_list scan, only on commerce
+		 * relevant write attempts after the early-out guards. Fail-open:
+		 * any detection failure returns true (refuse the store, dynamic),
+		 * never fatal.
+		 *
+		 * @since NEXT
+		 * @return bool True when a Set-Cookie response header is present.
+		 */
+		private function has_set_cookie_response_header(): bool {
+			try {
+				if ( ! function_exists( 'headers_list' ) ) {
+					return false;
+				}
+				foreach ( headers_list() as $header ) {
+					if ( 0 === stripos( (string) $header, 'set-cookie:' ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Whether the current request is an admin/editor-preview context.
 		 *
 		 * Unconditional static-cache bypass (issue #1097): wp-admin / login /
@@ -3423,6 +3456,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( '' !== $faceted_store_qs && Util::is_woo_faceted_query( $faceted_store_qs ) ) {
 						return false;
 					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+
+			// Set-Cookie store refusal (issue #1307): never persist a response
+			// carrying Set-Cookie (Woo session, logged-in auth, consent). The
+			// pre-boot drop-in cannot see response headers at serve time, so
+			// the write path is the enforcement point. Unconditional on safe
+			// mode. Fail-open: detection failure refuses the store (dynamic),
+			// never fatal.
+			try {
+				if ( $this->has_set_cookie_response_header() ) {
+					return false;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
