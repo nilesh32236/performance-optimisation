@@ -536,11 +536,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 *               with fail-open `try/catch` probing.
 		 * @return array {
 		 *     @type string $status            'Enabled' or 'Disabled'.
-		 *     @type string $detail            'not available' when the cache is unusable.
-		 *     @type string $memory_usage      Used of total memory, e.g. '100 MB of 256 MB'.
-		 *     @type string $interned_strings  Interned strings usage as a percentage.
-		 *     @type string $hit_rate          Cache hit rate percentage.
-		 *     @type string $cache_full        'Yes' or 'No'.
+		 *     @type string $detail            Optional. 'not available' when the cache is unusable (disabled paths only).
+		 *     @type string $memory_usage      Optional. Used of total memory, e.g. '100 MB of 256 MB' (enabled path only).
+		 *     @type string $interned_strings  Optional. Interned strings usage as a percentage (enabled path only).
+		 *     @type string $hit_rate          Optional. Cache hit rate percentage (enabled path only).
+		 *     @type string $cache_full        Optional. 'Yes' or 'No' (enabled path only).
 		 *     @type string $opcache_enabled   'Enabled', 'Disabled' or 'Not available'.
 		 *     @type string $opcache_enable_cli 'Enabled', 'Disabled' or 'Not available'.
 		 *     @type string $jit_enabled       'Enabled', 'Disabled' or 'Not available'.
@@ -551,11 +551,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			// Brief per-site cache: the System Info screen is already
 			// on-demand, so a short TTL here only avoids repeated
 			// opcache_get_status() probes on refresh. Fail-open to uncached.
+			$transient_key = Util::transient_key( 'wppo_sysinfo_opcache' );
 			try {
 				if ( function_exists( 'get_transient' ) ) {
-					$transient_key = Util::transient_key( 'wppo_sysinfo_opcache' );
-					$cached        = get_transient( $transient_key );
-					if ( is_array( $cached ) && isset( $cached['status'] ) ) {
+					$cached = get_transient( $transient_key );
+					if ( is_array( $cached ) && isset( $cached['status'], $cached['opcache_enabled'], $cached['opcache_enable_cli'], $cached['jit_enabled'], $cached['jit_mode'] ) ) {
 						return $cached;
 					}
 				}
@@ -580,7 +580,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			try {
 				if ( function_exists( 'set_transient' ) ) {
 					$ttl = defined( 'MINUTE_IN_SECONDS' ) ? 5 * MINUTE_IN_SECONDS : 300;
-					set_transient( Util::transient_key( 'wppo_sysinfo_opcache' ), $result, $ttl );
+					set_transient( $transient_key, $result, $ttl );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -608,7 +608,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 					'detail'             => 'not available',
 					'opcache_enabled'    => self::describe_ini_flag( 'opcache.enable' ),
 					'opcache_enable_cli' => self::describe_ini_flag( 'opcache.enable_cli' ),
-					'jit_enabled'        => $jit['enabled'],
+					// JIT requires OPcache: never report Enabled alongside a
+					// Disabled OPcache (raw mode is kept for observability).
+					'jit_enabled'        => __( 'Disabled', 'performance-optimisation' ),
 					'jit_mode'           => $jit['mode'],
 				);
 			}
@@ -616,13 +618,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Warning emitted when opcache.restrict_api blocks access.
 			$opcache = opcache_get_status( false );
 
-			if ( false === $opcache ) {
+			if ( false === $opcache || ! is_array( $opcache ) ) {
 				return array(
 					'status'             => __( 'Disabled by configuration', 'performance-optimisation' ),
 					'detail'             => 'not available',
 					'opcache_enabled'    => self::describe_ini_flag( 'opcache.enable' ),
 					'opcache_enable_cli' => self::describe_ini_flag( 'opcache.enable_cli' ),
-					'jit_enabled'        => $jit['enabled'],
+					// JIT requires OPcache: never report Enabled alongside a
+					// Disabled OPcache (raw mode is kept for observability).
+					'jit_enabled'        => __( 'Disabled', 'performance-optimisation' ),
 					'jit_mode'           => $jit['mode'],
 				);
 			}
@@ -650,8 +654,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			if (
-				isset( $opcache['interned_strings_usage']['used_memory'], $opcache['interned_strings_usage']['buffer_size'] )
-				&& 0 !== $opcache['interned_strings_usage']['buffer_size']
+			isset( $opcache['interned_strings_usage']['used_memory'], $opcache['interned_strings_usage']['buffer_size'] )
+			&& ! empty( $opcache['interned_strings_usage']['buffer_size'] )
 			) {
 				$info['interned_strings'] = sprintf(
 					/* translators: 1: Percentage used, 2: Total memory, 3: Free memory */
@@ -706,7 +710,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			if ( in_array( $normalized, array( '1', 'on', 'true', 'yes' ), true ) ) {
 				return __( 'Enabled', 'performance-optimisation' );
 			}
-			if ( in_array( $normalized, array( '0', 'off', 'false', 'no' ), true ) ) {
+			// An empty ini value (boolean Off reads as '' on some hosts)
+			// is definitively off, not unknown.
+			if ( '' === $normalized || in_array( $normalized, array( '0', 'off', 'false', 'no' ), true ) ) {
 				return __( 'Disabled', 'performance-optimisation' );
 			}
 
@@ -763,7 +769,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			$disabled_modes = array( 'off', 'disable', 'disabled', '0' );
-			$buffer_off     = false === $buffer_size || '0' === trim( (string) $buffer_size );
+			// A zero buffer (literal '0', shorthand '0M'/'0K'/'0G'/'0B', or
+			// empty) means JIT cannot engage even when `opcache.jit` names
+			// a mode. Real sizes use shorthand ('128M'), so only a
+			// zero-with-optional-suffix prefix counts as off.
+			$buf        = strtolower( trim( (string) $buffer_size ) );
+			$buffer_off = false === $buffer_size || '' === $buf || 1 === preg_match( '/^0+([bkmg])?$/', $buf );
 
 			return array(
 				'enabled' => ( in_array( strtolower( $mode ), $disabled_modes, true ) || $buffer_off )

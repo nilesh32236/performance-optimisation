@@ -375,7 +375,7 @@ const SystemInfo = () => {
 						} }
 					/>
 					<InfoTable
-						title={ __( 'OPCache', 'performance-optimisation' ) }
+						title={ __( 'OPcache', 'performance-optimisation' ) }
 						data={ info.opcache }
 						labels={ {
 							status: __( 'Status', 'performance-optimisation' ),

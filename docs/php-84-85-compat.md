@@ -204,5 +204,7 @@ and root `*.php`; the machine-checkable subset is pinned by
   on demand ("Load System Info" button, no frontend cost); the probe itself
   is now cached briefly (5-minute per-site transient via
   `Util::transient_key( 'wppo_sysinfo_opcache' )`), so refreshes never
-  hammer `opcache_get_status()` and multisite transients cannot leak
-  across sites. Frontend delta is zero KB / zero extra frontend queries.
+   hammer `opcache_get_status()` and multisite transients cannot leak
+   across sites. Public-site cost is zero (admin-only screen); the admin
+   bundle grows negligibly (4 label strings, no extra requests) with one
+   per-site transient read per System Info load (5-min TTL).
