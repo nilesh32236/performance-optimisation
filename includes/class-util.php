@@ -1763,12 +1763,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Shares one stat per distinct path across get_local_path(),
 		 * validate_minify_path(), and is_file_minified() callers so a
 		 * 30-asset page does not pay duplicate stats per handle. False
-		 * verdicts (unresolvable paths) are memoized too.
+		 * verdicts (unresolvable paths) are memoized too. Bounded FIFO
+		 * (500 entries): long-lived FPM/CLI/Action-Scheduler/cron workers
+		 * cycling many distinct paths cannot grow this without bound.
+		 * Cleared by reset_runtime_caches() for test isolation.
 		 *
 		 * @var array<string, string|false>
 		 * @since NEXT
 		 */
 		private static array $realpath_memo = array();
+
+		/**
+		 * Per-blog memo for expanded minify allow-roots (see validate_minify_path()).
+		 *
+		 * Caches the literal + realpath-resolved root union per blog ID so the
+		 * N-1 remaining assets on a page skip the O(R) rebuild (loop +
+		 * memoized_realpath per root + array_unique) on every call.
+		 * Cleared by reset_runtime_caches() for test isolation.
+		 *
+		 * @var array<int, string[]>
+		 * @since NEXT
+		 */
+		private static array $minify_expanded_roots_memo = array();
 
 		/**
 		 * Resets the home_url static cache for testing isolation.
@@ -1800,8 +1816,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			self::clear_settings_cache();
 			self::clear_permalink_cache();
 			self::reset_action_scheduler_unique_cache();
-			self::$minify_roots_memo = array();
-			self::$realpath_memo     = array();
+			self::$minify_roots_memo          = array();
+			self::$minify_expanded_roots_memo = array();
+			self::$realpath_memo              = array();
 		}
 
 		/**
@@ -2160,6 +2177,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$resolved = false;
 				}
 			}
+			// FIFO bound: evict the oldest entry so long-lived workers stay flat.
+			if ( count( self::$realpath_memo ) >= 500 ) {
+				array_shift( self::$realpath_memo );
+			}
 			self::$realpath_memo[ $path ] = $resolved;
 			return $resolved;
 		}
@@ -2216,12 +2237,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 
-			// If home_url has a subdirectory path, remove it only from the start.
+			// If home_url has a subdirectory path, remove it only from the start
+			// and only on an exact or slash boundary: "/blog" must not strip
+			// "/blog-extra/..." down to "-extra/..." (mis-mapping onto ABSPATH).
 			$home_path = wp_normalize_path( wp_parse_url( self::cached_home_url(), PHP_URL_PATH ) ?? '' );
 
 			if ( $home_path && '/' !== $home_path ) {
-				if ( 0 === strpos( $relative_path, $home_path ) ) {
-					$relative_path = substr( $relative_path, strlen( $home_path ) );
+				$home_trimmed = rtrim( $home_path, '/' );
+				if ( $relative_path === $home_trimmed || 0 === strpos( $relative_path, $home_trimmed . '/' ) ) {
+					$relative_path = substr( $relative_path, strlen( $home_trimmed ) );
 				}
 			}
 
@@ -2247,6 +2271,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// when the target exists but resolution fails (permissions,
 			// open_basedir, transient I/O) refuse rather than returning the
 			// unresolved string-checked path to file_get_contents/filesize.
+			// Single-stat: probe existence first so missing files (the common
+			// image/srcset-loop miss) pay one stat instead of realpath + exists.
+			if ( ! file_exists( $full_path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local read-only existence probe before symlink resolution.
+				return $full_path;
+			}
 			$resolved = self::memoized_realpath( $full_path );
 			if ( is_string( $resolved ) && '' !== $resolved ) {
 				$normalized_resolved = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $resolved ) : str_replace( '\\', '/', $resolved );
@@ -2260,7 +2289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( $normalized_resolved !== $abspath_base && 0 !== strpos( $normalized_resolved, $abspath_base . '/' ) ) {
 					return '';
 				}
-			} elseif ( file_exists( $full_path ) ) {
+			} else {
 				return '';
 			}
 
@@ -2319,8 +2348,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 			$defaults = array_values( array_unique( array_filter( $defaults ) ) );
 
+			// Fail-open to defaults when the filter is absent, throws, or
+			// returns unusable values: a poisoned/throwing filter must never
+			// open the tree or fatal a frontend render (callers in class-css,
+			// class-js, and class-cache call this gate without try/catch).
 			if ( function_exists( 'has_filter' ) && has_filter( 'wppo_minify_allowed_roots' ) ) {
-				$filtered = apply_filters( 'wppo_minify_allowed_roots', $defaults );
+				$filtered = $defaults;
+				try {
+					$filtered = apply_filters( 'wppo_minify_allowed_roots', $defaults );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$filtered = $defaults;
+				}
 				if ( is_array( $filtered ) && ! empty( $filtered ) ) {
 					$sanitized = array();
 					foreach ( $filtered as $root ) {
@@ -2380,6 +2419,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since NEXT
 		 */
 		public static function validate_minify_path( $path ): string {
+			try {
+				return self::validate_minify_path_unguarded( $path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Unguarded validate_minify_path() body (see wrapper for fail-open).
+		 *
+		 * @param mixed $path Candidate filesystem path.
+		 * @return string Normalized resolved allowed path, or '' when rejected.
+		 * @since NEXT
+		 */
+		private static function validate_minify_path_unguarded( $path ): string {
 			if ( ! is_string( $path ) || '' === $path ) {
 				return '';
 			}
@@ -2440,27 +2495,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// (atomic-deploy current->releases, Docker bind-mounts), the
 			// resolved candidate would otherwise miss the literal prefix and
 			// silently disable minify/combine. Fall back to literal roots
-			// when a root cannot be resolved.
-			$roots          = self::get_minify_allowed_roots();
-			$expanded_roots = array();
-			foreach ( $roots as $root ) {
-				if ( ! is_string( $root ) || '' === $root ) {
-					continue;
+			// when a root cannot be resolved. Memoized per blog ID so the N-1
+			// remaining assets on a page skip the O(R) rebuild per call.
+			$blog_id = self::current_blog_id();
+			if ( ! isset( self::$minify_expanded_roots_memo[ $blog_id ] ) ) {
+				$roots          = self::get_minify_allowed_roots();
+				$expanded_roots = array();
+				foreach ( $roots as $root ) {
+					if ( ! is_string( $root ) || '' === $root ) {
+						continue;
+					}
+					$expanded_roots[] = $root;
+					$resolved_root    = self::memoized_realpath( $root );
+					if ( is_string( $resolved_root ) && '' !== $resolved_root ) {
+						$expanded_roots[] = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $resolved_root ) : str_replace( '\\', '/', $resolved_root );
+					}
 				}
-				$expanded_roots[] = $root;
-				$resolved_root    = self::memoized_realpath( $root );
-				if ( is_string( $resolved_root ) && '' !== $resolved_root ) {
-					$expanded_roots[] = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $resolved_root ) : str_replace( '\\', '/', $resolved_root );
-				}
+				self::$minify_expanded_roots_memo[ $blog_id ] = array_values( array_unique( array_filter( $expanded_roots ) ) );
 			}
-			$expanded_roots = array_values( array_unique( array_filter( $expanded_roots ) ) );
+			$expanded_roots = self::$minify_expanded_roots_memo[ $blog_id ];
 
 			foreach ( $expanded_roots as $root ) {
 				if ( ! is_string( $root ) || '' === $root ) {
 					continue;
 				}
 				if ( $normalized === $root || 0 === strpos( $normalized, rtrim( $root, '/' ) . '/' ) ) {
-					return (string) $resolved;
+					return $normalized;
 				}
 			}
 

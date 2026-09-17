@@ -46,6 +46,13 @@ class MinifyHtmlHardening1344Test extends \PHPUnit\Framework\TestCase {
 	private $outside_file = '';
 
 	/**
+	 * Scratch dir holding the outside-root secret (unique per test run).
+	 *
+	 * @var string
+	 */
+	private $outside_dir = '';
+
+	/**
 	 * Symlink inside WP_CONTENT_DIR pointing outside the allowed roots.
 	 *
 	 * @var string
@@ -75,12 +82,15 @@ class MinifyHtmlHardening1344Test extends \PHPUnit\Framework\TestCase {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
 		file_put_contents( $this->fixture_css, ".wppo-1344 {\n\tcolor: red;\n}\n" );
 
-		$outside_dir = '/tmp/wppo-1344-outside';
-		if ( ! is_dir( $outside_dir ) ) {
+		// Unique per-run scratch dir under the system temp dir: parallel CI
+		// workers never collide, and the location never diverges from the
+		// WP_CONTENT_DIR constant above.
+		$this->outside_dir = sys_get_temp_dir() . '/wppo-1344-outside-' . uniqid();
+		if ( ! is_dir( $this->outside_dir ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixtures use native filesystem.
-			mkdir( $outside_dir, 0755, true );
+			mkdir( $this->outside_dir, 0755, true );
 		}
-		$this->outside_file = $outside_dir . '/secret-1344.css';
+		$this->outside_file = $this->outside_dir . '/secret-1344.css';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
 		file_put_contents( $this->outside_file, ".secret-1344 { color: black; }\n" );
 
@@ -105,6 +115,10 @@ class MinifyHtmlHardening1344Test extends \PHPUnit\Framework\TestCase {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 				unlink( $file );
 			}
+		}
+		if ( is_string( $this->outside_dir ) && '' !== $this->outside_dir && is_dir( $this->outside_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+			rmdir( $this->outside_dir );
 		}
 		\Brain\Monkey\tearDown();
 		parent::tearDown();
@@ -190,6 +204,32 @@ class MinifyHtmlHardening1344Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * End-to-end minify_html() pipeline restores every preserved script.
+	 *
+	 * Unlike the buffer-shape test above, this exercises the claimed
+	 * $pre_minify fallback assignment plus unconditional restore inside
+	 * minify_html(): a regression moving restore back inside the guarded
+	 * try (or dropping the fallback) fails here.
+	 */
+	public function test_minify_html_pipeline_restores_all_scripts_without_tokens(): void {
+		// phpcs:disable WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for placeholder restore tests.
+		$first  = '<script type="text/x-custom">var wppo_pipe_first_1344 = 1;</script>';
+		$second = '<script type="text/x-custom">var wppo_pipe_second_1344 = 2;</script>';
+		$html   = '<html><head><link rel="canonical" href="http://example.com/page-1344/"></head><body>' . $first . $second . '</body></html>';
+		// phpcs:enable WordPress.WP.EnqueuedResources.NonEnqueuedScript
+
+		$instance = new HTML( '<html><head></head><body><p>hi</p></body></html>', array( 'file_optimisation' => array() ) );
+
+		$out = $this->invoke_private( $instance, 'minify_html', $html );
+
+		$this->assertStringContainsString( $first, $out );
+		$this->assertStringContainsString( $second, $out );
+		$this->assertStringNotContainsString( 'data-wppo-preserve', $out );
+		$this->assertStringNotContainsString( 'wppo-href', $out );
+		$this->assertStringContainsString( 'href="http://example.com/page-1344/"', $out );
+	}
+
+	/**
 	 * Stylesheet resolver accepts a legitimate in-root file by realpath.
 	 */
 	public function test_resolve_local_stylesheet_accepts_legitimate(): void {
@@ -226,19 +266,24 @@ class MinifyHtmlHardening1344Test extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Main::is_file_minified() refuses symlink escapes and outside-root paths.
+	 *
+	 * Non-symlink hostile asserts run unconditionally so coverage survives
+	 * on filesystems without symlink support; only the escape-link assert
+	 * is symlink-gated.
 	 */
 	public function test_is_file_minified_rejects_escape_and_outside(): void {
 		$main = $this->make_main();
 
-		if ( ! is_link( $this->escape_link ) ) {
-			$this->markTestSkipped( 'Symlink creation not supported in this environment.' );
-		}
 		$content_dir = defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ? rtrim( WP_CONTENT_DIR, '/' ) : '/tmp/wordpress/wp-content';
 		// Fail-open verdict (true = "already minified, skip") for hostile input.
-		$this->assertTrue( $this->invoke_private( $main, 'is_file_minified', $this->escape_link, 'css' ) );
 		$this->assertTrue( $this->invoke_private( $main, 'is_file_minified', '/etc/hosts', 'css' ) );
 		$this->assertTrue( $this->invoke_private( $main, 'is_file_minified', $content_dir . "/a\0b.css", 'css' ) );
 		$this->assertTrue( $this->invoke_private( $main, 'is_file_minified', 'php://filter/convert.base64-encode/resource=' . $content_dir . '/x.css', 'css' ) );
+		$this->assertTrue( $this->invoke_private( $main, 'is_file_minified', $this->outside_file, 'css' ) );
+		if ( ! is_link( $this->escape_link ) ) {
+			$this->markTestSkipped( 'Symlink creation not supported in this environment.' );
+		}
+		$this->assertTrue( $this->invoke_private( $main, 'is_file_minified', $this->escape_link, 'css' ) );
 	}
 
 	/**
@@ -252,16 +297,20 @@ class MinifyHtmlHardening1344Test extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Util::get_local_path() refuses a symlink escaping ABSPATH but keeps benign mapping.
+	 *
+	 * The benign-mapping assert runs unconditionally so non-symlink
+	 * filesystems still pin coverage; only the escape-link assert is
+	 * symlink-gated.
 	 */
 	public function test_get_local_path_rejects_symlink_escape(): void {
-		if ( ! is_link( $this->escape_link ) ) {
-			$this->markTestSkipped( 'Symlink creation not supported in this environment.' );
-		}
-		$this->assertSame( '', Util::get_local_path( 'http://example.com/wp-content/wppo-1344-escape.css' ) );
 		$content_dir = defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ? rtrim( WP_CONTENT_DIR, '/' ) : '/tmp/wordpress/wp-content';
 		$this->assertSame(
 			$content_dir . '/themes/my-theme/style.css',
 			Util::get_local_path( 'http://example.com/wp-content/themes/my-theme/style.css' )
 		);
+		if ( ! is_link( $this->escape_link ) ) {
+			$this->markTestSkipped( 'Symlink creation not supported in this environment.' );
+		}
+		$this->assertSame( '', Util::get_local_path( 'http://example.com/wp-content/wppo-1344-escape.css' ) );
 	}
 }

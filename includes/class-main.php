@@ -8754,9 +8754,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} else {
 					$local = str_replace( '\\', '/', $local );
 				}
-				if ( false !== strpos( $local, "\0" ) || false !== strpos( $local, '..' ) ) {
-					return '';
-				}
+				// No further literal checks here: the shared
+				// Util::validate_minify_path() gate below repeats the
+				// NUL/traversal/scheme/containment sequence on $local, so a
+				// third local scan would only double per-asset string work.
 				// Shared realpath() + allow-root gate (WP_CONTENT_DIR, ABSPATH,
 				// uploads; multisite-safe). Fail-open: mismatch skips the asset.
 				if ( class_exists( Util::class ) && method_exists( Util::class, 'validate_minify_path' ) ) {
@@ -12769,116 +12770,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				unset( $e );
 			}
 
-			// Containment: only stat files under WP_CONTENT_DIR/ABSPATH so a
-			// poisoned wppo_* filter returning an absolute path cannot cause
-			// arbitrary local file stat/read. Symlinks are resolved via
-			// realpath() (guarded, memoized) so a link inside the content dir
-			// pointing outside is refused; non-existent paths keep the
-			// string-prefix verdict so the fail-open skip is unchanged.
-			// Intentionally strict: literal ".." over-blocks exotic names like
-			// my..theme.css (safe direction: skips optimization only).
-			if ( false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
-				return true;
-			}
-			$trimmed = ltrim( $file_path );
-			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $trimmed ) ) {
-				return true;
-			}
-			if ( 0 === stripos( $trimmed, 'data:' ) || 0 === stripos( $trimmed, 'phar:' ) ) {
-				return true;
-			}
-			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#i', $trimmed ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $trimmed ) ) {
-				return true;
-			}
-			// Shared-gate verdict first: a single auditable allow-list so the
-			// three containment copies cannot drift. Fail-open skip on reject.
-			if ( class_exists( Util::class ) && method_exists( Util::class, 'is_minify_path_allowed' ) ) {
+			// Single shared containment gate (Util::validate_minify_path):
+			// rejects NUL/traversal/wrappers/non-asset extensions, resolves
+			// symlinks via guarded memoized realpath(), and requires the
+			// resolved path to sit inside the literal-or-resolved allow-roots
+			// (ABSPATH, WP_CONTENT_DIR, uploads basedir). The returned
+			// resolved normalized path feeds the stat/read below so the
+			// containment verdict and the subsequent read cannot diverge via
+			// a simple symlink swap. Fail-open skip on reject.
+			// Note: a symlink-swap race between this check and the read/stat
+			// below remains (separate syscalls; would need O_NOFOLLOW/fstat
+			// revalidation to close). Requires a local file-write primitive;
+			// recorded as accepted residual.
+			$candidate = '';
+			if ( class_exists( Util::class ) && method_exists( Util::class, 'validate_minify_path' ) ) {
 				try {
-					if ( ! Util::is_minify_path_allowed( $file_path ) ) {
+					$validated = Util::validate_minify_path( $file_path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
+				if ( ! is_string( $validated ) || '' === $validated ) {
+					return true;
+				}
+				$candidate = $validated;
+			} else {
+				// Legacy fallback for stale deploys without the shared gate:
+				// intentionally a strict ABSPATH + WP_CONTENT_DIR subset.
+				try {
+					if ( false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
 						return true;
 					}
+					if ( ! function_exists( 'realpath' ) ) {
+						return true;
+					}
+					$real = realpath( $file_path );
+					if ( ! is_string( $real ) || '' === $real ) {
+						return true;
+					}
+					$real  = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $real ) : str_replace( '\\', '/', $real );
+					$roots = array();
+					if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+						$roots[] = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) WP_CONTENT_DIR ) : str_replace( '\\', '/', (string) WP_CONTENT_DIR );
+					}
+					if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+						$roots[] = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) ABSPATH ) : str_replace( '\\', '/', (string) ABSPATH );
+					}
+					$allowed = false;
+					foreach ( $roots as $root ) {
+						if ( ! is_string( $root ) || '' === $root ) {
+							continue;
+						}
+						if ( $real === $root || 0 === strpos( $real, rtrim( $root, '/' ) . '/' ) ) {
+							$allowed = true;
+							break;
+						}
+					}
+					if ( ! $allowed ) {
+						return true;
+					}
+					$candidate = $real;
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					return true;
 				}
 			}
-			try {
-				static $content_root = null;
-				static $abspath_root = null;
-				if ( null === $content_root ) {
-					$content_root = ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) ? ( function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) WP_CONTENT_DIR ) : str_replace( '\\', '/', (string) WP_CONTENT_DIR ) ) : '';
-				}
-				if ( null === $abspath_root ) {
-					$abspath_root = ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) ? ( function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) ABSPATH ) : str_replace( '\\', '/', (string) ABSPATH ) ) : '';
-				}
-				$normalize     = function_exists( 'wp_normalize_path' )
-					? static function ( string $p ): string {
-						return wp_normalize_path( $p );
-					}
-					: static function ( string $p ): string {
-						return str_replace( '\\', '/', $p );
-					};
-				$resolved_path = $file_path;
-				if ( class_exists( Util::class ) && method_exists( Util::class, 'memoized_realpath' ) ) {
-					try {
-						$memo_resolved = Util::memoized_realpath( $file_path );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$memo_resolved = false;
-					}
-					if ( is_string( $memo_resolved ) && '' !== $memo_resolved ) {
-						$resolved_path = $memo_resolved;
-					}
-				} elseif ( function_exists( 'realpath' ) ) {
-					try {
-						$resolved = realpath( $file_path );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$resolved = false;
-					}
-					if ( is_string( $resolved ) && '' !== $resolved ) {
-						$resolved_path = $resolved;
-					}
-				}
-				$normalized = $normalize( $resolved_path );
-				if ( false !== strpos( $normalized, "\0" ) ) {
-					return true;
-				}
-				$allowed = false;
-				if ( '' !== $content_root ) {
-					if ( $normalized === $content_root || 0 === strpos( $normalized, rtrim( $content_root, '/' ) . '/' ) ) {
-						$allowed = true;
-					}
-				}
-				if ( ! $allowed && '' !== $abspath_root ) {
-					if ( $normalized === $abspath_root || 0 === strpos( $normalized, rtrim( $abspath_root, '/' ) . '/' ) ) {
-						$allowed = true;
-					}
-				}
-				if ( ! $allowed ) {
-					return true;
-				}
-				// Stat the resolved path so the containment verdict and the
-				// subsequent read cannot diverge via a simple symlink swap.
-				// Note: a symlink-swap race between this check and the
-				// read/stat below remains (separate syscalls; would need
-				// O_NOFOLLOW/fstat revalidation to close). Requires a local
-				// file-write primitive; recorded as accepted residual.
-				$file_path = $resolved_path;
-			} catch ( \Throwable $e ) {
-				unset( $e );
+
+			if ( ! file_exists( $candidate ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local read-only probe on an allow-root-confined path.
 				return true;
 			}
 
-			if ( ! file_exists( $file_path ) ) {
-				return true;
-			}
-
-			$file_size = filesize( $file_path );
+			$file_size = filesize( $candidate ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Local read-only probe on an allow-root-confined path.
 			if ( false === $file_size ) {
 				return true;
 			}
-			$file_mtime = filemtime( $file_path );
+			$file_mtime = filemtime( $candidate ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filemtime -- Local read-only probe on an allow-root-confined path.
 			if ( false === $file_mtime ) {
 				return true;
 			}
@@ -12886,7 +12852,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Fold mtime+size into the key so an updated plugin/theme
 			// asset cannot serve a stale 'already minified, skip' verdict
 			// for up to an hour after the file changes.
-			$cache_key   = 'min_' . $type . '_' . md5( $file_path . '|' . $file_mtime . '|' . $file_size );
+			$cache_key   = 'min_' . $type . '_' . md5( $candidate . '|' . $file_mtime . '|' . $file_size );
 			$cache_group = 'wppo_minify_check';
 			$found       = false;
 			$cached      = wp_cache_get( $cache_key, $cache_group, false, $found );
@@ -12895,8 +12861,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return (bool) $cached;
 			}
 
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-			$handle = fopen( $file_path, 'r' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+			$handle = fopen( $candidate, 'r' );
 			if ( ! $handle ) {
 				return true;
 			}

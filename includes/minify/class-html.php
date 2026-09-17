@@ -616,7 +616,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			// Placeholder-carrying buffer: restored unconditionally below so a
 			// mid-minify throwable can never leak namespaced tokens or drop
 			// preserved scripts. Fail-open to unoptimised HTML on failure.
+			// $original is no longer referenced past this point, so release the
+			// duplicate page buffer now (peak memory stays ~2x instead of ~3x).
 			$pre_minify = $html;
+			unset( $original, $modified, $content_array );
 
 			try {
 				if ( ! empty( $this->options['file_optimisation']['minifyInlineCSS'] ) ) {
@@ -629,7 +632,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 				if ( ! empty( $this->options['file_optimisation']['minifyHTML'] ) ) {
 					try {
-						$html = $this->get_html_min()->minify( $html );
+						$minified = $this->get_html_min()->minify( $html );
 					} catch ( \Throwable $e ) {
 						try {
 							if ( function_exists( 'do_action' ) ) {
@@ -638,7 +641,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						} catch ( \Throwable $ignored ) {
 							unset( $ignored );
 						}
+						$minified = $pre_minify;
 					}
+					// Engine must return a string: a non-string return (or a
+					// PCRE-null coerced inside the engine) fails open to the
+					// placeholder-carrying buffer instead of TypeErroring the
+					// string-typed restore below.
+					$html = is_string( $minified ) ? $minified : $pre_minify;
 				}
 			} catch ( \Throwable $e ) {
 				try {
@@ -651,11 +660,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				$html = $pre_minify;
 			}
 
-			if ( ! empty( $scripts ) ) {
-				$html = $this->restore_preserved_scripts_template( $html, $scripts );
+			// Unconditional restore, itself guarded: neither a preserved-script
+			// nor a canonical-link throwable may escape minify_html() (called
+			// unguarded from __construct). Any restore failure fails open to
+			// the pre-minify buffer.
+			try {
+				if ( ! empty( $scripts ) ) {
+					$html = $this->restore_preserved_scripts_template( $html, $scripts );
+				}
+				$html = $this->restore_canonical_link( $html );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$html = $pre_minify;
 			}
-
-			$html = $this->restore_canonical_link( $html );
+			unset( $pre_minify );
 
 			return $html;
 		}
@@ -767,7 +785,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				function ( $matches ) {
 					$link_tag = preg_replace( '/\bhref\s*=/i', 'wppo-href=', $matches[0] );
 
-					return $link_tag;
+					return null !== $link_tag ? $link_tag : $matches[0];
 				},
 				$html
 			);
