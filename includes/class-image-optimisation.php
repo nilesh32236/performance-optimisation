@@ -6236,15 +6236,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// swapped for comment placeholders during the repair and
 			// restored afterwards (comments survive Tag Processor
 			// re-serialization verbatim and can never match an img tag).
-			$working_html = preg_replace_callback(
+			// Security (CVE-2026-2430 / CVE-2026-3220 / CVE-2025-12034
+			// shape): tokens use the per-request unguessable namespace and
+			// restore via the strict allowlist so stored content shaped like
+			// a token stays inert.
+			$noscript_namespace = $this->get_noscript_namespace();
+			$working_html       = preg_replace_callback(
 				'#<noscript\b[^>]*>.*?</noscript>#is',
-				static function ( $m ) use ( &$noscript_tokens, $html ) {
-					$token                     = '<!--wppo-noscript-' . count( $noscript_tokens ) . '-' . md5( $html . count( $noscript_tokens ) ) . '-->';
-					$noscript_tokens[ $token ] = $m[0];
+				function ( $m ) use ( &$noscript_tokens, $noscript_namespace ) {
+					$token = '<!--WPPO_NOSCRIPT_' . $noscript_namespace . '_' . count( $noscript_tokens ) . '-->';
+					// Harden before stashing so hostile markup inside a
+					// noscript block cannot be restored verbatim.
+					$noscript_tokens[ $token ] = $this->sanitize_comment_images_in_buffer( $m[0] );
 					return $token;
 				},
 				$html
 			);
+			// PCRE failure: degrade to the unmodified buffer, never fatal.
+			if ( null === $working_html ) {
+				return $original_html;
+			}
 			if ( is_string( $working_html ) ) {
 				$html = $working_html;
 			}
@@ -6267,9 +6278,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			if ( $updated || $marker_found ) {
 				$result = $updated ? (string) $tags->get_updated_html() : $html;
-				if ( ! empty( $noscript_tokens ) ) {
-					$result = strtr( $result, $noscript_tokens );
-				}
+				// Strict allowlist restore: unknown, foreign-namespace, or
+				// out-of-range tokens pass through unmodified (fail-open) so
+				// attacker-controlled markup shaped like a token stays inert.
+				$result = $this->restore_noscript_tokens( $result, $noscript_tokens );
 				return $result;
 			}
 			return $this->ensure_first_content_image_alt( $original_html, $video_id );
@@ -8593,7 +8605,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$noscript_tokens    = array();
 			$noscript_namespace = $this->get_noscript_namespace();
 			$extracted          = preg_replace_callback(
-				'#<noscript>.*?</noscript>#is',
+				'#<noscript\b[^>]*>.*?</noscript>#is',
 				function ( $m ) use ( &$noscript_tokens, $noscript_namespace ) {
 					$token = '<!--WPPO_NOSCRIPT_' . $noscript_namespace . '_' . count( $noscript_tokens ) . '-->';
 					// Harden before stashing so `<noscript><img onerror>>`
