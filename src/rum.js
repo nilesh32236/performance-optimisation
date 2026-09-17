@@ -158,6 +158,220 @@ export const shouldSendSample = ( rate, randomValue ) => {
 export const RUM_MAX_METRIC_MS = 60000;
 
 /**
+ * Maximum length (chars) for the LCP element selector attribution.
+ *
+ * Mirrors `RUM::LCP_SELECTOR_MAX_LENGTH` in includes/class-rum.php.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const RUM_MAX_LCP_SELECTOR_LENGTH = 256;
+
+/**
+ * Maximum slow-resource entries attached to one beacon.
+ *
+ * Mirrors `RUM::SLOW_RESOURCES_MAX_COUNT` in includes/class-rum.php.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const RUM_MAX_SLOW_RESOURCES = 5;
+
+/**
+ * Slow-resource duration threshold (ms): only entries slower than this
+ * are considered for the audit. Mirrors the server-side clamp range.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const RUM_SLOW_RESOURCE_THRESHOLD_MS = 300;
+
+/**
+ * Allowlisted resource initiator types for the slow-resource audit.
+ *
+ * Mirrors `RUM::ALLOWED_SLOW_RESOURCE_TYPES` in includes/class-rum.php.
+ *
+ * @since NEXT
+ * @type {string[]}
+ */
+export const RUM_ALLOWED_RESOURCE_TYPES = [
+	'img',
+	'script',
+	'css',
+	'link',
+	'font',
+	'fetch',
+	'xmlhttprequest',
+	'iframe',
+];
+
+/**
+ * Derive a compact CSS selector for the LCP element (fail-open).
+ *
+ * Privacy/size guard: only tag + #id or first class is used, never xpath
+ * or outerHTML. Returns null when the element is unavailable so callers
+ * omit the field and the numeric beacon path is unchanged.
+ *
+ * @since NEXT
+ * @param {*} element LCP entry element (`last.element`).
+ * @return {string|null} Compact selector (<=256 chars) or null.
+ */
+export const deriveLcpSelector = ( element ) => {
+	try {
+		if ( ! element || typeof element.tagName !== 'string' ) {
+			return null;
+		}
+		const tag = element.tagName.toLowerCase().slice( 0, 32 );
+		if ( ! /^[a-z][a-z0-9-]*$/.test( tag ) ) {
+			return null;
+		}
+		let selector = tag;
+		const id = typeof element.id === 'string' ? element.id.trim() : '';
+		if ( id && /^[a-z0-9_-]{1,64}$/i.test( id ) ) {
+			selector += '#' + id.slice( 0, 64 );
+			return selector.slice( 0, RUM_MAX_LCP_SELECTOR_LENGTH );
+		}
+		let firstClass = '';
+		try {
+			if (
+				element.classList &&
+				typeof element.classList.length === 'number' &&
+				element.classList.length > 0
+			) {
+				firstClass = String( element.classList[ 0 ] || '' ).trim();
+			} else if ( typeof element.className === 'string' ) {
+				firstClass = element.className.split( /\s+/ )[ 0 ] || '';
+			}
+		} catch {
+			firstClass = '';
+		}
+		if ( firstClass && /^[a-z0-9_-]{1,64}$/i.test( firstClass ) ) {
+			selector += '.' + firstClass.slice( 0, 64 );
+		}
+		return selector.slice( 0, RUM_MAX_LCP_SELECTOR_LENGTH );
+	} catch {
+		return null;
+	}
+};
+
+/**
+ * Normalize one slow-resource entry to the beacon shape.
+ *
+ * Fail-open: returns null for malformed entries so callers drop them.
+ *
+ * @since NEXT
+ * @param {*} entry Raw resource-timing entry.
+ * @return {Object|null} Shaped `{name, type, duration}` entry or null.
+ */
+export const sanitizeSlowResourceEntry = ( entry ) => {
+	try {
+		if ( ! entry || typeof entry !== 'object' ) {
+			return null;
+		}
+		const name = entry.name;
+		if (
+			typeof name !== 'string' ||
+			! name ||
+			name.length > 2048 ||
+			! (
+				name.indexOf( 'http://' ) === 0 ||
+				name.indexOf( 'https://' ) === 0 ||
+				name.charAt( 0 ) === '/'
+			)
+		) {
+			return null;
+		}
+		const rawType = entry.initiatorType ?? entry.type;
+		const type =
+			typeof rawType === 'string'
+				? rawType.toLowerCase().trim().slice( 0, 16 )
+				: '';
+		if ( RUM_ALLOWED_RESOURCE_TYPES.indexOf( type ) === -1 ) {
+			return null;
+		}
+		const duration = Number( entry.duration );
+		if (
+			! Number.isFinite( duration ) ||
+			duration < 0 ||
+			duration > RUM_MAX_METRIC_MS
+		) {
+			return null;
+		}
+		return {
+			name: name.slice( 0, 2048 ),
+			type,
+			duration: Math.round( duration ),
+		};
+	} catch {
+		return null;
+	}
+};
+
+/**
+ * Collect the slowest sub-resources via Resource Timing (fail-open).
+ *
+ * Guarded on `performance.getEntriesByType`; entries slower than
+ * `RUM_SLOW_RESOURCE_THRESHOLD_MS` are kept (or the top-3 slowest when
+ * none cross the threshold), capped at `RUM_MAX_SLOW_RESOURCES`, with a
+ * ~1.5KB JSON budget check that drops the fastest-first (keeping the
+ * slowest) on overflow.
+ * Returns an empty array when the API is absent so callers omit the field.
+ *
+ * @since NEXT
+ * @return {Object[]} Shaped slow-resource entries (possibly empty).
+ */
+export const collectSlowResources = () => {
+	try {
+		if (
+			typeof performance === 'undefined' ||
+			typeof performance.getEntriesByType !== 'function'
+		) {
+			return [];
+		}
+		const entries = performance.getEntriesByType( 'resource' );
+		if ( ! entries || typeof entries.length !== 'number' ) {
+			return [];
+		}
+		const shaped = [];
+		for ( const entry of entries ) {
+			const clean = sanitizeSlowResourceEntry( entry );
+			if ( clean ) {
+				shaped.push( clean );
+			}
+		}
+		if ( ! shaped.length ) {
+			return [];
+		}
+		shaped.sort( ( a, b ) => b.duration - a.duration );
+		let candidates = shaped.filter(
+			( item ) => item.duration > RUM_SLOW_RESOURCE_THRESHOLD_MS
+		);
+		if ( ! candidates.length ) {
+			candidates = shaped.slice( 0, 3 );
+		}
+		candidates = candidates.slice( 0, RUM_MAX_SLOW_RESOURCES );
+		// Payload budget: keep JSON under ~1.5KB, drop fastest-first (keep slowest) on overflow.
+		let encoded = '';
+		try {
+			encoded = JSON.stringify( candidates );
+		} catch {
+			return [];
+		}
+		while ( encoded.length > 1536 && candidates.length > 1 ) {
+			candidates = candidates.slice( 0, candidates.length - 1 );
+			try {
+				encoded = JSON.stringify( candidates );
+			} catch {
+				return [];
+			}
+		}
+		return candidates;
+	} catch {
+		return [];
+	}
+};
+
+/**
  * Drop out-of-range metric values before the beacon is sent.
  *
  * Time metrics (ttfb/fcp/lcp/inp) must be finite numbers in 0–60000ms;
@@ -203,6 +417,45 @@ export const sanitizeRumValues = ( raw ) => {
 			raw.lcpUrl.charAt( 0 ) === '/' )
 	) {
 		clean.lcpUrl = raw.lcpUrl;
+	}
+	// LCP element selector attribution (issue #1311): compact
+	// `tag#id`/`.class` selector, <=256 chars, strict charset. Omitted
+	// when absent so the p75-only path is unchanged.
+	if (
+		typeof raw.lcpSelector === 'string' &&
+		raw.lcpSelector &&
+		raw.lcpSelector.length <= RUM_MAX_LCP_SELECTOR_LENGTH &&
+		/^[a-z0-9#._\-\s:~+[\]=']{1,256}$/i.test( raw.lcpSelector ) &&
+		raw.lcpSelector.indexOf( '<' ) === -1 &&
+		raw.lcpSelector.indexOf( '>' ) === -1 &&
+		raw.lcpSelector.indexOf( '"' ) === -1 &&
+		raw.lcpSelector.indexOf( '`' ) === -1 &&
+		raw.lcpSelector.toLowerCase().indexOf( 'javascript:' ) === -1
+	) {
+		clean.lcpSelector = raw.lcpSelector.slice(
+			0,
+			RUM_MAX_LCP_SELECTOR_LENGTH
+		);
+	}
+	// Slow-resource audit (issue #1311): array of <=5 shaped entries.
+	// Malformed entries are dropped; the key is omitted when empty.
+	if ( Array.isArray( raw.slowResources ) ) {
+		const shaped = [];
+		for ( const entry of raw.slowResources.slice(
+			0,
+			RUM_MAX_SLOW_RESOURCES
+		) ) {
+			const cleanEntry = sanitizeSlowResourceEntry( entry );
+			if ( cleanEntry ) {
+				shaped.push( cleanEntry );
+			}
+			if ( shaped.length >= RUM_MAX_SLOW_RESOURCES ) {
+				break;
+			}
+		}
+		if ( shaped.length ) {
+			clean.slowResources = shaped;
+		}
 	}
 	return clean;
 };
@@ -348,6 +601,23 @@ export const sanitizeRumValues = ( raw ) => {
 		} catch {
 			// Connection detection unavailable; field omitted.
 		}
+		// LCP element attribution + slow-resource audit (issue #1311):
+		// attach exact hero selector and slowest sub-resources fail-open.
+		// Detection failures omit the fields; the numeric path is unchanged.
+		try {
+			const slow = collectSlowResources();
+			if ( Array.isArray( slow ) && slow.length ) {
+				const budgeted = sanitizeRumValues( {
+					lcp: 1,
+					slowResources: slow,
+				} ).slowResources;
+				if ( Array.isArray( budgeted ) && budgeted.length ) {
+					extra.slowResources = budgeted;
+				}
+			}
+		} catch {
+			// Slow-resource audit unavailable; field omitted.
+		}
 
 		const payload = JSON.stringify( {
 			// Page-visible by design: the public rum_collect endpoint
@@ -417,6 +687,40 @@ export const sanitizeRumValues = ( raw ) => {
 					values.lcpUrl = lcpUrl.slice( 0, 2048 );
 				} else {
 					delete values.lcpUrl;
+				}
+				// LCP element attribution (issue #1311): compact selector
+				// derived from `last.element` (tag + #id / first class only,
+				// never xpath or outerHTML). Guarded + fail-open: absent
+				// element or derivation failure omits the field.
+				try {
+					if (
+						typeof PerformanceObserver !== 'undefined' &&
+						last &&
+						last.element
+					) {
+						const selector = deriveLcpSelector( last.element );
+						if ( selector ) {
+							const checked = sanitizeRumValues( {
+								lcp: 1,
+								lcpSelector: selector,
+							} ).lcpSelector;
+							if ( checked ) {
+								values.lcpSelector = checked;
+							} else {
+								delete values.lcpSelector;
+							}
+						} else {
+							delete values.lcpSelector;
+						}
+					} else {
+						delete values.lcpSelector;
+					}
+				} catch {
+					try {
+						delete values.lcpSelector;
+					} catch {
+						// Ignore cleanup errors.
+					}
 				}
 			} );
 			lcpObserver.observe( {

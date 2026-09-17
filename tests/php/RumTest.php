@@ -1553,4 +1553,305 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 			// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
 		}
 	}
+
+	/**
+	 * Stub the WP functions needed for beacon intake URL gates.
+	 */
+	private function stub_attribution_environment(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+	}
+
+	/**
+	 * Test that a valid selector + slow-resource audit are stored (issue #1311).
+	 *
+	 * The shaped `type` key and the raw ResourceTiming `initiatorType` key
+	 * must both pass intake (client/server parity).
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_stores_lcp_selector_and_slow_resources(): void {
+		$this->install_stubs();
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token'         => $this->valid_token( '/attr' ),
+				'path'          => '/attr/',
+				'lcp'           => 1800,
+				'lcpSelector'   => 'img#hero-image',
+				'slowResources' => array(
+					array(
+						'name'          => 'https://example.com/app.js',
+						'initiatorType' => 'script',
+						'duration'      => 900,
+					),
+					array(
+						'url'      => 'https://example.com/style.css',
+						'type'     => 'css',
+						'duration' => 700,
+					),
+				),
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( 'lcpSelectors', $data[ $today ]['/attr'] );
+		$this->assertSame( 1, $data[ $today ]['/attr']['lcpSelectors']['img#hero-image']['n'] );
+		$this->assertArrayHasKey( 'slowResources', $data[ $today ]['/attr'] );
+		$this->assertCount( 2, $data[ $today ]['/attr']['slowResources'] );
+	}
+
+	/**
+	 * Test that malicious selectors are dropped while numerics are kept.
+	 *
+	 * Markup, child combinators (`>`, rejected server-side), double quotes
+	 * and `javascript:` must never reach the aggregate.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_drops_malicious_lcp_selector(): void {
+		$this->install_stubs();
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		foreach ( array( '<script>alert(1)</script>', 'div > img', 'img[src="hero.jpg"]', 'javascript:alert(1)' ) as $selector ) {
+			$result = RUM::collect(
+				array(
+					'token'       => $this->valid_token( '/attr' ),
+					'path'        => '/attr/',
+					'lcp'         => 1800,
+					'lcpSelector' => $selector,
+				)
+			);
+			$this->assertTrue( $result['ok'] );
+		}
+
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertSame( 4, $data[ $today ]['/attr']['lcp']['n'] );
+		$this->assertArrayNotHasKey( 'lcpSelectors', $data[ $today ]['/attr'] );
+	}
+
+	/**
+	 * Test the slow-resource intake gates (issue #1311).
+	 *
+	 * Cross-origin URLs, disallowed types and non-numeric durations are
+	 * dropped; extreme durations are clamped to 0–60000ms, never rejected.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_sanitizes_slow_resources(): void {
+		$this->install_stubs();
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token'         => $this->valid_token( '/attr' ),
+				'path'          => '/attr/',
+				'lcp'           => 1800,
+				'slowResources' => array(
+					array(
+						'name'          => 'https://example.com/app.js',
+						'initiatorType' => 'script',
+						'duration'      => 999999,
+					),
+					array(
+						'name'          => 'https://cdn.evil.com/x.js',
+						'initiatorType' => 'script',
+						'duration'      => 900,
+					),
+					array(
+						'name'          => 'https://example.com/clip.mp4',
+						'initiatorType' => 'video',
+						'duration'      => 900,
+					),
+					array(
+						'name'          => 'https://example.com/bad.js',
+						'initiatorType' => 'script',
+						'duration'      => 'fast',
+					),
+				),
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$slow  = $data[ $today ]['/attr']['slowResources'];
+		$this->assertCount( 1, $slow );
+		$row = reset( $slow );
+		$this->assertSame( 'https://example.com/app.js', $row['url'] );
+		$this->assertSame( 'script', $row['type'] );
+		$this->assertSame( 60000.0, $row['totalDuration'] );
+		$this->assertSame( 60000.0, $row['maxDuration'] );
+	}
+
+	/**
+	 * Test per-selector aggregation in get_top_lcp_selector (issue #1311).
+	 *
+	 * Counts must aggregate per selector first: unrelated selectors must
+	 * neither inflate the sample gate nor share freshness.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_top_lcp_selector_aggregates_per_selector(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$yesterday                    = gmdate( 'Y-m-d', time() - DAY_IN_SECONDS );
+		$this->options[ RUM::OPTION ] = array(
+			$today     => array(
+				'/mix' => array(
+					'lcpSelectors' => array(
+						'img#hero' => array(
+							'n'        => 12,
+							'lastSeen' => time(),
+						),
+						'div.lead' => array(
+							'n'        => 10,
+							'lastSeen' => time(),
+						),
+					),
+				),
+			),
+			$yesterday => array(
+				'/mix' => array(
+					'lcpSelectors' => array(
+						'img#hero' => array(
+							'n'        => 13,
+							'lastSeen' => time(),
+						),
+					),
+				),
+			),
+		);
+
+		// Per-selector counts: img#hero = 25, div.lead = 10. The winner
+		// carries its own count, not the 35-way cross-selector sum.
+		$top = RUM::get_top_lcp_selector( '/mix', 20 );
+		$this->assertIsArray( $top );
+		$this->assertSame( 'img#hero', $top['selector'] );
+		$this->assertSame( 25, $top['n'] );
+
+		// Neither selector alone reaches 30: no cross-selector inflation.
+		RUM::clear_field_lcp_cache();
+		$this->assertNull( RUM::get_top_lcp_selector( '/mix', 30 ) );
+	}
+
+	/**
+	 * Test that a stale selector winner is not kept alive by others.
+	 *
+	 * Freshness is per-selector: a fresh unrelated selector must not rescue
+	 * a stale winner through a shared max() lastSeen.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_top_lcp_selector_freshness_is_per_selector(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/mix' => array(
+					'lcpSelectors' => array(
+						'img#hero' => array(
+							'n'        => 100,
+							'lastSeen' => time() - ( 2 * DAY_IN_SECONDS ),
+						),
+						'div.lead' => array(
+							'n'        => 5,
+							'lastSeen' => time(),
+						),
+					),
+				),
+			),
+		);
+
+		$this->assertNull( RUM::get_top_lcp_selector( '/mix', 5 ) );
+	}
+
+	/**
+	 * Test slow-resource ranking, limit and same-origin filtering.
+	 *
+	 * Rows rank by observed count then average duration; cross-origin rows
+	 * are excluded even when seeded directly into the aggregate.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_top_slow_resources_ranks_and_filters(): void {
+		$this->install_stubs();
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/a' => array(
+					'slowResources' => array(
+						'example.com/slow.js'   => array(
+							'url'           => 'https://example.com/slow.js',
+							'type'          => 'script',
+							'n'             => 5,
+							'totalDuration' => 5000.0,
+							'maxDuration'   => 1200.0,
+							'lastSeen'      => time(),
+						),
+						'example.com/other.css' => array(
+							'url'           => 'https://example.com/other.css',
+							'type'          => 'css',
+							'n'             => 5,
+							'totalDuration' => 2500.0,
+							'maxDuration'   => 600.0,
+							'lastSeen'      => time(),
+						),
+						'evil.com/x.js'         => array(
+							'url'           => 'https://evil.com/x.js',
+							'type'          => 'script',
+							'n'             => 99,
+							'totalDuration' => 99000.0,
+							'maxDuration'   => 1000.0,
+							'lastSeen'      => time(),
+						),
+					),
+				),
+			),
+		);
+
+		$rows = RUM::get_top_slow_resources( 3 );
+		$this->assertCount( 2, $rows );
+		$this->assertSame( 'https://example.com/slow.js', $rows[0]['url'] );
+		$this->assertSame( 1000.0, $rows[0]['avgDuration'] );
+		$this->assertSame( 'https://example.com/other.css', $rows[1]['url'] );
+
+		$limited = RUM::get_top_slow_resources( 1 );
+		$this->assertCount( 1, $limited );
+		$this->assertSame( 'https://example.com/slow.js', $limited[0]['url'] );
+	}
 }
