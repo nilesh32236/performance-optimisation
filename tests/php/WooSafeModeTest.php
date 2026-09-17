@@ -11,6 +11,7 @@
  */
 
 use PerformanceOptimise\Inc\Cache;
+use PerformanceOptimise\Inc\LiteSpeed_Integration;
 use Brain\Monkey\Functions;
 
 /**
@@ -377,6 +378,45 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Guarded endpoint helper true/false matrix (issue #1371).
+	 *
+	 * True only when Woo is present and is_wc_endpoint_url() fires;
+	 * plain pages stay cacheable so non-Woo sites keep the fast path.
+	 */
+	public function test_woo_endpoint_request_helper_matrix(): void {
+		$this->stub_front_end_guests();
+
+		$cache  = $this->make_cache( array(), '/my-account/orders/' );
+		$method = new \ReflectionMethod( Cache::class, 'is_woo_endpoint_request' );
+
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( true );
+		$this->assertTrue( $method->invoke( $cache ) );
+
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		$this->assertFalse( $method->invoke( $cache ) );
+	}
+
+	/**
+	 * LiteSpeed endpoint backstop bypasses WC endpoints (issue #1371).
+	 *
+	 * Exercises the is_request_cacheable() defense-in-depth check so
+	 * orders/downloads endpoints never reach the LiteSpeed cache even
+	 * when the Cache delegation is unavailable or diverged.
+	 */
+	public function test_litespeed_endpoint_backstop_bypasses_cache(): void {
+		$this->stub_front_end_guests();
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( true );
+		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
+		$_SERVER['REQUEST_URI']     = '/my-account/downloads/file/1/';
+		LiteSpeed_Integration::reset_cache();
+
+		$this->assertFalse( LiteSpeed_Integration::is_request_cacheable() );
+
+		unset( $_SERVER['SERVER_SOFTWARE'], $_SERVER['REQUEST_URI'] );
+		LiteSpeed_Integration::reset_cache();
+	}
+
+	/**
 	 * Util::is_woo_safe_mode_enabled(): absent key = enabled, false = disabled.
 	 */
 	public function test_woo_safe_mode_enabled_helper(): void {
@@ -464,7 +504,23 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $result['donotcachepage_honored'] );
 		$this->assertSame( array( 'cart', 'checkout', 'my-account' ), $result['excluded_paths'] );
 		$this->assertTrue( $result['all_pass'] );
-		$this->assertCount( 4, $result['checks'] );
+		$this->assertCount( 6, $result['checks'] );
+
+		$by_path = array();
+		foreach ( $result['checks'] as $check ) {
+			$by_path[ $check['path'] ] = $check;
+		}
+
+		// Custom WC endpoint probes (issue #1371): orders/downloads
+		// sub-paths must bypass via the anywhere-segment rule.
+		$this->assertArrayHasKey( '/my-account/orders/', $by_path );
+		$this->assertArrayHasKey( '/my-account/downloads/', $by_path );
+		$this->assertTrue( $by_path['/my-account/orders/']['is_dynamic'] );
+		$this->assertFalse( $by_path['/my-account/orders/']['cacheable'] );
+		$this->assertTrue( $by_path['/my-account/orders/']['pass'] );
+		$this->assertTrue( $by_path['/my-account/downloads/']['is_dynamic'] );
+		$this->assertFalse( $by_path['/my-account/downloads/']['cacheable'] );
+		$this->assertTrue( $by_path['/my-account/downloads/']['pass'] );
 
 		foreach ( $result['checks'] as $check ) {
 			$this->assertTrue( $check['is_dynamic'] );

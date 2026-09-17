@@ -1345,6 +1345,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Whether the current request is a WooCommerce endpoint URL (issue #1371).
+		 *
+		 * Defense-in-depth backstop for the LiteSpeed layer: covers custom
+		 * endpoints (orders, downloads, order-pay, view-order, …) even on
+		 * paths where the Cache delegation is unavailable or diverged.
+		 * Guarded by a WooCommerce-presence gate so non-Woo sites take the
+		 * same fast path as before, plus a `function_exists()` legacy
+		 * fallback. Fail-open: detection failure returns true (bypass
+		 * cache, uncached-safe), never fatal. Cheap: 0 queries.
+		 *
+		 * @since NEXT
+		 * @return bool True when the request is a WC endpoint URL.
+		 */
+		private static function is_woo_endpoint_request(): bool {
+			try {
+				if ( ! class_exists( 'WooCommerce', false ) && ! function_exists( 'is_woocommerce' ) && ! function_exists( 'wc_get_page_id' ) && ! function_exists( 'is_wc_endpoint_url' ) ) {
+					return false;
+				}
+				if ( ! function_exists( 'is_wc_endpoint_url' ) ) {
+					return false;
+				}
+				return (bool) is_wc_endpoint_url();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Whether current request is cacheable for LiteSpeed layer.
 		 *
 		 * Cheap per-request cached check. Delegates to Cache when available
@@ -1405,6 +1434,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				}
 			}
 
+			// WC endpoint backstop (issue #1371): custom endpoints (orders,
+			// downloads, order-pay, …) bypass even when the Cache delegation
+			// above is unavailable or diverged. Fail-open: helper failure
+			// forces dynamic.
+			if ( $cacheable ) {
+				try {
+					if ( self::is_woo_endpoint_request() ) {
+						$cacheable = false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$cacheable = false;
+				}
+			}
+
 			// LS-304: honor preload_settings.excludePreloadCache when enabled.
 			// Static per-request memo of the processed exclude list so the
 			// parse (process_urls + cached_home_url) runs once per request
@@ -1448,9 +1492,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// Query-param poisoning guard (issue #1141) is a security
 			// property, not a preference: re-enforce after the filter so
 			// it cannot re-allow a functional query.
+			// WC endpoint backstop (issue #1371) is likewise re-enforced
+			// after the filter so it cannot re-allow a dynamic endpoint.
 			if ( self::$cached_is_cacheable ) {
 				try {
 					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query() ) {
+						self::$cached_is_cacheable = false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					self::$cached_is_cacheable = false;
+				}
+			}
+			if ( self::$cached_is_cacheable ) {
+				try {
+					if ( self::is_woo_endpoint_request() ) {
 						self::$cached_is_cacheable = false;
 					}
 				} catch ( \Throwable $e ) {

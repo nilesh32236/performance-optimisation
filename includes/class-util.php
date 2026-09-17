@@ -1347,6 +1347,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$excluded   = self::get_woo_excluded_paths();
 
 				$probe_paths = array( 'cart', 'checkout', 'my-account' );
+				// Custom WC endpoint probes (issue #1371): orders/downloads
+				// sub-paths match via the anywhere-segment rule in
+				// is_woo_dynamic_path(), locking the endpoint bypass even
+				// when is_wc_endpoint_url() is unavailable at self-test time.
+				foreach ( array( 'my-account/orders', 'my-account/downloads' ) as $endpoint_probe ) {
+					$probe_paths[] = $endpoint_probe;
+				}
 				foreach ( $excluded as $extra ) {
 					$candidate = strtolower( trim( (string) $extra, '/' ) );
 					if ( '' !== $candidate && ! in_array( $candidate, $probe_paths, true ) ) {

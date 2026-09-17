@@ -2621,6 +2621,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the current request is a WooCommerce endpoint URL.
+		 *
+		 * Covers custom endpoints (orders, downloads, order-pay,
+		 * view-order, …) that cart/checkout/account conditionals miss.
+		 * Guarded by a WooCommerce-presence gate so non-Woo sites take
+		 * the same fast path as before, plus a `function_exists()`
+		 * legacy fallback. Fail-open: detection failure returns true
+		 * (bypass cache, uncached-safe), never fatal. Cheap: 0 queries.
+		 *
+		 * @since NEXT
+		 * @return bool True when the request is a WC endpoint URL.
+		 */
+		private function is_woo_endpoint_request(): bool {
+			try {
+				if ( ! class_exists( 'WooCommerce', false ) && ! function_exists( 'is_woocommerce' ) && ! function_exists( 'wc_get_page_id' ) && ! function_exists( 'is_wc_endpoint_url' ) ) {
+					return false;
+				}
+				if ( ! function_exists( 'is_wc_endpoint_url' ) ) {
+					return false;
+				}
+				return (bool) is_wc_endpoint_url();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Whether the current request should be excluded from static cache due to WooCommerce safe mode.
 		 *
 		 * Safe-by-default exclusions for WooCommerce: cart/checkout/account,
@@ -2664,16 +2692,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			try {
 				$excluded = false;
 
-				// Woo endpoint URLs (order-pay, view-order, downloads, …) are dynamic.
-				if ( function_exists( 'is_wc_endpoint_url' ) ) {
-					try {
-						if ( is_wc_endpoint_url() ) {
-							$excluded = true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$excluded = true;
-					}
+				// Woo endpoint URLs (order-pay, view-order, orders,
+				// downloads, …) are dynamic. Safe-mode gated like the other
+				// conditional-tag bypasses (issue #1371, Option A); Store API
+				// and wc-ajax stay unconditional above.
+				if ( $this->is_woo_endpoint_request() ) {
+					$excluded = true;
 				}
 
 				$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
