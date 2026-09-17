@@ -73,10 +73,13 @@ const Tooltip = ( { content, children } ) => {
 						tabIndex: '0',
 						'aria-expanded': visible,
 						'aria-describedby': id,
-						'aria-label': __(
-							'More information',
-							'performance-optimisation'
-						),
+						'aria-label':
+							typeof content === 'string' && content.length < 50
+								? content
+								: __(
+										'More information',
+										'performance-optimisation'
+								  ),
 				  } ) }
 			onFocus={ () => setVisible( true ) }
 			onBlur={ handleBlur }
