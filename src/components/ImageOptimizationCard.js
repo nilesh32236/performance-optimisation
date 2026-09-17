@@ -173,6 +173,7 @@ const ImageOptimizationCard = ( {
 								),
 								// Audit #1420: nested _n so '1 image' is correct.
 								sprintf(
+									/* translators: %d: image count. */
 									_n(
 										'%d image',
 										'%d images',

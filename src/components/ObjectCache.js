@@ -88,27 +88,19 @@ const ObjectCache = ( { options = {} } ) => {
 	// static defaults (not the per-render defaultSettings identity), so
 	// exhaustive-deps needs no suppression.
 	const memoizedBaseline = useMemo(
+		// Audit #1420: static defaults with explicit per-key fallback
+		// (no duplicate keys) so undefined options never clobber defaults.
 		() => ( {
-			mode: 'standalone',
-			host: '127.0.0.1',
-			port: 6379,
-			password: '',
-			database: 0,
-			nodes: '',
-			master_name: 'mymaster',
-			use_tls: false,
-			persistent: false,
-			compression: 'none',
-			mode: options.mode,
-			host: options.host,
-			port: options.port,
-			password: options.password,
-			database: options.database,
-			nodes: options.nodes,
-			master_name: options.master_name,
-			use_tls: options.use_tls,
-			persistent: options.persistent,
-			compression: options.compression,
+			mode: options.mode ?? 'standalone',
+			host: options.host ?? '127.0.0.1',
+			port: options.port ?? 6379,
+			password: options.password ?? '',
+			database: options.database ?? 0,
+			nodes: options.nodes ?? '',
+			master_name: options.master_name ?? 'mymaster',
+			use_tls: options.use_tls ?? false,
+			persistent: options.persistent ?? false,
+			compression: options.compression ?? 'none',
 		} ),
 		[
 			options.mode,
