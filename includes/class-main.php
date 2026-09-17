@@ -1161,7 +1161,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// the core template-enhancement buffer only (no private ob_start
 			// capture); pre-6.9 keeps the legacy template_redirect captures.
 			// A runtime opt-out (filter returning false / no consumers) degrades
-			// to uncached streaming output — never a private buffer.
+			// to uncached streaming output — never a private buffer. This is an
+			// intentional availability tradeoff: re-arming a private capture on
+			// opt-out would stack a second buffer on top of core's and
+			// re-process HTML, so caching stays off until core opts back in.
 			// TODO(#553, #829): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
 			// Blocked until `Requires at least: 6.9`.
 			$use_core_buffer = self::should_use_core_template_buffer();
@@ -1213,7 +1216,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// persists. No private ob_start capture is registered, so
 					// exactly one core buffer is active when consumers exist and
 					// zero when none; a runtime opt-out (filter false) degrades
-					// to uncached streaming output.
+					// to uncached streaming output. Intentional (see above):
+					// caching resumes automatically when core opts back in.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
 					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
 				} else {
@@ -3652,8 +3656,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public function process_used_css_only( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			// Mid-template cancel safety (issue #1386): a cancelled core
 			// buffer can deliver a non-string into the filter. Fail open —
-			// never fatal, never white-screen.
+			// never fatal, never white-screen. Prefer the raw $output when
+			// it carries page HTML so a cancelled $filtered_output can never
+			// collapse the chain to a blank page.
 			if ( ! is_string( $filtered_output ) ) {
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
 				return '';
 			}
 			try {
@@ -3681,8 +3690,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$result   = $used_css->process_buffer( $filtered_output );
 				return is_string( $result ) ? $result : $filtered_output;
 			} catch ( \Throwable $e ) {
-				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
-				return is_string( $filtered_output ) ? $filtered_output : '';
+				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed.', array( 'exception' => $e ) );
+				if ( is_string( $filtered_output ) && '' !== $filtered_output ) {
+					return $filtered_output;
+				}
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
 			}
 		}
 
@@ -4017,7 +4032,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Fail open: return the unprocessed buffer rather than dropping
 				// the page content. Mirrors the wppo_debug_log convention used by
 				// the HTML minifier and Cloudflare purger.
-				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed.', array( 'exception' => $e ) );
 				return $original;
 			}
 		}
@@ -4982,7 +4997,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * callbacks and no private `ob_start()` capture; when false (pre-6.9)
 		 * only the legacy `template_redirect` captures are registered.
 		 * Honoring a runtime `false` (opt-out / no consumers) means degrading
-		 * to uncached streaming output, never opening a private buffer.
+		 * to uncached streaming output, never opening a private buffer —
+		 * intentional, since a private capture would stack on core's buffer
+		 * and re-process HTML; caching resumes when core opts back in.
 		 * Fail-open: false on any unreadable version or missing API, in which
 		 * case callers fall back to the pre-6.9 legacy path.
 		 *

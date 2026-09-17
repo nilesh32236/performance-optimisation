@@ -2291,7 +2291,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					// Fail open: serve the page unprocessed instead of
 					// throwing out of the buffer callback (which would
 					// discard the response and leave the buffer dangling).
-					do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+					do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed.', array( 'exception' => $e ) );
 					return $buffer;
 				}
 			};
@@ -2377,7 +2377,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 					return $buffer;
 				}
-				if ( false === stripos( $buffer, '<link' ) || false === stripos( $buffer, 'block-library' ) ) {
+				// Cheap pre-gate: skip the processor walk unless the page
+				// has a head close, the block library, and a per-block
+				// marker. Large cache-miss HTML without block styles exits
+				// on substring scans alone.
+				if ( false === stripos( $buffer, '</head' )
+					|| false === stripos( $buffer, 'block-library' )
+					|| ( false === stripos( $buffer, 'wp-block-' ) && false === stripos( $buffer, '/blocks/' ) ) ) {
 					return $buffer;
 				}
 				$head_close = stripos( $buffer, '</head>' );
@@ -2411,7 +2417,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( null === $library_href ) {
 					return $buffer;
 				}
-				// Candidate late links: per-block stylesheets not yet in head.
+				// Candidate late links: per-block stylesheets with no genuine
+				// `<link>` occurrence in head. Head membership is resolved
+				// from tag-verified occurrences (an href substring inside a
+				// script string, preload, or comment before `</head>` must
+				// not suppress the hoist), never from a raw substring search.
 				$candidates = array();
 				foreach ( $hrefs as $href ) {
 					if ( $href === $library_href ) {
@@ -2423,45 +2433,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( false === stripos( $href, 'wp-block-' ) && false === stripos( $href, '/blocks/' ) ) {
 						continue;
 					}
-					// Already in head: leave it (avoids duplicating the handle).
-					$first_pos = strpos( $buffer, $href );
-					if ( false !== $first_pos && $first_pos < $head_close ) {
+					if ( isset( $candidates[ $href ] ) ) {
 						continue;
 					}
-					$candidates[] = $href;
+					// Already in head: leave it (avoids duplicating the handle).
+					if ( $this->is_href_in_head_link( $buffer, $href, $head_close ) ) {
+						continue;
+					}
+					$candidates[ $href ] = true;
 				}
 				if ( empty( $candidates ) ) {
 					return $buffer;
 				}
-				// Resolve each candidate href to its late <link> tag range.
-				$ranges = array();
-				$seen   = array();
-				foreach ( $candidates as $href ) {
-					if ( isset( $seen[ $href ] ) ) {
-						continue;
-					}
-					$seen[ $href ] = true;
-					$offset        = $head_close;
-					$guard         = 0;
+				// Anchor: resolve the block-library href to its actual
+				// `<link>` tag range, so a non-link occurrence (JS string,
+				// data attribute) can never misplace the insert.
+				$library_range = $this->find_link_tag_for_href( $buffer, $library_href, 0 );
+				if ( null === $library_range ) {
+					return $buffer;
+				}
+				// Resolve each candidate href to its late `<link>` tag ranges
+				// with a forward-ordered cursor, so duplicate hrefs resolve
+				// to distinct tags. Every late occurrence is cut; only the
+				// first per href is re-inserted, so a duplicated body tag
+				// cannot clone the handle into head.
+				$ranges   = array();
+				$moved    = array();
+				$inserted = array();
+				foreach ( array_keys( $candidates ) as $href ) {
+					$offset = $head_close;
+					$guard  = 0;
 					while ( $guard < 50 ) {
 						++$guard;
-						$pos = strpos( $buffer, $href, $offset );
-						if ( false === $pos ) {
+						$range = $this->find_link_tag_for_href( $buffer, $href, $offset );
+						if ( null === $range ) {
 							break;
 						}
-						$before    = substr( $buffer, 0, $pos );
-						$tag_start = ( '' !== $before ) ? strrpos( $before, '<' ) : false;
-						$tag_end   = strpos( $buffer, '>', $pos );
-						if ( false === $tag_start || false === $tag_end ) {
-							break;
+						$ranges[] = $range;
+						if ( ! isset( $inserted[ $href ] ) ) {
+							$inserted[ $href ] = true;
+							$moved[]           = $range[2];
 						}
-						$tag_text = substr( $buffer, $tag_start, $tag_end - $tag_start + 1 );
-						if ( false === stripos( $tag_text, '<link' ) ) {
-							$offset = $pos + strlen( $href );
-							continue;
-						}
-						$ranges[] = array( $tag_start, $tag_end, $tag_text );
-						$offset   = $tag_end + 1;
+						$offset = $range[1] + 1;
 					}
 					if ( count( $ranges ) > 100 ) {
 						return $buffer;
@@ -2470,38 +2483,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( empty( $ranges ) ) {
 					return $buffer;
 				}
-				// Cut late tags from the end first so earlier offsets stay valid.
+				// Single-pass cut + insert: sort ascending, splice once, and
+				// place the moved tags directly after the library link tag
+				// (which sits before every late range, so its end offset is
+				// unaffected by the cut).
 				usort(
 					$ranges,
 					static function ( $a, $b ) {
 						if ( $a[0] === $b[0] ) {
 							return 0;
 						}
-						return ( $a[0] < $b[0] ) ? 1 : -1;
+						return ( $a[0] < $b[0] ) ? -1 : 1;
 					}
 				);
-				$moved = array();
+				$result  = substr( $buffer, 0, $library_range[1] + 1 );
+				$result .= implode( '', $moved );
+				$cursor  = $library_range[1] + 1;
 				foreach ( $ranges as $range ) {
-					$moved[] = $range[2];
-					$buffer  = substr( $buffer, 0, $range[0] ) . substr( $buffer, $range[1] + 1 );
+					if ( $range[0] < $cursor ) {
+						continue;
+					}
+					$result .= substr( $buffer, $cursor, $range[0] - $cursor );
+					$cursor  = $range[1] + 1;
 				}
-				$moved = array_reverse( $moved );
-				// Anchor: directly after the block-library link tag.
-				$lib_pos = strpos( $buffer, $library_href );
-				if ( false === $lib_pos ) {
-					return $buffer;
-				}
-				$lib_end = strpos( $buffer, '>', $lib_pos );
-				if ( false === $lib_end ) {
-					return $buffer;
-				}
-				$insert = implode( '', $moved );
-				$buffer = substr( $buffer, 0, $lib_end + 1 ) . $insert . substr( $buffer, $lib_end + 1 );
-				return $buffer;
+				$result .= substr( $buffer, $cursor );
+				return $result;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return is_string( $buffer ) ? $buffer : '';
 			}
+		}
+
+		/**
+		 * Locate the next `<link>` tag containing an href, at/after an offset.
+		 *
+		 * String-offset companion to the HTML-API discovery in
+		 * {@see hoist_late_block_styles()}: occurrences of the href that are
+		 * not wrapped in a `<link>` tag (script strings, data attributes,
+		 * comments) are skipped, so callers always resolve to a genuine
+		 * stylesheet tag. Never uses regex.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @param string $href   The stylesheet href to locate.
+		 * @param int    $offset Byte offset to search from.
+		 * @return array|null Array of [start, end, tag text], or null when no `<link>` tag carries the href.
+		 */
+		private function find_link_tag_for_href( $buffer, $href, $offset ) {
+			$pos   = (int) $offset;
+			$guard = 0;
+			while ( $guard < 50 ) {
+				++$guard;
+				$href_pos = strpos( $buffer, $href, $pos );
+				if ( false === $href_pos ) {
+					return null;
+				}
+				$before    = substr( $buffer, 0, $href_pos );
+				$tag_start = ( '' !== $before ) ? strrpos( $before, '<' ) : false;
+				$tag_end   = strpos( $buffer, '>', $href_pos );
+				if ( false === $tag_start || false === $tag_end || $tag_end <= $tag_start ) {
+					return null;
+				}
+				$tag_text = substr( $buffer, $tag_start, $tag_end - $tag_start + 1 );
+				if ( false !== stripos( $tag_text, '<link' ) ) {
+					return array( $tag_start, $tag_end, $tag_text );
+				}
+				$pos = $href_pos + strlen( $href );
+			}
+			return null;
+		}
+
+		/**
+		 * Whether an href is carried by a genuine `<link>` tag before `</head>`.
+		 *
+		 * Tag-verified head membership for {@see hoist_late_block_styles()}:
+		 * a bare href substring (script string, preload, comment) before the
+		 * head close does not count. Never uses regex.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer     The HTML buffer.
+		 * @param string $href       The stylesheet href to test.
+		 * @param int    $head_close Byte offset of `</head>`.
+		 * @return bool True when a `<link>` tag carries the href inside head.
+		 */
+		private function is_href_in_head_link( $buffer, $href, $head_close ) {
+			$range = $this->find_link_tag_for_href( $buffer, $href, 0 );
+			return ( null !== $range && $range[0] < $head_close );
 		}
 
 		/**
@@ -2523,12 +2592,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( '' === $buffer ) {
 				return $buffer;
 			}
-			// Nesting balance (issue #881): the enhancement-buffer filter and the
-			// legacy fallback buffer can both be registered on WP 6.9+ (the
-			// fallback engages only when a site opts out of core's buffer, but a
-			// site filter may flip between template_redirect and
-			// wp_before_include_template). Enhance exactly once per request so a
-			// mid-request flip can never double-minify or double-rewrite.
+			// Nesting balance (issue #881): the enhancement-buffer filter ran
+			// alongside a legacy fallback buffer before the single-buffer
+			// routing (issue #1386) retired the fallback on 6.9+. On 6.9+ only
+			// the core filter path is ever registered, so the flag now only
+			// guards legacy pre-6.9 double-entry (exactly-once enhancement).
 			if ( self::$buffer_enhanced ) {
 				return $buffer;
 			}
@@ -2601,8 +2669,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public function process_buffer_for_cache( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			// Mid-template cancel safety (issue #1386): a cancelled core
 			// buffer can deliver a non-string into the filter. Fail open —
-			// never fatal, never white-screen.
+			// never fatal, never white-screen. Prefer the raw $output when
+			// it carries page HTML so a cancelled $filtered_output can never
+			// collapse the chain to a blank page.
 			if ( ! is_string( $filtered_output ) ) {
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
 				return '';
 			}
 			try {
@@ -2614,8 +2687,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				return $this->process_buffer_only( $filtered_output );
 			} catch ( \Throwable $e ) {
-				do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
-				return is_string( $filtered_output ) ? $filtered_output : '';
+				do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed.', array( 'exception' => $e ) );
+				if ( is_string( $filtered_output ) && '' !== $filtered_output ) {
+					return $filtered_output;
+				}
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
 			}
 		}
 
@@ -2653,7 +2732,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$this->save_processed_buffer( $output, $file_path );
 			} catch ( \Throwable $e ) {
-				unset( $e );
+				do_action( 'wppo_debug_log', 'WPPO page cache stash failed.', array( 'exception' => $e ) );
 			}
 		}
 

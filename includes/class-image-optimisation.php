@@ -6918,10 +6918,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public function prioritize_lcp_in_buffer( $filtered_output, $output = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			// Mid-template cancel safety (issue #1386): a cancelled core
 			// buffer can deliver a non-string (false/null) into the filter.
-			// An output-buffer callback must always return a string —
-			// fail open to '' without consuming the one-shot so a later
-			// real pass can still run.
+			// An output-buffer callback must always return a string — fail
+			// open to the raw $output when it carries page HTML (priority 30
+			// runs after cache/used-CSS, so collapsing to '' would wipe
+			// output earlier filters already processed), else to '' without
+			// consuming the one-shot so a later real pass can still run.
 			if ( ! is_string( $filtered_output ) ) {
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
 				return '';
 			}
 			// One-shot per instance (issue #881 review): the 6.9+ enhancement
@@ -7018,8 +7023,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				return $buffer;
 			} catch ( \Throwable $e ) {
-				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed: ' . $e->getMessage(), array( 'exception' => $e ) );
-				return $filtered_output;
+				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed.', array( 'exception' => $e ) );
+				if ( is_string( $filtered_output ) && '' !== $filtered_output ) {
+					return $filtered_output;
+				}
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
 			}
 		}
 
