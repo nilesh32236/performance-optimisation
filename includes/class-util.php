@@ -3095,7 +3095,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			try {
 				$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 				if ( ! array_key_exists( $blog_id, self::$same_site_home_host ) ) {
-					$home_host = function_exists( 'wp_parse_url' ) ? wp_parse_url( self::cached_home_url(), PHP_URL_HOST ) : '';
+					$home_host                             = function_exists( 'wp_parse_url' ) ? wp_parse_url( self::cached_home_url(), PHP_URL_HOST ) : '';
 					self::$same_site_home_host[ $blog_id ] = ( is_string( $home_host ) ) ? strtolower( $home_host ) : '';
 				}
 				if ( '' === self::$same_site_home_host[ $blog_id ] ) {

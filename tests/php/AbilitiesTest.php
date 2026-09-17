@@ -113,7 +113,12 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 
-		$result = Abilities::execute_clear_cache( array( 'scope' => 'single', 'url' => 'https://evil.example/x' ) );
+		$result = Abilities::execute_clear_cache(
+			array(
+				'scope' => 'single',
+				'url'   => 'https://evil.example/x',
+			)
+		);
 		$this->assertFalse( $result['cleared'] );
 		$missing = Abilities::execute_clear_cache( array( 'scope' => 'single' ) );
 		$this->assertFalse( $missing['cleared'] );

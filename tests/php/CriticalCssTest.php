@@ -80,7 +80,7 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'apply_filters' )->alias(
 			function ( $tag, $value = null ) {
-				$args = func_get_args();
+				$args                         = func_get_args();
 				$this->filter_calls[ $tag ][] = array_slice( $args, 2 );
 				return $this->filter_overrides[ $tag ] ?? $value;
 			}

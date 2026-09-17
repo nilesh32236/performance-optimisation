@@ -817,9 +817,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 			return self::same_site_url_or_home( esc_url_raw( $raw ), '' );
 		}
 
+		/**
+		 * Validate a caller-supplied URL as same-site, else the fallback.
+		 *
+		 * Thin BC wrapper over Util::same_site_url_or_home() (audit #1357
+		 * review) so comparator rules cannot drift between call sites.
+		 *
+		 * @since NEXT
+		 * @param string $url      Caller URL (already esc_url_raw'd by caller).
+		 * @param string $fallback Fallback (home URL, or '' to fail closed).
+		 * @return string Same-site URL or the fallback.
+		 */
 		private static function same_site_url_or_home( string $url, string $fallback ): string {
-			// Audit #1357 review: thin BC wrapper over the canonical
-			// Util comparator so rules cannot drift.
 			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'same_site_url_or_home' ) ) {
 				try {
 					return Util::same_site_url_or_home( $url, $fallback );
@@ -865,7 +874,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		public static function execute_queue_pagespeed_scan( array $input ): array {
 			$url = self::resolve_input_url( $input );
 			if ( '' === $url ) {
-				return array( 'queued' => false, 'error' => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
+				return array(
+					'queued' => false,
+					'error'  => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ),
+				);
 			}
 			$format = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
 			$job_id = Pagespeed::queue_scan( $url, $format );
@@ -905,7 +917,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		public static function execute_get_suggestions( array $input ): array {
 			$url = self::resolve_input_url( $input );
 			if ( '' === $url ) {
-				return array( 'suggestions' => array(), 'error' => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
+				return array(
+					'suggestions' => array(),
+					'error'       => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ),
+				);
 			}
 			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
 			$telemetry     = get_transient( $transient_key );
