@@ -9499,7 +9499,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_filter(
 				'wp_speculation_rules_configuration',
 				function ( $config ) use ( $preload_settings, $enable_speculation ) {
-					return $this->filter_speculation_rules_configuration( $config, $preload_settings, $enable_speculation );
+					return $this->filter_speculation_exclude_commerce( $config, $preload_settings, $enable_speculation );
 				}
 			);
 
@@ -9680,6 +9680,185 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Commerce guardrails for the Speculation Rules API (single testable entry point).
+		 *
+		 * Layers prerender/prefetch speculation on top of the WordPress 6.8
+		 * speculative-loading core filters with WooCommerce guardrails, so
+		 * navigation feels instant (~80ms perceived) without breaking
+		 * transactional flows:
+		 *
+		 * - No-double-emit: a non-array `$config` (core disabled the request,
+		 *   or an unexpected shape) is returned untouched — the plugin never
+		 *   re-enables speculation and never prints a duplicate tag. List-rule
+		 *   dedupe lives in {@see filter_speculation_list_rules()}.
+		 * - Hard commerce exclusions: cart, checkout, my-account/account,
+		 *   add-to-cart query endpoints, admin, and preview/nocache contexts
+		 *   return null (core convention: disable speculation for the
+		 *   request), whether the UI toggle is on or off, so core's own rules
+		 *   can never prefetch a transactional flow. Complements
+		 *   {@see is_speculation_suppressed_for_visitor()} with request-URI
+		 *   checks in {@see is_speculation_commerce_request_excluded()}
+		 *   (WooCommerce dynamic paths via the same
+		 *   `Util::get_woo_excluded_paths()` paths as the static-cache
+		 *   cart/checkout exclusion self-test).
+		 * - RUM-gated prerender: conservative prefetch by default; a
+		 *   requested `prerender` mode is downgraded to
+		 *   `prefetch` + `conservative` unless {@see is_prerender_allowed()}
+		 *   reports a positive RUM signal (static cache active + qualified
+		 *   real-user p75). The downgrade is applied to the settings passed
+		 *   down so the delegate can never re-elevate an unqualified
+		 *   prerender.
+		 *
+		 * The remainder (mode/eagerness validation + pinning, cached-site
+		 * escalation guard) is delegated to
+		 * {@see filter_speculation_rules_configuration()} so pinning logic
+		 * stays in one place.
+		 *
+		 * Backward compatible with WP 6.2+ and PHP 8.2+: no unguarded core
+		 * calls (all probes are `function_exists`/`class_exists`/
+		 * `method_exists`-guarded); on WP <6.8 the registration in
+		 * {@see add_speculation_rules()} never fires, and a direct call
+		 * degrades to the delegate's allowlist behavior. Fail-open: an
+		 * unexpected failure returns `$config` unchanged (normal navigation),
+		 * never fatal. Multisite-safe: per-site settings and per-site RUM
+		 * aggregates only, no cross-site leakage. Zero extra queries: only
+		 * in-memory option reads plus the memoized RUM aggregate.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array<string,string>|null $config             Filter value ('auto' defaults, or null when speculative loading is disabled for the request).
+		 * @param array                     $preload_settings   The plugin's preload_settings option value (defaults to the stored value when empty).
+		 * @param bool|null                 $enable_speculation Whether the plugin's speculation-rules UI toggle is on (resolved from settings when null).
+		 * @return array<string,string>|null
+		 */
+		public function filter_speculation_exclude_commerce( $config, array $preload_settings = array(), ?bool $enable_speculation = null ) {
+			try {
+				// No-double-emit: core disabled (null) or an unexpected shape
+				// passes through untouched — never re-enable, never duplicate.
+				if ( ! is_array( $config ) ) {
+					return $config;
+				}
+				if ( empty( $preload_settings ) ) {
+					$stored = $this->options['preload_settings'] ?? array();
+					if ( is_array( $stored ) && ! empty( $stored ) ) {
+						$preload_settings = $stored;
+					}
+				}
+				if ( null === $enable_speculation ) {
+					$enable_speculation = ! empty( $preload_settings['enableSpeculationRules'] );
+				}
+				// Hard commerce exclusions apply regardless of the toggle so
+				// core's own rules can never prefetch a transactional flow.
+				if ( $this->is_speculation_suppressed_for_visitor() || $this->is_speculation_commerce_request_excluded() ) {
+					return null;
+				}
+				// RUM-gated prerender: conservative prefetch by default;
+				// prerender only with a positive RUM signal.
+				if ( 'prerender' === ( $preload_settings['speculationMode'] ?? 'prefetch' ) && ! $this->is_prerender_allowed() ) {
+					$preload_settings['speculationMode']      = 'prefetch';
+					$preload_settings['speculationEagerness'] = 'conservative';
+				}
+				return $this->filter_speculation_rules_configuration( $config, $preload_settings, (bool) $enable_speculation );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $config;
+			}
+		}
+
+		/**
+		 * Whether the current request URL is a commerce/admin/preview/nocache context.
+		 *
+		 * Request-URI counterpart to {@see is_speculation_suppressed_for_visitor()}
+		 * (which covers conditional tags, logged-in visitors, and
+		 * `DONOTCACHEPAGE`): this probe inspects the raw request for contexts
+		 * the conditional tags miss — `add-to-cart` query endpoints, admin
+		 * requests, preview/customizer query endpoints, explicit no-cache
+		 * requests, and cart/checkout/account path prefixes (base plus
+		 * WooCommerce dynamic paths, respecting the same
+		 * `Util::get_woo_excluded_paths()` paths as the static-cache
+		 * cart/checkout cache-exclusion self-test).
+		 *
+		 * Query-param checks are scoped to `QUERY_STRING` only (never the
+		 * path/host) so legitimate slugs (e.g. a post about "add to cart")
+		 * are not over-blocked — mirroring the path+query scoping in
+		 * {@see validate_speculation_list_url_uncached()}. Fail-closed: any
+		 * throwable means "excluded" so uncertainty suppresses speculation
+		 * on transactional flows.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when speculation must not be emitted for this request.
+		 */
+		private function is_speculation_commerce_request_excluded(): bool {
+			try {
+				if ( function_exists( 'is_admin' ) ) {
+					try {
+						if ( is_admin() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Lowercase substring probe only, never output or persisted.
+				$query_string = isset( $_SERVER['QUERY_STRING'] ) && is_string( $_SERVER['QUERY_STRING'] ) ? strtolower( substr( $_SERVER['QUERY_STRING'], 0, 2000 ) ) : '';
+				if ( '' !== $query_string ) {
+					foreach ( array( 'add-to-cart', 'preview', 'customize_changeset', 'nocache', 'no-cache', 'donotcachepage' ) as $unsafe ) {
+						if ( false !== strpos( $query_string, $unsafe ) ) {
+							return true;
+						}
+					}
+				}
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Path-prefix probe only, never output or persisted.
+				$request_uri = isset( $_SERVER['REQUEST_URI'] ) && is_string( $_SERVER['REQUEST_URI'] ) ? strtolower( substr( $_SERVER['REQUEST_URI'], 0, 2000 ) ) : '';
+				if ( '' === $request_uri ) {
+					return false;
+				}
+				$qpos = strpos( $request_uri, '?' );
+				$path = false !== $qpos ? substr( $request_uri, 0, $qpos ) : $request_uri;
+				$hpos = strpos( $path, '#' );
+				if ( false !== $hpos ) {
+					$path = substr( $path, 0, $hpos );
+				}
+				$path = rtrim( $path, '/' );
+				if ( '' === $path ) {
+					$path = '/';
+				}
+				$prefixes = $this->get_speculation_commerce_paths();
+				// Respect the WooCommerce cart/checkout cache-exclusion
+				// self-test paths (same slugs the static cache bypasses).
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_woo_excluded_paths' ) ) {
+					try {
+						foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
+							if ( ! is_string( $woo_path ) || '' === trim( $woo_path ) ) {
+								continue;
+							}
+							$candidate = '/' . trim( strtolower( trim( $woo_path ) ), '/' );
+							if ( ! in_array( $candidate, $prefixes, true ) ) {
+								$prefixes[] = $candidate;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				foreach ( $prefixes as $prefix ) {
+					$prefix = strtolower( rtrim( (string) $prefix, '/' ) );
+					if ( '' === $prefix || '/' === $prefix ) {
+						continue;
+					}
+					if ( $path === $prefix || 0 === strpos( $path . '/', $prefix . '/' ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
 			}
 		}
 
