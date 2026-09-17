@@ -498,10 +498,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$stored        = Util::get_settings();
 			$this->options = ! empty( $stored ) ? $stored : $defaults;
 
-			// WooCommerce safe mode (issue #1383): additive key, defaults to
-			// on so cart/checkout/account and Store API routes are proven
-			// uncached before the merchant goes live. In-memory only here
-			// (no front-end DB write); persisted via update_settings/REST.
+			// WooCommerce safe mode (issue #1383): defensive in-memory parity
+			// with Util::get_default_settings() (wooSafeMode defaults to on).
+			// No behavioral effect on its own — all safe-mode reads go through
+			// Util::is_woo_safe_mode_enabled() (absent=ON, fresh get_settings())
+			// and Cache keeps its own options copy; this only keeps direct
+			// $this->options['cache_settings'] reads consistent. In-memory only
+			// here (no front-end DB write); persisted via update_settings/REST.
 			// Multisite-safe: per-site wppo_settings only.
 			if ( ! isset( $this->options['cache_settings'] ) || ! is_array( $this->options['cache_settings'] ) ) {
 				$this->options['cache_settings'] = array();

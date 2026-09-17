@@ -439,22 +439,41 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 			// useNotice + NoticeBanner) surfaces instead of being dismissed
 			// away with the proof hidden.
 			if ( step.key === 'cache' ) {
+				const autoController =
+					typeof AbortController !== 'undefined'
+						? new AbortController()
+						: null;
+				wooAbortRef.current = autoController;
 				try {
-					const testRes = await runWooSelfTest();
+					const testRes = await runWooSelfTest(
+						autoController?.signal
+					);
+					if (
+						dismissedRef.current ||
+						wooAbortRef.current !== autoController ||
+						autoController?.signal?.aborted
+					) {
+						return;
+					}
 					if ( testRes?.success && testRes?.data ) {
 						setWooSelfTest( testRes.data );
 						const descriptor = getWooSelfTestNotice( testRes.data );
 						notify( { ...descriptor, durationMs: 5000 } );
-						if (
-							testRes.data?.runnable &&
-							testRes.data?.woo_active &&
-							testRes.data?.all_pass === false
-						) {
+						if ( shouldShowWooFixCta( testRes.data ) ) {
 							return;
 						}
 					}
-				} catch {
-					// Best-effort proof — ignore and continue to dismiss.
+				} catch ( selfTestError ) {
+					// Best-effort proof — log for debuggability, then
+					// continue to dismiss.
+					console.error(
+						'Woo self-test proof failed:',
+						getErrorLogMessage( selfTestError )
+					);
+				} finally {
+					if ( wooAbortRef.current === autoController ) {
+						wooAbortRef.current = null;
+					}
 				}
 			}
 
