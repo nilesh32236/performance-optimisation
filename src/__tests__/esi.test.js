@@ -245,7 +245,9 @@ describe( 'ESI placeholder hydration (esi.js)', () => {
 		expect( global.fetch ).toHaveBeenCalledTimes( 3 );
 		const refreshBody = global.fetch.mock.calls[ 1 ][ 1 ].body;
 		expect( refreshBody.get( 'block' ) ).toBe( 'nonce' );
-		expect( refreshBody.get( '_wpnonce' ) ).toBe( null );
+		// Audit #1329: the stale token is presented as receipt proof so the
+		// server can tier the refresh throttle budget.
+		expect( refreshBody.get( '_wpnonce' ) ).toBe( 'stale' );
 		const retryBody = global.fetch.mock.calls[ 2 ][ 1 ].body;
 		expect( retryBody.get( 'block' ) ).toBe( 'cart' );
 		expect( retryBody.get( '_wpnonce' ) ).toBe( 'freshnonce' );

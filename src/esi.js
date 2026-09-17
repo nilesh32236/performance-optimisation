@@ -403,13 +403,17 @@ const isAuthFailure = ( response, data ) => {
  *
  * The `nonce` block is exempt from nonce verification server-side (see
  * LiteSpeed_ESI::handle_ajax_fragment()) and returns a freshly minted nonce as
- * its fragment. Concurrent callers share one in-flight request.
+ * its fragment. The stale token that just failed is presented as receipt
+ * proof (audit #1329): callers proving prior page receipt keep the recovery
+ * throttle budget, while proof-less callers are throttled harder.
+ * Concurrent callers share one in-flight request.
  *
  * @since 2.0.0
- * @param {AbortSignal|undefined} signal Optional abort signal.
+ * @param {AbortSignal|undefined} signal     Optional abort signal.
+ * @param {string}                staleNonce The expired nonce that just failed (may be empty).
  * @return {Promise<string>} Fresh nonce, or empty string on failure.
  */
-const refreshEsiNonce = ( signal ) => {
+const refreshEsiNonce = ( signal, staleNonce = '' ) => {
 	if ( pendingNonceRefresh ) {
 		return pendingNonceRefresh;
 	}
@@ -417,7 +421,7 @@ const refreshEsiNonce = ( signal ) => {
 		method: 'POST',
 		credentials: 'same-origin',
 		headers: ESI_REQUEST_HEADERS,
-		body: buildEsiBody( 'nonce', '' ),
+		body: buildEsiBody( 'nonce', staleNonce ),
 		signal,
 	} )
 		.then( ( response ) => ( response.ok ? response.json() : null ) )
@@ -457,7 +461,7 @@ const requestEsiFragment = async ( block, nonce, signal ) => {
 	let data = await readJsonSafely( response );
 
 	if ( isAuthFailure( response, data ) ) {
-		const freshNonce = await refreshEsiNonce( signal );
+		const freshNonce = await refreshEsiNonce( signal, nonce );
 		if ( freshNonce ) {
 			response = await send( freshNonce );
 			data = await readJsonSafely( response );

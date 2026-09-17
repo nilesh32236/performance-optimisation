@@ -233,6 +233,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Whether a presented nonce value proves prior page receipt.
+		 *
+		 * Structural evidence only (audit #1329): `wp_create_nonce()` mints 10
+		 * alphanumerics, so a well-formed value shows the caller scraped a
+		 * server-minted placeholder — even when the tick window has expired and
+		 * `wp_verify_nonce()` can no longer distinguish it from garbage. Used
+		 * to tier the `nonce`-block refresh budget, not to authorize.
+		 *
+		 * @since NEXT
+		 * @param string $nonce The presented nonce value (may be empty).
+		 * @return bool True when the value is structurally a WP nonce.
+		 */
+		private static function has_nonce_receipt_proof( string $nonce ): bool {
+			return (bool) preg_match( '/^[a-zA-Z0-9]{10}$/', $nonce );
+		}
+
+		/**
 		 * Emit the private pair, fail-closed when the emitter is unavailable.
 		 *
 		 * The ESI bridge can run on admin-ajax/early hooks where the emitter
@@ -1076,6 +1093,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// fragment hits. Fail-closed when the transient API is
 			// unavailable (is_fragment_throttled() fails open): unlimited
 			// minting must not be granted when no bucket can be enforced.
+			// Audit #1329: tiered budgets — a caller presenting proof of prior
+			// receipt (a structurally valid nonce value, even if expired beyond
+			// the wp_verify_nonce() window) keeps the recovery budget; a caller
+			// presenting nothing gets a squeezed budget so blind minting without
+			// ever receiving a page is throttled harder. Expired-vs-never-valid
+			// cannot be distinguished after the tick window, so the structural
+			// check (WP nonces are 10 alphanumerics) is receipt evidence only.
 			if ( $is_nonce_refresh ) {
 				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
 					self::emit_private_fail_closed();
@@ -1084,7 +1108,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					}
 					return;
 				}
-				if ( self::is_fragment_throttled( $block, 10, 60 ) ) {
+				$refresh_limit = self::has_nonce_receipt_proof( $nonce ) ? 10 : 3;
+				if ( self::is_fragment_throttled( $block, $refresh_limit, 60 ) ) {
 					self::emit_private_fail_closed();
 					if ( function_exists( 'wp_send_json_error' ) ) {
 						wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
