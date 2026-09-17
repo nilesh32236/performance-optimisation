@@ -1548,6 +1548,32 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Build a single-key trends map with baseline samples + N degraded trailing windows.
+	 *
+	 * Exercises the three-window ratio-persistence gate (issue #1384):
+	 * every trailing window breaches the ratio/delta threshold.
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $metric Metric key ('lcp'|'cls').
+	 * @param int    $baseline_count Number of baseline samples.
+	 * @param float  $baseline_value Baseline sample value.
+	 * @param float  $degraded_value Degraded trailing-window value.
+	 * @param int    $degraded_count Number of degraded trailing windows.
+	 * @return array Trends map.
+	 */
+	private function make_anomaly_trends_persisted( string $metric, int $baseline_count, float $baseline_value, float $degraded_value, int $degraded_count = 3 ): array {
+		$snapshots = array();
+		for ( $i = 0; $i < $baseline_count; $i++ ) {
+			$snapshots[] = array( $metric => $baseline_value );
+		}
+		for ( $i = 0; $i < $degraded_count; $i++ ) {
+			$snapshots[] = array( $metric => $degraded_value );
+		}
+		return array( 'key1' => $snapshots );
+	}
+
+	/**
 	 * Build a RUM aggregate with a single path carrying n samples at an average.
 	 *
 	 * @since 2.0.0
@@ -1600,7 +1626,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_detect_anomalies_requires_rum_corroboration(): void {
 		$this->install_stubs();
-		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
 
 		$undersampled = $this->make_anomaly_rum( 'lcp', 5, 2600.0 );
 		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $undersampled, 1700000000 ) );
@@ -1610,6 +1636,109 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertCount( 1, $anomalies );
 		$this->assertSame( 'lcp', $anomalies[0]['metric'] );
 		$this->assertEqualsWithDelta( 50.0, $anomalies[0]['change_pct'], 0.001 );
+	}
+
+	/**
+	 * Test a single noisy window never pages without persistence.
+	 *
+	 * Given one degraded trailing window with corroborating RUM When
+	 * evaluated Then no page fires — three persisted windows are
+	 * required (issue #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_single_window_no_page(): void {
+		$this->install_stubs();
+		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 ) );
+	}
+
+	/**
+	 * Test three persisted windows page with an enriched payload.
+	 *
+	 * Given three degraded trailing windows with corroborating RUM When
+	 * evaluated Then one notice fires carrying route plus p75 plus
+	 * baseline plus delta plus samples (issue #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_three_window_page_enriched(): void {
+		$this->install_stubs();
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+
+		$anomalies = AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 );
+		$this->assertCount( 1, $anomalies );
+		$anomaly = $anomalies[0];
+		$this->assertSame( 'key1', $anomaly['route'] );
+		$this->assertSame( 'key1', $anomaly['key'] );
+		$this->assertEqualsWithDelta( 2000.0, $anomaly['baseline'], 0.001 );
+		$this->assertEqualsWithDelta( 3000.0, $anomaly['current'], 0.001 );
+		$this->assertEqualsWithDelta( 1000.0, $anomaly['delta'], 0.001 );
+		$this->assertSame( 13, $anomaly['samples'] );
+		$this->assertArrayHasKey( 'p75', $anomaly );
+		$this->assertGreaterThan( 0.0, $anomaly['p75'] );
+	}
+
+	/**
+	 * Test the live path emits zero notices with RUM disabled.
+	 *
+	 * Given persisted trend regressions but RUM collection off When
+	 * evaluated via the live (null aggregate) path Then zero notices
+	 * appear and the provisional state reports rum_disabled (issue
+	 * #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_rum_disabled_returns_empty(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => false ),
+		);
+		Util::clear_settings_cache();
+		// Stored RUM data must not matter while collection is disabled.
+		$this->options['wppo_web_vitals_rum'] = $this->make_anomaly_rum( 'lcp', 50, 2600.0 );
+
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, null, 1700000000 ) );
+
+		$state = AI_Adaptive::get_anomaly_provisional_state( $trends, null, 1700000000 );
+		$this->assertTrue( $state['provisional'] );
+		$this->assertSame( 'rum_disabled', $state['reason'] );
+	}
+
+	/**
+	 * Test thin data surfaces a provisional state, never a page.
+	 *
+	 * Given undersampled trend history When the provisional state is
+	 * read Then it reports trends_thin; given satisfied floors it
+	 * reports ready (issue #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_anomaly_provisional_state_thin_and_ready(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+
+		$thin  = $this->make_anomaly_trends( 'lcp', 4, 2000.0, 3000.0 );
+		$state = AI_Adaptive::get_anomaly_provisional_state( $thin, $this->make_anomaly_rum( 'lcp', 50, 2600.0 ), 1700000000 );
+		$this->assertTrue( $state['provisional'] );
+		$this->assertSame( 'trends_thin', $state['reason'] );
+
+		$persisted = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
+		$ready     = AI_Adaptive::get_anomaly_provisional_state( $persisted, $this->make_anomaly_rum( 'lcp', 12, 2600.0 ), 1700000000 );
+		$this->assertFalse( $ready['provisional'] );
+		$this->assertSame( 'ready', $ready['reason'] );
 	}
 
 	/**
@@ -1625,7 +1754,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_detect_anomalies_cooldown_single_banner(): void {
 		$this->install_stubs();
-		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
 		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
 		$now    = 1700000000;
 
@@ -1653,7 +1782,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 		$now = 1700000000;
 
-		$shift = $this->make_anomaly_trends( 'cls', 10, 0.05, 0.12 );
+		$shift = $this->make_anomaly_trends_persisted( 'cls', 10, 0.05, 0.12 );
 		$rum   = $this->make_anomaly_rum( 'cls', 12, 0.10 );
 		$fired = AI_Adaptive::detect_anomalies( $shift, $rum, $now );
 		$this->assertCount( 1, $fired );
@@ -1683,7 +1812,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 				throw new \Exception( 'filter exploded' );
 			}
 		);
-		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
 		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
 
 		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 ) );
