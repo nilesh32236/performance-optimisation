@@ -70,9 +70,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 *
 		 * Registers the hooks for asset dequeuing and capturing.
 		 *
+		 * Hooks are frontend-only: in the admin area the metabox reads
+		 * captured assets through the static getters, so no instance hooks
+		 * are registered there (keeps the manager code off admin hot paths).
+		 *
 		 * @since 1.1.0
 		 */
 		public function __construct() {
+			if ( function_exists( 'is_admin' ) && is_admin() ) {
+				return;
+			}
 			// Capture assets after they've been printed so $done arrays are populated.
 			add_action( 'wp_footer', array( $this, 'capture_page_assets' ), 9999 );
 
@@ -179,12 +186,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				foreach ( $wp_scripts->done as $handle ) {
 					if ( isset( $wp_scripts->registered[ $handle ] ) ) {
 						$registered = $wp_scripts->registered[ $handle ];
+						$src        = $registered->src ? $registered->src : '';
 						$scripts[]  = array(
 							'handle'         => $handle,
-							'src'            => $registered->src ? $registered->src : '',
+							'src'            => $src,
 							'deps'           => $registered->deps,
 							'delay_strategy' => $per_page_strategies[ $handle ] ?? null,
 							'delay_priority' => $per_page_priorities[ $handle ] ?? null,
+							'size'           => self::resolve_asset_size( $src ),
 						);
 					}
 				}
@@ -194,10 +203,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				foreach ( $wp_styles->done as $handle ) {
 					if ( isset( $wp_styles->registered[ $handle ] ) ) {
 						$registered = $wp_styles->registered[ $handle ];
+						$src        = $registered->src ? $registered->src : '';
 						$styles[]   = array(
 							'handle' => $handle,
-							'src'    => $registered->src ? $registered->src : '',
+							'src'    => $src,
 							'deps'   => $registered->deps,
+							'size'   => self::resolve_asset_size( $src ),
 						);
 					}
 				}
@@ -222,6 +233,117 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				// Store for 24 hours, keyed by post ID.
 				set_transient( Util::transient_key( self::TRANSIENT_PREFIX . $post_id ), $assets, DAY_IN_SECONDS );
 			}
+		}
+
+		/**
+		 * Resolve the on-disk size of an enqueued asset source.
+		 *
+		 * Fail-open helper for {@see capture_page_assets()}: only local files
+		 * are measured (via the existing {@see Util::get_local_path()} helper
+		 * so ABSPATH confinement still applies). Remote/CDN URLs, missing
+		 * files, and any internal failure resolve to `null` — never a remote
+		 * HEAD/HTTP request on the `wp_footer` hot path, never fatal.
+		 *
+		 * The `wppo_page_asset_size` filter offers an escape hatch; returning
+		 * a non-null integer overrides the measured value, returning `null`
+		 * keeps the legacy (unknown-size) fallback.
+		 *
+		 * @param  string $src The registered asset `src` (URL or path).
+		 * @since  NEXT
+		 * @return int|null Local file size in bytes, or null when unknown.
+		 */
+		public static function resolve_asset_size( $src ) {
+			try {
+				if ( ! is_string( $src ) || '' === $src ) {
+					return null;
+				}
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_page_asset_size' ) ) {
+					$filtered = apply_filters( 'wppo_page_asset_size', null, $src );
+					if ( is_int( $filtered ) && $filtered >= 0 ) {
+						return $filtered;
+					}
+					if ( null !== $filtered ) {
+						return null;
+					}
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_local_path' ) ) {
+					return null;
+				}
+				$local_path = Util::get_local_path( $src );
+				if ( '' === $local_path || ! file_exists( $local_path ) ) {
+					return null;
+				}
+				$size = filesize( $local_path );
+				return ( false !== $size && $size >= 0 ) ? (int) $size : null;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Suggest heavy, non-protected assets worth reviewing for this page.
+		 *
+		 * Read-only assistant: returns candidate handles ordered by size
+		 * (largest first) so the UI can *suggest* disables. It never writes
+		 * post meta and never auto-disables anything — the caller renders
+		 * suggestions as text only.
+		 *
+		 * @param  array $assets Captured page assets (`scripts`/`styles` lists).
+		 * @param  int   $threshold Minimum size in bytes for a suggestion. Defaults to 50 KB.
+		 * @since  NEXT
+		 * @return array List of `array( 'type' => 'script'|'style', 'handle' => string, 'size' => int )`.
+		 */
+		public static function get_asset_suggestions( $assets, $threshold = 51200 ) {
+			$suggestions = array();
+			try {
+				if ( ! is_array( $assets ) ) {
+					return $suggestions;
+				}
+				$threshold = is_int( $threshold ) && $threshold >= 0 ? $threshold : 51200;
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_asset_suggestion_threshold' ) ) {
+					$filtered_threshold = apply_filters( 'wppo_asset_suggestion_threshold', $threshold );
+					if ( is_numeric( $filtered_threshold ) && (int) $filtered_threshold >= 0 ) {
+						$threshold = (int) $filtered_threshold;
+					}
+				}
+				foreach ( array(
+					'scripts' => 'script',
+					'styles'  => 'style',
+				) as $group => $type ) {
+					if ( empty( $assets[ $group ] ) || ! is_array( $assets[ $group ] ) ) {
+						continue;
+					}
+					$protected = 'script' === $type ? self::$protected_scripts : self::$protected_styles;
+					foreach ( $assets[ $group ] as $asset ) {
+						if ( ! is_array( $asset ) || empty( $asset['handle'] ) || ! is_string( $asset['handle'] ) ) {
+							continue;
+						}
+						if ( in_array( $asset['handle'], $protected, true ) ) {
+							continue;
+						}
+						$size = $asset['size'] ?? null;
+						if ( ! is_int( $size ) || $size < $threshold ) {
+							continue;
+						}
+						$suggestions[] = array(
+							'type'   => $type,
+							'handle' => $asset['handle'],
+							'size'   => $size,
+						);
+					}
+				}
+				usort(
+					$suggestions,
+					static function ( $a, $b ) {
+						return $b['size'] - $a['size'];
+					}
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+			return $suggestions;
 		}
 
 		/**
