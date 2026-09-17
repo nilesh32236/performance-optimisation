@@ -12,6 +12,7 @@
  */
 
 use PerformanceOptimise\Inc\Cache;
+use PerformanceOptimise\Inc\Image_Optimisation;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
@@ -97,6 +98,169 @@ class CacheRenderLockTest extends \PHPUnit\Framework\TestCase {
 		$prop = new \ReflectionProperty( Cache::class, 'url_path' );
 		$prop->setValue( $cache, '' );
 		return $cache;
+	}
+
+	/**
+	 * Reset the once-per-request render flag so winner-path tests always
+	 * exercise the real process_buffer_only() pipeline.
+	 *
+	 * @return void
+	 */
+	private function reset_buffer_enhanced(): void {
+		$prop = new \ReflectionProperty( Cache::class, 'buffer_enhanced' );
+		$prop->setValue( null, false );
+	}
+
+	/**
+	 * Stub the extra WP functions needed by the save path
+	 * (save_processed_buffer() -> save_cache_files()).
+	 *
+	 * @return void
+	 */
+	private function install_save_path_stubs(): void {
+		Functions\when( 'WP_Filesystem' )->justReturn( true );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' );
+			}
+		);
+		// Override the suite-wide trailingslashit passthrough with core
+		// behavior: directory containment checks require the slash.
+		Functions\when( 'trailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' ) . '/';
+			}
+		);
+	}
+
+	/**
+	 * Build a filesystem spy covering both the Cache-level atomic writes
+	 * and the Util::prepare_cache_dir() directory probes.
+	 *
+	 * @return object Spy with a public $writes counter.
+	 */
+	private function make_filesystem_spy(): object {
+		return new class() {
+			/**
+			 * Number of put_contents calls recorded.
+			 *
+			 * @var int
+			 */
+			public $writes = 0;
+
+			/**
+			 * Record a write.
+			 *
+			 * @param string $path     Path.
+			 * @param string $contents Contents.
+			 * @param int    $mode     Mode.
+			 * @return bool
+			 */
+			public function put_contents( $path, $contents, $mode = 0644 ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
+				unset( $path, $contents, $mode );
+				++$this->writes;
+				return true;
+			}
+
+			/**
+			 * Record a move.
+			 *
+			 * @param string $from Source.
+			 * @param string $to   Dest.
+			 * @param bool   $overwrite Overwrite.
+			 * @return bool
+			 */
+			public function move( $from, $to, $overwrite = true ) {
+				unset( $from, $to, $overwrite );
+				return true;
+			}
+
+			/**
+			 * Stub delete.
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function delete( $path ) {
+				unset( $path );
+				return true;
+			}
+
+			/**
+			 * Stub exists.
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function exists( $path ) {
+				unset( $path );
+				return false;
+			}
+
+			/**
+			 * Stub is_dir (pretend the cache tree already exists).
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function is_dir( $path ) {
+				unset( $path );
+				return true;
+			}
+
+			/**
+			 * Stub mkdir.
+			 *
+			 * @param string $path  Path.
+			 * @param int    $chmod Mode.
+			 * @return bool
+			 */
+			public function mkdir( $path, $chmod = 0755 ) {
+				unset( $path, $chmod );
+				return true;
+			}
+		};
+	}
+
+	/**
+	 * Point a Cache instance at the filesystem spy.
+	 *
+	 * @param Cache  $cache Cache instance.
+	 * @param object $spy   Filesystem spy.
+	 * @return void
+	 */
+	private function seed_cache_filesystem( Cache $cache, object $spy ): void {
+		$prop = new \ReflectionProperty( Cache::class, 'filesystem' );
+		$prop->setValue( $cache, $spy );
+		$prop = new \ReflectionProperty( Cache::class, 'fs_initialized' );
+		$prop->setValue( $cache, true );
+	}
+
+	/**
+	 * Point Util::init_filesystem() at the spy via the global.
+	 *
+	 * @param object $spy Filesystem spy.
+	 * @return mixed Previous $GLOBALS['wp_filesystem'] value (null when unset).
+	 */
+	private function push_global_filesystem( object $spy ) {
+		$previous                 = $GLOBALS['wp_filesystem'] ?? null;
+		$GLOBALS['wp_filesystem'] = $spy;
+		return $previous;
+	}
+
+	/**
+	 * Restore the previous global filesystem.
+	 *
+	 * @param mixed $previous Previous value from push_global_filesystem().
+	 * @return void
+	 */
+	private function pop_global_filesystem( $previous ): void {
+		if ( null === $previous ) {
+			unset( $GLOBALS['wp_filesystem'] );
+		} else {
+			$GLOBALS['wp_filesystem'] = $previous;
+		}
 	}
 
 	/**
@@ -316,5 +480,102 @@ class CacheRenderLockTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 0, $write_mock->writes );
 		$this->assertSame( array(), $this->get_prop( $cache, 'html_render_skipped' ) );
+	}
+
+	/**
+	 * Render failure records the skip so stash_cache() never persists
+	 * unprocessed output over the winner's optimized file.
+	 *
+	 * Forces process_buffer_only() to throw via an Image_Optimisation
+	 * subclass (no parent-constructor side effects, first pipeline step
+	 * throws), with a working save path underneath so the test fails if
+	 * the skip marker is missing (writes would be > 0).
+	 */
+	public function test_render_exception_records_skip_and_stash_skips_save(): void {
+		$this->install_stubs();
+		$this->install_save_path_stubs();
+		$this->reset_buffer_enhanced();
+		$cache = $this->make_cache();
+
+		$spy = $this->make_filesystem_spy();
+		$this->seed_cache_filesystem( $cache, $spy );
+		$fs_backup = $this->push_global_filesystem( $spy );
+
+		$failing_images = new class() extends Image_Optimisation {
+			/**
+			 * Constructor without side effects (skips hook registration).
+			 */
+			public function __construct() {
+			}
+
+			/**
+			 * Fail the render deterministically.
+			 *
+			 * @param mixed $buffer Buffer (ignored).
+			 * @return void
+			 * @throws \RuntimeException Always.
+			 */
+			public function maybe_serve_next_gen_images( $buffer ) {
+				unset( $buffer );
+				throw new \RuntimeException( 'wppo test render failure' );
+			}
+		};
+		$cache->set_image_optimisation( $failing_images );
+
+		$file_path = $this->invoke_private( $cache, 'get_cache_file_path', array( 'html', '' ) );
+		$lock_key  = $this->invoke_private( $cache, 'html_render_lock_key', array( $file_path ) );
+		$this->assertNotSame( '', $lock_key );
+
+		try {
+			$result = $cache->process_buffer_for_cache( '<p>raw</p>', '<p>raw</p>' );
+			$this->assertSame( '<p>raw</p>', $result );
+
+			// Exception path records the skip and frees the flier slot.
+			$skipped = $this->get_prop( $cache, 'html_render_skipped' );
+			$this->assertArrayHasKey( $lock_key, $skipped );
+			$this->assertSame( array(), $this->get_prop( $cache, 'html_render_locks' ) );
+
+			$cache->stash_cache( '<p>unprocessed</p>' );
+		} finally {
+			$this->pop_global_filesystem( $fs_backup );
+		}
+
+		$this->assertSame( 0, $spy->writes );
+		$this->assertSame( array(), $this->get_prop( $cache, 'html_render_skipped' ) );
+	}
+
+	/**
+	 * Winner stash_cache() persists once and releases the render lock.
+	 */
+	public function test_winner_stash_cache_saves_and_releases(): void {
+		$this->install_stubs();
+		$this->install_save_path_stubs();
+		$this->reset_buffer_enhanced();
+		$cache = $this->make_cache();
+
+		$spy = $this->make_filesystem_spy();
+		$this->seed_cache_filesystem( $cache, $spy );
+		$fs_backup = $this->push_global_filesystem( $spy );
+
+		$file_path = $this->invoke_private( $cache, 'get_cache_file_path', array( 'html', '' ) );
+		$this->assertNotSame( '', $file_path );
+		$lock_key = $this->invoke_private( $cache, 'html_render_lock_key', array( $file_path ) );
+		$this->assertNotSame( '', $lock_key );
+
+		try {
+			$owner = $this->invoke_private( $cache, 'try_acquire_html_render_lock', array( $file_path ) );
+			$this->assertIsString( $owner );
+			$this->assertNotSame( '', $owner );
+
+			$cache->stash_cache( '<p>winner</p>' );
+		} finally {
+			$this->pop_global_filesystem( $fs_backup );
+		}
+
+		// HTML + gzip variants written via tmp+rename; fail-open owners
+		// are never tracked, so only the winner path asserts the release.
+		$this->assertGreaterThan( 0, $spy->writes );
+		$this->assertSame( array(), $this->get_prop( $cache, 'html_render_locks' ) );
+		$this->assertArrayNotHasKey( $lock_key, $this->transients );
 	}
 }

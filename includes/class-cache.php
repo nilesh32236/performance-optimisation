@@ -349,11 +349,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Set in {@see process_buffer_for_cache()} when
 		 * {@see try_acquire_html_render_lock()} returns false (another
 		 * worker observably holds the render lock, so this request serves
-		 * the unprocessed dynamic response). Consulted in
+		 * the unprocessed dynamic response) or when the render pipeline
+		 * itself throws (unprocessed output must never overwrite the
+		 * concurrent winner's optimized file). Consulted in
 		 * {@see stash_cache()} so a loser never persists its unprocessed
 		 * output over (or instead of) the winner's optimized file. Only
-		 * explicit losers are tracked — fail-open owners (guard off, empty
-		 * path, no lock infrastructure) still save normally.
+		 * explicit losers and render failures are tracked — fail-open owners
+		 * (guard off, empty path, no lock infrastructure) still save normally
+		 * when their own render succeeds.
 		 *
 		 * @var array<string,true>
 		 * @since NEXT
@@ -2470,8 +2473,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $this->process_buffer_only( $filtered_output );
 			} catch ( \Throwable $e ) {
 				// Fail open and free the flier slot so the next request can
-				// render instead of stalling behind this failure.
+				// render instead of stalling behind this failure. The output
+				// is unprocessed, so record the skip marker (same contract as
+				// the loser path above): stash_cache() must not persist it
+				// over the concurrent winner's optimized file.
 				if ( isset( $file_path ) && '' !== $file_path ) {
+					$skip_key = $this->html_render_lock_key( $file_path );
+					if ( '' !== $skip_key ) {
+						$this->html_render_skipped[ $skip_key ] = true;
+					}
 					$this->release_html_render_lock( $file_path );
 				}
 				do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
@@ -3310,14 +3320,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Try to become the single flier that renders this HTML cache file.
 		 *
-		 * Non-blocking: one non-blocking acquire, then a single jittered
-		 * backoff + retry so a just-finished holder lets this worker reuse
-		 * the fresh file instead of duplicating the render. Returns an owner
+		 * Non-blocking: a single non-blocking acquire. Returns an owner
 		 * token on win (tracked in $html_render_locks for release in
 		 * {@see stash_cache()}), a fail-open owner when the guard is off,
 		 * the path is empty, or no lock infrastructure exists (render without
 		 * a held lock — never blocks caching), or false when another worker
 		 * observably holds the lock (caller serves dynamic unprocessed).
+		 * Losers never wait: sleeping would add TTFB latency to a response
+		 * served dynamic anyway, and a retry that wins would re-render
+		 * unconditionally — duplicating the expensive pipeline even when the
+		 * holder just wrote a fresh file. The next request reuses the
+		 * winner's file via the advanced-cache.php drop-in.
 		 * Never fatal; never white-screens.
 		 *
 		 * @since NEXT
@@ -3382,24 +3395,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! $this->is_html_render_locked( $lock_key ) ) {
 					return '' !== $owner ? $owner : $no_lock_owner;
 				}
-				// Contended: jittered backoff + single retry so a
-				// just-finishing holder is reused instead of duplicating work.
-				try {
-					Util::stampede_jittered_sleep_us( 50000, 50000 );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				$retry_owner = '';
-				try {
-					$retry_owner = Util::generate_stampede_owner();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$retry_owner = $no_lock_owner;
-				}
-				if ( '' !== $retry_owner && Util::acquire_stampede_lock( $lock_key, $retry_owner, $ttl ) ) {
-					$this->html_render_locks[ $lock_key ] = $retry_owner;
-					return $retry_owner;
-				}
+				// Contended: serve dynamic immediately without waiting (see
+				// method docblock). The skip marker is recorded by the caller
+				// (process_buffer_for_cache()) alongside the dynamic response.
 				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
