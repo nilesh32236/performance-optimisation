@@ -225,11 +225,26 @@ if ( defined( 'WPPO_UNIT_TESTS' ) && WPPO_UNIT_TESTS ) {
 	return;
 }
 
-// Load Composer autoloader.
-require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
+// Load Composer autoloader (vendor/ is gitignored and installed on demand).
+$wppo_autoload = WPPO_PLUGIN_PATH . 'vendor/autoload.php';
+if ( file_exists( $wppo_autoload ) ) {
+	require_once $wppo_autoload;
+} else {
+	add_action(
+		'admin_notices',
+		static function () {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Performance Optimisation: vendor dependencies are missing. Run composer install to restore them.', 'performance-optimisation' ) . '</p></div>';
+		}
+	);
+	return;
+}
 
 // Boot only on supported runtimes; below the floors the guard registers an
 // admin notice and the site keeps running unoptimised (fail-open frontend).
+// Fallback require keeps Main available when the Composer classmap is stale.
+if ( ! class_exists( 'PerformanceOptimise\\Inc\\Main' ) && file_exists( WPPO_PLUGIN_PATH . 'includes/class-main.php' ) ) {
+	require_once WPPO_PLUGIN_PATH . 'includes/class-main.php';
+}
 if ( wppo_version_guard() ) {
 	new Main();
 }

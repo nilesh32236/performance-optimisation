@@ -52,7 +52,8 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 					$throttle_key = Util::transient_key( $throttle_group . '_' . $service_slug );
 					if ( false === get_transient( $throttle_key ) ) {
 						set_transient( $throttle_key, 1, $throttle_ttl > 0 ? $throttle_ttl : 60 );
-						Log::add( $log_prefix . ' [' . $service . ']: ' . substr( $detail, 0, 200 ) );
+						$truncated = function_exists( 'mb_substr' ) ? mb_substr( $detail, 0, 200, 'UTF-8' ) : substr( $detail, 0, 200 );
+						Log::add( $log_prefix . ' [' . $service . ']: ' . $truncated );
 					}
 				}
 			} catch ( \Throwable $e ) {

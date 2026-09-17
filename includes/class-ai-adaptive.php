@@ -39,6 +39,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private const LEARN_LOCK = 'wppo_ai_learn_lock';
 
 		/**
+		 * Per-request memo of the stored AI model (null = not loaded yet).
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $model_memo = null;
+
+		/**
 		 * Whether AI adaptive optimization is enabled.
 		 *
 		 * Gated by wppo_settings[ai_adaptive][enabled] (false default)
@@ -83,14 +91,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			self::$model_memo = $model;
 			return $model;
 		}
-
-		/**
-		 * Per-request memo of the stored AI model (null = not loaded yet).
-		 *
-		 * @since NEXT
-		 * @var array|null
-		 */
-		private static ?array $model_memo = null;
 
 		/**
 		 * Reset the per-request model memo (for testing).
@@ -556,13 +556,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return null;
 				}
 				if ( null === $rum ) {
-					$rum = get_option( RUM::OPTION, array() ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- AI model needs cross-signal input.
+					$rum = get_option( RUM::OPTION, array() );
 					if ( ! is_array( $rum ) ) {
 						$rum = array();
 					}
 				}
 				if ( null === $trends ) {
-					$trends = get_option( Pagespeed::TREND_OPTION, array() ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- AI model needs cross-signal input.
+					$trends = get_option( Pagespeed::TREND_OPTION, array() );
 					if ( ! is_array( $trends ) ) {
 						$trends = array();
 					}
@@ -572,7 +572,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				// in memory via wp_json_encode on the learn path.
 				$summary = self::summarize_aggregates_for_prompt( $rum, $trends );
 				$prompt  = 'Given RUM aggregates and trends, suggest top 2 prefetch URLs, least-used scripts to exclude, and speculation eagerness (conservative|moderate|eager) as JSON.';
-				$result  = $client->prompt( $prompt . ' RUM:' . wp_json_encode( $summary['rum'] ) . ' Trends:' . wp_json_encode( $summary['trends'] ) ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- AI model needs cross-signal input.
+				$result  = $client->prompt( $prompt . ' RUM:' . wp_json_encode( $summary['rum'] ) . ' Trends:' . wp_json_encode( $summary['trends'] ) );
 				if ( is_array( $result ) ) {
 					return $result;
 				}
@@ -1510,17 +1510,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function anomaly_now( ?int $now = null ): int {
-			if ( null !== $now ) {
-				return $now;
-			}
-			try {
-				if ( function_exists( 'time' ) ) {
-					return (int) time();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return 0;
+			return $now ?? time();
 		}
 
 		/**

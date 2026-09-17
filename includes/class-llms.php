@@ -263,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				return;
 			}
 			$url = Util::cached_home_url( '/llms.txt' );
-			echo '<link rel="alternate" type="text/markdown" href="' . esc_url( $url ) . '" />' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo '<link rel="alternate" type="text/markdown" href="' . esc_url( $url ) . '" />' . "\n";
 		}
 
 		/**
@@ -330,9 +330,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 					Util::prepare_cache_dir( $dir );
 				}
 			} elseif ( function_exists( 'wp_mkdir_p' ) ) {
-				wp_mkdir_p( $dir );
+				if ( ! wp_mkdir_p( $dir ) && ! is_dir( $dir ) ) {
+					return false;
+				}
 			} else {
 				@mkdir( $dir, 0775, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir,WordPress.PHP.NoSilencedErrors.Discouraged
+				if ( ! is_dir( $dir ) ) {
+					return false;
+				}
 			}
 
 			$path      = self::get_file_path( 'llms' );

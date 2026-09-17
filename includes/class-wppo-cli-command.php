@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				return;
 			}
 
-			$page = $assoc_args['page'] ?? null;
+			$page = isset( $assoc_args['page'] ) ? sanitize_text_field( (string) $assoc_args['page'] ) : null;
 
 			if ( $page ) {
 				$path    = wp_normalize_path( trim( (string) wp_parse_url( $page, PHP_URL_PATH ), '/' ) );
@@ -217,7 +217,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				if ( $dry_run ) {
 					$tables     = $assoc_args['tables'] ?? 'posts,postmeta,comments,commentmeta,options';
 					$table_list = array_map( 'trim', explode( ',', $tables ) );
-					WP_CLI::log( (string) wp_json_encode( array( 'would_optimize' => $table_list ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+					self::log_json( array( 'would_optimize' => $table_list ) );
 					WP_CLI::warning( __( 'Dry run — no tables optimized.', 'performance-optimisation' ) );
 					return;
 				}
@@ -227,13 +227,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$success_count  = 0;
 				foreach ( $table_list as $table ) {
 					if ( '' === $table || ! in_array( $table, $allowed_tables, true ) ) {
-						WP_CLI::warning( sprintf( ' - Skipped unknown table: %s', $table ) );
+						/* translators: %s: Table name */
+						WP_CLI::warning( sprintf( __( ' - Skipped unknown table: %s', 'performance-optimisation' ), sanitize_text_field( $table ) ) );
 						continue;
 					}
 					$result = Database_Cleanup::optimize_table( $table );
 					if ( $result ) {
 						++$success_count;
-						WP_CLI::log( sprintf( ' - Optimized table: %s', $table ) );
+						/* translators: %s: Table name */
+						WP_CLI::log( sprintf( __( ' - Optimized table: %s', 'performance-optimisation' ), sanitize_text_field( $table ) ) );
 					}
 				}
 				/* translators: %d: Number of tables optimized */
@@ -254,7 +256,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				if ( 'json' !== $format ) {
 					$format = 'json';
 				}
-				WP_CLI::log( (string) wp_json_encode( $counts, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+				self::log_json( $counts );
 				return;
 			}
 
@@ -277,7 +279,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					// Unknown or alias type — show full preview.
 					$payload = array( 'would_delete' => $counts );
 				}
-				WP_CLI::log( (string) wp_json_encode( $payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+				self::log_json( $payload );
 				WP_CLI::warning( __( 'Dry run — no rows deleted.', 'performance-optimisation' ) );
 				return;
 			}
@@ -306,12 +308,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 				foreach ( $results as $key => $val ) {
 					if ( is_wp_error( $val ) ) {
-						WP_CLI::warning( sprintf( ' - %s: %s', $key, $val->get_error_message() ) );
+						/* translators: 1: Cleanup type, 2: Error message */
+						WP_CLI::warning( sprintf( __( ' - %1$s: %2$s', 'performance-optimisation' ), $key, $val->get_error_message() ) );
 						continue;
 					}
 					$count  = (int) $val;
 					$total += $count;
-					WP_CLI::log( sprintf( ' - %s: %d cleaned', $key, $count ) );
+					/* translators: 1: Cleanup type, 2: Item count */
+					WP_CLI::log( sprintf( __( ' - %1$s: %2$d cleaned', 'performance-optimisation' ), $key, $count ) );
 				}
 
 				/* translators: %d: Total items removed */
@@ -488,7 +492,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					$output['pending'][ $fmt ]   = count( $pending );
 					$output['completed'][ $fmt ] = count( $completed );
 				}
-				WP_CLI::log( (string) wp_json_encode( $output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+				self::log_json( $output );
 				return;
 			}
 
@@ -896,7 +900,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			switch ( $action ) {
 				case 'status':
 					$status = $manager->get_status();
-					WP_CLI::log( (string) wp_json_encode( $status, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+					self::log_json( $status );
 					return;
 
 				case 'ping':
@@ -1019,8 +1023,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 */
 		public function pagespeed( array $args, array $assoc_args ): void {
 			$action   = $args[0] ?? 'scan';
-			$url      = $assoc_args['url'] ?? Util::cached_home_url();
-			$strategy = $assoc_args['strategy'] ?? 'mobile';
+			$url      = isset( $assoc_args['url'] ) && is_string( $assoc_args['url'] ) ? esc_url_raw( $assoc_args['url'] ) : Util::cached_home_url();
+			$strategy = isset( $assoc_args['strategy'] ) && is_string( $assoc_args['strategy'] ) ? $assoc_args['strategy'] : 'mobile';
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 
 			if ( 'scan' === $action ) {
 				$job_id = Pagespeed::queue_scan( $url, $strategy );
@@ -1041,7 +1048,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					WP_CLI::warning( __( 'No PageSpeed results found for the given URL and strategy.', 'performance-optimisation' ) );
 					return;
 				}
-				WP_CLI::log( (string) wp_json_encode( $results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+				self::log_json( $results );
 				return;
 			}
 
@@ -1097,11 +1104,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					WP_CLI::error( sprintf( __( 'Invalid system info group "%s".', 'performance-optimisation' ), $group ) );
 					return;
 				}
-				WP_CLI::log( (string) wp_json_encode( $all[ $group ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+				self::log_json( $all[ $group ] );
 				return;
 			}
 
-			WP_CLI::log( (string) wp_json_encode( $all, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+			self::log_json( $all );
 		}
 
 		/**

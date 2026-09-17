@@ -64,7 +64,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @param string $file_path  Path to the CSS file to be minified.
 		 * @param string $cache_dir  Directory where the minified file will be cached.
 		 */
-		public function __construct( $file_path, $cache_dir ) {
+		public function __construct( string $file_path, string $cache_dir ) {
 			// Traversal-safe by construction (issue #1179): the shared
 			// Util::validate_minify_path() gate rejects ../, NUL bytes,
 			// stream wrappers, and .php targets, resolves symlinks via
@@ -140,7 +140,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 					$minified_css = $css_minifier->minify();
 
 					$this->save_min_file( $minified_css, $cache_file );
-				} catch ( \Exception $e ) {
+				} catch ( \Throwable $e ) {
+					unset( $e );
 					return '';
 				}
 			}
@@ -262,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 						}
 
 						$avif_path = Img_Converter::get_img_path( $image_path, 'avif' );
-						if ( file_exists( $avif_path ) ) {
+						if ( file_exists( $avif_path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local CSS image-path probe, read-only.
 							return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
 						} else {
 							Img_Converter::add_img_into_queue( $local_path, 'avif' );
@@ -273,7 +274,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 						}
 
 						// Check if corresponding .webp image exists.
-						if ( file_exists( Img_Converter::get_img_path( $image_path ) ) ) {
+						if ( file_exists( Img_Converter::get_img_path( $image_path ) ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local CSS image-path probe, read-only.
 							return 'url("' . Img_Converter::get_img_url( $image_path ) . '")';
 						} else {
 							Img_Converter::add_img_into_queue( $local_path, 'webp' );
@@ -372,7 +373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 				$block = substr( $css, $pos, $end_pos - $pos + 1 );
 
-				if ( stripos( $block, 'font-display' ) === false ) {
+				if ( false === stripos( $block, 'font-display' ) ) {
 					$modified_block = substr( $block, 0, -1 ) . 'font-display: ' . $display_validated . ';}';
 					$css            = substr_replace( $css, $modified_block, $pos, $end_pos - $pos + 1 );
 					$offset         = $pos + strlen( $modified_block );

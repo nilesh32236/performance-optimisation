@@ -200,8 +200,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			}
 
 			if ( false === $data ) {
-				/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
+				/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared */
 				// Direct query is required for custom table operations.
+				// Table name uses $wpdb->prefix (no user input); no prepare placeholders needed.
 
 				// Get total number of activities.
 				$total_items = (int) $wpdb->get_var(
@@ -216,7 +217,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				// #888 finding 24).
 				$results = $wpdb->get_results(
 					$wpdb->prepare(
-						"SELECT * FROM {$wpdb->prefix}wppo_activity_logs ORDER BY created_at DESC, id DESC LIMIT %d OFFSET %d",
+						"SELECT id, activity, created_at FROM {$wpdb->prefix}wppo_activity_logs ORDER BY created_at DESC, id DESC LIMIT %d OFFSET %d",
 						$per_page,
 						$offset
 					),

@@ -2664,7 +2664,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( ! is_array( $all ) || empty( $all ) ) {
 					return null;
 				}
-				$now          = function_exists( 'time' ) ? time() : 0;
+				$now          = time();
 				$per_selector = array();
 				foreach ( $all as $day_bucket ) {
 					if ( ! is_array( $day_bucket ) ) {

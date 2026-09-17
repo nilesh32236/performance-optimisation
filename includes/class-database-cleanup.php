@@ -326,7 +326,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return int|false Number of rows deleted, or `false` on database error.
 		 */
 		public static function clean_revisions_advanced( $max_age_days = 30, $keep_latest = 5 ) {
-			$keep_latest = max( 1, $keep_latest );
+			$max_age_days = max( 1, min( 365, (int) $max_age_days ) );
+			$keep_latest  = max( 1, (int) $keep_latest );
 			global $wpdb;
 			$deleted = 0;
 

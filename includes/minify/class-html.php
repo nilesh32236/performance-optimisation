@@ -403,7 +403,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$priority_raw            = Util::process_urls( $this->options['file_optimisation']['delayJSPriority'] ?? array() );
 			foreach ( $priority_raw as $line ) {
 				$parts = explode( ':', $line, 2 );
-				if ( count( $parts ) === 2 ) {
+				if ( 2 === count( $parts ) ) {
 					$handle = trim( $parts[0] );
 					$level  = strtolower( trim( $parts[1] ) );
 					if ( '' !== $handle && in_array( $level, array( 'high', 'normal', 'low' ), true ) ) {
@@ -451,7 +451,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				// Compile-time validation: alternatives are quoted literals so
 				// this cannot backtrack-catastrophically; a false return here
 				// (overlong pattern) degrades to the strpos fallback per tag.
-				set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from validating the generated alternation.
+				set_error_handler( static function () {} ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Temporary guard while validating the generated alternation.
 				try {
 					$valid = preg_match( $re, '' );
 				} catch ( \Throwable $e ) {

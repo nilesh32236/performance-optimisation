@@ -1691,7 +1691,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( '' === $local_path || ! file_exists( $local_path ) ) {
 						continue;
 					}
-					$size = filesize( $local_path );
+					$size = @filesize( $local_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize,WordPress.PHP.NoSilencedErrors.Discouraged -- TOCTOU-safe stat after file_exists().
 					if ( false === $size || $size <= 0 || $size > 524288 ) {
 						continue;
 					}
@@ -3471,8 +3471,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					$error_msg = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP status ' . wp_remote_retrieve_response_code( $response );
-					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO used-CSS generation failed for post ' . (int) $post_id . ': ' . sanitize_text_field( $error_msg ) );
+					if ( class_exists( 'PerformanceOptimise\\Inc\\Log' ) ) {
+						Log::add( 'Used-CSS generation failed for post ' . (int) $post_id . ': ' . sanitize_text_field( $error_msg ) );
+					}
 				}
 				return;
 			}

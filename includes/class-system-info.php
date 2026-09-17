@@ -412,7 +412,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						// Try to distinguish LSCache foreign drop-in vs other.
 						$path     = Advanced_Cache_Handler::get_dropin_path();
 						$contents = '';
-						if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
+						$size     = is_readable( $path ) ? filesize( $path ) : false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+						if ( false !== $size && $size < 1048576 ) {
 							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 							if ( is_string( $contents_raw ) ) {
 								$contents = $contents_raw;
@@ -445,7 +446,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						// drop-in within wp-content (Part 2 review).
 						$path     = $oc->get_dropin_path();
 						$contents = '';
-						if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
+						$size     = is_readable( $path ) ? filesize( $path ) : false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+						if ( false !== $size && $size < 1048576 ) {
 							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 							if ( is_string( $contents_raw ) ) {
 								$contents = $contents_raw;
@@ -865,7 +867,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				$slug = dirname( $plugin_path );
 				// Single-file plugins have dirname of '.'.
 				if ( '.' === $slug ) {
-					$slug = str_replace( '.php', '', basename( $plugin_path ) );
+					$slug = basename( $plugin_path, '.php' );
 				}
 				if ( in_array( $slug, self::$cache_plugin_slugs, true ) ) {
 					return $slug;
