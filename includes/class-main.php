@@ -4267,6 +4267,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				),
 			);
 
+			// Audit #1333: wppoSettings intentionally carries no translations
+			// map — wp_set_script_translations() JSON below is the sole i18n
+			// source for the SPA (unlike the admin-bar wppoObject path, which
+			// needs its own map because src/main.js has no wp-i18n dep).
 			wp_set_script_translations( 'performance-optimisation-script', 'performance-optimisation' );
 		}
 
