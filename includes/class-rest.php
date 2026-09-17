@@ -1566,7 +1566,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								'order'    => 'ASC',
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
-							if ( ! is_array( $existing_actions ) || empty( $existing_actions ) ) {
+							if ( ! is_array( $existing_actions ) ) {
+								// Non-array store failure (false/WP_Error/null
+								// without throwing): the snapshot is unusable,
+								// so keep the per-item backstop below.
+								$scheduled_complete = false;
+								break;
+							}
+							if ( empty( $existing_actions ) ) {
 								$scheduled_complete = true;
 								break;
 							}

@@ -776,6 +776,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Per-request memo of the WordPress version string.
+		 *
+		 * Shared by {@see get_autoloadable_values()} and
+		 * {@see is_wp_version_at_least()} so audit paths pay one
+		 * `get_bloginfo( 'version' )` read per request instead of 3-4.
+		 *
+		 * @since NEXT
+		 * @var string|null Null when not yet read this request.
+		 */
+		private static $wp_version_memo = null;
+
+		/**
+		 * Reset the version memo (unit-test helper).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_version_memo_for_tests(): void {
+			self::$wp_version_memo = null;
+		}
+
+		/**
+		 * Read the running WordPress version once per request.
+		 *
+		 * @since NEXT
+		 * @return string Version string, or '' when unavailable.
+		 */
+		private static function get_wp_version_once(): string {
+			if ( null !== self::$wp_version_memo ) {
+				return self::$wp_version_memo;
+			}
+			$current = '';
+			if ( function_exists( 'get_bloginfo' ) ) {
+				try {
+					$current = (string) get_bloginfo( 'version' );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$current = '';
+				}
+			}
+			self::$wp_version_memo = $current;
+			return $current;
+		}
+
+		/**
 		 * Autoload values that count as "autoloaded" for the options audit.
 		 *
 		 * Mirrors Site Health / Performance Lab: on WP 6.6+ the core API
@@ -788,19 +833,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return string[]
 		 */
 		public static function get_autoloadable_values(): array {
-			// Single filterable version read: is_wp_version_at_least() and
-			// the known-pre-6.6 check below must share one get_bloginfo()
-			// call instead of two round trips per audit query path.
-			$current = '';
-			if ( function_exists( 'get_bloginfo' ) ) {
-				try {
-					$current = (string) get_bloginfo( 'version' );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$current = '';
-				}
-			}
-			$is_66 = '' !== $current && version_compare( $current, '6.6', '>=' );
+			// Single memoized version read: is_wp_version_at_least() shares
+			// the same per-request memo instead of a second round trip.
+			$current = self::get_wp_version_once();
+			$is_66   = '' !== $current && version_compare( $current, '6.6', '>=' );
 			if ( function_exists( 'wp_autoload_values_to_autoload' ) && $is_66 ) {
 				return (array) wp_autoload_values_to_autoload();
 			}
@@ -827,12 +863,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( ! function_exists( 'get_bloginfo' ) ) {
 				return false;
 			}
-			try {
-				$current = (string) get_bloginfo( 'version' );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			$current = self::get_wp_version_once();
 			if ( '' === $current ) {
 				return false;
 			}
@@ -1203,17 +1234,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// cannot go to SQL and could otherwise silently hide candidates
 			// sitting below a single LIMIT cutoff. Prefix-class exclusions
 			// (transients, oEmbed, wppo_*) are pushed into SQL so fewer rows
-			// enter the LENGTH() + ORDER BY filesort. Bounded to 5 windows
-			// (max ~3000 scanned rows) so large sites cannot loop unbounded.
+			// enter the LENGTH() + ORDER BY filesort. All 5 bounded windows
+			// are always exhausted (max ~3000 scanned rows): early-stopping
+			// on raw buffered rows would hide candidates when the top
+			// windows are mostly core/remediated rows filtered in PHP.
 			$fetch = $limit + 100;
 			$rows  = array();
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
+			$seen  = array();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
 			for ( $window = 0; $window < 5; $window++ ) {
 				$offset = $window * $fetch;
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query, windowed pagination.
 				$window_rows = $wpdb->get_results(
 					$wpdb->prepare( // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; LIKE exclusions passed via spread args.
-						"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $fetch . ' OFFSET ' . (int) $offset, // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; LIKE exclusions passed via spread args.
+						"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND LENGTH(option_value) >= %d ORDER BY opt_size DESC, option_name ASC LIMIT " . (int) $fetch . ' OFFSET ' . (int) $offset, // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; LIKE exclusions passed via spread args.
 						...array_merge( $autoload_values, array( '\_transient\_%', '\_site\_transient\_%', '\_oembed\_%', 'wppo\_%', $threshold ) )
 					),
 					ARRAY_A
@@ -1222,14 +1256,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					break;
 				}
 				foreach ( $window_rows as $window_row ) {
-					$rows[] = $window_row;
+					// Dedupe by option_name: LENGTH() ties plus concurrent
+					// option writes can shift OFFSET windows, yielding
+					// duplicates/skips across windows without a tiebreaker.
+					$row_name = isset( $window_row['option_name'] ) ? (string) $window_row['option_name'] : '';
+					if ( '' === $row_name || isset( $seen[ $row_name ] ) ) {
+						continue;
+					}
+					$seen[ $row_name ] = true;
+					$rows[]            = $window_row;
 				}
 				if ( count( $window_rows ) < $fetch ) {
-					break;
-				}
-				// Stop early once enough raw rows are buffered to plausibly
-				// yield $limit accepted rows after PHP-side exclusions.
-				if ( count( $rows ) >= $fetch + $limit ) {
 					break;
 				}
 			}

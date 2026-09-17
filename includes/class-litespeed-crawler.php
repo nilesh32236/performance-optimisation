@@ -9,8 +9,6 @@
  * @since 2.0.0
  */
 
-// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_init,WordPress.WP.AlternativeFunctions.curl_curl_multi_init,WordPress.WP.AlternativeFunctions.curl_curl_multi_add_handle,WordPress.WP.AlternativeFunctions.curl_curl_multi_exec,WordPress.WP.AlternativeFunctions.curl_curl_multi_info_read,WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle,WordPress.WP.AlternativeFunctions.curl_curl_multi_close,WordPress.WP.AlternativeFunctions.curl_curl_close,WordPress.WP.AlternativeFunctions.curl_curl_setopt,WordPress.WP.AlternativeFunctions.curl_curl_getinfo
-
 namespace PerformanceOptimise\Inc;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -290,6 +288,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		}
 
 		/**
+		 * Keep only same-origin URLs (SSRF hardening for filter output).
+		 *
+		 * `esc_url_raw()` blocks `javascript:`/`data:` but does not enforce
+		 * same-origin, so a code-level filter (`wppo_crawler_urls`,
+		 * `wppo_invalidation_urls`) returning an internal host (e.g.
+		 * 169.254.169.254) would otherwise be fetched server-side.
+		 * Fail-open: when the home host cannot be determined the input
+		 * list is returned unchanged.
+		 *
+		 * @since NEXT
+		 * @param string[] $urls Candidate URLs (already esc_url_raw'd).
+		 * @return string[]
+		 */
+		public static function filter_to_same_origin( array $urls ): array {
+			$home = '';
+			try {
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'cached_home_url' ) ) {
+					$home = Util::cached_home_url();
+				} elseif ( function_exists( 'home_url' ) ) {
+					$home = (string) home_url();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $urls;
+			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- host comparison only.
+			$home_host = is_string( $home ) && '' !== $home ? (string) wp_parse_url( $home, PHP_URL_HOST ) : '';
+			if ( ! is_string( $home_host ) || '' === $home_host ) {
+				return $urls;
+			}
+			$home_host = strtolower( $home_host );
+			$kept      = array();
+			foreach ( $urls as $candidate ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- host comparison only.
+				$host = wp_parse_url( (string) $candidate, PHP_URL_HOST );
+				if ( ! is_string( $host ) || '' === $host ) {
+					continue;
+				}
+				if ( strtolower( $host ) !== $home_host ) {
+					continue;
+				}
+				$kept[] = (string) $candidate;
+			}
+			return $kept;
+		}
+
+		/**
 		 * Build variant matrix for a URL.
 		 *
 		 * Variants: Accept webp/avif × mobile/desktop × guest/role_hash.
@@ -485,8 +530,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls );
 				// Mirror the normal-path defense-in-depth: a code-level
 				// filter could return external or oversized lists, so
-				// re-sanitize + cap even on the deadline early return.
+				// re-sanitize + same-origin gate + cap even on the deadline
+				// early return.
 				$urls = array_values( array_unique( array_filter( array_map( 'esc_url_raw', $urls ) ) ) );
+				$urls = self::filter_to_same_origin( $urls );
 				if ( count( $urls ) > $cap ) {
 					$urls = array_slice( $urls, 0, $cap );
 				}
@@ -609,6 +656,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			 */
 			$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls );
 			$urls = array_values( array_unique( array_filter( array_map( 'esc_url_raw', $urls ) ) ) );
+			// Same-origin gate: esc_url_raw() blocks javascript:/data: but a
+			// code-level filter returning an internal host would still be
+			// fetched server-side without a host check.
+			$urls = self::filter_to_same_origin( $urls );
 			if ( count( $urls ) > $cap ) {
 				$urls = array_slice( $urls, 0, $cap );
 			}
@@ -621,6 +672,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * Each URL is expanded to variant matrix; requests are run via curl_multi
 		 * with timeout 5s per handle and 15s wall-clock budget (mirroring get_sitemap_urls:555).
 		 * Lane throttling via concurrency param; blacklist threshold 3 skips failing URLs.
+		 *
+		 * The `skipped` tally mixes two units by design: blacklist skips count
+		 * input URLs (pre-expansion, variant count unknown at skip time) while
+		 * deadline skips count variant-matrix requests. Callers must not assume
+		 * `success + failed + skipped` tallies a single unit.
 		 *
 		 * @since 2.0.0
 		 * @param string[] $urls URLs to crawl.
@@ -654,11 +710,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			$concurrency = max( 1, min( 4, $concurrency ) );
 
 			// Expand to variant matrix via varyGroups wiring.
-			$requests          = array();
-			$skipped_blacklist = 0;
+			$requests     = array();
+			$skipped_urls = 0;
 			foreach ( $urls as $url ) {
 				if ( self::is_blacklisted( $url ) ) {
-					++$skipped_blacklist;
+					++$skipped_urls;
 					continue;
 				}
 				$matrix = self::get_variants_to_warm( $url );
@@ -678,7 +734,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				return array(
 					'success' => 0,
 					'failed'  => 0,
-					'skipped' => $skipped_blacklist > 0 ? $skipped_blacklist : count( $urls ),
+					'skipped' => $skipped_urls > 0 ? $skipped_urls : count( $urls ),
 				);
 			}
 
@@ -693,15 +749,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			if ( ! function_exists( 'curl_multi_init' ) || $disable_curl ) {
 				$success          = 0;
 				$failed           = 0;
-				$skipped_deadline = 0;
+				$skipped_requests = 0;
 				$deadline         = microtime( true ) + 15;
+				// Per-URL outcome sets: variants share one base URL string,
+				// so per-variant record_failure/clear_blacklist would issue
+				// up to 8 transient writes per page (tripping threshold 3
+				// on a single failure). Success/failed counters stay
+				// per-request; only the transient writes are deduped.
+				$bulk_ok  = array();
+				$bulk_bad = array();
 				foreach ( $requests as $req ) {
 					// Bound worst-case runtime like the curl_multi path: once
 					// the 15s wall-clock budget is spent, unattempted work
 					// counts as skipped (deferred), not failed, so the
 					// failed metric only reflects requests that actually ran.
 					if ( microtime( true ) >= $deadline ) {
-						++$skipped_deadline;
+						++$skipped_requests;
 						continue;
 					}
 					$resp = wp_remote_get(
@@ -712,28 +775,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 						)
 					);
 					if ( is_wp_error( $resp ) || (int) wp_remote_retrieve_response_code( $resp ) >= 400 ) {
-						self::record_failure( $req['url'] );
+						$bulk_bad[ (string) $req['url'] ] = true;
 						++$failed;
 					} else {
-						self::clear_blacklist( $req['url'] );
+						$bulk_ok[ (string) $req['url'] ] = true;
 						++$success;
+					}
+				}
+				foreach ( $bulk_ok as $ok_url => $ignored_ok ) {
+					unset( $ignored_ok );
+					self::clear_blacklist( (string) $ok_url );
+				}
+				foreach ( $bulk_bad as $bad_url => $ignored_bad ) {
+					unset( $ignored_bad );
+					if ( ! isset( $bulk_ok[ $bad_url ] ) ) {
+						self::record_failure( (string) $bad_url );
 					}
 				}
 				return array(
 					'success' => $success,
 					'failed'  => $failed,
-					'skipped' => $skipped_blacklist + $skipped_deadline,
+					// Mixed units (documented on the method): blacklist skips
+					// count input URLs, deadline skips count requests.
+					'skipped' => $skipped_urls + $skipped_requests,
 				);
 			}
 
-			$server_ip    = self::get_server_ip();
-			$mh           = curl_multi_init(); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_init -- crawler requires curl_multi for variant matrix
-			$handles      = array();
-			$queue        = $requests;
-			$active       = 0;
-			$success      = 0;
-			$failed       = 0;
-			$deadline     = microtime( true ) + 15;
+			$server_ip = self::get_server_ip();
+			$mh        = curl_multi_init(); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_init -- crawler requires curl_multi for variant matrix
+			$handles   = array();
+			$queue     = $requests;
+			$active    = 0;
+			$success   = 0;
+			$failed    = 0;
+			$deadline  = microtime( true ) + 15;
+			// Per-URL outcome sets (same dedupe as the fallback path):
+			// variants share one base URL, so flush one transient write
+			// per unique URL after the batch instead of one per variant.
+			$bulk_ok      = array();
+			$bulk_bad     = array();
 			$index_to_url = array();
 
 			// Helper to add next handle.
@@ -798,10 +878,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					$url  = $index_to_url[ (int) $ch ] ?? '';
 					if ( '' !== $url ) {
 						if ( '' !== $err || $code >= 400 || 0 === $code ) {
-							self::record_failure( $url );
+							$bulk_bad[ (string) $url ] = true;
 							++$failed;
 						} else {
-							self::clear_blacklist( $url );
+							$bulk_ok[ (string) $url ] = true;
 							++$success;
 						}
 					}
@@ -821,9 +901,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			} while ( $active && CURLM_OK === $status && microtime( true ) < $deadline );
 
 			// Unattempted remainder (still queued or in-flight past the
-			// deadline) counts as skipped, matching the wp_remote_get
-			// fallback, so success+failed+skipped tallies every request.
-			$skipped_deadline = count( $queue ) + count( $handles );
+			// deadline) counts as skipped requests, matching the
+			// wp_remote_get fallback. Mixed units (documented on the
+			// method): blacklist skips count input URLs while deadline
+			// skips count variant-matrix requests.
+			$skipped_requests = count( $queue ) + count( $handles );
+			// Flush one blacklist transient write per unique base URL: any
+			// success clears, otherwise a single failure is recorded.
+			foreach ( $bulk_ok as $ok_url => $ignored_ok ) {
+				unset( $ignored_ok );
+				self::clear_blacklist( (string) $ok_url );
+			}
+			foreach ( $bulk_bad as $bad_url => $ignored_bad ) {
+				unset( $ignored_bad );
+				if ( ! isset( $bulk_ok[ $bad_url ] ) ) {
+					self::record_failure( (string) $bad_url );
+				}
+			}
 			// Cleanup remaining.
 			foreach ( $handles as $ch ) {
 				curl_multi_remove_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle -- crawler requires curl_multi
@@ -837,7 +931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			return array(
 				'success' => $success,
 				'failed'  => $failed,
-				'skipped' => $skipped_blacklist + $skipped_deadline,
+				'skipped' => $skipped_urls + $skipped_requests,
 			);
 		}
 

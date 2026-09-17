@@ -244,7 +244,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			Img_Converter::migrate_img_info_autoload();
 			RUM::migrate_rum_autoload();
 			Pagespeed::migrate_trends_autoload();
-			self::migrate_settings_autoload();
+			// Retry-safe: a transient DB failure must not permanently mark
+			// the migration done, or the legacy autoload=yes row is never
+			// retried on the next admin_init/activation.
+			if ( ! self::migrate_settings_autoload() ) {
+				return;
+			}
 			update_option( 'wppo_autoload_migrated', 1, false );
 		}
 
@@ -258,25 +263,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * legacy rows here. Fail-open: missing rows or DB errors are no-ops.
 		 *
 		 * @since NEXT
-		 * @return void
+		 * @return bool True on success (or nothing to do), false on DB failure so the caller can retry later.
 		 */
-		public static function migrate_settings_autoload(): void {
+		public static function migrate_settings_autoload(): bool {
 			try {
 				if ( function_exists( 'wp_set_option_autoload' ) ) {
-					wp_set_option_autoload( 'wppo_settings', false );
-				} else {
-					global $wpdb;
-					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-					$wpdb->update(
-						$wpdb->options,
-						array( 'autoload' => 'no' ),
-						array( 'option_name' => 'wppo_settings' )
-					);
-					wp_cache_delete( 'wppo_settings', 'options' );
-					wp_cache_delete( 'alloptions', 'options' );
+					$result = wp_set_option_autoload( 'wppo_settings', false );
+					return false !== $result;
 				}
+				global $wpdb;
+				if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! isset( $wpdb->options ) ) {
+					return true;
+				}
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$result = $wpdb->update(
+					$wpdb->options,
+					array( 'autoload' => 'no' ),
+					array( 'option_name' => 'wppo_settings' )
+				);
+				if ( false === $result ) {
+					return false;
+				}
+				wp_cache_delete( 'wppo_settings', 'options' );
+				wp_cache_delete( 'alloptions', 'options' );
+				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				return false;
 			}
 		}
 

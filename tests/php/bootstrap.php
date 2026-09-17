@@ -284,6 +284,16 @@ trait WPPO_Test_Bootstrap {
 			// test reads its own wppo_activity_cache_version fixture.
 			\PerformanceOptimise\Inc\Log::reset_version_cache();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) && method_exists( 'PerformanceOptimise\Inc\Admin_Notices', 'reset_memo_cache_for_tests' ) ) {
+			// Admin-notice memos (circuit/drop-in/htaccess) persist per
+			// process: reset so stub changes between tests take effect.
+			\PerformanceOptimise\Inc\Admin_Notices::reset_memo_cache_for_tests();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) && method_exists( 'PerformanceOptimise\Inc\Database_Cleanup', 'reset_version_memo_for_tests' ) ) {
+			// WP-version memo persists per process: reset so per-test
+			// get_bloginfo() stubs take effect.
+			\PerformanceOptimise\Inc\Database_Cleanup::reset_version_memo_for_tests();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.
@@ -333,7 +343,12 @@ trait WPPO_Test_Bootstrap {
 				return 'http://example.com/wp-content' . (string) $path;
 			}
 		);
-		\Brain\Monkey\Functions\when( 'trailingslashit' )->returnArg();
+		\Brain\Monkey\Functions\when( 'trailingslashit' )->alias(
+			static function ( $path ) {
+				$path = (string) $path;
+				return '' === $path ? '' : rtrim( $path, '/' ) . '/';
+			}
+		);
 		\Brain\Monkey\Functions\when( 'wp_maybe_inline_styles' )->justReturn( '' );
 		\Brain\Monkey\Functions\when( 'get_bloginfo' )->justReturn( '6.8' );
 		\Brain\Monkey\Functions\when( '__' )->returnArg( 1 );

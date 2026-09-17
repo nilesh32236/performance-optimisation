@@ -1997,6 +1997,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			$success = true;
+			// Hoisted purge-name list: identical for every file in the walk.
+			$purge_names = array( self::USED_CSS_FILENAME, self::USED_CSS_FILENAME . '.sha256' );
+			foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+				$purge_names[] = 'used-css.' . $variant . '.css';
+				$purge_names[] = 'used-css.' . $variant . '.css.sha256';
+			}
 			// Head-index queue (O(1) dequeue) with a visited-dir budget so
 			// a huge tree cannot cost O(n) memmoves per dequeue nor walk
 			// unboundedly — mirrors the bounded snapshot queue in Cache.
@@ -2025,36 +2031,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
 						$dir_queue[] = array( $full_path, $depth + 1 );
 						$queue_total = count( $dir_queue );
-					} else {
-						$purge_names = array( self::USED_CSS_FILENAME, self::USED_CSS_FILENAME . '.sha256' );
-						foreach ( self::VIEWPORT_VARIANTS as $variant ) {
-							$purge_names[] = 'used-css.' . $variant . '.css';
-							$purge_names[] = 'used-css.' . $variant . '.css.sha256';
-						}
-						if ( in_array( $name, $purge_names, true ) ) {
+					} elseif ( in_array( $name, $purge_names, true ) ) {
 							// Post-purge fallback (issue #1275): retain each
 							// live used-css base before deleting so a full
 							// wipe keeps last-good instead of only the
 							// previous fallback generation. No-op when off.
-							if ( '.sha256' !== substr( (string) $name, -7 ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'retain_purge_fallback_file' ) ) {
-								try {
-									Util::retain_purge_fallback_file(
-										$fs,
-										function ( string $path ) use ( $root_slash ): bool {
-											if ( '' === $path || false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
-												return false;
-											}
-											return 0 === strpos( $path, $root_slash );
-										},
-										$full_path
-									);
-								} catch ( \Throwable $e ) {
-									unset( $e );
-								}
+						if ( '.sha256' !== substr( (string) $name, -7 ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'retain_purge_fallback_file' ) ) {
+							try {
+								Util::retain_purge_fallback_file(
+									$fs,
+									function ( string $path ) use ( $root_slash ): bool {
+										if ( '' === $path || false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+											return false;
+										}
+										return 0 === strpos( $path, $root_slash );
+									},
+									$full_path
+								);
+							} catch ( \Throwable $e ) {
+								unset( $e );
 							}
-							if ( ! $fs->delete( $full_path ) ) {
-								$success = false;
-							}
+						}
+						if ( ! $fs->delete( $full_path ) ) {
+							$success = false;
 						}
 					}
 				}
@@ -3368,16 +3367,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$this->mark_full_regen();
 			}
 
+			// Invalidate the 5-min scheduled-post cache unconditionally: it
+			// was built before this run's enqueues, and jobs completing
+			// during the run stay cached as scheduled. Gating on $queued
+			// would keep a stale snapshot when this run queued 0, so a
+			// second run within TTL would skip requeue it should retry.
+			try {
+				delete_transient( $scheduled_cache_key );
+			} catch ( \Throwable $transient_error ) {
+				unset( $transient_error );
+			}
 			if ( $queued > 0 ) {
-				// Invalidate the 5-min scheduled-post cache: it was built
-				// before this run's enqueues and completed jobs stay cached,
-				// so a second run within TTL would double-enqueue new posts
-				// and skip requeue of finished jobs.
-				try {
-					delete_transient( $scheduled_cache_key );
-				} catch ( \Throwable $transient_error ) {
-					unset( $transient_error );
-				}
 				Log::add(
 					sprintf(
 						/* translators: %d: Number of jobs */

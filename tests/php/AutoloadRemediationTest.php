@@ -71,6 +71,9 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 		// This class defines its own setUp(), shadowing the trait's — re-register
 		// the shared Brain Monkey stubs (wp_using_ext_object_cache, etc.) here.
 		$this->register_common_function_stubs();
+		// The WP-version memo persists per process: reset so each test
+		// reads its own get_bloginfo() fixture below.
+		Database_Cleanup::reset_version_memo_for_tests();
 
 		$this->autoload_calls  = array();
 		$this->updated_options = array();
@@ -381,6 +384,7 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_get_autoloadable_values_pre_66_returns_yes_only(): void {
 		Functions\when( 'get_bloginfo' )->justReturn( '6.5' );
+		Database_Cleanup::reset_version_memo_for_tests();
 
 		$this->assertSame( array( 'yes' ), Database_Cleanup::get_autoloadable_values() );
 	}
@@ -390,6 +394,7 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_get_autoloadable_values_unknown_version_fail_open(): void {
 		Functions\when( 'get_bloginfo' )->justReturn( '' );
+		Database_Cleanup::reset_version_memo_for_tests();
 
 		$values = Database_Cleanup::get_autoloadable_values();
 
