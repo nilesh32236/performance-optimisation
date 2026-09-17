@@ -2880,7 +2880,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 			if ( is_array( $anomalies ) && ! empty( $anomalies ) ) {
 				$anomaly = $anomalies[0];
-				if ( 'cls' === ( $anomaly['metric'] ?? 'lcp' ) ) {
+				// Fail-closed: only explicit 'cls'/'lcp' metrics render; unknown
+				// or missing metrics contribute zero suggestions (mirrors the
+				// maybe_queue_css_refresh() gate which treats non-'lcp' as non-lcp).
+				$anomaly_metric = $anomaly['metric'] ?? '';
+				if ( 'cls' === $anomaly_metric ) {
 					$change_abs = isset( $anomaly['change_abs'] ) ? (float) $anomaly['change_abs'] : 0.0;
 					/* translators: %s is the CLS absolute increase vs baseline. */
 					$cls_value     = sprintf( __( 'CLS +%s vs baseline', 'performance-optimisation' ), number_format( $change_abs, 2 ) );
@@ -2896,7 +2900,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							'settings' => array(),
 						),
 					);
-				} else {
+				} elseif ( 'lcp' === $anomaly_metric ) {
 					$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
 					/* translators: %d is the LCP percentage increase vs baseline. */
 					$value = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );

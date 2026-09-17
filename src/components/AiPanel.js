@@ -332,8 +332,8 @@ const AiPanel = () => {
 
 	const [ regeneratingMetrics, setRegeneratingMetrics ] = useState( [] );
 	const regenerateKey = ( suggestion ) =>
-		suggestion?.ai_payload?.css_refresh?.post_id ??
-		suggestion?.ai_payload?.css_refresh?.url ??
+		suggestion?.ai_payload?.css_refresh?.post_id ||
+		suggestion?.ai_payload?.css_refresh?.url ||
 		suggestion.metric;
 	const handleRegenerateCss = async ( suggestion ) => {
 		const postId = suggestion?.ai_payload?.css_refresh?.post_id;
