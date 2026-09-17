@@ -994,6 +994,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
 				'Core_Tweaks'            => 'class-core-tweaks.php',
 				'Critical_CSS'           => 'class-critical-css.php',
+				'Css_Rollout'            => 'class-css-rollout.php',
 				'Css_Safelist'           => 'class-css-safelist.php',
 				'Cron'                   => 'class-cron.php',
 				'Database_Cleanup'       => 'class-database-cleanup.php',

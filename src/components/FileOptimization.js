@@ -1615,6 +1615,41 @@ const FileOptimization = ( {
 		}
 	};
 
+	const handlePromoteRollout = async ( slot ) => {
+		await withNotification(
+			( async () => {
+				const res = await apiCall( 'css_rollout_promote', {
+					slot,
+				} );
+				if ( res?.success && onCcssRefresh ) {
+					onCcssRefresh();
+				}
+				return res;
+			} )(),
+			__( 'Staged CSS promoted to live.', 'performance-optimisation' ),
+			__( 'Failed to promote staged CSS.', 'performance-optimisation' )
+		);
+	};
+
+	const handleRollbackRollout = async ( slot ) => {
+		await withNotification(
+			( async () => {
+				const res = await apiCall( 'css_rollout_rollback', {
+					slot,
+				} );
+				if ( res?.success && onCcssRefresh ) {
+					onCcssRefresh();
+				}
+				return res;
+			} )(),
+			__(
+				'CSS rolled back to last-good assets.',
+				'performance-optimisation'
+			),
+			__( 'Failed to roll back CSS.', 'performance-optimisation' )
+		);
+	};
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
@@ -2144,6 +2179,25 @@ const FileOptimization = ( {
 													}
 												/>
 											) }
+										{ usedCssStatus &&
+											usedCssStatus.rollout &&
+											usedCssStatus.rollout.state ===
+												'rolled_back' && (
+												<NoticeBanner
+													type="warning"
+													className="wppo-mt-12"
+													message={ sprintf(
+														/* translators: %s: cache-hit reason. */
+														__(
+															'Used CSS auto-rolled back to last-good assets (%s). Regenerate to stage a fresh preview before promoting.',
+															'performance-optimisation'
+														),
+														usedCssStatus.rollout
+															.hit ||
+															'last-good restored'
+													) }
+												/>
+											) }
 										<NoticeBanner
 											type="info"
 											className="wppo-mt-12"
@@ -2437,6 +2491,102 @@ const FileOptimization = ( {
 										<div className="wppo-field wppo-mt-16">
 											<label
 												className="wppo-field-label"
+												htmlFor="cssRolloutMode"
+											>
+												{ __(
+													'Safe CSS Rollout Mode',
+													'performance-optimisation'
+												) }
+											</label>
+											<select
+												className="wppo-input"
+												id="cssRolloutMode"
+												name="cssRolloutMode"
+												value={
+													settings.cssRolloutMode ===
+													'staged'
+														? 'staged'
+														: 'direct'
+												}
+												onChange={ onFieldChange }
+												aria-describedby="cssRolloutMode-desc"
+											>
+												<option value="direct">
+													{ __(
+														'Direct apply (legacy)',
+														'performance-optimisation'
+													) }
+												</option>
+												<option value="staged">
+													{ __(
+														'Dry-run preview before apply',
+														'performance-optimisation'
+													) }
+												</option>
+											</select>
+											<p
+												id="cssRolloutMode-desc"
+												className="wppo-text-muted wppo-mt-8 wppo-text-small"
+											>
+												{ __(
+													'Staged mode writes new CSS to a preview slot first — promote it after reviewing the diff. Direct mode applies immediately with health-gated auto-rollback.',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+										<Tooltip
+											content={
+												optimizerDisabled
+													? pausedTooltip
+													: ''
+											}
+										>
+											<SwitchField
+												label={ __(
+													'Rollout Health Check',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Probe promoted CSS for missing/empty output and auto-restore last-good assets on breach.',
+													'performance-optimisation'
+												) }
+												name="cssRolloutHealthCheck"
+												checked={
+													settings.cssRolloutHealthCheck !==
+													false
+												}
+												onChange={ onFieldChange }
+												disabled={ optimizerDisabled }
+											/>
+										</Tooltip>
+										<Tooltip
+											content={
+												optimizerDisabled
+													? pausedTooltip
+													: ''
+											}
+										>
+											<SwitchField
+												label={ __(
+													'Keep Last-Good CSS Backup',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Snapshot the live file before every promote so rollback can restore it.',
+													'performance-optimisation'
+												) }
+												name="cssRolloutKeepLastGood"
+												checked={
+													settings.cssRolloutKeepLastGood !==
+													false
+												}
+												onChange={ onFieldChange }
+												disabled={ optimizerDisabled }
+											/>
+										</Tooltip>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
 												htmlFor="wppoSingleTemplate"
 											>
 												{ __(
@@ -2501,6 +2651,8 @@ const FileOptimization = ( {
 											onRegenerateSingle={
 												handleRegenerateSingleCcss
 											}
+											onPromote={ handlePromoteRollout }
+											onRollback={ handleRollbackRollout }
 										/>
 									</>
 								) }

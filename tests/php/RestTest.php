@@ -239,6 +239,9 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'used_css_status',
 			'regenerate_ccss',
 			'ccss_status',
+			'css_rollout_status',
+			'css_rollout_promote',
+			'css_rollout_rollback',
 			'dismiss_welcome',
 			'rum_collect',
 			'rum_data',
@@ -259,8 +262,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge routes).
-		$this->assertCount( 43, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge + 3 css-rollout routes).
+		$this->assertCount( 46, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );

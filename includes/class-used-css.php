@@ -1606,7 +1606,320 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Atomic write via the shared tmp+rename helper (unique tmp
 			// name, no non-atomic fallback) so interrupted writes never
 			// leave partial CSS behind.
-			return Util::atomic_file_put_contents( $fs, $file_path, $css );
+			// Safe rollout (issue #1348, lazy): staged mode writes the
+			// dry-run sidecar and records staged status instead of touching
+			// live; direct mode snapshots last-good, writes live, then runs
+			// the health gate with auto-rollback on breach.
+			if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+				try {
+					if ( Css_Rollout::is_staged_mode() ) {
+						$staged = self::get_staged_path_for( $file_path );
+						if ( '' !== $staged && Util::atomic_file_put_contents( $fs, $staged, $css ) ) {
+							$slot = self::rollout_slot_for_url( $url );
+							Css_Rollout::record_event( $slot, 'staged', sprintf( 'used-CSS dry-run staged %d bytes', strlen( $css ) ), 'bypass (staged preview)' );
+							return true;
+						}
+						return false;
+					}
+					if ( Css_Rollout::is_keep_last_good_enabled() && file_exists( $file_path ) ) {
+						$prior = self::read_slot_file( $file_path );
+						if ( is_string( $prior ) && '' !== trim( $prior ) ) {
+							$backup = self::get_last_good_path_for( $file_path );
+							if ( '' !== $backup ) {
+								Util::atomic_file_put_contents( $fs, $backup, $prior );
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			$ok = Util::atomic_file_put_contents( $fs, $file_path, $css );
+			if ( $ok && class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+				try {
+					if ( Css_Rollout::is_health_check_enabled() ) {
+						$check = Css_Rollout::health_check_content( $css );
+						$probe = Css_Rollout::probe_live_file( $file_path, $this->get_used_css_url( $url ) );
+						if ( ! $check['ok'] || ! $probe['ok'] ) {
+							$reason = ! $check['ok'] ? $check['reason'] : $probe['reason'];
+							self::rollback_used_css( $url, $reason );
+							return false;
+						}
+						Css_Rollout::record_event( self::rollout_slot_for_url( $url ), 'done', 'used-CSS direct apply', 'hit (direct)' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return $ok;
+		}
+
+		/**
+		 * Staged sidecar path for a live used-CSS file.
+		 *
+		 * Maps `…/used-css.css` → `…/used-css.staged.css`. Returns '' when
+		 * the live path does not end with the canonical filename (fail-open).
+		 *
+		 * @param string $live_path Live file path.
+		 * @return string Staged path, or '' when refused.
+		 * @since NEXT
+		 */
+		public static function get_staged_path_for( string $live_path ): string {
+			if ( '' === $live_path || 'used-css.css' !== basename( $live_path ) ) {
+				return '';
+			}
+			return dirname( $live_path ) . '/used-css.staged.css';
+		}
+
+		/**
+		 * Last-good backup path for a live used-CSS file.
+		 *
+		 * @param string $live_path Live file path.
+		 * @return string Backup path, or '' when refused.
+		 * @since NEXT
+		 */
+		public static function get_last_good_path_for( string $live_path ): string {
+			if ( '' === $live_path || 'used-css.css' !== basename( $live_path ) ) {
+				return '';
+			}
+			return dirname( $live_path ) . '/used-css.last-good.css';
+		}
+
+		/**
+		 * Read a used-CSS slot file safely with a 1MB cap.
+		 *
+		 * Fail-open: returns '' when the file is missing, unreadable, or
+		 * over the cap. Never fatal.
+		 *
+		 * @param string $path Absolute file path.
+		 * @return string File contents, or '' on any failure.
+		 * @since NEXT
+		 */
+		private static function read_slot_file( string $path ): string {
+			try {
+				if ( '' === $path || ! file_exists( $path ) ) {
+					return '';
+				}
+				$size = filesize( $path );
+				if ( false === $size || (int) $size <= 0 || (int) $size > 1048576 ) {
+					return '';
+				}
+				$contents = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache-slot read with size cap; never a remote URL.
+				return is_string( $contents ) ? $contents : '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Rollout slot identifier for a page URL.
+		 *
+		 * Md5 of the normalized URL path (word chars only) so the transient
+		 * key stays bounded and multisite-isolated via
+		 * Css_Rollout::state_key(). Falls back to 'used-css-global' for
+		 * empty URLs.
+		 *
+		 * @param string $url Page URL.
+		 * @return string Slot identifier.
+		 * @since NEXT
+		 */
+		public static function rollout_slot_for_url( string $url ): string {
+			try {
+				$norm = trim( $url );
+				if ( '' === $norm ) {
+					return 'used-css-global';
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_cache_url_path' ) ) {
+					$path = Util::sanitize_cache_url_path( $norm );
+					if ( '' !== $path ) {
+						$norm = $path;
+					}
+				}
+				$hash = md5( $norm );
+				return 'usedcss-' . substr( $hash, 0, 24 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'used-css-global';
+			}
+		}
+
+		/**
+		 * Dry-run preview for a page URL (issue #1348, read-only).
+		 *
+		 * Diffs the staged sidecar against live, capped at the Css_Rollout
+		 * snippet budget. Fail-open to an empty preview.
+		 *
+		 * @param string $url Page URL.
+		 * @return array Preview payload with has_staged flag.
+		 * @since NEXT
+		 */
+		public function get_used_css_preview( string $url = '' ): array {
+			$empty = array(
+				'has_staged'  => false,
+				'live_size'   => 0,
+				'live_sha'    => '',
+				'staged_size' => 0,
+				'staged_sha'  => '',
+				'delta_bytes' => 0,
+				'snippet'     => '',
+				'truncated'   => false,
+			);
+			try {
+				$live_path = $this->get_used_css_path( $url );
+				if ( '' === $live_path ) {
+					return $empty;
+				}
+				$staged_path = self::get_staged_path_for( $live_path );
+				if ( '' === $staged_path || ! file_exists( $staged_path ) ) {
+					return $empty;
+				}
+				$staged = self::read_slot_file( $staged_path );
+				if ( ! is_string( $staged ) || '' === $staged ) {
+					return $empty;
+				}
+				$live = file_exists( $live_path ) ? self::read_slot_file( $live_path ) : '';
+				if ( ! is_string( $live ) ) {
+					$live = '';
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$empty['has_staged']  = true;
+					$empty['staged_size'] = strlen( $staged );
+					return $empty;
+				}
+				$preview               = Css_Rollout::build_preview( $live, $staged );
+				$preview['has_staged'] = true;
+				return $preview;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $empty;
+			}
+		}
+
+		/**
+		 * Promote the staged used-CSS sidecar to live (issue #1348).
+		 *
+		 * Snapshots live → last-good, copies staged → live atomically, runs
+		 * the health gate, and auto-rolls back on breach. Never fatal.
+		 *
+		 * @param string $url Page URL.
+		 * @return bool True when staged is live and healthy.
+		 * @since NEXT
+		 */
+		public function promote_staged_used_css( string $url = '' ): bool {
+			try {
+				$live_path = $this->get_used_css_path( $url );
+				if ( '' === $live_path ) {
+					return false;
+				}
+				$staged_path = self::get_staged_path_for( $live_path );
+				if ( '' === $staged_path || ! file_exists( $staged_path ) ) {
+					return false;
+				}
+				$staged = self::read_slot_file( $staged_path );
+				if ( ! is_string( $staged ) || '' === trim( $staged ) ) {
+					return false;
+				}
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return false;
+				}
+				$keep = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$keep = Css_Rollout::is_keep_last_good_enabled();
+				}
+				if ( $keep && file_exists( $live_path ) ) {
+					$prior = self::read_slot_file( $live_path );
+					if ( is_string( $prior ) && '' !== trim( $prior ) ) {
+						$backup = self::get_last_good_path_for( $live_path );
+						if ( '' !== $backup ) {
+							Util::atomic_file_put_contents( $fs, $backup, $prior );
+						}
+					}
+				}
+				if ( ! Util::atomic_file_put_contents( $fs, $live_path, $staged ) ) {
+					return false;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$slot = self::rollout_slot_for_url( $url );
+					Css_Rollout::record_event( $slot, 'done', 'used-CSS staged output promoted to live', 'hit (promoted)' );
+					if ( Css_Rollout::is_health_check_enabled() ) {
+						$check = Css_Rollout::health_check_content( $staged );
+						$probe = Css_Rollout::probe_live_file( $live_path, $this->get_used_css_url( $url ) );
+						if ( ! $check['ok'] || ! $probe['ok'] ) {
+							$reason = ! $check['ok'] ? $check['reason'] : $probe['reason'];
+							self::rollback_used_css( $url, $reason );
+							return false;
+						}
+					}
+				}
+				try {
+					if ( function_exists( 'wp_delete_file' ) ) {
+						wp_delete_file( $staged_path );
+					} elseif ( file_exists( $staged_path ) ) {
+						unlink( $staged_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort staged sidecar cleanup.
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Roll back used-CSS to its last-good backup (issue #1348).
+		 *
+		 * Restores the backup → live; with no backup the broken live file is
+		 * removed so the page serves unoptimized markup. Records
+		 * `rolled_back` + logs the hit reason. Never fatal.
+		 *
+		 * @param string $url Page URL.
+		 * @param string $reason Breach reason.
+		 * @return bool True when live is safe.
+		 * @since NEXT
+		 */
+		public function rollback_used_css( string $url = '', string $reason = '' ): bool {
+			try {
+				$live_path = $this->get_used_css_path( $url );
+				if ( '' === $live_path ) {
+					return false;
+				}
+				$backup_path = self::get_last_good_path_for( $live_path );
+				$restored    = false;
+				if ( '' !== $backup_path && file_exists( $backup_path ) ) {
+					$backup = self::read_slot_file( $backup_path );
+					if ( is_string( $backup ) && '' !== trim( $backup ) ) {
+						$fs = Util::init_filesystem();
+						if ( $fs && Util::atomic_file_put_contents( $fs, $live_path, $backup ) ) {
+							$restored = true;
+						}
+					}
+				}
+				if ( ! $restored && file_exists( $live_path ) ) {
+					try {
+						if ( function_exists( 'wp_delete_file' ) ) {
+							wp_delete_file( $live_path );
+						} else {
+							unlink( $live_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Fail-open removal of broken used-CSS.
+						}
+						$restored = ! file_exists( $live_path );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$restored = false;
+					}
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$note = '' !== trim( $reason ) ? substr( trim( $reason ), 0, 200 ) : 'health gate breach';
+					Css_Rollout::record_event( self::rollout_slot_for_url( $url ), 'rolled_back', 'used-CSS auto-rollback: ' . $note, $restored ? 'hit (last-good restored)' : 'bypass (unoptimized)' );
+				}
+				return $restored;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -2268,6 +2581,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				$info['is_stale']      = $enabled && ( $last <= 0 || ( time() - $last ) > self::STALE_THRESHOLD_SECONDS );
 				$info['delivery_mode'] = self::get_used_css_delivery_mode();
+				// Safe-rollout summary (issue #1348, lazy): staged mode flag
+				// + global-slot hit reason so the SPA can surface status and
+				// rollback without extra queries.
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$info['rollout_mode']   = Css_Rollout::is_staged_mode() ? 'staged' : 'direct';
+					$info['rollout']        = Css_Rollout::get_state( 'used-css-global' );
+					$info['health_check']   = Css_Rollout::is_health_check_enabled();
+					$info['keep_last_good'] = Css_Rollout::is_keep_last_good_enabled();
+				}
 				if ( function_exists( 'get_option' ) ) {
 					$targeted = (int) get_option( self::TARGETED_REGEN_OPTION, 0 );
 					if ( $targeted > 0 ) {

@@ -241,6 +241,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'css_rollout_status'        => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_css_rollout_status' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'css_rollout_promote'       => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'promote_css_rollout' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'css_rollout_rollback'      => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'rollback_css_rollout' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'dismiss_welcome'           => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'dismiss_welcome' ),
@@ -3460,6 +3478,221 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				);
 
 			return $this->send_response( $status );
+		}
+
+		/**
+		 * Get safe CSS rollout status (issue #1348).
+		 *
+		 * Read-only GET: rollout mode toggles, per-template CCSS preview +
+		 * hit-reason state, and the used-CSS global slot state. Fail-open to
+		 * safe defaults on any failure. Multisite-safe via blog-aware
+		 * Css_Rollout keys.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_css_rollout_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
+			$params = $request->get_params();
+			$slot   = isset( $params['slot'] ) ? sanitize_text_field( substr( trim( (string) $params['slot'] ), 0, 128 ) ) : '';
+			$url    = isset( $params['url'] ) ? sanitize_text_field( substr( trim( (string) $params['url'] ), 0, 2048 ) ) : '';
+			$data   = array(
+				'mode'           => 'direct',
+				'health_check'   => true,
+				'keep_last_good' => true,
+			);
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$data['mode']           = Css_Rollout::is_staged_mode() ? 'staged' : 'direct';
+					$data['health_check']   = Css_Rollout::is_health_check_enabled();
+					$data['keep_last_good'] = Css_Rollout::is_keep_last_good_enabled();
+					if ( '' !== $slot && class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_ccss_preview' ) ) {
+						$data['slot']    = $slot;
+						$data['state']   = Css_Rollout::get_state( $slot );
+						$data['preview'] = Critical_CSS::get_ccss_preview( $slot );
+					} elseif ( '' !== $url && class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+						$used = new Used_CSS();
+						if ( method_exists( $used, 'get_used_css_preview' ) ) {
+							$data['url']     = $url;
+							$data['state']   = Css_Rollout::get_state( Used_CSS::rollout_slot_for_url( $url ) );
+							$data['preview'] = $used->get_used_css_preview( $url );
+						}
+					} else {
+						$data['ccss'] = class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_status_all' ) ? Critical_CSS::get_status_all() : array();
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response( $data );
+		}
+
+		/**
+		 * Promote a staged CSS slot to live (issue #1348).
+		 *
+		 * POST params: `slot` (CCSS template hash) or `url` (used-CSS page
+		 * URL). Exactly one is required. Throttled 5/60 like the other
+		 * regenerate endpoints. Fail-open messaging, never fatal.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function promote_css_rollout( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'css_rollout_promote', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
+			$params = $request->get_params();
+			$slot   = isset( $params['slot'] ) ? sanitize_text_field( substr( trim( (string) $params['slot'] ), 0, 128 ) ) : '';
+			$url    = isset( $params['url'] ) ? sanitize_text_field( substr( trim( (string) $params['url'] ), 0, 2048 ) ) : '';
+			try {
+				if ( '' !== $slot ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) || ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'promote_staged_ccss' ) ) {
+						return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+					}
+					$ok = Critical_CSS::promote_staged_ccss( $slot );
+					if ( $ok ) {
+						return $this->send_response(
+							array(
+								'slot'     => $slot,
+								'promoted' => true,
+							),
+							true,
+							200,
+							__( 'Staged CSS promoted to live.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response(
+						array(
+							'slot'     => $slot,
+							'promoted' => false,
+						),
+						false,
+						400,
+						__( 'Nothing staged to promote, or the health gate rolled back the change.', 'performance-optimisation' )
+					);
+				}
+				if ( '' !== $url ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+						return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+					}
+					$used = new Used_CSS();
+					if ( ! method_exists( $used, 'promote_staged_used_css' ) ) {
+						return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+					}
+					$ok = $used->promote_staged_used_css( $url );
+					if ( $ok ) {
+						return $this->send_response(
+							array(
+								'url'      => $url,
+								'promoted' => true,
+							),
+							true,
+							200,
+							__( 'Staged used-CSS promoted to live.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response(
+						array(
+							'url'      => $url,
+							'promoted' => false,
+						),
+						false,
+						400,
+						__( 'Nothing staged to promote, or the health gate rolled back the change.', 'performance-optimisation' )
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response( null, false, 400, __( 'Provide a template slot or a page URL to promote.', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * Roll back a CSS slot to its last-good backup (issue #1348).
+		 *
+		 * POST params: `slot` (CCSS template hash) or `url` (used-CSS page
+		 * URL) plus optional `reason`. Throttled 5/60. Fail-open: with no
+		 * backup the broken live file is removed so the page serves
+		 * unoptimized markup instead of broken styling.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function rollback_css_rollout( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'css_rollout_rollback', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
+			$params = $request->get_params();
+			$slot   = isset( $params['slot'] ) ? sanitize_text_field( substr( trim( (string) $params['slot'] ), 0, 128 ) ) : '';
+			$url    = isset( $params['url'] ) ? sanitize_text_field( substr( trim( (string) $params['url'] ), 0, 2048 ) ) : '';
+			$reason = isset( $params['reason'] ) ? sanitize_text_field( substr( trim( (string) $params['reason'] ), 0, 200 ) ) : 'manual rollback';
+			try {
+				if ( '' !== $slot ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) || ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'rollback_ccss' ) ) {
+						return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+					}
+					$ok = Critical_CSS::rollback_ccss( $slot, $reason );
+					if ( $ok ) {
+						return $this->send_response(
+							array(
+								'slot'        => $slot,
+								'rolled_back' => true,
+							),
+							true,
+							200,
+							__( 'CSS rolled back to last-good assets.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response(
+						array(
+							'slot'        => $slot,
+							'rolled_back' => false,
+						),
+						false,
+						400,
+						__( 'Rollback failed: nothing safe to restore.', 'performance-optimisation' )
+					);
+				}
+				if ( '' !== $url ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+						return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+					}
+					$used = new Used_CSS();
+					if ( ! method_exists( $used, 'rollback_used_css' ) ) {
+						return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+					}
+					$ok = $used->rollback_used_css( $url, $reason );
+					if ( $ok ) {
+						return $this->send_response(
+							array(
+								'url'         => $url,
+								'rolled_back' => true,
+							),
+							true,
+							200,
+							__( 'Used-CSS rolled back to last-good assets.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response(
+						array(
+							'url'         => $url,
+							'rolled_back' => false,
+						),
+						false,
+						400,
+						__( 'Rollback failed: nothing safe to restore.', 'performance-optimisation' )
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response( null, false, 400, __( 'Provide a template slot or a page URL to roll back.', 'performance-optimisation' ) );
 		}
 
 		/**

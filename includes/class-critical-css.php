@@ -494,6 +494,384 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Get the staged (dry-run preview) CCSS file path for a template hash.
+		 *
+		 * The staged slot holds newly generated output before promote so the
+		 * SPA can preview + diff via ccss_status without touching the live
+		 * file. Fail-open: returns '' for invalid hashes or missing dir.
+		 *
+		 * @param string $template_hash The template hash.
+		 * @return string Full staged file path, or '' when refused.
+		 * @since NEXT
+		 */
+		public static function get_ccss_staged_file( string $template_hash ): string {
+			if ( '' === $template_hash || 1 !== preg_match( self::TEMPLATE_HASH_PATTERN, $template_hash ) ) {
+				return '';
+			}
+			$dir = self::get_ccss_dir();
+			if ( '' === $dir ) {
+				return '';
+			}
+			return $dir . '/' . $template_hash . '.staged.css';
+		}
+
+		/**
+		 * Get the last-good backup CCSS file path for a template hash.
+		 *
+		 * The last-good slot is snapshotted from the live file before every
+		 * promote so the health gate can auto-restore it on breach.
+		 *
+		 * @param string $template_hash The template hash.
+		 * @return string Full last-good file path, or '' when refused.
+		 * @since NEXT
+		 */
+		public static function get_ccss_last_good_file( string $template_hash ): string {
+			if ( '' === $template_hash || 1 !== preg_match( self::TEMPLATE_HASH_PATTERN, $template_hash ) ) {
+				return '';
+			}
+			$dir = self::get_ccss_dir();
+			if ( '' === $dir ) {
+				return '';
+			}
+			return $dir . '/' . $template_hash . '.last-good.css';
+		}
+
+		/**
+		 * Read a CCSS slot file safely (live, staged, or last-good).
+		 *
+		 * Fail-open: returns '' when the file is missing, unreadable, or
+		 * over the 1MB read cap. Never fatal.
+		 *
+		 * @param string $path Absolute file path.
+		 * @return string File contents, or '' on any failure.
+		 * @since NEXT
+		 */
+		private static function read_ccss_slot_file( string $path ): string {
+			try {
+				if ( '' === $path || ! file_exists( $path ) ) {
+					return '';
+				}
+				$size = filesize( $path );
+				if ( false === $size || (int) $size <= 0 || (int) $size > 1048576 ) {
+					return '';
+				}
+				$contents = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache-slot read with size cap; never a remote URL.
+				return is_string( $contents ) ? $contents : '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Stage generated CCSS to the dry-run side slot (issue #1348).
+		 *
+		 * Writes the payload to `{hash}.staged.css` (additive: the live file
+		 * is untouched), records the `staged` rollout state with diff meta,
+		 * and sets the status cache to `staged` so ccss_status exposes the
+		 * preview before promote. Returns false without staging on any
+		 * failure (fail-open to the previous live file).
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $css Generated CSS payload.
+		 * @return bool True when staged.
+		 * @since NEXT
+		 */
+		public static function stage_ccss_output( string $template_hash, string $css ): bool {
+			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) || '' === trim( $css ) ) {
+					return false;
+				}
+				if ( self::contains_unsafe_css_tokens( $css ) ) {
+					return false;
+				}
+				$staged_file = self::get_ccss_staged_file( $template_hash );
+				if ( '' === $staged_file ) {
+					return false;
+				}
+				$dir = self::get_ccss_dir();
+				if ( '' !== $dir && ! wp_mkdir_p( $dir ) ) {
+					return false;
+				}
+				$filesystem = Util::init_filesystem();
+				if ( ! $filesystem || ! Util::atomic_file_put_contents( $filesystem, $staged_file, $css ) ) {
+					return false;
+				}
+				clearstatcache( true, $staged_file );
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$live_css = self::read_ccss_slot_file( self::get_ccss_file( $template_hash ) );
+					$preview  = Css_Rollout::build_preview( $live_css, $css );
+					Css_Rollout::record_event( $template_hash, 'staged', sprintf( 'dry-run staged %d bytes (delta %+d)', $preview['staged_size'], $preview['delta_bytes'] ), 'bypass (staged preview)' );
+				}
+				try {
+					self::set_status_cache( $template_hash, 'staged', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Get the dry-run preview for a template hash (issue #1348).
+		 *
+		 * Read-only: diffs the staged slot against live, capped at the
+		 * Css_Rollout snippet budget. Fail-open to an empty preview when no
+		 * staged output exists.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return array Preview payload (has_staged + build_preview() meta).
+		 * @since NEXT
+		 */
+		public static function get_ccss_preview( string $template_hash ): array {
+			try {
+				$empty = array(
+					'has_staged'  => false,
+					'live_size'   => 0,
+					'live_sha'    => '',
+					'staged_size' => 0,
+					'staged_sha'  => '',
+					'delta_bytes' => 0,
+					'snippet'     => '',
+					'truncated'   => false,
+				);
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return $empty;
+				}
+				$staged_css = self::read_ccss_slot_file( self::get_ccss_staged_file( $template_hash ) );
+				if ( '' === $staged_css ) {
+					return $empty;
+				}
+				$live_css = self::read_ccss_slot_file( self::get_ccss_file( $template_hash ) );
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$empty['has_staged']  = true;
+					$empty['staged_size'] = strlen( $staged_css );
+					return $empty;
+				}
+				$preview               = Css_Rollout::build_preview( $live_css, $staged_css );
+				$preview['has_staged'] = true;
+				return $preview;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'has_staged'  => false,
+					'live_size'   => 0,
+					'live_sha'    => '',
+					'staged_size' => 0,
+					'staged_sha'  => '',
+					'delta_bytes' => 0,
+					'snippet'     => '',
+					'truncated'   => false,
+				);
+			}
+		}
+
+		/**
+		 * Promote the staged CCSS slot to live (issue #1348).
+		 *
+		 * Copies live → last-good (when enabled), then staged → live via the
+		 * atomic writer, invalidates memos, runs the health gate, and
+		 * auto-rolls back to last-good on breach. Fail-open: returns false
+		 * without partial writes when no staged output exists or the copy
+		 * fails; never fatal or white-screen.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return bool True when the staged slot is live and healthy.
+		 * @since NEXT
+		 */
+		public static function promote_staged_ccss( string $template_hash ): bool {
+			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return false;
+				}
+				$staged_file    = self::get_ccss_staged_file( $template_hash );
+				$live_file      = self::get_ccss_file( $template_hash );
+				$last_good_file = self::get_ccss_last_good_file( $template_hash );
+				if ( '' === $staged_file || '' === $live_file || ! file_exists( $staged_file ) ) {
+					return false;
+				}
+				$staged_css = self::read_ccss_slot_file( $staged_file );
+				if ( '' === trim( $staged_css ) ) {
+					return false;
+				}
+				$filesystem = Util::init_filesystem();
+				if ( ! $filesystem ) {
+					return false;
+				}
+				$keep_last_good = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					$keep_last_good = Css_Rollout::is_keep_last_good_enabled();
+				}
+				if ( $keep_last_good && '' !== $last_good_file && file_exists( $live_file ) ) {
+					try {
+						$live_css = self::read_ccss_slot_file( $live_file );
+						if ( '' !== $live_css ) {
+							Util::atomic_file_put_contents( $filesystem, $last_good_file, $live_css );
+							clearstatcache( true, $last_good_file );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! Util::atomic_file_put_contents( $filesystem, $live_file, $staged_css ) ) {
+					return false;
+				}
+				self::invalidate_ccss_memo( $template_hash );
+				clearstatcache( true, $live_file );
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					Css_Rollout::record_event( $template_hash, 'done', 'staged output promoted to live', 'hit (promoted v' . ( Css_Rollout::get_state( $template_hash )['version'] + 1 ) . ')' );
+				}
+				try {
+					self::set_status_cache( $template_hash, 'done', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Post-apply health gate: probe the just-promoted live file
+				// and auto-rollback on breach (missing/empty/404).
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_health_check_enabled() ) {
+					if ( ! self::verify_live_ccss( $template_hash ) ) {
+						return false;
+					}
+				}
+				// Promote success: drop the staged sidecar so a later status
+				// cannot preview stale output. Best-effort, never fatal.
+				try {
+					if ( function_exists( 'wp_delete_file' ) ) {
+						wp_delete_file( $staged_file );
+					} elseif ( file_exists( $staged_file ) ) {
+						unlink( $staged_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort staged sidecar cleanup; guarded by hash allowlist.
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Roll back a CCSS template to its last-good backup (issue #1348).
+		 *
+		 * Restores `.last-good` → live; when no backup exists the broken
+		 * live file is deleted so the frontend serves unoptimized markup
+		 * instead of broken styling. Records `rolled_back` + logs the
+		 * cache-hit reason. Never fatal.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $reason Human-readable breach reason.
+		 * @return bool True when live is safe (restored or removed).
+		 * @since NEXT
+		 */
+		public static function rollback_ccss( string $template_hash, string $reason = '' ): bool {
+			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return false;
+				}
+				$live_file      = self::get_ccss_file( $template_hash );
+				$last_good_file = self::get_ccss_last_good_file( $template_hash );
+				if ( '' === $live_file ) {
+					return false;
+				}
+				$restored = false;
+				if ( '' !== $last_good_file && file_exists( $last_good_file ) ) {
+					$backup_css = self::read_ccss_slot_file( $last_good_file );
+					if ( '' !== trim( $backup_css ) ) {
+						$filesystem = Util::init_filesystem();
+						if ( $filesystem && Util::atomic_file_put_contents( $filesystem, $live_file, $backup_css ) ) {
+							$restored = true;
+						}
+					}
+				}
+				if ( ! $restored ) {
+					// No usable backup: fail open to unoptimized by removing
+					// the broken live file (best-effort, never fatal).
+					try {
+						if ( file_exists( $live_file ) ) {
+							if ( function_exists( 'wp_delete_file' ) ) {
+								wp_delete_file( $live_file );
+							} else {
+								unlink( $live_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Fail-open removal of a broken live file; guarded by hash allowlist.
+							}
+						}
+						$restored = ! file_exists( $live_file );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$restored = false;
+					}
+				}
+				self::invalidate_ccss_memo( $template_hash );
+				clearstatcache( true, $live_file );
+				$note = '' !== trim( $reason ) ? substr( trim( $reason ), 0, 200 ) : 'health gate breach';
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					Css_Rollout::record_event( $template_hash, 'rolled_back', 'auto-rollback: ' . $note, $restored ? 'hit (last-good restored)' : 'bypass (unoptimized)' );
+				}
+				try {
+					self::set_status_cache( $template_hash, 'rolled_back', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return $restored;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Verify the live CCSS file after apply (issue #1348 health gate).
+		 *
+		 * Probes content health + live-file existence/size (+ optional
+		 * HTTP 404 via Css_Rollout::probe_live_file()); on breach
+		 * auto-rolls back to last-good. Fail-open: probe errors count as
+		 * healthy (never roll back on an indeterminate probe), content
+		 * failures always roll back.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return bool True when live is healthy.
+		 * @since NEXT
+		 */
+		public static function verify_live_ccss( string $template_hash ): bool {
+			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return true;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					return true;
+				}
+				$live_file = self::get_ccss_file( $template_hash );
+				$live_css  = self::read_ccss_slot_file( $live_file );
+				$content   = Css_Rollout::health_check_content( $live_css );
+				if ( ! $content['ok'] ) {
+					self::rollback_ccss( $template_hash, $content['reason'] );
+					return false;
+				}
+				$live_url = '';
+				try {
+					$url_base = self::get_ccss_url();
+					if ( '' !== $url_base ) {
+						$live_url = rtrim( $url_base, '/' ) . '/' . $template_hash . '.css';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$probe = Css_Rollout::probe_live_file( $live_file, $live_url );
+				if ( ! $probe['ok'] ) {
+					self::rollback_ccss( $template_hash, $probe['reason'] );
+					return false;
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Read the configured CCSS inline size cap in bytes.
 		 *
 		 * The single source of truth is `Util::get_default_settings()`
@@ -3048,7 +3426,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$templates = self::get_templates();
 			$statuses  = array();
 
-			$allowed = array( 'queued', 'processing', 'done', 'skipped', 'failed', 'ready', 'pending', 'none' );
+			$allowed = array( 'queued', 'processing', 'done', 'skipped', 'failed', 'ready', 'pending', 'none', 'staged', 'rolled_back' );
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
 				if ( self::ccss_exists( $hash ) ) {
@@ -3076,6 +3454,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						'size'      => 0,
 						'truncated' => false,
 					);
+				}
+				// Safe-rollout overlay (issue #1348, lazy): a staged sidecar
+				// upgrades the badge to `staged` (preview available), and the
+				// rollout transient supplies hit-reason + version + preview
+				// meta without extra queries on the hot path.
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+						$rollout = Css_Rollout::get_state( $hash );
+						if ( 'staged' === $rollout['state'] && file_exists( self::get_ccss_staged_file( $hash ) ) ) {
+							$statuses[ $hash ]['status'] = 'staged';
+						} elseif ( 'rolled_back' === $rollout['state'] && 'done' === $statuses[ $hash ]['status'] ) {
+							// A restored last-good still serves CSS: keep the
+							// done badge but surface the rollback reason via
+							// the rollout block below.
+							$statuses[ $hash ]['status'] = 'rolled_back';
+						}
+						$statuses[ $hash ]['rollout'] = $rollout;
+						$preview                      = self::get_ccss_preview( $hash );
+						if ( ! empty( $preview['has_staged'] ) ) {
+							$statuses[ $hash ]['preview'] = $preview;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 			}
 
@@ -4745,8 +5147,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
+			// Safe rollout (issue #1348, lazy): staged mode writes the
+			// dry-run side slot and returns before touching live, so the
+			// SPA can preview + diff via ccss_status before promote.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_staged_mode() ) {
+					if ( self::stage_ccss_output( $template_hash, $critical_css ) ) {
+						try {
+							self::clear_ccss_retry_state( $template_hash );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+						return true;
+					}
+					self::record_generation_failure( $template_hash, $budget, $deadline );
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			$filesystem = Util::init_filesystem();
 			$file       = self::get_ccss_file( $template_hash );
+
+			// Last-good backup (issue #1348, lazy): snapshot live before
+			// overwrite so the health gate can restore it on breach.
+			// Best-effort, never fails the store.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_keep_last_good_enabled() && file_exists( $file ) ) {
+					$prior = self::read_ccss_slot_file( $file );
+					if ( '' !== $prior && '' !== self::get_ccss_last_good_file( $template_hash ) && $filesystem ) {
+						Util::atomic_file_put_contents( $filesystem, self::get_ccss_last_good_file( $template_hash ), $prior );
+						clearstatcache( true, self::get_ccss_last_good_file( $template_hash ) );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 
 			// Atomic write via the shared tmp+rename helper (unique tmp
 			// name, no non-atomic fallback) so interrupted writes never
@@ -4808,6 +5245,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				self::set_status_cache( $template_hash, 'done', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
 				try {
 					self::clear_ccss_retry_state( $template_hash );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Post-apply health gate (issue #1348, lazy): a bad deploy
+				// (missing/empty/404 live file) auto-restores last-good and
+				// logs the cache-hit reason instead of breaking styling
+				// site-wide. Fail-open: probe errors never roll back an
+				// indeterminate result (handled inside verify_live_ccss).
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_health_check_enabled() ) {
+						if ( ! self::verify_live_ccss( $template_hash ) ) {
+							return false;
+						}
+					} elseif ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+						Css_Rollout::record_event( $template_hash, 'done', 'direct apply', 'hit (direct)' );
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}

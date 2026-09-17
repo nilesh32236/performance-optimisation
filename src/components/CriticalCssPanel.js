@@ -34,6 +34,16 @@ const STATUS_CONFIG = {
 	// Copy (issue #1274 review): done === ready today, but a shared
 	// reference would let a future mutation hit both entries.
 	done: { ...READY_CONFIG },
+	staged: {
+		icon: faClock,
+		className: 'wppo-badge--info',
+		label: __( 'Staged', 'performance-optimisation' ),
+	},
+	rolled_back: {
+		icon: faExclamationTriangle,
+		className: 'wppo-badge--warning',
+		label: __( 'Rolled Back', 'performance-optimisation' ),
+	},
 	queued: pendingConfig( __( 'Queued', 'performance-optimisation' ) ),
 	pending: pendingConfig( __( 'Pending', 'performance-optimisation' ) ),
 	processing: pendingConfig( __( 'Processing', 'performance-optimisation' ) ),
@@ -58,12 +68,13 @@ const STATUS_CONFIG = {
  * Normalize a status entry into a null-safe shape.
  *
  * Malformed payloads (null, numbers, missing status) fall back to 'none'
- * with a hash-derived label instead of throwing.
+ * with a hash-derived label instead of throwing. Carries the safe-rollout
+ * block (rollout state + preview) through untouched for the badge overlay.
  *
  * @since NEXT
  * @param {*} hash  Status key.
  * @param {*} entry Raw entry value.
- * @return {{statusKey: string, label: string, size: number|null, truncated: boolean}} Normalized entry.
+ * @return {{statusKey: string, label: string, size: number|null, truncated: boolean, rollout: *, preview: *}} Normalized entry.
  */
 export const normalizeCcssEntry = ( hash, entry ) => {
 	const safeHash = typeof hash === 'string' ? hash : String( hash ?? '' );
@@ -75,6 +86,8 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 			label: fallbackLabel,
 			size: null,
 			truncated: false,
+			rollout: null,
+			preview: null,
 		};
 	}
 	if ( ! entry || typeof entry !== 'object' ) {
@@ -83,6 +96,8 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 			label: fallbackLabel,
 			size: null,
 			truncated: false,
+			rollout: null,
+			preview: null,
 		};
 	}
 	return {
@@ -96,6 +111,14 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 				: fallbackLabel,
 		size: Number.isFinite( entry.size ) ? entry.size : null,
 		truncated: !! entry.truncated,
+		rollout:
+			entry.rollout && typeof entry.rollout === 'object'
+				? entry.rollout
+				: null,
+		preview:
+			entry.preview && typeof entry.preview === 'object'
+				? entry.preview
+				: null,
 	};
 };
 
@@ -120,9 +143,12 @@ const CriticalCssPanel = ( {
 	status = {},
 	onRegenerate,
 	onRegenerateSingle,
+	onPromote,
+	onRollback,
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
 	const [ singleBusy, setSingleBusy ] = useState( null );
+	const [ rolloutBusy, setRolloutBusy ] = useState( null );
 	// No local useNotice/NoticeBanner here (issue #1274 review): the
 	// parent (FileOptimization via withNotification) is the single
 	// feedback owner; this panel logs locally and rethrows.
@@ -167,6 +193,24 @@ const CriticalCssPanel = ( {
 		}
 	};
 
+	const handleRollout = async ( hash, action ) => {
+		const fn = action === 'promote' ? onPromote : onRollback;
+		if ( ! fn ) {
+			return;
+		}
+		setRolloutBusy( `${ action }:${ hash }` );
+		try {
+			await fn( hash );
+		} catch ( err ) {
+			console.error(
+				`Failed to ${ action } staged CSS`,
+				getErrorLogMessage( err )
+			);
+		} finally {
+			setRolloutBusy( null );
+		}
+	};
+
 	const entries = useMemo( () => {
 		if (
 			! status ||
@@ -196,9 +240,21 @@ const CriticalCssPanel = ( {
 				>
 					{ entries.map( ( [ hash, entry ] ) => {
 						const normalized = normalizeCcssEntry( hash, entry );
-						const { statusKey, label, size, truncated } =
-							normalized;
+						const {
+							statusKey,
+							label,
+							size,
+							truncated,
+							rollout,
+							preview,
+						} = normalized;
 						const config = statusConfigFor( statusKey );
+						const hitReason =
+							rollout &&
+							typeof rollout.hit === 'string' &&
+							rollout.hit
+								? rollout.hit
+								: '';
 						return (
 							<div key={ hash } className="wppo-ccss-status-item">
 								<span className="wppo-ccss-status-hash">
@@ -257,6 +313,97 @@ const CriticalCssPanel = ( {
 											'performance-optimisation'
 										) }
 									</button>
+								) }
+								{ ( statusKey === 'staged' ||
+									( preview && preview.has_staged ) ) &&
+									onPromote && (
+										<button
+											className="wppo-button wppo-button--primary wppo-button--small"
+											type="button"
+											disabled={
+												rolloutBusy ===
+												`promote:${ hash }`
+											}
+											aria-label={ sprintf(
+												/* translators: %s: template label. */
+												__(
+													'Promote staged CSS for %s',
+													'performance-optimisation'
+												),
+												label
+											) }
+											onClick={ () =>
+												handleRollout( hash, 'promote' )
+											}
+										>
+											{ __(
+												'Promote',
+												'performance-optimisation'
+											) }
+										</button>
+									) }
+								{ ( statusKey === 'staged' ||
+									statusKey === 'rolled_back' ) &&
+									onRollback && (
+										<button
+											className="wppo-button wppo-button--secondary wppo-button--small"
+											type="button"
+											disabled={
+												rolloutBusy ===
+												`rollback:${ hash }`
+											}
+											aria-label={ sprintf(
+												/* translators: %s: template label. */
+												__(
+													'Roll back %s to last-good CSS',
+													'performance-optimisation'
+												),
+												label
+											) }
+											onClick={ () =>
+												handleRollout(
+													hash,
+													'rollback'
+												)
+											}
+										>
+											{ __(
+												'Roll back',
+												'performance-optimisation'
+											) }
+										</button>
+									) }
+								{ hitReason && (
+									<span className="wppo-text-muted wppo-text-small">
+										{ sprintf(
+											/* translators: %s: cache-hit reason. */
+											__(
+												'Hit reason: %s',
+												'performance-optimisation'
+											),
+											hitReason
+										) }
+									</span>
+								) }
+								{ preview && preview.has_staged && (
+									<span className="wppo-text-muted wppo-text-small">
+										{ sprintf(
+											/* translators: 1: staged size, 2: byte delta. */
+											__(
+												'Preview: %1$s (%2$s)',
+												'performance-optimisation'
+											),
+											formatBytes(
+												preview.staged_size || 0
+											),
+											( preview.delta_bytes >= 0
+												? '+'
+												: '' ) +
+												String(
+													preview.delta_bytes || 0
+												)
+										) }
+									</span>
 								) }
 							</div>
 						);

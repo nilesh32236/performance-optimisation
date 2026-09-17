@@ -275,7 +275,22 @@ describe( 'normalizeCcssEntry', () => {
 			label: 'Single',
 			size: 1234,
 			truncated: true,
+			rollout: null,
+			preview: null,
 		} );
+	} );
+
+	it( 'carries the rollout block and preview through', () => {
+		const normalized = normalizeCcssEntry( 'abcdef1234567890', {
+			status: 'staged',
+			label: 'Home',
+			size: 0,
+			rollout: { state: 'staged', hit: 'bypass (staged preview)' },
+			preview: { has_staged: true, staged_size: 120, delta_bytes: 20 },
+		} );
+		expect( normalized.statusKey ).toBe( 'staged' );
+		expect( normalized.rollout.hit ).toBe( 'bypass (staged preview)' );
+		expect( normalized.preview.has_staged ).toBe( true );
 	} );
 
 	it( 'nulls non-finite sizes and coerces truncated', () => {
@@ -328,5 +343,106 @@ describe( 'statusConfigFor', () => {
 		expect(
 			screen.getByRole( 'button', { name: 'Regenerate Home' } )
 		).toBeInTheDocument();
+	} );
+} );
+
+describe( 'safe rollout badges and actions', () => {
+	it( 'renders staged badge with hit reason, preview and promote action', async () => {
+		const onPromote = jest.fn().mockResolvedValue( undefined );
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: {
+						status: 'staged',
+						label: 'Home',
+						size: 0,
+						rollout: {
+							state: 'staged',
+							hit: 'bypass (staged preview)',
+						},
+						preview: {
+							has_staged: true,
+							staged_size: 120,
+							delta_bytes: 20,
+						},
+					},
+				} }
+				onRegenerate={ jest.fn() }
+				onPromote={ onPromote }
+				onRollback={ jest.fn() }
+			/>
+		);
+
+		expect( screen.getByText( 'Staged' ) ).toBeInTheDocument();
+		expect(
+			screen.getByText( 'Hit reason: bypass (staged preview)' )
+		).toBeInTheDocument();
+		fireEvent.click(
+			screen.getByRole( 'button', {
+				name: 'Promote staged CSS for Home',
+			} )
+		);
+		await waitFor( () =>
+			expect( onPromote ).toHaveBeenCalledWith( 'abcdef1234567890' )
+		);
+	} );
+
+	it( 'renders rolled back badge with rollback action', async () => {
+		const onRollback = jest.fn().mockResolvedValue( undefined );
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: {
+						status: 'rolled_back',
+						label: 'Home',
+						size: 512,
+						rollout: {
+							state: 'rolled_back',
+							hit: 'hit (last-good restored)',
+						},
+					},
+				} }
+				onRegenerate={ jest.fn() }
+				onRollback={ onRollback }
+			/>
+		);
+
+		expect( screen.getByText( 'Rolled Back' ) ).toBeInTheDocument();
+		expect(
+			screen.getByText( 'Hit reason: hit (last-good restored)' )
+		).toBeInTheDocument();
+		fireEvent.click(
+			screen.getByRole( 'button', {
+				name: 'Roll back Home to last-good CSS',
+			} )
+		);
+		await waitFor( () =>
+			expect( onRollback ).toHaveBeenCalledWith( 'abcdef1234567890' )
+		);
+	} );
+
+	it( 'logs rollout errors without a banner (single-owner feedback)', async () => {
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		const onPromote = jest.fn().mockRejectedValue( new Error( 'nope' ) );
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'staged', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+				onPromote={ onPromote }
+			/>
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', {
+				name: 'Promote staged CSS for Home',
+			} )
+		);
+		await waitFor( () => expect( onPromote ).toHaveBeenCalledTimes( 1 ) );
+		expect( screen.queryByRole( 'alert' ) ).not.toBeInTheDocument();
+		errorSpy.mockRestore();
 	} );
 } );

@@ -338,6 +338,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'ccssExcludedPostTypes'        => "fl-builder-template\nelementor_library",
 					'ccssMaxRetries'               => 5,
 					'usedCssQueueCap'              => 50,
+					'cssRolloutMode'               => 'direct',
+					'cssRolloutHealthCheck'        => true,
+					'cssRolloutKeepLastGood'       => true,
 					'ccssViewportVariants'         => false,
 					'usedCSSDeliveryMode'          => 'file',
 					'hostGoogleFontsLocally'       => false,
@@ -5926,6 +5929,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( 'usedCSSDeliveryMode' === $safe_key && ! is_array( $value ) ) {
 					$mode                   = strtolower( trim( (string) $value ) );
 					$sanitized[ $safe_key ] = in_array( $mode, array( 'file', 'delay', 'async', 'remove' ), true ) ? $mode : 'file';
+					continue;
+				}
+
+				// Safe CSS/JS rollout mode (issue #1348) — allowlist
+				// direct/staged. Unknown values fail open to direct (legacy
+				// direct-apply) so a rogue setting can never strand output
+				// in the staged slot.
+				if ( 'cssRolloutMode' === $safe_key && ! is_array( $value ) ) {
+					$mode                   = strtolower( trim( (string) $value ) );
+					$sanitized[ $safe_key ] = 'staged' === $mode ? 'staged' : 'direct';
+					continue;
+				}
+
+				// Rollout health-check + last-good toggles (issue #1348) —
+				// normalize malformed import shapes to bool. Unrecognized
+				// values fail safe to true (gate on, backup kept).
+				if ( in_array( $safe_key, array( 'cssRolloutHealthCheck', 'cssRolloutKeepLastGood' ), true ) && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					}
 					continue;
 				}
 
