@@ -77,10 +77,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 * excludeJS/cssJsSafeMode overlay the effective file-optimisation
 		 * slice read by the combine pipeline (issue #1404), and the HTML
 		 * minifier overlays staged delay excludes plus
-		 * delayJSExternalOnly/minifyInlineJS.
-		 * External minifyJS/minifyCSS have no staged widening (filters
-		 * register on production flags only), so they are deliberately
-		 * excluded until a preview path exists.
+		 * delayJSExternalOnly/minifyInlineJS. MinifyJS/minifyCSS and their
+		 * exclude lists now have a staged preview path via the effective
+		 * slice overlay, so they are staged for preview.
 		 *
 		 * @since NEXT
 		 * @var string[]

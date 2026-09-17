@@ -347,6 +347,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private string $combine_css_preload_url = '';
 
 		/**
+		 * Per-request memo of lowercased combine-exclusion lists (issue #1404).
+		 *
+		 * `is_excluded_from_combine()` runs per handle in the frontend
+		 * combine hot path; this memo lowercases each distinct exclusion
+		 * list once per request instead of once per handle.
+		 *
+		 * @since NEXT
+		 * @var array<string,array>
+		 */
+		private array $excluded_combine_lower_memo = array();
+
+		/**
 		 * Constructor to initialize cache settings and configurations.
 		 *
 		 * @param array $options Plugin options (optional). When empty, loaded from DB.
@@ -887,6 +899,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->is_hidden_block_asset_for_combine( $handle ) ) {
 				return true;
 			}
+			return $this->core_will_inline( $handle );
 		}
 
 		/**
@@ -1479,6 +1492,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Lowercased combine-exclusion lookup set (issue #1404).
+		 *
+		 * Memoized per request keyed by the exclusion list so the frontend
+		 * combine hot path pays the strtolower cost once per distinct list
+		 * instead of once per handle.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $exclude_combine_css Exclusion list.
+		 * @return array Lowercased trimmed string candidates.
+		 */
+		private function get_lowered_exclude_combine_css( array $exclude_combine_css ): array {
+			try {
+				$memo_key = md5( serialize( $exclude_combine_css ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+				if ( array_key_exists( $memo_key, $this->excluded_combine_lower_memo ) ) {
+					return $this->excluded_combine_lower_memo[ $memo_key ];
+				}
+				$lowered = array();
+				foreach ( $exclude_combine_css as $candidate ) {
+					if ( is_string( $candidate ) || is_numeric( $candidate ) ) {
+						$normalized = strtolower( trim( (string) $candidate ) );
+						if ( '' !== $normalized ) {
+							$lowered[] = $normalized;
+						}
+					}
+				}
+				$this->excluded_combine_lower_memo[ $memo_key ] = $lowered;
+				return $lowered;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
 		 * Whether a handle should be excluded from CSS combining.
 		 *
 		 * Checks both exact handle match and URL fragment substring.
@@ -1503,13 +1551,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Offender handles persist canonical-lowercase (see
 			// Main::record_combine_offender()); compare handles
 			// case-insensitively so a mixed-case enqueued handle still honors
-			// its isolation. Fail direction is safe (skip combining).
+			// its isolation. Fail direction is safe (skip combining). The
+			// lowered set is memoized per request (see
+			// get_lowered_exclude_combine_css()) so this loop costs one
+			// strtolower per handle instead of one per handle per candidate.
 			$needle = strtolower( trim( (string) $handle ) );
 			if ( '' !== $needle ) {
-				foreach ( $exclude_combine_css as $candidate ) {
-					if ( ( is_string( $candidate ) || is_numeric( $candidate ) ) && strtolower( trim( (string) $candidate ) ) === $needle ) {
-						return true;
-					}
+				$lowered = $this->get_lowered_exclude_combine_css( $exclude_combine_css );
+				if ( in_array( $needle, $lowered, true ) ) {
+					return true;
 				}
 			}
 			foreach ( $exclude_combine_css as $exclude_css ) {
