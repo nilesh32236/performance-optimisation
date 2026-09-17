@@ -2231,17 +2231,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function start_output_buffer(): void {
-			// WP 6.9+ template-enhancement buffer interplay (issue #881): when
-			// core's enhancement output buffer is active for this request, core
-			// owns output capture and the filter path
-			// ({@see process_buffer_for_cache()}) is responsible for processing.
-			// A plugin-level buffer here would stack on top of core's and
-			// re-process (or cache pre-hoisting) HTML, so it must not open.
-			// When the site opts out (the filter returning false) core does not
-			// buffer at all and this legacy path is the only cache-write path,
-			// so it proceeds.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
+			// Single-buffer routing (issue #1386): when the core
+			// template-enhancement buffer is available (WP 6.9+), core owns
+			// output capture and the filter path
+			// ({@see process_buffer_for_cache()}) is responsible for
+			// processing. A private buffer here would stack on top of core's
+			// and re-process (or cache pre-hoisting) HTML, so it must never
+			// open on 6.9+ — a runtime opt-out degrades to uncached streaming
+			// output instead.
+			$use_core = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'should_use_core_template_buffer' ) ) {
+					$use_core = Main::should_use_core_template_buffer();
+				} else {
+					$use_core = function_exists( 'wp_should_output_buffer_template_for_enhancement' );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$use_core = function_exists( 'wp_should_output_buffer_template_for_enhancement' );
+			}
+			if ( $use_core ) {
 				return;
+			}
+			// Nesting guard (issue #881, pre-6.9 defense in depth): when the
+			// core buffer is already active for this request, the filter path
+			// owns processing and a private buffer must not stack on top.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				try {
+					if ( wp_should_output_buffer_template_for_enhancement() ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 			// Note (see #553, #829): legacy fallback kept until minimum supported WP is raised.
@@ -2310,8 +2332,175 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// One-shot: never attempt to close the same buffer twice.
 			$level                = $this->cache_ob_level;
 			$this->cache_ob_level = null;
-			if ( ob_get_level() === $level ) {
-				ob_end_flush();
+			// Mid-template cancel safety (issue #1386): when a third party (or
+			// core's own cancel path) already closed our buffer, the level no
+			// longer matches and this is a no-op, never fatal. Fail-open on
+			// any throwable so shutdown can never white-screen the response.
+			try {
+				if ( ob_get_level() === $level ) {
+					ob_end_flush();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Hoist late-enqueued block stylesheets after the block library (WP 6.9 core parity).
+		 *
+		 * Core 6.9 hoists late-enqueued block assets into `<head>` behind the
+		 * template-enhancement buffer (Trac #43258; 6.9 frontend-performance
+		 * field guide). Because this pipeline now runs ON the core buffer
+		 * (issue #1386), hoisted styles are already present: this pass is
+		 * the fail-open net for markup where they are not: per-block
+		 * stylesheet `<link>` tags still sitting after `</head>` (late
+		 * `wp_enqueue_style()` calls printed in body/footer) are moved to
+		 * directly after the `block-library` stylesheet link, preserving
+		 * their relative order so the core cascade (library first, then
+		 * per-block overrides) stays intact.
+		 *
+		 * HTML API only: discovery walks `WP_HTML_Tag_Processor`; the move
+		 * itself uses plain string offsets, never regex. Idempotent (a
+		 * second pass finds nothing after `</head>` and no-ops) and
+		 * fail-open (any unexpected shape returns the input unchanged).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The HTML with late block styles hoisted, or the input unchanged.
+		 */
+		private function hoist_late_block_styles( $buffer ) {
+			try {
+				if ( ! is_string( $buffer ) || '' === $buffer ) {
+					return $buffer;
+				}
+				if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+					return $buffer;
+				}
+				if ( false === stripos( $buffer, '<link' ) || false === stripos( $buffer, 'block-library' ) ) {
+					return $buffer;
+				}
+				$head_close = stripos( $buffer, '</head>' );
+				if ( false === $head_close ) {
+					return $buffer;
+				}
+				// Discovery via the HTML API: ordered stylesheet hrefs.
+				$processor = new \WP_HTML_Tag_Processor( $buffer );
+				$hrefs     = array();
+				while ( $processor->next_tag( array( 'tag_name' => 'LINK' ) ) ) {
+					$rel = $processor->get_attribute( 'rel' );
+					if ( ! is_string( $rel ) || false === stripos( $rel, 'stylesheet' ) ) {
+						continue;
+					}
+					$href = $processor->get_attribute( 'href' );
+					if ( ! is_string( $href ) || '' === $href ) {
+						continue;
+					}
+					$hrefs[] = $href;
+				}
+				if ( empty( $hrefs ) ) {
+					return $buffer;
+				}
+				$library_href = null;
+				foreach ( $hrefs as $href ) {
+					if ( false !== stripos( $href, 'block-library' ) ) {
+						$library_href = $href;
+						break;
+					}
+				}
+				if ( null === $library_href ) {
+					return $buffer;
+				}
+				// Candidate late links: per-block stylesheets not yet in head.
+				$candidates = array();
+				foreach ( $hrefs as $href ) {
+					if ( $href === $library_href ) {
+						continue;
+					}
+					if ( false !== stripos( $href, 'block-library' ) ) {
+						continue;
+					}
+					if ( false === stripos( $href, 'wp-block-' ) && false === stripos( $href, '/blocks/' ) ) {
+						continue;
+					}
+					// Already in head: leave it (avoids duplicating the handle).
+					$first_pos = strpos( $buffer, $href );
+					if ( false !== $first_pos && $first_pos < $head_close ) {
+						continue;
+					}
+					$candidates[] = $href;
+				}
+				if ( empty( $candidates ) ) {
+					return $buffer;
+				}
+				// Resolve each candidate href to its late <link> tag range.
+				$ranges = array();
+				$seen   = array();
+				foreach ( $candidates as $href ) {
+					if ( isset( $seen[ $href ] ) ) {
+						continue;
+					}
+					$seen[ $href ] = true;
+					$offset        = $head_close;
+					$guard         = 0;
+					while ( $guard < 50 ) {
+						++$guard;
+						$pos = strpos( $buffer, $href, $offset );
+						if ( false === $pos ) {
+							break;
+						}
+						$before    = substr( $buffer, 0, $pos );
+						$tag_start = ( '' !== $before ) ? strrpos( $before, '<' ) : false;
+						$tag_end   = strpos( $buffer, '>', $pos );
+						if ( false === $tag_start || false === $tag_end ) {
+							break;
+						}
+						$tag_text = substr( $buffer, $tag_start, $tag_end - $tag_start + 1 );
+						if ( false === stripos( $tag_text, '<link' ) ) {
+							$offset = $pos + strlen( $href );
+							continue;
+						}
+						$ranges[] = array( $tag_start, $tag_end, $tag_text );
+						$offset   = $tag_end + 1;
+					}
+					if ( count( $ranges ) > 100 ) {
+						return $buffer;
+					}
+				}
+				if ( empty( $ranges ) ) {
+					return $buffer;
+				}
+				// Cut late tags from the end first so earlier offsets stay valid.
+				usort(
+					$ranges,
+					static function ( $a, $b ) {
+						if ( $a[0] === $b[0] ) {
+							return 0;
+						}
+						return ( $a[0] < $b[0] ) ? 1 : -1;
+					}
+				);
+				$moved = array();
+				foreach ( $ranges as $range ) {
+					$moved[] = $range[2];
+					$buffer  = substr( $buffer, 0, $range[0] ) . substr( $buffer, $range[1] + 1 );
+				}
+				$moved = array_reverse( $moved );
+				// Anchor: directly after the block-library link tag.
+				$lib_pos = strpos( $buffer, $library_href );
+				if ( false === $lib_pos ) {
+					return $buffer;
+				}
+				$lib_end = strpos( $buffer, '>', $lib_pos );
+				if ( false === $lib_end ) {
+					return $buffer;
+				}
+				$insert = implode( '', $moved );
+				$buffer = substr( $buffer, 0, $lib_end + 1 ) . $insert . substr( $buffer, $lib_end + 1 );
+				return $buffer;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return is_string( $buffer ) ? $buffer : '';
 			}
 		}
 
@@ -2324,6 +2513,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		private function process_buffer_only( $buffer ) {
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string (false/null) into the filter.
+			// Fail open to an empty string: never fatal, never a TypeError
+			// into the image/CDN/minify pipeline.
+			if ( ! is_string( $buffer ) ) {
+				return '';
+			}
+			if ( '' === $buffer ) {
+				return $buffer;
+			}
 			// Nesting balance (issue #881): the enhancement-buffer filter and the
 			// legacy fallback buffer can both be registered on WP 6.9+ (the
 			// fallback engages only when a site opts out of core's buffer, but a
@@ -2334,6 +2533,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $buffer;
 			}
 			self::$buffer_enhanced = true;
+
+			// Late-enqueued block styles (issue #1386) hoist first so every
+			// downstream pass (minify, used-CSS, CDN) and the cached file see
+			// the post-hoisting HTML with the core cascade intact.
+			$buffer = $this->hoist_late_block_styles( $buffer );
 
 			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
 
@@ -2395,13 +2599,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		public function process_buffer_for_cache( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
-				return $filtered_output;
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string into the filter. Fail open —
+			// never fatal, never white-screen.
+			if ( ! is_string( $filtered_output ) ) {
+				return '';
 			}
+			try {
+				if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
+					return $filtered_output;
+				}
 
-			$this->current_role_hash = $this->get_logged_in_role_hash();
+				$this->current_role_hash = $this->get_logged_in_role_hash();
 
-			return $this->process_buffer_only( $filtered_output );
+				return $this->process_buffer_only( $filtered_output );
+			} catch ( \Throwable $e ) {
+				do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				return is_string( $filtered_output ) ? $filtered_output : '';
+			}
 		}
 
 		/**
@@ -2421,14 +2636,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		public function stash_cache( $output ) {
-			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string (false/null) to the finalized
+			// action. Skipping the write degrades to uncached output —
+			// never fatal. Persistence failures are best-effort by design.
+			if ( ! is_string( $output ) || '' === $output ) {
 				return;
 			}
+			try {
+				if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
+					return;
+				}
 
-			$role_hash = ! empty( $this->current_role_hash ) ? $this->current_role_hash : $this->get_logged_in_role_hash();
-			$file_path = $this->get_cache_file_path( 'html', $role_hash );
+				$role_hash = ! empty( $this->current_role_hash ) ? $this->current_role_hash : $this->get_logged_in_role_hash();
+				$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
-			$this->save_processed_buffer( $output, $file_path );
+				$this->save_processed_buffer( $output, $file_path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

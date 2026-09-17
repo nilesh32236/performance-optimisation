@@ -1150,15 +1150,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Native script fetchpriority capability (issue #1218): version +
 			// API probe via supports_native_script_fetchpriority() so a
 			// filtered version string cannot enable native fetchpriority
-			// writes where the API is absent. $is_wp69_plus below stays a
-			// bare version gate for the template-enhancement buffer paths,
-			// which carry their own function_exists probes.
+			// writes where the API is absent. Template-enhancement buffer
+			// routing below uses the canonical
+			// should_use_core_template_buffer() predicate (version + API
+			// probe, issue #1386) — never a bare version_compare.
 			$supports_fetchpriority = self::supports_native_script_fetchpriority();
 			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
 			// of 6.9 which already ship the template-enhancement buffer functions.
+			// Single-buffer routing (issue #1386): on 6.9+ post-processing rides
+			// the core template-enhancement buffer only (no private ob_start
+			// capture); pre-6.9 keeps the legacy template_redirect captures.
+			// A runtime opt-out (filter returning false / no consumers) degrades
+			// to uncached streaming output — never a private buffer.
 			// TODO(#553, #829): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
-			// Blocked until `Requires at least: 6.9` — keep the dual path (modern filter + legacy fallback).
-			$is_wp69_plus = version_compare( $wp_version, '6.9-alpha', '>=' );
+			// Blocked until `Requires at least: 6.9`.
+			$use_core_buffer = self::should_use_core_template_buffer();
 
 			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
 			// on every supported version, so it is always registered when delay JS is on.
@@ -1201,19 +1207,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
 					$this->cache->set_google_fonts( $this->google_fonts );
 				}
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
-					// WP 6.9+ template enhancement output buffer.
+				if ( $use_core_buffer ) {
+					// WP 6.9+ core template-enhancement buffer (issue #1386):
+					// single-buffer routing — filter processes, finalized action
+					// persists. No private ob_start capture is registered, so
+					// exactly one core buffer is active when consumers exist and
+					// zero when none; a runtime opt-out (filter false) degrades
+					// to uncached streaming output.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
 					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
+				} else {
+					// Legacy buffer path (pre-6.9 only): the only cache path on
+					// older cores. Retired on 6.9+ (issue #1386) — never
+					// registered alongside the core buffer.
+					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				}
-				// Legacy buffer path, dual-purpose on WP 6.9+ (issue #881): on
-				// older cores it is the only cache path; on 6.9+
-				// Cache::start_output_buffer() self-gates on
-				// wp_should_output_buffer_template_for_enhancement() and only
-				// engages when the site opted out of core's enhancement buffer
-				// (which would otherwise silently stop cache generation), and
-				// never stacks on top of an active core buffer.
-				add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				// Post-purge last-good fallback (issue #1275): Nginx falls
 				// through to index.php?wppo_purge_fallback=$uri on a miss
 				// under the cache path; this 302s to the retained sibling
@@ -1272,15 +1280,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Standalone used-CSS output buffer when page cache is disabled.
 			if ( empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) && $safe_mode_off ) {
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
-					// WP 6.9+ template enhancement output buffer.
+				if ( $use_core_buffer ) {
+					// WP 6.9+ core template-enhancement buffer (issue #1386):
+					// single-buffer routing, no private capture.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
+				} else {
+					// Legacy fallback buffer (pre-6.9 only, issue #881).
+					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
 				}
-				// Dual-purpose legacy/fallback buffer (issue #881): on older cores
-				// it is the only used-CSS path; on 6.9+ start_used_css_buffer()
-				// self-gates on wp_should_output_buffer_template_for_enhancement()
-				// so it never stacks on top of an active core buffer.
-				add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
 			}
 
 			// Optional LCP image prioritization on the finalized HTML (default off).
@@ -1293,14 +1300,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// defer to core's wp_get_loading_optimization_attributes() output
 				// via Image_Optimisation::merge_core_loading_attributes(), and
 				// loading="lazy" + fetchpriority="high" pairs are never emitted.
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
-					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
+				if ( $use_core_buffer ) {
+					// WP 6.9+ core template-enhancement buffer (issue #1386).
+					// Runs after cache (10) and used-CSS (20). No private
+					// capture is registered on 6.9+.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
+				} else {
+					// Legacy fallback buffer (pre-6.9 only, issue #881).
+					add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 				}
-				// Dual-purpose legacy/fallback buffer (issue #881): start_lcp_priority_buffer()
-				// self-gates on wp_should_output_buffer_template_for_enhancement() so it
-				// never stacks on top of an active core buffer.
-				add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 			}
 
 			// Invalidate DB cleanup counts when posts are added or removed (for public post types).
@@ -3642,28 +3650,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function process_used_css_only( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
-				return $filtered_output;
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string into the filter. Fail open —
+			// never fatal, never white-screen.
+			if ( ! is_string( $filtered_output ) ) {
+				return '';
 			}
-			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
-			// to the full stylesheet, settings preserved.
-			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
-				return $filtered_output;
-			}
+			try {
+				if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
+					return $filtered_output;
+				}
+				// Safe-mode kill switch + nocache bypass (issue #1098): fail open
+				// to the full stylesheet, settings preserved.
+				if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+					return $filtered_output;
+				}
 
-			// Nesting balance (issue #881): run the used-CSS pipeline at most
-			// once per request (see Main::$used_css_buffer_enhanced).
-			if ( $this->used_css_buffer_enhanced ) {
-				return $filtered_output;
-			}
-			$this->used_css_buffer_enhanced = true;
+				// Nesting balance (issue #881): run the used-CSS pipeline at most
+				// once per request (see Main::$used_css_buffer_enhanced).
+				if ( $this->used_css_buffer_enhanced ) {
+					return $filtered_output;
+				}
+				$this->used_css_buffer_enhanced = true;
 
-			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
-				$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
-			}
+				if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
+					$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
+				}
 
-			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
-			return $used_css->process_buffer( $filtered_output );
+				$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
+				$result   = $used_css->process_buffer( $filtered_output );
+				return is_string( $result ) ? $result : $filtered_output;
+			} catch ( \Throwable $e ) {
+				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				return is_string( $filtered_output ) ? $filtered_output : '';
+			}
 		}
 
 		/**
@@ -3865,13 +3885,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function start_used_css_buffer() {
-			// Nesting balance (issue #881): when core's template-enhancement
-			// buffer is active, the 6.9+ filter path (process_used_css_only)
-			// handles used-CSS; a legacy buffer would double-process. When the
-			// site opted out of core's buffer, this legacy path is the only
-			// used-CSS path and proceeds.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
-				return;
+			// Single-buffer routing (issue #1386): when the core
+			// template-enhancement buffer is available (WP 6.9+), core owns
+			// output capture and the 6.9+ filter path
+			// (process_used_css_only) is responsible. Never open a private
+			// buffer on 6.9+ — a runtime opt-out degrades to uncached
+			// streaming output.
+			try {
+				if ( self::should_use_core_template_buffer() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Nesting guard (issue #881, pre-6.9 defense in depth): when
+			// the core buffer is already active for this request, the
+			// filter path owns used-CSS and a private buffer must not
+			// stack on top.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				try {
+					if ( wp_should_output_buffer_template_for_enhancement() ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return;
@@ -3899,12 +3937,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function start_lcp_priority_buffer() {
-			// Nesting balance (issue #881): when core's template-enhancement
-			// buffer is active, the 6.9+ filter path (prioritize_lcp_in_buffer
-			// on wp_template_enhancement_output_buffer) handles LCP
-			// prioritization; never stack a legacy buffer on top of it.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
-				return;
+			// Single-buffer routing (issue #1386): when the core
+			// template-enhancement buffer is available (WP 6.9+), the 6.9+
+			// filter path (prioritize_lcp_in_buffer on
+			// wp_template_enhancement_output_buffer) is responsible.
+			// Never open a private buffer on 6.9+ — a runtime opt-out
+			// degrades to uncached streaming output.
+			try {
+				if ( self::should_use_core_template_buffer() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Nesting guard (issue #881, pre-6.9 defense in depth): when
+			// the core buffer is already active for this request, the
+			// filter path owns LCP prioritization and a private buffer
+			// must not stack on top.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				try {
+					if ( wp_should_output_buffer_template_for_enhancement() ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return;
@@ -3929,7 +3986,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function process_used_css_capture( $buffer ) {
-			if ( empty( $buffer ) ) {
+			// Mid-template cancel safety (issue #1386): an output-buffer
+			// callback must always return a string — a non-string input
+			// (false/null from a cancelled buffer) fails open to ''.
+			if ( ! is_string( $buffer ) ) {
+				return '';
+			}
+			if ( '' === $buffer ) {
 				return $buffer;
 			}
 
@@ -3948,7 +4011,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
-				return $used_css->process_buffer( $buffer );
+				$result   = $used_css->process_buffer( $buffer );
+				return is_string( $result ) ? $result : $original;
 			} catch ( \Throwable $e ) {
 				// Fail open: return the unprocessed buffer rather than dropping
 				// the page content. Mirrors the wppo_debug_log convention used by
@@ -4902,6 +4966,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return method_exists( 'WP_Script_Modules', 'set_fetchpriority' );
 			}
 			return function_exists( 'wp_script_modules' ) && function_exists( 'wp_enqueue_script_module' );
+		}
+
+		/**
+		 * Whether the WP 6.9+ core template-enhancement buffer should carry plugin post-processing.
+		 *
+		 * Canonical predicate for the single-buffer routing (issue #1386):
+		 * version >= 6.9-alpha plus the genuinely-6.9
+		 * `wp_should_output_buffer_template_for_enhancement()` API. This is an
+		 * availability probe only: it never calls the predicate itself, so
+		 * registration-time routing cannot confuse a mid-request opt-out
+		 * (filter returning false) with a missing core. When true,
+		 * setup_hooks() registers ONLY the `wp_template_enhancement_output_buffer`
+		 * filter / `wp_finalized_template_enhancement_output_buffer` action
+		 * callbacks and no private `ob_start()` capture; when false (pre-6.9)
+		 * only the legacy `template_redirect` captures are registered.
+		 * Honoring a runtime `false` (opt-out / no consumers) means degrading
+		 * to uncached streaming output, never opening a private buffer.
+		 * Fail-open: false on any unreadable version or missing API, in which
+		 * case callers fall back to the pre-6.9 legacy path.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the core template-enhancement buffer path is allowed.
+		 */
+		public static function should_use_core_template_buffer(): bool {
+			try {
+				if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+					$wp_version = $GLOBALS['wp_version'];
+				} elseif ( function_exists( 'get_bloginfo' ) ) {
+					$wp_version = (string) get_bloginfo( 'version' );
+				} else {
+					return false;
+				}
+				if ( '' === $wp_version || version_compare( $wp_version, '6.9-alpha', '<' ) ) {
+					return false;
+				}
+				return function_exists( 'wp_should_output_buffer_template_for_enhancement' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**

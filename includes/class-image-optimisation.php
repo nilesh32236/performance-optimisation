@@ -6916,6 +6916,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed buffer.
 		 */
 		public function prioritize_lcp_in_buffer( $filtered_output, $output = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string (false/null) into the filter.
+			// An output-buffer callback must always return a string —
+			// fail open to '' without consuming the one-shot so a later
+			// real pass can still run.
+			if ( ! is_string( $filtered_output ) ) {
+				return '';
+			}
 			// One-shot per instance (issue #881 review): the 6.9+ enhancement
 			// filter and the legacy fallback buffer both call this method on
 			// the shared Main instance; a mid-request flip of the enhancement
