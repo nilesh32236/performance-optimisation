@@ -86,6 +86,12 @@ const coerceLongestEdge = ( value, fallback ) => {
 	return Math.max( 0, Math.trunc( num ) );
 };
 
+// Audit #1401: single placeholderType derivation (was copy-pasted in
+// init + baseline-sync; a new value needs one edit now).
+// @since NEXT
+const derivePlaceholderType = ( opts ) =>
+	opts.placeholderType ?? ( opts.replacePlaceholderWithSVG ? 'svg' : 'none' );
+
 const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
@@ -147,9 +153,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				options.maxLongestEdgePx,
 				prev.maxLongestEdgePx ?? 2560
 			),
-			placeholderType:
-				options.placeholderType ??
-				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+			placeholderType: derivePlaceholderType( options ),
 			clientSideMimeTypes: Array.isArray( options.clientSideMimeTypes )
 				? options.clientSideMimeTypes
 				: prev.clientSideMimeTypes,
@@ -326,9 +330,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				options.maxLongestEdgePx,
 				defaultSettings.maxLongestEdgePx ?? 2560
 			),
-			placeholderType:
-				options.placeholderType ??
-				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+			placeholderType: derivePlaceholderType( options ),
 			clientSideMimeTypes: Array.isArray( options.clientSideMimeTypes )
 				? options.clientSideMimeTypes
 				: defaultSettings.clientSideMimeTypes,

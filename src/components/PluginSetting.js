@@ -408,61 +408,94 @@ const PluginSetting = ( { options } ) => {
 	);
 	useUnsavedChanges( currentMonitoringSettings, baseline );
 
-	const saveMonitoring = async () => {
-		setSavingMonitoring( true );
+	// Audit #1401: shared saver owning dismiss/apiCall/notify/baseline/undo
+	// with a guaranteed flag reset — the three savers below keep only
+	// payload building and post-save side effects.
+	const savePerformanceAudit = async (
+		settingsPatch,
+		{
+			setSaving,
+			successNotice,
+			errorNotice,
+			catchNotice,
+			logLabel,
+			onSuccess,
+		}
+	) => {
+		setSaving( true );
 		dismissApiKey();
 		try {
 			const currentSettings =
 				typeof wppoSettings !== 'undefined'
 					? wppoSettings?.settings?.performance_audit ?? {}
 					: {};
-			const urls = highValueUrls
-				.split( '\n' )
-				.map( ( url ) => url.trim() )
-				.filter( Boolean );
-			// Defense-in-depth: drop non-same-origin http(s) lines client-side
-			// (mirrors runPerformanceScan/queuePagespeedScan). Server-side host
-			// allowlisting + rate limiting remains authoritative.
-			const validUrls = urls.filter( isValidScanUrl );
-			const invalidUrls = urls.filter(
-				( url ) => ! isValidScanUrl( url )
-			);
-			if ( invalidUrls.length > 0 && validUrls.length === 0 ) {
-				notifyApiKey( {
-					type: 'error',
-					message: sprintf(
-						/* translators: %s: comma-separated list of rejected URLs */
-						__(
-							'No valid URLs to save. Rejected: %s. URLs must be same-origin http(s) URLs.',
-							'performance-optimisation'
-						),
-						invalidUrls.join( ', ' )
-					),
-				} );
-				return;
-			}
 			const response = await apiCall( 'update_settings', {
 				tab: 'performance_audit',
-				settings: {
-					...currentSettings,
-					server_timing_enabled: serverTimingEnabled,
-					rum_enabled: rumEnabled,
-					high_value_urls: validUrls,
-				},
+				settings: { ...currentSettings, ...settingsPatch },
 			} );
 			if ( response.success ) {
-				const savedHighValueUrls = validUrls.join( '\n' );
-				if ( invalidUrls.length > 0 ) {
-					setHighValueUrls( savedHighValueUrls );
-				}
 				setUndoAvailable( true );
-				setBaseline( ( prev ) => ( {
-					...prev,
-					serverTimingEnabled,
-					rumEnabled,
-					highValueUrls: savedHighValueUrls,
-				} ) );
+				if ( onSuccess ) {
+					onSuccess( response );
+				}
 				notifyApiKey(
+					typeof successNotice === 'function'
+						? successNotice( response )
+						: successNotice
+				);
+			} else {
+				notifyApiKey( {
+					type: 'error',
+					message: response.message || errorNotice,
+				} );
+			}
+		} catch ( err ) {
+			notifyApiKey( {
+				type: 'error',
+				message: catchNotice || errorNotice,
+			} );
+			console.error( logLabel, getErrorLogMessage( err ) );
+		} finally {
+			setSaving( false );
+		}
+	};
+
+	const saveMonitoring = async () => {
+		const urls = highValueUrls
+			.split( '\n' )
+			.map( ( url ) => url.trim() )
+			.filter( Boolean );
+		// Defense-in-depth: drop non-same-origin http(s) lines client-side
+		// (mirrors runPerformanceScan/queuePagespeedScan). Server-side host
+		// allowlisting + rate limiting remains authoritative.
+		const validUrls = urls.filter( isValidScanUrl );
+		const invalidUrls = urls.filter( ( url ) => ! isValidScanUrl( url ) );
+		if ( invalidUrls.length > 0 && validUrls.length === 0 ) {
+			setSavingMonitoring( true );
+			notifyApiKey( {
+				type: 'error',
+				message: sprintf(
+					/* translators: %s: comma-separated list of rejected URLs */
+					__(
+						'No valid URLs to save. Rejected: %s. URLs must be same-origin http(s) URLs.',
+						'performance-optimisation'
+					),
+					invalidUrls.join( ', ' )
+				),
+			} );
+			setSavingMonitoring( false );
+			return;
+		}
+		const savedHighValueUrls = validUrls.join( '\n' );
+		await savePerformanceAudit(
+			{
+				server_timing_enabled: serverTimingEnabled,
+				rum_enabled: rumEnabled,
+				high_value_urls: validUrls,
+			},
+			{
+				setSaving: setSavingMonitoring,
+				successNotice: () =>
 					invalidUrls.length > 0
 						? {
 								type: 'warning',
@@ -482,137 +515,85 @@ const PluginSetting = ( { options } ) => {
 									'Monitoring settings saved.',
 									'performance-optimisation'
 								),
-						  }
-				);
-			} else {
-				notifyApiKey( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save monitoring settings.',
-							'performance-optimisation'
-						),
-				} );
-			}
-		} catch ( err ) {
-			notifyApiKey( {
-				type: 'error',
-				message: __(
+						  },
+				errorNotice: __(
+					'Failed to save monitoring settings.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
 					'Error saving monitoring settings.',
 					'performance-optimisation'
 				),
-			} );
-			console.error(
-				'Save monitoring error:',
-				getErrorLogMessage( err )
-			);
-		} finally {
-			setSavingMonitoring( false );
-		}
+				logLabel: 'Save monitoring error:',
+				onSuccess: () => {
+					if ( invalidUrls.length > 0 ) {
+						setHighValueUrls( savedHighValueUrls );
+					}
+					setBaseline( ( prev ) => ( {
+						...prev,
+						serverTimingEnabled,
+						rumEnabled,
+						highValueUrls: savedHighValueUrls,
+					} ) );
+				},
+			}
+		);
 	};
 
 	const saveAutoRescan = async () => {
-		setSavingAutoRescan( true );
-		dismissApiKey();
-		try {
-			const currentSettings =
-				typeof wppoSettings !== 'undefined'
-					? wppoSettings?.settings?.performance_audit ?? {}
-					: {};
-			const response = await apiCall( 'update_settings', {
-				tab: 'performance_audit',
-				settings: {
-					...currentSettings,
-					auto_rescan: autoRescan,
-				},
-			} );
-			if ( response.success ) {
-				setBaseline( ( prev ) => ( { ...prev, autoRescan } ) );
-				setUndoAvailable( true );
-				notifyApiKey( {
+		await savePerformanceAudit(
+			{ auto_rescan: autoRescan },
+			{
+				setSaving: setSavingAutoRescan,
+				successNotice: {
 					type: 'success',
 					message: __(
 						'Auto-rescan frequency saved.',
 						'performance-optimisation'
 					),
-				} );
-			} else {
-				notifyApiKey( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save auto-rescan frequency.',
-							'performance-optimisation'
-						),
-				} );
-			}
-		} catch ( err ) {
-			notifyApiKey( {
-				type: 'error',
-				message: __(
+				},
+				errorNotice: __(
+					'Failed to save auto-rescan frequency.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
 					'Error saving auto-rescan frequency.',
 					'performance-optimisation'
 				),
-			} );
-			console.error(
-				'Save auto-rescan error:',
-				getErrorLogMessage( err )
-			);
-		} finally {
-			setSavingAutoRescan( false );
-		}
+				logLabel: 'Save auto-rescan error:',
+				onSuccess: () => {
+					setBaseline( ( prev ) => ( { ...prev, autoRescan } ) );
+				},
+			}
+		);
 	};
 
 	const saveApiKey = async () => {
-		setSavingApiKey( true );
-		dismissApiKey();
-		try {
-			const currentSettings =
-				typeof wppoSettings !== 'undefined'
-					? wppoSettings?.settings?.performance_audit ?? {}
-					: {};
-			const trimmedKey = newApiKey.trim();
-			const response = await apiCall( 'update_settings', {
-				tab: 'performance_audit',
-				settings: {
-					...currentSettings,
-					...( trimmedKey ? { pagespeed_api_key: trimmedKey } : {} ),
-				},
-			} );
-			if ( response.success ) {
-				setNewApiKey( '' );
-				setApiKeyConfigured( true );
-				setUndoAvailable( true );
-				setBaseline( ( prev ) => ( { ...prev, newApiKey: '' } ) );
-				notifyApiKey( {
+		const trimmedKey = newApiKey.trim();
+		await savePerformanceAudit(
+			{ ...( trimmedKey ? { pagespeed_api_key: trimmedKey } : {} ) },
+			{
+				setSaving: setSavingApiKey,
+				successNotice: {
 					type: 'success',
 					message: __( 'API key saved.', 'performance-optimisation' ),
-				} );
-			} else {
-				notifyApiKey( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save API key.',
-							'performance-optimisation'
-						),
-				} );
-			}
-		} catch ( err ) {
-			notifyApiKey( {
-				type: 'error',
-				message: __(
+				},
+				errorNotice: __(
+					'Failed to save API key.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
 					'Error saving API key.',
 					'performance-optimisation'
 				),
-			} );
-			console.error( 'Save API key error:', getErrorLogMessage( err ) );
-		} finally {
-			setSavingApiKey( false );
-		}
+				logLabel: 'Save API key error:',
+				onSuccess: () => {
+					setNewApiKey( '' );
+					setApiKeyConfigured( true );
+					setBaseline( ( prev ) => ( { ...prev, newApiKey: '' } ) );
+				},
+			}
+		);
 	};
 
 	// Activity log state
@@ -730,7 +711,9 @@ const PluginSetting = ( { options } ) => {
 		const reader = new FileReader();
 		readerRef.current = reader;
 
-		reader.onerror = () => {
+		// Audit #1401: one shared failure handler — byte-identical twins
+		// drift (e.g. only one clears the failed selection).
+		const handleReaderFailure = () => {
 			readerRef.current = null;
 			if ( cancelledRef.current ) {
 				return;
@@ -742,19 +725,8 @@ const PluginSetting = ( { options } ) => {
 			setIsImporting( false );
 			resetFileInput();
 		};
-
-		reader.onabort = () => {
-			readerRef.current = null;
-			if ( cancelledRef.current ) {
-				return;
-			}
-			notifyImport( {
-				type: 'error',
-				message: __( 'Error reading file', 'performance-optimisation' ),
-			} );
-			setIsImporting( false );
-			resetFileInput();
-		};
+		reader.onerror = handleReaderFailure;
+		reader.onabort = handleReaderFailure;
 
 		reader.onload = ( e ) => {
 			readerRef.current = null;
