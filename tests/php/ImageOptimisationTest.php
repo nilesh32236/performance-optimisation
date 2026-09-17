@@ -2061,10 +2061,12 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that the field-measured LCP candidate is still lazy-loaded when
-	 * all LCP toggles are off (gated exclusion preserves default behaviour).
+	 * Test that the stable signal hero is excluded from lazy load even
+	 * when all LCP toggles are off (issue #1369 automatic path).
 	 *
 	 * @since 2.0.0
+	 * @since NEXT Toggles-off still excludes the stable RUM/OD hero so
+	 * the same response never lazy-loads its own preload.
 	 */
 	public function test_field_lcp_candidate_lazy_loaded_when_toggles_off(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2089,8 +2091,10 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$html   = '<img src="https://example.com/wp-content/uploads/field.jpg" alt="hero"/>';
 		$result = $image_opt->add_delay_load_img( $html );
 
-		// No LCP toggle is on, so the field hero follows the default lazy path.
-		$this->assertStringContainsString( 'data-src="https://example.com/wp-content/uploads/field.jpg"', $result );
+		// Issue #1369: the stable signal hero stays eager even with no
+		// LCP toggle on (same-response preload/lazy coupling).
+		$this->assertStringContainsString( 'src="https://example.com/wp-content/uploads/field.jpg"', $result );
+		$this->assertStringNotContainsString( 'data-src="https://example.com/wp-content/uploads/field.jpg"', $result );
 	}
 
 	/**

@@ -1001,6 +1001,19 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
 
 ---
 
+### `wppo_auto_lcp_preload`
+Filters whether the signal-driven automatic LCP preload may fire. When a stable RUM-field or OD real-visit candidate exists, the image pipeline emits exactly one `<link rel="preload" as="image" fetchpriority="high">` (with `imagesrcset`/`imagesizes` when available) and exempts that URL from lazy-load in the same response — even when the `autoPreloadLCP` / `autoLcpPreload` toggles are off. The manual `_wppo_lcp_preload_url` picker still overrides auto, and no signal means no preload. @since NEXT.
+
+**Parameters:**
+- `$allowed` *(bool)* — Whether the automatic LCP preload may emit. Default `true`.
+
+**Example:**
+```php
+add_filter( 'wppo_auto_lcp_preload', '__return_false' );
+```
+
+---
+
 ### `wppo_computed_css_hero_url`
 Passes a server-side computed CSS-hero background URL (e.g. derived from enqueued stylesheets where no inline `style=""` exists). Validated as an image on an allowed origin (same-origin or configured CDN); anything else is ignored. @since NEXT.
 

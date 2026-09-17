@@ -3337,12 +3337,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * The pipeline's wp_head:1 preload (Image_Optimisation::preload_images())
 		 * emits the same RUM-field → PageSpeed candidate with responsive
-		 * imagesrcset/imagesizes; its auto-LCP path runs only when
+		 * imagesrcset/imagesizes; its auto-LCP path runs when
 		 * `image_optimisation.autoPreloadLCP` or
 		 * `preload_settings.autoLcpPreload` is enabled. When either is on,
-		 * the CCSS-path hint (wp_head:0) yields so
-		 * exactly one preload prints. Fail-open: any failure returns false
-		 * (CCSS path emits normally).
+		 * the CCSS-path hint (wp_head:0) yields so exactly one preload
+		 * prints. The signal-driven automatic path (issue #1369) needs no
+		 * yield here: the CCSS path claims the URL in the pipeline's
+		 * shared dedup set, so the later pipeline run skips the duplicate
+		 * and exactly one hint prints either way. Fail-open: any failure
+		 * returns false (CCSS path emits normally).
 		 *
 		 * @return bool True when the image pipeline will preload the LCP hero.
 		 * @since NEXT
