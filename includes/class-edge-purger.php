@@ -186,78 +186,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Purge specific Cloudflare files (URL-scoped single-page purge).
 		 *
+		 * Thin delegating wrapper around the canonical
+		 * Cloudflare_Purger::purge_files() transport (file-purge semantics
+		 * differ from purge_everything, so the wrapper is retained). No HTTP
+		 * code lives here.
+		 *
 		 * @since 2.0.0
+		 * @since NEXT Delegates to Cloudflare_Purger::purge_files().
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @param string $url Absolute URL to purge.
 		 * @return bool
 		 */
 		private static function purge_cloudflare_files( string $zone, string $token, string $url ): bool {
-			$body = wp_json_encode( array( 'files' => array( $url ) ) );
-			if ( false === $body ) {
-				self::log_failure( 'cloudflare-edge', $zone . ': JSON encoding failed' );
+			if ( '' === $zone || '' === $token || '' === $url ) {
 				return false;
 			}
-			$response = wp_remote_request(
-				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
-				array(
-					'method'  => 'POST',
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $token,
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => $body,
-					'timeout' => 10,
-				)
-			);
-			if ( is_wp_error( $response ) ) {
-				self::log_failure( 'cloudflare-edge', $zone . ': ' . $response->get_error_message() );
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 				return false;
 			}
-			$code = (int) wp_remote_retrieve_response_code( $response );
-			if ( $code < 200 || $code >= 300 ) {
-				self::log_failure( 'cloudflare-edge', $zone . ' (HTTP ' . $code . ')' );
-				return false;
+			// Single implementation lives in Cloudflare_Purger::purge_files().
+			// The Edge prefix is passed through so debug-log filters matching
+			// 'Edge purge failed' keep working.
+			$result = Cloudflare_Purger::purge_files( $zone, $token, array( $url ), 'cloudflare-edge', 'Edge purge failed' );
+			if ( ! $result ) {
+				self::mirror_to_activity_log( 'cloudflare-edge', $zone . ': ' . $url );
 			}
-			return true;
+			return $result;
 		}
 
 		/**
 		 * Purge Cloudflare zone cache (purge_everything).
 		 *
+		 * Thin delegating wrapper around the canonical
+		 * Cloudflare_Purger::purge() transport. No HTTP code lives here.
+		 *
 		 * @since 2.0.0
+		 * @since NEXT Delegates to Cloudflare_Purger::purge().
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @return bool
 		 */
 		private static function purge_cloudflare( string $zone, string $token ): bool {
-			$body = wp_json_encode( array( 'purge_everything' => true ) );
-			if ( false === $body ) {
-				self::log_failure( 'cloudflare-edge', $zone . ': JSON encoding failed' );
+			if ( '' === $zone || '' === $token ) {
 				return false;
 			}
-			$response = wp_remote_request(
-				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
-				array(
-					'method'  => 'POST',
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $token,
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => $body,
-					'timeout' => 10,
-				)
-			);
-			if ( is_wp_error( $response ) ) {
-				self::log_failure( 'cloudflare-edge', $zone . ': ' . $response->get_error_message() );
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 				return false;
 			}
-			$code = (int) wp_remote_retrieve_response_code( $response );
-			if ( $code < 200 || $code >= 300 ) {
-				self::log_failure( 'cloudflare-edge', $zone . ' (HTTP ' . $code . ')' );
-				return false;
+			// Single implementation lives in Cloudflare_Purger::purge().
+			// The Edge prefix is passed through so debug-log filters matching
+			// 'Edge purge failed' keep working.
+			$result = Cloudflare_Purger::purge( $zone, $token, 'cloudflare-edge', 'Edge purge failed' );
+			if ( ! $result ) {
+				self::mirror_to_activity_log( 'cloudflare-edge', $zone );
 			}
-			return true;
+			return $result;
 		}
 
 		/**
@@ -304,11 +288,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 */
 		private static function log_failure( string $service, string $detail ): void {
 			do_action( 'wppo_debug_log', 'Edge purge failed [' . $service . ']: ' . $detail );
-			// Fallback: when no wppo_debug_log listener is attached the
-			// failure would be silent, so mirror it to the activity log.
-			// Fail-open: logging must never break the purge path.
-			// Throttled to one activity-log row per lock window so a
-			// prolonged edge outage cannot spam wppo_activity_logs.
+			self::mirror_to_activity_log( $service, $detail );
+		}
+
+		/**
+		 * Mirror a failure to the activity log when no debug-log listener exists.
+		 *
+		 * Extracted from log_failure() so the thin Cloudflare delegating wrappers
+		 * above can reuse the same throttled fallback: the canonical transport
+		 * already emitted the wppo_debug_log entry (with the Edge prefix passed
+		 * through), and only the activity-log mirror is still needed here.
+		 *
+		 * Fail-open: logging must never break the purge path. Throttled to one
+		 * activity-log row per lock window so a prolonged edge outage cannot
+		 * spam wppo_activity_logs.
+		 *
+		 * @since NEXT
+		 * @param string $service Service.
+		 * @param string $detail Detail.
+		 * @return void
+		 */
+		private static function mirror_to_activity_log( string $service, string $detail ): void {
 			try {
 				if ( ! has_filter( 'wppo_debug_log' ) && class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					// Per-service throttle key: a shared key would suppress
