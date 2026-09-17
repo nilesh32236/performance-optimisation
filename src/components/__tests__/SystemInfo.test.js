@@ -98,7 +98,7 @@ describe( 'SystemInfo Component', () => {
 		expect( screen.getByText( 'Enabled' ) ).toBeInTheDocument();
 	} );
 
-	it( 'renders OPCache table when opcache data is present', async () => {
+	it( 'renders OPcache table when opcache data is present', async () => {
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: true,
 			data: {
@@ -119,7 +119,7 @@ describe( 'SystemInfo Component', () => {
 		fireEvent.click( loadButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'OPCache' ) ).toBeInTheDocument();
+			expect( screen.getByText( 'OPcache' ) ).toBeInTheDocument();
 			expect( screen.getByText( 'Enabled' ) ).toBeInTheDocument();
 			expect(
 				screen.getByText( '50.00% of 8 MB (4 MB free)' )

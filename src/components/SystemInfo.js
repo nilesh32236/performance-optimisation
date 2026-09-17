@@ -375,10 +375,26 @@ const SystemInfo = () => {
 						} }
 					/>
 					<InfoTable
-						title={ __( 'OPCache', 'performance-optimisation' ) }
+						title={ __( 'OPcache', 'performance-optimisation' ) }
 						data={ info.opcache }
 						labels={ {
 							status: __( 'Status', 'performance-optimisation' ),
+							opcache_enabled: __(
+								'OPcache Enabled',
+								'performance-optimisation'
+							),
+							opcache_enable_cli: __(
+								'OPcache Enable CLI',
+								'performance-optimisation'
+							),
+							jit_enabled: __(
+								'JIT Enabled',
+								'performance-optimisation'
+							),
+							jit_mode: __(
+								'JIT Mode',
+								'performance-optimisation'
+							),
 							memory_usage: __(
 								'Memory Usage',
 								'performance-optimisation'

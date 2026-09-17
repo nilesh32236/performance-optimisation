@@ -6400,6 +6400,84 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Return the last HTTP response headers without touching the deprecated global.
+		 *
+		 * PHP 8.5 deprecates reading the `$http_response_header` global in
+		 * favour of `http_get_last_response_headers()` (see
+		 * https://www.php.net/manual/en/migration85.deprecated.php). This
+		 * wrapper prefers the new engine API when available
+		 * (`function_exists` guard) and falls back to the legacy global path
+		 * — always initialized and guarded with `isset` — so behaviour on
+		 * PHP 8.2 through 8.4 is unchanged. Fail-open: any probe failure
+		 * returns an empty array. Multisite-safe: no option/cache changes.
+		 *
+		 * Note: the legacy fallback reads the headers via the `$GLOBALS`
+		 * array with an `isset` guard (never a bare global read), which keeps
+		 * the deprecation scanner clean while preserving the 8.2–8.4 path.
+		 *
+		 * Scope limitation (PHP 8.2–8.4 legacy path): the engine populates
+		 * the header store in the local scope of the caller that made the
+		 * HTTP-wrapper request, so this static helper only observes headers
+		 * for requests made in global scope. Callers inside a
+		 * function/method scope should pass their headers explicitly via
+		 * `$legacy_source` (best-effort only).
+		 *
+		 * When the new engine API exists its result is authoritative: a
+		 * non-array probe (null/false, i.e. no headers in this scope) is
+		 * returned as an empty array instead of consulting the legacy
+		 * store, which may hold stale headers from an earlier request
+		 * (notably in long-lived PHP-FPM workers).
+		 *
+		 * @since NEXT
+		 * @since NEXT `$legacy_source` parameter for the scope-blind legacy path.
+		 * @param array|null $legacy_source Optional explicit header lines for the
+		 *                                  legacy path (string-filtered).
+		 * @return string[] List of response header lines, or empty array when unavailable.
+		 */
+		public static function get_last_response_headers( ?array $legacy_source = null ): array {
+			$headers = array();
+
+			if ( function_exists( 'http_get_last_response_headers' ) ) {
+				try {
+					$probe = http_get_last_response_headers();
+					if ( is_array( $probe ) ) {
+						foreach ( array_values( $probe ) as $line ) {
+							if ( is_string( $line ) ) {
+								$headers[] = $line;
+							}
+						}
+					}
+					// Authoritative: a non-array probe means "no headers in
+					// this scope" — never fall through to the legacy store,
+					// which may hold stale headers from an earlier request.
+					return $headers;
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$legacy = $legacy_source;
+			if ( null === $legacy && isset( $GLOBALS['http_response_header'] ) && is_array( $GLOBALS['http_response_header'] ) ) {
+				$legacy = $GLOBALS['http_response_header'];
+			}
+
+			try {
+				if ( is_array( $legacy ) ) {
+					foreach ( array_values( $legacy ) as $line ) {
+						if ( is_string( $line ) ) {
+							$headers[] = $line;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+
+			return $headers;
+		}
+
+		/**
 		 * Read core's `styles_inline_size_limit` budget.
 		 *
 		 * Single source of truth shared by Cache and Critical_CSS so their
