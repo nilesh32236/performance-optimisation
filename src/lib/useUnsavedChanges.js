@@ -78,18 +78,23 @@ export const stableStringify = ( value ) => {
  * flag is set, which the App shell uses for tab-switch and beforeunload
  * guards.
  *
+ * Safe to render outside `UnsavedChangesContext.Provider`: a missing
+ * provider (or a value without `setIsDirty`) degrades to a no-op.
+ *
  * @since 2.0.0
+ * @since NEXT No longer throws outside the provider; falls back to a no-op.
  * @param {Object} settings Current form state.
  * @param {Object} baseline Baseline derived from props / defaults.
  */
 const useUnsavedChanges = ( settings, baseline ) => {
-	const ctx = useContext( UnsavedChangesContext );
-	if ( ! ctx || typeof ctx.setIsDirty !== 'function' ) {
-		throw new Error(
-			'useUnsavedChanges must be used within UnsavedChangesContext.Provider'
-		);
-	}
-	const { setIsDirty } = ctx;
+	// Safe outside UnsavedChangesContext.Provider (e.g. isolated Jest
+	// renders or future embeds): fall back to a no-op instead of throwing
+	// so consumers never need a provider wrapper just to mount.
+	const unsavedCtx = useContext( UnsavedChangesContext );
+	const setIsDirty = useMemo( () => {
+		const setter = unsavedCtx?.setIsDirty;
+		return typeof setter === 'function' ? setter : () => {};
+	}, [ unsavedCtx ] );
 	const ownedRef = useRef( false );
 
 	const baselineKey = useMemo(

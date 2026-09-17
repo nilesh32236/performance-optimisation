@@ -297,9 +297,14 @@ const App = () => {
 			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
 		);
 		const overlay = doc.querySelector( '.wppo-sidebar-overlay' );
-		const focusable = overlay
-			? [ overlay, ...focusableNodes ]
-			: [ ...focusableNodes ];
+		// The overlay is only a valid initial focus target when it is
+		// focusable (e.g. the <button> variant); a plain non-focusable div
+		// would make first.focus() silently no-op. tabIndex >= 0 covers
+		// natively focusable elements (button => 0) and tabindex=-1 opt-outs.
+		const focusable =
+			overlay && overlay.tabIndex >= 0
+				? [ overlay, ...focusableNodes ]
+				: [ ...focusableNodes ];
 		const first = focusable[ 0 ];
 		const last = focusable[ focusable.length - 1 ];
 

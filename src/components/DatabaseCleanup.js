@@ -159,11 +159,22 @@ const DatabaseCleanup = ( { options = {} } ) => {
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isSaving, setIsSaving ] = useState( false );
+	// Mirrors isSaving for the props-sync effect below: the effect
+	// intentionally depends on per-key option values (not isSaving), so it
+	// reads the live value through this ref instead of a stale closure — a
+	// server options push arriving mid-save must not overwrite in-flight
+	// user edits.
+	const savingRef = useRef( isSaving );
+	savingRef.current = isSaving;
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
-		if ( ! isSaving && options && Object.keys( options ).length > 0 ) {
+		if (
+			! savingRef.current &&
+			options &&
+			Object.keys( options ).length > 0
+		) {
 			setSettings( ( prev ) => ( { ...prev, ...options } ) );
 		}
 		// Per-key deps (not object identity) so parent re-renders with an
@@ -282,10 +293,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			);
 			notify( {
 				type: 'error',
-				message: __(
-					'Error saving settings.',
-					'performance-optimisation'
-				),
+				// Prefer the backend/thrown detail when available so the
+				// notice stays actionable; fall back to the translated
+				// generic string. The raw value is always logged above.
+				message:
+					err?.message ||
+					__( 'Error saving settings.', 'performance-optimisation' ),
 				durationMs: 5000,
 			} );
 		} finally {

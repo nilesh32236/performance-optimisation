@@ -3098,6 +3098,11 @@ const initVideoPlaceholders = () => {
 			el.setAttribute( 'aria-label', getVideoPlayLabel() );
 		}
 		el.addEventListener( 'keydown', ( event ) => {
+			// Holding Enter/Space fires repeated keydowns until keyup;
+			// ignore auto-repeats so loadVideo (iframe + network) runs once.
+			if ( event.repeat ) {
+				return;
+			}
 			if ( event.key === 'Enter' || event.key === ' ' ) {
 				event.preventDefault();
 				loadVideo();

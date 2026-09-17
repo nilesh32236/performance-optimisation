@@ -73,6 +73,12 @@ describe( 'useUnsavedChanges', () => {
 		expect( state.setIsDirty ).toHaveBeenLastCalledWith( true );
 	} );
 
+	it( 'does not throw outside the provider (no-op fallback)', () => {
+		expect( () =>
+			renderHook( () => useUnsavedChanges( { a: 2 }, { a: 1 } ) )
+		).not.toThrow();
+	} );
+
 	it( 'clears the flag on unmount', () => {
 		const { setIsDirty, unmount } = renderWithDirtyFlag(
 			{ a: 2 },
