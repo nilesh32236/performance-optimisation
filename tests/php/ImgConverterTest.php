@@ -170,6 +170,32 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Create a PNG of explicit dimensions on disk and return its absolute path.
+	 *
+	 * Solid-fill so the file stays small on disk while getimagesize()
+	 * reports the full dimensions (used for over-budget fixtures that must
+	 * exceed the 4M-pixel budget floor).
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $name   File name to create.
+	 * @param int    $width  Image width in pixels.
+	 * @param int    $height Image height in pixels.
+	 * @return string Absolute path to the created PNG.
+	 */
+	private function create_large_sample_png( string $name, int $width, int $height ): string {
+		$path = $this->uploads_dir . '/' . $name;
+
+		$image = imagecreatetruecolor( $width, $height );
+		$color = imagecolorallocate( $image, 120, 180, 240 );
+		imagefill( $image, 0, 0, $color );
+		imagepng( $image, $path );
+		Util::destroy_gd_image( $image );
+
+		return $path;
+	}
+
+	/**
 	 * Build an Img_Converter instance with the given overrides.
 	 *
 	 * @param array $overrides Options to merge over defaults.
@@ -1213,7 +1239,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * The get_max_source_pixels() budget honors the wppo_max_source_pixels
-	 * filter and returns a positive memory-derived value by default.
+	 * filter (clamped to the documented 4M–80M budget) and returns a
+	 * positive memory-derived value by default.
 	 *
 	 * @since 2.0.0
 	 */
@@ -1228,12 +1255,31 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook_name, $value ) {
 				if ( 'wppo_max_source_pixels' === $hook_name ) {
+					return 10000000;
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 10000000, $converter->get_max_source_pixels(), 'In-range filter value passes through' );
+	}
+
+	/**
+	 * Filter-override clamping for the pre-decode pixel budget (#1346):
+	 * below-floor and above-ceiling overrides clamp to the documented
+	 * 4M–80M budget instead of disabling the area limb of the gate.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_max_source_pixels_filter_clamps_to_budget(): void {
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_source_pixels' === $hook_name ) {
 					return 1234567;
 				}
 				return $value;
 			}
 		);
-		$this->assertSame( 1234567, $converter->get_max_source_pixels() );
+		$this->assertSame( 4000000, $this->make_converter()->get_max_source_pixels(), 'Below-floor filter value clamps to 4M' );
 	}
 
 	/**
@@ -1509,7 +1555,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 				'imagickMaxDimensionPx' => 100000,
 			)
 		);
-		$this->assertSame( 256, $clean['imagickMemoryLimitMB'] );
+		$this->assertSame( 2048, $clean['imagickMemoryLimitMB'] );
 		$this->assertSame( 20000, $clean['imagickMaxDimensionPx'] );
 
 		$neg = Util::sanitize_settings_recursively(
@@ -1520,6 +1566,15 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->assertSame( 256, $neg['imagickMemoryLimitMB'] );
 		$this->assertSame( 0, $neg['imagickMaxDimensionPx'] );
+
+		// Clamp semantics (matching the read-time clamp): small but
+		// positive values floor to 32 instead of falling back to 256.
+		$low = Util::sanitize_settings_recursively(
+			array(
+				'imagickMemoryLimitMB' => 1,
+			)
+		);
+		$this->assertSame( 32, $low['imagickMemoryLimitMB'] );
 
 		$ok = Util::sanitize_settings_recursively(
 			array(
@@ -1559,6 +1614,11 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * Over-budget sources skip conversion fail-open: the original is served
 	 * unoptimised and the queue entry is marked `skipped`, never fatal (#1035).
 	 *
+	 * Uses a genuinely over-budget (5MP > 4M floor) fixture: since the
+	 * `wppo_max_source_pixels` override clamps to the documented 4M–80M
+	 * budget (#1346), a tiny filter value can no longer force the skip path
+	 * for a thumbnail-sized image.
+	 *
 	 * @since 2.0.0
 	 */
 	public function test_convert_image_pixel_budget_skip_marks_skipped(): void {
@@ -1572,7 +1632,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 				return $value;
 			}
 		);
-		$file = $this->create_sample_png( 'pixel-budget.png' );
+		$file = $this->create_large_sample_png( 'pixel-budget.png', 2500, 2000 );
 		// Force the core-handles probe false so conversion reaches the
 		// pixel-budget guard instead of the WP 6.7+ core skip (same
 		// Patchwork pattern as the downscale test above).

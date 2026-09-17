@@ -395,14 +395,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @param string $dest_path    Filesystem path for the `.avif` output.
 		 * @param int    $quality      Encode quality (1-100).
 		 * @param int    $max_edge     Optional longest-edge cap in pixels (`0` disables).
+		 * @param int    $known_width  Optional known source width (header probe reuse, `0` re-probes).
+		 * @param int    $known_height Optional known source height (header probe reuse, `0` re-probes).
 		 * @return bool True on success, false on any failure.
 		 */
-		public function encode_avif_via_imagick( string $source_image, string $dest_path, int $quality, int $max_edge = 0 ): bool {
+		public function encode_avif_via_imagick( string $source_image, string $dest_path, int $quality, int $max_edge = 0, int $known_width = 0, int $known_height = 0 ): bool {
 			if ( '' === $source_image || '' === $dest_path ) {
 				return false;
 			}
 
 			if ( ! self::is_safe_write_path( $dest_path ) ) {
+				return false;
+			}
+
+			// Source containment: a future or third-party direct call must
+			// not make readImage() decode an arbitrary file (/dev/zero, a
+			// huge raw). Same allowlist + realpath gate as convert_image().
+			if ( ! self::is_path_in_allowlist( $source_image ) || ! self::is_path_confined_to_uploads( $source_image ) ) {
 				return false;
 			}
 
@@ -423,10 +432,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// Pre-read dimension cap: a hostile/oversized header must skip
 			// before readImage() transiently allocates the full bitmap.
 			// Fail-open returns false (caller falls back to WebP/original).
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
-			$probe = @getimagesize( $source_image );
-			if ( is_array( $probe ) && isset( $probe[0], $probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $probe[0], (int) $probe[1] ) ) {
-				return false;
+			// Callers that already probed headers (convert_image()) pass the
+			// known dims to avoid a second open()+header parse per file.
+			if ( $known_width > 0 && $known_height > 0 ) {
+				if ( $this->exceeds_imagick_dimension_cap( $known_width, $known_height ) ) {
+					return false;
+				}
+			} else {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
+				$probe = @getimagesize( $source_image );
+				if ( is_array( $probe ) && isset( $probe[0], $probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $probe[0], (int) $probe[1] ) ) {
+					return false;
+				}
 			}
 
 			try {
@@ -435,6 +452,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					$this->apply_imagick_memory_guard( $imagick );
 
 					$imagick->readImage( $source_image );
+					// Post-read recheck: getimagesize() reports first-frame /
+					// logical dims with PHP's parser while Imagick may decode
+					// different dims (TIFF/HEIC delegates PHP cannot parse,
+					// frame variance, coalesced GIF, EXIF mismatch), so an
+					// understated or unparseable header must not bypass the
+					// cap — the decoded bitmap still transiently allocated.
+					if ( method_exists( $imagick, 'getImageWidth' ) && method_exists( $imagick, 'getImageHeight' ) ) {
+						try {
+							$rw = (int) $imagick->getImageWidth();
+							$rh = (int) $imagick->getImageHeight();
+						} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep the decoded image when dims are unreadable.
+							$rw = 0;
+							$rh = 0;
+						}
+						if ( $rw > 0 && $rh > 0 && $this->exceeds_imagick_dimension_cap( $rw, $rh ) ) {
+							$imagick->clear();
+							return false;
+						}
+					}
 					if ( $max_edge > 0 ) {
 						if ( ! method_exists( $imagick, 'thumbnailImage' ) ) {
 							return false;
@@ -479,7 +515,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: callers fall back to WebP/original.
 			}
 
-			if ( self::is_safe_delete_path( $dest_path ) && file_exists( $dest_path ) && 0 === filesize( $dest_path ) && function_exists( 'wp_delete_file' ) ) {
+			// TOCTOU re-validation: refuse symlinks swapped in between the
+			// pre-write gate and the delete, and re-assert containment
+			// immediately before the destructive call.
+			clearstatcache( true, $dest_path );
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on unreadable files; false is the handled signal.
+			$dest_size = @filesize( $dest_path );
+			if ( false !== $dest_size && 0 === $dest_size && ! is_link( $dest_path ) && self::is_safe_delete_path( $dest_path ) && function_exists( 'wp_delete_file' ) && file_exists( $dest_path ) ) {
 				wp_delete_file( $dest_path );
 			}
 
@@ -608,7 +650,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			 */
 			$override = (int) apply_filters( 'wppo_max_source_pixels', 0 );
 			if ( $override > 0 ) {
-				return $override;
+				// Clamp the override to the documented 4M-80M budget so a
+				// huge filter return (e.g. PHP_INT_MAX) cannot disable the
+				// area limb of the Imagick pre-read gate.
+				return min( 80000000, max( 4000000, $override ) );
 			}
 
 			$limit = $this->get_php_memory_limit_bytes();
@@ -686,21 +731,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! defined( 'ABSPATH' ) || ! defined( 'WP_CONTENT_DIR' ) ) {
 				return false;
 			}
-			$abspath = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( ABSPATH ) : str_replace( '\\', '/', ABSPATH );
-			$content = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
-			$abspath = rtrim( $abspath, '/' ) . '/';
-			$content = rtrim( $content, '/' ) . '/';
-			$roots   = array( $abspath, $content );
-			// Canonicalize roots too: on hosts with a symlinked docroot
-			// (e.g. /var/www/html -> /data/www) a realpath-resolved source
-			// would otherwise fail against the lexical roots.
-			foreach ( array( ABSPATH, WP_CONTENT_DIR ) as $root ) {
-				$real_root = realpath( $root );
-				if ( false !== $real_root ) {
-					$norm_root = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $real_root ) : str_replace( '\\', '/', $real_root );
-					$roots[]   = rtrim( $norm_root, '/' ) . '/';
+			static $roots_cache = null;
+			if ( null === $roots_cache ) {
+				$abspath = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( ABSPATH ) : str_replace( '\\', '/', ABSPATH );
+				$content = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
+				$abspath = rtrim( $abspath, '/' ) . '/';
+				$content = rtrim( $content, '/' ) . '/';
+				$roots   = array( $abspath, $content );
+				// Canonicalize roots too: on hosts with a symlinked docroot
+				// (e.g. /var/www/html -> /data/www) a realpath-resolved source
+				// would otherwise fail against the lexical roots.
+				foreach ( array( ABSPATH, WP_CONTENT_DIR ) as $root ) {
+					// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- realpath() on a known constant; false is the handled signal.
+					$real_root = @realpath( $root );
+					if ( false !== $real_root ) {
+						$norm_root = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $real_root ) : str_replace( '\\', '/', $real_root );
+						$roots[]   = rtrim( $norm_root, '/' ) . '/';
+					}
 				}
+				$roots_cache = array_values( array_unique( $roots ) );
 			}
+			$roots     = $roots_cache;
 			$candidate = rtrim( $normalized, '/' );
 			foreach ( $roots as $root ) {
 				if ( 0 === strpos( $candidate . '/', $root ) ) {
@@ -708,6 +759,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 			}
 			return false;
+		}
+
+		/**
+		 * Memoized per-site uploads basedir with trailing slash.
+		 *
+		 * Shared by is_safe_delete_path() and is_realpath_confined() so each
+		 * image pays one wp_upload_dir() resolution per site per request
+		 * instead of 4-8 across the delete/write gates in a batch.
+		 *
+		 * @since NEXT
+		 *
+		 * @return string Normalized basedir with trailing slash, or '' when unavailable.
+		 */
+		private static function get_uploads_basedir(): string {
+			static $dirs = array();
+			$blog_id     = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( ! isset( $dirs[ $blog_id ] ) ) {
+				if ( function_exists( 'wp_upload_dir' ) ) {
+					try {
+						$dir  = wp_upload_dir();
+						$base = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
+						$base = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $base ) : str_replace( '\\', '/', $base );
+						// Only cache non-empty basedirs: a transient
+						// wp_upload_dir() failure must not poison the rest
+						// of the request; retry on the next call instead.
+						if ( '' !== $base ) {
+							$dirs[ $blog_id ] = rtrim( $base, '/' ) . '/';
+						} else {
+							return '';
+						}
+					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: empty basedir on probe failure.
+						return '';
+					}
+				}
+			}
+			return $dirs[ $blog_id ] ?? '';
 		}
 
 		/**
@@ -740,28 +827,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( 0 === strpos( $candidate, $wppo ) ) {
 				$lexical_ok = true;
 			}
-			if ( ! $lexical_ok && function_exists( 'wp_upload_dir' ) ) {
-				$blog_id            = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-				static $upload_dirs = array();
-				if ( ! isset( $upload_dirs[ $blog_id ] ) ) {
-					$dir  = wp_upload_dir();
-					$base = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
-					$base = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $base ) : str_replace( '\\', '/', $base );
-					// Only cache non-empty basedirs: a transient
-					// wp_upload_dir() failure must not poison the rest of
-					// the request; retry on the next call instead.
-					if ( '' !== $base ) {
-						$upload_dirs[ $blog_id ] = rtrim( $base, '/' ) . '/';
-					} else {
-						return false;
-					}
-				}
-				if ( '' !== $upload_dirs[ $blog_id ] && 0 === strpos( $candidate, $upload_dirs[ $blog_id ] ) ) {
-					$lexical_ok = true;
-				}
-				// Converted outputs rewritten under `wppo/` keep the uploads
-				// sub-path (e.g. `wppo/uploads/2024/01/a.webp`); the prefix
-				// check above already covers them.
+			if ( ! $lexical_ok && '' !== self::get_uploads_basedir() && 0 === strpos( $candidate, self::get_uploads_basedir() ) ) {
+				$lexical_ok = true;
+			}
+			// Converted outputs rewritten under `wppo/` keep the uploads
+			// sub-path (e.g. `wppo/uploads/2024/01/a.webp`); the prefix
+			// check above already covers them.
+			if ( function_exists( 'wp_upload_dir' ) && '' === self::get_uploads_basedir() && ! $lexical_ok ) {
+				return false;
 			}
 			if ( ! $lexical_ok ) {
 				return false;
@@ -777,27 +850,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Whether a delete/write target stays confined to uploads after symlink resolution.
 		 *
-		 * Resolves `realpath()` on the candidate when it exists (and on its
-		 * parent directory for not-yet-existing write targets) and requires
-		 * the canonical path to sit under the per-site uploads basedir or
-		 * `WP_CONTENT_DIR/wppo/`. Non-existent paths with an unresolvable
-		 * parent fall back to the lexical verdict (fail-open for pre-write
-		 * targets; the write itself still runs through is_safe_write_path()).
+		 * Resolves `realpath()` on the candidate when it exists, otherwise
+		 * walks up ancestors until a resolvable component is found (so a
+		 * deep not-yet-existing write target like
+		 * `wppo/uploads/a/b/c.webp` where `a` is a symlink outside cannot
+		 * pass on an unresolvable immediate parent) and requires the
+		 * canonical path to sit under the per-site uploads basedir or
+		 * `WP_CONTENT_DIR/wppo/`. Roots are canonicalized with `realpath()`
+		 * (mirroring is_path_in_allowlist()) so symlinked docroot/content
+		 * hosts keep working. Refuses when no ancestor resolves (fail-closed:
+		 * callers skip + serve the original, never delete out of scope).
 		 * Multisite-safe: per-site uploads basedir only; no cross-site paths.
 		 *
 		 * @since NEXT
 		 *
 		 * @param string $path Absolute filesystem path proposed for delete/write.
-		 * @return bool True when the resolved path is confined (or unresolvable pre-write).
+		 * @return bool True when the resolved path is confined.
 		 */
 		protected static function is_realpath_confined( string $path ): bool {
 			if ( '' === $path || false !== strpos( $path, "\0" ) ) {
 				return false;
 			}
 			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
-				// Without the content root there is nothing to resolve
-				// against; the lexical gate already confined the target.
-				return true;
+				return false;
 			}
 			$normalize = function ( string $p ): string {
 				$n = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $p ) : str_replace( '\\', '/', $p );
@@ -805,17 +880,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			};
 			$content   = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
 			$roots     = array( $normalize( rtrim( $content, '/' ) . '/wppo' ) );
-			if ( function_exists( 'wp_upload_dir' ) ) {
-				$dir  = wp_upload_dir();
-				$base = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
-				if ( '' !== $base ) {
-					$roots[] = $normalize( $base );
+			$basedir   = self::get_uploads_basedir();
+			if ( '' !== $basedir ) {
+				$roots[] = $basedir;
+			}
+			// Canonicalize roots: on symlinked docroot/content-dir hosts a
+			// legit uploads delete resolves outside the lexical root and
+			// must still be accepted (mirrors is_path_in_allowlist()).
+			foreach ( array( rtrim( $content, '/' ) . '/wppo' ) as $root ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- realpath() emits warnings on missing paths; false is the handled signal.
+				$rr = @realpath( $root );
+				if ( false !== $rr ) {
+					$roots[] = $normalize( (string) $rr );
 				}
 			}
-			$contains = function ( string $candidate ) use ( $roots, $normalize ): bool {
+			if ( '' !== $basedir ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- realpath() emits warnings on missing paths; false is the handled signal.
+				$rr = @realpath( rtrim( $basedir, '/' ) );
+				if ( false !== $rr ) {
+					$roots[] = $normalize( (string) $rr );
+				}
+			}
+			$roots             = array_values( array_unique( $roots ) );
+			$contains          = function ( string $candidate ) use ( $roots, $normalize ): bool {
 				$candidate = $normalize( $candidate );
 				foreach ( $roots as $root ) {
 					if ( 0 === strpos( $candidate, $root ) ) {
+						return true;
+					}
+				}
+				return false;
+			};
+			$is_parent_of_root = function ( string $candidate ) use ( $roots, $normalize ): bool {
+				$candidate = $normalize( $candidate );
+				foreach ( $roots as $root ) {
+					if ( 0 === strpos( $root, $candidate ) ) {
 						return true;
 					}
 				}
@@ -826,25 +925,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( false !== $resolved ) {
 				return $contains( (string) $resolved );
 			}
-			$parent = dirname( $path );
-			if ( '' !== $parent && '.' !== $parent ) {
+			// Walk up ancestors until a resolvable component is found: the
+			// immediate parent alone is not enough when it is itself
+			// missing under a symlinked ancestor.
+			$dir = dirname( $path );
+			while ( '' !== $dir && '.' !== $dir ) {
 				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- realpath() emits warnings on missing paths; false is the handled signal.
-				$resolved_parent = @realpath( $parent );
+				$resolved_parent = @realpath( $dir );
 				if ( false !== $resolved_parent ) {
-					return $contains( (string) $resolved_parent );
+					if ( $contains( (string) $resolved_parent ) ) {
+						return true;
+					}
+					// Pre-write under a not-yet-created tree (e.g. a fresh
+					// wppo/ install where only WP_CONTENT_DIR resolves):
+					// the resolvable ancestor is a parent of a root, and
+					// the lexical gate already confined the full target.
+					if ( $is_parent_of_root( (string) $resolved_parent ) ) {
+						return true;
+					}
+					return false;
 				}
+				$next = dirname( $dir );
+				if ( $next === $dir ) {
+					break;
+				}
+				$dir = $next;
 			}
-			return true;
+			return false;
 		}
 
 		/**
 		 * Whether an absolute path is confined to the uploads tree after symlink resolution.
 		 *
-		 * Public uploads-confinement probe for backup/delete/resolved paths:
-		 * requires the lexical uploads/wppo containment (same gate as
-		 * is_safe_delete_path()) AND, when the file exists, that its
-		 * `realpath()` canonical form is still inside the per-site uploads
-		 * basedir or `WP_CONTENT_DIR/wppo/`. Guarded for WP 6.2 compat:
+		 * Public uploads-confinement probe for backup/delete/resolved paths
+		 * and third-party Imagick callers: requires the lexical uploads/wppo
+		 * containment (same gate as is_safe_delete_path()) AND the
+		 * `realpath()` re-containment. Intentional public API (not dead
+		 * code): wired as the source gate for encode_avif_via_imagick() and
+		 * the over-budget Imagick decode path. Guarded for WP 6.2 compat:
 		 * returns false when `WP_CONTENT_DIR` is undefined or
 		 * `wp_upload_dir()` is unavailable. Fail-open direction: out-of-scope
 		 * paths return false (callers skip + serve the original, never delete).
@@ -1246,6 +1364,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$max     = 2048 * 1024 * 1024;
 			try {
 				$mb = $this->options['image_optimisation']['imagickMemoryLimitMB'] ?? 256;
+				// Coerce defensively before the filter so an array setting
+				// cannot reach listener arithmetic (matching the documented
+				// untrusted-input contract of the dimension path).
+				$mb_numeric = is_numeric( $mb ) ? (int) $mb : 256;
 				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_imagick_memory_limit_bytes' ) ) {
 					/**
 					 * Filter the Imagick memory cap in bytes.
@@ -1253,7 +1375,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					 * @since NEXT
 					 * @param int $bytes Cap in bytes.
 					 */
-					$filtered = apply_filters( 'wppo_imagick_memory_limit_bytes', (int) $mb * 1024 * 1024 );
+					$filtered = apply_filters( 'wppo_imagick_memory_limit_bytes', $mb_numeric * 1024 * 1024 );
 					if ( is_numeric( $filtered ) && (int) $filtered > 0 ) {
 						return min( $max, max( $min, (int) $filtered ) );
 					}
@@ -1401,7 +1523,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MAP, $memory );
 				}
 				if ( defined( 'Imagick::RESOURCETYPE_DISK' ) ) {
-					$imagick->setResourceLimit( \Imagick::RESOURCETYPE_DISK, $memory * 2 );
+					// Clamp DISK independently (float math avoids 32-bit
+					// overflow): an uncapped $memory*2 reaches ~4.3GB and
+					// invites /tmp exhaustion across concurrent workers,
+					// turning fail-fast skips into disk-thrashing decodes.
+					$disk = (int) min( (float) $memory * 2.0, (float) ( 2048 * 1024 * 1024 ) );
+					$imagick->setResourceLimit( \Imagick::RESOURCETYPE_DISK, $disk );
 				}
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: resource caps are best-effort hardening.
 			}
@@ -1431,11 +1558,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * @since NEXT
 		 *
-		 * @param string $source    Absolute filesystem path to the source image.
-		 * @param int    $safe_edge Memory-safe longest edge in pixels.
+		 * @param string $source       Absolute filesystem path to the source image.
+		 * @param int    $safe_edge    Memory-safe longest edge in pixels.
+		 * @param int    $known_width  Optional known source width (header probe reuse, `0` re-probes).
+		 * @param int    $known_height Optional known source height (header probe reuse, `0` re-probes).
 		 * @return resource|\GdImage|null Decoded GD image on success, null on any failure.
 		 */
-		protected function decode_overbudget_image_via_imagick( string $source, int $safe_edge ) {
+		protected function decode_overbudget_image_via_imagick( string $source, int $safe_edge, int $known_width = 0, int $known_height = 0 ) {
 			if ( '' === $source || $safe_edge <= 0 ) {
 				return null;
 			}
@@ -1445,17 +1574,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! function_exists( 'imagecreatefromstring' ) ) {
 				return null;
 			}
+			// Source containment (parity with encode_avif_via_imagick()):
+			// never decode an arbitrary path via a direct call.
+			if ( ! self::is_path_in_allowlist( $source ) || ! self::is_path_confined_to_uploads( $source ) ) {
+				return null;
+			}
 			if ( ! file_exists( $source ) || ! is_readable( $source ) ) {
 				return null;
 			}
 
 			// Pre-read dimension cap: refuse oversized headers before
 			// readImage() transiently allocates the full bitmap. Null
-			// keeps the legacy skip (never a full-size GD decode).
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
-			$probe = @getimagesize( $source );
-			if ( is_array( $probe ) && isset( $probe[0], $probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $probe[0], (int) $probe[1] ) ) {
-				return null;
+			// keeps the legacy skip (never a full-size GD decode). Known
+			// dims from convert_image() avoid a second header parse.
+			if ( $known_width > 0 && $known_height > 0 ) {
+				if ( $this->exceeds_imagick_dimension_cap( $known_width, $known_height ) ) {
+					return null;
+				}
+			} else {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
+				$probe = @getimagesize( $source );
+				if ( is_array( $probe ) && isset( $probe[0], $probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $probe[0], (int) $probe[1] ) ) {
+					return null;
+				}
 			}
 
 			$imagick = null;
@@ -1471,6 +1612,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					}
 				}
 				$imagick->readImage( $source );
+				// Post-read recheck (parity with the AVIF site): an
+				// unparseable or understated header must not bypass the
+				// cap after the bitmap transiently allocated.
+				if ( method_exists( $imagick, 'getImageWidth' ) && method_exists( $imagick, 'getImageHeight' ) ) {
+					try {
+						$rw = (int) $imagick->getImageWidth();
+						$rh = (int) $imagick->getImageHeight();
+					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep the decoded image when dims are unreadable.
+						$rw = 0;
+						$rh = 0;
+					}
+					if ( $rw > 0 && $rh > 0 && $this->exceeds_imagick_dimension_cap( $rw, $rh ) ) {
+						return null;
+					}
+				}
 				if ( ! method_exists( $imagick, 'thumbnailImage' ) ) {
 					return null;
 				}
@@ -1656,6 +1812,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			if ( ! self::is_safe_delete_path( $sibling_path ) ) {
+				return false;
+			}
+
+			// TOCTOU re-validation immediately before the destructive call:
+			// refuse a symlink swapped in during the check-then-use window
+			// and re-assert containment after clearing the stat cache.
+			clearstatcache( true, $sibling_path );
+			if ( is_link( $sibling_path ) || ! self::is_safe_delete_path( $sibling_path ) ) {
 				return false;
 			}
 
@@ -1972,7 +2136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						// a full-size GD decode that would risk an
 						// uncatchable allowed-memory fatal.
 						if ( $memory_safe_edge > 0 ) {
-							$lowmem = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge );
+							$lowmem = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge, (int) $image_info[0], (int) $image_info[1] );
 							if ( null !== $lowmem && ( is_resource( $lowmem ) || $lowmem instanceof \GdImage ) ) {
 								$image = $lowmem;
 								break;
@@ -1994,7 +2158,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						// low-memory failure keeps the legacy skip, never a
 						// full-size GD decode.
 						if ( $memory_safe_edge > 0 ) {
-							$lowmem = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge );
+							$lowmem = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge, (int) $image_info[0], (int) $image_info[1] );
 							if ( null !== $lowmem && ( is_resource( $lowmem ) || $lowmem instanceof \GdImage ) ) {
 								$image = $this->convert_palette_to_truecolor( $lowmem );
 								imagealphablending( $image, true ); // For transparency.
@@ -2051,7 +2215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 									// Low-memory failure keeps the legacy skip,
 									// never a full-size GD decode.
 									if ( $memory_safe_edge > 0 ) {
-										$lowmem_webp = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge );
+										$lowmem_webp = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge, (int) $image_info[0], (int) $image_info[1] );
 										if ( null !== $lowmem_webp && ( is_resource( $lowmem_webp ) || $lowmem_webp instanceof \GdImage ) ) {
 											$image = $lowmem_webp;
 										} else {
@@ -2100,7 +2264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 									if ( function_exists( 'imageavif' ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 										$webp_source_success = true;
 										$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
-									} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge ) ) {
+									} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge, (int) $image_info[0], (int) $image_info[1] ) ) {
 										// Imagick-only AVIF host: GD decoded the WebP
 										// source but cannot encode AVIF, so encode
 										// from the source file via Imagick instead.
@@ -2201,12 +2365,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// headers before allocating Imagick so oversized
 							// sources skip without a needless object (parity
 							// with the AVIF/overbudget sites). Skip + mark
-							// failed, serve original.
-							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
-							$gif_probe = @getimagesize( $source_image );
-							if ( is_array( $gif_probe ) && isset( $gif_probe[0], $gif_probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $gif_probe[0], (int) $gif_probe[1] ) ) {
-								$this->update_conversion_status( $source_image, 'failed', $format );
-								return false;
+							// failed, serve original. Reuses the convert_image()
+							// header probe ($image_info) to avoid a second
+							// open()+header parse per GIF.
+							$gif_kw = isset( $image_info[0] ) ? (int) $image_info[0] : 0;
+							$gif_kh = isset( $image_info[1] ) ? (int) $image_info[1] : 0;
+							if ( $gif_kw > 0 && $gif_kh > 0 ) {
+								if ( $this->exceeds_imagick_dimension_cap( $gif_kw, $gif_kh ) ) {
+									$this->update_conversion_status( $source_image, 'failed', $format );
+									return false;
+								}
+							} else {
+								// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
+								$gif_probe = @getimagesize( $source_image );
+								if ( is_array( $gif_probe ) && isset( $gif_probe[0], $gif_probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $gif_probe[0], (int) $gif_probe[1] ) ) {
+									$this->update_conversion_status( $source_image, 'failed', $format );
+									return false;
+								}
 							}
 							$imagick = new \Imagick();
 							// Bound decoded memory + area to the pre-decode pixel
@@ -2215,6 +2390,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// setResourceLimit; the read below still runs fail-open.
 							$this->apply_imagick_memory_guard( $imagick );
 							$imagick->readImage( $source_image );
+							// Post-read recheck: frame variance / coalesced
+							// dims may exceed the header probe, and an
+							// unparseable header skips the pre-read gate
+							// entirely — refuse the decoded bitmap on breach.
+							try {
+								$rr_w = method_exists( $imagick, 'getImageWidth' ) ? (int) $imagick->getImageWidth() : 0;
+								$rr_h = method_exists( $imagick, 'getImageHeight' ) ? (int) $imagick->getImageHeight() : 0;
+							} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep the decoded image when dims are unreadable.
+								$rr_w = 0;
+								$rr_h = 0;
+							}
+							if ( $rr_w > 0 && $rr_h > 0 && $this->exceeds_imagick_dimension_cap( $rr_w, $rr_h ) ) {
+								$imagick->clear();
+								$this->update_conversion_status( $source_image, 'failed', $format );
+								return false;
+							}
 
 							// Longest-edge cap for the GIF-via-Imagick path
 							// (issue #985 follow-up): shrink coalesced frames
@@ -2309,7 +2500,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// target is inside the uploads/wppo allowlist, so a
 							// traversal or passthrough path can never delete
 							// outside it. Fail-open keeps the file intact.
-							if ( self::is_safe_delete_path( $webp_path ) && function_exists( 'wp_delete_file' ) ) {
+							// Re-validated after clearstatcache() with a
+							// symlink refusal to narrow the check-then-use
+							// race window.
+							clearstatcache( true, $webp_path );
+							if ( ! is_link( $webp_path ) && self::is_safe_delete_path( $webp_path ) && function_exists( 'wp_delete_file' ) ) {
 								wp_delete_file( $webp_path );
 							}
 							return false;
@@ -2360,7 +2555,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$avif_done = false;
 						if ( $avif_encoder && function_exists( 'imageavif' ) && Util::prepare_cache_dir( dirname( $avif_path ) ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 							$avif_done = true;
-						} elseif ( $avif_encoder && ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge ) ) {
+						} elseif ( $avif_encoder && ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge, (int) $image_info[0], (int) $image_info[1] ) ) {
 							// Imagick-only AVIF host: GD has no imageavif(),
 							// so encode from the source file via Imagick.
 							$avif_done = true;

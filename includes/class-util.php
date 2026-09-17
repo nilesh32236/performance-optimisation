@@ -6034,16 +6034,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 
 				// Imagick memory cap (issue #1346) — int MB clamped to
-				// 32–2048. Unrecognized values fail open to 256 so the OOM
-				// guard stays bounded; a huge stored value can never be
-				// persisted. Pinned before the generic is_numeric branch.
+				// 32–2048. Values below 1 (missing/unrecognized) fail open to
+				// 256 so the OOM guard stays bounded; in-range values clamp to
+				// the 32–2048 window (matching the read-time clamp in
+				// get_imagick_memory_limit_bytes()) so a huge stored value can
+				// never be persisted. Pinned before the generic is_numeric branch.
 				if ( 'imagickMemoryLimitMB' === $safe_key ) {
 					if ( is_array( $value ) ) {
 						$sanitized[ $safe_key ] = 256;
 						continue;
 					}
-					$limit                  = is_numeric( $value ) ? (int) $value : 256;
-					$sanitized[ $safe_key ] = ( $limit >= 32 && $limit <= 2048 ) ? $limit : 256;
+					$limit = is_numeric( $value ) ? (int) $value : 256;
+					if ( $limit < 1 ) {
+						$sanitized[ $safe_key ] = 256;
+						continue;
+					}
+					$sanitized[ $safe_key ] = min( 2048, max( 32, $limit ) );
 					continue;
 				}
 

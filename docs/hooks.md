@@ -1726,7 +1726,7 @@ add_filter( 'wppo_max_longest_edge_px', function () {
 ---
 
 ### `wppo_imagick_memory_limit_bytes`
-Filters the Imagick memory cap in bytes applied via `setResourceLimit()` (MEMORY/MAP, plus DISK at 2×) before every Imagick decode (AVIF fallback, over-budget stills, GIF-to-WebP). @since NEXT.
+Filters the Imagick memory cap in bytes applied via `setResourceLimit()` (MEMORY/MAP, plus DISK capped independently at 2GB) before every Imagick decode (AVIF fallback, over-budget stills, GIF-to-WebP). @since NEXT.
 
 Untrusted input is coerced fail-open: non-numeric/non-positive filter returns fall back to the 256MB default, and resolved values clamp to 32–2048 MB at read time (matching the pinned `imagickMemoryLimitMB` sanitizer) so a huge value cannot silently disable the OOM guard.
 
@@ -1757,6 +1757,27 @@ Filters the per-side Imagick dimension cap in pixels gating every `readImage()` 
 add_filter( 'wppo_imagick_max_dimension_px', function() {
     return 6000;
 } );
+```
+
+---
+
+### `wppo_memory_safe_edge_px`
+Filters the memory-safe longest edge in pixels computed for an over-budget source before a downscaled conversion (#1236). Applied to the computed safe edge after the longest-edge cap reconciliation; return a smaller value to force a stricter downscale. @since NEXT.
+
+**Parameters:**
+- `$safe` *(int)* — Computed safe longest edge in pixels (floored at 256).
+- `$width` *(int)* — Source width in pixels.
+- `$height` *(int)* — Source height in pixels.
+- `$channels` *(int)* — Channel count used for the estimate.
+
+Return `0` (or a value at/above the source longest edge) to disable the fallback — the caller then keeps the legacy skip path instead of decoding. Non-scalar filter returns are ignored and the computed edge is kept.
+
+**Example:**
+
+```php
+add_filter( 'wppo_memory_safe_edge_px', function( $safe, $width, $height ) {
+    return min( $safe, 1600 ); // Never decode wider than 1600px on this host.
+}, 10, 3 );
 ```
 
 ---
