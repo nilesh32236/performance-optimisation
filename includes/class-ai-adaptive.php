@@ -2015,6 +2015,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( ! function_exists( 'get_option' ) ) {
 					return 0;
 				}
+				// WordPress retains a stale page_on_front value after
+				// switching back to latest-posts, so gate on show_on_front
+				// to avoid queueing a regen against a page that is no
+				// longer the front page (fail-open: return 0).
+				if ( 'page' !== get_option( 'show_on_front' ) ) {
+					return 0;
+				}
 				$front_id = (int) get_option( 'page_on_front' );
 				return $front_id > 0 ? $front_id : 0;
 			} catch ( \Throwable $e ) {
@@ -2494,6 +2501,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Always returns suggestion-shaped arrays but the caller should gate
 		 * display on is_enabled() (guard: never auto-apply).
+		 *
+		 * Read-path queue note (issue #1407): when a field-LCP regression
+		 * fires, rendering the LCP suggestion bridges to
+		 * maybe_queue_css_refresh(), which may enqueue at most one
+		 * `wppo_used_css_generate` job per URL per 7-day cooldown window
+		 * (plus one cooldown transient and one bounded snapshot-option
+		 * write, only on an actual queue). The bridge runs only when the
+		 * `ai_adaptive.css_refresh_on_lcp_regression` opt-in is on
+		 * (default off/suggest-only), only for admin-capability callers of
+		 * the `ai_suggestions` GET endpoint, and is fail-open (any failure
+		 * degrades to a plain suggestion-only card).
 		 *
 		 * @return array[]
 		 * @since 2.0.0
