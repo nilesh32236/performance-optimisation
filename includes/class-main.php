@@ -6563,8 +6563,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				// Builder plus commerce are forced ON at every level.
-				if ( ! empty( $toggles['delayJSBuilderPreset'] ) || in_array( $level, array( 'safe', 'balanced', 'aggressive' ), true ) ) {
+				// Builder plus commerce are forced ON at every level (see
+				// get_delay_js_preset_level_settings(), which re-forces both
+				// toggles after the filter). The toggle reads below document
+				// that mapping; they are always true by design, never dead.
+				if ( ! empty( $toggles['delayJSBuilderPreset'] ) ) {
 					try {
 						$chunks[] = self::get_delay_js_builder_exclusions();
 						$chunks[] = self::get_delay_js_slider_exclusions();
@@ -6572,7 +6575,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						unset( $e );
 					}
 				}
-				if ( ! empty( $toggles['delayJSCommercePreset'] ) || in_array( $level, array( 'safe', 'balanced', 'aggressive' ), true ) ) {
+				if ( ! empty( $toggles['delayJSCommercePreset'] ) ) {
 					try {
 						$chunks[] = self::get_delay_js_commerce_exclusions();
 					} catch ( \Throwable $e ) {
