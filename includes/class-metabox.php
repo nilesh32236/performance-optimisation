@@ -189,7 +189,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 						</p>
 					</div>
 				<?php endif; ?>
-				<?php if ( ! empty( $disabled_scripts ) || ! empty( $disabled_styles ) ) : ?>
+				<?php if ( ! empty( $disabled_scripts ) || ! empty( $disabled_styles ) || ! empty( $delay_strategies ) || ! empty( $delay_priorities ) ) : ?>
 					<p>
 						<label for="wppo_asset_manager_revert">
 							<input
