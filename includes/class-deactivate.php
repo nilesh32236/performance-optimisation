@@ -83,7 +83,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			// Size-guarded like Object_Cache::is_own_dropin() so a large foreign
 			// file is never read fully into memory during deactivation.
 			$object_cache_file = wp_normalize_path( WP_CONTENT_DIR . '/object-cache.php' );
-			if ( $wp_filesystem && $wp_filesystem->exists( $object_cache_file ) && is_readable( $object_cache_file ) ) {
+			// Audit #1362: $wp_filesystem->exists() suffices; raw is_readable()
+			// is redundant here (and tripped the sniff without justification).
+			if ( $wp_filesystem && $wp_filesystem->exists( $object_cache_file ) ) {
 				$dropin_size = filesize( $object_cache_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
 				if ( false !== $dropin_size && $dropin_size < 1048576 ) {
 					$content = $wp_filesystem->get_contents( $object_cache_file );

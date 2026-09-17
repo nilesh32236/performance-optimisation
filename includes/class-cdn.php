@@ -324,7 +324,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 						continue;
 					}
 				} elseif ( 0 !== strpos( $url, $site_url ) ) {
-						continue;
+					continue;
 				}
 				// ori_dir guard via wildcard2regex (precomputed parts when available).
 				$ori_dir = $m['ori_dir'] ?? '';

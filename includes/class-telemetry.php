@@ -161,7 +161,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				$eager_images = array_filter( $resources['images'], fn( $img ) => false === $img['lazy'] );
 
 				$result = array(
-					'page_url'                  => esc_url( $url ),
+					// Audit #1362: raw for storage — esc_url() display-escaping
+					// would pollute stored data served via REST JSON.
+					'page_url'                  => esc_url_raw( $url ),
 					'load_time'                 => $load_time,
 					'ttfb'                      => $timings['ttfb'] ?? 0,
 					'server_wait_time'          => $timings['server_wait_time'] ?? 0,
@@ -543,7 +545,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 						/* translators: 1: HTTP status code, 2: URL */
 						__( 'HTTP %1$d returned for %2$s', 'performance-optimisation' ),
 						$response_code,
-						esc_url( $current_url )
+						esc_url_raw( $current_url )
 					)
 				);
 			}

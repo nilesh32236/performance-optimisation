@@ -207,6 +207,21 @@ add_filter( 'wppo_object_cache_probe_interval', function() {
 
 ---
 
+### `wppo_nginx_probe_clear_sites`
+Bounds how many sites the nginx config-exposure probe-clear fans out to on multisite (audit #1338 review). Sibling verdicts self-expire in 1–2h by design, so a smaller sweep only delays freshness, never correctness. @since NEXT.
+
+**Parameters:**
+- `$limit` *(int)* — Maximum site IDs to sweep. Default `500`, minimum `1`.
+
+**Example:**
+```php
+add_filter( 'wppo_nginx_probe_clear_sites', function() {
+    return 50; // Sweep at most 50 sites per settings save.
+} );
+```
+
+---
+
 ## 🎛️ Filter Hooks
 
 ### `wppo_woo_cacheable`

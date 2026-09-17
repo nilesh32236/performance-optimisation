@@ -2650,7 +2650,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $response;
 			}
 			$params = $request->get_params();
-			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
+			$url    = ( isset( $params['url'] ) && is_string( $params['url'] ) ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' ); // Audit #1362: is_string guard — array input fatals esc_url_raw on PHP 8.
 
 			if ( empty( $url ) ) {
 				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );
@@ -2715,7 +2715,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $response;
 			}
 			$params   = $request->get_params();
-			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
+			$url      = ( isset( $params['url'] ) && is_string( $params['url'] ) ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' ); // Audit #1362: is_string guard — array input fatals esc_url_raw on PHP 8.
 			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
 
 			if ( empty( $url ) ) {
@@ -2784,7 +2784,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_pagespeed_results( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
-			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
+			$url    = ( isset( $params['url'] ) && is_string( $params['url'] ) ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' ); // Audit #1362: is_string guard — array input fatals esc_url_raw on PHP 8.
 			if ( '' !== $url && ! $this->is_same_site_url( $url ) ) {
 				return $this->send_response( null, false, 400, __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
 			}
@@ -2842,7 +2842,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_web_vitals_trends( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
-			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
+			$url    = ( isset( $params['url'] ) && is_string( $params['url'] ) ) ? esc_url_raw( $params['url'] ) : '';
 			if ( '' !== $url && ! $this->is_same_site_url( $url ) ) {
 				return $this->send_response( null, false, 400, __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
 			}
@@ -2891,7 +2891,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_suggestions( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
-			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
+			$url    = ( isset( $params['url'] ) && is_string( $params['url'] ) ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' ); // Audit #1362: is_string guard — array input fatals esc_url_raw on PHP 8.
 			if ( '' !== $url && ! $this->is_same_site_url( $url ) ) {
 				return $this->send_response( null, false, 400, __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
 			}

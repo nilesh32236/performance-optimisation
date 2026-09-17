@@ -28,22 +28,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 	class Cron {
 
 		/**
-		 * Register WordPress actions and filters used to schedule and run the plugin's cron jobs.
-		 *
-		 * Hooks registered:
-		 * - init → schedule_cron_jobs
-		 * - wppo_page_cron_hook, wppo_page_cron_batch → wppo_page_cron_callback
-		 * - wppo_img_conversion → img_convert_cron
-		 * - cron_schedules (filter) → add_custom_cron_interval
-		 * - wppo_generate_static_page → process_page (priority 10, 1 arg)
-		 * - wppo_generate_static_url → process_url (priority 10, 1 arg)
-		 * - wppo_preload_url_batch → preload_url_batch (priority 10, 1 arg)
-		 * - wppo_database_cleanup_cron → database_cleanup_cron
-		 *
-		 * @since 1.0.0
-		 */
-
-		/**
 		 * Option name storing the resumable sitemap preload queue.
 		 *
 		 * Shape: `array{queued: string[], done: int, failed: string[], total: int, status: string, updated_at: int}`.
@@ -390,7 +374,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		);
 
 		/**
-		 * Constructor.
+		 * Constructor: registers the actions and filters used to schedule
+		 * and run the plugin's cron jobs (audit #1362: hooks docblock moved
+		 * here from the constants block so IDEs attach it correctly).
+		 *
+		 * Hooks registered:
+		 * - init → schedule_cron_jobs
+		 * - wppo_page_cron_hook, wppo_page_cron_batch → wppo_page_cron_callback
+		 * - wppo_img_conversion → img_convert_cron
+		 * - cron_schedules (filter) → add_custom_cron_interval
+		 * - wppo_generate_static_page → process_page (priority 10, 1 arg)
+		 * - wppo_generate_static_url → process_url (priority 10, 1 arg)
+		 * - wppo_preload_url_batch → preload_url_batch (priority 10, 1 arg)
+		 * - wppo_database_cleanup_cron → database_cleanup_cron
 		 *
 		 * @since 1.0.0
 		 */

@@ -219,7 +219,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			$swr    = isset( $config['swr'] ) ? (int) $config['swr'] : 86400;
 
 			$content = self::read_capped_template( 'cloudflare-worker.js' );
-			if ( false === $content || '' === $content ) {
+			// Audit #1362: read_capped_template() returns string only.
+			if ( '' === $content ) {
 				// Fallback inline template with SWR semantics.
 				$content = "export default {\n  async fetch(request, env, ctx) {\n    const cache = caches.default;\n    let response = await cache.match(request);\n    if (response) {\n      ctx.waitUntil(fetch(request).then(r=>{ if(r.ok){ const c=r.clone(); c.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}'); cache.put(request,c);} }).catch(()=>{}));\n      response.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n      response.headers.set('X-Edge-Cache','HIT');\n      return response;\n    }\n    const originRes = await fetch(request);\n    if (originRes.ok) {\n      const res = new Response(originRes.body, originRes);\n      res.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n      res.headers.set('X-Edge-Cache','MISS');\n      ctx.waitUntil(cache.put(request, res.clone()).catch(()=>{}));\n      return res;\n    }\n    return originRes;\n  }\n}\n";
 			}
@@ -298,7 +299,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 
 			// Try template file if present, else inline fallback.
 			$content = self::read_capped_template( 'bunny-edge.js' );
-			if ( false === $content || '' === $content ) {
+			// Audit #1362: read_capped_template() returns string only.
+			if ( '' === $content ) {
 				$content = "// Bunny Edge — stale-while-revalidate for WPPO cache semantics\n// Origin: {{ORIGIN_URL}} TTL={{CACHE_TTL}} SWR={{SWR}}\nasync function handleRequest(event){\n  const request=event.request;\n  const cache=caches.default;\n  let response=await cache.match(request);\n  if(response){\n    event.waitUntil(fetch(request).then(r=>{ if(r.ok){ const c=r.clone(); c.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}'); cache.put(request,c);} }).catch(()=>{}));\n    response.headers.set('X-Edge-Cache','HIT');\n    return response;\n  }\n  const originRes=await fetch(request);\n  if(originRes.ok){\n    const res=new Response(originRes.body, originRes);\n    res.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n    res.headers.set('X-Edge-Cache','MISS');\n    event.waitUntil(cache.put(request,res.clone()).catch(()=>{}));\n    return res;\n  }\n  return originRes;\n}\naddEventListener('fetch',e=>e.respondWith(handleRequest(e)));\n";
 			}
 

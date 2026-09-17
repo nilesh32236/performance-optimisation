@@ -787,18 +787,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		}
 
 		/**
-		 * Validate a caller-supplied URL as same-site, falling back to home.
-		 *
-		 * Mirrors Rest::is_same_site_url() (audit #1357): wp_http_validate_url()
-		 * plus http(s) scheme plus home-host comparison, so ability consumers
-		 * (including show_in_rest) cannot trigger off-site fetches/scans.
-		 *
-		 * @since NEXT
-		 * @param string $url      Caller-supplied URL (already esc_url_raw'd).
-		 * @param string $fallback Home URL fallback on mismatch.
-		 * @return string Same-site URL or the fallback.
-		 */
-		/**
 		 * Resolve the caller URL input: empty/missing falls back to home,
 		 * a provided URL must be same-site (audit #1357 review).
 		 *
