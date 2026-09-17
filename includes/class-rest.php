@@ -2650,7 +2650,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $response;
 			}
 			$params = $request->get_params();
-			$url    = isset( $params['url'] ) && is_string( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
+			if ( isset( $params['url'] ) && ! is_string( $params['url'] ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );
+			}
+			$url = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
 
 			if ( empty( $url ) ) {
 				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );

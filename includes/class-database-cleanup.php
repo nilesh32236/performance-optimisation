@@ -321,7 +321,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * @since 1.3.0
 		 *
-		 * @param int $max_age_days Maximum age in days; revisions older than now - $max_age_days will be eligible for deletion.
+		 * @param int $max_age_days Maximum age in days, clamped to 1-365; revisions older than now - $max_age_days will be eligible for deletion.
 		 * @param int $keep_latest  Number of most recent revisions to retain per parent post.
 		 * @return int|false Number of rows deleted, or `false` on database error.
 		 */
