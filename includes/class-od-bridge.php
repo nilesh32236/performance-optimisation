@@ -894,11 +894,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * @return string Srcset value or empty string.
 		 */
 		private static function extract_srcset_from_element( $element ): string {
-			$val = self::extract_element_attr( $element, 'srcset' );
-			if ( '' === $val ) {
-				$val = self::extract_element_attr( $element, 'srcSet' );
-			}
-			return $val;
+			return self::extract_element_attr( $element, 'srcset' );
 		}
 
 		/**
@@ -1125,7 +1121,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * Extract an image URL from an OD element.
 		 *
 		 * Handles object methods get_url(), get_src(), get_xpath() with
-		 * attribute extraction, and array keys src/url/xpath.
+		 * attribute extraction, and array keys src/url/xpath. Also reads
+		 * the poster/background keys the type extractor relies on so
+		 * video-poster and CSS-background elements carrying only those
+		 * keys resolve instead of dropping to ''.
 		 *
 		 * @since 2.0.0
 		 * @param mixed $element Element object or array.
@@ -1156,9 +1155,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 					if ( method_exists( $element, $method ) ) {
 						try {
 							if ( 'getAttribute' === $method || 'get_attribute' === $method ) {
-								$val = $element->$method( 'src' );
-								if ( is_string( $val ) && '' !== $val ) {
-									return $val;
+								// Probe the same keys the type extractor relies on
+								// so poster/background-only elements resolve
+								// instead of dropping to ''.
+								foreach ( array( 'src', 'poster', 'background', 'backgroundImage', 'background-image' ) as $attr ) {
+									$val = $element->$method( $attr );
+									if ( is_string( $val ) && '' !== $val ) {
+										return $val;
+									}
 								}
 								continue;
 							}
@@ -1173,7 +1177,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				}
 
 				// Try properties.
-				foreach ( array( 'url', 'src', 'xpath', 'nodePath' ) as $prop ) {
+				foreach ( array( 'url', 'src', 'poster', 'background', 'backgroundImage', 'xpath', 'nodePath' ) as $prop ) {
 					if ( isset( $element->$prop ) && is_string( $element->$prop ) && '' !== $element->$prop ) {
 						$val = $element->$prop;
 						// If xpath, try to extract URL from xpath-like string (may contain src).
@@ -1186,7 +1190,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 
 				// Try array access.
 				if ( $element instanceof \ArrayAccess ) {
-					foreach ( array( 'src', 'url', 'image_url', 'lcp_url' ) as $key ) {
+					foreach ( array( 'src', 'url', 'image_url', 'lcp_url', 'poster', 'background', 'backgroundImage', 'background-image' ) as $key ) {
 						if ( isset( $element[ $key ] ) && is_string( $element[ $key ] ) && '' !== $element[ $key ] ) {
 							return $element[ $key ];
 						}
@@ -1210,14 +1214,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 			}
 
 			if ( is_array( $element ) ) {
-				foreach ( array( 'src', 'url', 'image_url', 'lcp_url', 'imageUrl', 'lcpUrl' ) as $key ) {
+				foreach ( array( 'src', 'url', 'image_url', 'lcp_url', 'imageUrl', 'lcpUrl', 'poster', 'background', 'backgroundImage', 'background-image' ) as $key ) {
 					if ( isset( $element[ $key ] ) && is_string( $element[ $key ] ) && '' !== $element[ $key ] ) {
 						return $element[ $key ];
 					}
 				}
 				// Nested attributes array.
 				if ( isset( $element['attributes'] ) && is_array( $element['attributes'] ) ) {
-					foreach ( array( 'src', 'url' ) as $key ) {
+					foreach ( array( 'src', 'url', 'poster', 'background', 'backgroundImage', 'background-image' ) as $key ) {
 						if ( isset( $element['attributes'][ $key ] ) && is_string( $element['attributes'][ $key ] ) && '' !== $element['attributes'][ $key ] ) {
 							return $element['attributes'][ $key ];
 						}

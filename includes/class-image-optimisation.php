@@ -4156,6 +4156,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * applicable. Multisite-safe: per-site metrics only (current-URL
 		 * context, `Util::transient_key()` blog-aware keys downstream).
 		 *
+		 * Standalone single-emission entry point for direct buffer/`wp_head`
+		 * callers needing a self-contained responsive preload (public for
+		 * testability, not part of the external plugin API): the existing
+		 * `wp_head` (`get_auto_lcp_preload_data()`) and buffer companions
+		 * (`maybe_preload_hero_image()`, `maybe_inject_css_hero_preload()`)
+		 * share the same resolver via `get_breakpoint_srcset_for_url()` so
+		 * their toggles/gates stay unchanged, while direct callers should
+		 * prefer this emitter instead of reimplementing the OD → RUM →
+		 * single-high flow.
+		 *
 		 * @since NEXT
 		 * @param string|null $buffer Optional HTML buffer for responsive fallback scans.
 		 * @return string The preload `<link>` tag, or empty string when skipped.
@@ -4492,10 +4502,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Whether the response already carries a fetchpriority-high hint.
 		 *
-		 * Single-high guard (issue #1429): true when the per-response flag
-		 * is set, when any preload slot was already claimed this request,
-		 * or when the buffer already contains `fetchpriority="high"`.
-		 * Fail-open to false.
+		 * Single-high guard (issue #1429): true when the responsive
+		 * per-response flag is set or when the buffer already contains an
+		 * exact `fetchpriority="high"` hint. Slot-claim enforcement
+		 * (exact + any-media `has_emitted_preload()` /
+		 * `is_hero_preload_claimed()` checks plus buffer URL matching)
+		 * lives in `claim_hero_preload_slot()`, not here. Fail-open to
+		 * false.
 		 *
 		 * @since NEXT
 		 * @param string|null $buffer Optional HTML buffer to inspect.
@@ -4507,17 +4520,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					return true;
 				}
 				if ( is_string( $buffer ) && '' !== $buffer && false !== stripos( $buffer, 'fetchpriority' ) ) {
-					if ( 1 === preg_match( '/fetchpriority\s*=\s*["\']?high["\']?/i', $buffer ) ) {
+					if ( 1 === preg_match( '/fetchpriority\s*=\s*["\']?high(?=["\'\s>\/]|$)/i', $buffer ) ) {
 						return true;
-					}
-				}
-				if ( function_exists( 'version_compare' ) && '' !== ( $GLOBALS['wp_version'] ?? '' ) ) {
-					try {
-						if ( ! version_compare( (string) $GLOBALS['wp_version'], '6.2', '>=' ) && ! $this->is_html_api_available() ) {
-							return false;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
 					}
 				}
 			} catch ( \Throwable $e ) {
