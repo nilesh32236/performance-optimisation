@@ -1302,7 +1302,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						__( 'Used-CSS purging skipped: WP_HTML_Tag_Processor is unavailable (requires WordPress 6.2+). Serving unprocessed CSS instead.', 'performance-optimisation' )
 					);
 				}
-				return $combined_css;
+				// Sanitize even the unpurged fallback (issue #1347): raw
+				// source stylesheets are untrusted ingest and may carry
+				// script-capable constructs.
+				return Util::sanitize_css_for_storage( $combined_css );
 			}
 
 			$used_selectors = $this->extract_selectors( $html );
@@ -1316,10 +1319,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// large input) fails back to the full stylesheet, never fatal.
 			if ( $this->is_regression_guard_tripped( $combined_css, $purged ) ) {
 				$this->log_used_css_fallback( 'regression_guard', array_keys( $css_assets ) );
-				return $combined_css;
+				return Util::sanitize_css_for_storage( $combined_css );
 			}
 
-			return $purged;
+			// Sanitize the purged output (issue #1347): strip
+			// script-capable constructs before the CSS is stored/served so
+			// poisoned source stylesheets can never persist. An empty
+			// result fails open upstream (unoptimized buffer served).
+			return Util::sanitize_css_for_storage( $purged );
 		}
 
 		/**
@@ -1560,6 +1567,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			//
 			// @since 2.0.0 Empty-domain refusal.
 			if ( '' === $this->domain ) {
+				return false;
+			}
+
+			// Sanitize-before-store gate (issue #1347): strip
+			// script-capable constructs (expression(), javascript:,
+			// </style, event-handler payloads) and enforce the shared
+			// size/charset bounds via the Util worker. A rejected blob
+			// refuses the write so callers serve unoptimized output
+			// instead of persisting poisoned CSS. Never fatal.
+			$css = Util::sanitize_css_for_storage( $css );
+			if ( '' === $css ) {
 				return false;
 			}
 
@@ -1876,10 +1894,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Delete used-CSS file(s) for a URL or all URLs.
 		 *
 		 * @param string|null $url Optional URL to delete specific page used-CSS.
+		 * @param bool        $retain_fallback Whether to retain a last-good fallback copy before deleting (issue #1275).
+		 *                          Pass false when purging potentially poisoned CSS (issue #1347) so the poisoned
+		 *                          bytes are never retained as a servable fallback.
 		 * @return bool True on success.
 		 * @since 1.9.0
+		 * @since NEXT Added $retain_fallback for poison purges.
 		 */
-		public function delete_used_css( $url = null ): bool {
+		public function delete_used_css( $url = null, bool $retain_fallback = true ): bool {
 			if ( null !== $url ) {
 				$file_path = $this->get_used_css_path( (string) $url );
 				// Refuse deletes for hostile paths (fail-open: nothing
@@ -1904,10 +1926,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				// Post-purge fallback (issue #1275): retain the last-good
 				// copy before deleting so a first hit pre-regen stays styled
-				// (302). No-op when the gate is off. Bulk deletes
+				// (302). No-op when the gate is off. Skipped for poison
+				// purges (issue #1347) so poisoned bytes are never retained
+				// as a servable fallback. Bulk deletes
 				// (delete_all_used_css) only remove used-css* names, so
 				// retained fallback.css siblings survive them untouched.
-				$this->retain_purge_fallback( $file_path );
+				if ( $retain_fallback ) {
+					$this->retain_purge_fallback( $file_path );
+				}
 				// Drop the checksum sidecar alongside the variant so a
 				// re-generation re-baselines instead of comparing against a
 				// checksum for deleted output (issue #1038).
@@ -1918,7 +1944,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// Viewport variants (issue #1220): the single-file delete must
 				// also invalidate used-css.{mobile,desktop}.css (+ sidecars) or
 				// resolve_used_css_path() may keep serving a stale variant.
-				$this->delete_variant_files_for_url( (string) $url );
+				$this->delete_variant_files_for_url( (string) $url, $retain_fallback );
 				if ( $fs->exists( $file_path ) ) {
 					return $fs->delete( $file_path );
 				}
@@ -1937,10 +1963,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * never throws, missing files are skipped.
 		 *
 		 * @param string $url Page URL.
+		 * @param bool   $retain_fallback Whether to retain fallback copies (issue #1275).
+		 *                                False for poison purges (issue #1347).
 		 * @return void
 		 * @since NEXT
+		 * @since NEXT Added $retain_fallback for poison purges.
 		 */
-		private function delete_variant_files_for_url( string $url ): void {
+		private function delete_variant_files_for_url( string $url, bool $retain_fallback = true ): void {
 			try {
 				$fs = Util::init_filesystem();
 				if ( ! $fs ) {
@@ -1959,7 +1988,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					// Post-purge fallback (issue #1275): retain each
 					// viewport variant before deleting so variant-URL
 					// misses have a retained copy like the single file.
-					$this->retain_purge_fallback( $variant_path );
+					// Skipped for poison purges (issue #1347).
+					if ( $retain_fallback ) {
+						$this->retain_purge_fallback( $variant_path );
+					}
 					try {
 						$checksum_path = $this->get_checksum_path( $variant_path );
 					} catch ( \Throwable $e ) {
@@ -2654,7 +2686,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 					return false;
 				}
-				$args = array( 'post_id' => $post_id );
+				// Signed (issue #1347): the worker rejects tag mismatches.
+				$args = self::job_args_for_post( $post_id );
 				// Hoisted snapshot hint (issue #1274 review): the targeted
 				// regen path passes one as_get_scheduled_actions() snapshot
 				// so N posts cost one query instead of N
@@ -3269,11 +3302,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( isset( $scheduled[ $post_id ] ) ) {
 						continue;
 					}
-					// Atomic unique insert (issue #1310) dedupes by itself,
-					// so the per-row pre-check below only runs when unique
-					// inserts are unsupported (saves N SELECTs per batch).
+					// Signed (issue #1347): dedup lookups use the same signed
+					// args the worker verifies, so pre-checks match pending
+					// jobs queued by any producer. Atomic unique insert
+					// (issue #1310) dedupes by itself, so the per-row
+					// pre-check below only runs when unique inserts are
+					// unsupported (saves N SELECTs per batch).
+					$job_args   = self::job_args_for_post( $post_id );
 					$use_unique = $run_use_unique;
-					if ( ! $use_unique && ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+					if ( ! $use_unique && ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
 						$scheduled[ $post_id ] = true;
 						continue;
 					}
@@ -3292,7 +3329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						// in-repo: called directly, no method_exists guard.
 						$job_id = Util::enqueue_unique_async_action(
 							'wppo_used_css_generate',
-							array( 'post_id' => $post_id ),
+							$job_args,
 							'performance_optimisation'
 						);
 						if ( 0 === $job_id ) {
@@ -3300,7 +3337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							// review): without a verifiable pending or
 							// running job the 0 is a scheduler failure, so
 							// skip instead of counting a phantom job.
-							if ( ! self::is_used_css_job_live( array( 'post_id' => $post_id ) ) ) {
+							if ( ! self::is_used_css_job_live( $job_args ) ) {
 								continue;
 							}
 							$scheduled[ $post_id ] = true;
@@ -3417,15 +3454,135 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Build the signed `wppo_used_css_generate` job arguments (issue #1347).
+		 *
+		 * Single home for the job payload shape so every scheduler
+		 * (save-post hook, targeted/bulk regen, REST, Abilities) binds the
+		 * same HMAC tag over `post_id` with the per-site CSS-pipeline
+		 * secret. process_background() rejects jobs whose tag is missing or
+		 * mismatched and purges any poisoned CSS instead of generating.
+		 * Deterministic per site, so de-duplication still matches. The
+		 * `hmac` key is always present ('' when HMAC is unavailable) so the
+		 * shape never varies by environment; verification then takes the
+		 * legacy allow path.
+		 *
+		 * @param int $post_id Post ID.
+		 * @return array{post_id:int, hmac:string} Action arguments.
+		 * @since NEXT
+		 */
+		public static function job_args_for_post( int $post_id ): array {
+			$post_id = max( 0, $post_id );
+			$hmac    = '';
+			try {
+				$hmac = Util::sign_css_regen_payload( Util::used_css_job_payload( $post_id ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$hmac = '';
+			}
+			return array(
+				'post_id' => $post_id,
+				'hmac'    => $hmac,
+			);
+		}
+
+		/**
+		 * Verify the HMAC tag on a `wppo_used_css_generate` job (issue #1347).
+		 *
+		 * Fail-open legacy rule (mirrors Util::verify_css_regen_payload()):
+		 * jobs scheduled before the HMAC binding existed carry no tag and
+		 * are still honoured when HMAC is unavailable; once the site secret
+		 * exists, a missing or mismatched tag rejects the job. Never throws.
+		 *
+		 * @param mixed $post_id Candidate post ID.
+		 * @param mixed $hmac Candidate HMAC tag.
+		 * @return bool True when the job is authentic (or HMAC unavailable).
+		 * @since NEXT
+		 */
+		public static function is_job_hmac_valid( $post_id, $hmac ): bool {
+			try {
+				$post_id = is_numeric( $post_id ) ? (int) $post_id : 0;
+				if ( $post_id <= 0 ) {
+					return false;
+				}
+				return Util::verify_css_regen_payload( Util::used_css_job_payload( $post_id ), $hmac );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Purge a potentially poisoned used-CSS variant (issue #1347).
+		 *
+		 * Deletes the stored `used-css.css` for the post's permalink so a
+		 * rejected regeneration can never leave poisoned CSS behind; the
+		 * page then serves unoptimized markup. Never throws, never fatal.
+		 *
+		 * @param int $post_id Post ID.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function purge_poisoned_for_post( int $post_id ): void {
+			try {
+				if ( $post_id <= 0 || ! function_exists( 'get_permalink' ) ) {
+					return;
+				}
+				$permalink = get_permalink( $post_id );
+				if ( ! is_string( $permalink ) || '' === $permalink ) {
+					return;
+				}
+				try {
+					$instance = new self();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return;
+				}
+				try {
+					$instance->delete_used_css( $permalink, false );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					try {
+						Log::add(
+							sprintf(
+								/* translators: %d: Post ID */
+								__( 'Used-CSS regeneration rejected: HMAC mismatch; poisoned CSS purged for post: %d', 'performance-optimisation' ),
+								$post_id
+							)
+						);
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Process a single page for used-CSS generation (Action Scheduler callback).
 		 *
 		 * Builder-template post types are skipped without fetching (issue #1274).
+		 * Scheduler args are DB-backed untrusted input: the HMAC tag binds
+		 * the payload to this site (issue #1347) — a missing/mismatched tag
+		 * purges any poisoned CSS and rejects the job (fail-open:
+		 * unoptimized markup served). Action Scheduler unpacks the flat job
+		 * args positionally, so the tag arrives as the second parameter.
 		 *
-		 * @param int $post_id The post ID.
+		 * @param mixed $post_id The post ID.
+		 * @param mixed $hmac HMAC tag binding post_id to this site.
 		 * @return void
 		 * @since 1.9.0
+		 * @since NEXT Added $hmac verification with poisoned-CSS purge.
 		 */
-		public static function process_background( int $post_id ): void {
+		public static function process_background( $post_id, $hmac = '' ): void {
+			$post_id = is_numeric( $post_id ) ? (int) $post_id : 0;
+			// HMAC gate (issue #1347): reject forged jobs before any fetch.
+			if ( ! self::is_job_hmac_valid( $post_id, $hmac ) ) {
+				self::purge_poisoned_for_post( $post_id );
+				return;
+			}
 			// Builder-template skip-and-continue (issue #1274): never fetch
 			// non-renderable library templates for used CSS.
 			try {

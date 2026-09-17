@@ -306,7 +306,9 @@ class UsedCssRegenerateGuardTest extends \PHPUnit\Framework\TestCase {
 		$this->make_variant_fresh( $used_css, 'http://example.com/fresh-post/' );
 
 		$this->assertSame( 1, $used_css->regenerate_all() );
-		$this->assertSame( array( array( 'post_id' => 12 ) ), $enqueued );
+		$this->assertCount( 1, $enqueued );
+		$this->assertSame( 12, $enqueued[0]['post_id'] );
+		$this->assertTrue( Used_CSS::is_job_hmac_valid( 12, $enqueued[0]['hmac'] ?? null ) );
 		$this->assertArrayHasKey( Used_CSS::LAST_FULL_REGEN_OPTION, $updates );
 	}
 
@@ -384,7 +386,9 @@ class UsedCssRegenerateGuardTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$this->assertTrue( Used_CSS::requeue_for_post( 43 ) );
-		$this->assertSame( array( array( 'post_id' => 43 ) ), $enqueued );
+		$this->assertCount( 1, $enqueued );
+		$this->assertSame( 43, $enqueued[0]['post_id'] );
+		$this->assertTrue( Used_CSS::is_job_hmac_valid( 43, $enqueued[0]['hmac'] ?? null ) );
 	}
 
 	/**
@@ -471,7 +475,9 @@ class UsedCssRegenerateGuardTest extends \PHPUnit\Framework\TestCase {
 
 		$used_css = new Used_CSS( array( 'file_optimisation' => array( 'removeUnusedCSS' => true ) ) );
 		$this->assertSame( 1, $used_css->regenerate_all() );
-		$this->assertSame( array( array( 'post_id' => 12 ) ), $enqueued );
+		$this->assertCount( 1, $enqueued );
+		$this->assertSame( 12, $enqueued[0]['post_id'] );
+		$this->assertTrue( Used_CSS::is_job_hmac_valid( 12, $enqueued[0]['hmac'] ?? null ) );
 		$this->assertArrayHasKey( Used_CSS::LAST_FULL_REGEN_OPTION, $updates );
 	}
 
@@ -543,7 +549,9 @@ class UsedCssRegenerateGuardTest extends \PHPUnit\Framework\TestCase {
 		$updates  = array();
 		$enqueued = array();
 		$this->assertSame( 1, $this->run_with_cooldown_filter( 0, $updates, $enqueued ) );
-		$this->assertSame( array( array( 'post_id' => 99 ) ), $enqueued );
+		$this->assertCount( 1, $enqueued );
+		$this->assertSame( 99, $enqueued[0]['post_id'] );
+		$this->assertTrue( Used_CSS::is_job_hmac_valid( 99, $enqueued[0]['hmac'] ?? null ) );
 	}
 
 	/**

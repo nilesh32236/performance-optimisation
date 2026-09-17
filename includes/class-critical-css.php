@@ -1155,6 +1155,129 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Build the signed `wppo_generate_ccss` hook payload (issue #1347).
+		 *
+		 * Single home for the wrapped payload shape (AS unpacks args
+		 * positionally, so the callback receives the assoc array as one
+		 * argument). The `hmac` tag binds `template_hash` to this site via
+		 * the per-site CSS-pipeline secret; background_generate() rejects
+		 * jobs whose tag is missing or mismatched and purges any poisoned
+		 * CSS instead of generating. Deterministic per site, so scheduler
+		 * de-duplication still matches. The `hmac` key is always present
+		 * ('' when HMAC is unavailable) so the shape never varies by
+		 * environment; verification then takes the legacy allow path.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return array{0:array{template_hash:string, hmac:string}} Wrapped action arguments.
+		 * @since NEXT
+		 */
+		private static function ccss_hook_args( string $template_hash ): array {
+			$hmac = '';
+			try {
+				$hmac = Util::sign_css_regen_payload( Util::ccss_job_payload( $template_hash ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$hmac = '';
+			}
+			return array(
+				array(
+					'template_hash' => $template_hash,
+					'hmac'          => $hmac,
+				),
+			);
+		}
+
+		/**
+		 * Verify the HMAC tag on a `wppo_generate_ccss` job payload (issue #1347).
+		 *
+		 * Fail-open legacy rule (mirrors Util::verify_css_regen_payload()):
+		 * jobs scheduled before the HMAC binding existed carry no tag and
+		 * are still honoured when HMAC is unavailable; once the site secret
+		 * exists, a missing or mismatched tag rejects the job. Never throws.
+		 *
+		 * @param mixed $args Callback arguments.
+		 * @return string Valid template hash, or '' when rejected.
+		 * @since NEXT
+		 */
+		private static function verified_ccss_template_hash( $args ): string {
+			try {
+				$hash = is_array( $args ) ? ( $args['template_hash'] ?? '' ) : '';
+				if ( ! self::is_valid_template_hash( $hash ) ) {
+					return '';
+				}
+				$hmac = is_array( $args ) ? ( $args['hmac'] ?? '' ) : '';
+				if ( ! Util::verify_css_regen_payload( Util::ccss_job_payload( $hash ), $hmac ) ) {
+					self::purge_poisoned_css( $hash );
+					return '';
+				}
+				return $hash;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Purge a potentially poisoned critical-CSS variant (issue #1347).
+		 *
+		 * Deletes the stored `{hash}.css` file (plus viewport-split mirrors)
+		 * so a rejected regeneration can never leave poisoned CSS behind;
+		 * the page then serves unoptimized markup. Marks the status `failed`
+		 * so operators see the rejection instead of a silent stall. Never
+		 * throws, never fatal.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function purge_poisoned_css( string $template_hash ): void {
+			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return;
+				}
+				$file = self::get_ccss_file( $template_hash );
+				if ( '' !== $file && file_exists( $file ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Poisoned derived-CSS purge only.
+					unlink( $file );
+					clearstatcache( true, $file );
+				}
+				try {
+					foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+						$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
+						if ( '' !== $variant_file && file_exists( $variant_file ) ) {
+							// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Poisoned derived-CSS purge only.
+							unlink( $variant_file );
+							clearstatcache( true, $variant_file );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				self::invalidate_ccss_memo( $template_hash );
+				try {
+					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					try {
+						Log::add(
+							sprintf(
+								/* translators: %s: Template hash */
+								__( 'Critical CSS regeneration rejected: HMAC mismatch; poisoned CSS purged for template: %s', 'performance-optimisation' ),
+								$template_hash
+							)
+						);
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Schedule a later retry for a timed-out CCSS generation (issue #1235).
 		 *
 		 * Reuses the `wppo_generate_ccss` hook payload shape used by
@@ -1186,7 +1309,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			try {
 				// Wrapped payload: AS unpacks args positionally, so the
 				// callback must receive the assoc array as one argument.
-				$hook_args = array( array( 'template_hash' => $template_hash ) );
+				// Signed (issue #1347): the worker rejects tag mismatches.
+				$hook_args = self::ccss_hook_args( $template_hash );
 				if ( null === $attempts ) {
 					$attempts = self::get_ccss_timeout_attempts( $template_hash );
 				}
@@ -4030,88 +4154,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Token-breaking worker shared by sanitize_inline_css() (applied
 		 * both before and after the `wppo_ccss_sanitize_inline` filter so
-		 * hooked code cannot reintroduce breakout tokens). Neutralizes the
-		 * `</style>` raw-text terminator plus `script`, comment
-		 * (`<!--`/`-->`), and CSS expression vectors (`expression()`,
-		 * `javascript:`/`vbscript:` URLs, the `behavior` / `behaviour`
-		 * property in property position only, `-moz-binding`)
-		 * case-insensitively, decodes numeric/hex entities first so encoded
-		 * payloads cannot smuggle `<` past the encoder, then encodes any
-		 * remaining `<` as the equivalent CSS escape so stored CSS can never
-		 * break out of the style element. Fail-closed: a sanitizer error
-		 * drops the block (returns '') so output degrades to unoptimized
-		 * markup, never script execution.
+		 * hooked code cannot reintroduce breakout tokens). Delegates to the
+		 * shared {@see Util::sanitize_css_for_storage()} worker (issue
+		 * #1347) so the critical-CSS and used-CSS pipelines strip the same
+		 * script-capable constructs (`</style>`, `script`, comments, CSS
+		 * expression vectors, `behavior`/`behaviour` in property position
+		 * only, `-moz-binding`, script-capable `data:` URLs, event-handler
+		 * payloads) under the same size/charset bounds and can never drift
+		 * apart. Fail-closed: a sanitizer error drops the block (returns
+		 * '') so output degrades to unoptimized markup, never script
+		 * execution.
 		 *
 		 * @param string $css Raw critical CSS.
 		 * @return string Sanitized critical CSS.
 		 * @since 2.0.0
+		 * @since NEXT Delegates to Util::sanitize_css_for_storage().
 		 */
 		private static function sanitize_inline_css_tokens( string $css ): string {
 			try {
-				$css = self::decode_css_entities( $css );
-				$css = str_ireplace( '</style', '<\/style', $css );
-				$css = str_ireplace( '<script', '<\script', $css );
-				$css = str_ireplace( '<!--', '<\!--', $css );
-				$css = str_ireplace( '-->', '--\>', $css );
-				// Break CSS expression/URL vectors, tolerating whitespace
-				// between the keyword and its delimiter (e.g. 'expression (').
-				// A callback builds the replacement so the backslash is never
-				// parsed as a PCRE backreference.
-				$css = (string) preg_replace_callback(
-					'/expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:/i',
-					static function ( array $matches ): string {
-						$token = $matches[0];
-						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
-					},
-					$css
-				);
-				// Neutralize script-capable data: URLs inside url() so a
-				// poisoned stylesheet cannot smuggle `url(data:image/svg…)`
-				// or `url(data:text/html…)` past the scheme break above
-				// (issue #1181). A callback emits the backslash literally.
-				$css = (string) preg_replace_callback(
-					'/data\s*:\s*image\/svg|data\s*:\s*text\/html/i',
-					static function ( array $matches ): string {
-						$token = $matches[0];
-						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
-					},
-					$css
-				);
-				// Scope behavior/behaviour to property position (followed by
-				// a colon) AND to a whole property name, so benign selectors
-				// like .behavior-badge or #behaviour-list keep working and
-				// modern hyphenated properties such as `scroll-behavior`
-				// are not rewritten into invalid CSS. A callback emits the
-				// backslash literally instead of a PCRE backreference.
-				$css = (string) preg_replace_callback(
-					'/(?<![-\w])behaviou?r(?=\s*:)/i',
-					static function (): string {
-						return 'behavio\\r';
-					},
-					$css
-				);
-				$css = str_ireplace( '-moz-binding', '-moz-bindin\g', $css );
-
-				// Neutralize entity remnants that survived decoding (e.g.
-				// triple-encoded input): encode the '&' as a CSS escape so
-				// '&#60;' / '&lt;' can never decode back to '<' at render.
-				// A callback builds the replacement so '\26' is emitted
-				// literally instead of being parsed as a backreference.
-				$css = (string) preg_replace_callback(
-					'/&(?=#\d|#x[0-9a-f]|lt|gt|amp|quot);?/i',
-					static function (): string {
-						return "\\26 ";
-					},
-					$css
-				);
-
-				// Defense-in-depth: encode every remaining '<' (CSS-valid escape).
-				$css = str_replace( '<', '\3c ', $css );
+				return Util::sanitize_css_for_storage( $css );
 			} catch ( \Throwable $e ) {
+				unset( $e );
 				return '';
 			}
-
-			return $css;
 		}
 
 		/**
@@ -4203,6 +4268,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// most 2MB instead of an unbounded theme bundle.
 			if ( strlen( $css ) > self::MAX_CCSS_SOURCE_BYTES ) {
 				$css = substr( $css, 0, self::MAX_CCSS_SOURCE_BYTES );
+			}
+			// Charset bound (issue #1347): raw C0 controls (NUL et al,
+			// except tab/LF/CR) have no legitimate CSS use and signal a
+			// binary/poisoned blob — fail closed to '' (callers serve
+			// unoptimized markup, never fatal).
+			if ( 1 === preg_match( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $css ) ) {
+				return '';
 			}
 			$critical_parts = array();
 
@@ -4950,7 +5022,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// A template already marked `pending` has a live or scheduled
 				// attempt: skip re-queueing so a flooded frontend cannot
 				// stack duplicate jobs (issue #1235 review).
-				$hook_args = array( array( 'template_hash' => $template_hash ) );
+				// Signed (issue #1347): the worker rejects tag mismatches.
+				$hook_args = self::ccss_hook_args( $template_hash );
 				$queued    = false;
 				try {
 					// Accept `pending` (frontend gate), `queued`
@@ -5143,11 +5216,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( self::is_deferral_suspended_by_js() ) {
 				return;
 			}
-			$template_hash = $args['template_hash'] ?? '';
 			// Scheduler args are DB-backed untrusted input: reject
 			// non-string / malformed hashes before they reach string
 			// type-hints and kill the queue worker (issue #1235 review).
-			if ( ! self::is_valid_template_hash( $template_hash ) ) {
+			// HMAC gate (issue #1347): the tag binds the payload to this
+			// site; a missing/mismatched tag purges any poisoned CSS and
+			// rejects the job (fail-open: unoptimized markup served).
+			$template_hash = self::verified_ccss_template_hash( $args );
+			if ( '' === $template_hash ) {
 				return;
 			}
 
@@ -5362,7 +5438,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					$hook = 'wppo_generate_ccss';
 					// Wrapped payload: AS unpacks args positionally, so the
 					// callback must receive the assoc array as one argument.
-					$hook_args = array( array( 'template_hash' => $hash ) );
+					// Signed (issue #1347): the worker rejects tag mismatches.
+					$hook_args = self::ccss_hook_args( $hash );
 					// Atomic-first via the shared enqueue-gate helper
 					// (issue #1310 review): on AS 4.x the unique insert
 					// dedupes by itself, so no pre-check SELECTs run per
@@ -5443,7 +5520,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
 					$hook      = 'wppo_generate_ccss';
-					$hook_args = array( array( 'template_hash' => $hash ) );
+					// Signed (issue #1347): the worker rejects tag mismatches.
+					$hook_args = self::ccss_hook_args( $hash );
 					// Atomic-first via the shared enqueue-gate helper
 					// (issue #1310 review): the unique insert dedupes by
 					// itself on AS 4.x, so the both-group pending re-check

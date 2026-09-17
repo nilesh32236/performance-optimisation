@@ -1667,7 +1667,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wppo_pagespeed_scan', array( 'PerformanceOptimise\Inc\Pagespeed', 'run_scan' ), 10, 1 );
 
 			// Register Action Scheduler callback for background used-CSS generation.
-			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 1 );
+			// Two accepted args (issue #1347): AS unpacks the flat signed
+			// job args positionally (post_id, hmac).
+			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 2 );
 
 			// Register out-of-band Google Fonts download (keeps the frontend output-buffer hot path non-blocking).
 			add_action( 'wppo_google_fonts_download', array( 'PerformanceOptimise\Inc\Google_Fonts', 'handle_queued_download_action' ), 10, 1 );
@@ -3668,9 +3670,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Util ships in-repo: called directly (issue #1310 review) — its
 			// internal function_exists + supports_* + try/catch already
 			// fails open, so no method_exists/legacy branch is needed.
+			// Signed (issue #1347): the worker rejects tag mismatches.
 			Util::enqueue_unique_async_action(
 				'wppo_used_css_generate',
-				array( 'post_id' => $post_id ),
+				Used_CSS::job_args_for_post( $post_id ),
 				'performance_optimisation'
 			);
 		}

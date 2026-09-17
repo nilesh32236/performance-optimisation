@@ -132,6 +132,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_used_css_last_targeted_regen',       // Used_CSS::TARGETED_REGEN_OPTION (issue #1220).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
+			'wppo_css_pipeline_secret',                // CSS-pipeline HMAC secret (Util::CSS_PIPELINE_SECRET_OPTION, issue #1347).
 		);
 
 		/**
@@ -4405,6 +4406,385 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 			return hash( 'sha256', $css );
+		}
+
+		/**
+		 * Per-site option holding the CSS-pipeline HMAC secret (issue #1347).
+		 *
+		 * The secret is generated lazily, stored via core get_option (which
+		 * is inherently site-specific on multisite), and never logged.
+		 * Mirrored in uninstall.php via UNINSTALL_OPTIONS.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const CSS_PIPELINE_SECRET_OPTION = 'wppo_css_pipeline_secret';
+
+		/**
+		 * Hard cap on CSS bytes accepted for storage (issue #1347).
+		 *
+		 * Matches the critical-CSS source cap scale (2MB) so both pipelines
+		 * share one ingest bound; oversized input is truncated before the
+		 * sanitize passes instead of being stored verbatim.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_CSS_STORAGE_BYTES = 2097152;
+
+		/**
+		 * In-memory CSS-pipeline secrets keyed by blog ID (issue #1347).
+		 *
+		 * Lets sign + verify agree within one request even when the option
+		 * API cannot persist (unit-test doubles), without ever leaving the
+		 * process. Keyed by blog ID so switch_to_blog() mid-request cannot
+		 * leak one site's secret into another.
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		private static array $css_pipeline_secrets = array();
+
+		/**
+		 * Sanitize CSS for storage in the used/critical-CSS pipelines (issue #1347).
+		 *
+		 * Shared worker so both pipelines strip the same script-capable
+		 * constructs: entity-decodes first (bounded 2 passes) so encoded
+		 * payloads cannot smuggle `<` past the encoder, then breaks
+		 * `expression()`, `javascript:`/`vbscript:`/`file:`/`expect:` URLs,
+		 * the `behavior`/`behaviour` property (property position only, whole
+		 * property name so `.behavior-badge` and `scroll-behavior` survive),
+		 * `-moz-binding`, script-capable `data:` URLs inside `url()`,
+		 * event-handler payloads (`on*=`) in declaration values, plus
+		 * `</style`, `<script`, `<!--`/`-->` and entity remnants. Any
+		 * remaining `<` is encoded as the CSS escape `\3c ` so stored CSS
+		 * can never break out of a `<style>` element.
+		 *
+		 * Size bound: input over MAX_CSS_STORAGE_BYTES is truncated first.
+		 * Charset bound: NUL bytes or other C0 controls (except \t \n \r)
+		 * fail closed to ''. Any throwable fails closed to '' so callers
+		 * serve unoptimized markup instead of poisoned CSS. Never fatal.
+		 *
+		 * @param string $css Raw CSS.
+		 * @return string Sanitized CSS, or '' when rejected.
+		 * @since NEXT
+		 */
+		public static function sanitize_css_for_storage( string $css ): string {
+			try {
+				if ( '' === $css ) {
+					return '';
+				}
+				// Charset bound first: raw C0 controls (NUL et al, except
+				// tab/LF/CR) have no legitimate CSS use and signal a
+				// binary/poisoned blob — fail closed before decoding.
+				if ( 1 === preg_match( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $css ) ) {
+					return '';
+				}
+				// Size bound: truncate oversized input before the regex
+				// passes so each pass duplicates at most 2MB.
+				if ( strlen( $css ) > self::MAX_CSS_STORAGE_BYTES ) {
+					$css = substr( $css, 0, self::MAX_CSS_STORAGE_BYTES );
+				}
+				// Bounded entity decode (mirrors the critical-CSS decoder):
+				// triple-encoded input leaves harmless `&` escapes behind,
+				// which are neutralized below instead of decoded unboundedly.
+				for ( $i = 0; $i < 2; ++$i ) {
+					$decoded = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					if ( ! is_string( $decoded ) || $decoded === $css ) {
+						break;
+					}
+					$css = $decoded;
+				}
+				// Re-check the charset bound after decoding: entities may
+				// have smuggled controls past the raw check.
+				if ( 1 === preg_match( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $css ) ) {
+					return '';
+				}
+				$css = str_ireplace( '</style', '<\/style', $css );
+				$css = str_ireplace( '<script', '<\script', $css );
+				$css = str_ireplace( '<!--', '<\!--', $css );
+				$css = str_ireplace( '-->', '--\>', $css );
+				// Break CSS expression/URL vectors, tolerating whitespace
+				// between the keyword and its delimiter. A callback builds
+				// the replacement so the backslash is never parsed as a
+				// PCRE backreference.
+				$css = (string) preg_replace_callback(
+					'/expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				// Neutralize script-capable data: URLs inside url() so a
+				// poisoned stylesheet cannot smuggle `url(data:image/svg…)`
+				// or `url(data:text/html…)` past the scheme break above.
+				$css = (string) preg_replace_callback(
+					'/data\s*:\s*image\/svg|data\s*:\s*text\/html/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				// Scoped to property position (followed by a colon) AND to a
+				// whole property name, so benign selectors like
+				// .behavior-badge and modern `scroll-behavior:` keep working.
+				$css = (string) preg_replace_callback(
+					'/(?<![-\w])behaviou?r(?=\s*:)/i',
+					static function (): string {
+						return 'behavio\\r';
+					},
+					$css
+				);
+				$css = str_ireplace( '-moz-binding', '-moz-bindin\g', $css );
+				// Event-handler payloads in declaration values (e.g.
+				// `background:url(x"onload="...)`) have no legitimate CSS
+				// use outside quoted strings; break the `=` so the payload
+				// cannot re-arm. Scoped with a lookbehind so custom
+				// properties (`--onload-x`) and words like `lemon=` are
+				// untouched. A callback emits the backslash literally.
+				$css = (string) preg_replace_callback(
+					'/(?<![-\w])on[a-z]+\s*=/i',
+					static function ( array $matches ): string {
+						return substr( $matches[0], 0, -1 ) . '\\=';
+					},
+					$css
+				);
+				// Neutralize entity remnants that survived decoding (e.g.
+				// triple-encoded input): encode the '&' as a CSS escape so
+				// '&#60;' / '&lt;' can never decode back to '<' at render.
+				$css = (string) preg_replace_callback(
+					'/&(?=#\d|#x[0-9a-f]|lt|gt|amp|quot);?/i',
+					static function (): string {
+						return "\\26 ";
+					},
+					$css
+				);
+				// Defense-in-depth: encode every remaining '<' (CSS-valid escape).
+				$css = str_replace( '<', '\3c ', $css );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+
+			return $css;
+		}
+
+		/**
+		 * Whether CSS is safe to store without sanitization loss (issue #1347).
+		 *
+		 * Best-effort pre-store gate: decodes entities (bounded) and reports
+		 * whether script-capable constructs, oversized input, or out-of-bound
+		 * charset bytes are present. Callers that need the cleaned bytes
+		 * should use sanitize_css_for_storage() instead.
+		 *
+		 * @param string $css Raw CSS.
+		 * @return bool True when the CSS carries no unsafe constructs.
+		 * @since NEXT
+		 */
+		public static function is_css_safe_for_storage( string $css ): bool {
+			try {
+				if ( '' === $css ) {
+					return true;
+				}
+				if ( strlen( $css ) > self::MAX_CSS_STORAGE_BYTES ) {
+					return false;
+				}
+				if ( 1 === preg_match( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $css ) ) {
+					return false;
+				}
+				$decoded = $css;
+				for ( $i = 0; $i < 2; ++$i ) {
+					$next = html_entity_decode( $decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					if ( ! is_string( $next ) || $next === $decoded ) {
+						break;
+					}
+					$decoded = $next;
+				}
+				if ( 1 === preg_match( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $decoded ) ) {
+					return false;
+				}
+				return 1 !== preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:|data\s*:\s*image\/svg|data\s*:\s*text\/html|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|(?<![-\w])on[a-z]+\s*=|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Current blog scope key for the in-memory CSS-pipeline secret cache (issue #1347).
+		 *
+		 * @return string Blog ID, or '0' when unavailable (single-site / unit stubs).
+		 * @since NEXT
+		 */
+		private static function css_secret_scope(): string {
+			try {
+				if ( function_exists( 'get_current_blog_id' ) ) {
+					return (string) get_current_blog_id();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '0';
+		}
+
+		/**
+		 * Per-site CSS-pipeline HMAC secret (issue #1347).
+		 *
+		 * Generated lazily (32 random bytes, hex-encoded) and persisted via
+		 * core get_option/update_option — inherently per-site on multisite,
+		 * so no cross-site leakage. The value is never logged. Fail-open:
+		 * returns '' when the option API or a CSPRNG is unavailable (callers
+		 * then take the legacy capability+nonce-only path).
+		 *
+		 * @return string Site secret, or '' when unavailable.
+		 * @since NEXT
+		 */
+		public static function get_css_pipeline_secret(): string {
+			try {
+				$scope = self::css_secret_scope();
+				if ( isset( self::$css_pipeline_secrets[ $scope ] ) && '' !== self::$css_pipeline_secrets[ $scope ] ) {
+					return self::$css_pipeline_secrets[ $scope ];
+				}
+				if ( ! function_exists( 'get_option' ) ) {
+					return '';
+				}
+				$stored = get_option( self::CSS_PIPELINE_SECRET_OPTION );
+				if ( is_string( $stored ) && strlen( $stored ) >= 32 ) {
+					self::$css_pipeline_secrets[ $scope ] = $stored;
+					return $stored;
+				}
+				$secret = '';
+				if ( function_exists( 'wp_generate_password' ) ) {
+					$secret = (string) wp_generate_password( 64, true, true );
+				}
+				if ( strlen( $secret ) < 32 && function_exists( 'random_bytes' ) ) {
+					try {
+						$secret = bin2hex( random_bytes( 32 ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$secret = '';
+					}
+				}
+				if ( strlen( $secret ) < 32 ) {
+					return '';
+				}
+				self::$css_pipeline_secrets[ $scope ] = $secret;
+				if ( function_exists( 'update_option' ) ) {
+					try {
+						update_option( self::CSS_PIPELINE_SECRET_OPTION, $secret, false );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $secret;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Reset the in-memory CSS-pipeline secret cache (issue #1347).
+		 *
+		 * Test/switch_to_blog helper only: the persisted option is untouched.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function reset_css_pipeline_secrets(): void {
+			self::$css_pipeline_secrets = array();
+		}
+
+		/**
+		 * HMAC tag binding a CSS regeneration payload to this site (issue #1347).
+		 *
+		 * hash_hmac() is guarded: returns '' when unavailable so callers take
+		 * the legacy path instead of fataling. The payload canonical form is
+		 * `kind . ':' . id` (e.g. `used_css:123`, `ccss:<hash>`).
+		 *
+		 * @param string $payload Canonical payload string.
+		 * @return string Hex HMAC tag, or '' when HMAC is unavailable.
+		 * @since NEXT
+		 */
+		public static function sign_css_regen_payload( string $payload ): string {
+			try {
+				if ( '' === $payload || ! function_exists( 'hash_hmac' ) ) {
+					return '';
+				}
+				$secret = self::get_css_pipeline_secret();
+				if ( '' === $secret ) {
+					return '';
+				}
+				$tag = hash_hmac( 'sha256', $payload, $secret );
+				return is_string( $tag ) ? $tag : '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Verify an HMAC tag for a CSS regeneration payload (issue #1347).
+		 *
+		 * Fail-open legacy rule: returns true (allow) when HMAC is
+		 * unavailable (no hash_hmac/hash_equals or no site secret yet) so
+		 * scheduling never fatals on old stacks; returns false (reject) for
+		 * a missing/empty or mismatched tag once HMAC is available. Compare
+		 * with hash_equals() when present to avoid timing leaks.
+		 *
+		 * @param string $payload Canonical payload string.
+		 * @param mixed  $hmac Candidate tag.
+		 * @return bool True when the tag is valid (or HMAC unavailable).
+		 * @since NEXT
+		 */
+		public static function verify_css_regen_payload( string $payload, $hmac ): bool {
+			try {
+				if ( '' === $payload || ! function_exists( 'hash_hmac' ) ) {
+					return true;
+				}
+				$secret = self::get_css_pipeline_secret();
+				if ( '' === $secret ) {
+					return true;
+				}
+				if ( ! is_string( $hmac ) || '' === $hmac ) {
+					return false;
+				}
+				$expected = hash_hmac( 'sha256', $payload, $secret );
+				if ( ! is_string( $expected ) || '' === $expected ) {
+					return true;
+				}
+				if ( function_exists( 'hash_equals' ) ) {
+					return hash_equals( $expected, $hmac );
+				}
+				return $expected === $hmac;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Canonical HMAC payload for a used-CSS job (issue #1347).
+		 *
+		 * @param int $post_id Post ID.
+		 * @return string Canonical payload (`used_css:<id>`).
+		 * @since NEXT
+		 */
+		public static function used_css_job_payload( int $post_id ): string {
+			return 'used_css:' . max( 0, $post_id );
+		}
+
+		/**
+		 * Canonical HMAC payload for a critical-CSS job (issue #1347).
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return string Canonical payload (`ccss:<hash>`).
+		 * @since NEXT
+		 */
+		public static function ccss_job_payload( string $template_hash ): string {
+			return 'ccss:' . $template_hash;
 		}
 
 		/**

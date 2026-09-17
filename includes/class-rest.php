@@ -3006,7 +3006,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						unset( $e );
 					}
 				}
-				$job_args = array( 'post_id' => $post_id );
+				$job_args = Used_CSS::job_args_for_post( $post_id );
 				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
 					return $this->send_response(
 						array(

@@ -106,6 +106,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_settings_snapshot',
 		// Issue #1162 resumable sitemap preload queue.
 		'wppo_preload_queue',
+		// Issue #1347 CSS-pipeline HMAC secret (Util::CSS_PIPELINE_SECRET_OPTION).
+		'wppo_css_pipeline_secret',
 	);
 
 	/**

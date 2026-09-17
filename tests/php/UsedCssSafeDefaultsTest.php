@@ -162,7 +162,8 @@ class UsedCssSafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->assertTrue( Used_CSS::requeue_for_post( 42 ) );
 		$this->assertSame( 'wppo_used_css_generate', $enqueued[0][0] );
-		$this->assertSame( array( 'post_id' => 42 ), $enqueued[0][1] );
+		$this->assertSame( 42, $enqueued[0][1]['post_id'] );
+		$this->assertTrue( Used_CSS::is_job_hmac_valid( 42, $enqueued[0][1]['hmac'] ?? null ) );
 	}
 
 	/**
