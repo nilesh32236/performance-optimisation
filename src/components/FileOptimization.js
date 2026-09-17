@@ -1241,6 +1241,14 @@ const FileOptimization = ( {
 	// the existing exclusion-getter toggles only. Builder plus commerce stay
 	// forced ON at every level so carts and builders never break. The manual
 	// exclusion textarea plus filter are preserved untouched.
+	//
+	// Intentionally applies the curated unfiltered preset values: the server
+	// exposes the same maps via the filterable
+	// get_delay_js_preset_level_settings() (wppo_delay_js_preset_level_settings),
+	// so a site filtering that hook may resolve different server-side
+	// exclusions than the one-click patch shown here. The UI keeps the
+	// curated defaults so the buttons stay predictable; the server filter
+	// remains authoritative at render time.
 	const handleDelayJSPresetApply = ( level ) => {
 		const presets = {
 			safe: {

@@ -5799,6 +5799,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			self::$delay_pattern_regex_cache            = array();
 			self::$delay_js_third_party_auto_cache      = null;
 			self::$delay_js_third_party_auto_cache_blog = 0;
+			self::$delay_js_auto_label_commerce         = null;
+			self::$delay_js_auto_label_categories       = null;
+			self::$delay_js_auto_label_blog             = 0;
 		}
 
 		/**
@@ -6543,7 +6546,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * gallery, jquery plus the always-on base preset). Manual exclusions
 		 * and the delayJSThirdPartyAuto patterns are merged by the caller, so
 		 * the manual textarea plus filter always win. Fail-open: any failure
-		 * degrades to the balanced list, never fatal.
+		 * degrades to the base preset list (safe direction — pages exclude
+		 * more, never delay everything), never fatal.
 		 *
 		 * @since NEXT
 		 *
@@ -6644,7 +6648,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				);
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return array();
+				// Fail safe, never aggressive: a catastrophic getter failure
+				// must still exclude the base preset, never delay everything.
+				try {
+					return self::get_delay_js_base_preset_exclusions();
+				} catch ( \Throwable $ignored ) {
+					unset( $ignored );
+					return array();
+				}
 			}
 		}
 
@@ -7985,6 +7996,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static ?string $delay_js_third_party_auto_handle_key = null;
 
 		/**
+		 * Memoized commerce exclusions for the per-tag auto label (issue #1385 review).
+		 *
+		 * Per-tag memo: get_delay_js_third_party_auto_label() runs per script tag; without
+		 * a memo it would rebuild the commerce list (with has_filter /
+		 * apply_filters machinery) on every tag. Cached per blog id when no
+		 * related filter is registered; bypassed when a filter is present so
+		 * mid-request add_filter/remove_filter stays visible. Reset with
+		 * reset_delay_third_party_auto_cache().
+		 *
+		 * @since NEXT
+		 * @var string[]|null
+		 */
+		private static ?array $delay_js_auto_label_commerce = null;
+
+		/**
+		 * Memoized category buckets for the per-tag auto label (issue #1385 review).
+		 *
+		 * Same memo policy as $delay_js_auto_label_commerce above.
+		 *
+		 * @since NEXT
+		 * @var array<string, string[]>|null
+		 */
+		private static ?array $delay_js_auto_label_categories = null;
+
+		/**
+		 * Blog id the auto-label memo was computed for.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private static int $delay_js_auto_label_blog = 0;
+
+		/**
 		 * Labelled auto third-party vendor categories (issue #1385).
 		 *
 		 * Single source of truth for the auto detector: analytics, ads, and
@@ -8097,20 +8141,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( '' === $haystack ) {
 					return '';
 				}
-				// Commerce skip: WooCommerce fragments plus cart AJAX never
-				// carry a third-party label.
-				try {
-					$commerce = self::get_delay_js_commerce_exclusions();
-					foreach ( $commerce as $entry ) {
-						$entry = trim( (string) $entry );
-						if ( '' !== $entry && false !== stripos( $haystack, $entry ) ) {
-							return '';
-						}
+				// Per-tag memo: rebuilding the commerce list plus the full
+				// category buckets (with has_filter/apply_filters machinery)
+				// on every script tag is wasteful on script-heavy pages, so
+				// reuse the memoized copies when no related filter is
+				// registered. Bypassed when a filter is present so dynamic
+				// callbacks stay visible; keyed per blog id for multisite.
+				$blog_id          = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+				$has_label_filter = function_exists( 'has_filter' ) && ( has_filter( 'wppo_delay_js_commerce_exclusions' ) || has_filter( 'wppo_delay_js_third_party_auto_categories' ) );
+				if ( ! $has_label_filter && null !== self::$delay_js_auto_label_commerce && null !== self::$delay_js_auto_label_categories && $blog_id === self::$delay_js_auto_label_blog ) {
+					$commerce   = self::$delay_js_auto_label_commerce;
+					$categories = self::$delay_js_auto_label_categories;
+				} else {
+					$commerce   = array();
+					$categories = array();
+					// Commerce skip: WooCommerce fragments plus cart AJAX never
+					// carry a third-party label.
+					try {
+						$commerce = self::get_delay_js_commerce_exclusions();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$commerce = array();
 					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
+					try {
+						$categories = self::get_delay_js_third_party_auto_categories();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$categories = array();
+					}
+					if ( ! $has_label_filter ) {
+						self::$delay_js_auto_label_commerce   = $commerce;
+						self::$delay_js_auto_label_categories = $categories;
+						self::$delay_js_auto_label_blog       = $blog_id;
+					}
 				}
-				$categories = self::get_delay_js_third_party_auto_categories();
+				foreach ( $commerce as $entry ) {
+					$entry = trim( (string) $entry );
+					if ( '' !== $entry && false !== stripos( $haystack, $entry ) ) {
+						return '';
+					}
+				}
 				foreach ( array( 'analytics', 'ads', 'social' ) as $bucket ) {
 					if ( empty( $categories[ $bucket ] ) || ! is_array( $categories[ $bucket ] ) ) {
 						continue;
@@ -8141,6 +8211,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			self::$delay_js_third_party_auto_handle_segments = array();
 			self::$delay_js_third_party_auto_handle_re       = '';
 			self::$delay_js_third_party_auto_handle_key      = null;
+			self::$delay_js_auto_label_commerce              = null;
+			self::$delay_js_auto_label_categories            = null;
+			self::$delay_js_auto_label_blog                  = 0;
 		}
 
 		/**

@@ -267,6 +267,14 @@ try {
  * double-enqueued bundles) makes the whole replay idempotent across
  * interaction/idle/viewport flushes. Never throws.
  *
+ * Idempotency contract: delay postpones scripts, not the parser/load
+ * lifecycle, so the browser still fires the real DOMContentLoaded/load while
+ * non-captured on* handlers remain registered. The synthetic dispatch below
+ * therefore runs those non-captured consumers a second time by design (they
+ * would otherwise miss the delayed-queue release). Lifecycle handlers that
+ * observe the replay — especially analytics/consent beacons — must be
+ * idempotent.
+ *
  * @since NEXT
  * @return {void}
  */
@@ -305,7 +313,22 @@ const replayDelayedLifecycleEvents = () => {
 			: [];
 		queued.forEach( ( entry ) => {
 			try {
-				const { listener, target } = entry;
+				const { listener, target, options } = entry;
+				// Honour the platform abort contract: a listener added with
+				// an AbortSignal that was aborted before the flush must not
+				// run via the manual replay invoke.
+				try {
+					if (
+						options &&
+						typeof options === 'object' &&
+						options.signal &&
+						options.signal.aborted
+					) {
+						return;
+					}
+				} catch {
+					// Signal reads are best-effort; fall through to invoke.
+				}
 				if ( typeof listener === 'function' ) {
 					listener.call(
 						target,
