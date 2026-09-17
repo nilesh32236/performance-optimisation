@@ -1174,7 +1174,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					$has_pending = as_next_scheduled_action( 'wppo_generate_ccss', $hook_args, self::CCSS_AS_GROUP )
 					|| as_next_scheduled_action( 'wppo_generate_ccss', $hook_args, 'performance_optimisation' );
 					if ( ! $has_pending ) {
-						if ( function_exists( 'as_schedule_single_action' ) ) {
+						// Atomic unique insert (issue #1310) closes the
+						// check-then-act race; legacy branch stays as fallback.
+						if ( method_exists( 'PerformanceOptimise\Inc\Util', 'schedule_unique_single_action' ) ) {
+							Util::schedule_unique_single_action( time() + $delay, 'wppo_generate_ccss', $hook_args, self::CCSS_AS_GROUP );
+						} elseif ( function_exists( 'as_schedule_single_action' ) ) {
 							as_schedule_single_action( time() + $delay, 'wppo_generate_ccss', $hook_args, self::CCSS_AS_GROUP );
 						} else {
 							as_enqueue_async_action( 'wppo_generate_ccss', $hook_args, self::CCSS_AS_GROUP );
@@ -4772,6 +4776,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					);
 					if ( $has_pending ) {
 						$queued = true;
+					} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
+						// Atomic unique enqueue (issue #1310); the
+						// as_next_scheduled_action() pre-check above stays as
+						// a cheap fast path, the unique insert closes the race.
+						$job_id = Util::enqueue_unique_async_action(
+							$hook,
+							$hook_args,
+							self::CCSS_AS_GROUP
+						);
+						if ( $job_id > 0 ) {
+							$queued = true;
+						} elseif ( function_exists( 'as_next_scheduled_action' ) && as_next_scheduled_action( $hook, $hook_args, self::CCSS_AS_GROUP ) ) {
+							// A 0 return with a now-pending job means a
+							// concurrent process won the race — a job exists,
+							// so skip the WP-Cron fallback instead of
+							// double-scheduling in the other store.
+							$queued = true;
+						}
+						// Otherwise (scheduler failure) $queued stays false
+						// and the WP-Cron fallback below engages.
 					} else {
 						$queued = (bool) as_enqueue_async_action(
 							$hook,
@@ -5176,7 +5200,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						// burst never holds the worker for 5 back to
 						// back full-budget runs; falls back to async enqueue
 						// when the scheduler lacks single-action support.
-						if ( function_exists( 'as_schedule_single_action' ) ) {
+						// Atomic unique insert (issue #1310) closes the
+						// check-then-act race; legacy branch stays as fallback.
+						if ( method_exists( 'PerformanceOptimise\Inc\Util', 'schedule_unique_single_action' ) ) {
+							Util::schedule_unique_single_action( time() + ( $queued * 60 ), $hook, $hook_args, self::CCSS_AS_GROUP );
+						} elseif ( function_exists( 'as_schedule_single_action' ) ) {
 							as_schedule_single_action( time() + ( $queued * 60 ), $hook, $hook_args, self::CCSS_AS_GROUP );
 						} else {
 							as_enqueue_async_action(
@@ -5257,7 +5285,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						|| as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' )
 					);
 					if ( ! $has_pending ) {
-						if ( function_exists( 'as_schedule_single_action' ) ) {
+						// Atomic unique insert (issue #1310); legacy branch
+						// stays as fallback for older scheduler versions.
+						if ( method_exists( 'PerformanceOptimise\Inc\Util', 'schedule_unique_single_action' ) ) {
+							Util::schedule_unique_single_action( time(), $hook, $hook_args, self::CCSS_AS_GROUP );
+						} elseif ( function_exists( 'as_schedule_single_action' ) ) {
 							as_schedule_single_action( time(), $hook, $hook_args, self::CCSS_AS_GROUP );
 						} else {
 							as_enqueue_async_action( $hook, $hook_args, self::CCSS_AS_GROUP );

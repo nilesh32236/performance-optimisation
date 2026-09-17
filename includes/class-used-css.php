@@ -2625,7 +2625,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				as_enqueue_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+				// Atomic unique enqueue (issue #1310) closes the
+				// check-then-act race above; legacy call stays as fallback.
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
+					Util::enqueue_unique_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+				} else {
+					as_enqueue_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+				}
 				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -3170,11 +3176,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						continue;
 					}
 					try {
-						as_enqueue_async_action(
-							'wppo_used_css_generate',
-							array( 'post_id' => $post_id ),
-							'performance_optimisation'
-						);
+						// Atomic unique enqueue (issue #1310); the
+						// as_has_scheduled_action() pre-check above stays as
+						// a cheap fast path, the unique insert closes the race.
+						if ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
+							Util::enqueue_unique_async_action(
+								'wppo_used_css_generate',
+								array( 'post_id' => $post_id ),
+								'performance_optimisation'
+							);
+						} else {
+							as_enqueue_async_action(
+								'wppo_used_css_generate',
+								array( 'post_id' => $post_id ),
+								'performance_optimisation'
+							);
+						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 						continue;

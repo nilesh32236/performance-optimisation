@@ -1871,6 +1871,128 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Whether the opt-in failed-action purge is enabled.
+		 *
+		 * Additive opt-in (issue #1310): reads the
+		 * `database_cleanup.purgeFailedActions` setting (default off, absent
+		 * key migrates to off) and applies the `wppo_purge_failed_actions`
+		 * filter last so operators can opt in via code. Defaults to off so
+		 * failed-action debug history is retained unless the site opts in.
+		 * Purely additive — upstream
+		 * `action_scheduler_enable_failed_action_cleanup` defaults are never
+		 * altered here.
+		 *
+		 * @since NEXT
+		 * @return bool True when failed actions older than 3 months may be purged.
+		 */
+		public static function is_failed_action_purge_enabled(): bool {
+			try {
+				$opt_in = false;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = \PerformanceOptimise\Inc\Util::get_settings();
+					$opt_in   = ! empty( $settings['database_cleanup']['purgeFailedActions'] );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$opt_in = false;
+			}
+			/**
+			 * Filters whether failed Action Scheduler actions older than 3 months are purged.
+			 *
+			 * Default off (debug retention). Return true to opt in; the
+			 * `database_cleanup.purgeFailedActions` setting value is passed as
+			 * the default so either path enables the purge.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether the failed-action purge is enabled.
+			 */
+			return function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_purge_failed_actions', $opt_in ) : (bool) $opt_in;
+		}
+
+		/**
+		 * Purge failed Action Scheduler actions older than 3 months in batches.
+		 *
+		 * Opt-in companion to {@see clean_action_scheduler()}: guarantees a
+		 * 3-month bound on failed rows even when upstream failed-action
+		 * cleanup is disabled, without touching pending/in-progress/claimed
+		 * rows. Batched via `query_actions()` + `delete_action()` (so log
+		 * cascades are honored) with a per-batch cap, an iteration cap, and a
+		 * wall-clock budget to avoid long table locks. Fail-open: returns 0
+		 * when AS is absent, the opt-in is off, or the store throws.
+		 *
+		 * @since NEXT
+		 * @param int $batch_size Maximum rows deleted per iteration. Default 50, clamped to 1-100.
+		 * @return int Number of failed actions deleted.
+		 */
+		public static function purge_failed_actions( int $batch_size = 50 ): int {
+			if ( ! self::is_action_scheduler_available() ) {
+				return 0;
+			}
+			if ( ! self::is_failed_action_purge_enabled() ) {
+				return 0;
+			}
+			$batch_size = max( 1, min( 100, $batch_size ) );
+			try {
+				$store = \ActionScheduler_Store::instance();
+				if ( ! $store || ! method_exists( $store, 'query_actions' ) || ! method_exists( $store, 'delete_action' ) ) {
+					return 0;
+				}
+				$cutoff = self::get_action_scheduler_cutoff( 3 * 2678400 );
+				if ( null === $cutoff ) {
+					return 0;
+				}
+				$total          = 0;
+				$iterations     = 0;
+				$max_iterations = 10;
+				$deadline       = microtime( true ) + 15.0;
+				do {
+					$ids = $store->query_actions(
+						array(
+							'status'           => \ActionScheduler_Store::STATUS_FAILED,
+							'modified'         => $cutoff,
+							'modified_compare' => '<=',
+							'per_page'         => $batch_size,
+							'orderby'          => 'none',
+						)
+					);
+					if ( ! is_array( $ids ) || empty( $ids ) ) {
+						break;
+					}
+					$count = 0;
+					foreach ( $ids as $action_id ) {
+						try {
+							$store->delete_action( $action_id );
+							++$count;
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							continue;
+						}
+					}
+					$total += $count;
+					++$iterations;
+					$fetched = count( $ids );
+					if ( $fetched < $batch_size ) {
+						break;
+					}
+				} while ( $iterations < $max_iterations && microtime( true ) < $deadline );
+				if ( $total > 0 ) {
+					self::invalidate_counts_cache();
+					Log::add(
+						sprintf(
+							/* translators: %d: Number of failed Action Scheduler actions purged */
+							__( 'Action Scheduler cleanup: %d failed actions older than 3 months purged.', 'performance-optimisation' ),
+							$total
+						)
+					);
+				}
+				return $total;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
 		 * Purge terminal Action Scheduler actions past AS retention.
 		 *
 		 * Thin delegation to `ActionScheduler_QueueCleaner::delete_old_actions()`
@@ -1933,12 +2055,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					++$iterations;
 				} while ( $count > 0 && $iterations < $max_iterations && microtime( true ) < $deadline );
 				$count = $total;
+				// Opt-in 3-month failed-action bound (issue #1310): purely
+				// additive — upstream defaults are untouched, and the purge
+				// is a no-op (returns 0) unless the site opted in via the
+				// `wppo_purge_failed_actions` filter or the
+				// `database_cleanup.purgeFailedActions` setting.
+				$count += self::purge_failed_actions();
 				if ( $count > 0 ) {
 					self::invalidate_counts_cache();
 					Log::add(
 						sprintf(
 							/* translators: %d: Number of Action Scheduler actions purged */
-							__( 'Action Scheduler cleanup: %d terminal actions purged via Action Scheduler cleaner.', 'performance-optimisation' ),
+							__( 'Action Scheduler cleanup: %d actions purged (terminal retention plus opt-in failed-action purge).', 'performance-optimisation' ),
 							$count
 						)
 					);

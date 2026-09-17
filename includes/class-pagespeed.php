@@ -144,6 +144,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				}
 				return 0;
 			}
+			// Atomic unique enqueue (issue #1310) closes the check-then-act
+			// race above; legacy 3-argument call stays as fallback.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
+				return (int) Util::enqueue_unique_async_action(
+					self::AS_HOOK,
+					$args,
+					self::AS_GROUP
+				);
+			}
 			return (int) as_enqueue_async_action(
 				self::AS_HOOK,
 				$args,
@@ -245,7 +254,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $retry_args, self::AS_GROUP ) ) {
 						return;
 					}
-					as_schedule_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+					// Atomic unique insert (issue #1310); legacy branch stays
+					// as fallback for older scheduler versions.
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'schedule_unique_single_action' ) ) {
+						Util::schedule_unique_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+					} else {
+						as_schedule_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+					}
 					/* translators: %d is the retry delay in seconds. */
 					Log::add( sprintf( __( 'PageSpeed transport error; retry re-queued in %d seconds.', 'performance-optimisation' ), $delay ) );
 					return;

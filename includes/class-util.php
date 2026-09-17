@@ -453,7 +453,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'rum_sample_rate'       => 100,
 				),
 				'database_cleanup'      => array(
-					'autoloadThreshold' => 1024,
+					'autoloadThreshold'  => 1024,
+					'purgeFailedActions' => false,
 				),
 				'object_cache'          => array(),
 				'litespeed_integration' => array(
@@ -4406,6 +4407,203 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether the loaded Action Scheduler supports atomic unique actions.
+		 *
+		 * Action Scheduler 4.x added a `$unique` parameter (after `$group`,
+		 * before `$priority`) to `as_enqueue_async_action()`,
+		 * `as_schedule_single_action()` and `as_schedule_recurring_action()`
+		 * so hook+args+group deduplication happens atomically in the store
+		 * instead of via a racy check-then-act. Fail-open: returns false when
+		 * the scheduler is absent, older than 4.x, or reflection fails.
+		 *
+		 * @since NEXT
+		 * @return bool True when the `$unique` parameter may be passed.
+		 */
+		public static function supports_action_scheduler_unique(): bool {
+			try {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return false;
+				}
+				if ( class_exists( 'ActionScheduler_Versions' ) && method_exists( 'ActionScheduler_Versions', 'instance' ) ) {
+					try {
+						$versions = \ActionScheduler_Versions::instance();
+						if ( is_object( $versions ) && method_exists( $versions, 'latest_version' ) ) {
+							$latest = $versions->latest_version();
+							if ( is_string( $latest ) && '' !== $latest && version_compare( $latest, '4.0', '<' ) ) {
+								return false;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$ref = new \ReflectionFunction( 'as_enqueue_async_action' );
+				return $ref->getNumberOfParameters() >= 4;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Enqueue an async Action Scheduler job with atomic dedup when available.
+		 *
+		 * Tries `as_enqueue_async_action( $hook, $args, $group, true )` first so
+		 * concurrent processes cannot double-insert the same hook+args+group;
+		 * falls back to the legacy `as_has_scheduled_action()` guard plus a
+		 * 3-argument enqueue on older scheduler versions. Never fatal: any
+		 * scheduler API failure returns 0.
+		 *
+		 * @since NEXT
+		 * @param string $hook  Action hook.
+		 * @param array  $args  Action arguments.
+		 * @param string $group Action group.
+		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
+		 */
+		public static function enqueue_unique_async_action( string $hook, array $args = array(), string $group = '' ): int {
+			try {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return 0;
+				}
+				if ( self::supports_action_scheduler_unique() ) {
+					try {
+						$result = as_enqueue_async_action( $hook, $args, $group, true );
+						return (int) $result;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Legacy guard isolated in its own try/catch: a broken guard
+				// must degrade to "not scheduled" rather than fail the
+				// enqueue (fail-open).
+				$already_scheduled = false;
+				if ( function_exists( 'as_has_scheduled_action' ) ) {
+					try {
+						$already_scheduled = (bool) as_has_scheduled_action( $hook, $args, $group );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$already_scheduled = false;
+					}
+				}
+				if ( $already_scheduled ) {
+					return 0;
+				}
+				return (int) as_enqueue_async_action( $hook, $args, $group );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Schedule a one-off Action Scheduler job with atomic dedup when available.
+		 *
+		 * Same fail-open contract as {@see enqueue_unique_async_action()} but
+		 * for delayed single actions.
+		 *
+		 * @since NEXT
+		 * @param int    $timestamp When the job will run.
+		 * @param string $hook      Action hook.
+		 * @param array  $args      Action arguments.
+		 * @param string $group     Action group.
+		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
+		 */
+		public static function schedule_unique_single_action( int $timestamp, string $hook, array $args = array(), string $group = '' ): int {
+			try {
+				if ( ! function_exists( 'as_schedule_single_action' ) ) {
+					return 0;
+				}
+				if ( self::supports_action_scheduler_unique() ) {
+					try {
+						$ref = new \ReflectionFunction( 'as_schedule_single_action' );
+						if ( $ref->getNumberOfParameters() >= 5 ) {
+							return (int) as_schedule_single_action( $timestamp, $hook, $args, $group, true );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Legacy guard isolated in its own try/catch (fail-open —
+				// see enqueue_unique_async_action()).
+				$already_scheduled = false;
+				if ( function_exists( 'as_has_scheduled_action' ) ) {
+					try {
+						$already_scheduled = (bool) as_has_scheduled_action( $hook, $args, $group );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$already_scheduled = false;
+					}
+				}
+				if ( $already_scheduled ) {
+					return 0;
+				}
+				return (int) as_schedule_single_action( $timestamp, $hook, $args, $group );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Schedule a recurring Action Scheduler job idempotently when available.
+		 *
+		 * Passes `$unique = true` on AS 4.x so re-scheduling an already
+		 * scheduled recurring hook+args+group is a no-op; falls back to the
+		 * legacy `as_has_scheduled_action()` / `as_next_scheduled_action()`
+		 * guard plus a plain `as_schedule_recurring_action()` call otherwise.
+		 * Returns 0 when the scheduler API is unavailable or throws.
+		 *
+		 * @since NEXT
+		 * @param int    $timestamp First run timestamp.
+		 * @param int    $interval  Seconds between runs.
+		 * @param string $hook      Action hook.
+		 * @param array  $args      Action arguments.
+		 * @param string $group     Action group.
+		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
+		 */
+		public static function schedule_unique_recurring_action( int $timestamp, int $interval, string $hook, array $args = array(), string $group = '' ): int {
+			try {
+				if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
+					return 0;
+				}
+				if ( self::supports_action_scheduler_unique() ) {
+					try {
+						$ref = new \ReflectionFunction( 'as_schedule_recurring_action' );
+						if ( $ref->getNumberOfParameters() >= 6 ) {
+							return (int) as_schedule_recurring_action( $timestamp, $interval, $hook, $args, $group, true );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$already_scheduled = false;
+				if ( function_exists( 'as_has_scheduled_action' ) ) {
+					try {
+						$already_scheduled = (bool) as_has_scheduled_action( $hook, $args, $group );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$already_scheduled = false;
+					}
+				}
+				if ( ! $already_scheduled && function_exists( 'as_next_scheduled_action' ) ) {
+					try {
+						$already_scheduled = (bool) as_next_scheduled_action( $hook, $args, $group );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$already_scheduled = false;
+					}
+				}
+				if ( $already_scheduled ) {
+					return 0;
+				}
+				return (int) as_schedule_recurring_action( $timestamp, $interval, $hook, $args, $group );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
 		 * Whether the stampede guard is enabled.
 		 *
 		 * Operator opt-out via `wppo_settings['cache_settings']['stampedeGuard']`
@@ -5443,7 +5641,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// (all three features default off). Pinned before the generic
 				// stripos 'list' branch so speculationPrerenderList never
 				// falls through to sanitize_textarea_field.
-				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList', 'purgeFailedActions' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {
