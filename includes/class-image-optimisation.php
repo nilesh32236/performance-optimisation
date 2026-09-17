@@ -500,9 +500,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// Commit-then-clear (audit #1338 review): long-lived processes
 			// that clear between pages must not silently drop buffered alts.
 			self::commit_derived_alt_map();
-			self::$derived_alt_memo       = null;
-			self::$deferred_alt_entries   = array();
-			self::$alt_commit_registered  = false;
+			self::$derived_alt_memo      = null;
+			self::$deferred_alt_entries  = array();
+			self::$alt_commit_registered = false;
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'clear_request_memo' ) ) {
 				try {
 					\PerformanceOptimise\Inc\OD_Bridge::clear_request_memo();
@@ -5321,17 +5321,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( empty( self::$deferred_alt_entries ) ) {
 					return;
 				}
-				$buffered = self::$deferred_alt_entries;
+				$buffered                   = self::$deferred_alt_entries;
 				self::$deferred_alt_entries = array();
 				// Re-arm: entries buffered after this drain (long-lived
 				// processes, manual commits in tests) must re-register.
 				self::$alt_commit_registered = false;
-				$current_blog = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+				$current_blog                = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 				foreach ( $buffered as $blog_id => $entries ) {
 					if ( ! is_array( $entries ) || empty( $entries ) ) {
 						continue;
 					}
-					$blog_id = (int) $blog_id;
+					$blog_id  = (int) $blog_id;
 					$switched = false;
 					if ( $blog_id !== $current_blog && function_exists( 'switch_to_blog' ) ) {
 						switch_to_blog( $blog_id );

@@ -522,7 +522,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				// direct-read fallback; an unreadable cache is treated as
 				// unconverged (fall through and regenerate) rather than
 				// converged, so remote URLs can never get stuck.
-				$cached           = null;
+				$cached = null;
 				// Audit #1338: stat once before either read path so a
 				// swapped/corrupt oversized file is rejected up front instead
 				// of being slurped just to strpos() it.
