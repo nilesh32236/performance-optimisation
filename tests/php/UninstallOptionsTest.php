@@ -44,6 +44,7 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_ai_anomaly_last_alarm',              // AI_Adaptive::ANOMALY_COOLDOWN_KEY.
 		'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
 		'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
+		'wppo_css_pipeline_secret',                // Util::CSS_PIPELINE_SECRET_OPTION (issue #1347).
 	);
 
 	/**

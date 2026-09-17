@@ -239,14 +239,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Hard cap in bytes for the concatenated source CSS scanned in one
 		 * generation run (issue #1235 review).
 		 *
-		 * Bounds the fetch-plus-@import expansion so a 2-10MB theme
-		 * stylesheet cannot OOM the worker before the deadline polls run.
-		 * Per-stylesheet appends stop once the buffer exceeds this size.
+		 * Single-sourced from Util::MAX_CSS_STORAGE_BYTES (issue #1347
+		 * review) so both CSS pipelines share one ingest bound and can
+		 * never drift apart.
 		 *
 		 * @since NEXT
 		 * @var int
 		 */
-		private const MAX_CCSS_SOURCE_BYTES = 2097152;
+		private const MAX_CCSS_SOURCE_BYTES = \PerformanceOptimise\Inc\Util::MAX_CSS_STORAGE_BYTES;
 
 		/**
 		 * Hard cap on total stylesheet fetches per top-level generation run
@@ -1190,10 +1190,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Verify the HMAC tag on a `wppo_generate_ccss` job payload (issue #1347).
 		 *
-		 * Fail-open legacy rule (mirrors Util::verify_css_regen_payload()):
-		 * jobs scheduled before the HMAC binding existed carry no tag and
-		 * are still honoured when HMAC is unavailable; once the site secret
-		 * exists, a missing or mismatched tag rejects the job. Never throws.
+		 * Legacy rule (mirrors Used_CSS::process_background()): jobs
+		 * scheduled before the HMAC binding existed carry no tag and are
+		 * honoured without purging so upgrades never burn legitimate
+		 * cache; only a non-empty mismatched tag purges poisoned CSS and
+		 * rejects the job. Fail-closed on error. Never throws.
 		 *
 		 * @param mixed $args Callback arguments.
 		 * @return string Valid template hash, or '' when rejected.
@@ -1206,6 +1207,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					return '';
 				}
 				$hmac = is_array( $args ) ? ( $args['hmac'] ?? '' ) : '';
+				if ( ! is_string( $hmac ) || '' === $hmac ) {
+					// Legacy pre-HMAC job: honour without purging.
+					return $hash;
+				}
 				if ( ! Util::verify_css_regen_payload( Util::ccss_job_payload( $hash ), $hmac ) ) {
 					self::purge_poisoned_css( $hash );
 					return '';
@@ -1383,7 +1388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					$job_id = Util::schedule_unique_single_action( $timestamp, $hook, $hook_args, self::CCSS_AS_GROUP, array( $legacy_group ) );
 					if ( $job_id > 0 ) {
 						try {
-							self::$pending_memo[ md5( $hook . serialize( $hook_args ) ) ] = true; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+							self::$pending_memo[ self::ccss_memo_key( $hook, $hook_args ) ] = true;
 						} catch ( \Throwable $e ) {
 							unset( $e );
 						}
@@ -1426,7 +1431,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				if ( $job_id > 0 ) {
 					try {
-						self::$pending_memo[ md5( $hook . serialize( $hook_args ) ) ] = true; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+						self::$pending_memo[ self::ccss_memo_key( $hook, $hook_args ) ] = true;
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
@@ -4131,7 +4136,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * `<style>` element or execute script when inlined.
 		 *
 		 * Fail-closed pre-cache gate used by generate_and_store(): a poisoned
-		 * source stylesheet must never reach the CCSS cache.
+		 * source stylesheet must never reach the CCSS cache. Shares the
+		 * hostile pattern set with Util::sanitize_css_for_storage() /
+		 * Util::is_css_safe_for_storage() (issue #1347) — including the
+		 * `(?<![-\w])on[a-z]+\s*=` event-handler pattern the gate
+		 * previously lacked — so the gate and the sanitizer agree on every
+		 * hostile input class. Deliberately narrower than is_safe: a bare
+		 * `<` inside a quoted string (e.g. `content:"<b>"`) is altered by
+		 * the sanitizer (so is_safe reports unsafe) but is not poison, and
+		 * must not fail generation. Comment/escape-obfuscated vectors the
+		 * gate cannot see are still neutralized by the sanitizer before
+		 * the store, so a gate miss degrades to clean output, never to
+		 * stored poison.
 		 *
 		 * @param string $css Raw critical CSS.
 		 * @return bool True when hostile tokens are present.
@@ -4146,7 +4162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// legacy IE behavior vector. Without the lookbehind, any
 			// stylesheet using `scroll-behavior: smooth` failed this gate
 			// closed, which silently disabled critical CSS site-wide.
-			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:|data\s*:\s*image\/svg|data\s*:\s*text\/html|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
+			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:|data\s*:\s*image\/svg|data\s*:\s*text\/html|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|(?<![-\w])on[a-z]+\s*=|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
 		}
 
 		/**
@@ -4159,11 +4175,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * #1347) so the critical-CSS and used-CSS pipelines strip the same
 		 * script-capable constructs (`</style>`, `script`, comments, CSS
 		 * expression vectors, `behavior`/`behaviour` in property position
-		 * only, `-moz-binding`, script-capable `data:` URLs, event-handler
-		 * payloads) under the same size/charset bounds and can never drift
-		 * apart. Fail-closed: a sanitizer error drops the block (returns
-		 * '') so output degrades to unoptimized markup, never script
-		 * execution.
+		 * only, `-moz-binding`, non-allowlisted `data:` URLs, event-handler
+		 * payloads) under the same size/charset bounds. Fail-closed: a
+		 * sanitizer error drops the block (returns '') so output degrades
+		 * to unoptimized markup, never script execution.
 		 *
 		 * @param string $css Raw critical CSS.
 		 * @return string Sanitized critical CSS.
@@ -4788,16 +4803,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// stored file itself carries no breakout tokens even if the gate
 			// above missed a novel vector; output is sanitized again in
 			// inline_ccss(). An empty result fails closed like a gate hit.
+			// Sanitizer output is safe by construction (issue #1347
+			// review), so no second contains_unsafe scan runs here — the
+			// pre-sanitize gate plus the fail-closed empty check below own
+			// the poison path without re-decoding the same 2MB blob.
 			$critical_css = self::sanitize_inline_css( $critical_css );
-			if ( self::contains_unsafe_css_tokens( $critical_css ) ) {
-				try {
-					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				// Keep retry counters (see poison branch above).
-				return false;
-			}
 			if ( '' === trim( $critical_css ) ) {
 				self::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
@@ -5023,7 +5033,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// attempt: skip re-queueing so a flooded frontend cannot
 				// stack duplicate jobs (issue #1235 review).
 				// Signed (issue #1347): the worker rejects tag mismatches.
-				$hook_args = self::ccss_hook_args( $template_hash );
+				// The signed hook args (get_option + hash_hmac) are built
+				// lazily below, only inside the branch that actually
+				// schedules, so a miss storm served by the status-cache
+				// gate never pays HMAC per pageview (issue #1347 review).
+				$hook_args = null;
 				$queued    = false;
 				try {
 					// Accept `pending` (frontend gate), `queued`
@@ -5041,7 +5055,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					unset( $e );
 				}
 				if ( ! $queued && function_exists( 'as_enqueue_async_action' ) ) {
-					$hook = 'wppo_generate_ccss';
+					$hook      = 'wppo_generate_ccss';
+					$hook_args = self::ccss_hook_args( $template_hash );
 					// Single enqueue-gate flow (issue #1310 review): the
 					// shared helper owns the atomic-first insert plus the
 					// both-group re-check (dedicated CCSS group plus the
@@ -5058,6 +5073,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// the same hook via WP-Cron as a fallback. Rendering is
 					// never delayed: the async loader below keeps stylesheets
 					// loading while the critical CSS is generated in background.
+					if ( null === $hook_args ) {
+						$hook_args = self::ccss_hook_args( $template_hash );
+					}
 					if ( ! wp_next_scheduled( 'wppo_generate_ccss', $hook_args ) ) {
 						$queued = (bool) wp_schedule_single_event(
 							time() + ( defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS : 60 ),
@@ -5204,12 +5222,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * past the generation budget — on timeout the page keeps its
 		 * existing stylesheets and a retry is scheduled.
 		 *
-		 * @param array $args Arguments containing 'template_hash'.
+		 * Accepts mixed $args (issue #1347 review): pre-HMAC rows and
+		 * foreign schedulers may deliver a bare-string or otherwise
+		 * malformed shape, which verified_ccss_template_hash() rejects
+		 * without fataling the queue worker.
+		 *
+		 * @param mixed $args Arguments containing 'template_hash'.
 		 * @return void
 		 * @since 2.0.0
 		 * @since NEXT Routed through the guarded generation wrapper.
+		 * @since NEXT Accepts mixed args for legacy-shape BC.
 		 */
-		public static function background_generate( array $args ): void {
+		public static function background_generate( $args ): void {
 			// Suspended while deferJS/delayJS is active: generated variants
 			// could not be used (no deferral, no emission), so skip the work
 			// instead of logging per-template failures (issue #1090).
@@ -5519,7 +5543,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					unset( $e );
 				}
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					$hook      = 'wppo_generate_ccss';
+					$hook = 'wppo_generate_ccss';
 					// Signed (issue #1347): the worker rejects tag mismatches.
 					$hook_args = self::ccss_hook_args( $hash );
 					// Atomic-first via the shared enqueue-gate helper
@@ -5655,6 +5679,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Stable per-request memo key for a CCSS job (issue #1347).
+		 *
+		 * Keyed on the stable identity (template_hash), never the HMAC
+		 * tag, so a rotated secret cannot diverge the memo for the same
+		 * template within one request.
+		 *
+		 * @param string $hook Action hook.
+		 * @param array  $hook_args Wrapped action arguments.
+		 * @return string Memo key ('' when unhashable).
+		 * @since NEXT
+		 */
+		private static function ccss_memo_key( string $hook, array $hook_args ): string {
+			try {
+				$stable = $hook_args[0]['template_hash'] ?? $hook_args;
+				return md5( $hook . serialize( $stable ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Whether a CCSS generation job is pending or running in either AS group.
 		 *
 		 * Single home for the dedicated-group-plus-legacy-group disjunction
@@ -5670,6 +5716,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * rather than scheduler failure, otherwise the template is marked
 		 * failed with a day TTL while its job runs.
 		 *
+		 * Dedup covers the signed shape plus the legacy shape (no hmac):
+		 * the HMAC tag is verified only at execution, so pre-HMAC rows and
+		 * jobs minted under a rotated secret still dedupe instead of
+		 * double-scheduling (issue #1347 review). The memo is keyed on the
+		 * stable identity (template_hash) for the same reason.
+		 *
 		 * @since NEXT
 		 * @param string $hook      Action hook.
 		 * @param array  $hook_args Action arguments.
@@ -5679,12 +5731,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( ! function_exists( 'as_next_scheduled_action' ) ) {
 				return false;
 			}
+			// Dedup on stable identity (issue #1347 review): the HMAC tag
+			// is verified only at execution, so probes cover the signed
+			// shape plus the legacy shape (no hmac) — pre-HMAC rows and
+			// jobs minted under a rotated secret still dedupe instead of
+			// double-scheduling. The memo is keyed on the stable identity
+			// (template_hash) for the same reason.
+			$probes = array( $hook_args );
+			try {
+				$inner = $hook_args[0] ?? null;
+				if ( is_array( $inner ) && isset( $inner['template_hash'] ) && is_string( $inner['template_hash'] ) ) {
+					$legacy = array( array( 'template_hash' => $inner['template_hash'] ) );
+					if ( $legacy !== $hook_args ) {
+						$probes[] = $legacy;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			// Per-request memo (issue #1310 review): the frontend hot path
 			// and per-template loops repeat identical probes; the
 			// status-cache gate absorbs most repeats but the memo covers
 			// the rest within one request.
 			try {
-				$memo_key = md5( $hook . serialize( $hook_args ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+				$memo_key = self::ccss_memo_key( $hook, $hook_args );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				$memo_key = '';
@@ -5694,9 +5764,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 			$pending = false;
 			try {
-				if ( (bool) as_next_scheduled_action( $hook, $hook_args, self::CCSS_AS_GROUP )
-					|| (bool) as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' ) ) {
-					$pending = true;
+				foreach ( $probes as $probe ) {
+					if ( (bool) as_next_scheduled_action( $hook, $probe, self::CCSS_AS_GROUP )
+						|| (bool) as_next_scheduled_action( $hook, $probe, 'performance_optimisation' ) ) {
+						$pending = true;
+						break;
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -5719,19 +5792,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			try {
 				if ( function_exists( 'as_get_scheduled_actions' ) && class_exists( \ActionScheduler_Store::class ) ) {
 					foreach ( array( self::CCSS_AS_GROUP, 'performance_optimisation' ) as $ccss_group ) {
-						$running = as_get_scheduled_actions(
-							array(
-								'hook'     => $hook,
-								'args'     => $hook_args,
-								'group'    => $ccss_group,
-								'status'   => \ActionScheduler_Store::STATUS_RUNNING,
-								'per_page' => 1,
-							),
-							'ids'
-						);
-						if ( is_array( $running ) && ! empty( $running ) ) {
-							$result = true;
-							break;
+						foreach ( $probes as $probe ) {
+							$running = as_get_scheduled_actions(
+								array(
+									'hook'     => $hook,
+									'args'     => $probe,
+									'group'    => $ccss_group,
+									'status'   => \ActionScheduler_Store::STATUS_RUNNING,
+									'per_page' => 1,
+								),
+								'ids'
+							);
+							if ( is_array( $running ) && ! empty( $running ) ) {
+								$result = true;
+								break 2;
+							}
 						}
 					}
 				}

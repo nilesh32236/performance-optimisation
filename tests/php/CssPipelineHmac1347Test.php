@@ -326,8 +326,10 @@ class CssPipelineHmac1347Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * A bad/missing HMAC rejects the used-CSS job: no fetch runs and any
-	 * poisoned CSS is purged (unoptimized served instead).
+	 * A forged (non-empty mismatched) HMAC rejects the used-CSS job: no
+	 * fetch runs and any poisoned CSS is purged (unoptimized served
+	 * instead). A missing/empty tag is a legacy pre-HMAC job: honoured
+	 * without purging so upgrades never burn legitimate cache.
 	 */
 	public function test_process_background_rejects_bad_hmac_and_purges(): void {
 		$fetches   = array();
@@ -351,12 +353,13 @@ class CssPipelineHmac1347Test extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( array(), $fetches, 'Rejected job must not fetch' );
 		$this->assertFileDoesNotExist( $path, 'Poisoned CSS must be purged on HMAC mismatch' );
 
-		// Missing tag is rejected the same way.
+		// Legacy pre-HMAC shape (single assoc arg, no tag) is honoured
+		// without purging.
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture setup only.
-		file_put_contents( $path, '.x{width:expression(alert(1))}' );
-		Used_CSS::process_background( 77 );
-		$this->assertSame( array(), $fetches, 'Missing HMAC must not fetch' );
-		$this->assertFileDoesNotExist( $path, 'Poisoned CSS must be purged on missing HMAC' );
+		file_put_contents( $path, '.a{color:red}' );
+		Used_CSS::process_background( array( 'post_id' => 77 ) );
+		$this->assertCount( 1, $fetches, 'Legacy job must proceed to the fetch' );
+		$this->assertFileExists( $path, 'Legacy cache must not be purged on upgrade' );
 	}
 
 	/**
@@ -375,11 +378,56 @@ class CssPipelineHmac1347Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * A bad/missing HMAC rejects the critical-CSS job and purges poisoned CSS.
+	 * Encoded bypasses (comments inside keywords, CSS hex escapes,
+	 * double-encoded entities, non-allowlisted data: types) are neutralized.
+	 */
+	public function test_sanitize_blocks_encoded_bypasses(): void {
+		$comment_split = '.x{width:exp/**/ression(alert(1))}';
+		$clean         = Util::sanitize_css_for_storage( $comment_split );
+		$this->assertDoesNotMatchRegularExpression( '/expression\s*\(/i', $clean );
+		$this->assertFalse( Util::is_css_safe_for_storage( $comment_split ) );
+
+		$escaped = '.x{width:\65xpression(alert(1))}';
+		$clean   = Util::sanitize_css_for_storage( $escaped );
+		$this->assertDoesNotMatchRegularExpression( '/expression\s*\(/i', $clean );
+		$this->assertFalse( Util::is_css_safe_for_storage( $escaped ) );
+
+		$js_comment = '.y{background:url(java/**/script:alert(1))}';
+		$this->assertFalse( Util::is_css_safe_for_storage( $js_comment ) );
+		$this->assertDoesNotMatchRegularExpression( '/javascript\s*:/i', Util::sanitize_css_for_storage( $js_comment ) );
+
+		// Double-encoded entity: &amp;lt; decodes once to &lt; and the
+		// remnant `&` is escaped so it can never decode back to `<`.
+		$double = '.z{content:"&amp;lt;script"}';
+		$clean  = Util::sanitize_css_for_storage( $double );
+		$this->assertStringNotContainsString( '&lt;', $clean );
+		$this->assertFalse( Util::is_css_safe_for_storage( '.w{content:"&#60;script"}' ) );
+
+		// Non-allowlisted data: types break; allowlisted image types pass.
+		$this->assertFalse( Util::is_css_safe_for_storage( '.a{background:url(data:text/css;base64,花的)}' ) );
+		$this->assertFalse( Util::is_css_safe_for_storage( '.a{background:url(data:application/javascript;base64,xxx)}' ) );
+		$this->assertFalse( Util::is_css_safe_for_storage( '.a{background:url(data:image/svg+xml,<svg>)}' ) );
+		$this->assertTrue( Util::is_css_safe_for_storage( '.a{background:url(data:image/png;base64,iVBOR)}' ) );
+		$safe_png = '.a{background:url(data:image/png;base64,iVBOR)}';
+		$this->assertSame( $safe_png, Util::sanitize_css_for_storage( $safe_png ) );
+
+		// Sanitizer output is safe by construction: is_safe(sanitize(x))
+		// holds for hostile input (pins the gate/sanitizer agreement).
+		foreach ( array( $comment_split, $escaped, $js_comment ) as $evil ) {
+			$this->assertTrue( Util::is_css_safe_for_storage( Util::sanitize_css_for_storage( $evil ) ) );
+		}
+	}
+
+	/**
+	 * A forged (non-empty mismatched) HMAC rejects the critical-CSS job
+	 * and purges poisoned CSS. A missing tag is a legacy pre-HMAC job:
+	 * honoured without purging.
 	 */
 	public function test_ccss_background_generate_rejects_bad_hmac_and_purges(): void {
 		$this->stub_option_store();
 		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'get_page_templates' )->justReturn( array() );
+		Functions\when( 'get_stylesheet' )->justReturn( 'twentytwentyfour' );
 
 		$hash = str_repeat( 'a', 64 );
 		$dir  = WP_CONTENT_DIR . '/cache/wppo/ccss';
@@ -401,10 +449,69 @@ class CssPipelineHmac1347Test extends \PHPUnit\Framework\TestCase {
 		);
 		$this->assertFileDoesNotExist( $file, 'Poisoned CCSS must be purged on HMAC mismatch' );
 
-		// Missing tag is rejected the same way.
+		// Legacy pre-HMAC shape (no tag) is honoured without purging.
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture setup only.
-		file_put_contents( $file, '.x{width:expression(alert(1))}' );
+		file_put_contents( $file, '.a{color:red}' );
 		Critical_CSS::background_generate( array( 'template_hash' => $hash ) );
-		$this->assertFileDoesNotExist( $file, 'Poisoned CCSS must be purged on missing HMAC' );
+		$this->assertFileExists( $file, 'Legacy CCSS cache must not be purged on upgrade' );
+	}
+
+	/**
+	 * A valid HMAC lets the critical-CSS job proceed past the auth gate.
+	 *
+	 * Mirrors test_process_background_accepts_valid_hmac: the signed happy
+	 * path must not purge the stored file (the worker proceeds to template
+	 * resolution instead of the poison branch).
+	 */
+	public function test_ccss_background_generate_accepts_valid_hmac(): void {
+		$this->stub_option_store();
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'get_page_templates' )->justReturn( array() );
+		Functions\when( 'get_stylesheet' )->justReturn( 'twentytwentyfour' );
+
+		$hash = str_repeat( 'b', 64 );
+		$dir  = WP_CONTENT_DIR . '/cache/wppo/ccss';
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture setup only.
+			mkdir( $dir, 0755, true );
+		}
+		$this->created_dirs[] = WP_CONTENT_DIR . '/cache';
+		$file                 = $dir . '/' . $hash . '.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture setup only.
+		file_put_contents( $file, '.a{color:red}' );
+		$this->assertFileExists( $file );
+
+		$tag = Util::sign_css_regen_payload( Util::ccss_job_payload( $hash ) );
+		$this->assertNotSame( '', $tag );
+		Critical_CSS::background_generate(
+			array(
+				'template_hash' => $hash,
+				'hmac'          => $tag,
+			)
+		);
+		$this->assertFileExists( $file, 'Valid job must proceed past the HMAC gate without purging' );
+
+		// The verified gate itself: valid returns the hash, forged rejects.
+		$method = new \ReflectionMethod( Critical_CSS::class, 'verified_ccss_template_hash' );
+		$this->assertSame(
+			$hash,
+			$method->invoke(
+				null,
+				array(
+					'template_hash' => $hash,
+					'hmac'          => $tag,
+				)
+			)
+		);
+		$this->assertSame(
+			'',
+			$method->invoke(
+				null,
+				array(
+					'template_hash' => $hash,
+					'hmac'          => 'forged-tag',
+				)
+			)
+		);
 	}
 }

@@ -1287,9 +1287,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return '';
 			}
 
+			// Early cap (issue #1347 review): stop accumulating once the
+			// buffer exceeds the shared ingest bound so many/large
+			// stylesheets never peak at 10-25MB before sanitize truncates.
 			$combined_css = '';
 			foreach ( $css_assets as $css_content ) {
 				$combined_css .= $css_content . "\n";
+				if ( strlen( $combined_css ) > Util::MAX_CSS_STORAGE_BYTES ) {
+					$combined_css = substr( $combined_css, 0, Util::MAX_CSS_STORAGE_BYTES );
+					break;
+				}
 			}
 
 			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
@@ -1545,10 +1552,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $css The purged CSS content.
 		 * @param string $url The page URL.
+		 * @param bool   $already_sanitized Skip the sanitize pass when the
+		 *                                  caller already ran
+		 *                                  sanitize_css_for_storage()
+		 *                                  (e.g. generate_used_css()
+		 *                                  output) to avoid double-scanning
+		 *                                  the same blob.
 		 * @return bool True on success.
 		 * @since 1.9.0
+		 * @since NEXT Added $already_sanitized to avoid double sanitization.
 		 */
-		public function save_used_css( string $css, string $url = '' ): bool {
+		public function save_used_css( string $css, string $url = '', bool $already_sanitized = false ): bool {
 			if ( empty( $css ) ) {
 				return false;
 			}
@@ -1576,7 +1590,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// size/charset bounds via the Util worker. A rejected blob
 			// refuses the write so callers serve unoptimized output
 			// instead of persisting poisoned CSS. Never fatal.
-			$css = Util::sanitize_css_for_storage( $css );
+			// The is_css_safe_for_storage() pre-gate distinguishes
+			// deterministic poison (logged explicitly, no retry) from
+			// legit-empty input (silent refusal).
+			if ( ! $already_sanitized ) {
+				if ( ! Util::is_css_safe_for_storage( $css ) ) {
+					try {
+						Log::add(
+							__( 'Used-CSS write refused: poisoned CSS rejected by the sanitizer; serving unoptimized markup instead.', 'performance-optimisation' )
+						);
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					return false;
+				}
+				$css = Util::sanitize_css_for_storage( $css );
+			}
 			if ( '' === $css ) {
 				return false;
 			}
@@ -2013,10 +2042,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Delete all used-CSS files across all domains.
 		 *
+		 * @param bool $retain_fallback Retain a last-good fallback copy
+		 *                              before deleting (issue #1275).
+		 *                              Pass false from poison purges
+		 *                              (issue #1347) so poisoned bytes are
+		 *                              never snapshotted as servable
+		 *                              fallback.css.
 		 * @return bool True on success.
 		 * @since 1.9.0
+		 * @since NEXT Added $retain_fallback to skip fallback retention on poison purges.
 		 */
-		public static function delete_all_used_css(): bool {
+		public static function delete_all_used_css( bool $retain_fallback = true ): bool {
 			$fs = Util::init_filesystem();
 			if ( ! $fs ) {
 				return false;
@@ -2068,7 +2104,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							// live used-css base before deleting so a full
 							// wipe keeps last-good instead of only the
 							// previous fallback generation. No-op when off.
-							if ( '.sha256' !== substr( (string) $name, -7 ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'retain_purge_fallback_file' ) ) {
+							// Skipped for poison purges (issue #1347).
+							if ( $retain_fallback && '.sha256' !== substr( (string) $name, -7 ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'retain_purge_fallback_file' ) ) {
 								try {
 									Util::retain_purge_fallback_file(
 										$fs,
@@ -2103,10 +2140,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * live per-site under the domain-based cache tree.
 		 *
 		 * @param string|null $url_path Optional URL path for a single-page purge; null purges all.
+		 * @param bool        $retain_fallback Retain last-good fallback copies
+		 *                                     (issue #1347: pass false from
+		 *                                     poison purges).
 		 * @return array{page_cache: bool, used_css: bool} Per-store results.
 		 * @since 2.0.0
+		 * @since NEXT Added $retain_fallback for poison purges.
 		 */
-		public static function purge_coupled( $url_path = null ): array {
+		public static function purge_coupled( $url_path = null, bool $retain_fallback = true ): array {
 			$result = array(
 				'page_cache' => false,
 				'used_css'   => false,
@@ -2122,10 +2163,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			try {
 				if ( null !== $url_path && '' !== $url_path ) {
-					$instance           = new self( Util::get_settings() );
-					$result['used_css'] = $instance->delete_used_css( (string) $url_path );
+					$instance = new self( Util::get_settings() );
+					if ( $retain_fallback ) {
+						$result['used_css'] = $instance->delete_used_css( (string) $url_path );
+					} else {
+						$result['used_css'] = $instance->delete_used_css( (string) $url_path, false );
+					}
 				} else {
-					$result['used_css'] = self::delete_all_used_css();
+					$result['used_css'] = self::delete_all_used_css( $retain_fallback );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2608,6 +2653,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Legacy (pre-HMAC) job args for dedup probes (issue #1347).
+		 *
+		 * Pre-HMAC rows were stored as `array( 'post_id' => $id )` with no
+		 * `hmac` key, so an exact-args probe with the signed shape never
+		 * matches them. Dedup probes check both shapes so legacy rows
+		 * still dedupe instead of double-scheduling.
+		 *
+		 * @param int $post_id Post ID.
+		 * @return array{post_id:int} Legacy action arguments.
+		 * @since NEXT
+		 */
+		private static function legacy_job_args_for_post( int $post_id ): array {
+			return array( 'post_id' => max( 0, $post_id ) );
+		}
+
+		/**
 		 * Whether a used-CSS generation job is pending or running.
 		 *
 		 * Single home for the 0-return disambiguation used after a
@@ -2619,37 +2680,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * backstops. Fail-open: returns false when the lookup APIs are
 		 * unavailable or throw.
 		 *
+		 * Dedup probes check the signed shape plus the legacy shape (no
+		 * hmac) so pre-HMAC rows still dedupe instead of
+		 * double-scheduling (issue #1347 review); HMAC is verified only at
+		 * execution.
+		 *
 		 * @since NEXT
 		 * @param array $args Action arguments.
 		 * @return bool True when a matching job is pending or running.
 		 */
 		private static function is_used_css_job_live( array $args ): bool {
+			// Dedup on stable identity (issue #1347 review): probe the
+			// signed shape plus the legacy shape (no hmac) so pre-HMAC
+			// rows still dedupe; HMAC is verified only at execution.
+			$probes = array( $args );
 			try {
-				if ( function_exists( 'as_has_scheduled_action' ) && (bool) as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
-					return true;
+				if ( isset( $args['post_id'] ) ) {
+					$legacy = self::legacy_job_args_for_post( (int) $args['post_id'] );
+					if ( $legacy !== $args ) {
+						$probes[] = $legacy;
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			try {
-				if ( ! function_exists( 'as_get_scheduled_actions' ) || ! class_exists( \ActionScheduler_Store::class ) ) {
-					return false;
+			foreach ( $probes as $probe ) {
+				try {
+					if ( function_exists( 'as_has_scheduled_action' ) && (bool) as_has_scheduled_action( 'wppo_used_css_generate', $probe, 'performance_optimisation' ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
-				$running = as_get_scheduled_actions(
-					array(
-						'hook'     => 'wppo_used_css_generate',
-						'args'     => $args,
-						'group'    => 'performance_optimisation',
-						'status'   => \ActionScheduler_Store::STATUS_RUNNING,
-						'per_page' => 1,
-					),
-					'ids'
-				);
-				return is_array( $running ) && ! empty( $running );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
 			}
+			foreach ( $probes as $probe ) {
+				try {
+					if ( ! function_exists( 'as_get_scheduled_actions' ) || ! class_exists( \ActionScheduler_Store::class ) ) {
+						return false;
+					}
+					$running = as_get_scheduled_actions(
+						array(
+							'hook'     => 'wppo_used_css_generate',
+							'args'     => $probe,
+							'group'    => 'performance_optimisation',
+							'status'   => \ActionScheduler_Store::STATUS_RUNNING,
+							'per_page' => 1,
+						),
+						'ids'
+					);
+					if ( is_array( $running ) && ! empty( $running ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return false;
 		}
 
 		/**
@@ -2702,9 +2788,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// unsupported (one redundant SELECT saved per post save).
 				// Util ships in-repo: no method_exists guard needed.
 				$use_unique = Util::supports_action_scheduler_unique();
-				if ( ! $use_unique && function_exists( 'as_has_scheduled_action' ) && ( null === $scheduled_hints ) && as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
-					$already_scheduled = true;
-					return true;
+				// Dedup on stable identity (issue #1347 review): probe the
+				// signed shape plus the legacy shape (no hmac) so pre-HMAC
+				// rows still dedupe; HMAC is verified only at execution.
+				if ( ! $use_unique && function_exists( 'as_has_scheduled_action' ) && null === $scheduled_hints ) {
+					try {
+						if ( as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) || as_has_scheduled_action( 'wppo_used_css_generate', self::legacy_job_args_for_post( $post_id ), 'performance_optimisation' ) ) {
+							$already_scheduled = true;
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 				try {
 					$modified_gmt = '';
@@ -3302,17 +3397,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( isset( $scheduled[ $post_id ] ) ) {
 						continue;
 					}
-					// Signed (issue #1347): dedup lookups use the same signed
-					// args the worker verifies, so pre-checks match pending
-					// jobs queued by any producer. Atomic unique insert
-					// (issue #1310) dedupes by itself, so the per-row
-					// pre-check below only runs when unique inserts are
-					// unsupported (saves N SELECTs per batch).
+					// Signed (issue #1347): dedup on stable identity
+					// (post_id) ignoring hmac — probe the signed shape
+					// plus the legacy shape (no hmac) so pre-HMAC rows
+					// still dedupe; HMAC is verified only at execution.
+					// Atomic unique insert (issue #1310) dedupes by
+					// itself, so the per-row pre-check below only runs
+					// when unique inserts are unsupported (saves N
+					// SELECTs per batch).
 					$job_args   = self::job_args_for_post( $post_id );
 					$use_unique = $run_use_unique;
-					if ( ! $use_unique && ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
-						$scheduled[ $post_id ] = true;
-						continue;
+					if ( ! $use_unique && ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							if ( as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) || as_has_scheduled_action( 'wppo_used_css_generate', self::legacy_job_args_for_post( $post_id ), 'performance_optimisation' ) ) {
+								$scheduled[ $post_id ] = true;
+								continue;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 					}
 					if ( isset( $modified[ $post_id ] ) && '' !== $modified[ $post_id ] && $this->is_variant_fresh_for_post( $post_id, $modified[ $post_id ], $permalink_map[ $post_id ] ?? null ) ) {
 						continue;
@@ -3488,10 +3591,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Verify the HMAC tag on a `wppo_used_css_generate` job (issue #1347).
 		 *
-		 * Fail-open legacy rule (mirrors Util::verify_css_regen_payload()):
+		 * Fail-closed on error (mirrors Util::verify_css_regen_payload()):
 		 * jobs scheduled before the HMAC binding existed carry no tag and
 		 * are still honoured when HMAC is unavailable; once the site secret
-		 * exists, a missing or mismatched tag rejects the job. Never throws.
+		 * exists, a missing or mismatched tag rejects the job. Any
+		 * throwable rejects. Never throws.
 		 *
 		 * @param mixed $post_id Candidate post ID.
 		 * @param mixed $hmac Candidate HMAC tag.
@@ -3507,8 +3611,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return Util::verify_css_regen_payload( Util::used_css_job_payload( $post_id ), $hmac );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return true;
+				return false;
 			}
+		}
+
+		/**
+		 * Whether a used-CSS job carries the legacy (pre-HMAC) shape (issue #1347).
+		 *
+		 * Legacy rows were scheduled as `array( 'post_id' => $id )` with no
+		 * `hmac` key before the HMAC binding existed. A missing/empty tag
+		 * is honoured without purging (the stored CSS is legitimate cache,
+		 * not poison); only a non-empty mismatched tag purges.
+		 *
+		 * @param mixed $hmac Candidate HMAC tag.
+		 * @return bool True when the tag is missing/empty (legacy).
+		 * @since NEXT
+		 */
+		public static function is_legacy_job_tag( $hmac ): bool {
+			return ! is_string( $hmac ) || '' === $hmac;
 		}
 
 		/**
@@ -3577,11 +3697,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since NEXT Added $hmac verification with poisoned-CSS purge.
 		 */
 		public static function process_background( $post_id, $hmac = '' ): void {
+			// BC shim (issue #1347 review): pre-HMAC rows were scheduled as
+			// a single assoc arg `array( 'post_id' => $id )`; Action
+			// Scheduler unpacks it positionally, but direct calls (and some
+			// AS versions) may deliver the assoc array as $post_id.
+			if ( is_array( $post_id ) ) {
+				$legacy  = $post_id;
+				$hmac    = $legacy['hmac'] ?? $hmac;
+				$post_id = $legacy['post_id'] ?? 0;
+			}
 			$post_id = is_numeric( $post_id ) ? (int) $post_id : 0;
-			// HMAC gate (issue #1347): reject forged jobs before any fetch.
+			// HMAC gate (issue #1347): forged jobs (non-empty mismatched
+			// tag) purge any poisoned CSS and reject before any fetch.
+			// Legacy jobs (missing/empty tag) are honoured without purging
+			// so upgrades never burn legitimate cache.
 			if ( ! self::is_job_hmac_valid( $post_id, $hmac ) ) {
-				self::purge_poisoned_for_post( $post_id );
-				return;
+				if ( ! self::is_legacy_job_tag( $hmac ) ) {
+					self::purge_poisoned_for_post( $post_id );
+					return;
+				}
+				if ( $post_id <= 0 ) {
+					return;
+				}
 			}
 			// Builder-template skip-and-continue (issue #1274): never fetch
 			// non-renderable library templates for used CSS.
@@ -3649,7 +3786,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$purged_css = $used_css->generate_used_css( $html, $css_assets );
 
 			if ( ! empty( $purged_css ) ) {
-				$used_css->save_used_css( $purged_css, $permalink );
+				$used_css->save_used_css( $purged_css, $permalink, true );
 			}
 		}
 
@@ -4586,7 +4723,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return $buffer;
 			}
 
-			$saved = $this->save_used_css( $purged_css, $current_url );
+			$saved = $this->save_used_css( $purged_css, $current_url, true );
 			if ( $saved ) {
 				// Baseline the source checksum so later requests detect
 				// content edits that preserve mtime (issue #1038). Local

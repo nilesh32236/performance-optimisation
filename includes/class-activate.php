@@ -141,6 +141,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			}
 
 			self::maybe_seed_settings();
+			// Pre-mint the CSS-pipeline HMAC secret (issue #1347 review):
+			// minting lazily at schedule time lets concurrent workers mint
+			// divergent secrets and diverge HMAC dedup keys for the same
+			// post/template, so the secret exists before any job is queued.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_css_pipeline_secret' ) ) {
+					Util::get_css_pipeline_secret();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			self::create_activity_log_table();
 			Img_Converter::migrate_img_info_autoload();
 			RUM::migrate_rum_autoload();

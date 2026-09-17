@@ -1258,7 +1258,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 						'error'  => __( 'Invalid post ID.', 'performance-optimisation' ),
 					);
 				}
-				if ( ! function_exists( 'as_has_scheduled_action' ) || ! as_has_scheduled_action( 'wppo_used_css_generate', Used_CSS::job_args_for_post( $post_id ), 'performance_optimisation' ) ) {
+				// Dedup on stable identity (issue #1347 review): probe the
+				// signed shape plus the legacy shape (no hmac) so pre-HMAC
+				// rows still dedupe; HMAC is verified only at execution.
+				$already_queued = false;
+				if ( function_exists( 'as_has_scheduled_action' ) ) {
+					try {
+						$already_queued = (bool) as_has_scheduled_action( 'wppo_used_css_generate', Used_CSS::job_args_for_post( $post_id ), 'performance_optimisation' )
+							|| (bool) as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$already_queued = false;
+					}
+				}
+				if ( ! $already_queued ) {
 					as_enqueue_async_action(
 						'wppo_used_css_generate',
 						Used_CSS::job_args_for_post( $post_id ),
