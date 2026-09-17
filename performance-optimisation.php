@@ -225,13 +225,61 @@ if ( defined( 'WPPO_UNIT_TESTS' ) && WPPO_UNIT_TESTS ) {
 	return;
 }
 
-// Load Composer autoloader.
-require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
+	if ( ! function_exists( 'wppo_render_missing_autoload_notice' ) ) {
+		/**
+		 * Admin notice when vendor/autoload.php is missing (audit #1362).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		function wppo_render_missing_autoload_notice(): void {
+			try {
+				if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			return;
+			}
+			echo '<div class="notice notice-error" role="alert" aria-live="assertive"><p><strong>';
+			echo esc_html__( 'Performance Optimisation', 'performance-optimisation' );
+			echo '</strong> &mdash; ';
+			echo esc_html__( 'Dependencies are missing (vendor/autoload.php not found). Run composer install, then re-activate the plugin.', 'performance-optimisation' );
+			echo '</p></div>';
+		}
+	}
 
-// Boot only on supported runtimes; below the floors the guard registers an
-// admin notice and the site keeps running unoptimised (fail-open frontend).
-if ( wppo_version_guard() ) {
-	new Main();
+// Load Composer autoloader (audit #1362): vendor/ is gitignored and
+// installed on demand — fail with an admin notice, never a fatal, when
+// it is missing (fresh clone before composer install).
+$wppo_autoload = WPPO_PLUGIN_PATH . 'vendor/autoload.php';
+$wppo_have_deps = file_exists( $wppo_autoload );
+if ( $wppo_have_deps ) {
+	require_once $wppo_autoload;
+} elseif ( function_exists( 'add_action' ) ) {
+	try {
+		add_action( 'admin_notices', 'wppo_render_missing_autoload_notice' );
+		add_action( 'network_admin_notices', 'wppo_render_missing_autoload_notice' );
+	} catch ( \Throwable $autoload_notice_error ) {
+		unset( $autoload_notice_error );
+	}
+}
+
+// Boot only on supported runtimes with dependencies present; otherwise the
+// guards above register admin notices and the site keeps running
+// unoptimised (fail-open frontend).
+// The class_exists() fallback covers a stale Composer classmap: Main ships
+// in-repo, so require it directly when the autoloader cannot see it.
+if ( $wppo_have_deps && wppo_version_guard() ) {
+	if ( ! class_exists( 'PerformanceOptimise\\Inc\\Main' ) ) {
+		$wppo_main = WPPO_PLUGIN_PATH . 'includes/class-main.php';
+		if ( file_exists( $wppo_main ) ) {
+			require_once $wppo_main;
+		}
+	}
+	if ( class_exists( 'PerformanceOptimise\\Inc\\Main' ) ) {
+		new Main();
+	}
 }
 
 if ( ! function_exists( 'wppo_activate' ) ) {

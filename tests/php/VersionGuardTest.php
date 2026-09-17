@@ -279,8 +279,11 @@ class VersionGuardTest extends \PHPUnit\Framework\TestCase {
 	public function test_entry_point_gates_boot_behind_guard(): void {
 		$source = (string) file_get_contents( dirname( __DIR__, 2 ) . '/performance-optimisation.php' );
 
-		$this->assertStringContainsString( 'if ( wppo_version_guard() )', $source );
+		$this->assertStringContainsString( 'wppo_version_guard()', $source );
 		$this->assertStringContainsString( 'wppo_render_requirements_notice', $source );
+		// Audit #1362: boot additionally requires vendor/autoload.php with
+		// its own admin notice — still exactly one instantiation.
+		$this->assertStringContainsString( 'wppo_render_missing_autoload_notice', $source );
 		$this->assertSame( 1, substr_count( $source, 'new Main()' ) );
 	}
 }

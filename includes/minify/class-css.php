@@ -64,7 +64,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @param string $file_path  Path to the CSS file to be minified.
 		 * @param string $cache_dir  Directory where the minified file will be cached.
 		 */
-		public function __construct( $file_path, $cache_dir ) {
+		public function __construct( string $file_path, string $cache_dir ) { // Audit #1362: typed per docblock.
 			// Traversal-safe by construction (issue #1179): the shared
 			// Util::validate_minify_path() gate rejects ../, NUL bytes,
 			// stream wrappers, and .php targets, resolves symlinks via
@@ -109,7 +109,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @since 1.0.0
 		 */
 		public function minify() {
-			if ( empty( $this->file_path ) || ! is_readable( $this->file_path ) ) {
+			// Audit #1362: readability pre-gate before WP_Filesystem boots below.
+			if ( empty( $this->file_path ) || ! is_readable( $this->file_path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable -- Filesystem object not yet initialized at this pre-gate.
 				return '';
 			}
 			$cache_file = $this->get_cache_file_path();
@@ -140,7 +141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 					$minified_css = $css_minifier->minify();
 
 					$this->save_min_file( $minified_css, $cache_file );
-				} catch ( \Exception $e ) {
+				} catch ( \Throwable $e ) { // Audit #1362: catch \Error/\TypeError on PHP 8.
 					return '';
 				}
 			}
@@ -372,7 +373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 				$block = substr( $css, $pos, $end_pos - $pos + 1 );
 
-				if ( stripos( $block, 'font-display' ) === false ) {
+				if ( false === stripos( $block, 'font-display' ) ) { // Audit #1362: Yoda (WPCS).
 					$modified_block = substr( $block, 0, -1 ) . 'font-display: ' . $display_validated . ';}';
 					$css            = substr_replace( $css, $modified_block, $pos, $end_pos - $pos + 1 );
 					$offset         = $pos + strlen( $modified_block );

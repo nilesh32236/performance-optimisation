@@ -52,7 +52,9 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 					$throttle_key = Util::transient_key( $throttle_group . '_' . $service_slug );
 					if ( false === get_transient( $throttle_key ) ) {
 						set_transient( $throttle_key, 1, $throttle_ttl > 0 ? $throttle_ttl : 60 );
-						Log::add( $log_prefix . ' [' . $service . ']: ' . substr( $detail, 0, 200 ) );
+						// Audit #1362: byte-truncation can split multibyte text.
+						$excerpt = function_exists( 'mb_substr' ) ? mb_substr( $detail, 0, 200, 'UTF-8' ) : substr( $detail, 0, 200 );
+						Log::add( $log_prefix . ' [' . $service . ']: ' . $excerpt );
 					}
 				}
 			} catch ( \Throwable $e ) {

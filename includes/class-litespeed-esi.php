@@ -195,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			try {
 				$ip = '';
 				if ( isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-					$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+					$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
 				}
 				$key    = Util::transient_key( 'wppo_esi_throttle_' . md5( ( '' !== $ip ? $ip : 'anon' ) . '|' . strtolower( $block ) ) );
 				$bucket = get_transient( $key );
@@ -480,13 +480,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 						'in_footer' => true,
 					)
 				);
-				return;
+			} else {
+				// Bool $in_footer fallback so the client still loads in the
+				// footer on WP < 6.3 (fail-open: still hydrates, just
+				// render-blocking).
+				wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, true );
 			}
-
-			// Bool $in_footer fallback so the client still loads in the
-			// footer on WP < 6.3 (fail-open: still hydrates, just
-			// render-blocking).
-			wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, true );
+			// Audit #1362: the client ships translated labels — without this
+			// call non-English locales fall back to English strings.
+			if ( function_exists( 'wp_set_script_translations' ) ) {
+				wp_set_script_translations( 'wppo-esi', 'performance-optimisation', WPPO_PLUGIN_PATH . 'languages' );
+			}
 		}
 
 		/**

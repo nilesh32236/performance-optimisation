@@ -433,7 +433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @return void
 		 * @since 1.0.0
 		 */
-		private static function create_activity_log_table() {
+		private static function create_activity_log_table(): void { // Audit #1362: return type parity.
 			global $wpdb;
 
 			$table_name      = $wpdb->prefix . 'wppo_activity_logs';

@@ -136,7 +136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 					$minified_js = $js_minifier->minify();
 
 					$this->save_min_file( $minified_js, $cache_file );
-				} catch ( \Exception $e ) {
+				} catch ( \Throwable $e ) { // Audit #1362: catch \Error/\TypeError on PHP 8.
 					return '';
 				}
 			}
