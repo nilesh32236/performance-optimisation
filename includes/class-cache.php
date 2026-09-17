@@ -894,19 +894,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Thin delegate to `Main::record_combine_offender()` so REST and CLI
 		 * callers have a single choke point. Persists the handle in the
-		 * per-URL exclusion map (converges within 3 purges) and fails open
-		 * (false) on any error — production assets keep serving, never fatal.
+		 * per-URL exclusion map (max 3 handles per URL, one purge each) and
+		 * fails open (false) on any error — production assets keep serving,
+		 * never fatal.
 		 *
 		 * @since NEXT
 		 *
-		 * @param string $url    URL the breakage was reported on.
-		 * @param string $handle Offending style handle to exclude.
+		 * @param string     $url         URL the breakage was reported on.
+		 * @param string     $handle      Offending style handle to exclude.
+		 * @param array|null $fresh_slice Optional. Receives the post-write
+		 *                                `file_optimisation` slice (no extra
+		 *                                settings read for callers).
 		 * @return bool True when the exclusion was persisted (or already stored).
 		 */
-		public function isolate_combine_offender( string $url, string $handle ): bool {
+		public function isolate_combine_offender( string $url, string $handle, ?array &$fresh_slice = null ): bool {
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'record_combine_offender' ) ) {
-					return Main::record_combine_offender( $url, $handle );
+					return Main::record_combine_offender( $url, $handle, $fresh_slice );
 				}
 				return false;
 			} catch ( \Throwable $e ) {
@@ -1091,7 +1095,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// serves current production assets (uncombined), never fatal.
 			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'get_effective_combine_exclusions' ) ) {
 				try {
-					$current_url         = function_exists( 'home_url' ) ? (string) home_url( '/' ) : '';
+					$current_url = '';
+					try {
+						$request_uri = isset( $_SERVER['REQUEST_URI'] ) && is_string( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '/'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only combine-exclusion lookup, never output or persisted.
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'cached_home_url' ) ) {
+							$current_url = (string) Util::cached_home_url( $request_uri );
+						} elseif ( function_exists( 'home_url' ) ) {
+							$current_url = (string) home_url( '/' );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$current_url = function_exists( 'home_url' ) ? (string) home_url( '/' ) : '';
+					}
+					if ( '' === $current_url && function_exists( 'home_url' ) ) {
+						$current_url = (string) home_url( '/' );
+					}
 					$exclude_combine_css = Main::get_effective_combine_exclusions( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array(), $current_url );
 				} catch ( \Throwable $e ) {
 					unset( $e );

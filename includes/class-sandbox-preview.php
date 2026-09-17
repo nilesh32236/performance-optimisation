@@ -299,17 +299,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				// malformed import) would otherwise survive as a truthy
 				// non-empty string and later !empty() checks would enable a
 				// feature the caller meant to disable. Fail-safe to false,
-				// except elementorSafeMode which fail-safes to true (absent =
-				// enabled) matching Util::sanitize_settings_recursively().
-				foreach ( array( 'delayJS', 'deferJS', 'combineCSS', 'delayJSExternalOnly', 'minifyInlineJS', 'delayJSThirdParty', 'delayJSThirdPartyAuto', 'minifyJS', 'minifyCSS', 'cssJsSafeMode' ) as $bool_key ) {
+				// except elementorSafeMode and cssJsSafeMode which fail-safe
+				// to true (absent = enabled) matching
+				// Util::sanitize_settings_recursively().
+				foreach ( array( 'delayJS', 'deferJS', 'combineCSS', 'delayJSExternalOnly', 'minifyInlineJS', 'delayJSThirdParty', 'delayJSThirdPartyAuto', 'minifyJS', 'minifyCSS' ) as $bool_key ) {
 					if ( array_key_exists( $bool_key, $staged ) && ! is_bool( $staged[ $bool_key ] ) ) {
 						$bool                = filter_var( $staged[ $bool_key ], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$staged[ $bool_key ] = null === $bool ? false : $bool;
 					}
 				}
-				if ( array_key_exists( 'elementorSafeMode', $staged ) && ! is_bool( $staged['elementorSafeMode'] ) ) {
-					$bool                        = filter_var( $staged['elementorSafeMode'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$staged['elementorSafeMode'] = null === $bool ? true : $bool;
+				foreach ( array( 'elementorSafeMode', 'cssJsSafeMode' ) as $bool_key ) {
+					if ( array_key_exists( $bool_key, $staged ) && ! is_bool( $staged[ $bool_key ] ) ) {
+						$bool                = filter_var( $staged[ $bool_key ], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$staged[ $bool_key ] = null === $bool ? true : $bool;
+					}
 				}
 				$clean = array();
 				foreach ( self::ALLOWED_STAGED_KEYS as $key ) {

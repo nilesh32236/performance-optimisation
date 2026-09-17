@@ -3641,9 +3641,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Isolate a combine offender for a URL (issue #1404).
 		 *
-		 * POST params `url` + `handle` persist a per-URL exclusion (converges
-		 * within 3 purges via `Main::record_combine_offender()`). Fail-open:
-		 * never fatal; production assets keep serving on failure.
+		 * POST params `url` + `handle` persist a per-URL exclusion (max 3
+		 * handles per URL via `Main::record_combine_offender()`). The
+		 * response also carries `next_suspects` computed with
+		 * `Main::bisect_combine_handles()` so reporters converge within 3
+		 * purges. Fail-open: never fatal; production assets keep serving
+		 * on failure.
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
@@ -3656,24 +3659,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $response;
 			}
 			$params = $request->get_params();
-			$url    = isset( $params['url'] ) ? trim( (string) $params['url'] ) : '';
-			$handle = isset( $params['handle'] ) ? trim( (string) $params['handle'] ) : '';
+			// Strict type gates (same pattern as run_performance_scan):
+			// present-but-non-string input is a 400, never silently cast.
+			if ( ! isset( $params['url'] ) || ! is_string( $params['url'] ) || ! isset( $params['handle'] ) || ! is_string( $params['handle'] ) ) {
+				return $this->send_response( null, false, 400, __( 'URL and handle are required.', 'performance-optimisation' ) );
+			}
+			$url_raw    = function_exists( 'wp_unslash' ) ? wp_unslash( $params['url'] ) : $params['url']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here, sanitized below before persistence.
+			$handle_raw = function_exists( 'wp_unslash' ) ? wp_unslash( $params['handle'] ) : $params['handle']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here, sanitized below before persistence.
+			$url_raw    = trim( is_string( $url_raw ) ? $url_raw : '' );
+			$handle_raw = trim( is_string( $handle_raw ) ? $handle_raw : '' );
+			if ( '' === $url_raw || '' === $handle_raw ) {
+				return $this->send_response( null, false, 400, __( 'URL and handle are required.', 'performance-optimisation' ) );
+			}
+			// Bound lengths before persisting into wppo_settings (option-bloat
+			// / stored-data integrity guard, same substr-cap pattern used
+			// elsewhere in this file).
+			$url    = function_exists( 'esc_url_raw' ) ? substr( esc_url_raw( $url_raw ), 0, 512 ) : substr( $url_raw, 0, 512 );
+			$handle = function_exists( 'sanitize_key' ) ? substr( sanitize_key( $handle_raw ), 0, 128 ) : substr( preg_replace( '/[^a-zA-Z0-9_\-]/', '', $handle_raw ), 0, 128 );
 			if ( '' === $url || '' === $handle ) {
 				return $this->send_response( null, false, 400, __( 'URL and handle are required.', 'performance-optimisation' ) );
 			}
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'record_combine_offender' ) ) {
 				return $this->send_response( null, false, 500, __( 'Combine isolation is unavailable.', 'performance-optimisation' ) );
 			}
-			$ok = Main::record_combine_offender( $url, $handle );
+			// Single settings round-trip: record_combine_offender() hands back
+			// the post-write slice by reference so the read-back below needs
+			// no second Util::get_settings() option read.
+			$fresh_slice = null;
+			$ok          = Main::record_combine_offender( $url, $handle, $fresh_slice );
 			if ( ! $ok ) {
 				// Already-stored exclusions read back as success so a
 				// duplicate report is not a 500; only fail when the handle
 				// is genuinely absent (e.g. purge cap reached).
 				if ( method_exists( 'PerformanceOptimise\Inc\Main', 'get_combine_offenders_for_url' ) ) {
 					try {
-						$stored = Main::get_combine_offenders_for_url( $url );
+						$slice  = is_array( $fresh_slice ) ? $fresh_slice : array();
+						$stored = Main::get_combine_offenders_for_url( $url, $slice );
 						if ( in_array( $handle, $stored, true ) ) {
-							return $this->send_response( array( 'excluded' => $stored ) );
+							$next = array();
+							if ( method_exists( 'PerformanceOptimise\Inc\Main', 'bisect_combine_handles' ) ) {
+								try {
+									$next = Main::bisect_combine_handles( $stored );
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
+							return $this->send_response(
+								array(
+									'excluded'      => $stored,
+									'next_suspects' => $next,
+								)
+							);
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -3684,12 +3720,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$excluded = array();
 			if ( method_exists( 'PerformanceOptimise\Inc\Main', 'get_combine_offenders_for_url' ) ) {
 				try {
-					$excluded = Main::get_combine_offenders_for_url( $url );
+					$slice    = is_array( $fresh_slice ) ? $fresh_slice : array();
+					$excluded = Main::get_combine_offenders_for_url( $url, $slice );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 			}
-			return $this->send_response( array( 'excluded' => $excluded ) );
+			$next_suspects = array();
+			if ( method_exists( 'PerformanceOptimise\Inc\Main', 'bisect_combine_handles' ) ) {
+				try {
+					$next_suspects = Main::bisect_combine_handles( $excluded );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return $this->send_response(
+				array(
+					'excluded'      => $excluded,
+					'next_suspects' => $next_suspects,
+				)
+			);
 		}
 
 		/**

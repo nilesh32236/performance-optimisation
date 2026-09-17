@@ -2509,8 +2509,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string[] Effective exclusion list.
 		 */
 		public static function get_effective_combine_exclusions( array $file_optimisation = array(), string $url = '' ): array {
+			$user = array();
 			try {
-				$user = array();
 				if ( ! empty( $file_optimisation['excludeCombineCSS'] ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
 					try {
 						$user = Util::process_urls( $file_optimisation['excludeCombineCSS'] );
@@ -2544,7 +2544,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return array_values( array_unique( array_filter( array_map( 'trim', array_map( 'strval', $merged ) ) ) ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return array();
+				// Fail-open preserves the user list (never drop explicit
+				// exclusions), not an empty list.
+				return is_array( $user ) ? array_values( array_unique( array_filter( array_map( 'trim', array_map( 'strval', $user ) ) ) ) ) : array();
+			}
+		}
+
+		/**
+		 * Normalize a combine-offender URL to a canonical map key input (issue #1404).
+		 *
+		 * Strips the fragment, lowercases scheme + host (DNS is
+		 * case-insensitive), and removes a trailing slash from the path so
+		 * the same page cannot fragment into multiple `md5()` map entries.
+		 * Query strings are preserved (they may identify distinct pages).
+		 * Fail-open to the trimmed input on any error. Pure helper: no writes.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url Raw URL the breakage was reported on.
+		 * @return string Normalized URL used for map keying and storage.
+		 */
+		public static function normalize_combine_offender_url( string $url ): string {
+			try {
+				$trimmed = trim( $url );
+				if ( '' === $trimmed ) {
+					return '';
+				}
+				$fragment_pos = strpos( $trimmed, '#' );
+				if ( false !== $fragment_pos ) {
+					$trimmed = trim( substr( $trimmed, 0, $fragment_pos ) );
+				}
+				if ( '' === $trimmed ) {
+					return '';
+				}
+				$parts = function_exists( 'wp_parse_url' ) ? wp_parse_url( $trimmed ) : parse_url( $trimmed ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url is unavailable (unit tests, early boot).
+				if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+					return $trimmed;
+				}
+				$scheme = isset( $parts['scheme'] ) ? strtolower( (string) $parts['scheme'] ) : 'https';
+				$host   = strtolower( (string) $parts['host'] );
+				$port   = isset( $parts['port'] ) ? ':' . (int) $parts['port'] : '';
+				$path   = isset( $parts['path'] ) ? (string) $parts['path'] : '/';
+				if ( function_exists( 'untrailingslashit' ) ) {
+					$path = untrailingslashit( $path );
+					if ( '' === $path ) {
+						$path = '/';
+					}
+				} else {
+					$path = rtrim( $path, '/' );
+					if ( '' === $path ) {
+						$path = '/';
+					}
+				}
+				$normalized = $scheme . '://' . $host . $port . $path;
+				if ( isset( $parts['query'] ) && '' !== (string) $parts['query'] ) {
+					$normalized .= '?' . (string) $parts['query'];
+				}
+				return $normalized;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return trim( $url );
 			}
 		}
 
@@ -2552,9 +2611,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Per-URL combine-offender exclusions (issue #1404).
 		 *
 		 * Reads the additive `file_optimisation.combineOffenders` map keyed by
-		 * `md5( $url )` with shape `array( 'handles' => string[], 'purges' => int )`.
-		 * Fail-open to an empty list on any error. Multisite-safe: per-site
-		 * settings only.
+		 * `md5( normalize_combine_offender_url( $url ) )` with shape
+		 * `array( 'url' => string, 'handles' => string[], 'purges' => int )`.
+		 * URLs are normalized before hashing so trailing-slash / scheme-case /
+		 * fragment variants of the same page share one entry. Fail-open to an
+		 * empty list on any error. Multisite-safe: per-site settings only.
 		 *
 		 * @since NEXT
 		 *
@@ -2565,6 +2626,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public static function get_combine_offenders_for_url( string $url, array $file_optimisation = array() ): array {
 			try {
 				if ( '' === trim( $url ) ) {
+					return array();
+				}
+				$url = self::normalize_combine_offender_url( $url );
+				if ( '' === $url ) {
 					return array();
 				}
 				if ( empty( $file_optimisation ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
@@ -2594,6 +2659,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Returns the first half (ceil) as the next suspect set so repeated
 		 * reports converge within ~log2(n) <= 3 purges for typical builder
 		 * bundles. Pure helper: no WP calls, fail-open to the input list.
+		 * Production-wired: the `combine_isolate` REST endpoint returns this
+		 * subset as `next_suspects` alongside the persisted `excluded` list
+		 * so reporters know which half to re-test next.
 		 *
 		 * @since NEXT
 		 *
@@ -2617,21 +2685,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Persist a combine offender for a URL (issue #1404).
 		 *
-		 * Appends `$handle` to the per-URL exclusion entry (capped at 3
-		 * purges per URL: further reports are ignored once `purges >= 3`
-		 * so isolation always converges within 3 purges). Writes via
+		 * Appends `$handle` to the per-URL exclusion entry (max 3 handles
+		 * per URL: one purge is recorded per newly isolated handle, so
+		 * further reports are ignored once `purges >= 3` and isolation
+		 * always converges within 3 purges). URLs are normalized via
+		 * `normalize_combine_offender_url()` before hashing so slash /
+		 * case / fragment variants share one entry. Writes via
 		 * `Util::save_settings()` (per-site option, multisite-safe) and
 		 * fails open (false) when WP functions are unavailable. Never fatal.
 		 *
 		 * @since NEXT
 		 *
-		 * @param string $url    URL the breakage was reported on.
-		 * @param string $handle Offending style handle to exclude.
+		 * @param string     $url         URL the breakage was reported on.
+		 * @param string     $handle      Offending style handle to exclude.
+		 * @param array|null $fresh_slice Optional. Receives the post-write
+		 *                                `file_optimisation` slice so callers
+		 *                                (REST) can read back exclusions
+		 *                                without a second settings read.
 		 * @return bool True when the exclusion was persisted (or already stored).
 		 */
-		public static function record_combine_offender( string $url, string $handle ): bool {
+		public static function record_combine_offender( string $url, string $handle, ?array &$fresh_slice = null ): bool {
 			try {
-				$url    = trim( $url );
+				$url    = self::normalize_combine_offender_url( trim( $url ) );
 				$handle = trim( $handle );
 				if ( '' === $url || '' === $handle ) {
 					return false;
@@ -2644,21 +2719,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$settings['file_optimisation'] = array();
 				}
 				$map = isset( $settings['file_optimisation']['combineOffenders'] ) && is_array( $settings['file_optimisation']['combineOffenders'] ) ? $settings['file_optimisation']['combineOffenders'] : array();
-				// Cap the map so a hostile reporter cannot grow the option unbounded.
-				if ( count( $map ) > 50 ) {
+				$key = md5( $url );
+				// Cap the map so a hostile reporter cannot grow the option
+				// unbounded: at most 50 URL entries. Evict oldest-first only
+				// when inserting a NEW key so the map never exceeds 50.
+				if ( ! isset( $map[ $key ] ) && count( $map ) >= 50 ) {
+					$map = array_slice( $map, -49, 49, true );
+				} elseif ( count( $map ) > 50 ) {
+					// Legacy over-cap map (pre-fix 51-entry transient): trim
+					// back to the newest 50 before updating in place.
 					$map = array_slice( $map, -50, 50, true );
 				}
-				$key     = md5( $url );
 				$entry   = isset( $map[ $key ] ) && is_array( $map[ $key ] ) ? $map[ $key ] : array(
 					'handles' => array(),
 					'purges'  => 0,
 				);
 				$handles = isset( $entry['handles'] ) && is_array( $entry['handles'] ) ? $entry['handles'] : array();
 				if ( in_array( $handle, $handles, true ) ) {
+					$fresh_slice = $settings['file_optimisation'];
 					return true;
 				}
 				$purges = isset( $entry['purges'] ) ? (int) $entry['purges'] : 0;
 				if ( $purges >= 3 ) {
+					$fresh_slice = $settings['file_optimisation'];
 					return false;
 				}
 				$handles[]   = $handle;
@@ -2668,6 +2751,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'purges'  => $purges + 1,
 				);
 				$settings['file_optimisation']['combineOffenders'] = $map;
+				$fresh_slice                                       = $settings['file_optimisation'];
 				return (bool) Util::save_settings( $settings );
 			} catch ( \Throwable $e ) {
 				unset( $e );
