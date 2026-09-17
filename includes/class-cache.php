@@ -460,6 +460,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the request Host header mismatched the canonical home host.
+		 *
+		 * Additive alias of {@see is_host_mismatched()} using the issue's
+		 * canonical API name (`Cache::host_mismatch`). Pure delegation, no
+		 * behaviour change: true means serve dynamic uncached and never
+		 * write a cache file.
+		 *
+		 * @return bool True when the request host differs from the canonical host.
+		 * @since NEXT
+		 */
+		public function host_mismatch(): bool {
+			return $this->host_mismatch;
+		}
+
+		/**
 		 * Canonical, query-normalized cache key for the current request.
 		 *
 		 * The key is pinned to the allowlisted canonical host resolved from
