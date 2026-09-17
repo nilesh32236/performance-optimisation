@@ -23,7 +23,8 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import StatusBadge from './common/StatusBadge';
 
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
+import { formatMs, formatPercent } from '../lib/format';
 
 /**
  * Maps fix_action values to WPPO sidebar tab names.
@@ -121,13 +122,24 @@ export const formatValue = ( value, unit ) => {
 		return `${ Math.round( parseFloat( value ) * 100 ) } / 100`;
 	}
 	if ( unit === '%' ) {
-		return `${ Number( value ).toFixed( 1 ) }%`;
+		return formatPercent( value, { ratio: false } );
 	}
+	// Audit #1401: delegate to the shared lib/format.js helpers (with
+	// their missing-value guards and sprintf i18n) instead of
+	// template literals.
 	if ( unit === 's' ) {
-		return `${ Number( value ).toFixed( 2 ) }s`;
+		const num = Number( value );
+		if ( ! Number.isFinite( num ) ) {
+			return '—';
+		}
+		return sprintf(
+			/* translators: %s: seconds value. */
+			__( '%ss', 'performance-optimisation' ),
+			num.toFixed( 2 )
+		);
 	}
 	if ( unit === 'ms' ) {
-		return `${ Math.round( value ) }ms`;
+		return formatMs( value );
 	}
 	if ( unit === undefined || unit === null || unit === '' ) {
 		return String( value );

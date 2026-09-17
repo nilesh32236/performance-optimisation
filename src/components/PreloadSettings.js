@@ -1,5 +1,6 @@
 import { __, sprintf, _n } from '@wordpress/i18n';
 import { useState, useEffect, useContext, useMemo } from '@wordpress/element';
+import { useIsMounted, runAbortable } from '../lib/useAbortableFetch';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -54,8 +55,16 @@ const PreloadSettings = ( { options = {} } ) => {
 	// Keep baseline in sync with incoming options on mount / prop change.
 	// Per-key deps (not object identity) so parent re-renders with an
 	// identical payload do not reset the baseline.
+	// Keep baseline + form in sync with incoming options on mount / prop
+	// change (audit #1401: was two effects with hand-duplicated 20-key
+	// dep arrays — one array now, so a new key cannot update one sync
+	// and miss the other). Per-key deps (not object identity) so parent
+	// re-renders with an identical payload do not reset state.
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
+		if ( options && Object.keys( options ).length > 0 ) {
+			setSettings( ( prev ) => ( { ...prev, ...options } ) );
+		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.enablePreloadCache,
@@ -88,20 +97,13 @@ const PreloadSettings = ( { options = {} } ) => {
 		[ setSettings ]
 	);
 
-	// Audit #1354: signal-guarded fetch so unmount cannot setState.
+	// Audit #1401: shared abortable helper (useAbortableFetch) owns
+	// controller lifecycle + cancellation instead of ad-hoc flags.
+	const isMountedRef = useIsMounted();
 	const fetchPreloadStatus = async ( signal ) => {
-		let cancelled = false;
-		if ( signal ) {
-			if ( signal.aborted ) {
-				return;
-			}
-			signal.addEventListener( 'abort', () => {
-				cancelled = true;
-			} );
-		}
 		try {
 			const res = await apiCall( 'preload_status', {}, 'GET', signal );
-			if ( cancelled || ( signal && signal.aborted ) ) {
+			if ( ! isMountedRef.current || ( signal && signal.aborted ) ) {
 				return;
 			}
 			const payload = res && res.data ? res.data : res;
@@ -120,9 +122,10 @@ const PreloadSettings = ( { options = {} } ) => {
 	};
 
 	useEffect( () => {
-		const controller = new AbortController();
-		fetchPreloadStatus( controller.signal );
-		return () => controller.abort();
+		const { cancel } = runAbortable( ( signal ) =>
+			fetchPreloadStatus( signal ).catch( () => {} )
+		);
+		return cancel;
 	}, [] );
 
 	const handleResume = async () => {
@@ -174,37 +177,6 @@ const PreloadSettings = ( { options = {} } ) => {
 			setIsResuming( false );
 		}
 	};
-
-	useEffect( () => {
-		if ( ! options || Object.keys( options ).length === 0 ) {
-			return;
-		}
-		setSettings( ( prev ) => ( { ...prev, ...options } ) );
-		// Per-key deps (not object identity) so parent re-renders with an
-		// identical payload do not reset the form.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [
-		options.enablePreloadCache,
-		options.excludePreloadCache,
-		options.preloadSitemap,
-		options.preconnect,
-		options.preconnectOrigins,
-		options.prefetchDNS,
-		options.dnsPrefetchOrigins,
-		options.preloadFonts,
-		options.preloadFontsUrls,
-		options.autoDiscoverFonts,
-		options.autoLcpPreload,
-		options.preloadCSS,
-		options.preloadCSSUrls,
-		options.enableSpeculationRules,
-		options.speculationMode,
-		options.speculationEagerness,
-		options.speculationExcludeUrls,
-		options.speculationRumGating,
-		options.speculationTopUrlsLimit,
-		options.speculationPrerenderList,
-	] );
 
 	const speculationRules =
 		typeof wppoSettings !== 'undefined'

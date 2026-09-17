@@ -1,4 +1,5 @@
 import { isAuthErrorCode } from './authErrors';
+import { redactLogSecrets } from './logSecrets';
 
 // Audit #1354: the raw lookup Set stays module-private in
 // authErrors.js — re-export only the frozen list and the lookup.
@@ -48,37 +49,6 @@ export const getWppoSettings = ( path, fallback = {} ) => {
 	return current === undefined ? fallback : current;
 };
 
-/**
- * Redact secret-looking substrings from a log message (defense-in-depth).
- *
- * Server messages are trusted, but a message that ever embeds a credential
- * (Redis AUTH, PageSpeed API key) would otherwise persist verbatim in
- * devtools. Redaction runs before truncation.
- *
- * @since NEXT
- * @param {string} raw Raw message.
- * @return {string} Redacted message.
- */
-const redactLogSecrets = ( raw ) => {
-	if ( typeof raw !== 'string' || '' === raw ) {
-		return raw;
-	}
-	return raw
-		.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
-		.replace(
-			/(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi,
-			'$1=[redacted]'
-		)
-		.replace( /\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi, '$1=[redacted]' )
-		.replace(
-			/([?&](?:key|api[_-]?key|token|secret|password|pwd)\s*=)[^&\s]*/gi,
-			'$1[redacted]'
-		)
-		.replace(
-			/\b(password|passwd|pwd|secret|token)\b\s*[:=\s]\s*(['"]?)\S+\2/gi,
-			'$1=[redacted]'
-		);
-};
 
 /**
  * Extract a safe log message from an error without leaking response bodies.

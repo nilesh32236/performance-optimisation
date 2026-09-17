@@ -214,7 +214,8 @@ describe( 'formatValue', () => {
 	} );
 
 	it( 'formats milliseconds', () => {
-		expect( formatValue( '500', 'ms' ) ).toBe( '500ms' );
+		// Audit #1401: shared formatMs composes a spaced, localized unit.
+		expect( formatValue( '500', 'ms' ) ).toBe( '500 ms' );
 	} );
 
 	it( 'formats default unit', () => {

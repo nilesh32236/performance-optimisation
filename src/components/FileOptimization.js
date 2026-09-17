@@ -340,62 +340,52 @@ export const stripCdnRowIds = ( source = {} ) => {
 		} ),
 	};
 };
-// Backward-compatibility alias for the pre-rename `stripCdnIds` export
-// (kept so existing imports/tests keep working).
-// @since NEXT
-export const stripCdnIds = stripCdnRowIds;
 // Numeric clamps mirroring the server-side sanitizers so a raw server value
 // can never reach state/submit verbatim (display/UX parity — the server
 // stays authoritative).
+// Audit #1401: shared guarded-number core behind the sibling
+// normalizers (idle/ccss/regression) so PHP-parity fixes land once.
+// Returns { ok, n }: ok=false means fail open to the caller default.
+// @since NEXT
+const parseGuardedNumber = ( value ) => {
+	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
+		return { ok: false, n: 0 };
+	}
+	const s = String( value ?? '' ).trim();
+	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
+		return { ok: false, n: 0 };
+	}
+	const n = typeof value === 'number' ? value : Number( s );
+	if ( ! Number.isFinite( n ) ) {
+		return { ok: false, n: 0 };
+	}
+	return { ok: true, n };
+};
+
 // Booleans/arrays fail open (true must not coerce to 1 via Number()), and
 // hex/octal/binary literals fail open to match PHP is_numeric() parity
 // (see normalizeRetries).
 // @since NEXT
 export const normalizeIdleTimeout = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 3000;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 3000;
-	}
-	let n;
-	if ( typeof value === 'number' ) {
-		n = value;
-	} else {
-		n = Number( s );
-	}
-	if ( ! Number.isFinite( n ) || n <= 0 ) {
+	const { ok, n } = parseGuardedNumber( value );
+	if ( ! ok || n <= 0 ) {
 		return 3000;
 	}
 	return Math.min( 20000, Math.max( 500, Math.trunc( n ) ) );
 };
 // @since NEXT
 export const normalizeCcssMaxSize = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 20480;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 20480;
-	}
-	const n = typeof value === 'number' ? value : Number( s );
-	if ( ! Number.isFinite( n ) || n <= 0 ) {
+	const { ok, n } = parseGuardedNumber( value );
+	if ( ! ok || n <= 0 ) {
 		return 20480;
 	}
 	return Math.trunc( n );
 };
+
 // @since NEXT
 export const normalizeRegressionThreshold = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 20;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 20;
-	}
-	const n = typeof value === 'number' ? value : Number( s );
-	if ( ! Number.isFinite( n ) ) {
+	const { ok, n } = parseGuardedNumber( value );
+	if ( ! ok ) {
 		return 20;
 	}
 	const t = Math.trunc( n );

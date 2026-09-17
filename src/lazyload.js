@@ -1,3 +1,5 @@
+import { redactLogSecrets } from './lib/logSecrets';
+
 /**
  * Cached promise for the in-progress or completed deferred script load.
  * @type {Promise<void>|null}
@@ -13,18 +15,25 @@
  * @param {*} err Caught error value.
  * @return {string} Safe message string.
  */
+// Audit #1401: shared redaction — a credential-bearing message redacted
+// in the SPA must not log verbatim from this bundle.
 const getLogMessage = ( err ) => {
+	let message;
 	if ( err instanceof Error ) {
-		return err.message || 'Unknown error';
-	}
-	if ( typeof err === 'string' ) {
-		return err.slice( 0, 500 ) || 'Unknown error';
-	}
-	if ( err === null || typeof err === 'undefined' ) {
+		message = err.message || 'Unknown error';
+	} else if ( typeof err === 'string' ) {
+		message = err.slice( 0, 500 ) || 'Unknown error';
+	} else if ( err === null || typeof err === 'undefined' ) {
 		return 'Unknown error';
+	} else {
+		try {
+			message = String( err ).slice( 0, 500 );
+		} catch {
+			return 'Unknown error';
+		}
 	}
 	try {
-		return String( err ).slice( 0, 500 );
+		return ( redactLogSecrets( message ) || 'Unknown error' ).slice( 0, 500 );
 	} catch {
 		return 'Unknown error';
 	}
@@ -365,6 +374,28 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
 ] );
 
 /**
+ * Tokenize + lowercase + shape-check a raw attribute value, then keep only
+ * allowlisted tokens (audit #1401): single pipeline behind both iframe
+ * sanitizers so tightening the token shape in one cannot miss the other.
+ *
+ * @since NEXT
+ * @param {string}   value      Raw attribute value.
+ * @param {RegExp}   split      Split pattern.
+ * @param {Set}      allowedSet Allowlisted tokens.
+ * @return {Array} Kept tokens.
+ */
+const sanitizeTokenList = ( value, split, allowedSet ) =>
+	String( value )
+		.split( split )
+		.map( ( token ) => token.trim().toLowerCase() )
+		.filter(
+			( token ) =>
+				token &&
+				/^[a-z-]+$/.test( token ) &&
+				allowedSet.has( token )
+		);
+
+/**
  * Sanitize a stored `allow` value: keep only known-safe Permissions-Policy
  * tokens, return '' when nothing safe remains.
  *
@@ -372,18 +403,8 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
  * @param {string} value Raw allow attribute value.
  * @return {string} Sanitized value ('' when unsafe/empty).
  */
-const sanitizeIframeAllow = ( value ) => {
-	const tokens = String( value )
-		.split( ';' )
-		.map( ( token ) => token.trim().toLowerCase() )
-		.filter(
-			( token ) =>
-				token &&
-				/^[a-z-]+$/.test( token ) &&
-				IFRAME_ALLOW_TOKENS.has( token )
-		);
-	return tokens.join( '; ' );
-};
+const sanitizeIframeAllow = ( value ) =>
+	sanitizeTokenList( value, ';', IFRAME_ALLOW_TOKENS ).join( '; ' );
 
 /**
  * Sanitize a stored `sandbox` value: keep only known-safe tokens (never
@@ -399,14 +420,7 @@ const sanitizeIframeSandbox = ( value ) => {
 	if ( ! raw ) {
 		return '';
 	}
-	const tokens = raw
-		.split( /\s+/ )
-		.filter(
-			( token ) =>
-				token &&
-				/^[a-z-]+$/.test( token ) &&
-				IFRAME_SANDBOX_TOKENS.has( token )
-		);
+	const tokens = sanitizeTokenList( raw, /\s+/, IFRAME_SANDBOX_TOKENS );
 	return tokens.length ? tokens.join( ' ' ) : null;
 };
 
