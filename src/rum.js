@@ -313,7 +313,8 @@ export const sanitizeSlowResourceEntry = ( entry ) => {
  * Guarded on `performance.getEntriesByType`; entries slower than
  * `RUM_SLOW_RESOURCE_THRESHOLD_MS` are kept (or the top-3 slowest when
  * none cross the threshold), capped at `RUM_MAX_SLOW_RESOURCES`, with a
- * ~1.5KB JSON budget check that drops the slowest-first on overflow.
+ * ~1.5KB JSON budget check that drops the fastest-first (keeping the
+ * slowest) on overflow.
  * Returns an empty array when the API is absent so callers omit the field.
  *
  * @since NEXT
@@ -349,7 +350,7 @@ export const collectSlowResources = () => {
 			candidates = shaped.slice( 0, 3 );
 		}
 		candidates = candidates.slice( 0, RUM_MAX_SLOW_RESOURCES );
-		// Payload budget: keep JSON under ~1.5KB, drop slowest-first.
+		// Payload budget: keep JSON under ~1.5KB, drop fastest-first (keep slowest) on overflow.
 		let encoded = '';
 		try {
 			encoded = JSON.stringify( candidates );
@@ -424,9 +425,11 @@ export const sanitizeRumValues = ( raw ) => {
 		typeof raw.lcpSelector === 'string' &&
 		raw.lcpSelector &&
 		raw.lcpSelector.length <= RUM_MAX_LCP_SELECTOR_LENGTH &&
-		/^[a-z0-9#._\-\s>:~+[\]="']{1,256}$/i.test( raw.lcpSelector ) &&
+		/^[a-z0-9#._\-\s:~+[\]=']{1,256}$/i.test( raw.lcpSelector ) &&
 		raw.lcpSelector.indexOf( '<' ) === -1 &&
-		raw.lcpSelector.indexOf( '>' ) !== 0 &&
+		raw.lcpSelector.indexOf( '>' ) === -1 &&
+		raw.lcpSelector.indexOf( '"' ) === -1 &&
+		raw.lcpSelector.indexOf( '`' ) === -1 &&
 		raw.lcpSelector.toLowerCase().indexOf( 'javascript:' ) === -1
 	) {
 		clean.lcpSelector = raw.lcpSelector.slice(

@@ -1291,7 +1291,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$attributed_selector = null;
 			$slow_candidates     = array();
 			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_top_slow_resources' ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_top_slow_resources' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_top_lcp_selector' ) ) {
 					if ( ! empty( $top_paths ) && is_string( $top_paths[0] ) ) {
 						$top_selector = \PerformanceOptimise\Inc\RUM::get_top_lcp_selector( $top_paths[0] );
 						if ( is_array( $top_selector ) && isset( $top_selector['selector'] ) && is_string( $top_selector['selector'] ) && '' !== $top_selector['selector'] ) {
@@ -2264,12 +2264,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// emit nothing. Suggestions only — never auto-applied.
 			try {
 				$attributed = $model['attributed_lcp'] ?? null;
-				if ( null === $attributed && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_top_slow_resources' ) ) {
-					// Models persisted before attribution shipped: live
-					// read-only fallback. Never fatal, never writes.
-					$prefetch_first = ( is_array( $prefetch ) && ! empty( $prefetch ) ) ? null : null;
-					unset( $prefetch_first );
-				}
+				// Models persisted before attribution shipped simply emit no
+				// suggestions for missing keys (fail open).
 				if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] ) {
 					$attr_path     = isset( $attributed['path'] ) && is_string( $attributed['path'] ) ? $attributed['path'] : '';
 					$attr_selector = $attributed['selector'];

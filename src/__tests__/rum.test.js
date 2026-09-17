@@ -6,6 +6,13 @@ import {
 	RUM_MAX_METRIC_MS,
 	shouldSendSample,
 	RUM_DEFAULT_SAMPLE_RATE,
+	deriveLcpSelector,
+	sanitizeSlowResourceEntry,
+	collectSlowResources,
+	RUM_MAX_LCP_SELECTOR_LENGTH,
+	RUM_MAX_SLOW_RESOURCES,
+	RUM_SLOW_RESOURCE_THRESHOLD_MS,
+	RUM_ALLOWED_RESOURCE_TYPES,
 } from '../rum';
 
 describe( 'classifyDeviceWidth', () => {
@@ -226,5 +233,299 @@ describe( 'shouldSendSample', () => {
 
 	it( 'fails open on a non-finite roll', () => {
 		expect( shouldSendSample( 10, NaN ) ).toBe( true );
+	} );
+} );
+
+describe( 'deriveLcpSelector', () => {
+	it( 'derives tag#id when the element has a valid id', () => {
+		expect(
+			deriveLcpSelector( {
+				tagName: 'IMG',
+				id: 'hero-image',
+				classList: { length: 0 },
+			} )
+		).toBe( 'img#hero-image' );
+	} );
+
+	it( 'derives tag.first-class when no id is present', () => {
+		expect(
+			deriveLcpSelector( {
+				tagName: 'DIV',
+				id: '',
+				classList: { length: 2, 0: 'hero', 1: 'lazy' },
+			} )
+		).toBe( 'div.hero' );
+	} );
+
+	it( 'falls back to the className string when classList is absent', () => {
+		expect(
+			deriveLcpSelector( {
+				tagName: 'SECTION',
+				className: 'lead  extra',
+			} )
+		).toBe( 'section.lead' );
+	} );
+
+	it( 'returns a bare tag when neither id nor class is usable', () => {
+		expect( deriveLcpSelector( { tagName: 'H1' } ) ).toBe( 'h1' );
+	} );
+
+	it( 'ignores an invalid id and falls back to the first class', () => {
+		expect(
+			deriveLcpSelector( {
+				tagName: 'IMG',
+				id: 'has space<script>',
+				classList: { length: 1, 0: 'hero' },
+			} )
+		).toBe( 'img.hero' );
+	} );
+
+	it( 'returns null for missing or invalid elements (fail-open)', () => {
+		expect( deriveLcpSelector( null ) ).toBe( null );
+		expect( deriveLcpSelector( undefined ) ).toBe( null );
+		expect( deriveLcpSelector( {} ) ).toBe( null );
+		expect( deriveLcpSelector( { tagName: '123-bad' } ) ).toBe( null );
+		expect( deriveLcpSelector( { tagName: '<script>' } ) ).toBe( null );
+	} );
+
+	it( 'never emits markup, combinators or xpath', () => {
+		const selector = deriveLcpSelector( {
+			tagName: 'IMG',
+			id: 'hero',
+		} );
+		expect( selector ).toBe( 'img#hero' );
+		expect( selector ).not.toMatch( /[<>"'`/\\[\]()]/ );
+	} );
+} );
+
+describe( 'sanitizeSlowResourceEntry', () => {
+	it( 'shapes a valid entry and rounds the duration', () => {
+		expect(
+			sanitizeSlowResourceEntry( {
+				name: 'https://example.com/app.js',
+				initiatorType: 'script',
+				duration: 450.6,
+			} )
+		).toEqual( {
+			name: 'https://example.com/app.js',
+			type: 'script',
+			duration: 451,
+		} );
+	} );
+
+	it( 'accepts the client-shaped type key as well as initiatorType', () => {
+		expect(
+			sanitizeSlowResourceEntry( {
+				name: '/style.css',
+				type: 'css',
+				duration: 500,
+			} ).type
+		).toBe( 'css' );
+	} );
+
+	it( 'accepts every allowlisted initiator type', () => {
+		expect( RUM_ALLOWED_RESOURCE_TYPES ).toContain( 'img' );
+		for ( const type of RUM_ALLOWED_RESOURCE_TYPES ) {
+			const entry = sanitizeSlowResourceEntry( {
+				name: 'https://example.com/asset',
+				initiatorType: type.toUpperCase(),
+				duration: 400,
+			} );
+			expect( entry ).not.toBe( null );
+			expect( entry.type ).toBe( type );
+		}
+	} );
+
+	it( 'drops entries with disallowed types, bad urls or out-of-range durations', () => {
+		expect(
+			sanitizeSlowResourceEntry( {
+				name: 'https://example.com/video.mp4',
+				initiatorType: 'video',
+				duration: 900,
+			} )
+		).toBe( null );
+		expect(
+			sanitizeSlowResourceEntry( {
+				name: 'data:image/png;base64,x',
+				initiatorType: 'img',
+				duration: 900,
+			} )
+		).toBe( null );
+		expect(
+			sanitizeSlowResourceEntry( {
+				name: 'javascript:alert(1)',
+				initiatorType: 'script',
+				duration: 900,
+			} )
+		).toBe( null );
+		expect(
+			sanitizeSlowResourceEntry( {
+				name: 'https://example.com/a.js',
+				initiatorType: 'script',
+				duration: -5,
+			} )
+		).toBe( null );
+		expect(
+			sanitizeSlowResourceEntry( {
+				name: 'https://example.com/a.js',
+				initiatorType: 'script',
+				duration: RUM_MAX_METRIC_MS + 1,
+			} )
+		).toBe( null );
+		expect( sanitizeSlowResourceEntry( null ) ).toBe( null );
+		expect( sanitizeSlowResourceEntry( 'nope' ) ).toBe( null );
+	} );
+} );
+
+describe( 'collectSlowResources', () => {
+	let originalGetEntriesByType;
+
+	beforeEach( () => {
+		originalGetEntriesByType = performance.getEntriesByType;
+	} );
+
+	afterEach( () => {
+		performance.getEntriesByType = originalGetEntriesByType;
+	} );
+
+	const stubResources = ( entries ) => {
+		performance.getEntriesByType = jest.fn( ( type ) =>
+			type === 'resource' ? entries : []
+		);
+	};
+
+	it( 'keeps only entries slower than the threshold', () => {
+		expect( RUM_SLOW_RESOURCE_THRESHOLD_MS ).toBe( 300 );
+		stubResources( [
+			{
+				name: 'https://example.com/slow.js',
+				initiatorType: 'script',
+				duration: 900,
+			},
+			{
+				name: 'https://example.com/fast.css',
+				initiatorType: 'css',
+				duration: 50,
+			},
+		] );
+		const collected = collectSlowResources();
+		expect( collected ).toHaveLength( 1 );
+		expect( collected[ 0 ].name ).toBe( 'https://example.com/slow.js' );
+	} );
+
+	it( 'falls back to the top-3 slowest when nothing crosses the threshold', () => {
+		stubResources(
+			[ 100, 90, 80, 70, 60 ].map( ( duration, i ) => ( {
+				name: `https://example.com/a${ i }.js`,
+				initiatorType: 'script',
+				duration,
+			} ) )
+		);
+		const collected = collectSlowResources();
+		expect( collected ).toHaveLength( 3 );
+		expect( collected.map( ( item ) => item.duration ) ).toEqual( [
+			100, 90, 80,
+		] );
+	} );
+
+	it( 'caps the audit at RUM_MAX_SLOW_RESOURCES entries', () => {
+		expect( RUM_MAX_SLOW_RESOURCES ).toBe( 5 );
+		stubResources(
+			Array.from( { length: 8 }, ( _, i ) => ( {
+				name: `https://example.com/a${ i }.js`,
+				initiatorType: 'script',
+				duration: 1000 - i * 10,
+			} ) )
+		);
+		expect( collectSlowResources() ).toHaveLength( 5 );
+	} );
+
+	it( 'returns an empty array when resource timing is unavailable', () => {
+		performance.getEntriesByType = undefined;
+		expect( collectSlowResources() ).toEqual( [] );
+	} );
+
+	it( 'drops the fastest entries first when the ~1.5KB budget overflows', () => {
+		stubResources(
+			Array.from( { length: 5 }, ( _, i ) => ( {
+				name: `https://example.com/${ 'a'.repeat( 380 ) }${ i }.js`,
+				initiatorType: 'script',
+				duration: 1000 - i * 10,
+			} ) )
+		);
+		const collected = collectSlowResources();
+		expect( collected.length ).toBeLessThan( 5 );
+		expect( collected.length ).toBeGreaterThan( 0 );
+		// The slowest entry survives budget trimming.
+		expect( collected[ 0 ].duration ).toBe( 1000 );
+		expect( JSON.stringify( collected ).length ).toBeLessThanOrEqual(
+			1536
+		);
+	} );
+} );
+
+describe( 'sanitizeRumValues attribution branches', () => {
+	it( 'passes a compact lcpSelector through', () => {
+		expect( RUM_MAX_LCP_SELECTOR_LENGTH ).toBe( 256 );
+		const clean = sanitizeRumValues( {
+			lcp: 1200,
+			lcpSelector: 'img#hero-image',
+		} );
+		expect( clean.lcpSelector ).toBe( 'img#hero-image' );
+	} );
+
+	it( 'drops malicious or out-of-gate lcpSelector values', () => {
+		const cases = [
+			'div > img',
+			'img[src="hero.jpg"]',
+			'<script>alert(1)</script>',
+			'img`onerror=alert(1)`',
+			'javascript:alert(1)',
+			'a'.repeat( 257 ),
+			123,
+		];
+		for ( const lcpSelector of cases ) {
+			expect(
+				sanitizeRumValues( { lcp: 1200, lcpSelector } ).lcpSelector
+			).toBeUndefined();
+		}
+	} );
+
+	it( 'shapes slowResources and omits the key when empty', () => {
+		const clean = sanitizeRumValues( {
+			lcp: 1200,
+			slowResources: [
+				{
+					name: 'https://example.com/slow.js',
+					type: 'script',
+					duration: 800,
+				},
+				{ name: 'data:image/png;base64,x', type: 'img', duration: 9 },
+				'nope',
+			],
+		} );
+		expect( clean.slowResources ).toHaveLength( 1 );
+		expect( clean.slowResources[ 0 ] ).toEqual( {
+			name: 'https://example.com/slow.js',
+			type: 'script',
+			duration: 800,
+		} );
+		expect(
+			sanitizeRumValues( { lcp: 1200, slowResources: [] } ).slowResources
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( { lcp: 1200 } ).slowResources
+		).toBeUndefined();
+	} );
+
+	it( 'caps slowResources at RUM_MAX_SLOW_RESOURCES entries', () => {
+		const slowResources = Array.from( { length: 8 }, ( _, i ) => ( {
+			name: `https://example.com/a${ i }.js`,
+			type: 'script',
+			duration: 500,
+		} ) );
+		expect(
+			sanitizeRumValues( { lcp: 1200, slowResources } ).slowResources
+		).toHaveLength( RUM_MAX_SLOW_RESOURCES );
 	} );
 } );

@@ -1383,9 +1383,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( '' === $cleaned ) {
 					return '';
 				}
-				if ( 1 !== preg_match( '/^[a-z0-9#\._\-\s>:~+\[\]="\']{1,256}$/i', $cleaned ) ) {
+				if ( 1 !== preg_match( '/^[a-z0-9#\._\-\s:~+\[\]=\']{1,256}$/i', $cleaned ) ) {
 					return '';
 				}
+				// Authoritative markup/breakout rejection (mirrored by
+				// sanitizeRumValues() in src/rum.js): angle brackets,
+				// double quotes and backticks never pass, so the regex
+				// above intentionally omits them.
 				if ( false !== strpbrk( $cleaned, '<>"`' ) ) {
 					return '';
 				}
@@ -1455,7 +1459,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					if ( '' === $url || ! self::is_safe_lcp_url( $url ) ) {
 						continue;
 					}
-					$type = self::normalize_slow_resource_type( $entry['type'] ?? null );
+					$type = self::normalize_slow_resource_type( $entry['type'] ?? ( $entry['initiatorType'] ?? null ) );
 					if ( '' === $type ) {
 						continue;
 					}
@@ -2657,8 +2661,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( ! is_array( $all ) || empty( $all ) ) {
 					return null;
 				}
-				$now  = function_exists( 'time' ) ? time() : 0;
-				$best = null;
+				$now          = function_exists( 'time' ) ? time() : 0;
+				$per_selector = array();
 				foreach ( $all as $day_bucket ) {
 					if ( ! is_array( $day_bucket ) ) {
 						continue;
@@ -2685,30 +2689,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							}
 							$n         = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
 							$last_seen = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
-							if ( null === $best ) {
-								$best = array(
+							if ( ! isset( $per_selector[ $selector ] ) ) {
+								$per_selector[ $selector ] = array(
 									'selector' => $selector,
-									'n'        => $n,
-									'lastSeen' => $last_seen,
+									'n'        => 0,
+									'lastSeen' => 0,
 								);
-							} else {
-								$best['n']       += $n;
-								$best['lastSeen'] = max( $best['lastSeen'], $last_seen );
-								if ( $n >= ( $best['_raw_n'] ?? 0 ) ) {
-									$best['selector'] = $selector;
-									$best['_raw_n']   = $n;
-								}
 							}
-							if ( ! isset( $best['_raw_n'] ) ) {
-								$best['_raw_n'] = $n;
-							}
+							$per_selector[ $selector ]['n']       += $n;
+							$per_selector[ $selector ]['lastSeen'] = max( $per_selector[ $selector ]['lastSeen'], $last_seen );
 						}
+					}
+				}
+				if ( empty( $per_selector ) ) {
+					return null;
+				}
+				// Pick the selector with the highest per-selector count so
+				// unrelated selectors can neither inflate the sample gate
+				// nor keep a stale winner fresh.
+				$best = null;
+				foreach ( $per_selector as $candidate ) {
+					if ( null === $best || $candidate['n'] > $best['n'] ) {
+						$best = $candidate;
 					}
 				}
 				if ( null === $best ) {
 					return null;
 				}
-				unset( $best['_raw_n'] );
 				if ( $best['n'] < $min ) {
 					return null;
 				}
