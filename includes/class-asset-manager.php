@@ -95,8 +95,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			// Capture assets after they've been printed so $done arrays are populated.
 			add_action( 'wp_footer', array( $this, 'capture_page_assets' ), 9999 );
 
-			// Dequeue disabled assets on the frontend at a very late priority.
-			add_action( 'wp_enqueue_scripts', array( $this, 'dequeue_selected_assets' ), 9999 );
+			// Dequeue disabled assets at print time, not at wp_enqueue_scripts:
+			// the dependency guard reads $wp_scripts/$wp_styles->queue, and
+			// handles enqueued after wp_enqueue_scripts (widgets, late
+			// third-party enqueues) are invisible to an early pass, so an
+			// early dequeue could strip a shared library whose real dependent
+			// simply had not queued yet. Print-time hooks see the fuller
+			// queue. Residual limitation (documented): handles enqueued after
+			// their print phase has started (e.g. a footer script queued after
+			// wp_print_scripts runs) stay invisible; the guard fails open and
+			// keeps such assets enqueued.
+			add_action( 'wp_print_scripts', array( $this, 'dequeue_selected_assets' ), 9999 );
+			add_action( 'wp_print_styles', array( $this, 'dequeue_selected_assets' ), 9999 );
+			add_action( 'wp_print_footer_scripts', array( $this, 'dequeue_selected_assets' ), 9999 );
 		}
 
 		/**
@@ -144,7 +155,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 
 			// Global kill-switch (issue #1406): default OFF. Absent or
 			// malformed settings fail closed to OFF (assets stay enqueued).
-			if ( ! self::is_enabled() ) {
+			// Settings are fetched once per invocation and shared with the
+			// allowlist reader below (single Util::get_settings() per pass).
+			$settings = array();
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( ! is_array( $settings ) ) {
+						$settings = array();
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$settings = array();
+			}
+			if ( ! self::is_enabled( $settings ) ) {
 				return;
 			}
 
@@ -169,33 +194,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 
 			global $wp_scripts, $wp_styles;
 
-			$extra_allowlist = self::get_extra_allowlist();
+			$extra_allowlist = self::get_extra_allowlist( $settings );
 
-			$safe_scripts = self::filter_safe_handles( $disabled_scripts, self::registered_map( $wp_scripts ), self::queue_list( $wp_scripts ), $extra_allowlist );
+			$safe_scripts = self::filter_safe_handles( $disabled_scripts, self::registered_map( $wp_scripts ), self::queue_list( $wp_scripts ), $extra_allowlist, 'script' );
 			foreach ( $safe_scripts as $handle ) {
 				wp_dequeue_script( $handle );
 				wp_deregister_script( $handle );
 			}
 
-			$safe_styles = self::filter_safe_handles( $disabled_styles, self::registered_map( $wp_styles ), self::queue_list( $wp_styles ), $extra_allowlist );
+			$safe_styles = self::filter_safe_handles( $disabled_styles, self::registered_map( $wp_styles ), self::queue_list( $wp_styles ), $extra_allowlist, 'style' );
 			foreach ( $safe_styles as $handle ) {
 				wp_dequeue_style( $handle );
 				wp_deregister_style( $handle );
 			}
-		}
-
-		/**
-		 * Alias for dequeue_selected_assets() (issue #1406 naming parity).
-		 *
-		 * The proposed `maybe_dequeue_disabled()` dequeue entry point is this
-		 * hardened method: late dequeue with dependency guard, commerce
-		 * bypass, and global gate.
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		public function maybe_dequeue_disabled(): void {
-			$this->dequeue_selected_assets();
 		}
 
 		/**
@@ -402,7 +413,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		/**
 		 * Active (queued-to-print) handles from a WP_Scripts/WP_Styles registry.
 		 *
-		 * Reads `->queue` (populated at `wp_enqueue_scripts`, before print).
+		 * Reads `->queue` (populated before print; the dequeue pass runs on
+		 * the print-time hooks so late enqueues are visible to the guard).
 		 * Fail-open: an unreadable queue yields every registered handle as
 		 * active (most conservative: the guard refuses more, never less).
 		 *
@@ -430,6 +442,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		}
 
 		/**
+		 * Normalize an asset handle for comparison (lowercase + sanitize_key).
+		 *
+		 * Handles are case-insensitively compared so a mixed-case disabled
+		 * handle still matches its (lowercased) extra-allowlist entry and the
+		 * built-in protected lists. strtolower() runs first so the fold holds
+		 * even where sanitize_key() is stubbed; in production sanitize_key()
+		 * already lowercases, making the fold a no-op there.
+		 *
+		 * @since NEXT
+		 * @param mixed $handle Raw handle value.
+		 * @return string Normalized handle, or '' when unusable.
+		 */
+		private static function normalize_handle( $handle ): string {
+			try {
+				if ( ! is_string( $handle ) || '' === $handle ) {
+					return '';
+				}
+				$lower = strtolower( $handle );
+				if ( function_exists( 'sanitize_key' ) ) {
+					return (string) sanitize_key( $lower );
+				}
+				return (string) preg_replace( '/[^a-z0-9_\-]/', '', $lower );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Filter disabled handles down to those safe to dequeue.
 		 *
 		 * A handle is refused (kept enqueued) when it is protected
@@ -438,6 +479,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * transitively — that is not itself also disabled. Disabling a whole
 		 * dependent subtree at once is allowed.
 		 *
+		 * All handles are normalized (lowercase + sanitize_key) before
+		 * comparison so mixed-case input still matches the allowlists.
+		 * The never-strip list is per asset type: the script pass only honours
+		 * protected scripts + commerce scripts, the style pass only protected
+		 * styles, so a style named like a script handle (or vice versa) is no
+		 * longer over-blocked. An empty $asset_type keeps the legacy merged
+		 * list for backward compatibility.
+		 *
 		 * Pure helper (no I/O, no globals): fully unit-testable.
 		 *
 		 * @since NEXT
@@ -445,50 +494,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @param array<string,string[]> $registered Map of handle => deps.
 		 * @param string[]               $active     Handles queued to print.
 		 * @param string[]               $extra      Extra never-strip handles.
-		 * @return string[] Safe-to-dequeue handles (order-preserving, unique).
+		 * @param string                 $asset_type 'script', 'style', or '' (legacy merged list).
+		 * @return string[] Safe-to-dequeue handles (order-preserving, unique, normalized).
 		 */
-		public static function filter_safe_handles( array $disabled, array $registered, array $active, array $extra = array() ): array {
+		public static function filter_safe_handles( array $disabled, array $registered, array $active, array $extra = array(), string $asset_type = '' ): array {
 			try {
 				$disabled_set = array();
 				foreach ( $disabled as $handle ) {
-					if ( is_string( $handle ) && '' !== $handle && ! in_array( $handle, $disabled_set, true ) ) {
-						$disabled_set[] = $handle;
+					$clean = self::normalize_handle( $handle );
+					if ( '' !== $clean && ! in_array( $clean, $disabled_set, true ) ) {
+						$disabled_set[] = $clean;
 					}
 				}
 				if ( empty( $disabled_set ) ) {
 					return array();
 				}
-				$never_strip = array_merge( self::$protected_scripts, self::$protected_styles, self::$commerce_scripts, $extra );
+				if ( 'style' === $asset_type ) {
+					$never_strip_src = array_merge( self::$protected_styles, $extra );
+				} elseif ( 'script' === $asset_type ) {
+					$never_strip_src = array_merge( self::$protected_scripts, self::$commerce_scripts, $extra );
+				} else {
+					$never_strip_src = array_merge( self::$protected_scripts, self::$protected_styles, self::$commerce_scripts, $extra );
+				}
+				$never_strip = array();
+				foreach ( $never_strip_src as $handle ) {
+					$clean = self::normalize_handle( $handle );
+					if ( '' !== $clean ) {
+						$never_strip[ $clean ] = true;
+					}
+				}
 
-				// Reverse map: dependency => handles depending on it.
-				$dependents = array();
+				// Normalized registered map (handle => deps) so the guard
+				// graph speaks the same case-folded language as the inputs.
+				$normalized_registered = array();
 				foreach ( $registered as $handle => $deps ) {
-					if ( ! is_string( $handle ) || ! is_array( $deps ) ) {
+					$clean_handle = self::normalize_handle( $handle );
+					if ( '' === $clean_handle || ! is_array( $deps ) ) {
 						continue;
 					}
+					$clean_deps = array();
 					foreach ( $deps as $dep ) {
-						if ( ! is_string( $dep ) || '' === $dep ) {
-							continue;
+						$clean_dep = self::normalize_handle( $dep );
+						if ( '' !== $clean_dep && ! in_array( $clean_dep, $clean_deps, true ) ) {
+							$clean_deps[] = $clean_dep;
 						}
+					}
+					$normalized_registered[ $clean_handle ] = $clean_deps;
+				}
+
+				// Reverse map: dependency => set of handles depending on it
+				// (associative for O(1) dedup instead of linear in_array).
+				$dependents = array();
+				foreach ( $normalized_registered as $handle => $deps ) {
+					foreach ( $deps as $dep ) {
 						if ( ! isset( $dependents[ $dep ] ) ) {
 							$dependents[ $dep ] = array();
 						}
-						if ( ! in_array( $handle, $dependents[ $dep ], true ) ) {
-							$dependents[ $dep ][] = $handle;
-						}
+						$dependents[ $dep ][ $handle ] = true;
 					}
 				}
 
 				$active_set = array();
 				foreach ( $active as $handle ) {
-					if ( is_string( $handle ) && '' !== $handle ) {
-						$active_set[ $handle ] = true;
+					$clean = self::normalize_handle( $handle );
+					if ( '' !== $clean ) {
+						$active_set[ $clean ] = true;
 					}
 				}
 
 				$safe = array();
 				foreach ( $disabled_set as $handle ) {
-					if ( in_array( $handle, $never_strip, true ) ) {
+					if ( isset( $never_strip[ $handle ] ) ) {
 						continue;
 					}
 					if ( self::has_active_dependent( $handle, $dependents, $active_set, $disabled_set ) ) {
@@ -512,27 +588,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * allowed). Fail-safe: walk failure returns true (refuse).
 		 *
 		 * @since NEXT
-		 * @param string   $handle     Handle under test.
-		 * @param array    $dependents Reverse map (dependency => dependents).
+		 * @param string   $handle     Handle under test (normalized).
+		 * @param array    $dependents Reverse map (dependency => set of dependents as handle => true).
 		 * @param bool[]   $active_set Active handles as a set.
-		 * @param string[] $disabled_set Disabled handles.
+		 * @param string[] $disabled_set Disabled handles (normalized).
 		 * @return bool True when an active non-disabled dependent exists.
 		 */
 		private static function has_active_dependent( string $handle, array $dependents, array $active_set, array $disabled_set ): bool {
 			try {
 				$disabled_lookup = array();
 				foreach ( $disabled_set as $disabled ) {
-					$disabled_lookup[ $disabled ] = true;
+					if ( is_string( $disabled ) && '' !== $disabled ) {
+						$disabled_lookup[ $disabled ] = true;
+					}
 				}
 				$visited = array( $handle => true );
-				$queue   = isset( $dependents[ $handle ] ) && is_array( $dependents[ $handle ] ) ? array_values( $dependents[ $handle ] ) : array();
+				$queue   = isset( $dependents[ $handle ] ) && is_array( $dependents[ $handle ] ) ? array_keys( $dependents[ $handle ] ) : array();
+				$head    = 0;
+				$pending = count( $queue );
 				$steps   = 0;
-				while ( ! empty( $queue ) ) {
+				while ( $head < $pending ) {
 					++$steps;
 					if ( $steps > 10000 ) {
 						return true;
 					}
-					$current = array_shift( $queue );
+					$current = $queue[ $head ];
+					++$head;
 					if ( ! is_string( $current ) || '' === $current || isset( $visited[ $current ] ) ) {
 						continue;
 					}
@@ -541,9 +622,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 						return true;
 					}
 					if ( isset( $dependents[ $current ] ) && is_array( $dependents[ $current ] ) ) {
-						foreach ( $dependents[ $current ] as $next ) {
+						foreach ( $dependents[ $current ] as $next => $flag ) {
+							unset( $flag );
 							if ( is_string( $next ) && '' !== $next && ! isset( $visited[ $next ] ) ) {
 								$queue[] = $next;
+								++$pending;
 							}
 						}
 					}

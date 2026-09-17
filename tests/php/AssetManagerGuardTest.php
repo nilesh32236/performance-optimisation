@@ -65,34 +65,25 @@ class AssetManagerGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Define the wp_dequeue_script double (CoreTweaksTest pattern).
+	 * Define isolated dequeue doubles via Brain Monkey only.
 	 *
-	 * CoreTweaksTest eval-defines wp_dequeue_script on function_exists() and
-	 * asserts on its own global, so a Brain Monkey when() stub here would
-	 * leave a dead mock behind after tearDown (this file runs first
-	 * alphabetically) and break that file. A real eval'd double is used
-	 * instead, dual-recording CoreTweaksTest's global so that file stays
-	 * green. When another file already defined a double, a when()->alias()
-	 * override is used instead (safe: tearDown restores the pre-existing
-	 * real function). Styles/deregisters use plain when() stubs: no other
-	 * file guards on them, so the standard reconfigure pattern applies.
+	 * No eval'd real functions and no writes to other files' globals: each
+	 * when()->alias() mock is owned by the current Brain Monkey session
+	 * (torn down per test below), so this file stays green regardless of
+	 * suite ordering relative to CoreTweaksTest, which manages its own
+	 * wp_dequeue_script double and globals independently.
 	 *
 	 * @return void
 	 */
 	private function define_dequeue_doubles(): void {
-		if ( ! function_exists( 'wp_dequeue_script' ) ) {
-			eval( 'function wp_dequeue_script($handle){ $GLOBALS["wppo_test_dequeued_script"] = $handle; $GLOBALS["wppo_asset_guard_dequeued_scripts"][] = $handle; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- Test-only WP stub (CoreTweaksTest pattern).
-		} else {
-			Functions\when( 'wp_dequeue_script' )->alias(
-				static function ( $handle ) {
-					$GLOBALS['wppo_test_dequeued_script']            = $handle;
-					$GLOBALS['wppo_asset_guard_dequeued_scripts'][] = $handle;
-				}
-			);
-		}
+		Functions\when( 'wp_dequeue_script' )->alias(
+			static function ( $handle ) {
+				$GLOBALS['wppo_asset_guard_dequeued_scripts'][] = $handle;
+			}
+		);
 		Functions\when( 'wp_deregister_script' )->justReturn( null );
 		Functions\when( 'wp_dequeue_style' )->alias(
-			function ( $handle ) {
+			static function ( $handle ) {
 				$GLOBALS['wppo_asset_guard_dequeued_styles'][] = $handle;
 			}
 		);
@@ -118,11 +109,16 @@ class AssetManagerGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Tear down superglobal fixtures.
+	 * Tear down superglobal fixtures and the Brain Monkey session.
+	 *
+	 * Closing the session per test restores any Patchwork override of an
+	 * already-declared wp_dequeue_script() (e.g. when CoreTweaksTest runs
+	 * first) and drops this file's doubles, so no stub leaks across files.
 	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		unset( $_SERVER['REQUEST_URI'] );
 		unset( $GLOBALS['wp_scripts'], $GLOBALS['wp_styles'] );
+		\Brain\Monkey\tearDown();
 		parent::tearDown();
 	}
 
@@ -406,28 +402,83 @@ class AssetManagerGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The maybe_dequeue_disabled() alias delegates to the hardened path.
+	 * Per-type never-strip: a style named like a protected script handle is
+	 * not over-blocked in the style pass.
 	 */
-	public function test_maybe_dequeue_disabled_alias_dequeues_leaf(): void {
-		$this->settings_fixture = array(
-			'file_optimisation' => array( 'assetManagerEnabled' => true ),
+	public function test_filter_safe_handles_script_allowlist_does_not_block_styles(): void {
+		$safe = Asset_Manager::filter_safe_handles(
+			array( 'jquery', 'plain-style' ),
+			array(
+				'jquery'      => array(),
+				'plain-style' => array(),
+			),
+			array( 'jquery', 'plain-style' ),
+			array(),
+			''
 		);
-		$_SERVER['REQUEST_URI'] = '/about/';
-		Functions\when( 'get_post_meta' )->alias(
-			static function ( $post_id, $key, $single ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				if ( '_wppo_disabled_scripts' === $key ) {
-					return array( 'contact-form-7' );
-				}
-				return array();
-			}
+		// Legacy merged list (empty type falls back to BC behavior): jquery blocked.
+		$this->assertSame( array( 'plain-style' ), $safe );
+
+		$safe = Asset_Manager::filter_safe_handles(
+			array( 'jquery', 'plain-style' ),
+			array(
+				'jquery'      => array(),
+				'plain-style' => array(),
+			),
+			array( 'jquery', 'plain-style' ),
+			array(),
+			'style'
 		);
-		$GLOBALS['wp_scripts'] = $this->make_registry( array( 'contact-form-7' => array() ), array( 'contact-form-7' ) );
-		$GLOBALS['wp_styles']  = $this->make_registry( array(), array() );
+		$this->assertSame( array( 'jquery', 'plain-style' ), $safe );
+	}
 
-		$manager = ( new ReflectionClass( Asset_Manager::class ) )->newInstanceWithoutConstructor();
-		$manager->maybe_dequeue_disabled();
+	/**
+	 * Per-type never-strip: style-only and commerce handles are scoped to
+	 * their own pass (commerce guards scripts, not styles).
+	 */
+	public function test_filter_safe_handles_style_and_commerce_allowlist_are_type_scoped(): void {
+		$safe = Asset_Manager::filter_safe_handles(
+			array( 'dashicons', 'wc-cart-fragments', 'plain-script' ),
+			array(
+				'dashicons'         => array(),
+				'wc-cart-fragments' => array(),
+				'plain-script'      => array(),
+			),
+			array( 'dashicons', 'wc-cart-fragments', 'plain-script' ),
+			array(),
+			'script'
+		);
+		$this->assertSame( array( 'dashicons', 'plain-script' ), $safe );
 
-		$this->assertSame( array( 'contact-form-7' ), $this->dequeued_scripts() );
+		$safe = Asset_Manager::filter_safe_handles(
+			array( 'dashicons', 'wc-cart-fragments', 'plain-style' ),
+			array(
+				'dashicons'         => array(),
+				'wc-cart-fragments' => array(),
+				'plain-style'       => array(),
+			),
+			array( 'dashicons', 'wc-cart-fragments', 'plain-style' ),
+			array(),
+			'style'
+		);
+		$this->assertSame( array( 'wc-cart-fragments', 'plain-style' ), $safe );
+	}
+
+	/**
+	 * Handles are normalized before comparison: mixed-case disabled input
+	 * still matches a lowercased extra-allowlist entry.
+	 */
+	public function test_filter_safe_handles_normalizes_mixed_case_handles(): void {
+		$safe = Asset_Manager::filter_safe_handles(
+			array( 'Keep-Me', 'Plain-Handle' ),
+			array(
+				'keep-me'      => array(),
+				'plain-handle' => array(),
+			),
+			array( 'keep-me', 'plain-handle' ),
+			array( 'keep-me' )
+		);
+		$this->assertSame( array( 'plain-handle' ), $safe );
 	}
 
 	/**

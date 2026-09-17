@@ -148,9 +148,14 @@ class CoreTweaksTest extends \PHPUnit\Framework\TestCase {
 		if ( ! function_exists( 'wp_dequeue_script_module' ) ) {
 			eval( 'function wp_dequeue_script_module($id){ $GLOBALS["wppo_test_dequeued_module"] = $id; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
 		}
-		if ( ! function_exists( 'wp_dequeue_script' ) ) {
-			eval( 'function wp_dequeue_script($handle){ $GLOBALS["wppo_test_dequeued_script"] = $handle; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
-		}
+		// Isolated Brain Monkey double (no eval, no cross-file globals): works
+		// whether or not another test file already declared the stub, and the
+		// trait tearDown restores it afterwards.
+		Functions\when( 'wp_dequeue_script' )->alias(
+			static function ( $handle ) {
+				$GLOBALS['wppo_test_dequeued_script'] = $handle;
+			}
+		);
 		$GLOBALS['wppo_test_dequeued_module'] = null;
 		$GLOBALS['wppo_test_dequeued_script'] = null;
 		Functions\when( 'remove_action' )->justReturn( true );
