@@ -7,6 +7,7 @@
  * @param {Object}                    props
  * @param {string}                    props.content  The tooltip text.
  * @param {import('react').ReactNode} props.children The element that triggers the tooltip.
+ * @param {string}                    [props.label]  Optional accessible name for the icon-only trigger. Defaults to the string content, or a generic label for rich content.
  *
  * @since 1.5.0
  */
