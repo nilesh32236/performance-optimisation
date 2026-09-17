@@ -3063,7 +3063,10 @@ const initVideoPlaceholders = () => {
 			el.setAttribute( 'role', 'button' );
 		}
 		if ( ! el.hasAttribute( 'aria-label' ) ) {
-			el.setAttribute( 'aria-label', 'Play video' );
+			el.setAttribute(
+				'aria-label',
+				window.wppoLazyload?.i18n?.playVideo || 'Play video'
+			);
 		}
 		el.addEventListener( 'keydown', ( event ) => {
 			if ( event.key === 'Enter' || event.key === ' ' ) {

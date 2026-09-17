@@ -4258,7 +4258,7 @@ const FileOptimization = ( {
 								{ ( settings.cdnMapping || [] ).map(
 									( entry, idx ) => (
 										<div
-											key={ entry.id }
+											key={ entry.id ?? idx }
 											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">

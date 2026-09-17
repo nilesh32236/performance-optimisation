@@ -487,7 +487,7 @@ const App = () => {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 					console.error(
-						'wppo: server rules fetch failed:',
+						'wppo: ccss status fetch failed:',
 						err?.message || err
 					);
 				}
