@@ -1253,9 +1253,16 @@ observeViewportScripts();
 // Only register interaction event listeners if there are scripts using interaction strategy.
 if ( delayedScripts.length > 0 && hasInteractionScripts( delayedScripts ) ) {
 	// mouseover subsumes mouseenter (both fire on the same first pointer
-	// entry), so the pair only duplicated document listeners for one flush
-	// (audit #1354). mousedown covers click-driven engagement.
-	const triggerEvents = [ 'mousedown', 'touchstart', 'scroll', 'keydown' ];
+	// entry), so only mouseover is listed. It is kept alongside mousedown:
+	// hover-only sessions (kiosk, preview, assistive pointer) that never
+	// press/scroll/key still need to flush delayed scripts (audit #1354).
+	const triggerEvents = [
+		'mouseover',
+		'mousedown',
+		'touchstart',
+		'scroll',
+		'keydown',
+	];
 	const loadHandler = () => {
 		triggerEvents.forEach( ( event ) =>
 			document.removeEventListener( event, loadHandler )

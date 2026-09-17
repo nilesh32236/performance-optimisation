@@ -68,6 +68,16 @@ const getAllowedImportKeys = () =>
 const MAX_IMPORT_BYTES = 512 * 1024;
 
 /**
+ * Maximum length of a single string inside an imported settings file
+ * (64KB). Without a per-string cap, 1000 nested keys x 512KB each could
+ * retain ~500MB from a pasted JSON (admin tab DoS/freeze) even though the
+ * whole-file gate covers the FileReader path.
+ *
+ * @since NEXT
+ */
+const MAX_IMPORT_STRING = 64 * 1024;
+
+/**
  * Maximum nesting depth accepted in an imported settings file.
  *
  * @since 2.0.0
@@ -207,7 +217,7 @@ const isValidImportValue = ( value, depth ) => {
 	}
 	const type = typeof value;
 	if ( type === 'string' ) {
-		return value.length <= MAX_IMPORT_BYTES;
+		return value.length <= MAX_IMPORT_STRING;
 	}
 	if ( type === 'number' || type === 'boolean' ) {
 		return true;
@@ -761,7 +771,26 @@ const PluginSetting = ( { options } ) => {
 				return;
 			}
 			try {
-				const fileData = JSON.parse( e.target.result );
+				// Gate pasted/read text length before JSON.parse so an
+				// oversized payload cannot freeze the admin tab during parse
+				// (the File.size gate above only covers the file path).
+				const rawText =
+					typeof e.target.result === 'string'
+						? e.target.result
+						: String( e.target.result ?? '' );
+				if ( rawText.length > MAX_IMPORT_BYTES ) {
+					notifyImport( {
+						type: 'error',
+						message: __(
+							'Invalid settings file. The file must contain valid plugin settings.',
+							'performance-optimisation'
+						),
+					} );
+					setIsImporting( false );
+					resetFileInput();
+					return;
+				}
+				const fileData = JSON.parse( rawText );
 
 				if ( ! validateImportData( fileData ) ) {
 					notifyImport( {
@@ -1410,6 +1439,7 @@ export {
 	getAllowedImportKeys,
 	getMaxImportTopKeys,
 	MAX_IMPORT_BYTES,
+	MAX_IMPORT_STRING,
 	MAX_IMPORT_DEPTH,
 	MAX_IMPORT_NESTED_KEYS,
 	SECRET_KEY_PATTERN,

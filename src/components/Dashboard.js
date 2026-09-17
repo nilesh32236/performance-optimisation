@@ -45,6 +45,18 @@ const AiPanel = lazy( () => import( './AiPanel' ) );
 const EdgeCachePanel = lazy( () => import( './EdgeCachePanel' ) );
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
+
+/**
+ * Shared fallback for each independently-streamed lazy panel below the fold.
+ *
+ * @since NEXT
+ * @return {Element} Loading placeholder.
+ */
+const LazyPanelFallback = () => (
+	<div className="wppo-loading-placeholder">
+		<span>{ __( 'Loading panels…', 'performance-optimisation' ) }</span>
+	</div>
+);
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
 import { __, sprintf } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
@@ -111,6 +123,11 @@ const toTtlOverride = ( value ) => {
 	if ( '' === value || null === value || undefined === value ) {
 		return undefined;
 	}
+	// Booleans/arrays are never valid TTLs: Number(true) === 1 and
+	// Number([]) === 0 would otherwise pass through as real TTLs.
+	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
+		return undefined;
+	}
 	const n = Number( value );
 	return Number.isFinite( n ) ? n : undefined;
 };
@@ -167,13 +184,20 @@ const parseVarnishPurgeUrls = ( raw ) => {
  * @param {Object} raw - Raw image info object.
  */
 const normalizeImageInfo = ( raw ) => {
+	// Later arithmetic assumes numbers: numeric strings ('5') or objects
+	// would otherwise flow through and coerce totals to strings ('5' + 0
+	// === '50'), so coerce with a finite fallback.
+	const toCount = ( v ) => {
+		const n = Number( v );
+		return Number.isFinite( n ) ? n : 0;
+	};
 	const normalize = ( bucket ) => ( {
 		webp: Array.isArray( bucket?.webp )
 			? bucket.webp.length
-			: bucket?.webp || 0,
+			: toCount( bucket?.webp ),
 		avif: Array.isArray( bucket?.avif )
 			? bucket.avif.length
-			: bucket?.avif || 0,
+			: toCount( bucket?.avif ),
 	} );
 	return {
 		completed: normalize( raw?.completed ),
@@ -2251,48 +2275,54 @@ const Dashboard = ( {
 					onUrlChange={ handleAuditUrlChange }
 				/>
 
-				{ /* Below-fold panels load on demand via code-splitting. */ }
-				<Suspense
-					fallback={
-						<div className="wppo-loading-placeholder">
-							<span>
-								{ __(
-									'Loading panels…',
-									'performance-optimisation'
-								) }
-							</span>
-						</div>
-					}
-				>
-					{ /* Phase 2 — SuggestionsPanel sits directly below PerformanceAudit (v1.6.0) */ }
-					{ allSuggestions.length > 0 && (
+				{ /* Below-fold panels load on demand via code-splitting. Each
+					panel gets its own Suspense boundary so one slow chunk
+					never blocks the others (audit #1354). */ }
+				{ allSuggestions.length > 0 && (
+					<Suspense fallback={ <LazyPanelFallback /> }>
 						<SuggestionsPanel
 							suggestions={ allSuggestions }
 							onNavigate={ onNavigate }
 						/>
-					) }
+					</Suspense>
+				) }
 
-					{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
+				{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
+				<Suspense fallback={ <LazyPanelFallback /> }>
 					<PageSpeedPanel
 						url={ auditUrl }
 						onSuggestionsReady={ setPagespeedSuggestions }
 					/>
+				</Suspense>
 
-					{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
+				{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
+				<Suspense fallback={ <LazyPanelFallback /> }>
 					<WebVitalsTrends url={ auditUrl } />
+				</Suspense>
 
-					{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
+				{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
+				<Suspense fallback={ <LazyPanelFallback /> }>
 					<WebVitalsRum />
+				</Suspense>
 
-					{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
+				{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
+				<Suspense fallback={ <LazyPanelFallback /> }>
 					<AutoloadedOptions />
+				</Suspense>
 
+				<Suspense fallback={ <LazyPanelFallback /> }>
 					<LlmsPanel />
+				</Suspense>
 
+				<Suspense fallback={ <LazyPanelFallback /> }>
 					<AiPanel />
+				</Suspense>
 
+				<Suspense fallback={ <LazyPanelFallback /> }>
 					<EdgeCachePanel />
+				</Suspense>
 
+				<Suspense fallback={ <LazyPanelFallback /> }>
 					<SystemInfo />
 				</Suspense>
 			</div>

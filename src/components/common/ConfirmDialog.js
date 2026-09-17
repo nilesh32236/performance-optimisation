@@ -159,19 +159,23 @@ const ConfirmDialog = ( {
 	}
 
 	return (
-		<div
-			className="wppo-dialog-overlay"
-			onClick={ onCancel }
-			role="presentation"
-		>
-			{ /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */ }
+		<div className="wppo-dialog-overlay">
+			{ /* Separate backdrop button (not a wrapper): a clickable div
+				with role="presentation" strips button semantics so AT loses
+				the close affordance (audit #1354). A real button keeps its
+				semantics and keyboard support. */ }
+			<button
+				type="button"
+				className="wppo-dialog-overlay__backdrop"
+				onClick={ onCancel }
+				aria-label={ __( 'Close dialog', 'performance-optimisation' ) }
+			/>
 			<div
 				className="wppo-dialog"
 				ref={ dialogRef }
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={ titleId }
-				onClick={ ( e ) => e.stopPropagation() }
 			>
 				<h3 id={ titleId }>
 					<FontAwesomeIcon

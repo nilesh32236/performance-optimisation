@@ -344,10 +344,14 @@ const App = () => {
 		// run (audit #1354): recreating all three on every tab change
 		// aborted unrelated in-flight rules/CCSS requests even when the
 		// hasFetched guards made the other fetches no-ops.
+		// recentActivities changes type from [] to { activities } after a
+		// successful fetch, so emptiness needs a type-aware check — plain
+		// .length is undefined (not 0) on the object shape.
+		const activitiesEmpty = Array.isArray( recentActivities )
+			? recentActivities.length === 0
+			: ! ( recentActivities?.activities?.length > 0 );
 		const willFetchActivities =
-			( activeTab === 'overview' ||
-				activeTab === 'dashboard' ||
-				recentActivities.length === 0 ) &&
+			( activeTab === 'dashboard' || activitiesEmpty ) &&
 			! hasFetchedActivities.current;
 		const willFetchRules = ! ( serverRules || hasFetchedRules.current );
 		const willFetchCcss = ! (
@@ -388,11 +392,12 @@ const App = () => {
 		}
 
 		const fetchActivities = async () => {
+			const emptyNow = Array.isArray( recentActivities )
+				? recentActivities.length === 0
+				: ! ( recentActivities?.activities?.length > 0 );
 			if (
 				! (
-					( activeTab === 'overview' ||
-						activeTab === 'dashboard' ||
-						recentActivities.length === 0 ) &&
+					( activeTab === 'dashboard' || emptyNow ) &&
 					! hasFetchedActivities.current
 				)
 			) {
@@ -427,21 +432,28 @@ const App = () => {
 				return;
 			}
 			hasFetchedRules.current = true;
+			// The flag is only cleared when the settling controller is still
+			// current: if the effect re-ran while fetch A was in flight,
+			// A's rejection must not clear the flag for fetch B.
+			const isCurrent = () =>
+				rulesControllerRef.current === rulesController;
 			try {
 				const res = await fetchServerRules( rulesController.signal );
 				if ( ! rulesController.signal.aborted ) {
 					if ( res.success ) {
 						setServerRules( res.data );
 						setServerRulesError( false );
-					} else {
+					} else if ( isCurrent() ) {
 						hasFetchedRules.current = false;
 						setServerRulesError( true );
 					}
-				} else {
+				} else if ( isCurrent() ) {
 					hasFetchedRules.current = false;
 				}
 			} catch {
-				hasFetchedRules.current = false;
+				if ( isCurrent() ) {
+					hasFetchedRules.current = false;
+				}
 				if ( ! rulesController.signal.aborted ) {
 					setServerRulesError( true );
 				}
@@ -453,6 +465,11 @@ const App = () => {
 				return;
 			}
 			hasFetchedCcss.current = true;
+			// Only the still-current controller may clear the flag (see
+			// fetchRules above): a superseded fetch settling late must not
+			// invalidate its replacement.
+			const isCurrent = () =>
+				ccssControllerRef.current === ccssController;
 			try {
 				const res = await apiCall(
 					'ccss_status',
@@ -461,19 +478,23 @@ const App = () => {
 					ccssController.signal
 				);
 				if ( ccssController.signal.aborted ) {
-					hasFetchedCcss.current = false;
+					if ( isCurrent() ) {
+						hasFetchedCcss.current = false;
+					}
 					return;
 				}
 				if ( res.success ) {
 					setCcssStatus( res.data );
 					setCcssError( false );
-				} else {
+				} else if ( isCurrent() ) {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 				}
 			} catch {
 				if ( ! ccssController.signal.aborted ) {
-					hasFetchedCcss.current = false;
+					if ( isCurrent() ) {
+						hasFetchedCcss.current = false;
+					}
 					setCcssError( true );
 				}
 			}

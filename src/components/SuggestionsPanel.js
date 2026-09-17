@@ -206,16 +206,32 @@ export const formatValue = ( value, unit ) => {
 		return encodings[ String( value ).toLowerCase() ] || value;
 	}
 	if ( unit === 'score' ) {
-		return `${ Math.round( parseFloat( value ) * 100 ) } / 100`;
+		return sprintf(
+			/* translators: %s: score value, e.g. "95 / 100". */
+			__( '%s / 100', 'performance-optimisation' ),
+			Math.round( parseFloat( value ) * 100 )
+		);
 	}
 	if ( unit === '%' ) {
-		return `${ Number( value ).toFixed( 1 ) }%`;
+		return sprintf(
+			/* translators: %s: percentage value, e.g. "85.3%". */
+			__( '%s%%', 'performance-optimisation' ),
+			Number( value ).toFixed( 1 )
+		);
 	}
 	if ( unit === 's' ) {
-		return `${ Number( value ).toFixed( 2 ) }s`;
+		return sprintf(
+			/* translators: %s: seconds value, e.g. "1.23s". */
+			__( '%ss', 'performance-optimisation' ),
+			Number( value ).toFixed( 2 )
+		);
 	}
 	if ( unit === 'ms' ) {
-		return `${ Math.round( value ) }ms`;
+		return sprintf(
+			/* translators: %s: milliseconds value, e.g. "500ms". */
+			__( '%sms', 'performance-optimisation' ),
+			Math.round( value )
+		);
 	}
 	if ( typeof unit === 'string' ) {
 		const countable = formatCountableUnit( value, unit );
@@ -293,10 +309,11 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						type="button"
 						className="wppo-button wppo-button--sm wppo-button--primary"
 						onClick={ () => onNavigate( targetTab ) }
-						aria-label={ `${ __(
-							'Fix It',
-							'performance-optimisation'
-						) }: ${ description }` }
+						aria-label={ sprintf(
+							/* translators: %s: suggestion description. */
+							__( 'Fix It: %s', 'performance-optimisation' ),
+							description
+						) }
 					>
 						{ __( 'Fix It', 'performance-optimisation' ) }
 						<FontAwesomeIcon

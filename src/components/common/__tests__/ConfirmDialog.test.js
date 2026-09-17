@@ -170,8 +170,11 @@ describe( 'ConfirmDialog', () => {
 
 	it( 'calls onCancel when overlay is clicked', () => {
 		render( <ConfirmDialog { ...defaultProps } /> );
-		// The overlay is the div with role="presentation"
-		fireEvent.click( screen.getByRole( 'presentation' ) );
+		// The overlay is a dedicated backdrop button with full semantics
+		// (audit #1354), not a role="presentation" div.
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /close dialog/i } )
+		);
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
 	} );
 
@@ -181,16 +184,12 @@ describe( 'ConfirmDialog', () => {
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
 	} );
 
-	it( 'does not call onCancel when Enter key is pressed on overlay (keyboard path removed)', () => {
+	it( 'does not call onCancel on bare keyDown on the overlay backdrop (native button activation needs keyup/click)', () => {
 		render( <ConfirmDialog { ...defaultProps } /> );
-		const overlay = screen.getByRole( 'presentation' );
+		const overlay = screen.getByRole( 'button', {
+			name: /close dialog/i,
+		} );
 		fireEvent.keyDown( overlay, { key: 'Enter', code: 'Enter' } );
-		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 0 );
-	} );
-
-	it( 'does not call onCancel when Space key is pressed on overlay (keyboard path removed)', () => {
-		render( <ConfirmDialog { ...defaultProps } /> );
-		const overlay = screen.getByRole( 'presentation' );
 		fireEvent.keyDown( overlay, { key: ' ', code: 'Space' } );
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 0 );
 	} );

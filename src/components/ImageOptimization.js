@@ -40,12 +40,28 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
 /**
  * Human-readable labels for LCP candidate sources. Unknown future sources
  * fall back to the raw token at the render site.
+ *
+ * Stored as label factories (not module-scope __() results) so labels
+ * resolve against the current locale at render time instead of freezing at
+ * import (audit #1354).
  */
 const lcpSourceLabels = {
-	manual: __( 'Manual pin', 'performance-optimisation' ),
-	rum: __( 'RUM field data', 'performance-optimisation' ),
-	od: __( 'Optimization Detective', 'performance-optimisation' ),
-	pagespeed: __( 'PageSpeed', 'performance-optimisation' ),
+	manual: () => __( 'Manual pin', 'performance-optimisation' ),
+	rum: () => __( 'RUM field data', 'performance-optimisation' ),
+	od: () => __( 'Optimization Detective', 'performance-optimisation' ),
+	pagespeed: () => __( 'PageSpeed', 'performance-optimisation' ),
+};
+
+/**
+ * Resolve an LCP candidate source token to its display label.
+ *
+ * @since NEXT
+ * @param {string} source Raw source token.
+ * @return {string} Localised label, or the raw token when unknown.
+ */
+const lcpSourceLabel = ( source ) => {
+	const factory = lcpSourceLabels[ source ];
+	return typeof factory === 'function' ? factory() : source;
 };
 
 /**
@@ -498,8 +514,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				{ lcpCandidateSource && (
 					<p className="wppo-text-muted wppo-text-small">
 						{ __( 'Source:', 'performance-optimisation' ) }{ ' ' }
-						{ lcpSourceLabels[ lcpCandidateSource ] ||
-							lcpCandidateSource }
+						{ lcpSourceLabel( lcpCandidateSource ) }
 					</p>
 				) }
 				<LoadingSubmitButton

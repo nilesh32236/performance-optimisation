@@ -374,12 +374,25 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			} catch {
 				decodedPath = '';
 			}
+			// Decode twice so single-encoded traversal (%252e%252e → %2e%2e
+			// → ..) cannot slip past the '..' check (audit #1354).
+			let doubleDecodedPath = decodedPath;
+			try {
+				doubleDecodedPath = decodeURIComponent( decodedPath );
+			} catch {
+				doubleDecodedPath = decodedPath;
+			}
 			if (
 				! path ||
 				'string' !== typeof path ||
 				path.length > 2048 ||
 				path[ 0 ] !== '/' ||
-				decodedPath.includes( '..' )
+				path.startsWith( '//' ) ||
+				path.includes( '\\' ) ||
+				path.includes( '\0' ) ||
+				decodedPath.includes( '..' ) ||
+				decodedPath.includes( '\0' ) ||
+				doubleDecodedPath.includes( '..' )
 			) {
 				path = '/';
 			}

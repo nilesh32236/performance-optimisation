@@ -187,6 +187,17 @@ const CriticalCssPanel = ( {
 		return Object.entries( status );
 	}, [ status ] );
 
+	// Build the 8-entry status map (with its __() labels) once per render
+	// instead of per row: statusConfigFor() inside entries.map() costs O(N
+	// x map) allocations and translations on every render.
+	const statusConfig = useMemo( () => getStatusConfig(), [] );
+	const configForRow = ( statusKey ) => {
+		const hasOwn = Object.hasOwn
+			? Object.hasOwn( statusConfig, statusKey )
+			: Object.prototype.hasOwnProperty.call( statusConfig, statusKey );
+		return hasOwn ? statusConfig[ statusKey ] : statusConfig.none;
+	};
+
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
 			<div className="wppo-field-label">
@@ -207,7 +218,7 @@ const CriticalCssPanel = ( {
 						const normalized = normalizeCcssEntry( hash, entry );
 						const { statusKey, label, size, truncated } =
 							normalized;
-						const config = statusConfigFor( statusKey );
+						const config = configForRow( statusKey );
 						return (
 							<div key={ hash } className="wppo-ccss-status-item">
 								<span className="wppo-ccss-status-hash">

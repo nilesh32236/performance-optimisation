@@ -200,7 +200,7 @@ export const sanitizeEsiFragment = ( html ) => {
 	// removed too (server-side wp_kses is authoritative; fragments do not
 	// need inline styles).
 	frag.querySelectorAll(
-		'script, iframe, frame, frameset, object, embed, link, meta, base, style'
+		'script, iframe, frame, frameset, object, embed, applet, bgsound, keygen, basefont, link, meta, base, style'
 	).forEach( ( node ) => node.remove() );
 
 	const all = frag.querySelectorAll( '*' );
@@ -231,11 +231,30 @@ export const sanitizeEsiFragment = ( html ) => {
 			if ( ESI_URL_ATTRS.has( name ) ) {
 				// Browsers ignore ASCII whitespace/control characters when parsing
 				// schemes ("java\tscript:", "  javascript:"), so normalise before
-				// matching (0x00-0x20 covers C0 controls and space).
-				const value = String( attr.value || '' )
-					.toLowerCase()
-					.replace( /[\u0000-\u0020]/g, '' );
-				if ( /^(javascript|vbscript|data|blob):/.test( value ) ) {
+				// matching (0x00-0x20 covers C0 controls and space, plus DEL).
+				const isDangerousUrl = ( raw ) => {
+					const value = String( raw || '' )
+						.toLowerCase()
+						.replace( /[\u0000-\u0020\u007f]/g, '' );
+					return /^(javascript|vbscript|data|blob):/.test( value );
+				};
+				if ( name === 'srcset' ) {
+					// A srcset holds comma-separated candidates
+					// ("https://ok 1x, javascript:alert(1) 2x"): a whole-string
+					// prefix check would pass on the safe first candidate and
+					// leave the dangerous one in the hydrated fragment, so
+					// validate each candidate's URL token individually.
+					const bad = String( attr.value || '' )
+						.split( ',' )
+						.some( ( candidate ) => {
+							const token =
+								candidate.trim().split( /\s+/ )[ 0 ] || '';
+							return isDangerousUrl( token );
+						} );
+					if ( bad ) {
+						node.removeAttribute( attr.name );
+					}
+				} else if ( isDangerousUrl( attr.value ) ) {
 					node.removeAttribute( attr.name );
 				}
 			}

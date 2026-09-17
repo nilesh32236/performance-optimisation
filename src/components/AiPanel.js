@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBrain } from '@fortawesome/free-solid-svg-icons';
@@ -36,9 +36,14 @@ const AiPanel = () => {
 	const [ learning, setLearning ] = useState( false );
 	const [ model, setModel ] = useState( null );
 	const [ suggestions, setSuggestions ] = useState( [] );
-	// Tracks which suggestion metric/key is mid-apply so double-clicking
+	// Tracks which suggestion metric/keys are mid-apply so double-clicking
 	// Apply cannot fire duplicate update_settings requests (audit #1354).
-	const [ applyingKey, setApplyingKey ] = useState( null );
+	// The ref Set is the synchronous guard (state setters are async, so a
+	// second click before re-render would see a stale value); the state
+	// array mirrors it for per-key disabled UI. Per-key (not any-key)
+	// tracking lets independent suggestions apply concurrently.
+	const [ applyingKeys, setApplyingKeys ] = useState( [] );
+	const applyingRef = useRef( new Set() );
 	const { notice, notify, dismiss } = useNotice();
 
 	const fetchModel = useCallback(
@@ -208,11 +213,14 @@ const AiPanel = () => {
 		if ( ! payload ) {
 			return;
 		}
-		if ( applyingKey ) {
+		const key = suggestionKey( suggestion, suggestion.metric );
+		if ( applyingRef.current.has( key ) ) {
 			return;
 		}
-		const key = suggestionKey( suggestion, suggestion.metric );
-		setApplyingKey( key );
+		applyingRef.current.add( key );
+		setApplyingKeys( ( prev ) =>
+			prev.includes( key ) ? prev : [ ...prev, key ]
+		);
 		try {
 			const currentTabSettings =
 				typeof wppoSettings !== 'undefined'
@@ -253,7 +261,8 @@ const AiPanel = () => {
 				),
 			} );
 		} finally {
-			setApplyingKey( null );
+			applyingRef.current.delete( key );
+			setApplyingKeys( ( prev ) => prev.filter( ( k ) => k !== key ) );
 		}
 	};
 
@@ -421,10 +430,9 @@ const AiPanel = () => {
 										type="button"
 										className="wppo-button wppo-button--sm wppo-button--primary"
 										onClick={ () => handleApply( s ) }
-										disabled={
-											applyingKey ===
+										disabled={ applyingKeys.includes(
 											suggestionKey( s, s.metric )
-										}
+										) }
 										aria-label={ sprintf(
 											// translators: %s is the suggestion description.
 											__(

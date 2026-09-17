@@ -33,7 +33,6 @@ const LoadingSubmitButton = ( {
 			className={ className }
 			disabled={ isDisabled }
 			aria-busy={ isLoading }
-			aria-live="polite"
 		>
 			{ isLoading && (
 				<FontAwesomeIcon
@@ -43,7 +42,10 @@ const LoadingSubmitButton = ( {
 					className="wppo-mr-8"
 				/>
 			) }
-			<span>
+			{ /* Live region on the inner label, not the button: buttons are
+				not live regions, and aria-live + aria-busy on one control
+				double-announces (audit #1354). */ }
+			<span role="status">
 				{ isLoading
 					? loadingLabel || label || children
 					: label || children }

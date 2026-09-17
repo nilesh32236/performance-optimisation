@@ -978,6 +978,9 @@ const FileOptimization = ( {
 		setSandboxBusy( true );
 		try {
 			const res = await apiCall( 'sandbox_promote', {} );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			if ( res && res.success ) {
 				// Sync the production baseline so the form reflects the
 				// promoted values: prefer the production slice returned by
@@ -1035,18 +1038,26 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch {
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notifySandbox( {
 				type: 'error',
 				message: __( 'Could not promote.', 'performance-optimisation' ),
 			} );
 		} finally {
-			setSandboxBusy( false );
+			if ( isMountedRef.current ) {
+				setSandboxBusy( false );
+			}
 		}
 	};
 	const handleSandboxDiscard = async () => {
 		setSandboxBusy( true );
 		try {
 			const res = await apiCall( 'sandbox_discard', {} );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			if ( res && res.success ) {
 				setSandboxStaged( {} );
 				// Clear the stale preview link (its nonce and staged values
@@ -1069,12 +1080,17 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch {
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notifySandbox( {
 				type: 'error',
 				message: __( 'Could not discard.', 'performance-optimisation' ),
 			} );
 		} finally {
-			setSandboxBusy( false );
+			if ( isMountedRef.current ) {
+				setSandboxBusy( false );
+			}
 		}
 	};
 	const handleSandboxPerfTest = async () => {
