@@ -408,6 +408,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'maxLongestEdgePx'           => 2560,
 					'lazyRenderBelowFold'        => false,
 					'lazyRenderExcludeBuilders'  => true,
+					'hardenCommentImages'        => true,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
