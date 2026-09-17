@@ -1,14 +1,16 @@
 <?php
 /**
- * Tests for Used_CSS::strip_css_comments() (pure logic, no WordPress API).
+ * Tests for Util::strip_css_comments() (pure logic, no WordPress API).
  *
  * Covers quoted comment markers, escaped quotes, unterminated comments,
- * and normal comment removal.
+ * and normal comment removal. The scanner lives in Util as the single
+ * shared home (issue #1347 review); the Used_CSS duplicate was removed so
+ * comment handling can never drift from the sanitizer.
  *
  * @package PerformanceOptimise\Tests
  */
 
-use PerformanceOptimise\Inc\Used_CSS;
+use PerformanceOptimise\Inc\Util;
 
 /**
  * Tests for the string-aware CSS comment stripper.
@@ -19,14 +21,13 @@ class UsedCssStripCommentsTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
 
 	/**
-	 * Invoke the private strip_css_comments() helper.
+	 * Invoke the shared strip_css_comments() helper.
 	 *
 	 * @param string $css Raw CSS.
 	 * @return string CSS without comments.
 	 */
 	private function strip( string $css ): string {
-		$method = new \ReflectionMethod( Used_CSS::class, 'strip_css_comments' );
-		return $method->invoke( null, $css );
+		return Util::strip_css_comments( $css );
 	}
 
 	/**

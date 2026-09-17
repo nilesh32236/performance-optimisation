@@ -4473,13 +4473,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * removal. Quoted strings are honoured: comment markers inside
 		 * `'...'`/`"..."`
 		 * are preserved. Unterminated comments are dropped with the
-		 * remainder (fail-closed, never emitted).
+		 * remainder (fail-closed, never emitted). Shared single home for
+		 * the sanitizer and the used-CSS parser so comment handling can
+		 * never drift between copies (issue #1347 review).
 		 *
 		 * @param string $css CSS content.
 		 * @return string CSS without comments.
 		 * @since NEXT
 		 */
-		private static function strip_css_comments( string $css ): string {
+		public static function strip_css_comments( string $css ): string {
 			$len       = strlen( $css );
 			$out       = '';
 			$in_single = false;
@@ -4579,7 +4581,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Bounded HTML-entity decode for CSS pipelines (issue #1347 review).
+		 *
+		 * Shared single home for the 2-pass decode previously duplicated in
+		 * Util::sanitize_css_for_storage() and the critical-CSS gate, so
+		 * callers can decode once and share the stream instead of paying a
+		 * decode per pass over the same up-to-2MB blob. Triple-encoded
+		 * input leaves harmless `&` escapes behind, neutralized downstream.
+		 *
+		 * @param string $css CSS content.
+		 * @return string Entity-decoded CSS.
+		 * @since NEXT
+		 */
+		public static function decode_css_entities( string $css ): string {
+			for ( $i = 0; $i < 2; ++$i ) {
+				$decoded = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				if ( ! is_string( $decoded ) || $decoded === $css ) {
+					break;
+				}
+				$css = $decoded;
+			}
+			return $css;
+		}
+
+		/**
 		 * Whether a `data:` URL at the given offset carries an allowlisted safe MIME (issue #1347).
+		 *
+		 * Requires a MIME terminator (`;`, `,`, whitespace, or end of the
+		 * probed tail) right after the matched prefix, so `image/pngfoo`
+		 * or `font/woff2evil` cannot pass on a prefix match (issue #1347
+		 * review). Low exploitability in image/font contexts, but the
+		 * allowlist is exact by construction now.
 		 *
 		 * @param string $css CSS content (already comment-stripped and escape-decoded).
 		 * @param int    $colon_pos Offset just past the `data:` colon.
@@ -4589,7 +4621,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		private static function is_safe_css_data_url( string $css, int $colon_pos ): bool {
 			$tail = strtolower( ltrim( substr( $css, $colon_pos, 48 ) ) );
 			foreach ( self::SAFE_CSS_DATA_MIMES as $mime ) {
-				if ( 0 === strpos( $tail, $mime ) ) {
+				if ( 0 !== strpos( $tail, $mime ) ) {
+					continue;
+				}
+				$next = substr( $tail, strlen( $mime ), 1 );
+				if ( '' === $next || false !== strpos( ";, \t\r\n", $next ) ) {
 					return true;
 				}
 			}
@@ -4601,27 +4637,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Uses PREG_OFFSET_CAPTURE so the MIME following each match can be
 		 * checked against SAFE_CSS_DATA_MIMES; allowlisted prefixes pass
-		 * through byte-for-byte while everything else gets its colon
-		 * escaped. Never fatal.
+		 * through byte-for-byte while everything else gets its keyword
+		 * neutralized to `data_blocked:` — an inert-token substitution,
+		 * never a backslash break, because CSS escape rules would decode
+		 * `data\:` back to an active token in the browser (issue #1347
+		 * review). Idempotent: the substituted form matches neither the
+		 * break pattern nor the gate, so `sanitize(sanitize($x))` is stable.
+		 * Never fatal.
 		 *
 		 * @param string $css CSS content (already comment-stripped and escape-decoded).
-		 * @return string CSS with unsafe `data:` colons escaped.
+		 * @return string CSS with unsafe `data:` keywords neutralized.
 		 * @since NEXT
 		 */
 		private static function break_unsafe_css_data_urls( string $css ): string {
 			// Offset-aware pass: inspect the MIME after each `data:` match.
 			$out    = '';
 			$offset = 0;
-			if ( preg_match_all( '/data\s*:/i', $css, $matches, PREG_OFFSET_CAPTURE ) ) {
+			if ( preg_match_all( '/data(?=\s*:)/i', $css, $matches, PREG_OFFSET_CAPTURE ) ) {
 				foreach ( $matches[0] as $match ) {
-					$token = $match[0];
-					$pos   = (int) $match[1];
+					$pos = (int) $match[1];
+					// Locate the colon through optional whitespace (the
+					// lookahead guarantees `\s*:` follows).
+					$scan = $pos + 4;
+					$len  = strlen( $css );
+					while ( $scan < $len && ( ' ' === $css[ $scan ] || "\t" === $css[ $scan ] || "\r" === $css[ $scan ] || "\n" === $css[ $scan ] ) ) {
+						++$scan;
+					}
+					$colon = $scan + 1; // Offset just past the colon.
 					$out  .= substr( $css, $offset, $pos - $offset );
-					$colon = $pos + strlen( $token );
 					if ( self::is_safe_css_data_url( $css, $colon ) ) {
-						$out .= $token;
+						$out .= substr( $css, $pos, $colon - $pos );
 					} else {
-						$out .= substr( $token, 0, -1 ) . '\\:';
+						$out .= 'data_blocked' . substr( $css, $pos + 4, $colon - $pos - 4 );
 					}
 					$offset = $colon;
 				}
@@ -4634,11 +4681,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Sanitize CSS for storage in the used/critical-CSS pipelines (issue #1347).
 		 *
 		 * Shared worker so both pipelines strip the same script-capable
-		 * constructs: entity-decodes first (bounded 2 passes) so encoded
-		 * payloads cannot smuggle `<` past the encoder, then strips
-		 * `/*...*\/` comments (string-aware) and decodes CSS backslash
+		 * constructs: entity-decodes first (bounded 2 passes, skippable via
+		 * $already_entity_decoded when the caller shares one decoded stream)
+		 * so encoded payloads cannot smuggle `<` past the encoder, then
+		 * strips `/*...*\/` comments (string-aware) and decodes CSS backslash
 		 * escapes so `exp/**\/ression(` and `\65xpression(` cannot bypass
-		 * keyword checks, then breaks `expression()`,
+		 * keyword checks. Comment-strip and escape-decode run to a bounded
+		 * fixpoint (3 rounds) so escape-encoded comment delimiters
+		 * (`\2f\2a` / `\2a\2f`) cannot survive stripping only to decode
+		 * into real comments afterwards and split keywords past the
+		 * detectors (issue #1347 review). Then breaks `expression()`,
 		 * `javascript:`/`vbscript:`/`file:`/`expect:` URLs, the
 		 * `behavior`/`behaviour` property (property position only, whole
 		 * property name so `.behavior-badge` and `scroll-behavior` survive),
@@ -4649,20 +4701,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * remaining `<` is encoded as the CSS escape `\3c ` so stored CSS
 		 * can never break out of a `<style>` element.
 		 *
-		 * Size bound: input over MAX_CSS_STORAGE_BYTES is truncated first.
-		 * Charset bound: NUL bytes or other C0 controls (except \t \n \r)
-		 * fail closed to ''. Any throwable fails closed to '' so callers
-		 * serve unoptimized markup instead of poisoned CSS. Never fatal.
+		 * CSS keyword vectors are neutralized with inert-token substitution
+		 * (`expression_blocked(`, `javascript_blocked:`, `wppo-blocked-prop`,
+		 * `-moz-wppo-blocked`, `wppo-onload=`, `data_blocked:`) — never
+		 * delimiter backslash-escaping (`expression\(`, `behavio\r`),
+		 * which CSS escape rules decode back to the active token in the
+		 * browser and re-arm the stored CSS (issue #1347 review). Only the
+		 * HTML-layer breaks (`<\/style`, `<\script`, `<\!--`, `--\>`) use
+		 * backslashes: the HTML parser (which runs first on `<style>` raw
+		 * text) never decodes them, so the terminator stays broken.
+		 *
+		 * Size bound: input over MAX_CSS_STORAGE_BYTES is truncated first,
+		 * and the cap is re-enforced after the escaping passes since breaker
+		 * output expands (`<` to `\3c ` is 1 byte to 4). Charset bound: NUL
+		 * bytes or other C0 controls (except \t \n \r) fail closed to ''.
+		 * Any throwable fails closed to '' so callers serve unoptimized
+		 * markup instead of poisoned CSS. Never fatal.
 		 *
 		 * Use is_css_safe_for_storage() as the pre-store gate when callers
 		 * need a poison-vs-empty distinction for logging (this worker
 		 * returns '' for legit-empty, rejected, and error inputs alike).
 		 *
 		 * @param string $css Raw CSS.
+		 * @param bool   $already_entity_decoded Skip the entity-decode pass when the caller already shares a decoded stream (issue #1347 review).
 		 * @return string Sanitized CSS, or '' when rejected.
 		 * @since NEXT
+		 * @since NEXT Added $already_entity_decoded for shared-stream callers.
 		 */
-		public static function sanitize_css_for_storage( string $css ): string {
+		public static function sanitize_css_for_storage( string $css, bool $already_entity_decoded = false ): string {
 			try {
 				if ( '' === $css ) {
 					return '';
@@ -4678,26 +4744,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( strlen( $css ) > self::MAX_CSS_STORAGE_BYTES ) {
 					$css = substr( $css, 0, self::MAX_CSS_STORAGE_BYTES );
 				}
-				// Bounded entity decode (mirrors the critical-CSS decoder):
-				// triple-encoded input leaves harmless `&` escapes behind,
-				// which are neutralized below instead of decoded unboundedly.
-				for ( $i = 0; $i < 2; ++$i ) {
-					$decoded = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
-					if ( ! is_string( $decoded ) || $decoded === $css ) {
-						break;
-					}
-					$css = $decoded;
+				// Bounded entity decode (shared worker): triple-encoded
+				// input leaves harmless `&` escapes behind, which are
+				// neutralized below instead of decoded unboundedly.
+				// Skipped when the caller already shares a decoded stream.
+				if ( ! $already_entity_decoded ) {
+					$css = self::decode_css_entities( $css );
 				}
 				// Re-check the charset bound after decoding: entities may
 				// have smuggled controls past the raw check.
 				if ( 1 === preg_match( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $css ) ) {
 					return '';
 				}
-				// Comment + escape normalization before keyword checks:
-				// browsers strip comments and decode escapes before
-				// parsing, so the checks must see the same stream.
-				$css = self::strip_css_comments( $css );
-				$css = self::decode_css_escapes( $css );
+				// Comment + escape normalization to a bounded fixpoint
+				// before keyword checks: browsers strip comments and decode
+				// escapes before parsing, so the checks must see the same
+				// stream — and a single strip-then-decode pass lets
+				// escape-encoded comment delimiters survive stripping only
+				// to decode into real comments afterwards.
+				for ( $i = 0; $i < 3; ++$i ) {
+					$prev = $css;
+					$css  = self::decode_css_escapes( self::strip_css_comments( $css ) );
+					if ( $css === $prev ) {
+						break;
+					}
+				}
 				if ( 1 === preg_match( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $css ) ) {
 					return '';
 				}
@@ -4705,19 +4776,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$css = str_ireplace( '<script', '<\script', $css );
 				$css = str_ireplace( '<!--', '<\!--', $css );
 				$css = str_ireplace( '-->', '--\>', $css );
-				// Break CSS expression/URL vectors, tolerating whitespace
-				// between the keyword and its delimiter. A callback builds
-				// the replacement so the backslash is never parsed as a
-				// PCRE backreference.
+				// Break CSS expression/URL vectors with inert-token
+				// substitution: the keyword itself gains a `_blocked` infix
+				// (whitespace and delimiter preserved), so no CSS escape
+				// decoding can ever restore the active token. Idempotent:
+				// the substituted form matches neither this pattern nor
+				// the pre-store gate.
 				$css = (string) preg_replace_callback(
-					'/expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:/i',
+					'/expression(?=\s*\()|javascript(?=\s*:)|vbscript(?=\s*:)|file(?=\s*:)|expect(?=\s*:)/i',
 					static function ( array $matches ): string {
-						$token = $matches[0];
-						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+						return $matches[0] . '_blocked';
 					},
 					$css
 				);
-				// Allowlisted data: URLs: break every `data:` whose MIME
+				// Allowlisted data: URLs: neutralize every `data:` whose MIME
 				// is not in SAFE_CSS_DATA_MIMES, so novel script-capable
 				// types (svg/html/xhtml+xml/javascript/css/base64 blobs)
 				// can never smuggle past a denylist.
@@ -4725,25 +4797,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Scoped to property position (followed by a colon) AND to a
 				// whole property name, so benign selectors like
 				// .behavior-badge and modern `scroll-behavior:` keep working.
-				$css = (string) preg_replace_callback(
+				// Inert substitution (no `behavior` substring survives, so
+				// the gate can never re-match sanitized output).
+				$css = (string) preg_replace(
 					'/(?<![-\w])behaviou?r(?=\s*:)/i',
-					static function (): string {
-						return 'behavio\\r';
-					},
+					'wppo-blocked-prop',
 					$css
 				);
-				$css = str_ireplace( '-moz-binding', '-moz-bindin\g', $css );
+				$css = str_ireplace( '-moz-binding', '-moz-wppo-blocked', $css );
 				// Event-handler payloads in declaration values (e.g.
 				// `background:url(x"onload="...)`) have no legitimate CSS
-				// use outside quoted strings; break the `=` so the payload
-				// cannot re-arm. Scoped with a lookbehind so custom
+				// use outside quoted strings. The `on*` keyword is prefixed
+				// with `wppo-` (the lookbehind then fails, so sanitized
+				// output is stable); scoped with a lookbehind so custom
 				// properties (`--onload-x`) and words like `lemon=` are
-				// untouched. A callback emits the backslash literally.
-				$css = (string) preg_replace_callback(
-					'/(?<![-\w])on[a-z]+\s*=/i',
-					static function ( array $matches ): string {
-						return substr( $matches[0], 0, -1 ) . '\\=';
-					},
+				// untouched.
+				$css = (string) preg_replace(
+					'/(?<![-\w])on[a-z]+(?=\s*=)/i',
+					'wppo-$0',
 					$css
 				);
 				// Neutralize entity remnants that survived decoding (e.g.
@@ -4758,6 +4829,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				);
 				// Defense-in-depth: encode every remaining '<' (CSS-valid escape).
 				$css = str_replace( '<', '\3c ', $css );
+				// Re-enforce the size bound after escaping: breaker passes
+				// expand output (`<` to `\3c ` is 1 byte to 4), so the
+				// stored bytes — not just the input — respect the cap.
+				if ( strlen( $css ) > self::MAX_CSS_STORAGE_BYTES ) {
+					$css = substr( $css, 0, self::MAX_CSS_STORAGE_BYTES );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';
@@ -4821,13 +4898,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether the HMAC-unavailable fallback has been logged this request (issue #1347 review).
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $css_hmac_fallback_logged = false;
+
+		/**
+		 * Log the HMAC-unavailable fallback once per request (issue #1347 review).
+		 *
+		 * Falling back to legacy unsigned jobs (missing hash_hmac or an
+		 * unpersistable secret) silently disables job authentication, so the
+		 * first fallback per request leaves an activity-log trail instead of
+		 * running indefinitely with no operator visibility. Never fatal.
+		 *
+		 * @param string $reason Short reason for the fallback.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function log_css_hmac_fallback_once( string $reason ): void {
+			try {
+				if ( self::$css_hmac_fallback_logged ) {
+					return;
+				}
+				self::$css_hmac_fallback_logged = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					Log::add(
+						sprintf(
+							/* translators: %s: reason job authentication fell back to legacy unsigned jobs. */
+							__( 'CSS pipeline: job authentication unavailable (%s); using legacy unsigned jobs until the host provides hash_hmac and a writable options table.', 'performance-optimisation' ),
+							$reason
+						)
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Per-site CSS-pipeline HMAC secret (issue #1347).
 		 *
 		 * Generated lazily (32 random bytes, hex-encoded) and persisted via
 		 * core get_option/update_option — inherently per-site on multisite,
-		 * so no cross-site leakage. The value is never logged. Fail-open:
-		 * returns '' when the option API or a CSPRNG is unavailable (callers
-		 * then take the legacy capability+nonce-only path).
+		 * so no cross-site leakage. The value is never logged. First-writer
+		 * -wins: the mint goes through add_option() plus a re-read so
+		 * concurrent workers on existing installs converge on one secret
+		 * instead of minting divergent secrets whose loser-signed jobs
+		 * verify as mismatches and purge legitimate CSS (issue #1347
+		 * review). Fail-open: returns '' when the option API or a CSPRNG
+		 * is unavailable (callers then take the legacy capability+nonce-only
+		 * path, logged once per request).
 		 *
 		 * @return string Site secret, or '' when unavailable.
 		 * @since NEXT
@@ -4862,6 +4984,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return '';
 				}
 				self::$css_pipeline_secrets[ $scope ] = $secret;
+				if ( function_exists( 'add_option' ) ) {
+					// First-writer-wins mint: concurrent workers race the
+					// insert, and the re-read below converges every loser
+					// onto the winner's secret within this request.
+					try {
+						add_option( self::CSS_PIPELINE_SECRET_OPTION, $secret, '', false );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					try {
+						$winner = get_option( self::CSS_PIPELINE_SECRET_OPTION );
+						if ( is_string( $winner ) && strlen( $winner ) >= 32 ) {
+							self::$css_pipeline_secrets[ $scope ] = $winner;
+							return $winner;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				if ( function_exists( 'update_option' ) ) {
 					try {
 						update_option( self::CSS_PIPELINE_SECRET_OPTION, $secret, false );
@@ -4902,11 +5043,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function sign_css_regen_payload( string $payload ): string {
 			try {
-				if ( '' === $payload || ! function_exists( 'hash_hmac' ) ) {
+				if ( '' === $payload ) {
+					return '';
+				}
+				if ( ! function_exists( 'hash_hmac' ) ) {
+					self::log_css_hmac_fallback_once( 'hash_hmac unavailable' );
 					return '';
 				}
 				$secret = self::get_css_pipeline_secret();
 				if ( '' === $secret ) {
+					self::log_css_hmac_fallback_once( 'site secret unavailable' );
 					return '';
 				}
 				$tag = hash_hmac( 'sha256', $payload, $secret );
@@ -4941,10 +5087,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return false;
 				}
 				if ( ! function_exists( 'hash_hmac' ) ) {
+					self::log_css_hmac_fallback_once( 'hash_hmac unavailable' );
 					return true;
 				}
 				$secret = self::get_css_pipeline_secret();
 				if ( '' === $secret ) {
+					self::log_css_hmac_fallback_once( 'site secret unavailable' );
 					return true;
 				}
 				if ( ! is_string( $hmac ) || '' === $hmac ) {

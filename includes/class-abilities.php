@@ -1252,24 +1252,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 						'error'  => __( 'Action Scheduler not available.', 'performance-optimisation' ),
 					);
 				}
-				if ( function_exists( 'get_post' ) && null === get_post( $post_id ) ) {
+				if ( function_exists( 'get_post' ) && ! get_post( $post_id ) ) {
 					return array(
 						'queued' => 0,
 						'error'  => __( 'Invalid post ID.', 'performance-optimisation' ),
 					);
 				}
-				// Dedup on stable identity (issue #1347 review): probe the
-				// signed shape plus the legacy shape (no hmac) so pre-HMAC
-				// rows still dedupe; HMAC is verified only at execution.
+				// Single home for signed+legacy+running dedup (issue #1347
+				// review): Used_CSS::is_used_css_job_live() owns the probe
+				// shapes, so the next dedup fix lands in one place only.
+				// Falsy get_post() check mirrors the REST twin
+				// (get_post() returns false — not null — for missing posts).
 				$already_queued = false;
-				if ( function_exists( 'as_has_scheduled_action' ) ) {
-					try {
-						$already_queued = (bool) as_has_scheduled_action( 'wppo_used_css_generate', Used_CSS::job_args_for_post( $post_id ), 'performance_optimisation' )
-							|| (bool) as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$already_queued = false;
+				try {
+					if ( class_exists( Used_CSS::class ) && method_exists( Used_CSS::class, 'is_used_css_job_live' ) ) {
+						$already_queued = Used_CSS::is_used_css_job_live( Used_CSS::job_args_for_post( $post_id ) );
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$already_queued = false;
 				}
 				if ( ! $already_queued ) {
 					as_enqueue_async_action(

@@ -236,7 +236,19 @@ class CssPipelineHmac1347Test extends \PHPUnit\Framework\TestCase {
 				return $permalink;
 			}
 		);
-		Functions\when( 'is_wp_error' )->justReturn( true );
+		Functions\when( 'is_wp_error' )->alias(
+			static function ( $thing ) {
+				// Narrow stub (issue #1347 review): a blanket `true` forces
+				// every is_wp_error() in the worker true, so post-fetch
+				// valid/invalid paths are never genuinely exercised. Only
+				// WP_Error instances (or the anonymous test double carrying
+				// get_error_message()) report as errors.
+				if ( $thing instanceof \WP_Error ) {
+					return true;
+				}
+				return is_object( $thing ) && method_exists( $thing, 'get_error_message' );
+			}
+		);
 		Functions\when( 'wp_remote_get' )->alias(
 			static function ( $url, $args = array() ) use ( &$fetches ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match wp_remote_get().
 				$fetches[] = $url;

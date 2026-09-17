@@ -1835,6 +1835,20 @@ add_filter( 'wppo_ccss_queue_cap', static function() { return 10; } );
 
 ---
 
+### `wppo_css_probe_legacy_jobs`
+Filters whether the used-CSS / critical-CSS schedulers also probe the pre-HMAC (legacy, no-tag) job shape when de-duplicating. Default `true` so upgrades never double-schedule jobs queued before HMAC signing existed; return `false` once the upgrade window has drained legacy rows to skip the extra scheduler queries in the steady state. @since NEXT.
+
+**Parameters:**
+- `$probe` *(bool)* — Whether to probe the legacy shape. Default `true`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_css_probe_legacy_jobs', '__return_false' );
+```
+
+---
+
 ### `wppo_ccss_excluded_post_types`
 Filters post types skipped by Critical CSS and Used CSS generation. The filter is always ADDITIVE over the built-in builder defaults (`fl-builder-template`, `elementor_library`): returned slugs are merged with the defaults, and an empty (or all-invalid) return is ignored so builder-template protection cannot be silently disabled — there is no opt-out. Backed by the additive `file_optimisation.ccssExcludedPostTypes` setting (one post type per line; empty or all-invalid keeps the defaults). Shared contract: the CCSS-named key/filter intentionally serves both pipelines for backward compatibility. Used-CSS retries are intentionally out of scope — excluded posts are never queued, so no retry counter exists there. Fail-open: non-array/non-string output is ignored and the setting-derived list is kept. Filter accepts string[] or a newline/comma-delimited string (parsed via the shared parser). @since NEXT.
 

@@ -549,12 +549,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Note: the historic singular-`css` name predates the double-`s`
 		 * `get_ccss_queue_cap()` alias; both are kept as-is.
 		 *
+		 * @deprecated NEXT Use Critical_CSS::get_ccss_queue_cap() instead.
 		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
 		 * @since NEXT Filterable via `wppo_ccss_queue_cap`.
 		 * @see Critical_CSS::get_ccss_gen_timeout()
 		 * @see Critical_CSS::get_ccss_queue_cap()
 		 */
 		public static function get_css_queue_cap(): int {
+			return self::get_ccss_queue_cap();
+		}
+
+		/**
+		 * Canonical double-`s` spelling of the per-run CCSS queue cap (issue #1235).
+		 *
+		 * New code should prefer this name; get_css_queue_cap() remains as a
+		 * deprecated alias for backward compatibility.
+		 *
+		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
+		 * @since NEXT
+		 * @see Critical_CSS::get_css_queue_cap()
+		 */
+		public static function get_ccss_queue_cap(): int {
 			try {
 				$options = Util::get_settings();
 				if ( ! isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
@@ -578,20 +593,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				unset( $e );
 				return PHP_INT_MAX;
 			}
-		}
-
-		/**
-		 * Canonical double-`s` spelling of the per-run CCSS queue cap (issue #1235).
-		 *
-		 * New code should prefer this name; get_css_queue_cap() remains as a
-		 * deprecated alias for backward compatibility.
-		 *
-		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
-		 * @since NEXT
-		 * @see Critical_CSS::get_css_queue_cap()
-		 */
-		public static function get_ccss_queue_cap(): int {
-			return self::get_css_queue_cap();
 		}
 
 		/**
@@ -1202,6 +1203,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private static function verified_ccss_template_hash( $args ): string {
 			try {
+				// Bare-string legacy shim (issue #1347 review): the oldest
+				// queued rows stored the template hash directly instead of
+				// the wrapped assoc shape. Normalize before validation so
+				// legitimate legacy jobs are honoured, mirroring the
+				// Used_CSS worker which shims both shapes.
+				if ( is_string( $args ) ) {
+					$args = array( 'template_hash' => $args );
+				}
 				$hash = is_array( $args ) ? ( $args['template_hash'] ?? '' ) : '';
 				if ( ! self::is_valid_template_hash( $hash ) ) {
 					return '';
@@ -1382,6 +1391,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// Util ships in-repo: no method_exists guard needed.
 				$use_unique = Util::supports_action_scheduler_unique();
 				if ( $use_unique ) {
+					// Legacy-aware pre-check (issue #1347 review): the
+					// atomic unique insert dedupes on the exact
+					// (hook,args,group) tuple including the HMAC tag, so a
+					// pending pre-HMAC row would never suppress a signed
+					// insert — one duplicate generation per template during
+					// the upgrade window. Probe (signed + legacy shapes)
+					// first; the post-race re-check below still covers a
+					// concurrent winner.
+					try {
+						if ( self::has_pending_ccss_job( $hook, $hook_args ) ) {
+							return array(
+								'id'      => 0,
+								'pending' => true,
+							);
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					// Atomic path first (issue #1310): the insert itself
 					// dedupes, so the legacy pre-check below only runs on
 					// older schedulers.
@@ -4118,43 +4145,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function decode_css_entities( string $css ): string {
-			for ( $i = 0; $i < 2; ++$i ) {
-				$decoded = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
-				if ( ! is_string( $decoded ) ) {
-					break;
-				}
-				if ( $decoded === $css ) {
-					break;
-				}
-				$css = $decoded;
+			try {
+				return Util::decode_css_entities( $css );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $css;
 			}
-			return $css;
 		}
 
 		/**
 		 * Whether decoded CSS contains tokens that could break out of a
 		 * `<style>` element or execute script when inlined.
 		 *
-		 * Fail-closed pre-cache gate used by generate_and_store(): a poisoned
-		 * source stylesheet must never reach the CCSS cache. Shares the
-		 * hostile pattern set with Util::sanitize_css_for_storage() /
-		 * Util::is_css_safe_for_storage() (issue #1347) — including the
-		 * `(?<![-\w])on[a-z]+\s*=` event-handler pattern the gate
-		 * previously lacked — so the gate and the sanitizer agree on every
-		 * hostile input class. Deliberately narrower than is_safe: a bare
-		 * `<` inside a quoted string (e.g. `content:"<b>"`) is altered by
-		 * the sanitizer (so is_safe reports unsafe) but is not poison, and
-		 * must not fail generation. Comment/escape-obfuscated vectors the
-		 * gate cannot see are still neutralized by the sanitizer before
-		 * the store, so a gate miss degrades to clean output, never to
-		 * stored poison.
+		 * Best-effort pre-cache gate used by generate_and_store(): a poisoned
+		 * source stylesheet should never reach the CCSS cache, but this gate
+		 * is deliberately heuristic — the shared
+		 * Util::sanitize_css_for_storage() sanitizer is the authoritative
+		 * boundary, and anything this gate misses (comment/escape-obfuscated
+		 * vectors, novel `data:` types) is still neutralized before the
+		 * store, so a gate miss degrades to clean output, never to stored
+		 * poison. Includes the `(?<![-\w])on[a-z]+\s*=` event-handler
+		 * pattern the gate previously lacked. A bare `<` inside a quoted
+		 * string (e.g. `content:"<b>"`) is altered by the sanitizer but is
+		 * not poison, and must not fail generation. Pass
+		 * $already_decoded=true when the caller shares one entity-decoded
+		 * stream (issue #1347 review) so the up-to-2MB blob is not decoded
+		 * once per pass.
 		 *
-		 * @param string $css Raw critical CSS.
+		 * @param string $css Raw critical CSS (or the shared decoded stream when $already_decoded is true).
+		 * @param bool   $already_decoded Skip the entity-decode pass when the caller shares a decoded stream.
 		 * @return bool True when hostile tokens are present.
 		 * @since 2.0.0
+		 * @since NEXT Added $already_decoded for shared-stream callers.
 		 */
-		private static function contains_unsafe_css_tokens( string $css ): bool {
-			$decoded = self::decode_css_entities( $css );
+		private static function contains_unsafe_css_tokens( string $css, bool $already_decoded = false ): bool {
+			$decoded = $already_decoded ? $css : self::decode_css_entities( $css );
 			// Note: behaviou?r matches in property position (followed by a
 			// colon) AND only when it is the whole property name, so benign
 			// selectors like .behavior-badge pass and modern hyphenated
@@ -4168,54 +4193,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Sanitize generated critical CSS for safe output inside a <style> tag.
 		 *
-		 * Token-breaking worker shared by sanitize_inline_css() (applied
-		 * both before and after the `wppo_ccss_sanitize_inline` filter so
-		 * hooked code cannot reintroduce breakout tokens). Delegates to the
-		 * shared {@see Util::sanitize_css_for_storage()} worker (issue
-		 * #1347) so the critical-CSS and used-CSS pipelines strip the same
-		 * script-capable constructs (`</style>`, `script`, comments, CSS
-		 * expression vectors, `behavior`/`behaviour` in property position
-		 * only, `-moz-binding`, non-allowlisted `data:` URLs, event-handler
-		 * payloads) under the same size/charset bounds. Fail-closed: a
-		 * sanitizer error drops the block (returns '') so output degrades
-		 * to unoptimized markup, never script execution.
-		 *
-		 * @param string $css Raw critical CSS.
-		 * @return string Sanitized critical CSS.
-		 * @since 2.0.0
-		 * @since NEXT Delegates to Util::sanitize_css_for_storage().
-		 */
-		private static function sanitize_inline_css_tokens( string $css ): string {
-			try {
-				return Util::sanitize_css_for_storage( $css );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
-		}
-
-		/**
-		 * Sanitize generated critical CSS for safe output inside a <style> tag.
-		 *
-		 * Neutralizes the `</style>` raw-text terminator plus `script`,
-		 * comment (`<!--`/`-->`), and CSS expression vectors
-		 * (`expression()`, `javascript:`/`vbscript:` URLs, the `behavior` /
-		 * `behaviour` property, `-moz-binding`) case-insensitively, decodes
-		 * numeric/hex entities first so encoded payloads cannot smuggle `<`
-		 * past the encoder, then encodes any remaining `<` as the equivalent
-		 * CSS escape so stored CSS can never break out of the style element.
+		 * Delegates to the shared {@see Util::sanitize_css_for_storage()}
+		 * worker (issue #1347) so the critical-CSS and used-CSS pipelines
+		 * strip the same script-capable constructs (`</style>`, `script`,
+		 * comments, CSS expression vectors, `behavior`/`behaviour` in
+		 * property position only, `-moz-binding`, non-allowlisted `data:`
+		 * URLs, event-handler payloads) under the same size/charset bounds.
 		 * Fail-closed: a sanitizer error drops the block (returns '') so
 		 * output degrades to unoptimized markup, never script execution.
+		 * Per-request memo (bounded to 20 entries) dedupes repeats within
+		 * one request; pass $already_entity_decoded=true when the caller
+		 * shares an already entity-decoded stream (issue #1347 review).
 		 *
 		 * Filter output is re-sanitized: `wppo_ccss_sanitize_inline` is a
 		 * trusted-code-only hook, and a hooked callback must not be able to
 		 * reintroduce `</style>`/`<script>` past the sanitizer and gate.
 		 *
 		 * @param string $css Raw critical CSS.
+		 * @param bool   $already_entity_decoded Skip the entity-decode pass when the caller shares a decoded stream.
 		 * @return string Sanitized critical CSS.
 		 * @since 2.0.0
+		 * @since NEXT Delegates to Util::sanitize_css_for_storage(); collapsed the redundant sanitize_inline_css_tokens() wrapper.
+		 * @since NEXT Added $already_entity_decoded for shared-stream callers.
 		 */
-		private static function sanitize_inline_css( string $css ): string {
+		private static function sanitize_inline_css( string $css, bool $already_entity_decoded = false ): string {
 			// Per-request memo (issue #1235): output was already sanitized
 			// at generation time before the atomic write, so the inline_ccss()
 			// hot path would otherwise re-run the regex passes on every
@@ -4226,7 +4227,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( array_key_exists( $key, $memo ) ) {
 				return $memo[ $key ];
 			}
-			$css = self::sanitize_inline_css_tokens( $css );
+			try {
+				$css = Util::sanitize_css_for_storage( $css, $already_entity_decoded );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$css = '';
+			}
 
 			/**
 			 * Filters the inline critical CSS right before output.
@@ -4246,7 +4252,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 					return $css;
 				}
-				$css = self::sanitize_inline_css_tokens( $filtered );
+				try {
+					$css = Util::sanitize_css_for_storage( $filtered );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$css = '';
+				}
 			}
 			$memo[ $key ] = $css;
 			if ( count( $memo ) > 20 ) {
@@ -4643,31 +4654,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
-		 * Token-based selector matching that prevents substring false positives.
-		 *
-		 * Matches exact class, ID, tag, or attribute names using word boundaries.
-		 *
-		 * @param string $selector_part A single selector fragment (e.g., '.container', '#header', 'h1').
-		 * @param string $above         The above-fold selector pattern to match against.
-		 * @return bool True if the selector part matches the pattern.
-		 * @since 2.0.0
-		 */
-		private static function token_match( string $selector_part, string $above ): bool {
-			if ( $selector_part === $above ) {
-				return true;
-			}
-
-			// For class selectors, use word-boundary-aware matching.
-			$pattern = '/\b' . preg_quote( ltrim( $above, '.' ), '/' ) . '\b/';
-
-			return (bool) preg_match( $pattern, $selector_part );
-		}
-
-		/**
 		 * Fast token match using the precompiled above-fold matcher.
 		 *
 		 * Exact tag/class/id hits resolve via hash lookup; everything else
 		 * falls back to the single combined word-boundary alternation.
+		 * Fail-closed: a PCRE failure (false return) reports no match
+		 * instead of running the legacy per-token fallback loop (issue
+		 * #1347 review) — a missed above-fold selector only costs
+		 * optimization weight, never correctness.
 		 *
 		 * @since 2.0.0
 		 * @param string $selector_part Single selector fragment (last descendant part).
@@ -4683,18 +4677,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 			try {
 				$matched = preg_match( $matcher['regex'], $selector_part );
-				if ( false !== $matched ) {
-					return (bool) $matched;
+				if ( false === $matched ) {
+					return false;
 				}
+				return (bool) $matched;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				return false;
 			}
-			foreach ( self::ABOVE_FOLD_SELECTORS as $above ) {
-				if ( self::token_match( $selector_part, $above ) ) {
-					return true;
-				}
-			}
-			return false;
 		}
 
 		/**
@@ -4773,7 +4763,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// the failure was already determined, so routing it through the
 			// timeout path would burn up to 5 full-budget retries before
 			// escalation even though no retry can succeed.
-			if ( is_string( $critical_css ) && self::contains_unsafe_css_tokens( $critical_css ) ) {
+			// Shared decoded stream (issue #1347 review): the gate and the
+			// sanitizer both entity-decode the up-to-2MB blob, so decode once
+			// here and share it instead of paying a decode per pass.
+			$decoded_probe = is_string( $critical_css ) ? self::decode_css_entities( $critical_css ) : '';
+			if ( is_string( $critical_css ) && self::contains_unsafe_css_tokens( $decoded_probe, true ) ) {
 				try {
 					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 				} catch ( \Throwable $e ) {
@@ -4801,13 +4795,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 			// Defense-in-depth (issue #1181): sanitize before caching so the
 			// stored file itself carries no breakout tokens even if the gate
-			// above missed a novel vector; output is sanitized again in
-			// inline_ccss(). An empty result fails closed like a gate hit.
-			// Sanitizer output is safe by construction (issue #1347
-			// review), so no second contains_unsafe scan runs here — the
-			// pre-sanitize gate plus the fail-closed empty check below own
-			// the poison path without re-decoding the same 2MB blob.
-			$critical_css = self::sanitize_inline_css( $critical_css );
+			// above missed a novel vector. Sanitizer output is safe by
+			// construction (issue #1347 review), so no second contains_unsafe
+			// scan runs here — the pre-sanitize gate plus the fail-closed
+			// empty check below own the poison path. The shared decoded
+			// stream is passed through so the sanitizer skips its own
+			// entity-decode pass over the same blob.
+			$critical_css = self::sanitize_inline_css( $decoded_probe, true );
 			if ( '' === trim( $critical_css ) ) {
 				self::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
@@ -5017,8 +5011,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					return;
 				}
 				echo '<style id="wppo-critical-css">' . "\n";
-				// Sanitized against HTML breakout tokens; see sanitize_inline_css().
-				echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
+				// Stored content was sanitized at generation time (safe by
+				// construction), so the frontend hot path skips the full
+				// re-sanitize when no `wppo_ccss_sanitize_inline` listener
+				// can alter the bytes (issue #1347 review) — otherwise every
+				// pageview pays the ~12-pass sanitizer plus the md5 memo
+				// probe. With a listener registered, the filtered output is
+				// re-sanitized via sanitize_inline_css().
+				$inline = $content;
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_sanitize_inline' ) ) {
+					$inline = self::sanitize_inline_css( $content );
+				}
+				echo $inline . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context at generation time (or via sanitize_inline_css() when filtered).
 				echo '</style>' . "\n";
 			} else {
 				// No CCSS file yet — queue async generation and never block the
@@ -5716,11 +5720,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * rather than scheduler failure, otherwise the template is marked
 		 * failed with a day TTL while its job runs.
 		 *
-		 * Dedup covers the signed shape plus the legacy shape (no hmac):
-		 * the HMAC tag is verified only at execution, so pre-HMAC rows and
-		 * jobs minted under a rotated secret still dedupe instead of
-		 * double-scheduling (issue #1347 review). The memo is keyed on the
-		 * stable identity (template_hash) for the same reason.
+		 * Dedup covers the current-HMAC signed shape plus the legacy shape
+		 * (no hmac): the HMAC tag is verified only at execution, so
+		 * pre-HMAC rows still dedupe instead of double-scheduling (issue
+		 * #1347 review). Known limit: jobs minted under a rotated (prior)
+		 * secret carry a different tag, so the scheduler's exact-args
+		 * match cannot dedupe them. The memo is keyed on the stable
+		 * identity (template_hash) for the same reason. The legacy probe
+		 * runs only while the `wppo_css_probe_legacy_jobs` filter allows
+		 * (default true; flip to false once the upgrade window has drained
+		 * pre-HMAC rows) so the post-upgrade steady state pays no legacy
+		 * queries.
 		 *
 		 * @since NEXT
 		 * @param string $hook      Action hook.
@@ -5731,16 +5741,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( ! function_exists( 'as_next_scheduled_action' ) ) {
 				return false;
 			}
-			// Dedup on stable identity (issue #1347 review): the HMAC tag
-			// is verified only at execution, so probes cover the signed
-			// shape plus the legacy shape (no hmac) — pre-HMAC rows and
-			// jobs minted under a rotated secret still dedupe instead of
-			// double-scheduling. The memo is keyed on the stable identity
-			// (template_hash) for the same reason.
+			// Dedup on stable identity where the scheduler API allows
+			// exact-args probes (issue #1347 review): the HMAC tag is
+			// verified only at execution, so probes cover the current-HMAC
+			// signed shape plus the legacy shape (no hmac) — pre-HMAC rows
+			// still dedupe instead of double-scheduling. The memo is keyed
+			// on the stable identity (template_hash) for the same reason.
+			$probe_legacy = true;
+			try {
+				if ( function_exists( 'apply_filters' ) ) {
+					$probe_legacy = (bool) apply_filters( 'wppo_css_probe_legacy_jobs', true );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			$probes = array( $hook_args );
 			try {
 				$inner = $hook_args[0] ?? null;
-				if ( is_array( $inner ) && isset( $inner['template_hash'] ) && is_string( $inner['template_hash'] ) ) {
+				if ( $probe_legacy && is_array( $inner ) && isset( $inner['template_hash'] ) && is_string( $inner['template_hash'] ) ) {
 					$legacy = array( array( 'template_hash' => $inner['template_hash'] ) );
 					if ( $legacy !== $hook_args ) {
 						$probes[] = $legacy;

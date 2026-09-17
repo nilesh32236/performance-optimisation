@@ -576,57 +576,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
-		 * Strip CSS comments while preserving quoted segments.
-		 *
-		 * A character scanner that tracks single/double-quote state (with
-		 * backslash escapes), so comment markers inside strings never open
-		 * or close a comment. Unterminated comments are dropped (fail-open).
-		 *
-		 * @since NEXT
-		 * @param string $css Raw CSS content.
-		 * @return string CSS without comments.
-		 */
-		private static function strip_css_comments( string $css ): string {
-			$length = strlen( $css );
-			$out    = '';
-			$quote  = null;
-			$i      = 0;
-			while ( $i < $length ) {
-				$char = $css[ $i ];
-				if ( null !== $quote ) {
-					$out .= $char;
-					if ( '\\' === $char && $i + 1 < $length ) {
-						$out .= $css[ $i + 1 ];
-						$i   += 2;
-						continue;
-					}
-					if ( $char === $quote ) {
-						$quote = null;
-					}
-					++$i;
-					continue;
-				}
-				if ( '"' === $char || "'" === $char ) {
-					$quote = $char;
-					$out  .= $char;
-					++$i;
-					continue;
-				}
-				if ( '/' === $char && $i + 1 < $length && '*' === $css[ $i + 1 ] ) {
-					$end = strpos( $css, '*/', $i + 2 );
-					if ( false === $end ) {
-						break;
-					}
-					$i = $end + 2;
-					continue;
-				}
-				$out .= $char;
-				++$i;
-			}
-			return $out;
-		}
-
-		/**
 		 * Parse CSS content into structured rules.
 		 *
 		 * @param string $css Raw CSS content.
@@ -634,10 +583,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function parse_css( string $css ): array {
-			// Strip CSS comments with a string-aware scanner: comment markers
-			// inside quoted segments (e.g. content: "/* not a comment */")
-			// are preserved instead of being treated as comment boundaries.
-			$css = self::strip_css_comments( $css );
+			// Strip CSS comments with the shared string-aware scanner
+			// (Util::strip_css_comments, issue #1347 review): comment
+			// markers inside quoted segments (e.g. content: "/* not a
+			// comment */") are preserved instead of being treated as
+			// comment boundaries. A single home — never a local copy —
+			// so comment handling can never drift from the sanitizer.
+			$css = Util::strip_css_comments( $css );
 
 			$rules = array();
 
@@ -1590,11 +1542,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// size/charset bounds via the Util worker. A rejected blob
 			// refuses the write so callers serve unoptimized output
 			// instead of persisting poisoned CSS. Never fatal.
-			// The is_css_safe_for_storage() pre-gate distinguishes
-			// deterministic poison (logged explicitly, no retry) from
-			// legit-empty input (silent refusal).
+			// Single-pass gate (issue #1347 review): sanitize once, compare
+			// against the input, and reuse the cleaned bytes — instead of
+			// running is_css_safe_for_storage() (defined as
+			// sanitize-identity) and then sanitizing again, which scanned
+			// the same up-to-2MB blob twice. Any alteration or rejection
+			// (sanitized output differs from input) is deterministic poison:
+			// logged explicitly with no retry, distinct from legit-empty
+			// input (refused silently above).
 			if ( ! $already_sanitized ) {
-				if ( ! Util::is_css_safe_for_storage( $css ) ) {
+				$clean = Util::sanitize_css_for_storage( $css );
+				if ( $clean !== $css ) {
 					try {
 						Log::add(
 							__( 'Used-CSS write refused: poisoned CSS rejected by the sanitizer; serving unoptimized markup instead.', 'performance-optimisation' )
@@ -1604,7 +1562,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					}
 					return false;
 				}
-				$css = Util::sanitize_css_for_storage( $css );
+				$css = $clean;
 			}
 			if ( '' === $css ) {
 				return false;
@@ -1980,7 +1938,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return true;
 			}
 
-			return self::delete_all_used_css();
+			return self::delete_all_used_css( $retain_fallback );
 		}
 
 		/**
@@ -2669,6 +2627,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Per-request memo for is_used_css_job_live() probes (issue #1347 review).
+		 *
+		 * The frontend hot path and bulk-regen loops repeat identical
+		 * probes; the memo bounds them to one scheduler round-trip per
+		 * distinct args shape per request. Bounded to 200 entries so
+		 * unbounded bulk loops cannot grow memory in long-lived workers.
+		 *
+		 * @since NEXT
+		 * @var array<string, bool>
+		 */
+		private static array $job_live_memo = array();
+
+		/**
 		 * Whether a used-CSS generation job is pending or running.
 		 *
 		 * Single home for the 0-return disambiguation used after a
@@ -2678,24 +2649,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * bounded `STATUS_RUNNING` lookup, mirroring the CCSS
 		 * `has_pending_ccss_job()` and PageSpeed `find_pending_job_id()`
 		 * backstops. Fail-open: returns false when the lookup APIs are
-		 * unavailable or throw.
+		 * unavailable or throw. Public so ability/REST schedulers share
+		 * this exact logic instead of duplicating signed+legacy probes
+		 * that would drift on the next dedup fix (issue #1347 review).
 		 *
-		 * Dedup probes check the signed shape plus the legacy shape (no
-		 * hmac) so pre-HMAC rows still dedupe instead of
+		 * Dedup probes check the current-HMAC signed shape plus the legacy
+		 * shape (no hmac) so pre-HMAC rows still dedupe instead of
 		 * double-scheduling (issue #1347 review); HMAC is verified only at
-		 * execution.
+		 * execution. Known limit: jobs minted under a rotated (prior)
+		 * secret carry a different tag, so the scheduler's exact-args
+		 * match cannot dedupe them — only the current-HMAC and legacy
+		 * shapes are probed. The legacy probe runs only while the
+		 * `wppo_css_probe_legacy_jobs` filter allows (default true; flip
+		 * to false once the upgrade window has drained pre-HMAC rows) so
+		 * the post-upgrade steady state pays no legacy queries.
 		 *
 		 * @since NEXT
 		 * @param array $args Action arguments.
 		 * @return bool True when a matching job is pending or running.
 		 */
-		private static function is_used_css_job_live( array $args ): bool {
-			// Dedup on stable identity (issue #1347 review): probe the
-			// signed shape plus the legacy shape (no hmac) so pre-HMAC
-			// rows still dedupe; HMAC is verified only at execution.
+		public static function is_used_css_job_live( array $args ): bool {
+			// Dedup on stable identity where the scheduler API allows
+			// exact-args probes (issue #1347 review): the signed shape plus
+			// the legacy shape (no hmac); HMAC is verified only at
+			// execution.
+			try {
+				$memo_key = md5( serialize( $args ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$memo_key = '';
+			}
+			if ( '' !== $memo_key && array_key_exists( $memo_key, self::$job_live_memo ) ) {
+				return self::$job_live_memo[ $memo_key ];
+			}
+			$probe_legacy = true;
+			try {
+				if ( function_exists( 'apply_filters' ) ) {
+					$probe_legacy = (bool) apply_filters( 'wppo_css_probe_legacy_jobs', true );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			$probes = array( $args );
 			try {
-				if ( isset( $args['post_id'] ) ) {
+				if ( $probe_legacy && isset( $args['post_id'] ) ) {
 					$legacy = self::legacy_job_args_for_post( (int) $args['post_id'] );
 					if ( $legacy !== $args ) {
 						$probes[] = $legacy;
@@ -2707,6 +2704,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			foreach ( $probes as $probe ) {
 				try {
 					if ( function_exists( 'as_has_scheduled_action' ) && (bool) as_has_scheduled_action( 'wppo_used_css_generate', $probe, 'performance_optimisation' ) ) {
+						self::memoize_job_live( $memo_key, true );
 						return true;
 					}
 				} catch ( \Throwable $e ) {
@@ -2729,13 +2727,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						'ids'
 					);
 					if ( is_array( $running ) && ! empty( $running ) ) {
+						self::memoize_job_live( $memo_key, true );
 						return true;
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 			}
+			self::memoize_job_live( $memo_key, false );
 			return false;
+		}
+
+		/**
+		 * Store an is_used_css_job_live() verdict in the per-request memo (issue #1347 review).
+		 *
+		 * @param string $memo_key Memo key ('' skips the store).
+		 * @param bool   $live Whether a job is live.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function memoize_job_live( string $memo_key, bool $live ): void {
+			try {
+				if ( '' === $memo_key ) {
+					return;
+				}
+				self::$job_live_memo[ $memo_key ] = $live;
+				if ( count( self::$job_live_memo ) > 200 ) {
+					array_shift( self::$job_live_memo );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

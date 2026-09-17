@@ -212,6 +212,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return;
 			}
 
+			// Pre-mint the CSS-pipeline HMAC secret on upgrade too (issue
+			// #1347 review): activation-only minting leaves existing
+			// installs minting lazily at schedule time, where concurrent
+			// workers mint divergent secrets and diverge HMAC dedup keys
+			// for the same post/template. First-writer-wins inside
+			// get_css_pipeline_secret() converges the race.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_css_pipeline_secret' ) ) {
+					Util::get_css_pipeline_secret();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// One-time backfill: large aggregate options created by older
 			// releases defaulted to autoload=yes. Flip them to autoload=false
 			// once so they stop loading via alloptions on every request.
