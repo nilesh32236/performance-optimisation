@@ -528,6 +528,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$request_uri   = str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
 			'$cache_life    = ' . $cache_life . ';' . PHP_EOL . PHP_EOL .
 
+			'// Belt-and-braces: backslashes were already stripped above via str_replace,' . PHP_EOL .
+			'// so the strpos( $request_uri, \'\\\\\' ) check below is defense-in-depth only.' . PHP_EOL .
 			'if ( \'\' === $site_domain || \'\' === $canonical_host || \'\' === $request_host || $request_host !== $canonical_host || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false || strpos( $request_uri, "\0" ) !== false || strpos( $site_domain, "\0" ) !== false || false !== strpos( $request_uri, \'\\\\\' ) || (bool) preg_match( \'#^[a-zA-Z]:#\', ltrim( $request_uri ) ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .

@@ -1423,8 +1423,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( $wp_filesystem ) {
 					try {
 						if ( file_exists( $this->dropin_path ) && $this->is_own_dropin() && method_exists( $wp_filesystem, 'move' ) ) {
-							$wp_filesystem->move( $this->dropin_path, $this->get_parked_path(), true );
-							$this->own_dropin_memo = null;
+							$moved = $wp_filesystem->move( $this->dropin_path, $this->get_parked_path(), true );
+							if ( $moved ) {
+								$this->own_dropin_memo = null;
+							}
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -2094,7 +2096,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$tmp = '';
 			}
 			if ( ! is_string( $tmp ) || '' === $tmp ) {
-				$tmp = $this->dropin_path . '.tmp.' . time();
+				$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
+				$rand_part = 0;
+				try {
+					if ( function_exists( 'wp_rand' ) ) {
+						$rand_part = wp_rand( 100000, 999999 );
+					} else {
+						$rand_part = mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback only when wp_rand() is unavailable; uniqueness is all that is needed for the tmp suffix.
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$rand_part = mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Exception fallback; uniqueness is all that is needed for the tmp suffix.
+				}
+				$tmp = $this->dropin_path . '.tmp.' . time() . '.' . $rand_part . '.' . $uniq_part;
 			}
 			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
 
