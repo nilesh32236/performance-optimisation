@@ -1415,6 +1415,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private const ANOMALY_P75_MIN_SAMPLES = 10;
 
 		/**
+		 * Upper clamp for anomaly gate resolvers (issue #1384).
+		 *
+		 * Guards the persistence-window and p75 sample-floor resolvers so
+		 * a misbehaving `wppo_ai_anomaly_*` filter (or stored setting)
+		 * cannot silently disable paging forever with an enormous value.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_GATE_MAX = 30;
+
+		/**
 		 * Resolve the anomaly minimum-sample threshold.
 		 *
 		 * Reads the additive `ai_adaptive.anomaly_min_samples` setting,
@@ -1490,8 +1502,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Reads the additive `ai_adaptive.anomaly_persistence_windows`
 		 * setting, falling back to ANOMALY_PERSISTENCE_WINDOWS. Filterable
 		 * via `wppo_ai_anomaly_persistence_windows`. Fail-open to 3.
+		 * Clamped to ANOMALY_GATE_MAX so a misbehaving filter cannot
+		 * silently disable paging forever.
 		 *
-		 * @return int Trailing windows that must each breach (>=1).
+		 * @return int Trailing windows that must each breach (>=1, <=30).
 		 * @since NEXT
 		 */
 		private static function anomaly_persistence_windows(): int {
@@ -1502,17 +1516,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					if ( isset( $settings['ai_adaptive']['anomaly_persistence_windows'] ) ) {
 						$candidate = (int) $settings['ai_adaptive']['anomaly_persistence_windows'];
 						if ( $candidate >= 1 ) {
-							$windows = $candidate;
+							$windows = min( $candidate, self::ANOMALY_GATE_MAX );
 						}
 					}
 				}
 				if ( function_exists( 'apply_filters' ) ) {
 					$filtered = apply_filters( 'wppo_ai_anomaly_persistence_windows', $windows );
 					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
-						$windows = (int) $filtered;
+						$windows = min( (int) $filtered, self::ANOMALY_GATE_MAX );
 					}
 				}
-				return $windows >= 1 ? $windows : self::ANOMALY_PERSISTENCE_WINDOWS;
+				if ( $windows < 1 ) {
+					return self::ANOMALY_PERSISTENCE_WINDOWS;
+				}
+				return min( $windows, self::ANOMALY_GATE_MAX );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return self::ANOMALY_PERSISTENCE_WINDOWS;
@@ -1524,9 +1541,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Reads the additive `ai_adaptive.anomaly_p75_min_samples`
 		 * setting, falling back to ANOMALY_P75_MIN_SAMPLES. Filterable via
-		 * `wppo_ai_anomaly_p75_min_samples`. Fail-open to 10.
+		 * `wppo_ai_anomaly_p75_min_samples`. Fail-open to 10. Clamped to
+		 * ANOMALY_GATE_MAX so a misbehaving filter cannot silently
+		 * disable paging forever.
 		 *
-		 * @return int Minimum RUM samples (>=1).
+		 * @return int Minimum RUM samples (>=1, <=30).
 		 * @since NEXT
 		 */
 		private static function anomaly_p75_min_samples(): int {
@@ -1537,17 +1556,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					if ( isset( $settings['ai_adaptive']['anomaly_p75_min_samples'] ) ) {
 						$candidate = (int) $settings['ai_adaptive']['anomaly_p75_min_samples'];
 						if ( $candidate >= 1 ) {
-							$min = $candidate;
+							$min = min( $candidate, self::ANOMALY_GATE_MAX );
 						}
 					}
 				}
 				if ( function_exists( 'apply_filters' ) ) {
 					$filtered = apply_filters( 'wppo_ai_anomaly_p75_min_samples', $min );
 					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
-						$min = (int) $filtered;
+						$min = min( (int) $filtered, self::ANOMALY_GATE_MAX );
 					}
 				}
-				return $min >= 1 ? $min : self::ANOMALY_P75_MIN_SAMPLES;
+				if ( $min < 1 ) {
+					return self::ANOMALY_P75_MIN_SAMPLES;
+				}
+				return min( $min, self::ANOMALY_GATE_MAX );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return self::ANOMALY_P75_MIN_SAMPLES;
@@ -1759,11 +1781,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param string     $metric Metric name ('lcp'|'cls').
 		 * @param array|null $rum Optional RUM aggregate (null = live read-only read).
 		 * @param float      $baseline Trend baseline for the firing arm.
+		 * @param int|null   $p75_min_samples Optional pre-resolved sample floor (null = resolve once via anomaly_p75_min_samples()).
 		 * @return bool True when real-user data agrees with the trend arm.
 		 * @since 2.0.0
 		 * @since NEXT RUM-disabled short-circuit; read-only aggregate path; p75 sample floor.
 		 */
-		private static function is_rum_corroborated( string $metric, ?array $rum, float $baseline ): bool {
+		private static function is_rum_corroborated( string $metric, ?array $rum, float $baseline, ?int $p75_min_samples = null ): bool {
 			try {
 				if ( ! in_array( $metric, array( 'lcp', 'cls' ), true ) ) {
 					return false;
@@ -1780,6 +1803,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 				if ( ! is_array( $rum ) || empty( $rum ) ) {
 					return false;
+				}
+				$floor = $p75_min_samples;
+				if ( null === $floor ) {
+					$floor = self::anomaly_p75_min_samples();
+				}
+				if ( $floor < 1 ) {
+					$floor = self::ANOMALY_P75_MIN_SAMPLES;
 				}
 				$total_n   = 0;
 				$total_sum = 0.0;
@@ -1800,7 +1830,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						$total_sum += $sum;
 					}
 				}
-				if ( $total_n < self::anomaly_p75_min_samples() ) {
+				if ( $total_n < $floor ) {
 					return false;
 				}
 				$rum_avg = $total_sum / $total_n;
@@ -1928,6 +1958,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( $persistence < 1 ) {
 					$persistence = self::ANOMALY_PERSISTENCE_WINDOWS;
 				}
+				// Resolve the RUM sample floor once; is_rum_corroborated()
+				// receives it per arm so multi-key maps do not repeat
+				// option reads + filter applications.
+				$rum_floor = self::anomaly_p75_min_samples();
+				if ( $rum_floor < 1 ) {
+					$rum_floor = self::ANOMALY_P75_MIN_SAMPLES;
+				}
 				foreach ( $trends as $trend_key => $snapshots ) {
 					if ( ! is_array( $snapshots ) ) {
 						continue;
@@ -2003,7 +2040,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					}
 					foreach ( $candidates as $anomaly ) {
 						// RUM corroboration gate: trends + real-user data must agree.
-						if ( ! self::is_rum_corroborated( $anomaly['metric'], $rum, (float) $anomaly['baseline'] ) ) {
+						if ( ! self::is_rum_corroborated( $anomaly['metric'], $rum, (float) $anomaly['baseline'], $rum_floor ) ) {
 							continue;
 						}
 						// Record the alarm before filtering so a repeated
@@ -2057,8 +2094,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * pages, never writes, never fatal.
 		 *
 		 * Reasons: `rum_disabled` (RUM collection off), `rum_thin`
-		 * (RUM samples below `anomaly_p75_min_samples()` or aggregate
-		 * empty), `trends_thin` (no key reaches `anomaly_min_samples()`),
+		 * (best-sampled RUM metric below `anomaly_p75_min_samples()` or
+		 * aggregate empty), `trends_thin` (no key reaches both
+		 * `anomaly_min_samples()` and the persistence+1 history floor),
 		 * `cooling_down` (a page already fired inside the cooldown),
 		 * `ready` (history + RUM floors satisfied — detection may page).
 		 *
@@ -2095,7 +2133,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( ! is_array( $trends ) || empty( $trends ) ) {
 					return $fallback;
 				}
-				// Count the best-sampled key across both arms.
+				// Count the best-sampled key across both arms. The ready gate
+				// also requires the persistence+1 short-history floor from
+				// detect_anomalies() so provisional never claims ready
+				// while detection always returns empty.
 				$best = 0;
 				foreach ( $trends as $snapshots ) {
 					if ( ! is_array( $snapshots ) ) {
@@ -2104,7 +2145,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					$best = max( $best, count( self::collect_trend_samples( $snapshots, 'lcp', true ) ), count( self::collect_trend_samples( $snapshots, 'cls', false ) ) );
 				}
 				$fallback['samples'] = $best;
-				if ( $best < $min_samples ) {
+				$persistence         = self::anomaly_persistence_windows();
+				if ( $persistence < 1 ) {
+					$persistence = self::ANOMALY_PERSISTENCE_WINDOWS;
+				}
+				$required_history = max( $min_samples, $persistence + 1 );
+				if ( $best < $required_history ) {
 					$fallback['reason'] = 'trends_thin';
 					return $fallback;
 				}
@@ -2115,7 +2161,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return $fallback;
 				}
 				$aggregate = $rum_injected ? $rum : self::read_rum_aggregate_for_anomaly();
-				$total_n   = 0;
+				// Match the corroboration gate semantics: the p75 floor is
+				// enforced per arm (per metric), so report the best-sampled
+				// metric total instead of summing both arms (which would
+				// double-count the same visits).
+				$total_lcp = 0;
+				$total_cls = 0;
 				if ( is_array( $aggregate ) ) {
 					foreach ( $aggregate as $paths ) {
 						if ( ! is_array( $paths ) ) {
@@ -2125,14 +2176,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							if ( ! is_array( $metrics ) ) {
 								continue;
 							}
-							foreach ( array( 'lcp', 'cls' ) as $metric ) {
-								if ( isset( $metrics[ $metric ] ) && is_array( $metrics[ $metric ] ) && isset( $metrics[ $metric ]['n'] ) ) {
-									$total_n += (int) $metrics[ $metric ]['n'];
-								}
+							if ( isset( $metrics['lcp'] ) && is_array( $metrics['lcp'] ) && isset( $metrics['lcp']['n'] ) ) {
+								$total_lcp += (int) $metrics['lcp']['n'];
+							}
+							if ( isset( $metrics['cls'] ) && is_array( $metrics['cls'] ) && isset( $metrics['cls']['n'] ) ) {
+								$total_cls += (int) $metrics['cls']['n'];
 							}
 						}
 					}
 				}
+				$total_n                 = max( $total_lcp, $total_cls );
 				$fallback['rum_samples'] = $total_n;
 				if ( $total_n < $rum_min_samples ) {
 					$fallback['reason'] = 'rum_thin';
