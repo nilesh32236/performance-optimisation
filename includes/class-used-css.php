@@ -3799,16 +3799,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * Converts `link[data-wppo-delayed-css]` preloads to stylesheets on
 		 * first interaction (pointer/key/touch/scroll/hover) with a 5s backstop
-		 * so the full styles always arrive. The backstop timer is cleared on
-		 * pagehide/beforeunload (mirroring the critical-css loadCSS pattern)
-		 * so a late timer cannot fire after navigation. Tiny,
-		 * dependency-free, fail-open.
+		 * so the full styles always arrive. c() is the single cleanup shared
+		 * by the interaction and timeout paths (clears the backstop and
+		 * detaches every listener); pagehide/beforeunload only clear the
+		 * timer (mirroring the critical-css loadCSS pattern) so a late timer
+		 * cannot fire after navigation, and pageshow re-arms the backstop
+		 * after a bfcache restore where the timer was dropped. Tiny,
+		 * dependency-free, fail-open. mouseover covers hover intent
+		 * (mouseenter does not reliably fire on window, so it is omitted).
+		 *
+		 * Note: emitted as a raw tag (not wp_print_inline_script_tag()) so
+		 * no CSP nonce bakes into cached HTML.
 		 *
 		 * @return string Inline script tag.
 		 * @since NEXT
 		 */
 		private function build_delayed_css_loader(): string {
-			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false,t=null;function l(){if(d){return;}d=true;if(t!==null){clearTimeout(t);t=null;}var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);window.removeEventListener(\'mouseover\',b);window.removeEventListener(\'mouseenter\',b);}function c(){if(t!==null){clearTimeout(t);t=null;}}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});window.addEventListener(\'mouseover\',b,{passive:true});window.addEventListener(\'mouseenter\',b,{passive:true});window.addEventListener(\'pagehide\',c);window.addEventListener(\'beforeunload\',c);t=setTimeout(l,5000);})();</script>';
+			// phpcs:ignore Generic.Files.LineLength -- Single minified JS payload; unminified logic documented in the docblock above.
+			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false,t=null,E=[\'pointerdown\',\'keydown\',\'touchstart\',\'scroll\',\'mouseover\'];function c(){if(t!==null){clearTimeout(t);t=null;}for(var j=0;j<E.length;j++){try{window.removeEventListener(E[j],b);}catch(e){}}}function l(){if(d){return;}d=true;c();var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}}function b(){l();}function h(){if(d){return;}if(t!==null){clearTimeout(t);t=null;}}function s(){if(d||t!==null){return;}t=setTimeout(l,5000);}for(var k=0;k<E.length;k++){try{window.addEventListener(E[k],b,\'keydown\'===E[k]?false:{passive:true});}catch(e){window.addEventListener(E[k],b);}}window.addEventListener(\'pagehide\',h);window.addEventListener(\'beforeunload\',h);window.addEventListener(\'pageshow\',s);t=setTimeout(l,5000);})();</script>';
 		}
 
 		/**

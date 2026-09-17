@@ -7,7 +7,6 @@
  *
  * @since 1.10.0
  */
-import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCheckCircle,
@@ -15,6 +14,7 @@ import {
 	faInfoCircle,
 	faTimes,
 } from '@fortawesome/free-solid-svg-icons';
+import getWppoString from '../../lib/getWppoString';
 
 /**
  * Allowed notice types. Unknown values fall back to 'info' so a typo never
@@ -73,7 +73,7 @@ const NoticeBanner = ( {
 					type="button"
 					className="wppo-notice__dismiss"
 					onClick={ onDismiss }
-					aria-label={ __( 'Dismiss', 'performance-optimisation' ) }
+					aria-label={ getWppoString( 'dismiss', 'Dismiss' ) }
 				>
 					<FontAwesomeIcon icon={ faTimes } aria-hidden="true" />
 				</button>

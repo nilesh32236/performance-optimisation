@@ -121,12 +121,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		}
 
 		/**
+		 * In-request registry of emitted protected-note ids (issue #1333).
+		 *
+		 * Handles that sanitize identically (e.g. foo/bar vs foo:bar) or N
+		 * empty handles would otherwise emit duplicate ids; the registry
+		 * appends -2, -3, … on collision so every checkbox/em pair stays
+		 * unique. Reset via reset_protected_note_ids().
+		 *
+		 * @since NEXT
+		 * @var array<string, bool>
+		 */
+		private static array $protected_note_ids_seen = array();
+
+		/**
+		 * Reset the protected-note id registry (unit-test helper).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_protected_note_ids(): void {
+			self::$protected_note_ids_seen = array();
+		}
+
+		/**
 		 * Stable aria-describedby id for a protected asset row (issue #1333).
 		 *
 		 * Derived from the asset handle (not the foreach index) so the id is
-		 * stable when asset order changes. Prefers sanitize_html_class() +
-		 * wp_hash() with pure-PHP fallbacks so rendering never fatals where
-		 * those helpers are unavailable.
+		 * stable when asset order changes. Uses sanitize_html_class() with a
+		 * pure-PHP fallback so rendering never fatals where the helper is
+		 * unavailable, plus an unkeyed md5 suffix as a uniqueness
+		 * disambiguator (a keyed MAC is unnecessary here and would expose
+		 * salt-derived material in public markup). Collisions (including N
+		 * empty handles) get a -2, -3, … suffix via the in-request seen-set
+		 * so no two rows share an id.
 		 *
 		 * @param string $prefix  Id prefix (with trailing dash).
 		 * @param string $handle  Script/style handle.
@@ -142,12 +169,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			if ( '' === $sanitized ) {
 				$sanitized = 'protected';
 			}
-			if ( function_exists( 'wp_hash' ) ) {
-				$hash = substr( (string) wp_hash( $handle, 'nonce' ), 0, 8 );
-			} else {
-				$hash = substr( (string) md5( $handle ), 0, 8 );
+			$hash = substr( (string) md5( $handle ), 0, 8 );
+			$id   = $prefix . $sanitized . '-' . $hash;
+			if ( isset( self::$protected_note_ids_seen[ $id ] ) ) {
+				$suffix = 2;
+				while ( isset( self::$protected_note_ids_seen[ $id . '-' . $suffix ] ) ) {
+					++$suffix;
+				}
+				$id = $id . '-' . $suffix;
 			}
-			return $prefix . $sanitized . '-' . $hash;
+			self::$protected_note_ids_seen[ $id ] = true;
+			return $id;
 		}
 
 		/**
@@ -196,6 +228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$protected_css = Asset_Manager::get_protected_styles();
 			?>
 			<div class="wppo-asset-manager">
+				<style>.wppo-protected-row{background-color:var(--wppo-protected-bg,#f0f0f1);border-left:4px solid var(--wppo-protected-border,#8c8f94);}</style>
 				<h4><?php esc_html_e( 'Delay JS Overrides', 'performance-optimisation' ); ?></h4>
 				<p>
 					<label for="wppo_delay_disabled">
@@ -314,7 +347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 								</tr>
 							</thead>
 							<tbody>
-							<?php foreach ( $assets['scripts'] as $script_index => $script ) : ?>
+							<?php foreach ( $assets['scripts'] as $script ) : ?>
 								<?php
 								$is_protected = in_array( $script['handle'], $protected_js, true );
 								$is_disabled  = in_array( $script['handle'], $disabled_scripts, true );
@@ -324,15 +357,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 								// an index-based id shifts when asset order
 								// changes, breaking the aria-describedby
 								// reference. sanitize_html_class() keeps the id
-								// valid; the short hash suffix keeps handles
-								// that sanitize identically unique.
-								$note_id = self::protected_note_id( 'wppo-protected-script-', (string) $script['handle'] );
+								// valid; the short hash suffix plus the
+								// in-request seen-set keep handles that
+								// sanitize identically unique. Computed lazily:
+								// non-protected rows never render it.
+								$note_id = $is_protected ? self::protected_note_id( 'wppo-protected-script-', (string) $script['handle'] ) : '';
 								?>
-							<tr
-								<?php if ( $is_protected ) : ?>
-								style="background-color: #f0f0f1;border-left: 4px solid #8c8f94;"
-							<?php endif; ?>
-							>
+							<tr<?php echo $is_protected ? ' class="wppo-protected-row"' : ''; ?>>
 									<td>
 										<input
 											type="checkbox"
@@ -413,19 +444,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 								</tr>
 							</thead>
 							<tbody>
-							<?php foreach ( $assets['styles'] as $style_index => $style ) : ?>
+							<?php foreach ( $assets['styles'] as $style ) : ?>
 								<?php
 								$is_protected = in_array( $style['handle'], $protected_css, true );
 								$is_disabled  = in_array( $style['handle'], $disabled_styles, true );
 								// Stable AT id derived from the handle (issue #1333):
 								// see the scripts loop above for the rationale.
-								$note_id = self::protected_note_id( 'wppo-protected-style-', (string) $style['handle'] );
+								$note_id = $is_protected ? self::protected_note_id( 'wppo-protected-style-', (string) $style['handle'] ) : '';
 								?>
-							<tr
-								<?php if ( $is_protected ) : ?>
-								style="background-color: #f0f0f1;border-left: 4px solid #8c8f94;"
-							<?php endif; ?>
-							>
+							<tr<?php echo $is_protected ? ' class="wppo-protected-row"' : ''; ?>>
 									<td>
 										<input
 											type="checkbox"

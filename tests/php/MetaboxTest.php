@@ -474,6 +474,86 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Invoke the private protected_note_id() helper via reflection.
+	 *
+	 * @param string $prefix Id prefix.
+	 * @param string $handle Asset handle.
+	 * @return string Stable element id.
+	 */
+	private function call_protected_note_id( string $prefix, string $handle ): string {
+		$method = new \ReflectionMethod( Metabox::class, 'protected_note_id' );
+		return (string) $method->invoke( null, $prefix, $handle );
+	}
+
+	/**
+	 * Handle-derived ids are stable: the same handle maps to the same id
+	 * after a registry reset (issue #1333).
+	 */
+	public function test_protected_note_id_is_stable_per_handle(): void {
+		Metabox::reset_protected_note_ids();
+		$first = $this->call_protected_note_id( 'wppo-protected-script-', 'jquery-core' );
+		Metabox::reset_protected_note_ids();
+		$second = $this->call_protected_note_id( 'wppo-protected-script-', 'jquery-core' );
+		$this->assertSame( $first, $second );
+		$this->assertStringStartsWith( 'wppo-protected-script-jquery-core-', $first );
+		Metabox::reset_protected_note_ids();
+	}
+
+	/**
+	 * Handles that sanitize identically diverge via the hash suffix, and a
+	 * repeated id in one request gets a -2 suffix (issue #1333).
+	 */
+	public function test_protected_note_id_diverges_for_colliding_handles(): void {
+		Metabox::reset_protected_note_ids();
+		try {
+			$foo_slash = $this->call_protected_note_id( 'wppo-protected-script-', 'foo/bar' );
+			$foo_colon = $this->call_protected_note_id( 'wppo-protected-script-', 'foo:bar' );
+			$this->assertNotSame( $foo_slash, $foo_colon );
+
+			Metabox::reset_protected_note_ids();
+			$once  = $this->call_protected_note_id( 'wppo-protected-script-', 'dup-handle' );
+			$twice = $this->call_protected_note_id( 'wppo-protected-script-', 'dup-handle' );
+			$this->assertNotSame( $once, $twice );
+			$this->assertStringEndsWith( '-2', $twice );
+		} finally {
+			Metabox::reset_protected_note_ids();
+		}
+	}
+
+	/**
+	 * Empty handles each get a unique id within one request (issue #1333).
+	 */
+	public function test_protected_note_id_is_unique_for_empty_handles(): void {
+		Metabox::reset_protected_note_ids();
+		try {
+			$first  = $this->call_protected_note_id( 'wppo-protected-script-', '' );
+			$second = $this->call_protected_note_id( 'wppo-protected-script-', '' );
+			$this->assertNotSame( $first, $second );
+		} finally {
+			Metabox::reset_protected_note_ids();
+		}
+	}
+
+	/**
+	 * The sanitize_html_class() branch agrees with the pure-PHP fallback on
+	 * plain handles and keeps ids valid (issue #1333).
+	 */
+	public function test_protected_note_id_uses_sanitize_html_class_when_available(): void {
+		Functions\when( 'sanitize_html_class' )->alias(
+			static function ( $handle ) {
+				return (string) preg_replace( '/[^A-Za-z0-9_-]/', '', (string) $handle );
+			}
+		);
+		Metabox::reset_protected_note_ids();
+		try {
+			$id = $this->call_protected_note_id( 'wppo-protected-style-', 'my-style' );
+			$this->assertStringStartsWith( 'wppo-protected-style-my-style-', $id );
+		} finally {
+			Metabox::reset_protected_note_ids();
+		}
+	}
+
+	/**
 	 * Saving without the disable checkbox deletes the kill-switch meta.
 	 */
 	public function test_save_preload_image_urls_deletes_disable_auto_lcp_when_unchecked(): void {

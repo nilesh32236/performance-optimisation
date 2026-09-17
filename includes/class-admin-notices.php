@@ -333,7 +333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			echo '<div class="notice notice-error" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation', 'performance-optimisation' ) . '</strong> — ';
 			echo esc_html__( 'Failed to update .htaccess rules. The previous file was left intact and the plugin keeps working. Please check file permissions, then re-save settings to retry.', 'performance-optimisation' );
-			echo ' &middot; <a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss htaccess failure notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss .htaccess failure notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
 

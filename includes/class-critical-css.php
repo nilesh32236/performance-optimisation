@@ -97,6 +97,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static array $ccss_defer_blocked = array();
 
 		/**
+		 * Per-request loadCSS fallback emission guard (issue #1333).
+		 *
+		 * The inline_ccss() method has two mutually exclusive loader call
+		 * sites per call, but nothing stops a double wp_head or direct
+		 * double-call in one request — without a guard the second call would re-emit
+		 * id="wppo-loadcss-fallback" and redefine window.wppoLoadCSS plus
+		 * listeners. Reset via reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $loadcss_emitted = false;
+
+		/**
 		 * Above-fold selectors to match during extraction.
 		 *
 		 * Uses precise token-based matching to avoid false positives.
@@ -2890,6 +2904,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$ccss_presets_memo   = null;
 			self::$lcp_preload_emitted = array();
 			self::$ccss_defer_blocked  = array();
+			self::$loadcss_emitted     = false;
 			self::$templates_memo      = null;
 			self::$pending_memo        = array();
 		}
@@ -4789,7 +4804,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private static function get_loadcss_loader_script(): string {
+			// phpcs:ignore Generic.Files.LineLength -- Single minified JS payload; unminified source in docs (loadCSS stub with pagehide/beforeunload timer cleanup).
 			return '!function(e){"use strict";var T=[],c=function(h){var i=T.indexOf(h);if(i>-1){T.splice(i,1)}clearTimeout(h)},n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a);var h=setTimeout(function(){c(h),r.media=o||"all"},0);T.push(h),r.onload=function(){c(h),r.media=o||"all"}};e.wppoLoadCSS=n;var f=function(){for(var i=0;i<T.length;i++){clearTimeout(T[i])}T.length=0};e.addEventListener("pagehide",f),e.addEventListener("beforeunload",f)}(window);';
+		}
+
+		/**
+		 * Emit the async loadCSS fallback loader once per request (issue #1333).
+		 *
+		 * Both inline_ccss() fallback branches share this emitter so a
+		 * double wp_head or direct double-call cannot duplicate
+		 * id="wppo-loadcss-fallback" or redefine window.wppoLoadCSS.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function maybe_emit_loadcss_loader(): void {
+			if ( self::$loadcss_emitted ) {
+				return;
+			}
+			self::$loadcss_emitted = true;
+			wp_print_inline_script_tag( self::get_loadcss_loader_script(), array( 'id' => 'wppo-loadcss-fallback' ) );
 		}
 
 		/**
@@ -4869,8 +4903,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// cleared on pagehide/beforeunload (audit #1077 finding 5).
 					// Emitted via wp_print_inline_script_tag() so the core
 					// wp_inline_script_attributes filter can attach a CSP
-					// nonce (issue #1333; same as RUM/bfcache).
-					wp_print_inline_script_tag( self::get_loadcss_loader_script(), array( 'id' => 'wppo-loadcss-fallback' ) );
+					// nonce (issue #1333; same as RUM/bfcache). Once per
+					// request so a double-call cannot duplicate the tag id.
+					self::maybe_emit_loadcss_loader();
 					return;
 				}
 				$cap   = self::get_ccss_max_size();
@@ -4972,8 +5007,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// are tracked so the media-swap fallback is cleared on
 				// pagehide/beforeunload (audit #1077 finding 5). Emitted via
 				// wp_print_inline_script_tag() for a core CSP nonce
-				// (issue #1333; same as RUM/bfcache).
-				wp_print_inline_script_tag( self::get_loadcss_loader_script(), array( 'id' => 'wppo-loadcss-fallback' ) );
+				// (issue #1333; same as RUM/bfcache). Once per request so a
+				// double-call cannot duplicate the tag id.
+				self::maybe_emit_loadcss_loader();
 			}
 		}
 
