@@ -5029,6 +5029,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether a queued classic handle must never receive the native defer strategy.
+		 *
+		 * Module scripts are deferred by the browser, and import-map /
+		 * speculation-rules / data-block registrations never execute as classic
+		 * JavaScript, so stamping `strategy=defer` on them is at best redundant
+		 * and risks changing module semantics. Reads the registered `type` data
+		 * via `WP_Scripts::get_data()` (guarded; fail-open) and treats an absent
+		 * or classic-JS type as deferrable. Inline-only registrations (no `src`)
+		 * are also skipped — there is no external fetch to defer. Any unreadable
+		 * state fails open to false (deferrable) so detection failures degrade
+		 * to the previous behaviour, never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $handle Script handle.
+		 * @return bool True when the handle must be skipped by add_defer_strategy().
+		 */
+		private function is_non_deferrable_script_handle( string $handle ): bool {
+			try {
+				global $wp_scripts;
+				if ( ! $wp_scripts instanceof \WP_Scripts ) {
+					return false;
+				}
+				if ( '' === trim( $handle ) ) {
+					return false;
+				}
+				if ( method_exists( $wp_scripts, 'get_data' ) ) {
+					$type = $wp_scripts->get_data( $handle, 'type' );
+					if ( is_string( $type ) && '' !== trim( $type ) ) {
+						$normalised = strtolower( trim( $type ) );
+						if ( ! in_array( $normalised, array( 'text/javascript', 'application/javascript', 'text/ecmascript', 'application/ecmascript' ), true ) ) {
+							return true;
+						}
+					}
+				}
+				if ( isset( $wp_scripts->registered ) && is_array( $wp_scripts->registered ) && isset( $wp_scripts->registered[ $handle ] ) ) {
+					$registered = $wp_scripts->registered[ $handle ];
+					if ( is_object( $registered ) && property_exists( $registered, 'src' ) ) {
+						$src = $registered->src;
+						if ( false === $src || null === $src || ( is_string( $src ) && '' === trim( $src ) ) ) {
+							return true;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			return false;
+		}
+
+		/**
 		 * Applies defer strategy to non-logged-in users' scripts using wp_script_add_data.
 		 *
 		 * Canonical defer path on WP 6.3+ (issue #1218); the pre-6.3
@@ -5108,6 +5160,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				//
 				// @since NEXT.
 				if ( in_array( (string) $handle, array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' ), true ) ) {
+					continue;
+				}
+				// Module / import-map awareness (issue #1342): never stamp
+				// strategy=defer on a module-typed, import-map,
+				// speculation-rules, or other non-classic-JS registration, nor
+				// on inline-only (src-less) handles. Modules already defer by
+				// default; strategy writes there are redundant and risk
+				// semantic changes. Fail-open: unreadable state stays deferrable.
+				//
+				// @since NEXT.
+				if ( $this->is_non_deferrable_script_handle( (string) $handle ) ) {
 					continue;
 				}
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
@@ -5434,7 +5497,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * pre-checks are case-insensitive with attribute boundaries and
 		 * quote-masking, so DEFER, valued async="async", single-quoted or
 		 * spaced type='module', and `async` inside quoted values (ignored)
-		 * are all handled.
+		 * are all handled. Import-map, speculation-rules, and other
+		 * non-executable data blocks plus inline (src-less) tags are likewise
+		 * never stamped (issue #1342): defer is meaningless without an
+		 * external fetch, and rewriting data blocks would corrupt payloads.
 		 *
 		 * @since 1.9.0
 		 *
@@ -5494,8 +5560,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			// Module scripts are always deferred by the browser; match type=module
 			// on the raw tag (masking strips its quotes) tolerating case, quote
-			// style, and surrounding whitespace.
-			if ( preg_match( '/\stype\s*=\s*(["\']?)module\1(?=[\s>\/]|$)/i', (string) $tag ) ) {
+			// style, and surrounding whitespace. Import-map and
+			// speculation-rules tags never execute as classic scripts and must
+			// never be stamped either (issue #1342).
+			if ( preg_match( '/\stype\s*=\s*(["\']?)(module|importmap|speculationrules)\1(?=[\s>\/]|$)/i', (string) $tag ) ) {
+				return $tag;
+			}
+			// Non-executable data blocks (application/json, application/ld+json,
+			// text/template, …) never execute, so deferring them is meaningless
+			// and moving payloads would corrupt them. Reuses the delay path's
+			// canonical predicate; type="module" already returned above.
+			//
+			// @since NEXT.
+			if ( ! $this->is_executable_script_type( (string) $tag ) ) {
+				return $tag;
+			}
+			// Inline (src-less) tags carry no external fetch to defer; this also
+			// keeps inline import-map / speculation-rules data blocks untouched
+			// even when they omit the type attribute.
+			//
+			// @since NEXT.
+			if ( ! preg_match( '/\ssrc\s*=/i', ' ' . (string) $tag ) ) {
 				return $tag;
 			}
 
