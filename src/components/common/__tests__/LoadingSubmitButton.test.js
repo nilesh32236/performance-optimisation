@@ -67,11 +67,13 @@ describe( 'LoadingSubmitButton', () => {
 		expect( button ).toHaveAttribute( 'aria-busy', 'true' );
 	} );
 
-	it( 'has no live region when idle and announces loading text while loading', () => {
+	it( 'keeps a persistent (empty) live region when idle and announces loading text while loading', () => {
 		const { rerender } = render(
 			<LoadingSubmitButton label="Submit" loadingLabel="Saving..." />
 		);
-		expect( screen.queryByRole( 'status' ) ).not.toBeInTheDocument();
+		// Audit #1354: region always rendered so SRs never miss it.
+		const idleRegion = screen.getByRole( 'status' );
+		expect( idleRegion ).toHaveTextContent( '' );
 
 		rerender(
 			<LoadingSubmitButton

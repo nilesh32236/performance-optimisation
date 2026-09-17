@@ -119,6 +119,14 @@ const ObjectCache = ( { options = {} } ) => {
 	const [ confirmDisable, setConfirmDisable ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
+	// Audit #1354: skip state updates after unmount.
+	const isMountedRef = useRef( true );
+	useEffect( () => {
+		return () => {
+			isMountedRef.current = false;
+		};
+	}, [] );
+
 	const fetchStatus = useCallback(
 		async ( signal ) => {
 			try {
@@ -149,7 +157,13 @@ const ObjectCache = ( { options = {} } ) => {
 					} ) );
 				}
 			} catch ( error ) {
-				if ( signal?.aborted || error?.name === 'AbortError' ) {
+				// Audit #1354 review: signal-less callers (handleAction) still
+				// need the mount check before notifying.
+				if (
+					signal?.aborted ||
+					error?.name === 'AbortError' ||
+					! isMountedRef.current
+				) {
 					return;
 				}
 				console.error(
@@ -239,14 +253,6 @@ const ObjectCache = ( { options = {} } ) => {
 			setIsLoading( false );
 		}
 	};
-
-	// Audit #1354: skip state updates after unmount.
-	const isMountedRef = useRef( true );
-	useEffect( () => {
-		return () => {
-			isMountedRef.current = false;
-		};
-	}, [] );
 
 	const handleAction = async ( action ) => {
 		setActiveAction( action );

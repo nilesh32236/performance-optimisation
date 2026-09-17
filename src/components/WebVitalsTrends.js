@@ -74,16 +74,14 @@ const TrendSeries = ( { strategy, trends } ) => {
 
 	const snapshots = trends[ seriesKey ] ?? [];
 	// Audit #1354: coerce to finite numbers — a non-numeric API entry
-	// would otherwise yield NaN SVG coordinates.
+	// would otherwise yield NaN SVG coordinates. Header and chart gate
+	// on the same filtered list so they never disagree.
 	const values = snapshots
 		.map( ( snap ) => Number( snap.performance ) )
 		.filter( ( num ) => Number.isFinite( num ) );
-	const last =
-		snapshots.length > 0
-			? snapshots[ snapshots.length - 1 ].performance
-			: null;
+	const last = values.length > 0 ? values[ values.length - 1 ] : null;
 	const points = buildPoints( values );
-	const limited = snapshots.length > 1;
+	const limited = values.length > 1;
 
 	return (
 		<div className="wppo-trend-series">

@@ -52,7 +52,10 @@ const Tooltip = ( { content, children, label } ) => {
 		if (
 			hasChildren &&
 			e.target.closest &&
-			e.target.closest( 'button, input, [role="switch"], a' )
+			// Audit #1354 review: widen to missed interactive descendants.
+			e.target.closest(
+				'button, input, select, textarea, a, [role="switch"], [contenteditable]'
+			)
 		) {
 			return;
 		}
@@ -69,13 +72,14 @@ const Tooltip = ( { content, children, label } ) => {
 			}${ visible ? ' wppo-tooltip-container--visible' : '' }` }
 			{ ...( hasChildren
 				? {
+						'aria-expanded': visible,
 						...( visible && {
 							'aria-describedby': id,
 						} ),
 				  }
 				: {
 						role: 'button',
-						tabIndex: '0',
+						tabIndex: 0,
 						'aria-expanded': visible,
 						...( ( label || typeof content !== 'string' ) && {
 							'aria-describedby': id,

@@ -2968,6 +2968,12 @@ const initVideoPlaceholders = () => {
 			el.appendChild( iframe );
 
 			const onLoad = () => {
+				// Audit #1354 review: clear the fallback timer on load so the
+				// el/iframe closure is released immediately.
+				if ( typeof fallbackTimer !== 'undefined' ) {
+					clearTimeout( fallbackTimer );
+					videoFallbackTimers.delete( fallbackTimer );
+				}
 				const picture = el.querySelector( 'picture' );
 				if ( picture ) {
 					picture.remove();

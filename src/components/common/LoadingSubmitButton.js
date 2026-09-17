@@ -33,7 +33,7 @@ const LoadingSubmitButton = ( {
 				type={ type }
 				className={ className }
 				disabled={ isDisabled }
-				aria-busy={ isLoading }
+				aria-busy={ isLoading || undefined }
 			>
 				{ isLoading && (
 					<FontAwesomeIcon
@@ -49,17 +49,15 @@ const LoadingSubmitButton = ( {
 						: label || children }
 				</span>
 			</button>
-			{ /* Audit #1354: live region sits beside the button — announcements
-			from inside a disabled control are unreliable in some SRs. */ }
-			{ isLoading && (
-				<span
-					role="status"
-					aria-live="polite"
-					className="screen-reader-text"
-				>
-					{ loadingLabel || label }
-				</span>
-			) }
+			{ /* Audit #1354 review: persistent region (toggled text, not
+			mount) so SRs never miss the announcement. */ }
+			<span
+				role="status"
+				aria-live="polite"
+				className="wppo-screen-reader-text"
+			>
+				{ isLoading ? loadingLabel || label : '' }
+			</span>
 		</>
 	);
 };

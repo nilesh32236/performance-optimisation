@@ -1,5 +1,5 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { memo, useMemo, useState } from '@wordpress/element';
+import { memo, useMemo, useRef, useState } from '@wordpress/element';
 import {
 	faCheckCircle,
 	faExclamationTriangle,
@@ -132,6 +132,19 @@ const CriticalCssPanel = ( {
 	onRegenerateSingle,
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
+	// Audit #1354 review: per-render config cache so entries.map does
+	// not rebuild 8 objects + __() lookups per row.
+	const configCacheRef = useRef( new Map() );
+	configCacheRef.current.clear();
+	const configFor = ( statusKey ) => {
+		if ( ! configCacheRef.current.has( statusKey ) ) {
+			configCacheRef.current.set(
+				statusKey,
+				statusConfigFor( statusKey )
+			);
+		}
+		return configCacheRef.current.get( statusKey );
+	};
 	const [ singleBusy, setSingleBusy ] = useState( null );
 	// No local useNotice/NoticeBanner here (issue #1274 review): the
 	// parent (FileOptimization via withNotification) is the single
@@ -208,7 +221,7 @@ const CriticalCssPanel = ( {
 						const normalized = normalizeCcssEntry( hash, entry );
 						const { statusKey, label, size, truncated } =
 							normalized;
-						const config = statusConfigFor( statusKey );
+						const config = configFor( statusKey );
 						return (
 							<div key={ hash } className="wppo-ccss-status-item">
 								<span className="wppo-ccss-status-hash">

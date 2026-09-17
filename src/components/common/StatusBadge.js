@@ -20,7 +20,9 @@ const STATUS_ALIASES = {
 const KNOWN_STATUSES = [ 'good', 'needs_improvement', 'poor' ];
 
 const StatusBadge = ( { status } ) => {
-	const normalized = STATUS_ALIASES[ status ] || status;
+	const normalized = Object.hasOwn( STATUS_ALIASES, status )
+		? STATUS_ALIASES[ status ]
+		: status;
 	const safeStatus = KNOWN_STATUSES.includes( normalized )
 		? normalized
 		: 'unknown';

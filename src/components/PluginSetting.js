@@ -79,7 +79,11 @@ const MAX_IMPORT_DEPTH = 10;
  *
  * @since 2.0.0
  */
-const MAX_IMPORT_TOP_KEYS = FALLBACK_ALLOWED_KEYS.length;
+// Audit #1354 review: the cap must track the live allowlist, not the
+// fallback length, or a newly-added server tab is rejected client-side.
+// Kept as a constant for the static MAX check; validateImportData uses
+// the live list (see below).
+const MAX_IMPORT_TOP_KEYS = 64;
 
 /**
  * Maximum keys/entries accepted in a nested object or array inside an
@@ -115,6 +119,9 @@ const validateImportData = ( data ) => {
 		return false;
 	}
 	const allowedKeys = getAllowedImportKeys();
+	if ( keys.length > allowedKeys.length ) {
+		return false;
+	}
 	return keys.every( ( key ) => {
 		if (
 			isPollutionKey( key ) ||

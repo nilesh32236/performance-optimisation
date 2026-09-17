@@ -614,18 +614,21 @@ export const hydrateESIPlaceholders = ( signal ) => {
 							'WPPO ESI hydration failed; embedded content could not be loaded.',
 							'performance-optimisation'
 						),
-						err
+						getEsiLogMessage( err )
 					);
 					targets.forEach( ( el ) => markElementFailed( el ) );
 				}
 			} )
 		).catch( ( err ) => {
+			if ( isAbortError( err ) ) {
+				return;
+			}
 			console.warn(
 				__(
 					'WPPO ESI hydration failed; embedded content could not be loaded.',
 					'performance-optimisation'
 				),
-				err
+				getEsiLogMessage( err )
 			);
 		} );
 	};

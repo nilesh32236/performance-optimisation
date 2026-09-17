@@ -185,6 +185,20 @@ const App = () => {
 		return () => window.removeEventListener( 'beforeunload', handler );
 	}, [ isDirty ] );
 
+	// Audit #1354 review: stable callbacks so heavy tabs keep prop
+	// identity across App renders.
+	const handleRetryRules = useCallback( () => {
+		hasFetchedRules.current = false;
+		setServerRulesError( false );
+		setServerRules( null );
+		setRulesRetryTrigger( ( c ) => c + 1 );
+	}, [] );
+	const handleCcssRefresh = useCallback( () => {
+		hasFetchedCcss.current = false;
+		setCcssError( false );
+		setCcssRefreshTrigger( ( c ) => c + 1 );
+	}, [] );
+
 	const renderContent = () => {
 		const settings =
 			typeof wppoSettings !== 'undefined'
@@ -211,22 +225,9 @@ const App = () => {
 					serverRulesError={ serverRulesError }
 					ccssStatus={ ccssStatus }
 					ccssError={ ccssError }
-					onRetryServerRules={ () => {
-						hasFetchedRules.current = false;
-						setServerRulesError( false );
-						setServerRules( null );
-						setRulesRetryTrigger( ( c ) => c + 1 );
-					} }
-					onCcssRefresh={ () => {
-						hasFetchedCcss.current = false;
-						setCcssError( false );
-						setCcssRefreshTrigger( ( c ) => c + 1 );
-					} }
-					onCcssRetry={ () => {
-						hasFetchedCcss.current = false;
-						setCcssError( false );
-						setCcssRefreshTrigger( ( c ) => c + 1 );
-					} }
+					onRetryServerRules={ handleRetryRules }
+					onCcssRefresh={ handleCcssRefresh }
+					onCcssRetry={ handleCcssRefresh }
 				/>
 			),
 			preload: <PreloadSettings options={ settings.preload_settings } />,
@@ -466,10 +467,12 @@ const App = () => {
 			fetchCcssStatus(),
 		] );
 
+		// Audit #1354 review: locals may be null when their want* flag
+		// was false — abort via refs, never possibly-null locals.
 		return () => {
-			activitiesController.abort();
-			rulesController.abort();
-			ccssController.abort();
+			activitiesControllerRef.current?.abort();
+			rulesControllerRef.current?.abort();
+			ccssControllerRef.current?.abort();
 		};
 		// Intentionally minimal deps: hasFetched* refs (not state) gate
 		// re-fetches, so effect-written state (recentActivities, serverRules)

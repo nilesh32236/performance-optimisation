@@ -324,7 +324,16 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				}
 				refetchControllerRef.current = new AbortController();
 				fetchCounts( refetchControllerRef.current.signal ).catch(
-					() => {}
+					// Audit #1354 review: log non-abort refetch errors
+					// instead of swallowing them.
+					( refetchError ) => {
+						if ( refetchError?.name !== 'AbortError' ) {
+							console.error(
+								'Refetch counts failed:',
+								getErrorLogMessage( refetchError )
+							);
+						}
+					}
 				);
 			} else {
 				const failures = response.data?.failures;
@@ -351,7 +360,16 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					}
 					refetchControllerRef.current = new AbortController();
 					fetchCounts( refetchControllerRef.current.signal ).catch(
-						() => {}
+						// Audit #1354 review: log non-abort refetch errors
+						// instead of swallowing them.
+						( refetchError ) => {
+							if ( refetchError?.name !== 'AbortError' ) {
+								console.error(
+									'Refetch counts failed:',
+									getErrorLogMessage( refetchError )
+								);
+							}
+						}
 					);
 				}
 			}

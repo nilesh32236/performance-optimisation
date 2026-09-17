@@ -249,9 +249,15 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 					if ( response.data?.status === 'not_ready' ) {
 						if ( isMounted.current ) {
+							// Audit #1354 review: defer the next tick while
+							// the tab is hidden instead of polling PHP/DB.
+							const delay = getPollDelay( pollCountRef.current );
 							pollRef.current = setTimeout(
 								poll,
-								getPollDelay( pollCountRef.current )
+								typeof document !== 'undefined' &&
+									document.hidden
+									? Math.max( delay, 30000 )
+									: delay
 							);
 						}
 						return;

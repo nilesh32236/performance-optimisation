@@ -88,7 +88,7 @@ export const formatPercent = ( value, options = {} ) => {
 	}
 	return sprintf(
 		/* translators: %s: percent value. */
-		__( '%s%', 'performance-optimisation' ),
+		__( '%s%%', 'performance-optimisation' ),
 		Math.round( pct * 10 ) / 10
 	);
 };

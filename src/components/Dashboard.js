@@ -564,9 +564,13 @@ const Dashboard = ( {
 			} );
 		}
 		if ( pollingRef.current === currentTimeout ) {
+			// Audit #1354 review: back off while hidden (mirrors PageSpeed).
+			const delay = getPollDelay( pollAttemptsRef.current );
 			pollingRef.current = setTimeout(
 				pollJobStatus,
-				getPollDelay( pollAttemptsRef.current )
+				typeof document !== 'undefined' && document.hidden
+					? Math.max( delay, 30000 )
+					: delay
 			);
 		}
 	}, [ updateState, notify ] );

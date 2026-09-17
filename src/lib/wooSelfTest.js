@@ -201,26 +201,46 @@ export const getWooRuleRemediation = ( kind, pass ) => {
  * @return {Promise<Object>} Resolved self-test response.
  */
 export const runWooSelfTest = ( signal ) => {
+	// Audit #1354 review: each abort source forwards its own reason so
+	// callers can distinguish timeout vs caller-cancel; a setTimeout
+	// fallback covers runtimes without AbortSignal.timeout.
+	const controller =
+		typeof AbortController !== 'undefined' ? new AbortController() : null;
+	if ( ! controller ) {
+		return fetchWooCacheSelfTest( undefined );
+	}
+	const onCallerAbort = () => controller.abort( signal.reason );
+	const timers = [];
+	if ( signal ) {
+		if ( signal.aborted ) {
+			onCallerAbort();
+		} else {
+			signal.addEventListener( 'abort', onCallerAbort, { once: true } );
+		}
+	}
 	let timeoutSignal = null;
 	if ( typeof AbortSignal !== 'undefined' && AbortSignal.timeout ) {
 		timeoutSignal = AbortSignal.timeout( WOO_SELF_TEST_TIMEOUT_MS );
-	}
-	if ( ! signal ) {
-		return fetchWooCacheSelfTest( timeoutSignal );
-	}
-	if ( ! timeoutSignal ) {
-		return fetchWooCacheSelfTest( signal );
-	}
-	const controller = new AbortController();
-	const onAbort = () => controller.abort( signal.reason );
-	if ( signal.aborted ) {
-		onAbort();
+		const onTimeoutAbort = () => controller.abort( timeoutSignal.reason );
+		timeoutSignal.addEventListener( 'abort', onTimeoutAbort, {
+			once: true,
+		} );
+		timers.push( () =>
+			timeoutSignal.removeEventListener( 'abort', onTimeoutAbort )
+		);
 	} else {
-		signal.addEventListener( 'abort', onAbort, { once: true } );
-		timeoutSignal.addEventListener( 'abort', onAbort, { once: true } );
+		const timerId = setTimeout(
+			() => controller.abort( new Error( 'Woo self-test timed out' ) ),
+			WOO_SELF_TEST_TIMEOUT_MS
+		);
+		timers.push( () => clearTimeout( timerId ) );
+	}
+	if ( signal ) {
+		timers.push( () =>
+			signal.removeEventListener( 'abort', onCallerAbort )
+		);
 	}
 	return fetchWooCacheSelfTest( controller.signal ).finally( () => {
-		signal.removeEventListener( 'abort', onAbort );
-		timeoutSignal.removeEventListener( 'abort', onAbort );
+		timers.forEach( ( cleanup ) => cleanup() );
 	} );
 };

@@ -30,7 +30,6 @@ const ConfirmDialog = ( {
 	children,
 } ) => {
 	const dialogRef = useRef( null );
-	const confirmBtnRef = useRef( null );
 	// Audit #1354: unique title id so two mounted dialogs never share one.
 	const titleId = useId();
 	const focusableRef = useRef( [] );
@@ -98,7 +97,8 @@ const ConfirmDialog = ( {
 	}, [ rebuildTrapList, children ] );
 
 	useEffect( () => {
-		if ( isOpen && confirmBtnRef.current ) {
+		// Audit #1354 review: gate on dialogRef (mounted dialog).
+		if ( isOpen && dialogRef.current ) {
 			const cancelBtn = dialogRef.current?.querySelector(
 				'.wppo-dialog-cancel'
 			);
@@ -153,12 +153,8 @@ const ConfirmDialog = ( {
 	}
 
 	return (
-		<div
-			className="wppo-dialog-overlay"
-			onClick={ onCancel }
-			role="presentation"
-		>
-			{ /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */ }
+		<div className="wppo-dialog-overlay" onClick={ onCancel }>
+			{ /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- overlay click is progressive enhancement; Esc + buttons are the keyboard paths (audit #1354). */ }
 			<div
 				className="wppo-dialog"
 				ref={ dialogRef }
@@ -193,7 +189,6 @@ const ConfirmDialog = ( {
 								: 'wppo-button--primary'
 						}` }
 						onClick={ onConfirm }
-						ref={ confirmBtnRef }
 					>
 						{ confirmLabel ||
 							__( 'Confirm', 'performance-optimisation' ) }

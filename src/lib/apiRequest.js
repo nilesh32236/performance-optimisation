@@ -131,6 +131,13 @@ let pendingRefresh = null;
  * @return {Promise<string>} The refreshed nonce string.
  */
 const refreshNonce = async ( signal ) => {
+	// Audit #1354 review: restore the shared-promise guard — concurrent
+	// 403s share one round-trip. (A caller-specific signal cannot abort
+	// the shared fetch; callers needing cancellation pass their signal
+	// to apiCall(), which aborts its own request.)
+	if ( pendingRefresh ) {
+		return pendingRefresh;
+	}
 	if ( typeof wppoSettings === 'undefined' ) {
 		throw new Error( 'wppoSettings is not defined' );
 	}

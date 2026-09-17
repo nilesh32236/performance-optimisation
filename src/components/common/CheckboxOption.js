@@ -72,23 +72,25 @@ export const CheckboxOption = ( {
 				<div className="wppo-nested-content">
 					{ textareaName && (
 						<div className="wppo-field-group">
+							{ /* Audit #1354 review: explicit label element instead of
+							a placeholder fallback (placeholders are not labels). */ }
+							<label
+								className="wppo-screen-reader-text"
+								htmlFor={ `${ id }-textarea` }
+							>
+								{ textareaPlaceholder || label }
+							</label>
 							<textarea
+								id={ `${ id }-textarea` }
 								className="wppo-text-area-field"
 								placeholder={ textareaPlaceholder || '' }
-								aria-label={ textareaPlaceholder || label }
 								name={ textareaName }
-								// Audit #1354: uncontrolled when no handler is
-								// provided, so React never warns about a
-								// controlled-without-onChange textarea.
-								{ ...( onTextareaChange
-									? {
-											value: textareaValue,
-											onChange: onTextareaChange,
-									  }
-									: {
-											defaultValue: textareaValue,
-											readOnly: true,
-									  } ) }
+								// Audit #1354 review: always controlled so
+								// async settings loads never leave stale text;
+								// readOnly when no change handler exists.
+								value={ textareaValue }
+								onChange={ onTextareaChange }
+								readOnly={ ! onTextareaChange }
 							/>
 						</div>
 					) }
