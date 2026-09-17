@@ -623,22 +623,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * keep loading on every WordPress request via alloptions. Mirrors
 		 * Img_Converter::migrate_img_info_autoload().
 		 *
+		 * Fail-open: unavailable DB layers are no-ops (true). A false
+		 * return from wp_set_option_autoload() (missing row or DB failure)
+		 * returns false so the caller retries instead of marking the
+		 * migration done.
+		 *
 		 * @since 2.0.0
-		 * @return void
+		 * @since NEXT Return bool so the autoload-migration flag can retry on DB failure.
+		 * @return bool True on success (or nothing to do), false on DB failure.
 		 */
-		public static function migrate_trends_autoload(): void {
-			if ( function_exists( 'wp_set_option_autoload' ) ) {
-				wp_set_option_autoload( self::TREND_OPTION, false );
-			} else {
+		public static function migrate_trends_autoload(): bool {
+			try {
+				if ( function_exists( 'wp_set_option_autoload' ) ) {
+					return false !== wp_set_option_autoload( self::TREND_OPTION, false );
+				}
 				global $wpdb;
+				if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! isset( $wpdb->options ) ) {
+					return true;
+				}
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$wpdb->update(
+				$result = $wpdb->update(
 					$wpdb->options,
 					array( 'autoload' => 'no' ),
 					array( 'option_name' => self::TREND_OPTION )
 				);
+				if ( false === $result ) {
+					return false;
+				}
 				wp_cache_delete( self::TREND_OPTION, 'options' );
 				wp_cache_delete( 'alloptions', 'options' );
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
 		}
 

@@ -3749,22 +3749,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Should be called during plugin activation or upgrade to ensure large
 		 * image metadata doesn't bloat the 'alloptions' cache.
 		 *
+		 * Fail-open: unavailable DB layers are no-ops (true). A false
+		 * return from wp_set_option_autoload() (missing row or DB failure)
+		 * returns false so the caller retries instead of marking the
+		 * migration done.
+		 *
 		 * @since 1.5.1
-		 * @return void
+		 * @since NEXT Return bool so the autoload-migration flag can retry on DB failure.
+		 * @return bool True on success (or nothing to do), false on DB failure.
 		 */
-		public static function migrate_img_info_autoload(): void {
-			if ( function_exists( 'wp_set_option_autoload' ) ) {
-				wp_set_option_autoload( 'wppo_img_info', false );
-			} else {
+		public static function migrate_img_info_autoload(): bool {
+			try {
+				if ( function_exists( 'wp_set_option_autoload' ) ) {
+					return false !== wp_set_option_autoload( 'wppo_img_info', false );
+				}
 				global $wpdb;
+				if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! isset( $wpdb->options ) ) {
+					return true;
+				}
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$wpdb->update(
+				$result = $wpdb->update(
 					$wpdb->options,
 					array( 'autoload' => 'no' ),
 					array( 'option_name' => 'wppo_img_info' )
 				);
+				if ( false === $result ) {
+					return false;
+				}
 				wp_cache_delete( 'wppo_img_info', 'options' );
 				wp_cache_delete( 'alloptions', 'options' );
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
 		}
 	}

@@ -1379,10 +1379,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * or the sitemap is unavailable, so preloading never breaks.
 		 *
 		 * @since 2.0.0
-		 * @param int $cap Maximum number of URLs to return.
+		 * @since NEXT Accept an optional shared wall-clock deadline so callers
+		 *             with their own budget (e.g. the LiteSpeed crawler) bound
+		 *             the combined work instead of stacking two budgets.
+		 * @param int        $cap Maximum number of URLs to return.
+		 * @param float|null $deadline Optional microtime(true) deadline shared with the caller.
 		 * @return string[] List of absolute sitemap URLs.
 		 */
-		public function get_sitemap_urls( int $cap = 500 ): array {
+		public function get_sitemap_urls( int $cap = 500, ?float $deadline = null ): array {
 			$urls       = array();
 			$urls_count = 0;
 			$home_host  = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
@@ -1391,7 +1395,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			// Bound the whole discovery pass so a slow sitemap index cannot hold the
 			// cron request (or the follow-up preload batch) for minutes on end.
-			$deadline = microtime( true ) + 15;
+			// A caller-supplied deadline keeps the combined budget bounded.
+			if ( null === $deadline ) {
+				$deadline = microtime( true ) + 15;
+			}
 
 			while ( ! empty( $to_fetch ) && $urls_count < $cap ) {
 				$current = array_shift( $to_fetch );

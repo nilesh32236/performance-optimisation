@@ -373,7 +373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			}
 
 			try {
-				if ( self::$circuit_state_memo_set && is_array( self::$circuit_state_memo ) ) {
+				if ( self::$circuit_state_memo_set ) {
 					$circuit = self::$circuit_state_memo;
 				} else {
 					$circuit                      = ( new Object_Cache() )->get_circuit_state();

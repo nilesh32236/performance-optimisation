@@ -270,7 +270,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// with identical values means "unchanged" (success), false
 				// with differing values means the write failed.
 				$before  = self::get_settings();
-				$updated = update_option( 'wppo_settings', $restored );
+				$updated = update_option( 'wppo_settings', $restored, false );
 				self::set_settings_cache( $restored );
 				if ( ! $updated && $before !== $restored ) {
 					// Write failed: roll the memo back so it keeps

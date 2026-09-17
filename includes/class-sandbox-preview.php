@@ -349,7 +349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 					$stored['file_optimisation'] = array();
 				}
 				$stored['file_optimisation'][ self::STAGED_KEY ] = $clean;
-				$updated = update_option( 'wppo_settings', $stored );
+				$updated = update_option( 'wppo_settings', $stored, false );
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					try {
 						Util::set_settings_cache( $stored );
@@ -434,7 +434,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 					}
 				}
 				$stored['file_optimisation'][ self::STAGED_KEY ] = array();
-				$updated = update_option( 'wppo_settings', $stored );
+				$updated = update_option( 'wppo_settings', $stored, false );
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					try {
 						Util::set_settings_cache( $stored );
@@ -505,7 +505,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 					$stored['file_optimisation'] = array();
 				}
 				$stored['file_optimisation'][ self::STAGED_KEY ] = array();
-				$updated = update_option( 'wppo_settings', $stored );
+				$updated = update_option( 'wppo_settings', $stored, false );
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					try {
 						Util::set_settings_cache( $stored );

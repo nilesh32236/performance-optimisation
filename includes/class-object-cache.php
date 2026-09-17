@@ -1256,7 +1256,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				// returns false both on failure and on identical values, and
 				// the value differs here, so false means the write failed and
 				// the memo must keep describing the stored state.
-				if ( update_option( 'wppo_settings', $settings ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+				if ( update_option( 'wppo_settings', $settings, false ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $settings );
 				}
 				// Recovery probe so an armed flag heals without waiting for
@@ -1320,7 +1320,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return;
 				}
 				$settings['object_cache']['outage_bypassed'] = false;
-				if ( update_option( 'wppo_settings', $settings ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+				if ( update_option( 'wppo_settings', $settings, false ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $settings );
 				}
 			} catch ( \Throwable $e ) {

@@ -234,16 +234,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * loading via alloptions on every request. Guarded by a flag option
 		 * so the DB writes run once, not on every admin_init.
 		 *
+		 * Retry-safe: a transient DB failure in any of the four migrators
+		 * leaves the flag unset so the next admin_init/activation retries.
+		 *
 		 * @since 2.0.0
+		 * @since NEXT Added wppo_settings autoload repair + retry-safe flag gated on all four migrators.
 		 * @return void
 		 */
 		public static function maybe_migrate_option_autoload(): void {
 			if ( get_option( 'wppo_autoload_migrated', false ) ) {
 				return;
 			}
-			Img_Converter::migrate_img_info_autoload();
-			RUM::migrate_rum_autoload();
-			Pagespeed::migrate_trends_autoload();
+			if ( ! Img_Converter::migrate_img_info_autoload() ) {
+				return;
+			}
+			if ( ! RUM::migrate_rum_autoload() ) {
+				return;
+			}
+			if ( ! Pagespeed::migrate_trends_autoload() ) {
+				return;
+			}
 			// Retry-safe: a transient DB failure must not permanently mark
 			// the migration done, or the legacy autoload=yes row is never
 			// retried on the next admin_init/activation.
@@ -260,7 +270,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * large multi-tab settings array in alloptions on every request. Newer
 		 * write paths pass autoload=false explicitly, but WordPress only flips
 		 * the column when the parameter is passed — so a one-time repair flips
-		 * legacy rows here. Fail-open: missing rows or DB errors are no-ops.
+		 * legacy rows here. Fail-open: unavailable DB layers are no-ops
+		 * (true). A DB write failure — including a missing row reported as
+		 * false by wp_set_option_autoload() — returns false so the caller
+		 * retries on the next admin_init/activation rather than marking the
+		 * migration done.
 		 *
 		 * @since NEXT
 		 * @return bool True on success (or nothing to do), false on DB failure so the caller can retry later.

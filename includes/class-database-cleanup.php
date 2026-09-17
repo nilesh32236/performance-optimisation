@@ -1119,17 +1119,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( ! function_exists( 'wp_set_option_autoload' ) ) {
 				return false;
 			}
-			if ( function_exists( 'get_bloginfo' ) ) {
-				try {
-					$version = (string) get_bloginfo( 'version' );
-				} catch ( \Throwable $e ) {
-					return false;
-				}
-				if ( '' !== $version && version_compare( $version, '6.6', '<' ) ) {
-					return false;
-				}
-			}
-			return true;
+			// Shared per-request version memo (single get_bloginfo read).
+			return self::is_wp_version_at_least( '6.6' );
 		}
 
 		/**
@@ -1271,7 +1262,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				}
 			}
 
-			if ( ! is_array( $rows ) || empty( $rows ) ) {
+			if ( empty( $rows ) ) {
 				return array();
 			}
 

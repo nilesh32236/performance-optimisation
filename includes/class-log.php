@@ -163,12 +163,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
 				} else {
 					// Best-effort bump: concurrent Log::add() calls can lose
-					// an increment (read-modify-write). Re-read after the
-					// write so the per-request memo never trails the stored
-					// version; a lost increment only risks a stale activity
-					// page, never data loss.
-					update_option( 'wppo_activity_cache_version', (int) get_option( 'wppo_activity_cache_version', 0 ) + 1, false );
-					self::$activity_cache_version = (int) get_option( 'wppo_activity_cache_version', 0 );
+					// an increment (read-modify-write). Computing the next
+					// value once and reusing it for the write and the memo
+					// avoids a second option read on hot admin paths.
+					$next = (int) get_option( 'wppo_activity_cache_version', 0 ) + 1;
+					update_option( 'wppo_activity_cache_version', $next, false );
+					self::$activity_cache_version = $next;
 				}
 			}
 		}

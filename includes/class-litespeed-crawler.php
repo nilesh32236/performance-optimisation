@@ -335,6 +335,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		}
 
 		/**
+		 * Shared final sanitization for crawler URL lists.
+		 *
+		 * Both the normal path and the deadline early-return path funnel
+		 * through here so esc_url_raw + same-origin gating + cap can never
+		 * drift apart when one path changes.
+		 *
+		 * @since NEXT
+		 * @param string[] $urls Candidate URLs.
+		 * @param int      $cap  Maximum URLs to return.
+		 * @return string[]
+		 */
+		private static function finalize_crawl_urls( array $urls, int $cap ): array {
+			$urls = array_values( array_unique( array_filter( array_map( 'esc_url_raw', $urls ) ) ) );
+			$urls = self::filter_to_same_origin( $urls );
+			return count( $urls ) > $cap ? array_slice( $urls, 0, $cap ) : $urls;
+		}
+
+		/**
 		 * Build variant matrix for a URL.
 		 *
 		 * Variants: Accept webp/avif × mobile/desktop × guest/role_hash.
@@ -462,9 +480,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 *
 		 * Merges sitemap URLs (when preloadSitemap enabled) with published post permalinks,
 		 * deduplicates, respects wppo_invalidation_urls and wppo_crawler_urls filters,
-		 * caps at $cap and respects 15s wall-clock budget.
+		 * caps at $cap and respects 15s wall-clock budget. The sitemap fetch
+		 * shares this deadline (remaining budget is threaded through) so the
+		 * worst case is ~15s total, not the sum of two budgets.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Thread the shared 15s deadline into the sitemap fetch.
 		 * @param int $cap Cap for sitemap + total URLs.
 		 * @return string[]
 		 */
@@ -482,8 +503,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					try {
 						$cron = new Cron();
 						// Cron::get_sitemap_urls is now public; use it directly.
-						if ( method_exists( $cron, 'get_sitemap_urls' ) ) {
-							$sitemap_urls = $cron->get_sitemap_urls( $cap );
+						if ( method_exists( $cron, 'get_sitemap_urls' ) && microtime( true ) < $deadline ) {
+							$sitemap_urls = $cron->get_sitemap_urls( $cap, $deadline );
 						}
 					} catch ( \Throwable $e ) {
 						$sitemap_urls = array();
@@ -528,16 +549,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				 */
 				$urls = (array) apply_filters( 'wppo_crawler_urls', $urls );
 				$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls );
-				// Mirror the normal-path defense-in-depth: a code-level
-				// filter could return external or oversized lists, so
-				// re-sanitize + same-origin gate + cap even on the deadline
-				// early return.
-				$urls = array_values( array_unique( array_filter( array_map( 'esc_url_raw', $urls ) ) ) );
-				$urls = self::filter_to_same_origin( $urls );
-				if ( count( $urls ) > $cap ) {
-					$urls = array_slice( $urls, 0, $cap );
-				}
-				return $urls;
+				// Shared final sanitization (esc_url_raw + same-origin
+				// gate + cap) mirrors the normal path.
+				return self::finalize_crawl_urls( $urls, $cap );
 			}
 
 			// Merge post permalinks (up to 200, like Cron::schedule_page_cron_jobs).
@@ -611,6 +625,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							);
 						}
 						foreach ( $posts as $pid ) {
+							if ( microtime( true ) >= $deadline ) {
+								break;
+							}
 							$post_id = (int) ( is_object( $pid ) && isset( $pid->ID ) ? $pid->ID : ( is_object( $pid ) ? 0 : $pid ) );
 							if ( $post_id < 1 ) {
 								continue;
@@ -655,15 +672,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			 * @param string[] $urls URLs.
 			 */
 			$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls );
-			$urls = array_values( array_unique( array_filter( array_map( 'esc_url_raw', $urls ) ) ) );
-			// Same-origin gate: esc_url_raw() blocks javascript:/data: but a
-			// code-level filter returning an internal host would still be
-			// fetched server-side without a host check.
-			$urls = self::filter_to_same_origin( $urls );
-			if ( count( $urls ) > $cap ) {
-				$urls = array_slice( $urls, 0, $cap );
-			}
-			return $urls;
+			// Shared final sanitization: esc_url_raw blocks javascript:/data:
+			// but a code-level filter returning an internal host would still
+			// be fetched server-side without the same-origin host check.
+			return self::finalize_crawl_urls( $urls, $cap );
 		}
 
 		/**

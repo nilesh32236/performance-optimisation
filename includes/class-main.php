@@ -1821,7 +1821,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( ! array_key_exists( 'blockAssetsOnDemand', $file ) ) {
 				$stored['file_optimisation'] = $file + array( 'blockAssetsOnDemand' => true );
-				update_option( 'wppo_settings', $stored );
+				update_option( 'wppo_settings', $stored, false );
 
 				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 					$this->options['file_optimisation'] = array();
@@ -1866,7 +1866,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$stored['file_optimisation'] = $file + array( 'ccssMaxSize' => 20480 );
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
@@ -1909,7 +1909,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$stored['file_optimisation'] = $file + array( 'ccssSafelistExtra' => '' );
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
@@ -1968,7 +1968,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$stored['file_optimisation'] = $file;
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
@@ -2016,7 +2016,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$preload['speculationTopUrlsLimit'] = 2;
 			$stored['preload_settings']         = $preload;
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
 				$this->options['preload_settings'] = array();
@@ -2065,7 +2065,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$preload['speculationPrerenderList'] = false;
 			$stored['preload_settings']          = $preload;
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
 				$this->options['preload_settings'] = array();
@@ -2114,7 +2114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$audit['rum_sample_rate']    = $default_rate;
 			$stored['performance_audit'] = $audit;
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['performance_audit'] ) || ! is_array( $this->options['performance_audit'] ) ) {
 				$this->options['performance_audit'] = array();
@@ -2171,7 +2171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$stored['image_optimisation'] = $image;
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
 				$this->options['image_optimisation'] = array();
@@ -2215,7 +2215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$stored['file_optimisation'] = $file + array( 'safeMode' => false );
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
@@ -2310,7 +2310,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 			$stored['file_optimisation'] = $file + array( 'elementorSafeMode' => true );
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
 			}
@@ -2645,7 +2645,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 			$stored['file_optimisation'] = $file + array( 'sandboxStaged' => array() );
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
 			}
@@ -2694,7 +2694,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$stored['preload_settings'] = $preload;
-			update_option( 'wppo_settings', $stored );
+			update_option( 'wppo_settings', $stored, false );
 
 			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
 				$this->options['preload_settings'] = array();
@@ -2744,7 +2744,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$stored['object_cache'] = $oc + array( 'outage_bypassed' => false );
-				update_option( 'wppo_settings', $stored );
+				update_option( 'wppo_settings', $stored, false );
 
 				if ( ! isset( $this->options['object_cache'] ) || ! is_array( $this->options['object_cache'] ) ) {
 					$this->options['object_cache'] = array();
@@ -2805,7 +2805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$stored['image_optimisation'] = $image + array( 'hardenCommentImages' => true );
-				update_option( 'wppo_settings', $stored );
+				update_option( 'wppo_settings', $stored, false );
 
 				// Keep the in-request settings memo in parity (sibling
 				// migration paths call set_settings_cache(); without it a
@@ -2899,7 +2899,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$stored['file_optimisation'] = $file;
-				$updated                     = update_option( 'wppo_settings', $stored );
+				$updated                     = update_option( 'wppo_settings', $stored, false );
 				if ( ! $updated ) {
 					return;
 				}
@@ -2958,7 +2958,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$file['delayJSThirdPartyAuto'] = false;
 
 				$stored['file_optimisation'] = $file;
-				$updated                     = update_option( 'wppo_settings', $stored );
+				$updated                     = update_option( 'wppo_settings', $stored, false );
 				if ( ! $updated ) {
 					return;
 				}
@@ -3219,7 +3219,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 					// Prevent infinite loop by temporary removing the action.
 					remove_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10 );
-					update_option( 'wppo_settings', $value );
+					update_option( 'wppo_settings', $value, false );
 					add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 
 					add_action( 'admin_notices', array( __CLASS__, 'render_htaccess_failure_notice' ) );

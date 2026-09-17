@@ -695,7 +695,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				} catch ( \Throwable $snapshot_error ) {
 					unset( $snapshot_error );
 				}
-				update_option( 'wppo_settings', $merged_settings );
+				update_option( 'wppo_settings', $merged_settings, false );
 
 				Log::add( __( 'Settings imported via WP-CLI', 'performance-optimisation' ) );
 				WP_CLI::success( __( 'Settings imported successfully.', 'performance-optimisation' ) );
@@ -797,7 +797,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				} catch ( \Throwable $snapshot_error ) {
 					unset( $snapshot_error );
 				}
-				update_option( 'wppo_settings', $options );
+				update_option( 'wppo_settings', $options, false );
 
 				/* translators: %s: Settings tab name */
 				Log::add( sprintf( __( 'Updated plugin settings for tab %s via WP-CLI', 'performance-optimisation' ), $tab ) );

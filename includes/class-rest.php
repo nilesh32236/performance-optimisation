@@ -1518,15 +1518,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Cap the merged client-supplied list so one request cannot
 			// enqueue unbounded jobs (100 per request; remainder left pending).
+			// Interleave webp/avif round-robin before slicing so a webp
+			// backlog alone exceeding the cap cannot starve avif jobs
+			// indefinitely until webp drains.
 			$jobs_cap    = (int) apply_filters( 'wppo_optimise_image_cap', 100 );
 			$jobs_cap    = $jobs_cap > 0 ? $jobs_cap : 100;
 			$jobs_capped = ( count( $webp_images ) + count( $avif_images ) ) > $jobs_cap;
-			if ( count( $webp_images ) > $jobs_cap ) {
-				$webp_images = array_slice( $webp_images, 0, $jobs_cap );
+			$merged      = array();
+			$interleave  = max( count( $webp_images ), count( $avif_images ) );
+			for ( $pair_idx = 0; $pair_idx < $interleave; $pair_idx++ ) {
+				if ( isset( $webp_images[ $pair_idx ] ) ) {
+					$merged[] = array( $webp_images[ $pair_idx ], 'webp' );
+				}
+				if ( isset( $avif_images[ $pair_idx ] ) ) {
+					$merged[] = array( $avif_images[ $pair_idx ], 'avif' );
+				}
 			}
-			$remaining = $jobs_cap - count( $webp_images );
-			if ( count( $avif_images ) > $remaining ) {
-				$avif_images = array_slice( $avif_images, 0, max( 0, $remaining ) );
+			$merged      = array_slice( $merged, 0, $jobs_cap );
+			$webp_images = array();
+			$avif_images = array();
+			foreach ( $merged as $pair ) {
+				if ( 'webp' === $pair[1] ) {
+					$webp_images[] = $pair[0];
+				} else {
+					$avif_images[] = $pair[0];
+				}
 			}
 
 			$use_action_scheduler = function_exists( 'as_enqueue_async_action' );
@@ -1545,7 +1561,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				// intentional — the waste is one duplicate job, not data loss.
 				$scheduled          = array();
 				$scheduled_complete = false;
-				if ( function_exists( 'as_get_scheduled_actions' ) ) {
+				// Wanted source_path|format keys for this batch: once every
+				// wanted key is covered by the snapshot, further pages cannot
+				// change a dedup decision, so paging stops early instead of
+				// always scanning to exhaustion.
+				$wanted = array();
+				foreach ( $webp_images as $webp_image ) {
+					$wanted[ $this->resolve_optimise_source_path( $webp_image, $normalized_abspath ) . '|webp' ] = false;
+				}
+				foreach ( $avif_images as $avif_image ) {
+					$wanted[ $this->resolve_optimise_source_path( $avif_image, $normalized_abspath ) . '|avif' ] = false;
+				}
+				$wanted_count = count( $wanted );
+				if ( 0 === $wanted_count ) {
+					$scheduled_complete = true;
+				}
+				if ( function_exists( 'as_get_scheduled_actions' ) && ! $scheduled_complete ) {
 					try {
 						$statuses = array( 'pending', 'in-progress' );
 						if ( class_exists( 'ActionScheduler_Store' ) ) {
@@ -1587,8 +1618,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 									$action_args = is_array( $decoded ) ? $decoded : null;
 								}
 								if ( is_array( $action_args ) && isset( $action_args[0]['source_path'], $action_args[0]['format'] ) ) {
-									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
+									$action_key               = $action_args[0]['source_path'] . '|' . $action_args[0]['format'];
+									$scheduled[ $action_key ] = true;
+									if ( array_key_exists( $action_key, $wanted ) ) {
+										$wanted[ $action_key ] = true;
+									}
 								}
+							}
+							if ( 0 !== $wanted_count && ! in_array( false, $wanted, true ) ) {
+								// Every key this batch cares about is covered:
+								// further pages cannot change a dedup decision.
+								$scheduled_complete = true;
+								break;
 							}
 						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 							if ( count( $existing_actions ) < 1000 ) {

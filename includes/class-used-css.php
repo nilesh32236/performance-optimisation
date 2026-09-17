@@ -2284,21 +2284,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Effective targeted-regeneration cooldown in seconds (issue #1220).
 		 *
-		 * Fail-open: any failure returns the default.
-		 *
-		 * @return int Cooldown seconds (>= 0).
-		 * @since NEXT
-		 */
-		private function get_targeted_regen_cooldown(): int {
-			return self::get_effective_targeted_cooldown();
-		}
-
-		/**
-		 * Static variant of the targeted-regen cooldown (issue #1220).
-		 *
-		 * Shares the filterable default with the instance gate so static
-		 * callers (e.g. get_staleness_info()) display the same remaining
-		 * time the gate enforces. Fail-open: any failure returns the default.
+		 * Single canonical accessor shared by the instance gate and static
+		 * callers (e.g. get_staleness_info()) so the displayed remaining
+		 * time always matches the enforced gate. Fail-open: any failure
+		 * returns the default.
 		 *
 		 * @return int Cooldown seconds (>= 0).
 		 * @since NEXT
@@ -2345,7 +2334,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( $last <= 0 ) {
 					return false;
 				}
-				return ( time() - $last ) < $this->get_targeted_regen_cooldown();
+				return ( time() - $last ) < self::get_effective_targeted_cooldown();
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -2765,7 +2754,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// trend-only site (no RUM samples yet) must still prioritize,
 				// so only fall back to FIFO when both signals are empty.
 				if ( null === $trends ) {
-					$trends = null;
 					if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
 						$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
 						if ( ! is_array( $trends ) ) {
