@@ -13,18 +13,26 @@
 
 import StatusBadge from './StatusBadge';
 
+// Audit #1420: dl/dt/dd association + loading placeholder with aria-busy.
 const MetricCard = ( { label, value, unit = '', status = null } ) => {
+	const loading = value === null || value === undefined;
 	return (
-		<div className="wppo-metric-card">
-			<span className="wppo-metric-card__label">{ label }</span>
-			<span className="wppo-metric-card__value">
-				{ value }
-				{ unit !== null && unit !== undefined && unit !== '' && (
-					<span className="wppo-metric-card__unit"> { unit }</span>
-				) }
-			</span>
+		<dl className="wppo-metric-card">
+			<dt className="wppo-metric-card__label">{ label }</dt>
+			<dd
+				className="wppo-metric-card__value"
+				aria-busy={ loading || undefined }
+			>
+				{ loading ? '—' : value }
+				{ ! loading &&
+					unit !== null &&
+					unit !== undefined &&
+					unit !== '' && (
+						<span className="wppo-metric-card__unit"> { unit }</span>
+					) }
+			</dd>
 			{ status && <StatusBadge status={ status } /> }
-		</div>
+		</dl>
 	);
 };
 

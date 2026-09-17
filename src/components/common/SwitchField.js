@@ -35,6 +35,8 @@ const SwitchField = ( {
 	};
 
 	const labelId = useId();
+	// Audit #1420: description programmatically associated with the toggle.
+	const descriptionId = description ? `desc-${ labelId }` : undefined;
 
 	return (
 		<div className="wppo-switch-field">
@@ -49,7 +51,9 @@ const SwitchField = ( {
 						</span>
 					) }
 					{ description && (
-						<p className="wppo-text-muted">{ description }</p>
+						<p id={ descriptionId } className="wppo-text-muted">
+							{ description }
+						</p>
 					) }
 				</div>
 			) }
@@ -61,6 +65,7 @@ const SwitchField = ( {
 				hideLabelFromVision={ true }
 				disabled={ disabled }
 				{ ...( showLabel ? { 'aria-labelledby': labelId } : {} ) }
+				{ ...( descriptionId ? { 'aria-describedby': descriptionId } : {} ) }
 			/>
 		</div>
 	);

@@ -68,9 +68,14 @@ const PluginSettings = lazy( () =>
 	)
 );
 
+// Audit #1420: announced loading state.
 const TabFallback = () => (
-	<div className="wppo-loading-placeholder wppo-loading-placeholder--fallback">
-		<FontAwesomeIcon icon={ faSpinner } spin />
+	<div
+		className="wppo-loading-placeholder wppo-loading-placeholder--fallback"
+		role="status"
+		aria-live="polite"
+	>
+		<FontAwesomeIcon icon={ faSpinner } spin aria-hidden="true" />
 		<span>{ __( 'Loading…', 'performance-optimisation' ) }</span>
 	</div>
 );
@@ -287,8 +292,24 @@ const App = () => {
 			first.focus();
 		}
 
+		// Audit #1420: document-level trap (overlay button + outside focus
+		// cannot escape) with Escape-to-close returning focus to the toggle.
 		const handleKeyDown = ( e ) => {
+			if ( e.key === 'Escape' ) {
+				setMobileMenuOpen( false );
+				if ( toggleBtn ) {
+					toggleBtn.focus();
+				}
+				return;
+			}
 			if ( e.key !== 'Tab' ) {
+				return;
+			}
+			if ( ! sidebar.contains( doc.activeElement ) ) {
+				e.preventDefault();
+				if ( first ) {
+					first.focus();
+				}
 				return;
 			}
 			if ( ! first || ! last ) {
@@ -305,10 +326,10 @@ const App = () => {
 			}
 		};
 
-		sidebar.addEventListener( 'keydown', handleKeyDown );
+		doc.addEventListener( 'keydown', handleKeyDown );
 
 		return () => {
-			sidebar.removeEventListener( 'keydown', handleKeyDown );
+			doc.removeEventListener( 'keydown', handleKeyDown );
 			if ( toggleBtn ) {
 				toggleBtn.focus();
 			}
@@ -422,9 +443,13 @@ const App = () => {
 				} else {
 					hasFetchedRules.current = false;
 				}
-			} catch {
+			} catch ( rulesError ) {
 				hasFetchedRules.current = false;
 				if ( ! rulesController.signal.aborted ) {
+					console.error(
+						'Failed fetching server rules',
+						getErrorLogMessage( rulesError )
+					);
 					setServerRulesError( true );
 				}
 			}
@@ -453,8 +478,12 @@ const App = () => {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 				}
-			} catch {
+			} catch ( ccssError ) {
 				if ( ! ccssController.signal.aborted ) {
+					console.error(
+						'Failed fetching CCSS status',
+						getErrorLogMessage( ccssError )
+					);
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 				}
@@ -495,8 +524,15 @@ const App = () => {
 
 	const wppoVersion = getWppoSettings()?.version ?? '';
 
+	// Audit #1420: stable context value so consumers do not re-render
+	// on every App render.
+	const unsavedContextValue = useMemo(
+		() => ( { isDirty, setIsDirty } ),
+		[ isDirty, setIsDirty ]
+	);
+
 	return (
-		<UnsavedChangesContext.Provider value={ { isDirty, setIsDirty } }>
+		<UnsavedChangesContext.Provider value={ unsavedContextValue }>
 			<div className="wppo-container">
 				{ /* Mobile Top Header */ }
 				<div className="wppo-mobile-header">

@@ -465,7 +465,15 @@ const refreshEsiNonce = ( signal, staleNonce = '' ) => {
 	} )
 		.then( ( response ) => ( response.ok ? response.json() : null ) )
 		.then( ( data ) => extractFragmentHtml( data ) )
-		.catch( () => '' );
+		.catch( ( refreshError ) => {
+			// Audit #1420: log the redacted failure like other hydration
+			// failures; resolve empty so hydration continues.
+			console.warn(
+				'WPPO ESI fragment hydration failed:',
+				getEsiLogMessage( refreshError )
+			);
+			return '';
+		} );
 
 	pendingNonceRefresh = refresh.finally( () => {
 		pendingNonceRefresh = null;

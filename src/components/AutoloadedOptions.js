@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
@@ -223,8 +223,10 @@ const AutoloadedOptions = () => {
 					type: 'success',
 					message: sprintf(
 						/* translators: %d: number of options remediated. */
-						__(
+						_n(
+							'Remediation applied to %d option.',
 							'Remediation applied to %d options.',
+							response.data.applied?.length || 0,
 							'performance-optimisation'
 						),
 						response.data.applied?.length || 0
@@ -486,14 +488,14 @@ const AutoloadedOptions = () => {
 			icon={ <FontAwesomeIcon icon={ faDatabase } /> }
 			actions={
 				loading && (
+					<span role="status" aria-live="polite">
 					<FontAwesomeIcon
 						icon={ faSpinner }
 						spin
-						aria-label={ __(
-							'Loading…',
-							'performance-optimisation'
-						) }
+						aria-hidden="true"
 					/>
+					{ __( 'Loading…', 'performance-optimisation' ) }
+				</span>
 				)
 			}
 		>
@@ -515,7 +517,12 @@ const AutoloadedOptions = () => {
 				<p className="wppo-text-muted wppo-text-small">
 					{ sprintf(
 						/* translators: %d: number of options listed */
-						__( 'Showing %d options.', 'performance-optimisation' ),
+						_n(
+							'Showing %d option.',
+							'Showing %d options.',
+							options.length,
+							'performance-optimisation'
+						),
 						options.length
 					) }
 				</p>

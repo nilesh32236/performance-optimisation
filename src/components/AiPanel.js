@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBrain } from '@fortawesome/free-solid-svg-icons';
@@ -33,6 +33,7 @@ const AiPanel = () => {
 		!! initial.use_wp_ai_client
 	);
 	const [ saving, setSaving ] = useState( false );
+	const suggestRunRef = useRef( 0 );
 	const [ learning, setLearning ] = useState( false );
 	const [ model, setModel ] = useState( null );
 	const [ suggestions, setSuggestions ] = useState( [] );
@@ -141,7 +142,14 @@ const AiPanel = () => {
 					),
 					durationMs: 3000,
 				} );
-				fetchSuggestions();
+				// Audit #1420: run-id guard so a stale refresh cannot
+				// overwrite newer state after rapid saves.
+				const runId = ++suggestRunRef.current;
+				fetchSuggestions().finally( () => {
+					if ( runId !== suggestRunRef.current ) {
+						return;
+					}
+				} );
 			} else {
 				notify( {
 					type: 'error',
@@ -153,7 +161,8 @@ const AiPanel = () => {
 						),
 				} );
 			}
-		} catch {
+		} catch ( saveError ) {
+			console.error( 'Save AI settings failed:', getErrorLogMessage( saveError ) );
 			notify( {
 				type: 'error',
 				message: __(
@@ -190,7 +199,8 @@ const AiPanel = () => {
 						__( 'Failed to learn.', 'performance-optimisation' ),
 				} );
 			}
-		} catch {
+		} catch ( learnError ) {
+			console.error( 'Learn failed:', getErrorLogMessage( learnError ) );
 			notify( {
 				type: 'error',
 				message: __( 'Failed to learn.', 'performance-optimisation' ),

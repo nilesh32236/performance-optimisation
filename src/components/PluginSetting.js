@@ -24,7 +24,7 @@ import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
 import CheckboxOption from './common/CheckboxOption';
 
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 
 // Keep in sync with PHP Util::ALLOWED_SETTINGS_KEYS (single source).
 // At runtime the list is also available as wppoSettings.allowedSettingsKeys
@@ -381,6 +381,32 @@ const PluginSetting = ( { options } ) => {
 			: ''
 	);
 	const [ savingMonitoring, setSavingMonitoring ] = useState( false );
+
+	// Audit #1420: resync when the global arrives late. Per-key deps so
+	// parent re-renders do not reset the form; saving guards so an
+	// in-progress edit is never clobbered.
+	const liveAudit =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.performance_audit ?? {}
+			: {};
+	useEffect( () => {
+		if ( ! savingMonitoring && ! savingAutoRescan ) {
+			setServerTimingEnabled( !! liveAudit.server_timing_enabled );
+			setRumEnabled( !! liveAudit.rum_enabled );
+			setHighValueUrls(
+				Array.isArray( liveAudit.high_value_urls )
+					? liveAudit.high_value_urls.join( '\n' )
+					: ''
+			);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- liveAudit identity changes per render; per-key deps below.
+	}, [
+		liveAudit.server_timing_enabled,
+		liveAudit.rum_enabled,
+		liveAudit.high_value_urls,
+		savingMonitoring,
+		savingAutoRescan,
+	] );
 	const [ baseline, setBaseline ] = useState( {
 		newApiKey: '',
 		autoRescan,
@@ -499,15 +525,17 @@ const PluginSetting = ( { options } ) => {
 					invalidUrls.length > 0
 						? {
 								type: 'warning',
-								message: sprintf(
-									/* translators: 1: number of skipped URLs, 2: comma-separated list of skipped URLs */
-									__(
-										'Monitoring settings saved. Skipped %1$s invalid URL(s): %2$s.',
-										'performance-optimisation'
-									),
+							message: sprintf(
+								/* translators: 1: skipped count, 2: skipped URLs. */
+								_n(
+									'Monitoring settings saved. Skipped %1$s invalid URL: %2$s.',
+									'Monitoring settings saved. Skipped %1$s invalid URLs: %2$s.',
 									invalidUrls.length,
-									invalidUrls.join( ', ' )
+									'performance-optimisation'
 								),
+								invalidUrls.length,
+								invalidUrls.join( ', ' )
+							),
 						  }
 						: {
 								type: 'success',
@@ -615,11 +643,30 @@ const PluginSetting = ( { options } ) => {
 			.split( '.' )[ 0 ];
 	};
 
+	// Audit #1420: abortable log fetch — unmount/rapid pagination cannot
+	// set state on an unmounted component.
+	const logControllerRef = useRef( null );
+	useEffect( () => {
+		return () => {
+			if ( logControllerRef.current ) {
+				logControllerRef.current.abort();
+			}
+		};
+	}, [] );
+
 	const loadActivityLog = async ( page = 1 ) => {
+		if ( logControllerRef.current ) {
+			logControllerRef.current.abort();
+		}
+		logControllerRef.current = new AbortController();
+		const signal = logControllerRef.current.signal;
 		setLogLoading( true );
 		dismissLog();
 		try {
-			const data = await fetchRecentActivities( page );
+			const data = await fetchRecentActivities( page, signal );
+			if ( signal.aborted ) {
+				return;
+			}
 			if ( data?.activities ) {
 				setLogEntries( data.activities );
 				setLogPage( data.current_page || 1 );
@@ -627,6 +674,10 @@ const PluginSetting = ( { options } ) => {
 				setLogLoaded( true );
 			}
 		} catch ( err ) {
+			// Audit #1420: aborts are expected (unmount/pagination), not errors.
+			if ( signal.aborted || err?.name === 'AbortError' ) {
+				return;
+			}
 			notifyLog( {
 				type: 'error',
 				message: __(
@@ -639,7 +690,9 @@ const PluginSetting = ( { options } ) => {
 				getErrorLogMessage( err )
 			);
 		} finally {
-			setLogLoading( false );
+			if ( ! signal.aborted ) {
+				setLogLoading( false );
+			}
 		}
 	};
 
@@ -943,7 +996,10 @@ const PluginSetting = ( { options } ) => {
 												{ entry.activity }
 											</div>
 											{ entry.created_at && (
-												<time className="wppo-activity-time">
+												<time
+													className="wppo-activity-time"
+													dateTime={ entry.created_at }
+												>
 													{ new Date(
 														entry.created_at.replace(
 															' ',
@@ -1004,6 +1060,8 @@ const PluginSetting = ( { options } ) => {
 						className={ `wppo-notice wppo-notice--${
 							apiKeyConfigured ? 'success' : 'warning'
 						} wppo-mb-16` }
+						role="status"
+						aria-live="polite"
 					>
 						<FontAwesomeIcon
 							icon={
@@ -1012,6 +1070,7 @@ const PluginSetting = ( { options } ) => {
 									: faExclamationCircle
 							}
 							className="wppo-mr-8"
+							aria-hidden="true"
 						/>
 						{ apiKeyConfigured
 							? __(
@@ -1135,7 +1194,7 @@ const PluginSetting = ( { options } ) => {
 				{ /* Monitoring: Server-Timing + high-value URLs */ }
 				<FeatureCard
 					title={ __( 'Monitoring', 'performance-optimisation' ) }
-					icon={ <i className="fas fa-tachometer-alt"></i> }
+					icon={ <i className="fas fa-tachometer-alt" aria-hidden="true"></i> } // Audit #1420: decorative.
 				>
 					<CheckboxOption
 						checked={ serverTimingEnabled }

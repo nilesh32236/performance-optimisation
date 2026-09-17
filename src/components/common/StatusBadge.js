@@ -40,9 +40,13 @@ const StatusBadge = ( { status } ) => {
 
 	// Audit #1354: no redundant aria-label — the visible text is already
 	// the accessible name.
+	// Audit #1420: async status changes announced (visible text stays
+	// the accessible name; no redundant aria-label).
 	return (
 		<span
 			className={ `wppo-status-badge wppo-status-badge--${ safeStatus }` }
+			role="status"
+			aria-live="polite"
 		>
 			{ label }
 		</span>

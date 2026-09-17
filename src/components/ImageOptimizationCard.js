@@ -10,7 +10,7 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { formatBytes } from '../lib/util';
 import { savingsPercent } from '../lib/format';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 
 /**
  * Shared conversion progress section (WebP/AVIF were ~30-line duplicates).
@@ -157,9 +157,9 @@ const ImageOptimizationCard = ( {
 					>
 						<span>
 							{ sprintf(
-								/* translators: %1$s: original size, %2$s: optimised size, %3$d: percent saved, %4$d: image count. */
+								/* translators: 1: original size, 2: optimised size, 3: percent saved, 4: image-count phrase. */
 								__(
-									'Original %1$s → Optimised %2$s (%3$d%% smaller · %4$d images)',
+									'Original %1$s → Optimised %2$s (%3$d%% smaller · %4$s)',
 									'performance-optimisation'
 								),
 								formatBytes( savings.original_bytes ),
@@ -171,22 +171,37 @@ const ImageOptimizationCard = ( {
 										savings.converted_bytes
 									) ?? 0
 								),
-								savings.images_counted
+								// Audit #1420: nested _n so '1 image' is correct.
+								sprintf(
+									_n(
+										'%d image',
+										'%d images',
+										savings.images_counted,
+										'performance-optimisation'
+									),
+									savings.images_counted
+								)
 							) }
 						</span>
 					</div>
 				) }
 
 			{ ( bgProcessing || bgJobsQueued > 0 ) && (
-				<div className="wppo-notice wppo-notice--info wppo-mt-32">
-					<FontAwesomeIcon icon={ faSpinner } spin />
+				<div
+					className="wppo-notice wppo-notice--info wppo-mt-32"
+					role="status"
+					aria-live="polite"
+				>
+					<FontAwesomeIcon icon={ faSpinner } spin aria-hidden="true" />
 					<span>
-						{ __(
-							'Currently processing background optimisation jobs',
-							'performance-optimisation'
-						) }{ ' ' }
-						( { bgJobsQueued }{ ' ' }
-						{ __( 'queued', 'performance-optimisation' ) })
+						{ sprintf(
+							/* translators: %d: queued job count. */
+							__(
+								'Currently processing background optimisation jobs (%d queued)',
+								'performance-optimisation'
+							),
+							bgJobsQueued
+						) }
 					</span>
 				</div>
 			) }

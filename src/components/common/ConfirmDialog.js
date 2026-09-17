@@ -17,6 +17,7 @@ import { __ } from '@wordpress/i18n';
  * @param {string}               [props.cancelLabel]  Label for the cancel button.
  * @param {string}               [props.variant]      'warning' | 'danger' — controls confirm button style.
  * @param {import('react').Node} [props.children]     Optional extra content (e.g., a detail list).
+ * @param {boolean}              [props.isBusy]        Disables both buttons while async confirm runs.
  */
 const ConfirmDialog = ( {
 	isOpen,
@@ -28,6 +29,7 @@ const ConfirmDialog = ( {
 	cancelLabel,
 	variant = 'danger',
 	children,
+	isBusy = false,
 } ) => {
 	const dialogRef = useRef( null );
 	// Audit #1354: unique title id so two mounted dialogs never share one.
@@ -46,7 +48,11 @@ const ConfirmDialog = ( {
 			// disabled button leaving one tab stop).
 			if ( e.key === 'Tab' && dialogRef.current ) {
 				const focusable = focusableRef.current;
+				// Audit #1420: empty list must still trap — focus the dialog
+				// container (tabIndex -1) instead of letting Tab escape.
 				if ( focusable.length === 0 ) {
+					e.preventDefault();
+					dialogRef.current.focus();
 					return;
 				}
 				const first = focusable[ 0 ];
@@ -158,6 +164,7 @@ const ConfirmDialog = ( {
 			<div
 				className="wppo-dialog"
 				ref={ dialogRef }
+				tabIndex={ -1 }
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={ titleId }
@@ -176,6 +183,7 @@ const ConfirmDialog = ( {
 					<button
 						type="button"
 						className="wppo-button wppo-button--secondary wppo-dialog-cancel"
+						disabled={ isBusy }
 						onClick={ onCancel }
 					>
 						{ cancelLabel ||
@@ -188,6 +196,8 @@ const ConfirmDialog = ( {
 								? 'wppo-button--danger'
 								: 'wppo-button--primary'
 						}` }
+						disabled={ isBusy }
+						aria-busy={ isBusy || undefined }
 						onClick={ onConfirm }
 					>
 						{ confirmLabel ||

@@ -1251,16 +1251,30 @@ const delayedScripts = document.querySelectorAll(
 const idleScripts = document.querySelectorAll(
 	'script[data-wppo-delay-strategy="idle"]'
 );
+// Audit #1420: tracked handle so teardownLazyload() can cancel a late
+// idle callback instead of it re-creating observers after teardown.
+let idleScriptsHandle = null;
+const cancelIdleScripts = () => {
+	if ( idleScriptsHandle === null ) {
+		return;
+	}
+	if ( 'cancelIdleCallback' in window ) {
+		window.cancelIdleCallback( idleScriptsHandle );
+	} else {
+		clearTimeout( idleScriptsHandle );
+	}
+	idleScriptsHandle = null;
+};
 if ( idleScripts.length > 0 ) {
 	if ( 'requestIdleCallback' in window ) {
-		window.requestIdleCallback( loadIdleScripts, {
+		idleScriptsHandle = window.requestIdleCallback( loadIdleScripts, {
 			timeout: ( delayConfig && delayConfig.idleTimeout ) || 3000,
 		} );
 	} else {
 		// Fallback: load after a short delay.
 		// requestIdleCallback's timeout is a deadline (max wait), while setTimeout is a minimum delay.
 		// Use a shorter explicit delay to avoid excessive waiting when rIC is unavailable.
-		setTimeout(
+		idleScriptsHandle = setTimeout(
 			loadIdleScripts,
 			Math.min( 2000, ( delayConfig && delayConfig.idleTimeout ) || 3000 )
 		);
@@ -1392,6 +1406,7 @@ const clearSafetyScan = () => {
  */
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
+	cancelIdleScripts();
 	if ( loadImagesTimer !== null ) {
 		clearTimeout( loadImagesTimer );
 		loadImagesTimer = null;
@@ -2460,6 +2475,7 @@ const loadImages = () => {
 								} );
 								el.load();
 								if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+									// Autoplay-policy rejections are expected (muted/invisible media); intentionally silent.
 									el.play().catch( () => {} );
 								}
 							}
@@ -2717,7 +2733,8 @@ const loadImages = () => {
 							} );
 							el.load();
 							if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
-								el.play().catch( () => {} );
+								// Autoplay-policy rejections are expected (muted/invisible media); intentionally silent.
+									el.play().catch( () => {} );
 							}
 							el.classList.remove( 'wppo-lazy-video' );
 						} else {
@@ -3010,7 +3027,33 @@ const initVideoPlaceholders = () => {
 			videoFallbackTimers.add( fallbackTimer );
 		};
 
+		// Audit #1420: keyboard + AT path — the placeholder is a
+		// focusable button-role element, not click-only.
+		if ( ! el.hasAttribute( 'tabindex' ) ) {
+			el.setAttribute( 'tabindex', '0' );
+		}
+		if ( ! el.hasAttribute( 'role' ) ) {
+			el.setAttribute( 'role', 'button' );
+		}
+		if ( ! el.hasAttribute( 'aria-label' ) ) {
+			// Audit #1354: PHP-provided translation via module data
+			// (server-localized); English fallback otherwise.
+			el.setAttribute(
+				'aria-label',
+				typeof moduleData.videoPlayerLabel === 'string' &&
+					moduleData.videoPlayerLabel
+					? moduleData.videoPlayerLabel
+					: 'Play video'
+			);
+		}
 		el.addEventListener( 'click', loadVideo );
+		el.addEventListener( 'keydown', ( event ) => {
+			if ( event.key !== 'Enter' && event.key !== ' ' ) {
+				return;
+			}
+			event.preventDefault();
+			loadVideo();
+		} );
 	} );
 };
 

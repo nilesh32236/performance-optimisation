@@ -701,8 +701,9 @@ const FileOptimization = ( {
 			if ( res && res.success && res.data ) {
 				setUsedCssStatus( res.data );
 			}
-		} catch {
+		} catch ( statusError ) {
 			// Fail-open: leave the banner hidden.
+			console.error( 'Failed refreshing used-CSS status:', getErrorLogMessage( statusError ) );
 		}
 	}, [] );
 	useEffect( () => {
@@ -747,8 +748,9 @@ const FileOptimization = ( {
 						res.data.safe_preview_url || prev.safe_preview_url,
 				} ) );
 			}
-		} catch {
+		} catch ( upgradeError ) {
 			// Fail-open: keep the seeded wppoSettings value.
+			console.error( 'Failed refreshing upgrade purge status:', getErrorLogMessage( upgradeError ) );
 		}
 	}, [] );
 	// Note: no auto-fetch on mount/tab-open — the status is seeded from
@@ -872,12 +874,14 @@ const FileOptimization = ( {
 			return;
 		}
 		sandboxHydratedRef.current = true;
-		let cancelled = false;
+		// Audit #1420: AbortController (not just a flag) so tab-switch
+		// aborts the network request.
+		const controller = new AbortController();
 		( async () => {
 			try {
-				const status = await apiCall( 'sandbox_preview', {}, 'GET' );
+				const status = await apiCall( 'sandbox_preview', {}, 'GET', controller.signal );
 				if (
-					cancelled ||
+					controller.signal.aborted ||
 					! status ||
 					! status.success ||
 					! status.data
@@ -894,13 +898,17 @@ const FileOptimization = ( {
 				if ( status.data.preview_url ) {
 					setSandboxPreviewUrl( status.data.preview_url );
 				}
-			} catch {
+			} catch ( sandboxError ) {
 				// Best-effort: the stage/promote/discard controls still work
 				// without prior status.
+				// Tab-switch aborts are expected, not errors.
+				if ( sandboxError?.name !== 'AbortError' ) {
+					console.error( 'Failed fetching sandbox preview:', getErrorLogMessage( sandboxError ) );
+				}
 			}
 		} )();
 		return () => {
-			cancelled = true;
+			controller.abort();
 		};
 	}, [ activeSubTab ] );
 	const handleSandboxSave = async () => {
@@ -1618,21 +1626,30 @@ const FileOptimization = ( {
 		}
 	};
 
+	// Audit #1420: hoisted handler (was an inline per-render closure).
+	const handleSinglePostIdChange = useCallback(
+		( e ) => setSinglePostId( e.target.value ),
+		[]
+	);
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
 		setIsSaving( true );
 		dismiss();
+		// Audit #1420: snapshot before await so edits typed during the save
+		// cannot be clobbered by a render-time baseline.
+		const submitSnapshot = stripCdnRowIds( { ...settings } );
 		try {
 			const res = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
 				// Strip client-only CDN row ids: they are React keys, not
 				// settings, and must never persist server-side.
-				settings: stripCdnRowIds( { ...settings } ),
+				settings: submitSnapshot,
 			} );
 			if ( res.success ) {
-				setBaseline( stripCdnRowIds( { ...settings } ) );
+				setBaseline( submitSnapshot );
 				setIsDirty( false );
 				notify( {
 					type: 'success',
@@ -2206,11 +2223,7 @@ const FileOptimization = ( {
 													// placeholders — translators could break them.
 													placeholder="123"
 													value={ singlePostId }
-													onChange={ ( e ) =>
-														setSinglePostId(
-															e.target.value
-														)
-													}
+													onChange={ handleSinglePostIdChange }
 												/>
 												<button
 													className="wppo-button wppo-button--secondary"
@@ -4230,10 +4243,17 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 								</p>
-								{ ( settings.cdnMapping || [] ).map(
-									( entry, idx ) => (
+								{ ( settings.cdnMapping || [] )
+									// Audit #1420: id-less rows cannot key stably — drop them.
+									.filter(
+										( entry ) =>
+											entry &&
+											( typeof entry.id === 'string' ||
+												typeof entry.id === 'number' )
+									)
+									.map( ( entry ) => (
 										<div
-											key={ entry.id ?? idx }
+											key={ entry.id }
 											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">

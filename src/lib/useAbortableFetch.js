@@ -13,6 +13,10 @@ import { useEffect, useRef } from '@wordpress/element';
 /**
  * Mounted ref: false after unmount. Gate setState/notify behind it.
  *
+ * Prefer AbortController cancellation (runAbortable/cancel in cleanup)
+ * for in-flight work; use this only for non-abortable completions
+ * (audit #1420).
+ *
  * @since NEXT
  * @return {Object} Ref object with .current boolean.
  */
@@ -33,14 +37,15 @@ export const useIsMounted = () => {
  * @param {*} error Caught error value.
  * @return {boolean} True for AbortError.
  */
-export const isAbortError = ( error ) => error?.name === 'AbortError';
+export const isAbortError = ( error ) =>
+	error?.name === 'AbortError' || error?.code === 20; // Audit #1420: DOMException ABORT_ERR.
 
 /**
  * Run an async task guarded by a fresh AbortController.
  *
- * Creates the controller, runs the task, and aborts on cleanup. Returns
- * the task promise so callers can await it; rejections other than abort
- * propagate to the caller.
+ * Creates the controller and runs the task. Callers MUST wire cancel()
+ * into effect cleanup — this helper cannot auto-abort (audit #1420).
+ * Rejections other than abort propagate to the caller.
  *
  * @since NEXT
  * @param {Function} task Async task receiving the signal.
