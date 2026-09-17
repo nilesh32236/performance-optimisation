@@ -683,15 +683,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 
 			if ( self::supports_script_strategy() ) {
+				$args = array(
+					'strategy'  => 'defer',
+					'in_footer' => true,
+				);
+				// Native fetchpriority on WP 6.9+ (Trac #61734): pass
+				// 'fetchpriority' => 'low' through the core loader so the
+				// beacon composes with core loading-optimisation instead of a
+				// second rewrite pass. Pre-6.9 keeps today's exact array
+				// (byte-identical output via the buffer fallback owned by Main).
+				//
+				// @since NEXT.
+				$fetchpriority = self::get_rum_fetchpriority();
+				if ( '' !== $fetchpriority ) {
+					$args['fetchpriority'] = $fetchpriority;
+				}
 				wp_enqueue_script(
 					'wppo-rum',
 					WPPO_PLUGIN_URL . 'build/rum.js',
 					$deps,
 					$version,
-					array(
-						'strategy'  => 'defer',
-						'in_footer' => true,
-					)
+					$args
 				);
 				return;
 			}
@@ -711,6 +723,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 */
 		private static function supports_script_strategy(): bool {
 			return Util::supports_script_strategy();
+		}
+
+		/**
+		 * Whether core renders native script fetchpriority (WP 6.9+).
+		 *
+		 * Reuses Main::supports_native_script_fetchpriority() — the single
+		 * shared gate (version + WP_Script_Modules::set_fetchpriority()
+		 * probe) — guarded so RUM stays standalone when Main is
+		 * unavailable. Fail-open to false so pre-6.9 installs keep the
+		 * byte-identical buffer path.
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		private static function supports_native_fetchpriority(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'supports_native_script_fetchpriority' ) ) {
+					return false;
+				}
+				return (bool) \PerformanceOptimise\Inc\Main::supports_native_script_fetchpriority();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Resolve the RUM beacon fetchpriority for the native 6.9+ path.
+		 *
+		 * Honors the existing `wppo_deferred_fetchpriority` filter with
+		 * handle 'wppo-rum' (same contract as
+		 * Main::get_filtered_deferred_fetchpriority(): default 'low',
+		 * falsy/unknown suppresses the key). Returns '' when the native
+		 * path is unavailable so the caller passes today's exact args
+		 * array. Fail-open to 'low' on any throwable; no options or
+		 * transients touched (multisite-safe).
+		 *
+		 * @since NEXT
+		 * @return string Validated 'high'|'low'|'auto', or '' to suppress.
+		 */
+		private static function get_rum_fetchpriority(): string {
+			if ( ! self::supports_native_fetchpriority() ) {
+				return '';
+			}
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_deferred_fetchpriority' ) ) {
+				return 'low';
+			}
+			try {
+				$fetchpriority = apply_filters( 'wppo_deferred_fetchpriority', 'low', 'wppo-rum' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'low';
+			}
+			if ( ! is_string( $fetchpriority ) ) {
+				return '';
+			}
+			$fetchpriority = strtolower( trim( $fetchpriority ) );
+			if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
+				return '';
+			}
+			return $fetchpriority;
 		}
 
 		/**
