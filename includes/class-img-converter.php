@@ -414,6 +414,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
+			// Content-sniff gate (#1411): verify magic bytes/MIME before
+			// any `readImage()` call so PostScript/compressed-magic
+			// polyglots never reach the Imagick decoder. Fail-open false:
+			// the caller falls back to the GD path or the original.
+			try {
+				$sniff_safe = $this->is_safe_image_content( $source_image );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: sniff failure must not block the encode attempt.
+				$sniff_safe = true;
+			}
+			if ( ! $sniff_safe ) {
+				return false;
+			}
+
 			if ( ! Util::prepare_cache_dir( dirname( $dest_path ) ) ) {
 				return false;
 			}
@@ -1184,6 +1197,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return null;
 			}
 
+			// Content-sniff gate (#1411): verify magic bytes/MIME before
+			// any `readImage()` call so PostScript/compressed-magic
+			// polyglots never reach the Imagick decoder. Fail-open null:
+			// the caller keeps the legacy skipped status (never a
+			// full-size GD decode) so the guard cannot cascade into the
+			// OOM it was meant to avoid.
+			try {
+				$sniff_safe = $this->is_safe_image_content( $source );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: sniff failure must not block the decode attempt.
+				$sniff_safe = true;
+			}
+			if ( ! $sniff_safe ) {
+				return null;
+			}
+
 			$imagick = null;
 			try {
 				$imagick = new \Imagick();
@@ -1433,6 +1461,114 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Content-sniff guard: verify magic bytes/MIME before any Imagick decode.
+		 *
+		 * Decode-before-verify is the author-level Imagick RCE pattern
+		 * (polyglot PNG+PostScript / compressed-magic payloads reaching
+		 * `Imagick::readImage()`, cf. Patchstack Aug 2026, Smush
+		 * CVE-2026-81285): this moves verification ahead of the decoder.
+		 * Checks a bounded 4 KB header peek (magic bytes live at offset
+		 * 0-32) against an allowlist (JPEG/PNG/GIF/WebP/AVIF), rejecting
+		 * PostScript (`%!PS`) and compressed-magic payloads before any
+		 * `readImage()` call, with an optional `finfo` cross-check where
+		 * magic bytes stay authoritative.
+		 *
+		 * Fail-open by design: unreadable/short reads and any unexpected
+		 * `\Throwable` return true (safe), so behaviour is unchanged for
+		 * missing files and finfo-absent hosts. Callers resolve a `false`
+		 * result to `skipped` status (original served, never fatal).
+		 * Multisite-safe: pure filesystem compute, no options/DB writes.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute filesystem path to the candidate image.
+		 * @return bool True when the content is safe to decode.
+		 */
+		protected function is_safe_image_content( string $path ): bool {
+			try {
+				if ( '' === $path || ! file_exists( $path ) || ! is_readable( $path ) ) {
+					return true;
+				}
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Bounded header peek; silencing missing-file notices is intentional.
+				$header = @file_get_contents( $path, false, null, 0, 4096 );
+				if ( false === $header || '' === $header ) {
+					return true;
+				}
+
+				// PostScript markers anywhere in the header window: a
+				// polyglot carries valid raster magic at offset 0 with the
+				// `%!PS` payload later, so an offset-0-only check would miss
+				// it. A genuine raster never contains this ASCII sequence.
+				if ( false !== strpos( $header, '%!PS' ) ) {
+					return false;
+				}
+
+				// Compressed/container magic at offset 0 (polyglot and
+				// compressed-magic class): gzip, bzip2, zip, zlib streams.
+				$magic2 = substr( $header, 0, 2 );
+				$magic4 = substr( $header, 0, 4 );
+				if ( "\x1f\x8b" === $magic2 || "PK\x03\x04" === $magic4 ) {
+					return false;
+				}
+				if ( 'BZh' === substr( $header, 0, 3 ) ) {
+					return false;
+				}
+				if ( "\x78\x01" === $magic2 || "\x78\x9c" === $magic2 || "\x78\xda" === $magic2 ) {
+					return false;
+				}
+
+				// Allowlist magic match. BMFF `ftyp` sits at offset 4, so
+				// AVIF/HEIC brands are checked at bytes 4-11.
+				$safe = false;
+				if ( "\xff\xd8\xff" === substr( $header, 0, 3 ) ) {
+					$safe = true;
+				} elseif ( "\x89PNG\r\n\x1a\n" === substr( $header, 0, 8 ) ) {
+					$safe = true;
+				} elseif ( 'GIF87a' === substr( $header, 0, 6 ) || 'GIF89a' === substr( $header, 0, 6 ) ) {
+					$safe = true;
+				} elseif ( strlen( $header ) >= 12 && 'RIFF' === $magic4 && 'WEBP' === substr( $header, 8, 4 ) ) {
+					$safe = true;
+				} elseif ( strlen( $header ) >= 12 && 'ftyp' === substr( $header, 4, 4 ) && in_array( substr( $header, 8, 4 ), array( 'avif', 'avis', 'heic', 'heix', 'mif1', 'msf1' ), true ) ) {
+					$safe = true;
+				}
+				if ( ! $safe ) {
+					return false;
+				}
+
+				// Optional finfo cross-check: magic bytes stay
+				// authoritative, any finfo failure is ignored so
+				// finfo-absent hosts behave identically.
+				if ( function_exists( 'finfo_open' ) && function_exists( 'finfo_file' ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_finfo_open -- Content-sniff cross-check; teardown routes via Util::close_finfo_handle().
+					$finfo = finfo_open( FILEINFO_MIME_TYPE );
+					if ( false !== $finfo ) {
+						try {
+							$mime = finfo_file( $finfo, $path );
+							if ( is_string( $mime ) && '' !== $mime ) {
+								$parts = explode( ';', $mime );
+								$mime  = strtolower( trim( $parts[0] ) );
+								if ( '' !== $mime && ! in_array( $mime, array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' ), true ) ) {
+									return false;
+								}
+							}
+						} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: finfo is advisory only, magic bytes already passed.
+						} finally {
+							if ( class_exists( Util::class ) && method_exists( Util::class, 'close_finfo_handle' ) ) {
+								Util::close_finfo_handle( $finfo );
+							} else {
+								$finfo = null;
+							}
+						}
+					}
+				}
+
+				return true;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: unexpected sniff failure must never block conversion.
+				return true;
+			}
+		}
+
+		/**
 		 * Whether the source embeds an UltraHDR gain map.
 		 *
 		 * Core skips such images end-to-end when applying
@@ -1610,6 +1746,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			if ( empty( $image_info ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
+				return false;
+			}
+
+			// Content-sniff gate (#1411): verify magic bytes/MIME before
+			// any GD or Imagick decode so PostScript/compressed-magic
+			// polyglots never reach `Imagick::readImage()`. Fail-open
+			// `skipped`: the original is served, never fatal, never a
+			// white-screen. Oversize sources are already resolved to
+			// `skipped` (or a memory-safe downscaled output) by the
+			// pre-decode pixel-budget guard below.
+			try {
+				$sniff_safe = $this->is_safe_image_content( $source_image );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: sniff failure must not block conversion.
+				$sniff_safe = true;
+			}
+			if ( ! $sniff_safe ) {
+				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}
 
@@ -1923,6 +2076,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// Do not hard-clamp Imagick depth to 8-bit — core's
 							// image_max_bit_depth filter (WP 6.8+, Trac #62285)
 							// preserves HDR up to 12-bit by default.
+							// Content-sniff gate (#1411): reject
+							// PostScript/compressed-magic polyglots before any
+							// `readImage()` call. Fail-open `skipped`: the
+							// original is served, never fatal.
+							try {
+								$gif_sniff_safe = $this->is_safe_image_content( $source_image );
+							} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: sniff failure must not block conversion.
+								$gif_sniff_safe = true;
+							}
+							if ( ! $gif_sniff_safe ) {
+								$this->update_conversion_status( $source_image, 'skipped', $format );
+								return false;
+							}
 							$imagick = new \Imagick();
 							// Bound decoded memory + area to the pre-decode pixel
 							// budget so multi-frame GIFs cannot OOM the worker.
