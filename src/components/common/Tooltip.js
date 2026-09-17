@@ -11,6 +11,7 @@
  * @since 1.5.0
  */
 import { useState, useId } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
@@ -72,6 +73,10 @@ const Tooltip = ( { content, children } ) => {
 						tabIndex: '0',
 						'aria-expanded': visible,
 						'aria-describedby': id,
+						'aria-label': __(
+							'More information',
+							'performance-optimisation'
+						),
 				  } ) }
 			onFocus={ () => setVisible( true ) }
 			onBlur={ handleBlur }
