@@ -232,6 +232,189 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A raw string 'false' (e.g. via direct update_option/DB edit bypassing
+	 * the sanitizer) must not enable the purge through !empty() truthiness.
+	 */
+	public function test_failed_purge_read_normalizes_string_false_to_off(): void {
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'database_cleanup' => array(
+					'purgeFailedActions' => 'false',
+				),
+			)
+		);
+		Filters\expectApplied( 'wppo_purge_failed_actions' )->once()->with( false )->andReturn( false );
+		$this->assertFalse( Database_Cleanup::is_failed_action_purge_enabled() );
+	}
+
+	/**
+	 * A lowered/rogue retention filter returning 0 must not make the purge
+	 * cutoff "now" (fail-destructive): the lifespan is floored at one day.
+	 *
+	 * Runs in a separate process with a stub store capturing the query.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_purge_cutoff_floors_zero_retention_to_one_day(): void {
+		if ( ! class_exists( 'ActionScheduler_Store' ) ) {
+			eval( // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only stub store in an isolated process; no real AS tables exist in unit tests.
+				'abstract class ActionScheduler_Store { const STATUS_FAILED = "failed"; public static $wppo_1310_floor_queries = array(); public static $wppo_1310_floor_batches = array( array( 31 ), array() ); public static function instance() { return new ActionScheduler_1310_Floor_Store(); } public function query_actions( $query = array(), $query_type = "select" ) { self::$wppo_1310_floor_queries[] = $query; return array_shift( self::$wppo_1310_floor_batches ); } public function delete_action( $action_id ) {} }'
+				. 'class ActionScheduler_1310_Floor_Store extends ActionScheduler_Store {}'
+			);
+		}
+		if ( ! class_exists( 'ActionScheduler_QueueCleaner' ) ) {
+			eval( 'class ActionScheduler_QueueCleaner {}' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only stub in an isolated process.
+		}
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array() );
+		\Brain\Monkey\Filters\expectApplied( 'wppo_purge_failed_actions' )->once()->with( false )->andReturn( true );
+		\Brain\Monkey\Filters\expectApplied( 'action_scheduler_retention_period' )->once()->andReturn( 0 );
+		\Brain\Monkey\Filters\expectApplied( 'action_scheduler_retention_period_for_failed' )->once()->andReturn( 0 );
+
+		$deleted = Database_Cleanup::purge_failed_actions( 50, false );
+
+		$this->assertSame( 1, $deleted );
+		$this->assertNotEmpty( \ActionScheduler_Store::$wppo_1310_floor_queries );
+		$cutoff = \ActionScheduler_Store::$wppo_1310_floor_queries[0]['modified'];
+		$this->assertInstanceOf( \DateTime::class, $cutoff );
+		$age = time() - $cutoff->getTimestamp();
+		$this->assertGreaterThanOrEqual( 86400 - 120, $age );
+		$this->assertLessThanOrEqual( 86400 + 120, $age );
+	}
+
+	/**
+	 * A raised retention filter (e.g. 10 years) is capped at the documented
+	 * 3-month bound instead of widening the purge window.
+	 *
+	 * Runs in a separate process with a stub store capturing the query.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_purge_cutoff_caps_raised_retention_at_three_months(): void {
+		if ( ! class_exists( 'ActionScheduler_Store' ) ) {
+			eval( // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only stub store in an isolated process; no real AS tables exist in unit tests.
+				'abstract class ActionScheduler_Store { const STATUS_FAILED = "failed"; public static $wppo_1310_cap_queries = array(); public static $wppo_1310_cap_batches = array( array( 41 ), array() ); public static function instance() { return new ActionScheduler_1310_Cap_Store(); } public function query_actions( $query = array(), $query_type = "select" ) { self::$wppo_1310_cap_queries[] = $query; return array_shift( self::$wppo_1310_cap_batches ); } public function delete_action( $action_id ) {} }'
+				. 'class ActionScheduler_1310_Cap_Store extends ActionScheduler_Store {}'
+			);
+		}
+		if ( ! class_exists( 'ActionScheduler_QueueCleaner' ) ) {
+			eval( 'class ActionScheduler_QueueCleaner {}' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only stub in an isolated process.
+		}
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array() );
+		\Brain\Monkey\Filters\expectApplied( 'wppo_purge_failed_actions' )->once()->with( false )->andReturn( true );
+		\Brain\Monkey\Filters\expectApplied( 'action_scheduler_retention_period' )->once()->andReturn( 10 * 365 * 86400 );
+		\Brain\Monkey\Filters\expectApplied( 'action_scheduler_retention_period_for_failed' )->once()->andReturn( 10 * 365 * 86400 );
+
+		$deleted = Database_Cleanup::purge_failed_actions( 50, false );
+
+		$this->assertSame( 1, $deleted );
+		$this->assertNotEmpty( \ActionScheduler_Store::$wppo_1310_cap_queries );
+		$cutoff = \ActionScheduler_Store::$wppo_1310_cap_queries[0]['modified'];
+		$this->assertInstanceOf( \DateTime::class, $cutoff );
+		$age = time() - $cutoff->getTimestamp();
+		$this->assertGreaterThanOrEqual( 3 * 2678400 - 300, $age );
+		$this->assertLessThanOrEqual( 3 * 2678400 + 300, $age );
+	}
+
+	/**
+	 * The CCSS pending probe sees a concurrent winner in the legacy group,
+	 * not just the dedicated group, so the post-race re-check can never
+	 * fall through to a double-schedule.
+	 *
+	 * Runs in a separate process with a group-sensitive lookup stub.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_ccss_pending_probe_sees_legacy_group_winner(): void {
+		if ( ! function_exists( 'as_next_scheduled_action' ) ) {
+			eval( 'function as_next_scheduled_action( $hook, $args = array(), $group = "" ) { if ( "performance_optimisation" === $group ) { return time() + 60; } return false; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only group-sensitive lookup stub in an isolated process.
+		}
+		$method = new \ReflectionMethod( \PerformanceOptimise\Inc\Critical_CSS::class, 'has_pending_ccss_job' );
+		$this->assertTrue( $method->invoke( null, 'wppo_generate_ccss', array( array( 'template_hash' => 'abc' ) ) ) );
+	}
+
+	/**
+	 * The PageSpeed winner re-query returns the pending job ID so
+	 * queue_scan() reports the job instead of failure after a lost
+	 * unique-race.
+	 *
+	 * Runs in a separate process with a stub lookup plus store stub.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_pagespeed_winner_requery_returns_pending_id(): void {
+		if ( ! class_exists( 'ActionScheduler_Store' ) ) {
+			eval( 'abstract class ActionScheduler_Store { const STATUS_PENDING = "pending"; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only stub in an isolated process.
+		}
+		if ( ! function_exists( 'as_get_scheduled_actions' ) ) {
+			eval( 'function as_get_scheduled_actions( $query = array(), $query_type = "select" ) { return array( 123 ); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only lookup stub in an isolated process.
+		}
+		$method = new \ReflectionMethod( \PerformanceOptimise\Inc\Pagespeed::class, 'find_pending_job_id' );
+		$args   = array(
+			array(
+				'url'      => 'https://example.test/',
+				'strategy' => 'mobile',
+			),
+		);
+		$this->assertSame( 123, $method->invoke( null, $args ) );
+	}
+
+	/**
+	 * regenerate_single() on a scheduler failure (0 with nothing pending)
+	 * returns 0 without asserting phantom `queued` status.
+	 *
+	 * Runs in a separate process with a legacy-shaped scheduler stub whose
+	 * schedule call returns 0 and whose lookup reports nothing pending.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_regenerate_single_returns_zero_on_scheduler_failure(): void {
+		if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+			eval( 'function as_enqueue_async_action( $hook, $args = array(), $group = "" ) { return 0; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only legacy-shaped scheduler stub in an isolated process.
+		}
+		if ( ! function_exists( 'as_has_scheduled_action' ) ) {
+			eval( 'function as_has_scheduled_action( $hook, $args = array(), $group = "" ) { return false; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only lookup stub in an isolated process.
+		}
+		if ( ! function_exists( 'as_schedule_single_action' ) ) {
+			eval( 'function as_schedule_single_action( $timestamp, $hook, $args = array(), $group = "" ) { return 0; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only failing scheduler stub in an isolated process.
+		}
+		if ( ! function_exists( 'as_next_scheduled_action' ) ) {
+			eval( 'function as_next_scheduled_action( $hook, $args = array(), $group = "" ) { return false; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only lookup stub in an isolated process.
+		}
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array() );
+		\Brain\Monkey\Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		\Brain\Monkey\Functions\when( 'get_stylesheet' )->justReturn( 'twentytwentyfour' );
+		\Brain\Monkey\Functions\when( 'home_url' )->alias(
+			static function ( $path = '' ) {
+				return 'https://example.test/' . ltrim( (string) $path, '/' );
+			}
+		);
+		\Brain\Monkey\Functions\when( 'untrailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' );
+			}
+		);
+		$transients = array();
+		\Brain\Monkey\Functions\when( 'set_transient' )->alias(
+			static function ( $key, $value, $expiration = 0 ) use ( &$transients ) {
+				$transients[ $key ] = $value;
+				return true;
+			}
+		);
+		\Brain\Monkey\Functions\when( 'get_transient' )->alias(
+			static function ( $key ) use ( &$transients ) {
+				return array_key_exists( $key, $transients ) ? $transients[ $key ] : false;
+			}
+		);
+
+		$result = \PerformanceOptimise\Inc\Critical_CSS::regenerate_single( 'home', array( 'home' => 'Home' ) );
+
+		$this->assertSame( 0, $result );
+		foreach ( $transients as $value ) {
+			$this->assertNotSame( 'queued', $value );
+		}
+	}
+
+	/**
 	 * A broken legacy guard must not fail the enqueue (fail-open).
 	 *
 	 * Regression coverage for stale test doubles (or a half-loaded

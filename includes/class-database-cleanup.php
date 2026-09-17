@@ -52,6 +52,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		);
 
 		/**
+		 * Month length in seconds shared by the Action Scheduler bounds below.
+		 *
+		 * A single named constant so the 3-month purge cap and the retention
+		 * defaults cannot drift apart when one of them is bumped (issue
+		 * #1310 review). 31-day months, matching the upstream AS default.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MONTH_SECONDS = 2678400;
+
+		/**
 		 * Upper bound for the opt-in failed-action purge lifespan.
 		 *
 		 * Three months in seconds (31-day months), mirroring the
@@ -65,7 +77,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @since NEXT
 		 * @var int
 		 */
-		private const FAILED_PURGE_MAX_LIFESPAN = 3 * 2678400;
+		private const FAILED_PURGE_MAX_LIFESPAN = 3 * self::MONTH_SECONDS;
 
 		/**
 		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
@@ -1709,7 +1721,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return array{lifespan:int,lifespan_failed:int}
 		 */
 		private static function get_action_scheduler_retention(): array {
-			$month = 2678400;
+			$month = self::MONTH_SECONDS;
 			try {
 				$lifespan = function_exists( 'apply_filters' ) ? apply_filters( 'action_scheduler_retention_period', $month ) : $month;
 				$lifespan = is_numeric( $lifespan ) ? max( 0, (int) $lifespan ) : $month;
@@ -1922,10 +1934,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function is_failed_action_purge_enabled(): bool {
 			try {
-				$opt_in = false;
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
-					$settings = \PerformanceOptimise\Inc\Util::get_settings();
-					$opt_in   = ! empty( $settings['database_cleanup']['purgeFailedActions'] );
+				// Util is always loaded via Main::includes(), so no
+				// class_exists/method_exists guard is needed here (issue
+				// #1310 review); read-time normalization mirrors the
+				// sanitizer so a raw string 'false' (e.g. via direct
+				// update_option/DB edit bypassing sanitize) cannot enable
+				// deletion through !empty() truthiness.
+				$settings = Util::get_settings();
+				$raw      = $settings['database_cleanup']['purgeFailedActions'] ?? false;
+				if ( is_bool( $raw ) ) {
+					$opt_in = $raw;
+				} else {
+					$parsed = filter_var( $raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$opt_in = true === $parsed;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -1962,11 +1983,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * (issue #1310 review).
 		 *
 		 * @since NEXT
-		 * @param int  $batch_size Maximum rows deleted per iteration. Default 50, clamped to 1-100.
-		 * @param bool $log        Whether to write the activity-log row and invalidate the counts cache. Pass false when a wrapper (e.g. clean_action_scheduler()) logs the combined total itself, so one purge emits one row and invalidates once (issue #1310 review).
+		 * @param int        $batch_size Maximum rows deleted per iteration. Default 50, clamped to 1-100.
+		 * @param bool       $log        Whether to write the activity-log row and invalidate the counts cache. Pass false when a wrapper (e.g. clean_action_scheduler()) logs the combined total itself, so one purge emits one row and invalidates once (issue #1310 review).
+		 * @param float|null $deadline   Optional shared wall-clock deadline (microtime(true) value) inherited from a wrapper that already spent part of its budget. Null starts a fresh 15s budget for standalone calls.
 		 * @return int Number of failed actions deleted.
 		 */
-		public static function purge_failed_actions( int $batch_size = 50, bool $log = true ): int {
+		public static function purge_failed_actions( int $batch_size = 50, bool $log = true, ?float $deadline = null ): int {
 			if ( ! self::is_action_scheduler_store_available() ) {
 				return 0;
 			}
@@ -1983,9 +2005,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				// review): the filtered failed-action retention, capped at
 				// the 3-month FAILED_PURGE_MAX_LIFESPAN so the documented
 				// bound holds even when an operator raises the upstream
-				// retention.
+				// retention. Floored at one day so a lowered/rogue
+				// retention filter returning 0 cannot make cutoff=now and
+				// destroy just-failed debug history (fail-open to the
+				// floor instead of fail-destructive).
+				$day       = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
 				$retention = self::get_action_scheduler_retention();
-				$lifespan  = min( max( 0, (int) $retention['lifespan_failed'] ), self::FAILED_PURGE_MAX_LIFESPAN );
+				$lifespan  = min( max( $day, (int) $retention['lifespan_failed'] ), self::FAILED_PURGE_MAX_LIFESPAN );
 				$cutoff    = self::get_action_scheduler_cutoff( $lifespan );
 				if ( null === $cutoff ) {
 					return 0;
@@ -1993,7 +2019,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$total          = 0;
 				$iterations     = 0;
 				$max_iterations = 10;
-				$deadline       = microtime( true ) + 15.0;
+				if ( null === $deadline ) {
+					$deadline = microtime( true ) + 15.0;
+				}
 				do {
 					$ids = $store->query_actions(
 						array(
@@ -2033,11 +2061,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				} while ( $iterations < $max_iterations && microtime( true ) < $deadline );
 				if ( $log && $total > 0 ) {
 					self::invalidate_counts_cache();
+					$lifespan_days = max( 1, (int) round( $lifespan / $day ) );
 					Log::add(
 						sprintf(
-							/* translators: %d: Number of failed Action Scheduler actions purged */
-							__( 'Action Scheduler cleanup: %d failed actions older than 3 months purged.', 'performance-optimisation' ),
-							$total
+							/* translators: 1: Number of failed Action Scheduler actions purged 2: Retention bound in days */
+							__( 'Action Scheduler cleanup: %1$d failed actions past retention (%2$d days) purged.', 'performance-optimisation' ),
+							$total,
+							$lifespan_days
 						)
 					);
 				}
@@ -2070,11 +2100,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * 168 MB backlog is actually reclaimed in one invocation without
 		 * risking a REST timeout (issue #1106 review).
 		 *
-		 * The opt-in failed-action purge below runs after the upstream loop,
-		 * so one invocation can perform up to ~20 store passes with two
-		 * 15s budgets back to back (issue #1310 review). The purge is
-		 * called with `$log = false` so the combined total is logged once
-		 * and the counts cache is invalidated once, in this wrapper only.
+		 * The opt-in failed-action purge below runs after the upstream loop
+		 * against the same shared deadline (issue #1310 review), so one
+		 * invocation is bounded by a single 15s budget across both passes.
+		 * The purge is called with `$log = false` so the combined total is
+		 * logged once and the counts cache is invalidated once, in this
+		 * wrapper only.
 		 *
 		 * @since NEXT
 		 * @return int Number of actions deleted (0 when AS absent, disabled, or nothing past retention).
@@ -2124,8 +2155,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				// `database_cleanup.purgeFailedActions` setting. Logging is
 				// suppressed here ($log = false) so the combined total below
 				// is the single activity-log row and the counts cache is
-				// invalidated once.
-				$count += self::purge_failed_actions( 50, false );
+				// invalidated once. The wrapper deadline is shared (issue
+				// #1310 review) so one invocation cannot stack two
+				// independent 15s budgets back to back; when under 2s of
+				// budget remains the purge is deferred to the next run.
+				if ( microtime( true ) < $deadline - 2.0 ) {
+					$count += self::purge_failed_actions( 50, false, $deadline );
+				}
 				if ( $count > 0 ) {
 					self::invalidate_counts_cache();
 					Log::add(

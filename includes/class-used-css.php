@@ -2474,7 +2474,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						continue;
 					}
 					try {
-						if ( self::requeue_for_post( $post_id, $scheduled_hints, $instance ) ) {
+						// Already-vs-new distinction (issue #1310 review):
+						// a hint-hit or lost unique-race means the job is
+						// pending but not newly scheduled — it must not
+						// inflate the queued count, consume cap, or trigger
+						// mark_targeted_regen()/logging on its own.
+						$already_scheduled = false;
+						if ( self::requeue_for_post( $post_id, $scheduled_hints, $instance, $already_scheduled ) && ! $already_scheduled ) {
 							++$queued;
 						}
 					} catch ( \Throwable $e ) {
@@ -2583,12 +2589,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param int        $post_id Post ID to requeue.
 		 * @param array|null $scheduled_hints Optional hoisted pending-job map (post ID => true); null falls back to per-post lookup.
 		 * @param self|null  $instance Optional hoisted instance (shares parsed safelist/memo across loop calls).
+		 * @param bool|null  $already_scheduled Optional out flag: set to true when the job was already pending (hint-hit, pre-check hit, or lost unique-race) rather than newly scheduled; false when a new job was inserted. Untouched (stays false) on skip/failure. Lets bulk callers count only genuinely new jobs (issue #1310).
 		 * @return bool True when a job was queued or already scheduled; false when skipped as fresh or on failure.
 		 * @since 2.0.0
 		 * @since NEXT Optional $scheduled_hints for batched targeted regen.
 		 * @since NEXT Optional $instance to avoid per-post re-construction.
+		 * @since NEXT Optional $already_scheduled out flag distinguishing already-pending from newly-scheduled.
 		 */
-		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null, ?self $instance = null ): bool {
+		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null, ?self $instance = null, ?bool &$already_scheduled = null ): bool {
+			$already_scheduled = false;
 			if ( $post_id <= 0 ) {
 				return false;
 			}
@@ -2606,9 +2615,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// so N posts cost one query instead of N
 				// as_has_scheduled_action() reads.
 				if ( null !== $scheduled_hints && isset( $scheduled_hints[ $post_id ] ) ) {
+					$already_scheduled = true;
 					return true;
 				}
-				if ( function_exists( 'as_has_scheduled_action' ) && ( null === $scheduled_hints ) && as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
+				// Atomic-first on AS 4.x (issue #1310 review): the unique
+				// enqueue below dedupes by itself, so the per-post
+				// pre-check SELECT only runs when unique inserts are
+				// unsupported (one redundant SELECT saved per post save).
+				$use_unique = method_exists( Util::class, 'enqueue_unique_async_action' ) && Util::supports_action_scheduler_unique();
+				if ( ! $use_unique && function_exists( 'as_has_scheduled_action' ) && ( null === $scheduled_hints ) && as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
+					$already_scheduled = true;
 					return true;
 				}
 				try {
@@ -2639,7 +2655,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( 0 === $job_id ) {
 					// Strict gate: without a verifiable pending job the 0
 					// is a scheduler failure, so report false instead of
-					// counting a phantom job.
+					// counting a phantom job. A lost unique-race (job now
+					// pending, foreign winner) reports true but flags
+					// already-scheduled so callers count only new jobs.
 					$race_won = false;
 					if ( function_exists( 'as_has_scheduled_action' ) ) {
 						try {
@@ -2652,6 +2670,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( ! $race_won ) {
 						return false;
 					}
+					$already_scheduled = true;
 				}
 				return true;
 			} catch ( \Throwable $e ) {
@@ -3161,9 +3180,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// One permalink resolution per post per batch: the map is
 				// shared by RUM-priority ordering and the freshness check
 				// below instead of each pass calling get_permalink()
-				// separately (issue #1274 review).
+				// separately (issue #1274 review). Built lazily (issue
+				// #1310 review): with RUM/trends signals empty (the
+				// default) ordering is a FIFO no-op, so pre-resolving 200
+				// permalinks just for the sort is wasted — the freshness
+				// check resolves per-post itself when the map is empty.
+				$needs_map     = $signals_ok && ( ! empty( $run_priority ) || ! empty( $run_trends ) );
 				$permalink_map = array();
-				if ( function_exists( 'get_permalink' ) ) {
+				if ( $needs_map && function_exists( 'get_permalink' ) ) {
 					foreach ( $post_ids as $pid ) {
 						try {
 							$resolved = get_permalink( (int) $pid );
@@ -3202,12 +3226,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					}
 					try {
 						// The helper return is gated (issue #1310 review): a
-						// 0 from a lost unique-race or a swallowed failure
-						// must not be counted as queued (which would inflate
-						// logs and consume queue_cap while blocking real
-						// jobs). A 0 with a now-pending job means a
-						// concurrent process won the race — still counts as
-						// scheduled without consuming cap twice.
+						// 0 from a swallowed failure must not be counted as
+						// queued (which would inflate logs and consume
+						// queue_cap while blocking real jobs). A 0 with a
+						// now-pending job means a concurrent process won
+						// the race — record it as scheduled WITHOUT
+						// counting it as newly queued, so two concurrent
+						// runs never double-count the same job.
 						$job_id = 0;
 						if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
 							$job_id = Util::enqueue_unique_async_action(
@@ -3238,6 +3263,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							if ( ! $race_won ) {
 								continue;
 							}
+							$scheduled[ $post_id ] = true;
+							continue;
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );

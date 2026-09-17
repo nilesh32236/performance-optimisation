@@ -187,7 +187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 */
 		private static function find_pending_job_id( array $args ): int {
 			try {
-				if ( ! function_exists( 'as_get_scheduled_actions' ) ) {
+				if ( ! function_exists( 'as_get_scheduled_actions' ) || ! class_exists( \ActionScheduler_Store::class ) ) {
 					return 0;
 				}
 				$existing = as_get_scheduled_actions(
@@ -307,15 +307,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 						return;
 					}
 					// Atomic unique insert (issue #1310); legacy branch stays
-					// as fallback for older scheduler versions.
+					// as fallback for older scheduler versions. The return
+					// is gated (issue #1310 review): a 0 with no job
+					// pending means the scheduler failed, so fall through
+					// to the error handling below instead of logging a
+					// phantom 'retry re-queued' with no backing job.
+					$retry_pending = false;
 					if ( method_exists( Util::class, 'schedule_unique_single_action' ) ) {
-						Util::schedule_unique_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+						$retry_id      = Util::schedule_unique_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+						$retry_pending = $retry_id > 0;
+						if ( ! $retry_pending && function_exists( 'as_has_scheduled_action' ) ) {
+							try {
+								$retry_pending = (bool) as_has_scheduled_action( self::AS_HOOK, $retry_args, self::AS_GROUP );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$retry_pending = false;
+							}
+						}
 					} else {
 						as_schedule_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+						$retry_pending = true;
 					}
-					/* translators: %d is the retry delay in seconds. */
-					Log::add( sprintf( __( 'PageSpeed transport error; retry re-queued in %d seconds.', 'performance-optimisation' ), $delay ) );
-					return;
+					if ( $retry_pending ) {
+						/* translators: %d is the retry delay in seconds. */
+						Log::add( sprintf( __( 'PageSpeed transport error; retry re-queued in %d seconds.', 'performance-optimisation' ), $delay ) );
+						return;
+					}
 				}
 				if ( ! $already_retried && ! function_exists( 'as_schedule_single_action' ) ) {
 					// No scheduler (e.g. unit tests): one immediate retry

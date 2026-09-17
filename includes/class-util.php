@@ -588,12 +588,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'cloudflareZoneId'     => 'scalar',
 					'bunnyPullZoneId'      => 'scalar',
 				),
-				'database_cleanup'   => array(
-					'dbSchedule'      => 'scalar',
-					'dbRevMaxAge'     => 'scalar',
-					'dbRevKeepLatest' => 'scalar',
-					'dbOptimize'      => 'scalar',
-				),
+			'database_cleanup'   => array(
+				'dbSchedule'         => 'scalar',
+				'dbRevMaxAge'        => 'scalar',
+				'dbRevKeepLatest'    => 'scalar',
+				'dbOptimize'         => 'scalar',
+				'autoloadThreshold'  => 'scalar',
+				'purgeFailedActions' => 'scalar',
+			),
 				// Mirrors Object_Cache::ALLOWED_KEYS. `password` is stripped by
 				// the REST layer but may survive in imported/legacy payloads.
 				// `outage_bypassed` is the additive persistent outage status
@@ -4440,10 +4442,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Null until the first probe runs; afterwards true/false for the
 		 * remainder of the request.
-		 *
-		 * @var bool|null
 		 */
-		private static $as_unique_support = null;
+		private static ?bool $as_unique_support = null;
 
 		/**
 		 * Memoized per-function `$unique`-parameter arity probes.
@@ -4453,7 +4453,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @var array<string, bool>
 		 */
-		private static $as_unique_arity = array();
+		private static array $as_unique_arity = array();
 
 		/**
 		 * Reset the memoized Action Scheduler unique-support probes.
@@ -4558,6 +4558,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Fail-open "already scheduled" check across several AS groups.
+		 *
+		 * The CCSS pipeline schedules on the dedicated `wppo-ccss` group but
+		 * must still dedupe against pre-split jobs in the legacy
+		 * `performance_optimisation` group; a guard that only probes the
+		 * passed group would double-schedule on pre-4.x schedulers when a
+		 * legacy-group job lands between checks (issue #1310 review).
+		 * Callers pass the extra groups so every legacy fallback below
+		 * probes the same disjunction the atomic path dedupes.
+		 *
+		 * @since NEXT
+		 * @param string   $hook         Action hook.
+		 * @param array    $args         Action arguments.
+		 * @param string   $group        Primary action group.
+		 * @param string[] $extra_groups Additional groups to probe.
+		 * @return bool True when a matching action is already scheduled in any of the groups.
+		 */
+		private static function as_already_scheduled_in_any_group( string $hook, array $args, string $group, array $extra_groups = array() ): bool {
+			if ( self::as_already_scheduled( $hook, $args, $group ) ) {
+				return true;
+			}
+			foreach ( $extra_groups as $extra_group ) {
+				if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
+					continue;
+				}
+				if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
 		 * Enqueue an async Action Scheduler job with atomic dedup when available.
 		 *
 		 * Tries `as_enqueue_async_action( $hook, $args, $group, true )` first so
@@ -4567,12 +4600,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * scheduler API failure returns 0.
 		 *
 		 * @since NEXT
-		 * @param string $hook  Action hook.
-		 * @param array  $args  Action arguments.
-		 * @param string $group Action group.
+		 * @param string   $hook         Action hook.
+		 * @param array    $args         Action arguments.
+		 * @param string   $group        Action group.
+		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard (e.g. the CCSS legacy group).
 		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
 		 */
-		public static function enqueue_unique_async_action( string $hook, array $args = array(), string $group = '' ): int {
+		public static function enqueue_unique_async_action( string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
 			try {
 				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 					return 0;
@@ -4586,7 +4620,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 				}
 				// Legacy guard (fail-open — see as_already_scheduled()).
-				if ( self::as_already_scheduled( $hook, $args, $group ) ) {
+				if ( self::as_already_scheduled_in_any_group( $hook, $args, $group, $extra_groups ) ) {
 					return 0;
 				}
 				return (int) as_enqueue_async_action( $hook, $args, $group );
@@ -4603,13 +4637,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * for delayed single actions.
 		 *
 		 * @since NEXT
-		 * @param int    $timestamp When the job will run.
-		 * @param string $hook      Action hook.
-		 * @param array  $args      Action arguments.
-		 * @param string $group     Action group.
+		 * @param int      $timestamp    When the job will run.
+		 * @param string   $hook         Action hook.
+		 * @param array    $args         Action arguments.
+		 * @param string   $group        Action group.
+		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard (e.g. the CCSS legacy group).
 		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
 		 */
-		public static function schedule_unique_single_action( int $timestamp, string $hook, array $args = array(), string $group = '' ): int {
+		public static function schedule_unique_single_action( int $timestamp, string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
 			try {
 				if ( ! function_exists( 'as_schedule_single_action' ) ) {
 					return 0;
@@ -4624,7 +4659,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 				}
 				// Legacy guard (fail-open — see as_already_scheduled()).
-				if ( self::as_already_scheduled( $hook, $args, $group ) ) {
+				if ( self::as_already_scheduled_in_any_group( $hook, $args, $group, $extra_groups ) ) {
 					return 0;
 				}
 				return (int) as_schedule_single_action( $timestamp, $hook, $args, $group );
@@ -4649,14 +4684,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * helpers before its first caller lands.
 		 *
 		 * @since NEXT
-		 * @param int    $timestamp First run timestamp.
-		 * @param int    $interval  Seconds between runs.
-		 * @param string $hook      Action hook.
-		 * @param array  $args      Action arguments.
-		 * @param string $group     Action group.
+		 * @param int      $timestamp    First run timestamp.
+		 * @param int      $interval     Seconds between runs.
+		 * @param string   $hook         Action hook.
+		 * @param array    $args         Action arguments.
+		 * @param string   $group        Action group.
+		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard.
 		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
 		 */
-		public static function schedule_unique_recurring_action( int $timestamp, int $interval, string $hook, array $args = array(), string $group = '' ): int {
+		public static function schedule_unique_recurring_action( int $timestamp, int $interval, string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
 			try {
 				if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
 					return 0;
@@ -4670,19 +4706,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						unset( $e );
 					}
 				}
-				if ( self::as_already_scheduled( $hook, $args, $group ) ) {
-					return 0;
-				}
-				$already_scheduled = false;
-				if ( function_exists( 'as_next_scheduled_action' ) ) {
-					try {
-						$already_scheduled = (bool) as_next_scheduled_action( $hook, $args, $group );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$already_scheduled = false;
-					}
-				}
-				if ( $already_scheduled ) {
+				// Single legacy guard (issue #1310 review): the former
+				// as_next_scheduled_action() second probe overlapped this
+				// check and cost an extra SELECT per call, so only the
+				// shared as_already_scheduled() guard remains.
+				if ( self::as_already_scheduled_in_any_group( $hook, $args, $group, $extra_groups ) ) {
 					return 0;
 				}
 				return (int) as_schedule_recurring_action( $timestamp, $interval, $hook, $args, $group );

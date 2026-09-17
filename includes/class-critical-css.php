@@ -1123,13 +1123,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				return;
 			}
-			try {
+		// Gate the status on the verified schedule outcome (issue #1310
+		// review): only assert `queued` when the retry insert returned an
+		// ID or a job is verifiably pending; on scheduler failure mark
+		// `failed` instead, otherwise inline_ccss() skips re-queueing for
+		// the TTL while no backing job will ever run.
+		$retry = self::schedule_ccss_retry( $template_hash, $attempts );
+		try {
+			if ( $retry['pending'] ) {
 				self::set_status_cache( $template_hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			} else {
+				self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 			}
-			self::schedule_ccss_retry( $template_hash, $attempts );
+		} catch ( \Throwable $e ) {
+			unset( $e );
 		}
+	}
 
 		/**
 		 * Schedule a later retry for a timed-out CCSS generation (issue #1235).
@@ -1149,12 +1158,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string   $template_hash Template hash to retry.
 		 * @param int|null $attempts      Optional pre-read attempt count for the backoff (generic-retry path passes its own counter so generic failures back off exponentially too; null reads the timeout counter).
-		 * @return void
+		 * @return array{id:int,pending:bool} `id` is the new action ID (>0) when a job was inserted; `pending` tells whether a job is now verifiably pending (new insert, lost unique-race, or WP-Cron fallback).
 		 * @since NEXT
 		 */
-		private static function schedule_ccss_retry( string $template_hash, ?int $attempts = null ): void {
+		private static function schedule_ccss_retry( string $template_hash, ?int $attempts = null ): array {
+			$none = array(
+				'id'      => 0,
+				'pending' => false,
+			);
 			if ( ! self::is_valid_template_hash( $template_hash ) ) {
-				return;
+				return $none;
 			}
 			try {
 				// Wrapped payload: AS unpacks args positionally, so the
@@ -1167,33 +1180,122 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// already bounded to 0..3 so the result is exactly one of those
 				// four steps — no further clamping needed.
 				$delay = 300 * ( 1 << min( max( $attempts - 1, 0 ), 3 ) );
-				if ( function_exists( 'as_enqueue_async_action' ) && function_exists( 'as_next_scheduled_action' ) ) {
-					// Dedicated CCSS group (issue #1235 review) keeps long runs
-					// off the shared worker; the legacy group is checked too so
-					// jobs queued before the split still dedupe.
-					$use_unique  = method_exists( Util::class, 'schedule_unique_single_action' ) && Util::supports_action_scheduler_unique();
-					$has_pending = ! $use_unique && self::has_pending_ccss_job( 'wppo_generate_ccss', $hook_args );
-					if ( ! $has_pending ) {
-						// Atomic unique insert (issue #1310) closes the
-						// check-then-act race; legacy branch stays as fallback.
-						if ( method_exists( Util::class, 'schedule_unique_single_action' ) ) {
-							Util::schedule_unique_single_action( time() + $delay, 'wppo_generate_ccss', $hook_args, self::CCSS_AS_GROUP );
-						} elseif ( function_exists( 'as_schedule_single_action' ) ) {
-							as_schedule_single_action( time() + $delay, 'wppo_generate_ccss', $hook_args, self::CCSS_AS_GROUP );
-						} else {
-							as_enqueue_async_action( 'wppo_generate_ccss', $hook_args, self::CCSS_AS_GROUP );
-						}
-					}
-					return;
+				if ( function_exists( 'as_enqueue_async_action' ) ) {
+					// Single enqueue-gate flow (issue #1310 review): the
+					// shared helper owns the atomic-first insert plus the
+					// both-group re-check, so this path can never drift
+					// from inline/regenerate_all/regenerate_single.
+					return self::schedule_ccss_job( 'wppo_generate_ccss', $hook_args, time() + $delay );
 				}
 				if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
 					if ( ! wp_next_scheduled( 'wppo_generate_ccss', $hook_args ) ) {
-						wp_schedule_single_event( time() + $delay, 'wppo_generate_ccss', $hook_args );
+						$scheduled = (bool) wp_schedule_single_event( time() + $delay, 'wppo_generate_ccss', $hook_args );
+						return array(
+							'id'      => 0,
+							'pending' => $scheduled,
+						);
 					}
+					return array(
+						'id'      => 0,
+						'pending' => true,
+					);
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
+			return $none;
+		}
+
+		/**
+		 * Single home for the CCSS Action Scheduler enqueue-gate flow.
+		 *
+		 * Owns the atomic-first unique insert plus the both-group re-check
+		 * so schedule_ccss_retry(), inline_ccss(), regenerate_all() and
+		 * regenerate_single() can never drift apart again (issue #1310
+		 * review). On AS 4.x the unique insert dedupes by itself, so no
+		 * pre-check SELECTs run on the hot path; a 0 return is disambiguated
+		 * with one both-group re-check (lost unique-race vs scheduler
+		 * failure). On older schedulers the legacy check-then-act probes
+		 * both the dedicated and the legacy group before inserting.
+		 * Fail-open: any missing API or exception reports no pending job
+		 * rather than fataling the caller.
+		 *
+		 * @since NEXT
+		 * @param string $hook      Action hook.
+		 * @param array  $hook_args Wrapped action arguments.
+		 * @param int    $timestamp When the job will run.
+		 * @return array{id:int,pending:bool} `id` is the new action ID (>0) for a genuine insert; `pending` tells whether a job is now verifiably pending.
+		 */
+		private static function schedule_ccss_job( string $hook, array $hook_args, int $timestamp ): array {
+			$none = array(
+				'id'      => 0,
+				'pending' => false,
+			);
+			try {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return $none;
+				}
+				$legacy_group = 'performance_optimisation';
+				$use_unique   = method_exists( Util::class, 'schedule_unique_single_action' ) && Util::supports_action_scheduler_unique();
+				if ( $use_unique && method_exists( Util::class, 'schedule_unique_single_action' ) ) {
+					// Atomic path first (issue #1310): the insert itself
+					// dedupes, so the legacy pre-check below only runs on
+					// older schedulers.
+					$job_id = Util::schedule_unique_single_action( $timestamp, $hook, $hook_args, self::CCSS_AS_GROUP, array( $legacy_group ) );
+					if ( $job_id > 0 ) {
+						return array(
+							'id'      => $job_id,
+							'pending' => true,
+						);
+					}
+					// A 0 return is ambiguous (deduped race vs scheduler
+					// failure): re-check both groups for the winner.
+					if ( self::has_pending_ccss_job( $hook, $hook_args ) ) {
+						return array(
+							'id'      => 0,
+							'pending' => true,
+						);
+					}
+					return $none;
+				}
+				if ( self::has_pending_ccss_job( $hook, $hook_args ) ) {
+					return array(
+						'id'      => 0,
+						'pending' => true,
+					);
+				}
+				$job_id = 0;
+				if ( function_exists( 'as_schedule_single_action' ) ) {
+					try {
+						$job_id = (int) as_schedule_single_action( $timestamp, $hook, $hook_args, self::CCSS_AS_GROUP );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$job_id = 0;
+					}
+				} else {
+					try {
+						$job_id = (int) as_enqueue_async_action( $hook, $hook_args, self::CCSS_AS_GROUP );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$job_id = 0;
+					}
+				}
+				if ( $job_id > 0 ) {
+					return array(
+						'id'      => $job_id,
+						'pending' => true,
+					);
+				}
+				if ( self::has_pending_ccss_job( $hook, $hook_args ) ) {
+					return array(
+						'id'      => 0,
+						'pending' => true,
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $none;
 		}
 
 		/**
@@ -1368,13 +1470,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return;
 			}
 			// Below the cap: stay silent (no per-timeout Log::add) and
-			// re-queue with backoff.
+			// re-queue with backoff. The status is gated on the verified
+			// schedule outcome (issue #1310 review): only assert `queued`
+			// when a retry job is now pending, else mark `failed` so no
+			// phantom queued status survives a scheduler failure.
+			$retry = self::schedule_ccss_retry( $template_hash );
 			try {
-				self::set_status_cache( $template_hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+				if ( $retry['pending'] ) {
+					self::set_status_cache( $template_hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+				} else {
+					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			self::schedule_ccss_retry( $template_hash );
 		}
 
 		/**
@@ -4768,57 +4877,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				if ( ! $queued && function_exists( 'as_enqueue_async_action' ) ) {
 					$hook = 'wppo_generate_ccss';
-					// Dedicated CCSS group (issue #1235 review); the legacy
-					// shared group is checked too so pre-split jobs still dedupe.
-					$use_unique = method_exists( Util::class, 'enqueue_unique_async_action' ) && Util::supports_action_scheduler_unique();
-					if ( $use_unique ) {
-						// Atomic path first (issue #1310 review): a single
-						// unique insert replaces the two pre-check SELECTs
-						// above on the TTFB path; only a 0 return triggers
-						// one re-check (both groups) to tell a lost
-						// unique-race (job pending) from scheduler failure.
-						$job_id = Util::enqueue_unique_async_action(
-							$hook,
-							$hook_args,
-							self::CCSS_AS_GROUP
-						);
-						if ( $job_id > 0 ) {
-							$queued = true;
-						} elseif ( function_exists( 'as_next_scheduled_action' ) && self::has_pending_ccss_job( $hook, $hook_args ) ) {
-							// A 0 return with a now-pending job means a
-							// concurrent process won the race — a job exists,
-							// so skip the WP-Cron fallback instead of
-							// double-scheduling in the other store.
-							$queued = true;
-						}
-						// Otherwise (scheduler failure) $queued stays false
-						// and the WP-Cron fallback below engages.
-					} else {
-						$has_pending = function_exists( 'as_next_scheduled_action' ) && self::has_pending_ccss_job( $hook, $hook_args );
-						if ( $has_pending ) {
-							$queued = true;
-						} elseif ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
-							// Unique helper without atomic support (older AS):
-							// still closes part of the race via its legacy
-							// guard; re-check both groups on 0.
-							$job_id = Util::enqueue_unique_async_action(
-								$hook,
-								$hook_args,
-								self::CCSS_AS_GROUP
-							);
-							if ( $job_id > 0 ) {
-								$queued = true;
-							} elseif ( function_exists( 'as_next_scheduled_action' ) && self::has_pending_ccss_job( $hook, $hook_args ) ) {
-								$queued = true;
-							}
-						} else {
-							$queued = (bool) as_enqueue_async_action(
-								$hook,
-								$hook_args,
-								self::CCSS_AS_GROUP
-							);
-						}
-					}
+					// Single enqueue-gate flow (issue #1310 review): the
+					// shared helper owns the atomic-first insert plus the
+					// both-group re-check (dedicated CCSS group plus the
+					// legacy shared group, so pre-split jobs still
+					// dedupe). A lost unique-race reports pending (skip
+					// the WP-Cron fallback, no double-schedule); only a
+					// verified scheduler failure falls through to cron.
+					$job    = self::schedule_ccss_job( $hook, $hook_args, time() );
+					$queued = $job['pending'];
 				}
 
 				if ( ! $queued ) {
@@ -5198,48 +5265,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				$scheduled_now = false;
-				$has_pending   = false;
+				$pending_now = false;
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
 					$hook = 'wppo_generate_ccss';
 					// Wrapped payload: AS unpacks args positionally, so the
 					// callback must receive the assoc array as one argument.
 					$hook_args = array( array( 'template_hash' => $hash ) );
-					// Dedicated CCSS group (issue #1235 review); the legacy
-					// shared group is checked too so pre-split jobs still dedupe.
-					$has_pending = self::has_pending_ccss_job( $hook, $hook_args );
-					if ( ! $has_pending ) {
-						// Stagger jobs 60s apart (issue #1235 review) so the
-						// burst never holds the worker for 5 back to
-						// back full-budget runs; falls back to async enqueue
-						// when the scheduler lacks single-action support.
-						// Atomic unique insert (issue #1310) closes the
-						// check-then-act race; legacy branch stays as fallback.
-						// The return is gated (issue #1310 review): a 0 from
-						// a lost unique-race or a swallowed failure must not
-						// produce phantom queued status with no backing job.
-						$job_id = 0;
-						if ( method_exists( Util::class, 'schedule_unique_single_action' ) ) {
-							$job_id = Util::schedule_unique_single_action( time() + ( $queued * 60 ), $hook, $hook_args, self::CCSS_AS_GROUP );
-						} elseif ( function_exists( 'as_schedule_single_action' ) ) {
-							$job_id = (int) as_schedule_single_action( time() + ( $queued * 60 ), $hook, $hook_args, self::CCSS_AS_GROUP );
-						} else {
-							$job_id = (int) as_enqueue_async_action(
-								$hook,
-								$hook_args,
-								self::CCSS_AS_GROUP
-							);
-						}
-						if ( $job_id > 0 || self::has_pending_ccss_job( $hook, $hook_args ) ) {
-							$scheduled_now = true;
-							++$queued;
-						}
+					// Atomic-first via the shared enqueue-gate helper
+					// (issue #1310 review): on AS 4.x the unique insert
+					// dedupes by itself, so no pre-check SELECTs run per
+					// template — the both-group re-check only fires on a 0
+					// return. Only genuine inserts (`id > 0`) advance the
+					// 60s stagger and the queued count; a lost unique-race
+					// (verifiably pending, foreign winner) marks status
+					// without inflating the count or shifting the stagger.
+					// Stagger jobs 60s apart (issue #1235 review) so the
+					// burst never holds the worker for back-to-back
+					// full-budget runs on the dedicated `wppo-ccss` AS
+					// group (issue #1235 review).
+					$job         = self::schedule_ccss_job( $hook, $hook_args, time() + ( $queued * 60 ) );
+					$pending_now = $job['pending'];
+					if ( $job['id'] > 0 ) {
+						++$queued;
 					}
 				}
 				// Only mark queued when a job is actually pending/scheduled
 				// (issue #1274 review): without Action Scheduler the status
 				// must not claim queued with zero jobs queued.
-				if ( $has_pending || $scheduled_now ) {
+				if ( $pending_now ) {
 					self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 				}
 			}
@@ -5297,26 +5350,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					unset( $e );
 				}
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					$hook        = 'wppo_generate_ccss';
-					$hook_args   = array( array( 'template_hash' => $hash ) );
-					$has_pending = self::has_pending_ccss_job( $hook, $hook_args );
-					if ( ! $has_pending ) {
-						// Atomic unique insert (issue #1310); legacy branch
-						// stays as fallback for older scheduler versions.
-						// The return is gated (issue #1310 review): on a 0
-						// with no job pending the scheduler failed, so
-						// return 0 instead of claiming queued with zero jobs.
-						$job_id = 0;
-						if ( method_exists( Util::class, 'schedule_unique_single_action' ) ) {
-							$job_id = Util::schedule_unique_single_action( time(), $hook, $hook_args, self::CCSS_AS_GROUP );
-						} elseif ( function_exists( 'as_schedule_single_action' ) ) {
-							$job_id = (int) as_schedule_single_action( time(), $hook, $hook_args, self::CCSS_AS_GROUP );
-						} else {
-							$job_id = (int) as_enqueue_async_action( $hook, $hook_args, self::CCSS_AS_GROUP );
-						}
-						if ( 0 === $job_id && ! self::has_pending_ccss_job( $hook, $hook_args ) ) {
-							return 0;
-						}
+					$hook      = 'wppo_generate_ccss';
+					$hook_args = array( array( 'template_hash' => $hash ) );
+					// Atomic-first via the shared enqueue-gate helper
+					// (issue #1310 review): the unique insert dedupes by
+					// itself on AS 4.x, so the both-group pending re-check
+					// only fires on a 0 return. A 0 with no job pending is
+					// a scheduler failure — return 0 instead of claiming
+					// queued with zero jobs.
+					$job = self::schedule_ccss_job( $hook, $hook_args, time() );
+					if ( ! $job['pending'] ) {
+						return 0;
 					}
 				} else {
 					// Distinct sentinel (issue #1274 review): a missing
