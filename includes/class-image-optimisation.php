@@ -1213,6 +1213,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Resolve the LCP preload candidate for the current page.
+		 *
+		 * Public stable entry point for the automatic LCP pipeline (issue
+		 * #1405). Thin fail-open wrapper around `resolve_auto_lcp_url()`:
+		 * manual `_wppo_lcp_preload_url` picker first, stability-gated
+		 * Optimization Detective real-visit data second, stored
+		 * PageSpeed/RUM-field aggregates third, first-viewport-image
+		 * heuristic last (buffer-only). All OD/RUM reads stay guarded with
+		 * `class_exists()`/`method_exists()`/`function_exists()` inside the
+		 * delegated chain; any failure returns '' (current behavior), never
+		 * fatal. Multisite-safe: per-site settings only, no cross-site state.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer enabling the heuristic tier.
+		 * @return string The LCP image URL, or empty string when unresolved.
+		 */
+		public function get_lcp_candidate( ?string $buffer = null ): string {
+			try {
+				return $this->resolve_auto_lcp_url( $buffer );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Stamp `fetchpriority="high"` on the LCP candidate in an HTML buffer.
+		 *
+		 * Public stable entry point for the automatic LCP pipeline (issue
+		 * #1405). Thin fail-open wrapper around `prioritize_lcp_image()`:
+		 * resolves the candidate via `get_lcp_candidate( $buffer )` and stamps
+		 * at most one `<img>` (first match wins, lazy removed, eager +
+		 * `decoding="async"` filled, existing `fetchpriority` never
+		 * overridden). Lazy-loading skips the candidate via the same target,
+		 * and the `wp_head` preload path dedups against this URL so no
+		 * duplicate preload occurs. Any failure returns the buffer unchanged.
+		 *
+		 * @since NEXT
+		 * @param string $buffer The HTML buffer.
+		 * @return string The buffer with fetchpriority="high" on the LCP image.
+		 */
+		public function add_fetchpriority_high( string $buffer ): string {
+			try {
+				return $this->prioritize_lcp_image( $buffer );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $buffer;
+			}
+		}
+
+		/**
+		 * Emit the LCP preload hint(s) for the current page.
+		 *
+		 * Public stable alias of `preload_images()` for the automatic LCP
+		 * pipeline (issue #1405). Emits a single preload link with
+		 * `fetchpriority=high` matching `get_lcp_candidate()`; the
+		 * per-request emitted-preload guard suppresses duplicates (including
+		 * OD-emitted hints). Fail-open: never fatal.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function preload(): void {
+			try {
+				$this->preload_images();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Get (and lazily mint) the per-request noscript token namespace.
 		 *
 		 * Uses cryptographically random hex via `random_bytes()` when available,
