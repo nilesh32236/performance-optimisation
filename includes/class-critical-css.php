@@ -419,6 +419,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static array $pending_memo = array();
 
 		/**
+		 * Per-request memo of gzipped transfer sizes keyed by md5(css).
+		 *
+		 * Level-9 gzencode() is the most expensive compression level; the
+		 * budget guard may probe the same payload twice in one request
+		 * (inline + budget helpers), so memoize per content hash. Bounded
+		 * (20 entries, FIFO evict) so unbounded CSS cannot grow memory.
+		 * Reset via reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var array<string, int>
+		 */
+		private static array $gzip_size_memo = array();
+
+		/**
+		 * Per-request memo of the commerce-context verdict (issue #1388 review).
+		 *
+		 * The is_commerce_context() check fans out to conditional tags + option reads;
+		 * defer_stylesheets() called it once per stylesheet tag. Null means
+		 * uncomputed. Reset via reset_ccss_memo() (tests reset between cases).
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $commerce_context_memo = null;
+
+		/**
+		 * Per-request memo of the combined commerce-exclusion verdict.
+		 *
+		 * Shared by inline_ccss() and defer_stylesheets() so one request pays
+		 * one settings + context evaluation. Null means uncomputed. Reset via
+		 * reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $commerce_excluded_context_memo = null;
+
+		/**
 		 * Viewport-split variant slugs (issue #1164).
 		 *
 		 * Stored as `{hash}.{variant}.css` next to the single `{hash}.css`
@@ -609,7 +647,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Uses gzencode() level 9 when available so the budget check tracks
 		 * what the browser actually downloads; falls back to raw strlen()
-		 * when zlib is unavailable (fail-open, never fatal).
+		 * when zlib is unavailable (fail-open, never fatal). Results are
+		 * memoized per content hash per request (bounded, 20 entries) so
+		 * repeated budget probes on the frontend hot path pay compression once.
 		 *
 		 * @param string $css CSS content.
 		 * @return int Gzipped size in bytes, or raw size without zlib.
@@ -620,16 +660,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return 0;
 			}
 			try {
+				$memo_key = md5( $css );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$memo_key = '';
+			}
+			if ( '' !== $memo_key && array_key_exists( $memo_key, self::$gzip_size_memo ) ) {
+				return self::$gzip_size_memo[ $memo_key ];
+			}
+			$size = strlen( $css );
+			try {
 				if ( function_exists( 'gzencode' ) ) {
 					$encoded = gzencode( $css, 9 );
 					if ( is_string( $encoded ) && '' !== $encoded ) {
-						return strlen( $encoded );
+						$size = strlen( $encoded );
 					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return strlen( $css );
+			if ( '' !== $memo_key ) {
+				if ( count( self::$gzip_size_memo ) >= 20 ) {
+					array_shift( self::$gzip_size_memo );
+				}
+				self::$gzip_size_memo[ $memo_key ] = $size;
+			}
+			return $size;
 		}
 
 		/**
@@ -681,30 +737,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Whether the current request is a cart/checkout context (issue #1388).
 		 *
 		 * Guards every WooCommerce conditional with function_exists() plus a
-		 * legacy fallback (cart/checkout page-ID options, then the
-		 * `woocommerce_items_in_cart` cookie heuristic) so the exclusion
-		 * holds even when conditional tags are unavailable. Fail-open to
-		 * false: any failure reports "not commerce" and the caller keeps
-		 * current behaviour.
+		 * legacy fallback (cart/checkout page-ID options) so the exclusion
+		 * holds even when conditional tags are unavailable. A cart-session
+		 * cookie alone deliberately never marks the request as commerce:
+		 * cookies are present on every page (home, blog, product) for any
+		 * shopper with items in the cart, so consulting them would disable
+		 * critical CSS site-wide for exactly the users being optimized. Only
+		 * cart/checkout pages are commerce contexts. Result is memoized per
+		 * request (reset via reset_ccss_memo()). Fail-open to false: any
+		 * failure reports "not commerce" and the caller keeps current
+		 * behaviour.
 		 *
 		 * @return bool True on cart/checkout pages.
 		 * @since NEXT
 		 */
 		public static function is_commerce_context(): bool {
+			if ( null !== self::$commerce_context_memo ) {
+				return self::$commerce_context_memo;
+			}
+			$result = false;
 			try {
 				if ( function_exists( 'is_cart' ) ) {
 					try {
 						if ( is_cart() ) {
-							return true;
+							$result = true;
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
 				}
-				if ( function_exists( 'is_checkout' ) ) {
+				if ( ! $result && function_exists( 'is_checkout' ) ) {
 					try {
 						if ( is_checkout() ) {
-							return true;
+							$result = true;
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -712,28 +777,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				// Legacy fallback: WooCommerce cart/checkout page IDs work
 				// even when conditional tags are not loaded yet.
-				if ( function_exists( 'get_option' ) ) {
+				if ( ! $result && function_exists( 'get_option' ) ) {
 					try {
 						$cart_id     = (int) get_option( 'woocommerce_cart_page_id', 0 );
 						$checkout_id = (int) get_option( 'woocommerce_checkout_page_id', 0 );
 						if ( ( $cart_id > 0 || $checkout_id > 0 ) && function_exists( 'get_the_ID' ) ) {
 							$current = (int) get_the_ID();
 							if ( $current > 0 && ( $current === $cart_id || $current === $checkout_id ) ) {
-								return true;
+								$result = true;
 							}
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
 				}
-				// Active cart session on any page (read-only heuristic, no nonce needed).
-				if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
-					return true;
-				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				$result = false;
 			}
-			return false;
+			self::$commerce_context_memo = $result;
+			return $result;
+		}
+
+		/**
+		 * Whether commerce exclusion applies to the current request (issue #1388 review).
+		 *
+		 * Memoized union of is_commerce_excluded() + is_commerce_context()
+		 * shared by inline_ccss() and defer_stylesheets() so one request pays
+		 * one settings + context evaluation instead of one per stylesheet tag.
+		 * Reset via reset_ccss_memo(). Fail-open to false.
+		 *
+		 * @return bool True when inline/deferral must yield to normal stylesheets.
+		 * @since NEXT
+		 */
+		private static function is_commerce_excluded_context(): bool {
+			if ( null !== self::$commerce_excluded_context_memo ) {
+				return self::$commerce_excluded_context_memo;
+			}
+			try {
+				$result = self::is_commerce_excluded() && self::is_commerce_context();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$result = false;
+			}
+			self::$commerce_excluded_context_memo = $result;
+			return $result;
+		}
+
+		/**
+		 * Human-readable label for the configured gzipped inline budget (issue #1388 review).
+		 *
+		 * Derived from get_ccss_inline_budget_bytes() so admin notices and
+		 * activity-log warnings never hardcode "14 KB" while the budget is
+		 * configurable (1–100 KB + wppo_ccss_inline_budget filter).
+		 *
+		 * @return string e.g. "14 KB" or "2.5 KB".
+		 * @since NEXT
+		 */
+		public static function get_ccss_inline_budget_label(): string {
+			try {
+				$bytes = self::get_ccss_inline_budget_bytes();
+				if ( 0 === ( $bytes % 1024 ) ) {
+					return sprintf( '%d KB', (int) ( $bytes / 1024 ) );
+				}
+				$kb = $bytes / 1024;
+				return sprintf( '%.1f KB', $kb );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '14 KB';
+			}
 		}
 
 		/**
@@ -3241,15 +3353,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return void
 		 */
 		public static function reset_ccss_memo(): void {
-			self::$ccss_exists_cache   = array();
-			self::$ccss_content_cache  = array();
-			self::$sample_url_cache    = array();
-			self::$stale_probe_memo    = array();
-			self::$ccss_presets_memo   = null;
-			self::$lcp_preload_emitted = array();
-			self::$ccss_defer_blocked  = array();
-			self::$templates_memo      = null;
-			self::$pending_memo        = array();
+			self::$ccss_exists_cache              = array();
+			self::$ccss_content_cache             = array();
+			self::$sample_url_cache               = array();
+			self::$stale_probe_memo               = array();
+			self::$ccss_presets_memo              = null;
+			self::$lcp_preload_emitted            = array();
+			self::$ccss_defer_blocked             = array();
+			self::$templates_memo                 = null;
+			self::$pending_memo                   = array();
+			self::$gzip_size_memo                 = array();
+			self::$commerce_context_memo          = null;
+			self::$commerce_excluded_context_memo = null;
 		}
 
 		/**
@@ -5164,7 +5279,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *    When the file URL is unavailable (missing/unreadable variant),
 		 *    output nothing and defer to the full stylesheet instead of
 		 *    inlining a truncated block (issue #1255).
-		 * 5b. Content over the 14 KB gzipped inline budget (issue #1388) —
+		 * 5b. Content over the configured gzipped inline budget (issue #1388) —
 		 *    warn and take the used-CSS fallback: no inline output, the
 		 *    prior good file is kept, and the deferred full stylesheet plus
 		 *    used CSS styles the page. Oversized inline CSS is never
@@ -5207,7 +5322,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// get inline critical CSS — dynamic commerce markup must not
 			// be styled from a cached above-fold snapshot. Fail-open:
 			// stylesheets load normally via the deferral skip below.
-			if ( self::is_commerce_excluded() && self::is_commerce_context() ) {
+			// Memoized per request (single settings + context evaluation).
+			if ( self::is_commerce_excluded_context() ) {
 				return;
 			}
 
@@ -5270,22 +5386,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					return;
 				}
 				// Gzipped inline budget guard (issue #1388): output that fits
-				// the raw cap but exceeds the 14 KB gzipped budget is never
+				// the raw cap but exceeds the gzipped inline budget is never
 				// inlined — warn and take the used-CSS fallback instead. The
 				// prior good file is kept in place (never overwritten here),
 				// no oversized inline CSS is ever emitted, and the deferred
-				// full stylesheet plus used CSS styles the page. Fail-open by
-				// design, never fatal.
+				// full stylesheet plus used CSS styles the page. The warning
+				// is throttled to once per template per 12h (transient flag)
+				// so the frontend hot path never writes a DB row per pageview.
+				// Fail-open by design, never fatal.
 				if ( self::is_over_inline_budget( $content ) ) {
 					try {
-						if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) && function_exists( '__' ) ) {
+						$warn_key = Util::transient_key( 'wppo_ccss_budget_warn_' . $template_hash );
+						$throttle = function_exists( 'get_transient' ) ? get_transient( $warn_key ) : true;
+						if ( false === $throttle && class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) && function_exists( '__' ) ) {
 							\PerformanceOptimise\Inc\Log::add(
 								sprintf(
-								/* translators: %s: Template hash */
-									__( 'Critical CSS over 14 KB gzipped inline budget for template: %s. Serving deferred stylesheet plus used CSS only.', 'performance-optimisation' ),
+								/* translators: 1: Inline budget label (e.g. "14 KB"), 2: Template hash */
+									__( 'Critical CSS over %1$s gzipped inline budget for template: %2$s. Serving deferred stylesheet plus used CSS only.', 'performance-optimisation' ),
+									self::get_ccss_inline_budget_label(),
 									$template_hash
 								)
 							);
+							if ( function_exists( 'set_transient' ) ) {
+								set_transient( $warn_key, 1, defined( 'HOUR_IN_SECONDS' ) ? 12 * HOUR_IN_SECONDS : 43200 );
+							}
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -5433,7 +5557,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// never given inline critical CSS, so deferring the full
 			// stylesheets would leave dynamic commerce markup unstyled
 			// until JS runs — load normally instead (fail-open).
-			if ( self::is_commerce_excluded() && self::is_commerce_context() ) {
+			// Memoized per request: one settings + context evaluation no
+			// matter how many stylesheet tags render on the page.
+			if ( self::is_commerce_excluded_context() ) {
 				return $tag;
 			}
 
@@ -5637,7 +5763,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// the URL-only score when the segment API is unavailable.
 				$template_weights = array();
 				try {
-					if ( method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_p75_by_segment' ) ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_p75_by_segment' ) ) {
 						$rows = \PerformanceOptimise\Inc\RUM::get_field_lcp_p75_by_segment();
 						if ( is_array( $rows ) ) {
 							foreach ( $rows as $row ) {
