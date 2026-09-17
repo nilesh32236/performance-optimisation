@@ -45,18 +45,6 @@ const AiPanel = lazy( () => import( './AiPanel' ) );
 const EdgeCachePanel = lazy( () => import( './EdgeCachePanel' ) );
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
-
-/**
- * Shared fallback for each independently-streamed lazy panel below the fold.
- *
- * @since NEXT
- * @return {Element} Loading placeholder.
- */
-const LazyPanelFallback = () => (
-	<div className="wppo-loading-placeholder">
-		<span>{ __( 'Loading panels…', 'performance-optimisation' ) }</span>
-	</div>
-);
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
 import { __, sprintf } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
@@ -74,6 +62,84 @@ import {
 	faGlobe,
 	faUserCheck,
 } from '@fortawesome/free-solid-svg-icons';
+
+/**
+ * Shared fallback for each independently-streamed lazy panel below the fold.
+ *
+ * @since NEXT
+ * @return {Element} Loading placeholder.
+ */
+const LazyPanelFallback = () => (
+	<div className="wppo-loading-placeholder">
+		<span>{ __( 'Loading panels…', 'performance-optimisation' ) }</span>
+	</div>
+);
+
+/**
+ * Observe an element once and report when it first enters the viewport.
+ *
+ * Falls back to visible when IntersectionObserver is unavailable (tests,
+ * older browsers) so panels still mount and fetch there.
+ *
+ * @since NEXT
+ * @return {[Object, boolean]} Ref to attach and whether it is in view.
+ */
+const useInViewOnce = () => {
+	const ref = useRef( null );
+	const [ inView, setInView ] = useState(
+		() => typeof IntersectionObserver === 'undefined'
+	);
+	useEffect( () => {
+		if ( inView ) {
+			return;
+		}
+		const el = ref.current;
+		if ( ! el || typeof IntersectionObserver === 'undefined' ) {
+			setInView( true );
+			return;
+		}
+		const observer = new IntersectionObserver(
+			( entries ) => {
+				if ( entries.some( ( entry ) => entry.isIntersecting ) ) {
+					setInView( true );
+					observer.disconnect();
+				}
+			},
+			{ rootMargin: '200px' }
+		);
+		observer.observe( el );
+		return () => observer.disconnect();
+	}, [ inView ] );
+	return [ ref, inView ];
+};
+
+/**
+ * Gate a below-fold lazy panel on visibility.
+ *
+ * Code-splitting alone only cut parse cost — every panel still mounted and
+ * fetched on dashboard open. Rendering the fallback until the section
+ * scrolls into view (with a 200px prefetch margin) defers the chunk fetch
+ * plus its REST calls until the user actually scrolls there.
+ *
+ * @since NEXT
+ * @param {Object}               props
+ * @param {import('react').Node} props.children Lazy panel element.
+ * @return {Element} Gated panel.
+ */
+const LazyPanelGate = ( { children } ) => {
+	const [ ref, inView ] = useInViewOnce();
+	return (
+		<div ref={ ref }>
+			{ inView ? (
+				<Suspense fallback={ <LazyPanelFallback /> }>
+					{ children }
+				</Suspense>
+			) : (
+				<LazyPanelFallback />
+			) }
+		</div>
+	);
+};
 
 /**
  * Polling interval for image_job_status ticks.
@@ -191,14 +257,21 @@ const normalizeImageInfo = ( raw ) => {
 		const n = Number( v );
 		return Number.isFinite( n ) ? n : 0;
 	};
-	const normalize = ( bucket ) => ( {
-		webp: Array.isArray( bucket?.webp )
-			? bucket.webp.length
-			: toCount( bucket?.webp ),
-		avif: Array.isArray( bucket?.avif )
-			? bucket.avif.length
-			: toCount( bucket?.avif ),
-	} );
+	const normalize = ( bucket ) => {
+		// A numeric bucket (e.g. completed: 5) is a valid total count, not a
+		// {webp, avif} shape — count it as webp instead of discarding it.
+		if ( typeof bucket === 'number' ) {
+			return { webp: toCount( bucket ), avif: 0 };
+		}
+		return {
+			webp: Array.isArray( bucket?.webp )
+				? bucket.webp.length
+				: toCount( bucket?.webp ),
+			avif: Array.isArray( bucket?.avif )
+				? bucket.avif.length
+				: toCount( bucket?.avif ),
+		};
+	};
 	return {
 		completed: normalize( raw?.completed ),
 		pending: normalize( raw?.pending ),
@@ -2279,52 +2352,52 @@ const Dashboard = ( {
 					panel gets its own Suspense boundary so one slow chunk
 					never blocks the others (audit #1354). */ }
 				{ allSuggestions.length > 0 && (
-					<Suspense fallback={ <LazyPanelFallback /> }>
+					<LazyPanelGate>
 						<SuggestionsPanel
 							suggestions={ allSuggestions }
 							onNavigate={ onNavigate }
 						/>
-					</Suspense>
+					</LazyPanelGate>
 				) }
 
 				{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
-				<Suspense fallback={ <LazyPanelFallback /> }>
+				<LazyPanelGate>
 					<PageSpeedPanel
 						url={ auditUrl }
 						onSuggestionsReady={ setPagespeedSuggestions }
 					/>
-				</Suspense>
+				</LazyPanelGate>
 
 				{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
-				<Suspense fallback={ <LazyPanelFallback /> }>
+				<LazyPanelGate>
 					<WebVitalsTrends url={ auditUrl } />
-				</Suspense>
+				</LazyPanelGate>
 
 				{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
-				<Suspense fallback={ <LazyPanelFallback /> }>
+				<LazyPanelGate>
 					<WebVitalsRum />
-				</Suspense>
+				</LazyPanelGate>
 
 				{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
-				<Suspense fallback={ <LazyPanelFallback /> }>
+				<LazyPanelGate>
 					<AutoloadedOptions />
-				</Suspense>
+				</LazyPanelGate>
 
-				<Suspense fallback={ <LazyPanelFallback /> }>
+				<LazyPanelGate>
 					<LlmsPanel />
-				</Suspense>
+				</LazyPanelGate>
 
-				<Suspense fallback={ <LazyPanelFallback /> }>
+				<LazyPanelGate>
 					<AiPanel />
-				</Suspense>
+				</LazyPanelGate>
 
-				<Suspense fallback={ <LazyPanelFallback /> }>
+				<LazyPanelGate>
 					<EdgeCachePanel />
-				</Suspense>
+				</LazyPanelGate>
 
-				<Suspense fallback={ <LazyPanelFallback /> }>
+				<LazyPanelGate>
 					<SystemInfo />
-				</Suspense>
+				</LazyPanelGate>
 			</div>
 
 			{ /* Image optimization + activity log */ }

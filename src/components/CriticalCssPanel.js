@@ -108,10 +108,30 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 };
 
 /**
+ * Own-property check with an Object.hasOwn fallback for older runtimes.
+ *
+ * Single shared helper so the exported and render paths cannot drift when
+ * only one guard is fixed.
+ *
+ * @since NEXT
+ * @param {Object} obj Object to check.
+ * @param {*}      key Key to check.
+ * @return {boolean} True when key is an own property.
+ */
+const hasOwnKey = ( obj, key ) =>
+	Object.hasOwn
+		? Object.hasOwn( obj, key )
+		: Object.prototype.hasOwnProperty.call( obj, key );
+
+/**
  * Resolve the badge config for a status key with an own-property check.
  *
  * Plain property access would resolve inherited keys like '__proto__' to
  * Object.prototype (truthy) instead of the intended `none` fallback.
+ *
+ * Test-only entry point: render paths use the per-render memoized map via
+ * configForRow() below so the 8-entry map (plus its __() calls) is built
+ * once per render instead of once per row. Kept exported for unit tests.
  *
  * @since NEXT
  * @param {*} statusKey Raw status key.
@@ -119,10 +139,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
  */
 export const statusConfigFor = ( statusKey ) => {
 	const config = getStatusConfig();
-	const hasOwn = Object.hasOwn
-		? Object.hasOwn( config, statusKey )
-		: Object.prototype.hasOwnProperty.call( config, statusKey );
-	return hasOwn ? config[ statusKey ] : config.none;
+	return hasOwnKey( config, statusKey ) ? config[ statusKey ] : config.none;
 };
 
 const CriticalCssPanel = ( {
@@ -189,14 +206,14 @@ const CriticalCssPanel = ( {
 
 	// Build the 8-entry status map (with its __() labels) once per render
 	// instead of per row: statusConfigFor() inside entries.map() costs O(N
-	// x map) allocations and translations on every render.
-	const statusConfig = useMemo( () => getStatusConfig(), [] );
-	const configForRow = ( statusKey ) => {
-		const hasOwn = Object.hasOwn
-			? Object.hasOwn( statusConfig, statusKey )
-			: Object.prototype.hasOwnProperty.call( statusConfig, statusKey );
-		return hasOwn ? statusConfig[ statusKey ] : statusConfig.none;
-	};
+	// x map) allocations and translations on every render. Computed each
+	// render (not memoized on []) so a locale switch after mount picks up
+	// fresh translated labels.
+	const statusConfig = getStatusConfig();
+	const configForRow = ( statusKey ) =>
+		hasOwnKey( statusConfig, statusKey )
+			? statusConfig[ statusKey ]
+			: statusConfig.none;
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
@@ -252,7 +269,10 @@ const CriticalCssPanel = ( {
 								<span
 									className={ `wppo-badge ${ config.className }` }
 								>
-									<FontAwesomeIcon icon={ config.icon } />
+									<FontAwesomeIcon
+										icon={ config.icon }
+										aria-hidden="true"
+									/>
 									{ config.label }
 								</span>
 								{ onRegenerateSingle && (

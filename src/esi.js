@@ -100,13 +100,26 @@ const ESI_AUTH_ERROR_CODES = new Set( [
 ] );
 
 /**
+ * Maximum fragment HTML bytes parsed before the node-count walk.
+ *
+ * Cheap fail-closed pre-check so a pathological fragment is dropped before
+ * querySelectorAll('*') materializes the whole tree.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const MAX_ESI_HTML_BYTES = 1024 * 1024;
+
+/**
  * In-flight nonce refresh promise (thundering-herd guard).
  *
- * Concurrent 401/403 responses share a single `nonce` block round-trip, and
- * the promise is cleared once settled so a later failure can refresh again.
+ * Concurrent 401/403 responses sharing the same stale nonce share a single
+ * `nonce` block round-trip, and the entry is cleared once settled so a later
+ * failure can refresh again. Keyed by stale nonce so a second caller's
+ * throttle receipt is never dropped in favour of the first caller's body.
  *
  * @since 2.0.0
- * @type {Promise<string>|null}
+ * @type {{key: string, promise: Promise<string>}|null}
  */
 let pendingNonceRefresh = null;
 
@@ -191,8 +204,16 @@ const isAbortError = ( err ) => !! err && 'AbortError' === err.name;
  * @return {DocumentFragment} Sanitized fragment.
  */
 export const sanitizeEsiFragment = ( html ) => {
+	const raw = String( html ?? '' );
+	if ( raw.length > MAX_ESI_HTML_BYTES ) {
+		console.warn(
+			'WPPO ESI fragment exceeds sane byte budget; dropping fragment',
+			raw.length
+		);
+		return document.createDocumentFragment();
+	}
 	const template = document.createElement( 'template' );
-	template.innerHTML = String( html ?? '' );
+	template.innerHTML = raw;
 	const frag = template.content;
 
 	// Remove script-capable elements outright. Forms/inputs are kept —
@@ -232,8 +253,8 @@ export const sanitizeEsiFragment = ( html ) => {
 				// Browsers ignore ASCII whitespace/control characters when parsing
 				// schemes ("java\tscript:", "  javascript:"), so normalise before
 				// matching (0x00-0x20 covers C0 controls and space, plus DEL).
-				const isDangerousUrl = ( raw ) => {
-					const value = String( raw || '' )
+				const isDangerousUrl = ( candidate ) => {
+					const value = String( candidate || '' )
 						.toLowerCase()
 						.replace( /[\u0000-\u0020\u007f]/g, '' );
 					return /^(javascript|vbscript|data|blob):/.test( value );
@@ -437,8 +458,9 @@ const isAuthFailure = ( response, data ) => {
  * @return {Promise<string>} Fresh nonce, or empty string on failure.
  */
 const refreshEsiNonce = ( signal, staleNonce = '' ) => {
-	if ( pendingNonceRefresh ) {
-		return pendingNonceRefresh;
+	const pendingKey = staleNonce || '';
+	if ( pendingNonceRefresh && pendingNonceRefresh.key === pendingKey ) {
+		return pendingNonceRefresh.promise;
 	}
 	const refresh = fetch( buildEsiUrl(), {
 		method: 'POST',
@@ -451,10 +473,14 @@ const refreshEsiNonce = ( signal, staleNonce = '' ) => {
 		.then( ( data ) => extractFragmentHtml( data ) )
 		.catch( () => '' );
 
-	pendingNonceRefresh = refresh.finally( () => {
-		pendingNonceRefresh = null;
+	const entry = { key: pendingKey, promise: null };
+	entry.promise = refresh.finally( () => {
+		if ( pendingNonceRefresh === entry ) {
+			pendingNonceRefresh = null;
+		}
 	} );
-	return pendingNonceRefresh;
+	pendingNonceRefresh = entry;
+	return entry.promise;
 };
 
 /**

@@ -64,7 +64,9 @@ export const CheckboxOption = ( {
 					onChange={ onChange }
 					aria-describedby={ descriptionId }
 				/>
-				<span className="wppo-option-label-text">{ label }</span>
+				<span id={ `${ id }-label` } className="wppo-option-label-text">
+					{ label }
+				</span>
 			</label>
 
 			{ description && (
@@ -79,13 +81,27 @@ export const CheckboxOption = ( {
 						<div className="wppo-field-group">
 							<textarea
 								className="wppo-text-area-field"
+								id={ `${ id }-textarea` }
 								placeholder={ textareaPlaceholder || '' }
-								aria-label={ textareaPlaceholder || label }
+								aria-labelledby={ `${ id }-label` }
+								aria-describedby={
+									textareaPlaceholder
+										? `${ id }-textarea-hint`
+										: undefined
+								}
 								name={ textareaName }
 								value={ textareaValue ?? '' }
 								onChange={ handleTextareaChange }
 								readOnly={ isTextareaReadOnly }
 							/>
+							{ textareaPlaceholder && (
+								<span
+									id={ `${ id }-textarea-hint` }
+									className="wppo-text-muted wppo-text-small"
+								>
+									{ textareaPlaceholder }
+								</span>
+							) }
 						</div>
 					) }
 					{ children }

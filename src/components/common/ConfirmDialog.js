@@ -104,13 +104,20 @@ const ConfirmDialog = ( {
 	}, [ isOpen, children ] );
 
 	useEffect( () => {
-		if ( isOpen && confirmBtnRef.current ) {
-			const cancelBtn = dialogRef.current?.querySelector(
-				'.wppo-dialog-cancel'
-			);
-			if ( cancelBtn ) {
-				cancelBtn.focus();
-			}
+		if ( ! isOpen ) {
+			return;
+		}
+		// Gate on the element actually focused: the cancel button is the
+		// initial focus target, and the confirm ref may be null on first
+		// paint (or the cancel button absent) — either way focus the dialog
+		// or cancel control that exists.
+		const cancelBtn = dialogRef.current?.querySelector(
+			'.wppo-dialog-cancel'
+		);
+		if ( cancelBtn ) {
+			cancelBtn.focus();
+		} else {
+			confirmBtnRef.current?.focus();
 		}
 	}, [ isOpen ] );
 

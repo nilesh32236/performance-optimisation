@@ -392,7 +392,8 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				path.includes( '\0' ) ||
 				decodedPath.includes( '..' ) ||
 				decodedPath.includes( '\0' ) ||
-				doubleDecodedPath.includes( '..' )
+				doubleDecodedPath.includes( '..' ) ||
+				doubleDecodedPath.includes( '\0' )
 			) {
 				path = '/';
 			}

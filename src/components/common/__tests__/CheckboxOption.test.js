@@ -69,11 +69,14 @@ describe( 'CheckboxOption', () => {
 			</CheckboxOption>
 		);
 
+		// The textarea is labelled by the checkbox label (not the
+		// placeholder, which is exposed as a hint via aria-describedby).
 		const textarea = screen.getByRole( 'textbox', {
-			name: /Enter details/i,
+			name: /Enable Feature/i,
 		} );
 		expect( textarea ).toBeInTheDocument();
 		expect( textarea ).toHaveValue( 'Some details' );
+		expect( textarea ).not.toHaveAttribute( 'aria-label' );
 		expect( screen.getByTestId( 'nested-child' ) ).toBeInTheDocument();
 
 		fireEvent.change( textarea, { target: { value: 'New details' } } );

@@ -45,16 +45,33 @@ const AiPanel = () => {
 	const [ applyingKeys, setApplyingKeys ] = useState( [] );
 	const applyingRef = useRef( new Set() );
 	const { notice, notify, dismiss } = useNotice();
+	// AiPanel mounts via React.lazy under Dashboard Suspense, so a fast tab
+	// switch can unmount it while requests are in flight — bail out after
+	// each await instead of setting state on an unmounted instance.
+	const isMountedRef = useRef( true );
+	useEffect(
+		() => () => {
+			isMountedRef.current = false;
+		},
+		[]
+	);
 
 	const fetchModel = useCallback(
 		async ( signal ) => {
 			try {
 				const res = await apiCall( 'ai_model', {}, 'GET', signal );
-				if ( res.success && ! signal?.aborted ) {
+				if ( ! isMountedRef.current || signal?.aborted ) {
+					return;
+				}
+				if ( res.success ) {
 					setModel( res.data );
 				}
 			} catch ( err ) {
-				if ( err?.name === 'AbortError' || signal?.aborted ) {
+				if (
+					! isMountedRef.current ||
+					err?.name === 'AbortError' ||
+					signal?.aborted
+				) {
 					return;
 				}
 				console.error(
@@ -82,15 +99,18 @@ const AiPanel = () => {
 					'GET',
 					signal
 				);
-				if (
-					res.success &&
-					res.data?.suggestions &&
-					! signal?.aborted
-				) {
+				if ( ! isMountedRef.current || signal?.aborted ) {
+					return;
+				}
+				if ( res.success && res.data?.suggestions ) {
 					setSuggestions( res.data.suggestions );
 				}
 			} catch ( err ) {
-				if ( err?.name === 'AbortError' || signal?.aborted ) {
+				if (
+					! isMountedRef.current ||
+					err?.name === 'AbortError' ||
+					signal?.aborted
+				) {
 					return;
 				}
 				console.error(
@@ -117,6 +137,9 @@ const AiPanel = () => {
 	}, [ fetchModel, fetchSuggestions ] );
 
 	const handleSave = async () => {
+		if ( ! isMountedRef.current ) {
+			return;
+		}
 		setSaving( true );
 		dismiss();
 		try {
@@ -135,6 +158,9 @@ const AiPanel = () => {
 					dismissed_suggestions: dismissed,
 				},
 			} );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			if ( response.success ) {
 				patchSettingsCache( 'ai_adaptive', {
 					enabled,
@@ -162,6 +188,9 @@ const AiPanel = () => {
 				} );
 			}
 		} catch {
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __(
@@ -170,15 +199,23 @@ const AiPanel = () => {
 				),
 			} );
 		} finally {
-			setSaving( false );
+			if ( isMountedRef.current ) {
+				setSaving( false );
+			}
 		}
 	};
 
 	const handleLearn = async () => {
+		if ( ! isMountedRef.current ) {
+			return;
+		}
 		setLearning( true );
 		dismiss();
 		try {
 			const res = await apiCall( 'ai_learn', {}, 'POST' );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			if ( res.success ) {
 				setModel( res.data );
 				notify( {
@@ -199,12 +236,17 @@ const AiPanel = () => {
 				} );
 			}
 		} catch {
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __( 'Failed to learn.', 'performance-optimisation' ),
 			} );
 		} finally {
-			setLearning( false );
+			if ( isMountedRef.current ) {
+				setLearning( false );
+			}
 		}
 	};
 
@@ -231,6 +273,9 @@ const AiPanel = () => {
 				tab: payload.tab,
 				settings: merged,
 			} );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			if ( res.success ) {
 				patchSettingsCache( payload.tab, merged );
 				notify( {
@@ -253,6 +298,9 @@ const AiPanel = () => {
 				} );
 			}
 		} catch {
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __(
@@ -262,7 +310,11 @@ const AiPanel = () => {
 			} );
 		} finally {
 			applyingRef.current.delete( key );
-			setApplyingKeys( ( prev ) => prev.filter( ( k ) => k !== key ) );
+			if ( isMountedRef.current ) {
+				setApplyingKeys( ( prev ) =>
+					prev.filter( ( k ) => k !== key )
+				);
+			}
 		}
 	};
 
@@ -294,6 +346,9 @@ const AiPanel = () => {
 					dismissed_suggestions: current,
 				},
 			} );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			if ( res.success ) {
 				patchSettingsCache( 'ai_adaptive', {
 					enabled,
@@ -321,6 +376,9 @@ const AiPanel = () => {
 				fetchSuggestions();
 			}
 		} catch {
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __(

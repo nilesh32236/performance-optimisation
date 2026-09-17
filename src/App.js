@@ -95,6 +95,10 @@ const App = () => {
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedRules = useRef( false );
 	const hasFetchedCcss = useRef( false );
+	// Last ccssRefreshTrigger value actually handled: the trigger stays at its
+	// incremented value after a manual refresh, so gating on
+	// `0 === ccssRefreshTrigger` alone refetches on every tab switch.
+	const lastCcssTrigger = useRef( 0 );
 
 	const activitiesControllerRef = useRef( null );
 	const rulesControllerRef = useRef( null );
@@ -354,9 +358,9 @@ const App = () => {
 			( activeTab === 'dashboard' || activitiesEmpty ) &&
 			! hasFetchedActivities.current;
 		const willFetchRules = ! ( serverRules || hasFetchedRules.current );
-		const willFetchCcss = ! (
-			hasFetchedCcss.current && 0 === ccssRefreshTrigger
-		);
+		const willFetchCcss =
+			! hasFetchedCcss.current ||
+			lastCcssTrigger.current !== ccssRefreshTrigger;
 
 		let activitiesController = null;
 		if ( willFetchActivities ) {
@@ -461,7 +465,10 @@ const App = () => {
 		};
 
 		const fetchCcssStatus = async () => {
-			if ( hasFetchedCcss.current && 0 === ccssRefreshTrigger ) {
+			if (
+				hasFetchedCcss.current &&
+				lastCcssTrigger.current === ccssRefreshTrigger
+			) {
 				return;
 			}
 			hasFetchedCcss.current = true;
@@ -486,6 +493,7 @@ const App = () => {
 				if ( res.success ) {
 					setCcssStatus( res.data );
 					setCcssError( false );
+					lastCcssTrigger.current = ccssRefreshTrigger;
 				} else if ( isCurrent() ) {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
@@ -506,16 +514,13 @@ const App = () => {
 			fetchCcssStatus(),
 		] );
 
+		// Abort by ref identity: when willFetch is false no new controller
+		// is created, so aborting only this run's controllers would leave an
+		// earlier in-flight fetch un-aborted on re-run/unmount.
 		return () => {
-			if ( willFetchActivities && activitiesController ) {
-				activitiesController.abort();
-			}
-			if ( willFetchRules && rulesController ) {
-				rulesController.abort();
-			}
-			if ( willFetchCcss && ccssController ) {
-				ccssController.abort();
-			}
+			activitiesControllerRef.current?.abort();
+			rulesControllerRef.current?.abort();
+			ccssControllerRef.current?.abort();
 		};
 		// Intentionally minimal deps: hasFetched* refs (not state) gate
 		// re-fetches, so effect-written state (recentActivities, serverRules)

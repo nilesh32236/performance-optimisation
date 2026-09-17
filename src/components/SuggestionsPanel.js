@@ -53,6 +53,7 @@ const SuggestionIcon = ( { status } ) => {
 			<FontAwesomeIcon
 				icon={ faCheckCircle }
 				className="wppo-suggestion-icon wppo-suggestion-icon--good"
+				aria-hidden="true"
 			/>
 		);
 	}
@@ -61,6 +62,7 @@ const SuggestionIcon = ( { status } ) => {
 			<FontAwesomeIcon
 				icon={ faExclamationTriangle }
 				className="wppo-suggestion-icon wppo-suggestion-icon--warning"
+				aria-hidden="true"
 			/>
 		);
 	}
@@ -68,6 +70,7 @@ const SuggestionIcon = ( { status } ) => {
 		<FontAwesomeIcon
 			icon={ faTimesCircle }
 			className="wppo-suggestion-icon wppo-suggestion-icon--poor"
+			aria-hidden="true"
 		/>
 	);
 };
@@ -206,31 +209,47 @@ export const formatValue = ( value, unit ) => {
 		return encodings[ String( value ).toLowerCase() ] || value;
 	}
 	if ( unit === 'score' ) {
+		const n = Number( value );
+		if ( ! Number.isFinite( n ) ) {
+			return String( value ?? '—' );
+		}
 		return sprintf(
 			/* translators: %s: score value, e.g. "95 / 100". */
 			__( '%s / 100', 'performance-optimisation' ),
-			Math.round( parseFloat( value ) * 100 )
+			Math.round( n * 100 )
 		);
 	}
 	if ( unit === '%' ) {
+		const n = Number( value );
+		if ( ! Number.isFinite( n ) ) {
+			return String( value ?? '—' );
+		}
 		return sprintf(
 			/* translators: %s: percentage value, e.g. "85.3%". */
 			__( '%s%%', 'performance-optimisation' ),
-			Number( value ).toFixed( 1 )
+			n.toFixed( 1 )
 		);
 	}
 	if ( unit === 's' ) {
+		const n = Number( value );
+		if ( ! Number.isFinite( n ) ) {
+			return String( value ?? '—' );
+		}
 		return sprintf(
 			/* translators: %s: seconds value, e.g. "1.23s". */
 			__( '%ss', 'performance-optimisation' ),
-			Number( value ).toFixed( 2 )
+			n.toFixed( 2 )
 		);
 	}
 	if ( unit === 'ms' ) {
+		const n = Number( value );
+		if ( ! Number.isFinite( n ) ) {
+			return String( value ?? '—' );
+		}
 		return sprintf(
 			/* translators: %s: milliseconds value, e.g. "500ms". */
 			__( '%sms', 'performance-optimisation' ),
-			Math.round( value )
+			Math.round( n )
 		);
 	}
 	if ( typeof unit === 'string' ) {
@@ -239,7 +258,12 @@ export const formatValue = ( value, unit ) => {
 			return countable;
 		}
 	}
-	return `${ value } ${ unit }`;
+	return sprintf(
+		/* translators: 1: value, 2: unit. */
+		__( '%1$s %2$s', 'performance-optimisation' ),
+		String( value ?? '—' ),
+		String( unit ?? '' )
+	);
 };
 
 /**
@@ -319,6 +343,7 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						<FontAwesomeIcon
 							icon={ faArrowRight }
 							className="wppo-ml-6"
+							aria-hidden="true"
 						/>
 					</button>
 				) }
@@ -328,6 +353,7 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						<FontAwesomeIcon
 							icon={ faCheckCircle }
 							className="wppo-mr-4"
+							aria-hidden="true"
 						/>
 						{ __( 'Passing', 'performance-optimisation' ) }
 					</span>
@@ -354,6 +380,7 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 				<FontAwesomeIcon
 					icon={ faCheckCircle }
 					className="wppo-suggestions-panel__empty-icon"
+					aria-hidden="true"
 				/>
 				<p>
 					{ __(
@@ -371,7 +398,11 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 	return (
 		<div className="wppo-suggestions-panel">
 			<div className="wppo-suggestions-panel__header">
-				<FontAwesomeIcon icon={ faLightbulb } className="wppo-mr-8" />
+				<FontAwesomeIcon
+					icon={ faLightbulb }
+					className="wppo-mr-8"
+					aria-hidden="true"
+				/>
 				<h3 className="wppo-suggestions-panel__title">
 					{ __( 'Suggestions', 'performance-optimisation' ) }
 				</h3>

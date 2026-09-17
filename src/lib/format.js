@@ -12,13 +12,6 @@
 import { __, sprintf } from '@wordpress/i18n';
 
 /**
- * Format milliseconds.
- *
- * @since NEXT
- * @param {*} value Numeric value.
- * @return {string} Formatted value or '—' fallback.
- */
-/**
  * True when a metric value counts as missing.
  *
  * Null, undefined, booleans, arrays, and blank strings render the '—'

@@ -13,7 +13,11 @@ export const isSafeHttpUrl = ( url ) => {
 		return false;
 	}
 	try {
-		const parsed = new URL( url );
+		// Strip ASCII control characters before parsing (same convention as
+		// the esi.js / lazyload.js sanitizers): browsers ignore embedded
+		// tab/newline tricks when parsing schemes, so normalize first.
+		const cleaned = url.replace( /[\u0000-\u0020\u007f]/g, '' );
+		const parsed = new URL( cleaned );
 		return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
 	} catch {
 		return false;
