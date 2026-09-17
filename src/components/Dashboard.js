@@ -11,6 +11,13 @@ import {
 	getErrorLogMessage,
 	getWppoSettings,
 } from '../lib/apiRequest';
+import {
+	WOO_SELF_TEST_TIMEOUT_MS,
+	formatWooSummary,
+	getWooCheckState,
+	getWooSelfTestNotice,
+	shouldShowWooFixCta,
+} from '../lib/wooSelfTest';
 import { getDbCounts } from '../lib/dbCounts';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -32,7 +39,7 @@ import AiPanel from './AiPanel';
 import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
-import WelcomePanel from './WelcomePanel';
+import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
 import { __, sprintf } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
@@ -81,6 +88,29 @@ const toTtlOverride = ( value ) => {
  * Allowed CDN purge services (client-side allowlist; server allowlists too).
  */
 const CDN_PURGE_SERVICES = [ 'none', 'cloudflare', 'varnish' ];
+
+/**
+ * Copy for a Woo self-test check row with explicit tri-state handling.
+ *
+ * A malformed entry with pass missing must never render FAIL copy with no
+ * evidence — it renders an inconclusive label instead.
+ *
+ * @since NEXT
+ * @param {*}      pass     Raw pass value from a check entry.
+ * @param {string} passCopy Pass label.
+ * @param {string} failCopy Fail label.
+ * @return {string} Row label.
+ */
+const getWooCheckCopy = ( pass, passCopy, failCopy ) => {
+	const state = getWooCheckState( pass );
+	if ( state === 'pass' ) {
+		return passCopy;
+	}
+	if ( state === 'fail' ) {
+		return failCopy;
+	}
+	return __( 'Inconclusive (re-run)', 'performance-optimisation' );
+};
 
 /**
  * Parse the Varnish purge-endpoint textarea into validated http(s) URLs.
@@ -321,6 +351,9 @@ const Dashboard = ( {
 	const pollRetryRef = useRef( 0 );
 	const pollAttemptsRef = useRef( 0 );
 	const submittingRef = useRef( false );
+	const wooAbortRef = useRef( null );
+	const wooTimedOutRef = useRef( false );
+	const wooTimeoutRef = useRef( null );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
@@ -378,6 +411,20 @@ const Dashboard = ( {
 		fetchDbCounts( controller.signal );
 		return () => controller.abort();
 	}, [ fetchDbCounts ] );
+
+	// Abort any in-flight Woo self-test on unmount so a slow request can
+	// never call setWooSelfTest/notify after the component is gone.
+	useEffect( () => {
+		return () => {
+			if ( wooTimeoutRef.current ) {
+				clearTimeout( wooTimeoutRef.current );
+				wooTimeoutRef.current = null;
+			}
+			if ( wooAbortRef.current ) {
+				wooAbortRef.current.abort();
+			}
+		};
+	}, [] );
 
 	const dbOverheadCount = useMemo( () => {
 		return Object.entries( dbCounts ).reduce( ( sum, [ , val ] ) => {
@@ -776,23 +823,43 @@ const Dashboard = ( {
 
 	const runWooCacheSelfTest = useCallback( () => {
 		setWooSelfTestLoading( true );
-		fetchWooCacheSelfTest()
+		// Abort any previous in-flight test and clear its timeout first so
+		// a rapid re-run can never let a stale timer misclassify the new
+		// run's abort as a 5s timeout, nor let stale results win.
+		if ( wooTimeoutRef.current ) {
+			clearTimeout( wooTimeoutRef.current );
+			wooTimeoutRef.current = null;
+		}
+		if ( wooAbortRef.current ) {
+			wooAbortRef.current.abort();
+		}
+		const controller =
+			typeof AbortController !== 'undefined'
+				? new AbortController()
+				: null;
+		wooAbortRef.current = controller;
+		wooTimedOutRef.current = false;
+		if ( controller ) {
+			wooTimeoutRef.current = setTimeout( () => {
+				wooTimedOutRef.current = true;
+				controller.abort();
+			}, WOO_SELF_TEST_TIMEOUT_MS );
+		}
+		fetchWooCacheSelfTest( controller?.signal )
 			.then( ( response ) => {
+				// Bail when this run is no longer current (a newer re-run
+				// replaced it) or its signal was aborted — stale results
+				// must never overwrite the latest run.
+				if (
+					wooAbortRef.current !== controller ||
+					wooAbortRef.current?.signal?.aborted
+				) {
+					return;
+				}
 				if ( response.success && response.data ) {
 					setWooSelfTest( response.data );
-					notify( {
-						type: response.data.all_pass ? 'success' : 'warning',
-						message: response.data.all_pass
-							? __(
-									'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.',
-									'performance-optimisation'
-							  )
-							: __(
-									'WooCommerce self-test found a cacheable dynamic route. Check safe mode and the results below.',
-									'performance-optimisation'
-							  ),
-						durationMs: 5000,
-					} );
+					const descriptor = getWooSelfTestNotice( response.data );
+					notify( { ...descriptor, durationMs: 5000 } );
 				} else {
 					notify( {
 						type: 'error',
@@ -804,7 +871,36 @@ const Dashboard = ( {
 					} );
 				}
 			} )
-			.catch( () =>
+			.catch( ( error ) => {
+				// An abort from unmount cleanup (not the 5s timeout) must
+				// stay silent: notifying after unmount is spurious. The
+				// timeout sets wooTimedOutRef before aborting, so an aborted
+				// signal without the flag means unmount (or a superseded run).
+				if ( controller?.signal?.aborted && ! wooTimedOutRef.current ) {
+					return;
+				}
+				if (
+					error?.name === 'AbortError' ||
+					controller?.signal?.aborted
+				) {
+					console.error(
+						'Woo self-test timed out:',
+						getErrorLogMessage( error )
+					);
+					notify( {
+						type: 'error',
+						message: __(
+							'The WooCommerce self-test timed out after 5 seconds. Please retry.',
+							'performance-optimisation'
+						),
+						durationMs: 5000,
+					} );
+					return;
+				}
+				console.error(
+					'Woo self-test failed:',
+					getErrorLogMessage( error )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -812,9 +908,18 @@ const Dashboard = ( {
 						'performance-optimisation'
 					),
 					durationMs: 5000,
-				} )
-			)
-			.finally( () => setWooSelfTestLoading( false ) );
+				} );
+			} )
+			.finally( () => {
+				if ( wooTimeoutRef.current ) {
+					clearTimeout( wooTimeoutRef.current );
+					wooTimeoutRef.current = null;
+				}
+				if ( wooAbortRef.current === controller ) {
+					wooAbortRef.current = null;
+					setWooSelfTestLoading( false );
+				}
+			} );
 	}, [ notify ] );
 
 	const saveLoggedInCacheSettings = useCallback( () => {
@@ -822,6 +927,10 @@ const Dashboard = ( {
 			{
 				enableLoggedInCache: loggedInCacheEnabled,
 				loggedInCacheRoles,
+				// Carry the live safe-mode switch so saving this card can
+				// never silently reset a staged fix back to the last
+				// committed value via the global-settings sync effect.
+				wooSafeMode,
 			},
 			setSavingLoggedInCache,
 			__( 'Logged-in cache settings saved.', 'performance-optimisation' ),
@@ -830,7 +939,12 @@ const Dashboard = ( {
 				'performance-optimisation'
 			)
 		);
-	}, [ loggedInCacheEnabled, loggedInCacheRoles, saveCacheTab ] );
+	}, [
+		loggedInCacheEnabled,
+		loggedInCacheRoles,
+		wooSafeMode,
+		saveCacheTab,
+	] );
 
 	const saveCdnPurgeSettings = useCallback( () => {
 		const service = CDN_PURGE_SERVICES.includes( cdnPurgeService )
@@ -841,6 +955,10 @@ const Dashboard = ( {
 				cdnPurgeService: service,
 				cloudflareZoneId,
 				varnishPurgeUrls: parseVarnishPurgeUrls( varnishPurgeUrls ),
+				// Carry the live safe-mode switch so saving this card can
+				// never silently reset a staged fix back to the last
+				// committed value via the global-settings sync effect.
+				wooSafeMode,
 			},
 			setSavingCdnPurge,
 			__( 'CDN purge settings saved.', 'performance-optimisation' ),
@@ -849,7 +967,13 @@ const Dashboard = ( {
 				'performance-optimisation'
 			)
 		);
-	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls, saveCacheTab ] );
+	}, [
+		cdnPurgeService,
+		cloudflareZoneId,
+		varnishPurgeUrls,
+		wooSafeMode,
+		saveCacheTab,
+	] );
 
 	const handleLoggedInCacheToggle = useCallback( ( e ) => {
 		setLoggedInCacheEnabled( e.target.checked );
@@ -897,6 +1021,27 @@ const Dashboard = ( {
 	const handleWooSafeModeToggle = useCallback( ( e ) => {
 		setWooSafeMode( e.target.checked );
 	}, [] );
+	// Stage WooCommerce safe mode on from a FAIL self-test result.
+	//
+	// Staging only: the existing Save Page Cache Settings flow remains the
+	// commit path, so the button label and helper copy say so explicitly
+	// and a notice reminds the user to save. Focus moves to the safe-mode
+	// switch (shared scrollToWooSafeMode helper) so keyboard and
+	// screen-reader users land on the staged fix. Sibling save cards carry
+	// the live wooSafeMode value so a staged fix survives saving another
+	// card; switching tabs still discards unstaged changes.
+	const handleReenableWooSafeMode = useCallback( () => {
+		setWooSafeMode( true );
+		notify( {
+			type: 'info',
+			message: __(
+				'WooCommerce safe mode staged on — click Save Page Cache Settings below to apply.',
+				'performance-optimisation'
+			),
+			durationMs: 5000,
+		} );
+		scrollToWooSafeMode();
+	}, [ notify ] );
 	const handleCdnPurgeServiceChange = useCallback( ( e ) => {
 		setCdnPurgeService(
 			CDN_PURGE_SERVICES.includes( e.target.value )
@@ -1090,7 +1235,7 @@ const Dashboard = ( {
 				}
 			/>
 
-			<WelcomePanel />
+			<WelcomePanel onNavigate={ onNavigate } />
 
 			{ upgradePurge &&
 				( ( upgradePurge.last_purge &&
@@ -1488,19 +1633,21 @@ const Dashboard = ( {
 						) }
 					</p>
 				</div>
-				<SwitchField
-					label={ __(
-						'WooCommerce safe mode',
-						'performance-optimisation'
-					) }
-					description={ __(
-						'Always bypass the static cache for cart, checkout, account pages and Store API routes. Custom Woo slugs stay excluded even without WooCommerce conditional tags.',
-						'performance-optimisation'
-					) }
-					name="wooSafeMode"
-					checked={ wooSafeMode }
-					onChange={ handleWooSafeModeToggle }
-				/>
+				<div id="wppoWooSafeMode" tabIndex="-1">
+					<SwitchField
+						label={ __(
+							'WooCommerce safe mode',
+							'performance-optimisation'
+						) }
+						description={ __(
+							'Always bypass the static cache for cart, checkout, account pages and Store API routes. Custom Woo slugs stay excluded even without WooCommerce conditional tags.',
+							'performance-optimisation'
+						) }
+						name="wooSafeMode"
+						checked={ wooSafeMode }
+						onChange={ handleWooSafeModeToggle }
+					/>
+				</div>
 				<div className="wppo-field">
 					<button
 						type="button"
@@ -1523,49 +1670,56 @@ const Dashboard = ( {
 					</p>
 				</div>
 				{ wooSelfTest && (
-					<div
-						className="wppo-field"
-						role="status"
-						aria-live="polite"
-					>
-						{ ! wooSelfTest.runnable && (
+					<div className="wppo-field">
+						<div role="status" aria-live="polite">
+							{ ! wooSelfTest.runnable && (
+								<p className="wppo-text-muted wppo-text-small">
+									{ __(
+										'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
+										'performance-optimisation'
+									) }
+								</p>
+							) }
+							{ wooSelfTest.runnable &&
+								! wooSelfTest.woo_active && (
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+											'performance-optimisation'
+										) }
+									</p>
+								) }
 							<p className="wppo-text-muted wppo-text-small">
-								{ __(
-									'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
-									'performance-optimisation'
+								{ formatWooSummary(
+									wooSelfTest.safe_mode,
+									wooSelfTest.excluded_paths
 								) }
 							</p>
-						) }
-						{ wooSelfTest.runnable && ! wooSelfTest.woo_active && (
+						</div>
+						{ shouldShowWooFixCta( wooSelfTest ) && (
 							<p className="wppo-text-muted wppo-text-small">
 								{ __(
-									'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+									'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Stage WooCommerce safe mode back on, then save below to apply — never a stale cart.',
 									'performance-optimisation'
-								) }
+								) }{ ' ' }
+								<button
+									type="button"
+									className="wppo-button wppo-button--secondary wppo-button--sm"
+									onClick={ handleReenableWooSafeMode }
+								>
+									{ __(
+										'Stage safe mode on',
+										'performance-optimisation'
+									) }
+								</button>{ ' ' }
+								<span>
+									{ __(
+										'Staging only — click Save Page Cache Settings to apply.',
+										'performance-optimisation'
+									) }
+								</span>
 							</p>
 						) }
-						{ wooSelfTest.force_exclude && (
-							<p className="wppo-text-muted wppo-text-small">
-								{ __(
-									'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Re-enable WooCommerce safe mode and serve dynamic — never a stale cart.',
-									'performance-optimisation'
-								) }
-							</p>
-						) }
-						<p className="wppo-text-muted wppo-text-small">
-							{ __( 'Safe mode:', 'performance-optimisation' ) }{ ' ' }
-							{ wooSelfTest.safe_mode
-								? __( 'On', 'performance-optimisation' )
-								: __( 'Off', 'performance-optimisation' ) }
-							{ ' • ' }
-							{ __(
-								'Excluded paths:',
-								'performance-optimisation'
-							) }{ ' ' }
-							{ Array.isArray( wooSelfTest.excluded_paths )
-								? wooSelfTest.excluded_paths.join( ', ' )
-								: '' }
-						</p>
 						{ Array.isArray( wooSelfTest.checks ) && (
 							<ul className="wppo-woo-self-test">
 								{ wooSelfTest.checks.map( ( check, index ) => (
@@ -1577,15 +1731,17 @@ const Dashboard = ( {
 										<span>{ check?.path }</span>
 										{ ' — ' }
 										<span>
-											{ check?.pass
-												? __(
-														'Bypassed (pass)',
-														'performance-optimisation'
-												  )
-												: __(
-														'Cacheable (fail)',
-														'performance-optimisation'
-												  ) }
+											{ getWooCheckCopy(
+												check?.pass,
+												__(
+													'Bypassed (pass)',
+													'performance-optimisation'
+												),
+												__(
+													'Cacheable (fail)',
+													'performance-optimisation'
+												)
+											) }
 										</span>
 									</li>
 								) ) }
@@ -1618,15 +1774,17 @@ const Dashboard = ( {
 													<span>{ check?.path }</span>
 													{ ' — ' }
 													<span>
-														{ check?.pass
-															? __(
-																	'Bypassed (pass)',
-																	'performance-optimisation'
-															  )
-															: __(
-																	'Cacheable (fail)',
-																	'performance-optimisation'
-															  ) }
+														{ getWooCheckCopy(
+															check?.pass,
+															__(
+																'Bypassed (pass)',
+																'performance-optimisation'
+															),
+															__(
+																'Cacheable (fail)',
+																'performance-optimisation'
+															)
+														) }
 													</span>
 												</li>
 											)
@@ -1660,15 +1818,17 @@ const Dashboard = ( {
 													<span>{ check?.path }</span>
 													{ ' — ' }
 													<span>
-														{ check?.pass
-															? __(
-																	'Skipped (pass)',
-																	'performance-optimisation'
-															  )
-															: __(
-																	'Queued (fail)',
-																	'performance-optimisation'
-															  ) }
+														{ getWooCheckCopy(
+															check?.pass,
+															__(
+																'Skipped (pass)',
+																'performance-optimisation'
+															),
+															__(
+																'Queued (fail)',
+																'performance-optimisation'
+															)
+														) }
 													</span>
 												</li>
 											)
@@ -1702,15 +1862,17 @@ const Dashboard = ( {
 													<span>{ check?.key }</span>
 													{ ' — ' }
 													<span>
-														{ check?.pass
-															? __(
-																	'Bypassed (pass)',
-																	'performance-optimisation'
-															  )
-															: __(
-																	'Cacheable (fail)',
-																	'performance-optimisation'
-															  ) }
+														{ getWooCheckCopy(
+															check?.pass,
+															__(
+																'Bypassed (pass)',
+																'performance-optimisation'
+															),
+															__(
+																'Cacheable (fail)',
+																'performance-optimisation'
+															)
+														) }
 													</span>
 												</li>
 											)
