@@ -2391,8 +2391,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					self::$nginx_probe_memo['server'] = false;
 					return false;
 				}
-				$url       = content_url( self::CONFIG_FILENAME );
-				$probe_key = self::NGINX_PROBE_TRANSIENT . '_' . md5( $url );
+				$url = content_url( self::CONFIG_FILENAME );
+				// Audit #1338: blog-prefix the per-URL key (multisite
+				// key-isolation rule). Legacy global reads below stay as
+				// migration fallbacks.
+				$probe_key = Util::transient_key( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
 				if ( isset( self::$nginx_probe_memo[ $probe_key ] ) ) {
 					return self::$nginx_probe_memo[ $probe_key ];
 				}
@@ -2478,6 +2481,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						try {
 							$url = content_url( self::CONFIG_FILENAME );
 							delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
+							delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) ) );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 						}
@@ -2507,6 +2511,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 										if ( function_exists( 'content_url' ) ) {
 											$site_url = content_url( self::CONFIG_FILENAME );
 											delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $site_url ) );
+											if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+												delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT . '_' . md5( $site_url ) ) );
+											}
 										}
 										delete_transient( self::NGINX_PROBE_TRANSIENT );
 										if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {

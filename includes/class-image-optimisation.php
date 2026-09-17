@@ -467,6 +467,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			self::$placeholder_info_cache = null;
 			self::$placeholder_path_cache = array();
 			self::$heuristic_lcp_memo     = array();
+			self::$derived_alt_memo       = null;
+			self::$deferred_alt_entries   = array();
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'clear_request_memo' ) ) {
 				try {
 					\PerformanceOptimise\Inc\OD_Bridge::clear_request_memo();
@@ -5205,15 +5207,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private static function get_derived_alt_map(): array {
 			try {
+				// Audit #1325: per-request memo (a page with N distinct images
+				// calls this N times on the output-buffer path). Reset by the
+				// shutdown commit so same-request reads observe the merge.
+				if ( is_array( self::$derived_alt_memo ) ) {
+					return self::$derived_alt_memo;
+				}
 				if ( function_exists( 'wp_cache_get' ) ) {
 					$hit = wp_cache_get( Util::transient_key( 'wppo_derived_alt_map' ), 'wppo' );
 					if ( is_array( $hit ) ) {
+						self::$derived_alt_memo = $hit;
 						return $hit;
 					}
 				}
 				if ( function_exists( 'get_transient' ) ) {
-					$map = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
-					return is_array( $map ) ? $map : array();
+					$map                    = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
+					$map                    = is_array( $map ) ? $map : array();
+					self::$derived_alt_memo = $map;
+					return $map;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -5222,10 +5233,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Deferred alt-map entries buffered for the shutdown commit.
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		private static $deferred_alt_entries = array();
+
+		/**
+		 * Per-request memo of the persistent alt map (see get_derived_alt_map).
+		 *
+		 * @since NEXT
+		 * @var array<string, string>|null
+		 */
+		private static $derived_alt_memo = null;
+
+		/**
+		 * Whether the shutdown commit is registered.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static $alt_commit_registered = false;
+
+		/**
 		 * Store one src-to-title entry in the bounded persistent map.
 		 *
-		 * Capped at 200 entries (drop-oldest) with a day TTL so the map
-		 * cannot grow unbounded.
+		 * Deferred (audit #1338): entries buffer per request and persist once
+		 * on shutdown, so a page with N new images issues one write instead
+		 * of N read-modify-writes on the render path. Capped at 200 entries
+		 * (drop-oldest) with a day TTL so the map cannot grow unbounded.
 		 *
 		 * @since 2.0.0
 		 * @param string $src   Image src URL.
@@ -5234,12 +5271,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private static function set_derived_alt_map_entry( string $src, string $title ): void {
 			try {
-				$key         = Util::transient_key( 'wppo_derived_alt_map' );
-				$map         = self::get_derived_alt_map();
-				$map[ $src ] = $title;
+				self::$deferred_alt_entries[ $src ] = $title;
+				if ( ! self::$alt_commit_registered && function_exists( 'add_action' ) ) {
+					add_action( 'shutdown', array( __CLASS__, 'commit_derived_alt_map' ) );
+					self::$alt_commit_registered = true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Persist buffered alt-map entries (shutdown handler).
+		 *
+		 * Merges the request buffer into the persistent map in one write.
+		 * Fail-open: any failure drops the buffer silently.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function commit_derived_alt_map(): void {
+			try {
+				if ( empty( self::$deferred_alt_entries ) ) {
+					return;
+				}
+				$key = Util::transient_key( 'wppo_derived_alt_map' );
+				$map = self::get_derived_alt_map();
+				foreach ( self::$deferred_alt_entries as $src => $title ) {
+					$map[ $src ] = $title;
+				}
+				self::$deferred_alt_entries = array();
 				if ( count( $map ) > 200 ) {
 					$map = array_slice( $map, -200, 200, true );
 				}
+				self::$derived_alt_memo = $map;
 				if ( function_exists( 'wp_cache_set' ) ) {
 					wp_cache_set( $key, $map, 'wppo', DAY_IN_SECONDS );
 				}

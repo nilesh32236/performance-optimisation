@@ -2855,6 +2855,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Per-request memo of stored LCP URL by path (audit #1338).
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		private static $stored_lcp_memo = array();
+
+		/**
+		 * Clear the per-request stored-LCP memo.
+		 *
+		 * Exposed publicly so tests can reset isolation between cases
+		 * (mirrors clear_field_lcp_cache()).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_stored_lcp_memo(): void {
+			self::$stored_lcp_memo = array();
+		}
+
+		/**
 		 * Read-only lookup of the stored PageSpeed LCP candidate for a page.
 		 *
 		 * Single shared implementation of the PageSpeed priorities used by
@@ -2878,6 +2899,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 */
 		public static function get_stored_pagespeed_lcp_url( ?string $path = null ): string {
 			try {
+				$memo_key = null === $path ? '' : (string) $path;
+				if ( array_key_exists( $memo_key, self::$stored_lcp_memo ) ) {
+					return self::$stored_lcp_memo[ $memo_key ];
+				}
 				$strategies = array( 'mobile', 'desktop' );
 
 				// Priority 1: Singular post — check post meta (mobile first, then desktop).
@@ -2893,6 +2918,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 									// cross-origin tier value is skipped so a
 									// later same-origin tier can still win.
 									if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
+										self::$stored_lcp_memo[ $memo_key ] = $meta_lcp;
 										return $meta_lcp;
 									}
 								}
@@ -2911,6 +2937,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							foreach ( $strategies as $strategy ) {
 								$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
 								if ( ! empty( $front_lcp ) && is_string( $front_lcp ) && self::is_same_origin_url( $front_lcp ) ) {
+									self::$stored_lcp_memo[ $memo_key ] = $front_lcp;
 									return $front_lcp;
 								}
 							}
@@ -2951,6 +2978,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						continue;
 					}
 					if ( ! empty( $transient ) && is_string( $transient ) && self::is_same_origin_url( $transient ) ) {
+						self::$stored_lcp_memo[ $memo_key ] = $transient;
 						return $transient;
 					}
 				}

@@ -279,6 +279,11 @@ trait WPPO_Test_Bootstrap {
 			// so processor-availability fixtures never leak across tests.
 			\PerformanceOptimise\Inc\Util::reset_html_processor_memo();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'clear_stored_lcp_memo' ) ) {
+			// Stored-LCP memo is per process: reset so path fixtures never
+			// leak across tests.
+			\PerformanceOptimise\Inc\RUM::clear_stored_lcp_memo();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

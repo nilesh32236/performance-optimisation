@@ -178,7 +178,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 
 			$template_path = WPPO_PLUGIN_PATH . 'templates/cloudflare-worker.js';
 			$content       = '';
-			if ( file_exists( $template_path ) && is_readable( $template_path ) ) {
+			// Audit #1338: cap template reads (fall back to inline below on
+			// missing/unreadable/oversized files).
+			$template_size = ( file_exists( $template_path ) && is_readable( $template_path ) ) ? @filesize( $template_path ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
+			if ( is_int( $template_size ) && $template_size > 0 && $template_size <= 1024 * 1024 ) {
 				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 			}
 			if ( false === $content || '' === $content ) {
@@ -259,9 +262,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			$swr    = isset( $config['swr'] ) ? (int) $config['swr'] : 86400;
 
 			// Try template file if present, else inline fallback.
+			// Audit #1338: capped like the Cloudflare template above.
 			$template_path = WPPO_PLUGIN_PATH . 'templates/bunny-edge.js';
 			$content       = '';
-			if ( file_exists( $template_path ) && is_readable( $template_path ) ) {
+			$template_size = ( file_exists( $template_path ) && is_readable( $template_path ) ) ? @filesize( $template_path ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
+			if ( is_int( $template_size ) && $template_size > 0 && $template_size <= 1024 * 1024 ) {
 				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 			}
 			if ( false === $content || '' === $content ) {

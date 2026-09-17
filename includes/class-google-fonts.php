@@ -531,6 +531,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					}
 				}
 				if ( null === $cached ) {
+					// Audit #1338: bound the read (CSS cache is ours, but a
+					// swapped/corrupt file must not spike memory).
+					$css_size = function_exists( 'wp_filesize' ) ? wp_filesize( $css_file ) : @filesize( $css_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
+					if ( is_int( $css_size ) && $css_size > 1024 * 1024 ) {
+						return false;
+					}
 					$direct = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe fallback when WP_Filesystem is unavailable; writes still go through WP_Filesystem.
 					if ( is_string( $direct ) ) {
 						$cached = $direct;
@@ -813,6 +819,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with a false check below.
 			$size = @filesize( $tmp );
 			if ( false === $size || 0 === $size ) {
+				if ( file_exists( $tmp ) ) {
+					wp_delete_file( $tmp );
+				}
+				set_transient( $fail_key, 1, self::backoff_ttl() );
+				return false;
+			}
+			// Audit #1338: reject oversized remote bodies before rename (a
+			// font file over 5MB is never legitimate) so a corrupt/redirected
+			// response cannot fill the cache dir uncapped.
+			if ( $size > 5 * 1024 * 1024 ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}

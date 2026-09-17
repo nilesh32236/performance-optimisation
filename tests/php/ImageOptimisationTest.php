@@ -52,6 +52,12 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		if ( class_exists( Image_Optimisation::class ) ) {
 			Image_Optimisation::clear_runtime_caches();
 		}
+		// Stored-LCP memo (audit #1338): get_current_lcp_url() reads through
+		// RUM::get_stored_pagespeed_lcp_url(), so the RUM memo must reset
+		// per test too or path fixtures leak across cases.
+		if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'clear_stored_lcp_memo' ) ) {
+			\PerformanceOptimise\Inc\RUM::clear_stored_lcp_memo();
+		}
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
 		$this->request_uri_had_value = isset( $_SERVER['REQUEST_URI'] );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
