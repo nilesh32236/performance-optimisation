@@ -36,28 +36,68 @@
 import { __ } from '@wordpress/i18n';
 
 /**
+ * Redact secret-looking substrings from a log message (defense-in-depth).
+ *
+ * Dependency-free mirror of redactLogSecrets() in src/lib/logMessage.js
+ * (audit #1354 + maintainability) — keep in sync (pinned by
+ * src/__tests__/logMirrorSync.test.js).
+ *
+ * @since NEXT
+ * @param {string} raw Raw message.
+ * @return {string} Redacted message.
+ */
+const redactEsiLogSecrets = ( raw ) => {
+	if ( typeof raw !== 'string' || '' === raw ) {
+		return raw;
+	}
+	return raw
+		.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
+		.replace(
+			/(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi,
+			'$1=[redacted]'
+		)
+		.replace( /\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi, '$1=[redacted]' )
+		.replace(
+			/([?&](?:key|api[_-]?key|token|secret|password|pwd)\s*=)[^&\s]*/gi,
+			'$1[redacted]'
+		)
+		.replace(
+			/\b(password|passwd|pwd|secret|token)\b\s*[:=\s]\s*(['"]?)\S+\2/gi,
+			'$1=[redacted]'
+		);
+};
+
+/**
  * Extract a safe log message without leaking response bodies.
  *
- * Dependency-free mirror of lazyload.js getLogMessage() (audit #1354):
- * console output persists in devtools, so only the message is logged,
- * never full objects.
+ * Dependency-free mirror of the shared getLogMessage() in
+ * src/lib/logMessage.js (audit #1354 + maintainability): console output
+ * persists in devtools, so only the message is logged, never full objects.
+ * Redaction runs before truncation — keep in sync (pinned by
+ * src/__tests__/logMirrorSync.test.js).
  *
  * @since NEXT
  * @param {*} err Caught error value.
  * @return {string} Safe message string.
  */
 const getEsiLogMessage = ( err ) => {
+	let message;
 	if ( err instanceof Error ) {
-		return err.message || 'Unknown error';
-	}
-	if ( typeof err === 'string' ) {
-		return err.slice( 0, 500 ) || 'Unknown error';
-	}
-	if ( err === null || typeof err === 'undefined' ) {
+		message = err.message || 'Unknown error';
+	} else if ( typeof err === 'string' ) {
+		message = err.slice( 0, 500 ) || 'Unknown error';
+	} else if ( err === null || typeof err === 'undefined' ) {
 		return 'Unknown error';
+	} else {
+		try {
+			message = String( err ).slice( 0, 500 );
+		} catch {
+			return 'Unknown error';
+		}
 	}
 	try {
-		return String( err ).slice( 0, 500 );
+		const redacted = redactEsiLogSecrets( message );
+		return ( redacted || 'Unknown error' ).slice( 0, 500 );
 	} catch {
 		return 'Unknown error';
 	}

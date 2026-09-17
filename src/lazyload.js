@@ -4,27 +4,68 @@
  */
 
 /**
+ * Redact secret-looking substrings from a log message (defense-in-depth).
+ *
+ * Dependency-free mirror of redactLogSecrets() in src/lib/logMessage.js
+ * (audit maintainability) — keep in sync (pinned by
+ * src/__tests__/logMirrorSync.test.js).
+ *
+ * @since NEXT
+ * @param {string} raw Raw message.
+ * @return {string} Redacted message.
+ */
+const redactLogSecrets = ( raw ) => {
+	if ( typeof raw !== 'string' || '' === raw ) {
+		return raw;
+	}
+	return raw
+		.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
+		.replace(
+			/(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi,
+			'$1=[redacted]'
+		)
+		.replace( /\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi, '$1=[redacted]' )
+		.replace(
+			/([?&](?:key|api[_-]?key|token|secret|password|pwd)\s*=)[^&\s]*/gi,
+			'$1[redacted]'
+		)
+		.replace(
+			/\b(password|passwd|pwd|secret|token)\b\s*[:=\s]\s*(['"]?)\S+\2/gi,
+			'$1=[redacted]'
+		);
+};
+
+/**
  * Extract a safe log message without leaking response bodies.
  *
- * Dependency-free mirror of the SPA's getErrorLogMessage(): console output
+ * Dependency-free mirror of the shared getLogMessage() in
+ * src/lib/logMessage.js (audit maintainability): console output
  * persists in devtools, so only the message is logged, never full objects.
+ * Redaction runs before truncation — keep in sync (pinned by
+ * src/__tests__/logMirrorSync.test.js).
  *
  * @since NEXT
  * @param {*} err Caught error value.
  * @return {string} Safe message string.
  */
 const getLogMessage = ( err ) => {
+	let message;
 	if ( err instanceof Error ) {
-		return err.message || 'Unknown error';
-	}
-	if ( typeof err === 'string' ) {
-		return err.slice( 0, 500 ) || 'Unknown error';
-	}
-	if ( err === null || typeof err === 'undefined' ) {
+		message = err.message || 'Unknown error';
+	} else if ( typeof err === 'string' ) {
+		message = err.slice( 0, 500 ) || 'Unknown error';
+	} else if ( err === null || typeof err === 'undefined' ) {
 		return 'Unknown error';
+	} else {
+		try {
+			message = String( err ).slice( 0, 500 );
+		} catch {
+			return 'Unknown error';
+		}
 	}
 	try {
-		return String( err ).slice( 0, 500 );
+		const redacted = redactLogSecrets( message );
+		return ( redacted || 'Unknown error' ).slice( 0, 500 );
 	} catch {
 		return 'Unknown error';
 	}
@@ -365,6 +406,33 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
 ] );
 
 /**
+ * Sanitize a token list against an allowlist (audit maintainability).
+ *
+ * sanitizeIframeAllow() and sanitizeIframeSandbox() duplicated the same
+ * tokenize/lowercase/regex/Set/join pipeline with different delimiters — a
+ * token-shape tightening in one but not the other let a tampered
+ * data-wppo-iframe-attrs payload escalate allow/sandbox capability. The
+ * pipeline lives here once; both sanitizers stay thin wrappers.
+ *
+ * @since NEXT
+ * @param {*}             value              Raw attribute value.
+ * @param {Object}        options            Sanitizer options.
+ * @param {RegExp|string} options.split      Split pattern for String.split().
+ * @param {Set}           options.allowedSet Allowlisted tokens.
+ * @return {string[]} Sanitized tokens.
+ */
+const sanitizeTokenList = ( value, { split, allowedSet } ) => {
+	const tokens = String( value )
+		.split( split )
+		.map( ( token ) => token.trim().toLowerCase() )
+		.filter(
+			( token ) =>
+				token && /^[a-z-]+$/.test( token ) && allowedSet.has( token )
+		);
+	return tokens;
+};
+
+/**
  * Sanitize a stored `allow` value: keep only known-safe Permissions-Policy
  * tokens, return '' when nothing safe remains.
  *
@@ -372,18 +440,11 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
  * @param {string} value Raw allow attribute value.
  * @return {string} Sanitized value ('' when unsafe/empty).
  */
-const sanitizeIframeAllow = ( value ) => {
-	const tokens = String( value )
-		.split( ';' )
-		.map( ( token ) => token.trim().toLowerCase() )
-		.filter(
-			( token ) =>
-				token &&
-				/^[a-z-]+$/.test( token ) &&
-				IFRAME_ALLOW_TOKENS.has( token )
-		);
-	return tokens.join( '; ' );
-};
+const sanitizeIframeAllow = ( value ) =>
+	sanitizeTokenList( value, {
+		split: ';',
+		allowedSet: IFRAME_ALLOW_TOKENS,
+	} ).join( '; ' );
 
 /**
  * Sanitize a stored `sandbox` value: keep only known-safe tokens (never
@@ -399,14 +460,10 @@ const sanitizeIframeSandbox = ( value ) => {
 	if ( ! raw ) {
 		return '';
 	}
-	const tokens = raw
-		.split( /\s+/ )
-		.filter(
-			( token ) =>
-				token &&
-				/^[a-z-]+$/.test( token ) &&
-				IFRAME_SANDBOX_TOKENS.has( token )
-		);
+	const tokens = sanitizeTokenList( value, {
+		split: /\s+/,
+		allowedSet: IFRAME_SANDBOX_TOKENS,
+	} );
 	return tokens.length ? tokens.join( ' ' ) : null;
 };
 
@@ -704,6 +761,215 @@ const isSafeSrcsetValue = ( value ) => {
 		const urlToken = candidate.split( /\s+/ )[ 0 ];
 		return !! urlToken && isSafeSubresourceUrl( urlToken );
 	} );
+};
+
+/**
+ * Restore one deferred attribute after validation (audit maintainability).
+ *
+ * Centralizes the validate-then-assign data-src/data-srcset pattern repeated
+ * across the hero-restore, IntersectionObserver (IMG/picture/iframe/video),
+ * and scroll-fallback paths: validate via isSafeSubresourceUrl/isSafeSrcsetValue,
+ * warn + drop on failure, assign + drop on success. A srcset-hardening fix
+ * applied here reaches every path at once instead of being missed in
+ * fallback/hero copies.
+ *
+ * @since NEXT
+ * @param {Element}  target                   Element holding the data-* attribute.
+ * @param {Object}   options                  Restore options.
+ * @param {string}   options.dataAttr         Attribute holding the deferred value.
+ * @param {string}   options.liveProp         Live property to assign on success.
+ * @param {Function} options.isValid          Validator for the raw value.
+ * @param {string}   options.blockedLabel     Label in the blocked warning.
+ * @param {boolean}  [options.skipEmpty=true] Skip warn/assign on empty values
+ *                                            (warn-on-empty callers pass false
+ *                                            to preserve legacy behavior).
+ * @return {void}
+ */
+const restoreDataAttr = (
+	target,
+	{ dataAttr, liveProp, isValid, blockedLabel, skipEmpty = true }
+) => {
+	if ( ! target.hasAttribute( dataAttr ) ) {
+		return;
+	}
+	const raw = target.getAttribute( dataAttr );
+	if ( raw ) {
+		if ( ! isValid( raw ) ) {
+			console.warn(
+				`WPPO: blocked ${ blockedLabel } (scheme/origin not allowed):`,
+				raw
+			);
+		} else {
+			target[ liveProp ] = raw;
+		}
+	} else if ( ! skipEmpty ) {
+		console.warn(
+			`WPPO: blocked ${ blockedLabel } (scheme/origin not allowed):`,
+			raw
+		);
+	}
+	target.removeAttribute( dataAttr );
+};
+
+/**
+ * Restore deferred src + srcset on an IMG/IFRAME element.
+ *
+ * @since NEXT
+ * @param {Element} el                           Element to restore.
+ * @param {Object}  [options]                    Restore options.
+ * @param {string}  [options.kind='lazy image']  Label base for warnings.
+ * @param {boolean} [options.includeSrc=true]    Restore data-src → src.
+ * @param {boolean} [options.includeSrcset=true] Restore data-srcset → srcset.
+ * @return {void}
+ */
+const restoreSrcAttrs = (
+	el,
+	{ kind = 'lazy image', includeSrc = true, includeSrcset = true } = {}
+) => {
+	if ( includeSrc ) {
+		restoreDataAttr( el, {
+			dataAttr: 'data-src',
+			liveProp: 'src',
+			isValid: isSafeSubresourceUrl,
+			blockedLabel: `${ kind } src`,
+		} );
+	}
+	if ( includeSrcset ) {
+		restoreDataAttr( el, {
+			dataAttr: 'data-srcset',
+			liveProp: 'srcset',
+			isValid: isSafeSrcsetValue,
+			blockedLabel: `${ kind } srcset`,
+		} );
+	}
+};
+
+/**
+ * Promote sibling `<source data-srcset>`/sizes inside a parent `<picture>`.
+ *
+ * @since NEXT
+ * @param {Element} imgEl                                IMG element whose parent picture is scanned.
+ * @param {Object}  [options]                            Restore options.
+ * @param {string}  [options.kind='lazy picture source'] Warning label base.
+ * @return {void}
+ */
+const restorePictureSourceSets = (
+	imgEl,
+	{ kind = 'lazy picture source' } = {}
+) => {
+	const parent = imgEl.parentNode;
+	if ( ! parent || parent.tagName !== 'PICTURE' ) {
+		return;
+	}
+	parent.querySelectorAll( 'source' ).forEach( ( s ) => {
+		restoreSizes( s );
+		restoreDataAttr( s, {
+			dataAttr: 'data-srcset',
+			liveProp: 'srcset',
+			isValid: isSafeSrcsetValue,
+			blockedLabel: `${ kind } srcset`,
+		} );
+	} );
+};
+
+/**
+ * Restore a lazy VIDEO element (audit maintainability).
+ *
+ * Shared core for the IntersectionObserver path and the scroll-fallback
+ * path: poster + src + `<source data-src>` promotion, media load, and
+ * autoplay. The fallback path additionally promotes
+ * `<source data-srcset>` (legacy markup); the observer path never carried
+ * it, so it stays opt-in. Callers own observer bookkeeping
+ * (unobserve/cleanup) and fallback-only class removal.
+ *
+ * @since NEXT
+ * @param {Element} el                                  VIDEO element to restore.
+ * @param {Object}  [options]                           Restore options.
+ * @param {boolean} [options.includeSourceSrcset=false] Also promote source data-srcset.
+ * @return {void}
+ */
+const restoreLazyVideo = ( el, { includeSourceSrcset = false } = {} ) => {
+	restoreDataAttr( el, {
+		dataAttr: 'data-poster',
+		liveProp: 'poster',
+		isValid: isSafeSubresourceUrl,
+		blockedLabel: 'lazy video poster',
+		skipEmpty: false,
+	} );
+	restoreDataAttr( el, {
+		dataAttr: 'data-src',
+		liveProp: 'src',
+		isValid: isSafeSubresourceUrl,
+		blockedLabel: 'lazy video src',
+		skipEmpty: false,
+	} );
+	el.querySelectorAll(
+		includeSourceSrcset
+			? 'source[data-src], source[data-srcset]'
+			: 'source[data-src]'
+	).forEach( ( s ) => {
+		restoreDataAttr( s, {
+			dataAttr: 'data-src',
+			liveProp: 'src',
+			isValid: isSafeSubresourceUrl,
+			blockedLabel: 'lazy source src',
+			skipEmpty: false,
+		} );
+		if ( includeSourceSrcset ) {
+			restoreDataAttr( s, {
+				dataAttr: 'data-srcset',
+				liveProp: 'srcset',
+				isValid: isSafeSrcsetValue,
+				blockedLabel: 'lazy source srcset',
+			} );
+		}
+	} );
+	el.load();
+	if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+		el.play().catch( () => {} );
+	}
+};
+
+/**
+ * Restore a lazy IMG element (audit maintainability).
+ *
+ * Shared core for the IntersectionObserver path and the scroll-fallback
+ * path: picture-source promotion, placeholder styling, load-handler
+ * registration (before src assignment so cached-image load events are not
+ * missed), sizes hint, then src/srcset restore.
+ *
+ * @since NEXT
+ * @param {Element} el IMG element to restore.
+ * @return {void}
+ */
+const restoreLazyImage = ( el ) => {
+	restorePictureSourceSets( el );
+	// Apply placeholder styling before the full image loads.
+	applyPlaceholderBeforeLoad( el );
+	// Register handler BEFORE setting src to avoid missing cached-image load events.
+	const onImgLoad = makePlaceholderLoadHandler( el );
+	el.addEventListener( 'load', onImgLoad );
+	// Restore sizes before src/srcset so the hint is active when the browser selects a candidate.
+	restoreSizes( el );
+	restoreSrcAttrs( el, { kind: 'lazy image' } );
+};
+
+/**
+ * Check whether an element is visible in the current viewport.
+ *
+ * Hoisted to module scope (audit maintainability) so the scroll-fallback
+ * path in loadImages() stays a thin orchestrator and the predicate is
+ * directly unit-testable.
+ *
+ * @since 1.0.0
+ * @param {Element} el The DOM element.
+ * @return {boolean} True if the element is fully within the viewport.
+ */
+const isElementInViewport = ( el ) => {
+	const rect = el.getBoundingClientRect();
+	const vh = window.innerHeight || document.documentElement.clientHeight;
+	const vw = window.innerWidth || document.documentElement.clientWidth;
+	return rect.top < vh && rect.bottom > 0 && rect.left < vw && rect.right > 0;
 };
 
 /**
@@ -1364,6 +1630,125 @@ const clearSafetyScan = () => {
 };
 
 /**
+ * Periodic safety scan for dynamically added lazy elements.
+ *
+ * Hoisted to module scope (audit maintainability) so loadImages() stays a
+ * thin orchestrator and the scan is directly unit-testable. Depends only on
+ * module-level state (safetyScanId, observedElements, pendingLazyCount) and
+ * top-level helpers.
+ *
+ * @since 1.0.0
+ * @return {void}
+ */
+const startSafetyScan = () => {
+	// Guard only on this copy's own handle so a second copy of
+	// this module on the same page still scans its own elements.
+	// Each copy owns a separate interval; clearing stays isolated
+	// via clearSafetyScan() (window.wppoSafetyScanId is only a
+	// backward-compat mirror, never a startup gate).
+	if ( safetyScanId !== null ) {
+		return;
+	}
+	let ticks = 0;
+	let emptyStreak = 0;
+	const MAX_TICKS = 30;
+	safetyScanId = setInterval( () => {
+		if ( document.hidden ) {
+			return;
+		}
+		ticks++;
+		const elements = document.querySelectorAll( getLazySelector() );
+		if ( elements.length === 0 ) {
+			// Fallback reconciliation: removed-without-intersecting
+			// nodes are released via the MutationObserver above, but
+			// if any slot leaked (e.g. observer installed late),
+			// a zero-match DOM proves nothing is pending.
+			pendingLazyCount = 0;
+			checkCleanup();
+			clearSafetyScan();
+			return;
+		}
+		let newlyObserved = 0;
+		elements.forEach( ( el ) => {
+			if ( ! observedElements.has( el ) ) {
+				observeElement( el );
+				newlyObserved++;
+			}
+		} );
+		if ( 0 === newlyObserved ) {
+			emptyStreak++;
+		} else {
+			emptyStreak = 0;
+		}
+		if ( ticks >= MAX_TICKS || emptyStreak >= 2 ) {
+			clearSafetyScan();
+		}
+	}, 10000 );
+	// Backward-compat mirror for tests/inline snippets; the
+	// module-local binding above remains the source of truth.
+	window.wppoSafetyScanId = safetyScanId;
+};
+
+// Coalesced mutation state: burst inserts accumulate here and are
+// processed once per frame by processMutationBatch() below.
+// @since NEXT
+let pendingMutationBatch = [];
+let mutationFlushScheduled = false;
+
+/**
+ * Process one MutationObserver batch (audit maintainability).
+ *
+ * Hoisted to module scope so loadImages() stays a thin orchestrator and
+ * batching is directly unit-testable. Depends only on module-level state
+ * and top-level helpers.
+ *
+ * @since NEXT
+ * @param {MutationRecord[]} mutations Observer batch.
+ * @return {void}
+ */
+const processMutationBatch = ( mutations ) => {
+	const selector = getLazySelector();
+	mutations.forEach( ( mutation ) => {
+		releaseRemovedLazyNodes( mutation.removedNodes );
+		mutation.addedNodes.forEach( ( node ) => {
+			if ( 1 !== node.nodeType ) {
+				return;
+			}
+			// Natively-deferred images never enter observeElement()
+			// (no data-src), so prepare their placeholders here too
+			// (idempotent — the dedicated native observer agrees).
+			prepareNativePlaceholdersForNode( node );
+			if (
+				node.tagName === 'IMG' ||
+				node.tagName === 'IFRAME' ||
+				node.tagName === 'VIDEO'
+			) {
+				observeElement( node );
+			}
+			const kids = node.querySelectorAll( selector );
+			kids.forEach( ( child ) => {
+				observeElement( child );
+			} );
+			// Single-pass: reuse matches/query results instead of
+			// re-querying the DOM for the safety-scan decision.
+			const matchesSelf =
+				'function' === typeof node.matches && node.matches( selector );
+			if ( matchesSelf || kids.length > 0 ) {
+				startSafetyScan();
+			}
+			const videoPlaceholder =
+				'function' === typeof node.matches &&
+				node.matches( '.wppo-video-placeholder' )
+					? node
+					: node.querySelector( '.wppo-video-placeholder' );
+			if ( videoPlaceholder ) {
+				initVideoPlaceholders();
+			}
+		} );
+	} );
+};
+
+/**
  * Teardown lazyload observers and safety interval.
  *
  * Idempotent — safe to call multiple times. Runs automatically on
@@ -1736,55 +2121,9 @@ const isHeroImage = ( el ) => {
  * @param {Element} el The hero IMG element.
  */
 const restoreHeroImage = ( el ) => {
-	if ( el.hasAttribute( 'data-src' ) ) {
-		const dataSrc = el.getAttribute( 'data-src' );
-		if ( dataSrc ) {
-			if ( ! isSafeSubresourceUrl( dataSrc ) ) {
-				console.warn(
-					'WPPO: blocked hero image src (scheme/origin not allowed):',
-					dataSrc
-				);
-			} else {
-				el.src = dataSrc;
-			}
-		}
-		el.removeAttribute( 'data-src' );
-	}
-	if ( el.hasAttribute( 'data-srcset' ) ) {
-		const dataSrcset = el.getAttribute( 'data-srcset' );
-		if ( dataSrcset ) {
-			if ( ! isSafeSrcsetValue( dataSrcset ) ) {
-				console.warn(
-					'WPPO: blocked hero image srcset (scheme/origin not allowed):',
-					dataSrcset
-				);
-			} else {
-				el.srcset = dataSrcset;
-			}
-		}
-		el.removeAttribute( 'data-srcset' );
-	}
+	restoreSrcAttrs( el, { kind: 'hero image' } );
 	restoreSizes( el );
-	const parent = el.parentNode;
-	if ( parent && parent.tagName === 'PICTURE' ) {
-		parent.querySelectorAll( 'source' ).forEach( ( s ) => {
-			restoreSizes( s );
-			if ( s.hasAttribute( 'data-srcset' ) ) {
-				const sourceSrcset = s.getAttribute( 'data-srcset' );
-				if ( sourceSrcset ) {
-					if ( ! isSafeSrcsetValue( sourceSrcset ) ) {
-						console.warn(
-							'WPPO: blocked hero picture source srcset (scheme/origin not allowed):',
-							sourceSrcset
-						);
-					} else {
-						s.srcset = sourceSrcset;
-					}
-				}
-				s.removeAttribute( 'data-srcset' );
-			}
-		} );
-	}
+	restorePictureSourceSets( el, { kind: 'hero picture source' } );
 	if ( el.getAttribute( 'loading' ) !== 'eager' ) {
 		el.setAttribute( 'loading', 'eager' );
 	}
@@ -2271,19 +2610,11 @@ const loadImages = () => {
 	// so the browser handles lazy loading natively. No IntersectionObserver needed for them.
 	if ( USE_NATIVE_LAZY ) {
 		document.querySelectorAll( 'iframe[data-src]' ).forEach( ( iframe ) => {
-			const src = iframe.getAttribute( 'data-src' );
 			iframe.setAttribute( 'loading', 'lazy' );
-			if ( src ) {
-				if ( ! isSafeSubresourceUrl( src ) ) {
-					console.warn(
-						'WPPO: blocked lazy iframe src (scheme/origin not allowed):',
-						src
-					);
-				} else {
-					iframe.src = src;
-				}
-			}
-			iframe.removeAttribute( 'data-src' );
+			restoreSrcAttrs( iframe, {
+				kind: 'lazy iframe',
+				includeSrcset: false,
+			} );
 		} );
 	}
 
@@ -2309,144 +2640,14 @@ const loadImages = () => {
 							const el = entry.target;
 
 							if ( el.tagName === 'IMG' ) {
-								const parent = el.parentNode;
-								if ( parent && parent.tagName === 'PICTURE' ) {
-									const sources =
-										parent.querySelectorAll( 'source' );
-									sources.forEach( ( s ) => {
-										restoreSizes( s );
-										if ( s.hasAttribute( 'data-srcset' ) ) {
-											const pictureSrcset =
-												s.getAttribute( 'data-srcset' );
-											if ( pictureSrcset ) {
-												if (
-													! isSafeSrcsetValue(
-														pictureSrcset
-													)
-												) {
-													console.warn(
-														'WPPO: blocked lazy picture source srcset (scheme/origin not allowed):',
-														pictureSrcset
-													);
-												} else {
-													s.srcset = pictureSrcset;
-												}
-											}
-											s.removeAttribute( 'data-srcset' );
-										}
-									} );
-								}
-
-								// Apply placeholder styling before the full image loads.
-								applyPlaceholderBeforeLoad( el );
-
-								// Register handler BEFORE setting src to avoid missing cached-image load events.
-								const onImgLoad =
-									makePlaceholderLoadHandler( el );
-								el.addEventListener( 'load', onImgLoad );
-
-								// Restore sizes before src/srcset so the hint is active when the browser selects a candidate.
-								restoreSizes( el );
-
-								if ( el.hasAttribute( 'data-src' ) ) {
-									const imgSrc =
-										el.getAttribute( 'data-src' );
-									if ( imgSrc ) {
-										if (
-											! isSafeSubresourceUrl( imgSrc )
-										) {
-											console.warn(
-												'WPPO: blocked lazy image src (scheme/origin not allowed):',
-												imgSrc
-											);
-										} else {
-											el.src = imgSrc;
-										}
-									}
-									el.removeAttribute( 'data-src' );
-								}
-
-								if ( el.hasAttribute( 'data-srcset' ) ) {
-									const imgSrcset =
-										el.getAttribute( 'data-srcset' );
-									if ( imgSrcset ) {
-										if (
-											! isSafeSrcsetValue( imgSrcset )
-										) {
-											console.warn(
-												'WPPO: blocked lazy image srcset (scheme/origin not allowed):',
-												imgSrcset
-											);
-										} else {
-											el.srcset = imgSrcset;
-										}
-									}
-									el.removeAttribute( 'data-srcset' );
-								}
+								restoreLazyImage( el );
 							} else if ( el.tagName === 'IFRAME' ) {
-								if ( el.hasAttribute( 'data-src' ) ) {
-									const iframeSrc =
-										el.getAttribute( 'data-src' );
-									if ( iframeSrc ) {
-										if (
-											! isSafeSubresourceUrl( iframeSrc )
-										) {
-											console.warn(
-												'WPPO: blocked lazy iframe src (scheme/origin not allowed):',
-												iframeSrc
-											);
-										} else {
-											el.src = iframeSrc;
-										}
-									}
-									el.removeAttribute( 'data-src' );
-								}
-							} else if ( el.tagName === 'VIDEO' ) {
-								if ( el.hasAttribute( 'data-src' ) ) {
-									const videoSrc =
-										el.getAttribute( 'data-src' );
-									if ( isSafeSubresourceUrl( videoSrc ) ) {
-										el.src = videoSrc;
-									} else {
-										console.warn(
-											'WPPO: blocked lazy video src (scheme/origin not allowed):',
-											videoSrc
-										);
-									}
-									el.removeAttribute( 'data-src' );
-								}
-								if ( el.hasAttribute( 'data-poster' ) ) {
-									const poster =
-										el.getAttribute( 'data-poster' );
-									if ( isSafeSubresourceUrl( poster ) ) {
-										el.poster = poster;
-									} else {
-										console.warn(
-											'WPPO: blocked lazy video poster (scheme/origin not allowed):',
-											poster
-										);
-									}
-									el.removeAttribute( 'data-poster' );
-								}
-								el.querySelectorAll(
-									'source[data-src]'
-								).forEach( ( s ) => {
-									const sourceSrc =
-										s.getAttribute( 'data-src' );
-									if ( isSafeSubresourceUrl( sourceSrc ) ) {
-										s.src = sourceSrc;
-									} else {
-										console.warn(
-											'WPPO: blocked lazy source src (scheme/origin not allowed):',
-											sourceSrc
-										);
-									}
-									s.removeAttribute( 'data-src' );
+								restoreSrcAttrs( el, {
+									kind: 'lazy iframe',
+									includeSrcset: false,
 								} );
-								el.load();
-								if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
-									el.play().catch( () => {} );
-								}
+							} else if ( el.tagName === 'VIDEO' ) {
+								restoreLazyVideo( el );
 							}
 
 							globalObserver.unobserve( el );
@@ -2467,107 +2668,6 @@ const loadImages = () => {
 					rootMargin: '200px',
 				}
 			);
-
-			const startSafetyScan = () => {
-				// Guard only on this copy's own handle so a second copy of
-				// this module on the same page still scans its own elements.
-				// Each copy owns a separate interval; clearing stays isolated
-				// via clearSafetyScan() (window.wppoSafetyScanId is only a
-				// backward-compat mirror, never a startup gate).
-				if ( safetyScanId !== null ) {
-					return;
-				}
-				let ticks = 0;
-				let emptyStreak = 0;
-				const MAX_TICKS = 30;
-				safetyScanId = setInterval( () => {
-					if ( document.hidden ) {
-						return;
-					}
-					ticks++;
-					const elements = document.querySelectorAll(
-						getLazySelector()
-					);
-					if ( elements.length === 0 ) {
-						// Fallback reconciliation: removed-without-intersecting
-						// nodes are released via the MutationObserver above, but
-						// if any slot leaked (e.g. observer installed late),
-						// a zero-match DOM proves nothing is pending.
-						pendingLazyCount = 0;
-						checkCleanup();
-						clearSafetyScan();
-						return;
-					}
-					let newlyObserved = 0;
-					elements.forEach( ( el ) => {
-						if ( ! observedElements.has( el ) ) {
-							observeElement( el );
-							newlyObserved++;
-						}
-					} );
-					if ( 0 === newlyObserved ) {
-						emptyStreak++;
-					} else {
-						emptyStreak = 0;
-					}
-					if ( ticks >= MAX_TICKS || emptyStreak >= 2 ) {
-						clearSafetyScan();
-					}
-				}, 10000 );
-				// Backward-compat mirror for tests/inline snippets; the
-				// module-local binding above remains the source of truth.
-				window.wppoSafetyScanId = safetyScanId;
-			};
-
-			// Coalesced mutation state: burst inserts accumulate here and are
-			// processed once per frame by processMutationBatch() below.
-			// @since NEXT
-			let pendingMutationBatch = [];
-			let mutationFlushScheduled = false;
-			const processMutationBatch = ( mutations ) => {
-				const selector = getLazySelector();
-				mutations.forEach( ( mutation ) => {
-					releaseRemovedLazyNodes( mutation.removedNodes );
-					mutation.addedNodes.forEach( ( node ) => {
-						if ( 1 !== node.nodeType ) {
-							return;
-						}
-						// Natively-deferred images never enter observeElement()
-						// (no data-src), so prepare their placeholders here too
-						// (idempotent — the dedicated native observer agrees).
-						prepareNativePlaceholdersForNode( node );
-						if (
-							node.tagName === 'IMG' ||
-							node.tagName === 'IFRAME' ||
-							node.tagName === 'VIDEO'
-						) {
-							observeElement( node );
-						}
-						const kids = node.querySelectorAll( selector );
-						kids.forEach( ( child ) => {
-							observeElement( child );
-						} );
-						// Single-pass: reuse matches/query results instead of
-						// re-querying the DOM for the safety-scan decision.
-						const matchesSelf =
-							'function' === typeof node.matches &&
-							node.matches( selector );
-						if ( matchesSelf || kids.length > 0 ) {
-							startSafetyScan();
-						}
-						const videoPlaceholder =
-							'function' === typeof node.matches &&
-							node.matches( '.wppo-video-placeholder' )
-								? node
-								: node.querySelector(
-										'.wppo-video-placeholder'
-								  );
-						if ( videoPlaceholder ) {
-							initVideoPlaceholders();
-						}
-					} );
-				} );
-			};
 
 			// Guard against re-entry: a re-executed module must not create a
 			// second MutationObserver on document.body.
@@ -2636,121 +2736,12 @@ const loadImages = () => {
 					}
 					if ( isElementInViewport( el ) ) {
 						if ( el.tagName === 'VIDEO' ) {
-							if ( el.hasAttribute( 'data-poster' ) ) {
-								const fallbackPoster =
-									el.getAttribute( 'data-poster' );
-								if ( isSafeSubresourceUrl( fallbackPoster ) ) {
-									el.poster = fallbackPoster;
-								} else {
-									console.warn(
-										'WPPO: blocked lazy video poster (scheme/origin not allowed):',
-										fallbackPoster
-									);
-								}
-								el.removeAttribute( 'data-poster' );
-							}
-							if ( el.hasAttribute( 'data-src' ) ) {
-								const fallbackVideoSrc =
-									el.getAttribute( 'data-src' );
-								if (
-									isSafeSubresourceUrl( fallbackVideoSrc )
-								) {
-									el.src = fallbackVideoSrc;
-								} else {
-									console.warn(
-										'WPPO: blocked lazy video src (scheme/origin not allowed):',
-										fallbackVideoSrc
-									);
-								}
-								el.removeAttribute( 'data-src' );
-							}
-							el.querySelectorAll(
-								'source[data-src], source[data-srcset]'
-							).forEach( ( s ) => {
-								if ( s.hasAttribute( 'data-src' ) ) {
-									const fbSourceSrc =
-										s.getAttribute( 'data-src' );
-									if ( isSafeSubresourceUrl( fbSourceSrc ) ) {
-										s.src = fbSourceSrc;
-									} else {
-										console.warn(
-											'WPPO: blocked lazy source src (scheme/origin not allowed):',
-											fbSourceSrc
-										);
-									}
-									s.removeAttribute( 'data-src' );
-								}
-								if ( s.hasAttribute( 'data-srcset' ) ) {
-									const fbSourceSrcset =
-										s.getAttribute( 'data-srcset' );
-									if ( fbSourceSrcset ) {
-										if (
-											! isSafeSrcsetValue(
-												fbSourceSrcset
-											)
-										) {
-											console.warn(
-												'WPPO: blocked lazy source srcset (scheme/origin not allowed):',
-												fbSourceSrcset
-											);
-										} else {
-											s.srcset = fbSourceSrcset;
-										}
-									}
-									s.removeAttribute( 'data-srcset' );
-								}
+							restoreLazyVideo( el, {
+								includeSourceSrcset: true,
 							} );
-							el.load();
-							if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
-								el.play().catch( () => {} );
-							}
 							el.classList.remove( 'wppo-lazy-video' );
 						} else {
-							// Apply placeholder styling before the full image loads.
-							applyPlaceholderBeforeLoad( el );
-
-							// Register handler BEFORE setting src to avoid missing cached-image load events.
-							const onImgLoadFallback =
-								makePlaceholderLoadHandler( el );
-							el.addEventListener( 'load', onImgLoadFallback );
-
-							// Restore sizes before src/srcset so the hint is active when the browser selects a candidate.
-							restoreSizes( el );
-
-							if ( el.hasAttribute( 'data-src' ) ) {
-								const fallbackImgSrc =
-									el.getAttribute( 'data-src' );
-								if ( fallbackImgSrc ) {
-									if (
-										! isSafeSubresourceUrl( fallbackImgSrc )
-									) {
-										console.warn(
-											'WPPO: blocked lazy image src (scheme/origin not allowed):',
-											fallbackImgSrc
-										);
-									} else {
-										el.src = fallbackImgSrc;
-									}
-								}
-								el.removeAttribute( 'data-src' );
-							}
-							if ( el.hasAttribute( 'data-srcset' ) ) {
-								const fallbackImgSrcset =
-									el.getAttribute( 'data-srcset' );
-								if ( fallbackImgSrcset ) {
-									if (
-										! isSafeSrcsetValue( fallbackImgSrcset )
-									) {
-										console.warn(
-											'WPPO: blocked lazy image srcset (scheme/origin not allowed):',
-											fallbackImgSrcset
-										);
-									} else {
-										el.srcset = fallbackImgSrcset;
-									}
-								}
-								el.removeAttribute( 'data-srcset' );
-							}
+							restoreLazyImage( el );
 						}
 					}
 				} );
@@ -2759,27 +2750,6 @@ const loadImages = () => {
 				}
 				active = false;
 			}, 200 );
-		};
-
-		/**
-		 * Check whether an element is visible in the current viewport.
-		 *
-		 * @since 1.0.0
-		 * @param {Element} el The DOM element.
-		 * @return {boolean} True if the element is fully within the viewport.
-		 */
-		const isElementInViewport = ( el ) => {
-			const rect = el.getBoundingClientRect();
-			const vh =
-				window.innerHeight || document.documentElement.clientHeight;
-			const vw =
-				window.innerWidth || document.documentElement.clientWidth;
-			return (
-				rect.top < vh &&
-				rect.bottom > 0 &&
-				rect.left < vw &&
-				rect.right > 0
-			);
 		};
 
 		if ( window.wppoLazyLoadFallback ) {

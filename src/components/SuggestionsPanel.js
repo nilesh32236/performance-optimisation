@@ -24,6 +24,7 @@ import {
 import StatusBadge from './common/StatusBadge';
 
 import { __ } from '@wordpress/i18n';
+import { isMissingMetric } from '../lib/format';
 
 /**
  * Maps fix_action values to WPPO sidebar tab names.
@@ -75,12 +76,19 @@ const SuggestionIcon = ( { status } ) => {
 /**
  * Format a suggestion value for display.
  *
+ * Missing-value handling delegates to the shared `isMissingMetric()` guard
+ * in `lib/format.js` so edge values (null/booleans/arrays/blank strings)
+ * render '—' exactly like the shared `formatMs`/`formatPercent` call sites.
+ * The ms/%/s branches intentionally keep the compact card format ('500ms',
+ * '85.3%', '1.23s') rather than the spaced i18n format of the shared
+ * helpers — do not "unify" the suffixes without updating card snapshots.
+ *
  * @param {*}      value Metric value.
  * @param {string} unit  Unit label.
  * @return {string} Formatted display string.
  */
 export const formatValue = ( value, unit ) => {
-	if ( value === null || value === undefined ) {
+	if ( isMissingMetric( value ) ) {
 		return '—';
 	}
 	if ( unit === 'list' ) {

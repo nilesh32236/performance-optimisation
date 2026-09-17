@@ -22,11 +22,14 @@ import { __, sprintf } from '@wordpress/i18n';
  * Null, undefined, booleans, arrays, and blank strings render the '—'
  * fallback instead of a coerced number (e.g. true → 1, [] → 0).
  *
+ * Shared guard for metric formatters (formatMs/formatPercent/formatBytesShared
+ * and SuggestionsPanel.formatValue) so edge-value handling cannot drift.
+ *
  * @since NEXT
  * @param {*} value Raw value.
  * @return {boolean} Whether to render the fallback.
  */
-const isMissingMetric = ( value ) => {
+export const isMissingMetric = ( value ) => {
 	if ( value === null || value === undefined ) {
 		return true;
 	}

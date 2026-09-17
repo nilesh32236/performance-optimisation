@@ -1,6 +1,7 @@
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { apiCall, patchSettingsCache } from '../lib/apiRequest';
+import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
@@ -8,23 +9,14 @@ import NoticeBanner from './common/NoticeBanner';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 /**
- * Whether a URL is safe to render as an external link href (http(s) only).
+ * Deprecated alias kept for backward compatibility (audit maintainability:
+ * canonical implementation lives in `src/lib/urls.js` as `isSafeHttpUrl`).
  *
- * @since 2.0.0
+ * @since NEXT
  * @param {string} url Raw URL.
  * @return {boolean} True when the URL parses as http(s).
  */
-export const isHttpUrl = ( url ) => {
-	if ( ! url || typeof url !== 'string' ) {
-		return false;
-	}
-	try {
-		const parsed = new URL( url );
-		return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
-	} catch {
-		return false;
-	}
-};
+export const isHttpUrl = isSafeHttpUrl;
 
 /**
  * LLMs.txt panel for Dashboard (N8).
@@ -165,7 +157,7 @@ const LlmsPanel = () => {
 						'File will be available at:',
 						'performance-optimisation'
 					) }{ ' ' }
-					{ isHttpUrl( llmsUrl ) ? (
+					{ isSafeHttpUrl( llmsUrl ) ? (
 						<a
 							href={ llmsUrl }
 							target="_blank"

@@ -23,6 +23,7 @@ import {
 	getErrorLogMessage,
 } from '../lib/apiRequest';
 import { formatBytes } from '../lib/util';
+import { boolToStatus, thresholdStatus } from '../lib/status';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
@@ -118,29 +119,16 @@ const METRIC_INFO = {
 /**
  * Derive a status string from a numeric value and thresholds.
  *
- * Missing or non-numeric telemetry (undefined, null, NaN, non-finite)
- * renders 'unknown' instead of 'poor' so absent fields never show red.
- * Matches lib/status.js scoreToStatus() semantics; StatusBadge already
- * renders the 'unknown' variant.
+ * Thin alias over the shared `thresholdStatus()` in `lib/status.js` (audit
+ * maintainability: one threshold contract for audit + PageSpeed badges).
  *
  * @param {*}      value The metric value.
  * @param {number} good  Upper bound for 'good'.
  * @param {number} poor  Lower bound for 'poor'.
  * @return {string} Status string.
  */
-const numericStatus = ( value, good, poor ) => {
-	const num = Number( value );
-	if ( ! Number.isFinite( num ) ) {
-		return 'unknown';
-	}
-	if ( num <= good ) {
-		return 'good';
-	}
-	if ( num <= poor ) {
-		return 'needs_improvement';
-	}
-	return 'poor';
-};
+const numericStatus = ( value, good, poor ) =>
+	thresholdStatus( value, good, poor );
 
 /**
  * Format a metric value with a unit, falling back to an em dash when
@@ -162,22 +150,14 @@ const fmtMetric = ( value, unit ) => {
 /**
  * Derive a status string from a boolean pass/fail value.
  *
- * Non-boolean telemetry (undefined, null, numbers, strings) renders
- * 'unknown' instead of 'poor' so absent checks never show red. Matches
- * lib/status.js boolToStatus() semantics.
+ * Thin alias over the shared `boolToStatus()` in `lib/status.js` (audit
+ * maintainability: keeps audit badges and PageSpeed badges on one contract).
  *
+ * @since NEXT
  * @param {*} passing Whether the check passed.
  * @return {string} 'good', 'poor' or 'unknown'.
  */
-const boolStatus = ( passing ) => {
-	if ( passing === true ) {
-		return 'good';
-	}
-	if ( passing === false ) {
-		return 'poor';
-	}
-	return 'unknown';
-};
+const boolStatus = boolToStatus;
 
 /**
  * A single row in the results table with optional tooltip.

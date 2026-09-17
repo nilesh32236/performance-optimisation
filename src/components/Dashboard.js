@@ -7,16 +7,14 @@ import {
 } from '@wordpress/element';
 import {
 	apiCall,
-	fetchWooCacheSelfTest,
 	getErrorLogMessage,
 	getWppoSettings,
 } from '../lib/apiRequest';
 import {
 	WOO_SELF_TEST_TIMEOUT_MS,
 	formatWooSummary,
-	getWooCheckState,
-	getWooRuleRemediation,
 	getWooSelfTestNotice,
+	runWooSelfTest,
 	shouldShowWooFixCta,
 } from '../lib/wooSelfTest';
 import { getDbCounts } from '../lib/dbCounts';
@@ -29,6 +27,8 @@ import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import CheckboxOption from './common/CheckboxOption';
 import NoticeBanner from './common/NoticeBanner';
+import WooCheckList from './common/WooCheckList';
+import TtlOverrideSelect, { toTtlOverride } from './common/TtlOverrideSelect';
 import PerformanceAudit from './PerformanceAudit';
 import PageSpeedPanel from './PageSpeedPanel';
 import WebVitalsTrends from './WebVitalsTrends';
@@ -94,49 +94,9 @@ const getPollDelay = ( attempts ) =>
 	);
 
 /**
- * Coerce a TTL override select value to a finite number, or undefined when
- * the override should be omitted. Guards against tampered non-numeric option
- * values: Number('abc') is NaN and JSON.stringify(NaN) becomes null, which
- * the server could misread as an explicit clear / never-expire.
- *
- * @param {*} value Raw select value ('' | number | string | null | undefined).
- * @return {number|undefined} Finite number, or undefined to omit.
- */
-const toTtlOverride = ( value ) => {
-	if ( '' === value || null === value || undefined === value ) {
-		return undefined;
-	}
-	const n = Number( value );
-	return Number.isFinite( n ) ? n : undefined;
-};
-
-/**
  * Allowed CDN purge services (client-side allowlist; server allowlists too).
  */
 const CDN_PURGE_SERVICES = [ 'none', 'cloudflare', 'varnish' ];
-
-/**
- * Copy for a Woo self-test check row with explicit tri-state handling.
- *
- * A malformed entry with pass missing must never render FAIL copy with no
- * evidence — it renders an inconclusive label instead.
- *
- * @since NEXT
- * @param {*}      pass     Raw pass value from a check entry.
- * @param {string} passCopy Pass label.
- * @param {string} failCopy Fail label.
- * @return {string} Row label.
- */
-const getWooCheckCopy = ( pass, passCopy, failCopy ) => {
-	const state = getWooCheckState( pass );
-	if ( state === 'pass' ) {
-		return passCopy;
-	}
-	if ( state === 'fail' ) {
-		return failCopy;
-	}
-	return __( 'Inconclusive (re-run)', 'performance-optimisation' );
-};
 
 /**
  * Parse the Varnish purge-endpoint textarea into validated http(s) URLs.
@@ -870,6 +830,11 @@ const Dashboard = ( {
 		// Abort any previous in-flight test and clear its timeout first so
 		// a rapid re-run can never let a stale timer misclassify the new
 		// run's abort as a 5s timeout, nor let stale results win.
+		// Timeout/race enforcement lives in lib/wooSelfTest.js
+		// runWooSelfTest() (audit maintainability: one timeout contract, so
+		// a timeout fix in lib reaches this panel); the local timer below
+		// only classifies timeout-vs-unmount for the error notice, and the
+		// abort ref only supersedes/cleans up runs.
 		if ( wooTimeoutRef.current ) {
 			clearTimeout( wooTimeoutRef.current );
 			wooTimeoutRef.current = null;
@@ -889,7 +854,7 @@ const Dashboard = ( {
 				controller.abort();
 			}, WOO_SELF_TEST_TIMEOUT_MS );
 		}
-		fetchWooCacheSelfTest( controller?.signal )
+		runWooSelfTest( controller?.signal )
 			.then( ( response ) => {
 				// Bail when this run is no longer current (a newer re-run
 				// replaced it) or its signal was aborted — stale results
@@ -1537,150 +1502,48 @@ const Dashboard = ( {
 						) }
 					</p>
 				</div>
-				<div className="wppo-field">
-					<label className="wppo-field-label" htmlFor="wppoTtlPost">
-						{ __(
-							'Posts TTL override',
-							'performance-optimisation'
-						) }
-					</label>
-					<select
-						className="wppo-select"
-						id="wppoTtlPost"
-						name="ttlPost"
-						value={ '' === ttlPost ? '' : String( ttlPost ) }
-						onChange={ handleTtlPostChange }
-						aria-describedby="wppoTtlOverrides-desc"
-					>
-						<option value="">
-							{ __(
-								'Inherit global',
-								'performance-optimisation'
-							) }
-						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
-					</select>
-				</div>
-				<div className="wppo-field">
-					<label className="wppo-field-label" htmlFor="wppoTtlPage">
-						{ __(
-							'Pages TTL override',
-							'performance-optimisation'
-						) }
-					</label>
-					<select
-						className="wppo-select"
-						id="wppoTtlPage"
-						name="ttlPage"
-						value={ '' === ttlPage ? '' : String( ttlPage ) }
-						onChange={ handleTtlPageChange }
-						aria-describedby="wppoTtlOverrides-desc"
-					>
-						<option value="">
-							{ __(
-								'Inherit global',
-								'performance-optimisation'
-							) }
-						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
-					</select>
-				</div>
-				<div className="wppo-field">
-					<label
-						className="wppo-field-label"
-						htmlFor="wppoTtlProduct"
-					>
-						{ __(
-							'Products TTL override',
-							'performance-optimisation'
-						) }
-					</label>
-					<select
-						className="wppo-select"
-						id="wppoTtlProduct"
-						name="ttlProduct"
-						value={ '' === ttlProduct ? '' : String( ttlProduct ) }
-						onChange={ handleTtlProductChange }
-						aria-describedby="wppoTtlOverrides-desc"
-					>
-						<option value="">
-							{ __(
-								'Inherit global',
-								'performance-optimisation'
-							) }
-						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
-					</select>
-					<p
-						id="wppoTtlOverrides-desc"
-						className="wppo-text-muted wppo-text-small"
-					>
-						{ __(
-							'LiteSpeed only — per post type overrides for X-LiteSpeed-Cache-Control. Non-singular pages use the global lifespan. Filter wppo_litespeed_ttl still works.',
-							'performance-optimisation'
-						) }
-					</p>
-				</div>
+				<TtlOverrideSelect
+					id="wppoTtlPost"
+					name="ttlPost"
+					label={ __(
+						'Posts TTL override',
+						'performance-optimisation'
+					) }
+					value={ ttlPost }
+					onChange={ handleTtlPostChange }
+					describedBy="wppoTtlOverrides-desc"
+				/>
+				<TtlOverrideSelect
+					id="wppoTtlPage"
+					name="ttlPage"
+					label={ __(
+						'Pages TTL override',
+						'performance-optimisation'
+					) }
+					value={ ttlPage }
+					onChange={ handleTtlPageChange }
+					describedBy="wppoTtlOverrides-desc"
+				/>
+				<TtlOverrideSelect
+					id="wppoTtlProduct"
+					name="ttlProduct"
+					label={ __(
+						'Products TTL override',
+						'performance-optimisation'
+					) }
+					value={ ttlProduct }
+					onChange={ handleTtlProductChange }
+					describedBy="wppoTtlOverrides-desc"
+				/>
+				<p
+					id="wppoTtlOverrides-desc"
+					className="wppo-text-muted wppo-text-small"
+				>
+					{ __(
+						'LiteSpeed only — per post type overrides for X-LiteSpeed-Cache-Control. Non-singular pages use the global lifespan. Filter wppo_litespeed_ttl still works.',
+						'performance-optimisation'
+					) }
+				</p>
 				<div id="wppoWooSafeMode" tabIndex="-1">
 					<SwitchField
 						label={ __(
@@ -1773,265 +1636,107 @@ const Dashboard = ( {
 								</span>
 							</p>
 						) }
-						{ Array.isArray( wooSelfTest.checks ) && (
-							<ul className="wppo-woo-self-test">
-								{ wooSelfTest.checks.map( ( check, index ) => (
-									<li
-										key={ `${
-											check?.path ?? 'check'
-										}-${ index }` }
-									>
-										<span>{ check?.path }</span>
-										{ ' — ' }
-										<span>
-											{ getWooCheckCopy(
-												check?.pass,
-												__(
-													'Bypassed (pass)',
-													'performance-optimisation'
-												),
-												__(
-													'Cacheable (fail)',
-													'performance-optimisation'
-												)
-											) }
-										</span>
-										{ check?.pass === false && (
-											<>
-												{ ' — ' }
-												<span className="wppo-text-muted wppo-text-small">
-													{ getWooRuleRemediation(
-														'route',
-														check?.pass
-													) }
-												</span>
-											</>
-										) }
-									</li>
-								) ) }
-							</ul>
-						) }
-						{ Array.isArray( wooSelfTest.fragment_checks ) &&
-							wooSelfTest.fragment_checks.length > 0 && (
-								<>
-									<p className="wppo-text-muted wppo-text-small">
-										{ __(
-											'Fragment probes (query-string):',
-											'performance-optimisation'
-										) }
-									</p>
-									<ul
-										className="wppo-woo-self-test"
-										aria-label={ __(
-											'Fragment probes (query-string)',
-											'performance-optimisation'
-										) }
-									>
-										{ wooSelfTest.fragment_checks.map(
-											( check, index ) => (
-												<li
-													key={ `${
-														check?.path ??
-														'fragment'
-													}-${ index }` }
-												>
-													<span>{ check?.path }</span>
-													{ ' — ' }
-													<span>
-														{ getWooCheckCopy(
-															check?.pass,
-															__(
-																'Bypassed (pass)',
-																'performance-optimisation'
-															),
-															__(
-																'Cacheable (fail)',
-																'performance-optimisation'
-															)
-														) }
-													</span>
-													{ check?.pass === false && (
-														<>
-															{ ' — ' }
-															<span className="wppo-text-muted wppo-text-small">
-																{ getWooRuleRemediation(
-																	'fragment',
-																	check?.pass
-																) }
-															</span>
-														</>
-													) }
-												</li>
-											)
-										) }
-									</ul>
-								</>
+						<WooCheckList
+							items={ wooSelfTest.checks }
+							kind="route"
+							passCopy={ __(
+								'Bypassed (pass)',
+								'performance-optimisation'
 							) }
-						{ Array.isArray( wooSelfTest.editor_checks ) &&
-							wooSelfTest.editor_checks.length > 0 && (
-								<>
-									<p className="wppo-text-muted wppo-text-small">
-										{ __(
-											'Editor bypass probes (admin + previews):',
-											'performance-optimisation'
-										) }
-									</p>
-									<ul
-										className="wppo-woo-self-test"
-										aria-label={ __(
-											'Editor bypass probes (admin + previews)',
-											'performance-optimisation'
-										) }
-									>
-										{ wooSelfTest.editor_checks.map(
-											( check, index ) => (
-												<li
-													key={ `${
-														check?.url ?? 'editor'
-													}-${ index }` }
-												>
-													<span>{ check?.url }</span>
-													{ ' — ' }
-													<span>
-														{ getWooCheckCopy(
-															check?.pass,
-															__(
-																'Bypassed (pass)',
-																'performance-optimisation'
-															),
-															__(
-																'Cacheable (fail)',
-																'performance-optimisation'
-															)
-														) }
-													</span>
-													{ check?.pass === false && (
-														<>
-															{ ' — ' }
-															<span className="wppo-text-muted wppo-text-small">
-																{ getWooRuleRemediation(
-																	'editor',
-																	check?.pass
-																) }
-															</span>
-														</>
-													) }
-												</li>
-											)
-										) }
-									</ul>
-								</>
+							failCopy={ __(
+								'Cacheable (fail)',
+								'performance-optimisation'
 							) }
-						{ Array.isArray( wooSelfTest.preload_checks ) &&
-							wooSelfTest.preload_checks.length > 0 && (
-								<>
-									<p className="wppo-text-muted wppo-text-small">
-										{ __(
-											'Preload probes (faceted URLs skipped):',
-											'performance-optimisation'
-										) }
-									</p>
-									<ul
-										className="wppo-woo-self-test"
-										aria-label={ __(
-											'Preload probes (faceted URLs skipped)',
-											'performance-optimisation'
-										) }
-									>
-										{ wooSelfTest.preload_checks.map(
-											( check, index ) => (
-												<li
-													key={ `${
-														check?.path ?? 'preload'
-													}-${ index }` }
-												>
-													<span>{ check?.path }</span>
-													{ ' — ' }
-													<span>
-														{ getWooCheckCopy(
-															check?.pass,
-															__(
-																'Skipped (pass)',
-																'performance-optimisation'
-															),
-															__(
-																'Queued (fail)',
-																'performance-optimisation'
-															)
-														) }
-													</span>
-													{ check?.pass === false && (
-														<>
-															{ ' — ' }
-															<span className="wppo-text-muted wppo-text-small">
-																{ getWooRuleRemediation(
-																	'preload',
-																	check?.pass
-																) }
-															</span>
-														</>
-													) }
-												</li>
-											)
-										) }
-									</ul>
-								</>
+						/>
+						<WooCheckList
+							items={ wooSelfTest.fragment_checks }
+							kind="fragment"
+							passCopy={ __(
+								'Bypassed (pass)',
+								'performance-optimisation'
 							) }
-						{ Array.isArray( wooSelfTest.cart_checks ) &&
-							wooSelfTest.cart_checks.length > 0 && (
-								<>
-									<p className="wppo-text-muted wppo-text-small">
-										{ __(
-											'Guest-cart survival (page + object cache on):',
-											'performance-optimisation'
-										) }
-									</p>
-									<ul
-										className="wppo-woo-self-test"
-										aria-label={ __(
-											'Guest-cart survival (page + object cache on)',
-											'performance-optimisation'
-										) }
-									>
-										{ wooSelfTest.cart_checks.map(
-											( check, index ) => (
-												<li
-													key={ `${
-														check?.key ?? 'cart'
-													}-${ index }` }
-												>
-													<span>{ check?.key }</span>
-													{ ' — ' }
-													<span>
-														{ getWooCheckCopy(
-															check?.pass,
-															__(
-																'Bypassed (pass)',
-																'performance-optimisation'
-															),
-															__(
-																'Cacheable (fail)',
-																'performance-optimisation'
-															)
-														) }
-													</span>
-													{ check?.pass === false && (
-														<>
-															{ ' — ' }
-															<span className="wppo-text-muted wppo-text-small">
-																{ getWooRuleRemediation(
-																	'cart',
-																	check?.pass
-																) }
-															</span>
-														</>
-													) }
-												</li>
-											)
-										) }
-									</ul>
-								</>
+							failCopy={ __(
+								'Cacheable (fail)',
+								'performance-optimisation'
 							) }
+							heading={ __(
+								'Fragment probes (query-string):',
+								'performance-optimisation'
+							) }
+							ariaLabel={ __(
+								'Fragment probes (query-string)',
+								'performance-optimisation'
+							) }
+							requireNonEmpty
+						/>
+						<WooCheckList
+							items={ wooSelfTest.editor_checks }
+							labelField="url"
+							keyFallback="editor"
+							kind="editor"
+							passCopy={ __(
+								'Bypassed (pass)',
+								'performance-optimisation'
+							) }
+							failCopy={ __(
+								'Cacheable (fail)',
+								'performance-optimisation'
+							) }
+							heading={ __(
+								'Editor bypass probes (admin + previews):',
+								'performance-optimisation'
+							) }
+							ariaLabel={ __(
+								'Editor bypass probes (admin + previews)',
+								'performance-optimisation'
+							) }
+							requireNonEmpty
+						/>
+						<WooCheckList
+							items={ wooSelfTest.preload_checks }
+							keyFallback="preload"
+							kind="preload"
+							passCopy={ __(
+								'Skipped (pass)',
+								'performance-optimisation'
+							) }
+							failCopy={ __(
+								'Queued (fail)',
+								'performance-optimisation'
+							) }
+							heading={ __(
+								'Preload probes (faceted URLs skipped):',
+								'performance-optimisation'
+							) }
+							ariaLabel={ __(
+								'Preload probes (faceted URLs skipped)',
+								'performance-optimisation'
+							) }
+							requireNonEmpty
+						/>
+						<WooCheckList
+							items={ wooSelfTest.cart_checks }
+							labelField="key"
+							keyFallback="cart"
+							kind="cart"
+							passCopy={ __(
+								'Bypassed (pass)',
+								'performance-optimisation'
+							) }
+							failCopy={ __(
+								'Cacheable (fail)',
+								'performance-optimisation'
+							) }
+							heading={ __(
+								'Guest-cart survival (page + object cache on):',
+								'performance-optimisation'
+							) }
+							ariaLabel={ __(
+								'Guest-cart survival (page + object cache on)',
+								'performance-optimisation'
+							) }
+							requireNonEmpty
+						/>
 					</div>
 				) }
 				<div className="wppo-feature-card__footer">

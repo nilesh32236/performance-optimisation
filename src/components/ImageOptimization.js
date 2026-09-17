@@ -86,6 +86,22 @@ const coerceLongestEdge = ( value, fallback ) => {
 	return Math.max( 0, Math.trunc( num ) );
 };
 
+/**
+ * Resolve the placeholder type with legacy fallback (audit maintainability).
+ *
+ * The `placeholderType ?? (replacePlaceholderWithSVG ? 'svg' : 'none')`
+ * mapping was triplicated across defaults and both sync effects — a
+ * legacy-mapping fix at one site only caused mount-vs-resync divergence,
+ * flipping the placeholder select after re-render. Single source here.
+ *
+ * @since NEXT
+ * @param {Object} [options={}] Raw options object.
+ * @return {string} Resolved placeholder type.
+ */
+export const resolvePlaceholderType = ( options = {} ) =>
+	options.placeholderType ??
+	( options.replacePlaceholderWithSVG ? 'svg' : 'none' );
+
 const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
@@ -122,9 +138,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		forceServerSideConversion: false,
 		discardOversizedSibling: true,
 		...options,
-		placeholderType:
-			options.placeholderType ??
-			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+		placeholderType: resolvePlaceholderType( options ),
 	};
 
 	// Coerce AFTER the spread so a corrupt non-numeric payload cannot flow
@@ -147,9 +161,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				options.maxLongestEdgePx,
 				prev.maxLongestEdgePx ?? 2560
 			),
-			placeholderType:
-				options.placeholderType ??
-				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+			placeholderType: resolvePlaceholderType( options ),
 			clientSideMimeTypes: Array.isArray( options.clientSideMimeTypes )
 				? options.clientSideMimeTypes
 				: prev.clientSideMimeTypes,
@@ -326,9 +338,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				options.maxLongestEdgePx,
 				defaultSettings.maxLongestEdgePx ?? 2560
 			),
-			placeholderType:
-				options.placeholderType ??
-				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+			placeholderType: resolvePlaceholderType( options ),
 			clientSideMimeTypes: Array.isArray( options.clientSideMimeTypes )
 				? options.clientSideMimeTypes
 				: defaultSettings.clientSideMimeTypes,

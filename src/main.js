@@ -21,28 +21,69 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	const fallbackTimers = new Set();
 
 	/**
+	 * Redact secret-looking substrings before logging.
+	 *
+	 * Dependency-free mirror of redactLogSecrets() in src/lib/logMessage.js
+	 * (audit maintainability); kept local so this entry stays standalone
+	 * (no SPA bundle coupling). Keep in sync (pinned by
+	 * src/__tests__/logMirrorSync.test.js).
+	 *
+	 * @param {string} raw Raw message.
+	 * @return {string} Redacted message.
+	 */
+	const redactLogSecrets = ( raw ) => {
+		if ( 'string' !== typeof raw || '' === raw ) {
+			return raw;
+		}
+		return raw
+			.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
+			.replace(
+				/(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi,
+				'$1=[redacted]'
+			)
+			.replace(
+				/\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi,
+				'$1=[redacted]'
+			)
+			.replace(
+				/([?&](?:key|api[_-]?key|token|secret|password|pwd)\s*=)[^&\s]*/gi,
+				'$1[redacted]'
+			)
+			.replace(
+				/\b(password|passwd|pwd|secret|token)\b\s*[:=\s]\s*(['"]?)\S+\2/gi,
+				'$1=[redacted]'
+			);
+	};
+
+	/**
 	 * Extract a safe log message from an error without leaking response
 	 * bodies. Server error objects can embed settings/status payloads and
 	 * console output persists for any extension/devtools user, so only the
 	 * message is logged, never the full error object. Mirrors
-	 * getErrorLogMessage() in src/lib/apiRequest.js; kept local so this
+	 * getLogMessage() in src/lib/logMessage.js; kept local so this
 	 * entry stays standalone (no SPA bundle coupling).
 	 *
 	 * @param {*} error Caught error value.
 	 * @return {string} Safe message string.
 	 */
 	const getErrorLogMessage = ( error ) => {
+		let message;
 		if ( error instanceof Error ) {
-			return error.message || 'Unknown error';
-		}
-		if ( 'string' === typeof error ) {
-			return error.slice( 0, 500 ) || 'Unknown error';
-		}
-		if ( error === null || 'undefined' === typeof error ) {
+			message = error.message || 'Unknown error';
+		} else if ( 'string' === typeof error ) {
+			message = error.slice( 0, 500 ) || 'Unknown error';
+		} else if ( error === null || 'undefined' === typeof error ) {
 			return 'Unknown error';
+		} else {
+			try {
+				message = String( error ).slice( 0, 500 );
+			} catch {
+				return 'Unknown error';
+			}
 		}
 		try {
-			return String( error ).slice( 0, 500 );
+			const redacted = redactLogSecrets( message );
+			return ( redacted || 'Unknown error' ).slice( 0, 500 );
 		} catch {
 			return 'Unknown error';
 		}

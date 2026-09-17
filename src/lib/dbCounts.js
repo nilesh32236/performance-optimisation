@@ -12,34 +12,37 @@ import { apiCall } from './apiRequest';
 
 const DEFAULT_TTL_MS = 60000;
 
-let cachedAt = 0;
-let cachedData = null;
-let inflight = null;
-let inflightSignal = null;
-let generation = 0;
-let activeTtlMs = DEFAULT_TTL_MS;
+const hasSignalArg = ( signal ) => signal !== undefined && signal !== null;
 
 /**
  * Override the TTL (primarily for tests).
+ *
+ * Thin wrapper over the module singleton's setTtl() (audit maintainability:
+ * the singleton is a createDbCountsCache() instance, so the TTL/inflight/
+ * abort/generation logic lives in exactly one place).
  *
  * @since NEXT
  * @param {number} ttlMs TTL in milliseconds.
  * @return {void}
  */
 export const setDbCountsTtl = ( ttlMs ) => {
-	if ( Number.isFinite( ttlMs ) && ttlMs >= 0 ) {
-		activeTtlMs = ttlMs;
-	}
+	singleton.setTtl( ttlMs );
 };
 
 /**
  * Create an isolated counts cache (for tests; production uses the module singleton).
  *
+ * Single implementation of the TTL/inflight/signal/abort/generation logic
+ * (audit maintainability): getDbCounts()/clearDbCountsCache() below are a
+ * thin singleton over this factory instead of a second copy, so an
+ * abort-semantics or stale-while-revalidate fix cannot land in one copy and
+ * miss the other.
+ *
  * @since NEXT
  * @param {Object}   options       Options.
  * @param {number}   options.ttlMs TTL in milliseconds.
  * @param {Function} options.fetch Fetch implementation receiving a signal.
- * @return {{get: Function, clear: Function}} Isolated cache.
+ * @return {{get: Function, clear: Function, setTtl: Function}} Isolated cache.
  */
 export const createDbCountsCache = ( {
 	ttlMs = DEFAULT_TTL_MS,
@@ -48,7 +51,7 @@ export const createDbCountsCache = ( {
 			? apiCall( 'database_cleanup_counts', {}, 'GET', signal )
 			: apiCall( 'database_cleanup_counts', {}, 'GET' ),
 } = {} ) => {
-	const safeTtl =
+	let safeTtl =
 		Number.isFinite( ttlMs ) && ttlMs >= 0 ? ttlMs : DEFAULT_TTL_MS;
 	let localAt = 0;
 	let localData = null;
@@ -103,10 +106,22 @@ export const createDbCountsCache = ( {
 			localInflight = null;
 			localInflightSignal = null;
 		},
+		setTtl: ( nextTtlMs ) => {
+			if ( Number.isFinite( nextTtlMs ) && nextTtlMs >= 0 ) {
+				safeTtl = nextTtlMs;
+			}
+		},
 	};
 };
 
-const hasSignalArg = ( signal ) => signal !== undefined && signal !== null;
+/**
+ * Module singleton backing getDbCounts()/clearDbCountsCache().
+ *
+ * Thin singleton over createDbCountsCache() (audit maintainability) instead
+ * of a second ~50-line copy of the TTL/inflight/signal/abort/generation
+ * logic.
+ */
+const singleton = createDbCountsCache();
 
 /**
  * Fetch database cleanup counts with memoization.
@@ -115,54 +130,7 @@ const hasSignalArg = ( signal ) => signal !== undefined && signal !== null;
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Counts keyed by cleanup type.
  */
-export const getDbCounts = async ( signal ) => {
-	const hasSignal = hasSignalArg( signal );
-	const ownerSignal = signal ?? null;
-	const now = Date.now();
-	if ( cachedData && now - cachedAt < activeTtlMs ) {
-		// A cache hit must still honour an already-aborted caller signal —
-		// callers expect AbortError rather than a value after cancellation.
-		if ( hasSignal && signal.aborted ) {
-			throw new DOMException(
-				'The operation was aborted.',
-				'AbortError'
-			);
-		}
-		return { ...cachedData };
-	}
-	// Only coalesce onto an in-flight request created by the same caller
-	// signal (or by another signal-less caller). A different AbortSignal must
-	// not adopt — and then be rejected by — another component's request.
-	if ( inflight && inflightSignal === ownerSignal ) {
-		return inflight.then( ( data ) => ( { ...data } ) );
-	}
-	const requestGeneration = generation;
-	const request = (
-		hasSignal
-			? apiCall( 'database_cleanup_counts', {}, 'GET', signal )
-			: apiCall( 'database_cleanup_counts', {}, 'GET' )
-	).then( ( response ) => {
-		if ( response && response.success && response.data ) {
-			if ( requestGeneration === generation ) {
-				cachedData = { ...response.data };
-				cachedAt = Date.now();
-			}
-			return { ...response.data };
-		}
-		throw new Error( response?.message || 'Failed to load counts.' );
-	} );
-	inflight = request.finally( () => {
-		if (
-			generation === requestGeneration &&
-			inflightSignal === ownerSignal
-		) {
-			inflight = null;
-			inflightSignal = null;
-		}
-	} );
-	inflightSignal = ownerSignal;
-	return inflight;
-};
+export const getDbCounts = ( signal ) => singleton.get( signal );
 
 /**
  * Clear the memoized counts (e.g. after a cleanup run invalidates them).
@@ -170,10 +138,4 @@ export const getDbCounts = async ( signal ) => {
  * @since 2.0.0
  * @return {void}
  */
-export const clearDbCountsCache = () => {
-	cachedData = null;
-	cachedAt = 0;
-	generation++;
-	inflight = null;
-	inflightSignal = null;
-};
+export const clearDbCountsCache = () => singleton.clear();

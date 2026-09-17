@@ -20,6 +20,7 @@ import {
 } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
+import { clampNumeric, clampNumericRange } from '../lib/normalizeNumber';
 import useNotice from '../lib/useNotice';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -85,36 +86,15 @@ const CCSS_EXCLUDED_DEFAULT = 'fl-builder-template\nelementor_library';
 
 // Normalize the max-retries input the same way PHP sanitizes it
 // (is_numeric whole-value check, (int) truncation, clamped 0..5,
-// fail-open to 5). Number() mirrors PHP is_numeric() except for
-// hex/binary/octal literals (e.g. '0x3'): PHP is_numeric() rejects
-// them, so they are guarded explicitly to fail open to 5.
+// fail-open to 5). Thin wrapper over the shared clampNumericRange()
+// in lib/normalizeNumber.js (audit maintainability) — the boolean/array
+// fail-open guard, trim, hex-prefix guard and Number()+clamp live there
+// once so PHP-parity fixes cannot diverge across normalizers.
 // Math.trunc() mirrors the (int) cast for values like '3.7'.
 // Exported for direct Jest coverage.
 // @since NEXT
-export const normalizeRetries = ( value ) => {
-	if ( typeof value === 'number' ) {
-		return Number.isFinite( value )
-			? Math.min( 5, Math.max( 0, Math.trunc( value ) ) )
-			: 5;
-	}
-	if ( Array.isArray( value ) ) {
-		return 5;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s ) {
-		return 5;
-	}
-	// PHP is_numeric() rejects hex/binary/octal while Number() parses
-	// them, so guard explicitly to keep UI/server parity.
-	if ( /^0[xXoObB]/.test( s ) ) {
-		return 5;
-	}
-	const n = Number( s );
-	if ( ! Number.isFinite( n ) ) {
-		return 5;
-	}
-	return Math.min( 5, Math.max( 0, Math.trunc( n ) ) );
-};
+export const normalizeRetries = ( value ) =>
+	clampNumericRange( value, { defaultValue: 5, min: 0, max: 5 } );
 
 // Normalize the used-CSS delivery mode the same way PHP sanitizes it
 // (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
@@ -347,60 +327,27 @@ export const stripCdnIds = stripCdnRowIds;
 // Numeric clamps mirroring the server-side sanitizers so a raw server value
 // can never reach state/submit verbatim (display/UX parity — the server
 // stays authoritative).
-// Booleans/arrays fail open (true must not coerce to 1 via Number()), and
-// hex/octal/binary literals fail open to match PHP is_numeric() parity
-// (see normalizeRetries).
+// Thin wrappers over the shared clampNumeric()/clampNumericRange() in
+// lib/normalizeNumber.js (audit maintainability): booleans/arrays fail open
+// (true must not coerce to 1 via Number()), and hex/octal/binary literals
+// fail open to match PHP is_numeric() parity (see normalizeRetries).
 // @since NEXT
-export const normalizeIdleTimeout = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 3000;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 3000;
-	}
-	let n;
-	if ( typeof value === 'number' ) {
-		n = value;
-	} else {
-		n = Number( s );
-	}
-	if ( ! Number.isFinite( n ) || n <= 0 ) {
-		return 3000;
-	}
-	return Math.min( 20000, Math.max( 500, Math.trunc( n ) ) );
-};
+export const normalizeIdleTimeout = ( value ) =>
+	clampNumericRange( value, {
+		defaultValue: 3000,
+		min: 500,
+		max: 20000,
+		rejectNonPositive: true,
+	} );
 // @since NEXT
-export const normalizeCcssMaxSize = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 20480;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 20480;
-	}
-	const n = typeof value === 'number' ? value : Number( s );
-	if ( ! Number.isFinite( n ) || n <= 0 ) {
-		return 20480;
-	}
-	return Math.trunc( n );
-};
+export const normalizeCcssMaxSize = ( value ) =>
+	clampNumericRange( value, {
+		defaultValue: 20480,
+		rejectNonPositive: true,
+	} );
 // @since NEXT
-export const normalizeRegressionThreshold = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 20;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 20;
-	}
-	const n = typeof value === 'number' ? value : Number( s );
-	if ( ! Number.isFinite( n ) ) {
-		return 20;
-	}
-	const t = Math.trunc( n );
-	return t >= 5 && t <= 50 ? t : 20;
-};
+export const normalizeRegressionThreshold = ( value ) =>
+	clampNumeric( value, { defaultValue: 20, min: 5, max: 50 } );
 // toTextLines() (after spread, so backend arrays win correctly), delivery
 // mode via the PHP-mirroring allowlist, CCSS retries clamped 0..5, blank
 // CCSS exclusions reset to the builder defaults (mirroring PHP), font
