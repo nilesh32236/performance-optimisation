@@ -401,6 +401,7 @@ const ObjectCache = ( { options = {} } ) => {
 		if ( cacheStatus.failure_count > 0 ) {
 			parts.push(
 				`(${ sprintf(
+					/* translators: %d: failure count. */
 					_n(
 						'%d failure',
 						'%d failures',

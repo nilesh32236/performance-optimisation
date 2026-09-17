@@ -96,7 +96,6 @@ let pendingRefresh = null;
  * guard) so multiple simultaneous 403s share a single admin-ajax round-trip.
  *
  * @since 1.6.0
- * @param {AbortSignal|undefined} signal Optional abort signal (audit #1354).
  * @return {Promise<string>} The refreshed nonce string.
  */
 const refreshNonce = async () => {

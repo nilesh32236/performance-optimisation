@@ -1,4 +1,4 @@
-import { __, sprintf, _n } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import {
 	useState,
 	useEffect,
