@@ -28,7 +28,10 @@ const MetricCard = ( { label, value, unit = '', status = null } ) => {
 					unit !== null &&
 					unit !== undefined &&
 					unit !== '' && (
-						<span className="wppo-metric-card__unit"> { unit }</span>
+						<span className="wppo-metric-card__unit">
+							{ ' ' }
+							{ unit }
+						</span>
 					) }
 			</dd>
 			{ status && <StatusBadge status={ status } /> }

@@ -37,10 +37,10 @@ const RecentActivityCard = ( {
 					type="button"
 					className="wppo-button wppo-button--secondary"
 					onClick={ () => {
-					if ( typeof onNavigate === 'function' ) {
-						onNavigate( 'tools' );
-					}
-				} }
+						if ( typeof onNavigate === 'function' ) {
+							onNavigate( 'tools' );
+						}
+					} }
 					aria-label={ __(
 						'View Full Optimisation Activity Log',
 						'performance-optimisation'
@@ -84,7 +84,10 @@ const RecentActivityCard = ( {
 						role="status"
 						aria-live="polite"
 					>
-						{ __( 'Loading activity…', 'performance-optimisation' ) }
+						{ __(
+							'Loading activity…',
+							'performance-optimisation'
+						) }
 					</div>
 				) }
 				{ loading && ! showList && (
@@ -93,7 +96,10 @@ const RecentActivityCard = ( {
 						role="status"
 						aria-live="polite"
 					>
-						{ __( 'Loading activity…', 'performance-optimisation' ) }
+						{ __(
+							'Loading activity…',
+							'performance-optimisation'
+						) }
 					</div>
 				) }
 				{ showEmptyState && (

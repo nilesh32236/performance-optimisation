@@ -251,7 +251,10 @@ const CriticalCssPanel = ( {
 								<span
 									className={ `wppo-badge ${ config.className }` }
 								>
-									<FontAwesomeIcon icon={ config.icon } aria-hidden="true" />
+									<FontAwesomeIcon
+										icon={ config.icon }
+										aria-hidden="true"
+									/>
 									{ config.label }
 								</span>
 								{ onRegenerateSingle && (

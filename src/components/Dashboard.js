@@ -185,11 +185,11 @@ const normalizeImageInfo = ( raw ) => {
  * used to leave one list mislabeling FAIL as pass.
  *
  * @since NEXT
- * @param {Object} props           Component props.
- * @param {Array}  props.items     Check entries ({ path|key, pass }).
- * @param {string} props.kind      Remediation kind for getWooRuleRemediation.
- * @param {string} props.idPrefix  Key prefix.
- * @param {string} props.pathKey   Entry field holding the label ('path'|'key').
+ * @param {Object} props             Component props.
+ * @param {Array}  props.items       Check entries ({ path|key, pass }).
+ * @param {string} props.kind        Remediation kind for getWooRuleRemediation.
+ * @param {string} props.idPrefix    Key prefix.
+ * @param {string} props.pathKey     Entry field holding the label ('path'|'key').
  * @param {string} [props.listLabel] Accessible label for the list.
  * @return {Element} Check list.
  */
@@ -205,14 +205,8 @@ const WooCheckList = ( { items, kind, idPrefix, pathKey, listLabel } ) => (
 				<span>
 					{ getWooCheckCopy(
 						check?.pass,
-						__(
-							'Bypassed (pass)',
-							'performance-optimisation'
-						),
-						__(
-							'Cacheable (fail)',
-							'performance-optimisation'
-						)
+						__( 'Bypassed (pass)', 'performance-optimisation' ),
+						__( 'Cacheable (fail)', 'performance-optimisation' )
 					) }
 				</span>
 				{ check?.pass === false && (
@@ -384,7 +378,10 @@ const Dashboard = ( {
 			}
 		} catch ( statusError ) {
 			// Fail-open: keep the seeded wppoSettings value.
-			console.error( 'Failed refreshing upgrade purge status:', getErrorLogMessage( statusError ) );
+			console.error(
+				'Failed refreshing upgrade purge status:',
+				getErrorLogMessage( statusError )
+			);
 		}
 	}, [] );
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
@@ -847,7 +844,10 @@ const Dashboard = ( {
 			} )
 			.catch( ( dashboardError ) => {
 				// Audit #1420: log before notify.
-				console.error( 'Dashboard request failed:', getErrorLogMessage( dashboardError ) );
+				console.error(
+					'Dashboard request failed:',
+					getErrorLogMessage( dashboardError )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -856,8 +856,7 @@ const Dashboard = ( {
 					),
 					durationMs: 5000,
 				} );
-			}
-			)
+			} )
 			.finally( () => handleLoading( 'remove_images', false ) );
 	}, [ handleLoading, notify ] );
 
@@ -900,14 +899,16 @@ const Dashboard = ( {
 				} )
 				.catch( ( dashboardError ) => {
 					// Audit #1420: log before notify.
-					console.error( 'Dashboard request failed:', getErrorLogMessage( dashboardError ) );
+					console.error(
+						'Dashboard request failed:',
+						getErrorLogMessage( dashboardError )
+					);
 					notify( {
 						type: 'error',
 						message: failureMessage,
 						durationMs: 5000,
 					} );
-				}
-				)
+				} )
 				.finally( () => setSaving( false ) );
 		},
 		[ cacheSettings, notify ]
@@ -1649,7 +1650,7 @@ const Dashboard = ( {
 						onChange={ handleTtlPostChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
-												<TtlDurationOptions />
+						<TtlDurationOptions />
 					</select>
 				</div>
 				<div className="wppo-field">
@@ -1667,7 +1668,7 @@ const Dashboard = ( {
 						onChange={ handleTtlPageChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
-												<TtlDurationOptions />
+						<TtlDurationOptions />
 					</select>
 				</div>
 				<div className="wppo-field">
@@ -1688,7 +1689,7 @@ const Dashboard = ( {
 						onChange={ handleTtlProductChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
-												<TtlDurationOptions />
+						<TtlDurationOptions />
 					</select>
 					<p
 						id="wppoTtlOverrides-desc"
@@ -1793,7 +1794,7 @@ const Dashboard = ( {
 							</p>
 						) }
 						{ Array.isArray( wooSelfTest.checks ) && (
-														<WooCheckList
+							<WooCheckList
 								items={ wooSelfTest.checks }
 								kind="route"
 								idPrefix="check"
@@ -1809,12 +1810,15 @@ const Dashboard = ( {
 											'performance-optimisation'
 										) }
 									</p>
-																		<WooCheckList
+									<WooCheckList
 										items={ wooSelfTest.fragment_checks }
 										kind="fragment"
 										idPrefix="fragment"
 										pathKey="path"
-										listLabel={ __( 'Fragment probes (query-string)', 'performance-optimisation' ) }
+										listLabel={ __(
+											'Fragment probes (query-string)',
+											'performance-optimisation'
+										) }
 									/>
 								</>
 							) }
@@ -1827,12 +1831,15 @@ const Dashboard = ( {
 											'performance-optimisation'
 										) }
 									</p>
-																		<WooCheckList
+									<WooCheckList
 										items={ wooSelfTest.editor_checks }
 										kind="editor"
 										idPrefix="editor"
 										pathKey="path"
-										listLabel={ __( 'Editor bypass probes (admin + previews)', 'performance-optimisation' ) }
+										listLabel={ __(
+											'Editor bypass probes (admin + previews)',
+											'performance-optimisation'
+										) }
 									/>
 								</>
 							) }
@@ -1845,12 +1852,15 @@ const Dashboard = ( {
 											'performance-optimisation'
 										) }
 									</p>
-																		<WooCheckList
+									<WooCheckList
 										items={ wooSelfTest.preload_checks }
 										kind="preload"
 										idPrefix="preload"
 										pathKey="path"
-										listLabel={ __( 'Preload probes (faceted URLs skipped)', 'performance-optimisation' ) }
+										listLabel={ __(
+											'Preload probes (faceted URLs skipped)',
+											'performance-optimisation'
+										) }
 									/>
 								</>
 							) }
@@ -1863,12 +1873,15 @@ const Dashboard = ( {
 											'performance-optimisation'
 										) }
 									</p>
-																		<WooCheckList
+									<WooCheckList
 										items={ wooSelfTest.cart_checks }
 										kind="cart"
 										idPrefix="cart"
 										pathKey="key"
-										listLabel={ __( 'Guest-cart survival (page + object cache on)', 'performance-optimisation' ) }
+										listLabel={ __(
+											'Guest-cart survival (page + object cache on)',
+											'performance-optimisation'
+										) }
 									/>
 								</>
 							) }

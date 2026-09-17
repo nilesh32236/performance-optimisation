@@ -176,8 +176,8 @@ describe( 'SystemInfo Component', () => {
 
 		await waitFor( () => {
 			// Audit #1420: unmapped keys show the raw key (synthesized
-		// English would bypass i18n with made-up translations).
-		expect( screen.getByText( 'unknown_key' ) ).toBeInTheDocument();
+			// English would bypass i18n with made-up translations).
+			expect( screen.getByText( 'unknown_key' ) ).toBeInTheDocument();
 			expect( screen.queryByText( 'Database' ) ).not.toBeInTheDocument();
 			expect( screen.queryByText( 'WordPress' ) ).not.toBeInTheDocument();
 		} );

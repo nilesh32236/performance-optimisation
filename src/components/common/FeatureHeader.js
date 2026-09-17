@@ -18,17 +18,19 @@ const FeatureHeader = ( { title, description, status, actions, children } ) => {
 			<div className="wppo-feature-header__main">
 				<div className="wppo-feature-header__title">
 					<h2 id={ titleId }>{ title }</h2>
-				{ description && <p>{ description }</p> }
-				{ status && (
-					<div className="wppo-feature-header__status">
-						{ status }
+					{ description && <p>{ description }</p> }
+					{ status && (
+						<div className="wppo-feature-header__status">
+							{ status }
+						</div>
+					) }
+				</div>
+				{ actions && (
+					<div className="wppo-feature-header__actions">
+						{ actions }
 					</div>
 				) }
 			</div>
-			{ actions && (
-				<div className="wppo-feature-header__actions">{ actions }</div>
-			) }
-		</div>
 			{ children && (
 				<div className="wppo-feature-header__extra">{ children }</div>
 			) }

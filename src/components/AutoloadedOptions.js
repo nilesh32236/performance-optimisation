@@ -489,13 +489,13 @@ const AutoloadedOptions = () => {
 			actions={
 				loading && (
 					<span role="status" aria-live="polite">
-					<FontAwesomeIcon
-						icon={ faSpinner }
-						spin
-						aria-hidden="true"
-					/>
-					{ __( 'Loading…', 'performance-optimisation' ) }
-				</span>
+						<FontAwesomeIcon
+							icon={ faSpinner }
+							spin
+							aria-hidden="true"
+						/>
+						{ __( 'Loading…', 'performance-optimisation' ) }
+					</span>
 				)
 			}
 		>

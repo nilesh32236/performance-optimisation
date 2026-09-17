@@ -619,7 +619,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'DNS Lookup',
 											'performance-optimisation'
 										) }
-										value={ fmtMetric( result.dns_lookup_time, 'ms' ) }
+										value={ fmtMetric(
+											result.dns_lookup_time,
+											'ms'
+										) }
 										tooltipKey="dns"
 									/>
 									<ResultRow
@@ -627,7 +630,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'TCP Connection',
 											'performance-optimisation'
 										) }
-										value={ fmtMetric( result.connect_time, 'ms' ) }
+										value={ fmtMetric(
+											result.connect_time,
+											'ms'
+										) }
 										tooltipKey="connect"
 									/>
 									<ResultRow
@@ -657,7 +663,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'Server Processing',
 											'performance-optimisation'
 										) }
-										value={ fmtMetric( result.server_wait_time, 'ms' ) }
+										value={ fmtMetric(
+											result.server_wait_time,
+											'ms'
+										) }
 										tooltipKey="server_wait"
 									/>
 

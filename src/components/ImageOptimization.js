@@ -207,7 +207,10 @@ const ImageOptimization = ( { options = {} } ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	// Audit #1420: single memoized change handler instead of a new
 	// closure per input per render (mirrors FileOptimization).
-	const onFieldChange = useMemo( () => handleChange( setSettings ), [ setSettings ] );
+	const onFieldChange = useMemo(
+		() => handleChange( setSettings ),
+		[ setSettings ]
+	);
 	const { notice, notify, dismiss } = useNotice();
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
@@ -478,10 +481,16 @@ const ImageOptimization = ( { options = {} } ) => {
 		} catch ( error ) {
 			// Audit #1420: raw backend text stays in console; UI gets the
 			// translated generic string.
-			console.error( 'Save image settings failed:', getErrorLogMessage( error ) );
+			console.error(
+				'Save image settings failed:',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
-				message: __( 'Error saving settings.', 'performance-optimisation' ),
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {

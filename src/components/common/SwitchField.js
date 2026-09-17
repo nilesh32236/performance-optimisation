@@ -65,7 +65,9 @@ const SwitchField = ( {
 				hideLabelFromVision={ true }
 				disabled={ disabled }
 				{ ...( showLabel ? { 'aria-labelledby': labelId } : {} ) }
-				{ ...( descriptionId ? { 'aria-describedby': descriptionId } : {} ) }
+				{ ...( descriptionId
+					? { 'aria-describedby': descriptionId }
+					: {} ) }
 			/>
 		</div>
 	);

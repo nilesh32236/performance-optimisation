@@ -33,7 +33,7 @@ const AiPanel = () => {
 		!! initial.use_wp_ai_client
 	);
 	const [ saving, setSaving ] = useState( false );
-	const suggestRunRef = useRef( 0 );
+	const suggestRunRef = useRef( null );
 	const [ learning, setLearning ] = useState( false );
 	const [ model, setModel ] = useState( null );
 	const [ suggestions, setSuggestions ] = useState( [] );
@@ -106,7 +106,13 @@ const AiPanel = () => {
 		const controller = new AbortController();
 		fetchModel( controller.signal );
 		fetchSuggestions( controller.signal );
-		return () => controller.abort();
+		return () => {
+			controller.abort();
+			if ( suggestRunRef.current ) {
+				suggestRunRef.current.abort();
+				suggestRunRef.current = null;
+			}
+		};
 	}, [ fetchModel, fetchSuggestions ] );
 
 	const handleSave = async () => {
@@ -142,14 +148,15 @@ const AiPanel = () => {
 					),
 					durationMs: 3000,
 				} );
-				// Audit #1420: run-id guard so a stale refresh cannot
-				// overwrite newer state after rapid saves.
-				const runId = ++suggestRunRef.current;
-				fetchSuggestions().finally( () => {
-					if ( runId !== suggestRunRef.current ) {
-						return;
-					}
-				} );
+				// Audit #1420: abort the previous post-save refresh so a
+				// stale response cannot overwrite newer state after rapid saves.
+				if ( suggestRunRef.current ) {
+					suggestRunRef.current.abort();
+				}
+				suggestRunRef.current = new AbortController();
+				fetchSuggestions( suggestRunRef.current.signal ).catch(
+					() => {}
+				);
 			} else {
 				notify( {
 					type: 'error',
@@ -162,7 +169,10 @@ const AiPanel = () => {
 				} );
 			}
 		} catch ( saveError ) {
-			console.error( 'Save AI settings failed:', getErrorLogMessage( saveError ) );
+			console.error(
+				'Save AI settings failed:',
+				getErrorLogMessage( saveError )
+			);
 			notify( {
 				type: 'error',
 				message: __(

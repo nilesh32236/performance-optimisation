@@ -2734,7 +2734,7 @@ const loadImages = () => {
 							el.load();
 							if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
 								// Autoplay-policy rejections are expected (muted/invisible media); intentionally silent.
-									el.play().catch( () => {} );
+								el.play().catch( () => {} );
 							}
 							el.classList.remove( 'wppo-lazy-video' );
 						} else {

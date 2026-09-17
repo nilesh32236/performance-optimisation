@@ -111,7 +111,6 @@ const ObjectCache = ( { options = {} } ) => {
 			compression: options.compression,
 		} ),
 		[
-
 			options.mode,
 			options.host,
 			options.port,

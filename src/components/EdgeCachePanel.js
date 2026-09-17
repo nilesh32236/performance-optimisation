@@ -8,7 +8,11 @@ import {
 import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons';
-import { apiCall, patchSettingsCache, getErrorLogMessage } from '../lib/apiRequest';
+import {
+	apiCall,
+	patchSettingsCache,
+	getErrorLogMessage,
+} from '../lib/apiRequest';
 import { useIsMounted } from '../lib/useAbortableFetch';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -137,7 +141,10 @@ const EdgeCachePanel = () => {
 				} );
 			}
 		} catch ( saveError ) {
-			console.error( 'Save edge cache failed:', getErrorLogMessage( saveError ) );
+			console.error(
+				'Save edge cache failed:',
+				getErrorLogMessage( saveError )
+			);
 			if ( isMountedRef.current ) {
 				notify( {
 					type: 'error',

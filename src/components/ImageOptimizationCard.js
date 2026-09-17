@@ -192,7 +192,11 @@ const ImageOptimizationCard = ( {
 					role="status"
 					aria-live="polite"
 				>
-					<FontAwesomeIcon icon={ faSpinner } spin aria-hidden="true" />
+					<FontAwesomeIcon
+						icon={ faSpinner }
+						spin
+						aria-hidden="true"
+					/>
 					<span>
 						{ sprintf(
 							/* translators: %d: queued job count. */

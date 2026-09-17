@@ -1,5 +1,11 @@
 import { __, sprintf, _n } from '@wordpress/i18n';
-import { useState, useEffect, useContext, useMemo, useCallback } from '@wordpress/element';
+import {
+	useState,
+	useEffect,
+	useContext,
+	useMemo,
+	useCallback,
+} from '@wordpress/element';
 import { useIsMounted, runAbortable } from '../lib/useAbortableFetch';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
@@ -103,26 +109,31 @@ const PreloadSettings = ( { options = {} } ) => {
 	// Audit #1420: useCallback so the mount effect lists exhaustive deps.
 	const fetchPreloadStatus = useCallback(
 		async ( signal ) => {
-		try {
-			const res = await apiCall( 'preload_status', {}, 'GET', signal );
-			if ( ! isMountedRef.current || ( signal && signal.aborted ) ) {
-				return;
+			try {
+				const res = await apiCall(
+					'preload_status',
+					{},
+					'GET',
+					signal
+				);
+				if ( ! isMountedRef.current || ( signal && signal.aborted ) ) {
+					return;
+				}
+				const payload = res && res.data ? res.data : res;
+				if ( payload && payload.preload ) {
+					setPreload( payload.preload );
+				}
+				if ( payload && payload.cache ) {
+					setCacheCap( payload.cache );
+				}
+			} catch ( err ) {
+				console.error(
+					'Failed fetching preload status',
+					getErrorLogMessage( err )
+				);
 			}
-			const payload = res && res.data ? res.data : res;
-			if ( payload && payload.preload ) {
-				setPreload( payload.preload );
-			}
-			if ( payload && payload.cache ) {
-				setCacheCap( payload.cache );
-			}
-		} catch ( err ) {
-			console.error(
-				'Failed fetching preload status',
-				getErrorLogMessage( err )
-			);
-		}
-	},
-	[ isMountedRef ]
+		},
+		[ isMountedRef ]
 	);
 
 	useEffect( () => {

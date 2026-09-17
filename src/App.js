@@ -478,11 +478,11 @@ const App = () => {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 				}
-			} catch ( ccssError ) {
+			} catch ( ccssFetchError ) {
 				if ( ! ccssController.signal.aborted ) {
 					console.error(
 						'Failed fetching CCSS status',
-						getErrorLogMessage( ccssError )
+						getErrorLogMessage( ccssFetchError )
 					);
 					hasFetchedCcss.current = false;
 					setCcssError( true );

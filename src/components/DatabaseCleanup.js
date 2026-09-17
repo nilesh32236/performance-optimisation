@@ -287,7 +287,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			notify( {
 				type: 'error',
 				// Audit #1420: translated generic only (raw text stays in console).
-				message: __( 'Error saving settings.', 'performance-optimisation' ),
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {

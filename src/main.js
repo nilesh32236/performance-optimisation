@@ -347,37 +347,37 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			withBusyItem( item, () =>
 				postJsonRequest( '/clear_cache', { action: 'clear_cache' } )
 					.then( ( res ) => {
-					if ( res.success ) {
+						if ( res.success ) {
+							showNotice(
+								getNoticeString(
+									'cacheCleared',
+									'Cache cleared successfully.'
+								)
+							);
+						} else {
+							showNotice(
+								res.message ||
+									getNoticeString(
+										'clearFailed',
+										'Failed to clear cache.'
+									),
+								'error'
+							);
+						}
+					} )
+					.catch( ( error ) => {
+						console.error(
+							'Cache clear failed: ',
+							getErrorLogMessage( error )
+						);
 						showNotice(
 							getNoticeString(
-								'cacheCleared',
-								'Cache cleared successfully.'
-							)
-						);
-					} else {
-						showNotice(
-							res.message ||
-								getNoticeString(
-									'clearFailed',
-									'Failed to clear cache.'
-								),
+								'clearRetry',
+								'Failed to clear cache. Please try again.'
+							),
 							'error'
 						);
-					}
-				} )
-				.catch( ( error ) => {
-					console.error(
-						'Cache clear failed: ',
-						getErrorLogMessage( error )
-					);
-					showNotice(
-						getNoticeString(
-							'clearRetry',
-							'Failed to clear cache. Please try again.'
-						),
-						'error'
-					);
-				} )
+					} )
 			);
 		} );
 	}
@@ -412,37 +412,37 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					path,
 				} )
 					.then( ( res ) => {
-					if ( res.success ) {
+						if ( res.success ) {
+							showNotice(
+								getNoticeString(
+									'pageCleared',
+									'Page cache cleared successfully.'
+								)
+							);
+						} else {
+							showNotice(
+								res.message ||
+									getNoticeString(
+										'pageFailed',
+										'Failed to clear page cache.'
+									),
+								'error'
+							);
+						}
+					} )
+					.catch( ( error ) => {
+						console.error(
+							'Page cache clear failed: ',
+							getErrorLogMessage( error )
+						);
 						showNotice(
 							getNoticeString(
-								'pageCleared',
-								'Page cache cleared successfully.'
-							)
-						);
-					} else {
-						showNotice(
-							res.message ||
-								getNoticeString(
-									'pageFailed',
-									'Failed to clear page cache.'
-								),
+								'pageRetry',
+								'Failed to clear page cache. Please try again.'
+							),
 							'error'
 						);
-					}
-				} )
-				.catch( ( error ) => {
-					console.error(
-						'Page cache clear failed: ',
-						getErrorLogMessage( error )
-					);
-					showNotice(
-						getNoticeString(
-							'pageRetry',
-							'Failed to clear page cache. Please try again.'
-						),
-						'error'
-					);
-				} )
+					} )
 			);
 		} );
 	}

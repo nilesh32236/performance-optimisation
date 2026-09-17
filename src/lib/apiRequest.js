@@ -429,7 +429,7 @@ export const buildAction = ( action, params = {} ) => {
  * rejections are localizable like other UI notice strings.
  *
  * @since NEXT
- * @param {string} key     Translations key.
+ * @param {string} key      Translations key.
  * @param {string} fallback English fallback.
  * @return {string} Translated or fallback message.
  */

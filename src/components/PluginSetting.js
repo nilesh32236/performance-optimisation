@@ -399,7 +399,6 @@ const PluginSetting = ( { options } ) => {
 					: ''
 			);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- liveAudit identity changes per render; per-key deps below.
 	}, [
 		liveAudit.server_timing_enabled,
 		liveAudit.rum_enabled,
@@ -525,17 +524,17 @@ const PluginSetting = ( { options } ) => {
 					invalidUrls.length > 0
 						? {
 								type: 'warning',
-							message: sprintf(
-								/* translators: 1: skipped count, 2: skipped URLs. */
-								_n(
-									'Monitoring settings saved. Skipped %1$s invalid URL: %2$s.',
-									'Monitoring settings saved. Skipped %1$s invalid URLs: %2$s.',
+								message: sprintf(
+									/* translators: 1: skipped count, 2: skipped URLs. */
+									_n(
+										'Monitoring settings saved. Skipped %1$s invalid URL: %2$s.',
+										'Monitoring settings saved. Skipped %1$s invalid URLs: %2$s.',
+										invalidUrls.length,
+										'performance-optimisation'
+									),
 									invalidUrls.length,
-									'performance-optimisation'
+									invalidUrls.join( ', ' )
 								),
-								invalidUrls.length,
-								invalidUrls.join( ', ' )
-							),
 						  }
 						: {
 								type: 'success',
@@ -998,7 +997,9 @@ const PluginSetting = ( { options } ) => {
 											{ entry.created_at && (
 												<time
 													className="wppo-activity-time"
-													dateTime={ entry.created_at }
+													dateTime={
+														entry.created_at
+													}
 												>
 													{ new Date(
 														entry.created_at.replace(
@@ -1194,7 +1195,12 @@ const PluginSetting = ( { options } ) => {
 				{ /* Monitoring: Server-Timing + high-value URLs */ }
 				<FeatureCard
 					title={ __( 'Monitoring', 'performance-optimisation' ) }
-					icon={ <i className="fas fa-tachometer-alt" aria-hidden="true"></i> } // Audit #1420: decorative.
+					icon={
+						<i
+							className="fas fa-tachometer-alt"
+							aria-hidden="true"
+						></i>
+					} // Audit #1420: decorative.
 				>
 					<CheckboxOption
 						checked={ serverTimingEnabled }

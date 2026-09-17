@@ -17,7 +17,7 @@ import { __ } from '@wordpress/i18n';
  * @param {string}               [props.cancelLabel]  Label for the cancel button.
  * @param {string}               [props.variant]      'warning' | 'danger' — controls confirm button style.
  * @param {import('react').Node} [props.children]     Optional extra content (e.g., a detail list).
- * @param {boolean}              [props.isBusy]        Disables both buttons while async confirm runs.
+ * @param {boolean}              [props.isBusy]       Disables both buttons while async confirm runs.
  */
 const ConfirmDialog = ( {
 	isOpen,

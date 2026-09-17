@@ -234,7 +234,10 @@ export const runWooSelfTest = ( signal ) => {
 				controller.abort(
 					new Error(
 						// Audit #1420: localizable abort reason.
-						__( 'Woo self-test timed out', 'performance-optimisation' )
+						__(
+							'Woo self-test timed out',
+							'performance-optimisation'
+						)
 					)
 				),
 			WOO_SELF_TEST_TIMEOUT_MS

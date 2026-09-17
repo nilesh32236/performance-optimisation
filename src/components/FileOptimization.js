@@ -703,7 +703,10 @@ const FileOptimization = ( {
 			}
 		} catch ( statusError ) {
 			// Fail-open: leave the banner hidden.
-			console.error( 'Failed refreshing used-CSS status:', getErrorLogMessage( statusError ) );
+			console.error(
+				'Failed refreshing used-CSS status:',
+				getErrorLogMessage( statusError )
+			);
 		}
 	}, [] );
 	useEffect( () => {
@@ -750,7 +753,10 @@ const FileOptimization = ( {
 			}
 		} catch ( upgradeError ) {
 			// Fail-open: keep the seeded wppoSettings value.
-			console.error( 'Failed refreshing upgrade purge status:', getErrorLogMessage( upgradeError ) );
+			console.error(
+				'Failed refreshing upgrade purge status:',
+				getErrorLogMessage( upgradeError )
+			);
 		}
 	}, [] );
 	// Note: no auto-fetch on mount/tab-open — the status is seeded from
@@ -879,7 +885,12 @@ const FileOptimization = ( {
 		const controller = new AbortController();
 		( async () => {
 			try {
-				const status = await apiCall( 'sandbox_preview', {}, 'GET', controller.signal );
+				const status = await apiCall(
+					'sandbox_preview',
+					{},
+					'GET',
+					controller.signal
+				);
 				if (
 					controller.signal.aborted ||
 					! status ||
@@ -903,7 +914,10 @@ const FileOptimization = ( {
 				// without prior status.
 				// Tab-switch aborts are expected, not errors.
 				if ( sandboxError?.name !== 'AbortError' ) {
-					console.error( 'Failed fetching sandbox preview:', getErrorLogMessage( sandboxError ) );
+					console.error(
+						'Failed fetching sandbox preview:',
+						getErrorLogMessage( sandboxError )
+					);
 				}
 			}
 		} )();
@@ -2223,7 +2237,9 @@ const FileOptimization = ( {
 													// placeholders — translators could break them.
 													placeholder="123"
 													value={ singlePostId }
-													onChange={ handleSinglePostIdChange }
+													onChange={
+														handleSinglePostIdChange
+													}
 												/>
 												<button
 													className="wppo-button wppo-button--secondary"
@@ -4440,8 +4456,7 @@ const FileOptimization = ( {
 												) }
 											</button>
 										</div>
-									)
-								) }
+									) ) }
 								{ ( settings.cdnMapping || [] ).length < 5 && (
 									<button
 										className="wppo-button wppo-button--secondary wppo-mt-12"
