@@ -89,6 +89,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 		 */
 		public static function sanitize_mode( $value ): string {
 			try {
+				// Non-scalar input (e.g. arrays) must fail open to direct
+				// without emitting an "Array to string conversion" warning
+				// (a Warning is not caught by the Throwable catch below).
+				if ( is_array( $value ) || ( ! is_scalar( $value ) && null !== $value ) ) {
+					return self::MODE_DIRECT;
+				}
 				$mode = strtolower( trim( (string) $value ) );
 				return self::MODE_STAGED === $mode ? self::MODE_STAGED : self::MODE_DIRECT;
 			} catch ( \Throwable $e ) {
@@ -132,27 +138,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 		 * @param array|null $settings Optional settings array.
 		 * @return bool True when the health gate runs after apply.
 		 */
-		public static function is_health_check_enabled( ?array $settings = null ): bool {
-			try {
-				if ( null === $settings ) {
-					if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
-						return true;
-					}
-					$settings = (array) Util::get_settings();
-				}
-				$file = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
-				if ( ! array_key_exists( 'cssRolloutHealthCheck', $file ) ) {
+		/**
+		 * Shared fail-safe boolean reader for the rollout toggles.
+		 *
+		 * Absent key defaults to enabled (fail-safe); explicit false
+		 * disables. Mirrors the JS normalizeRolloutBool() allowlist
+		 * (true: 1/true/on/yes, false: 0/false/off/no/'', else true) so
+		 * the UI toggle and the server never disagree.
+		 *
+		 * @since NEXT
+		 * @param array|null $settings Optional settings array.
+		 * @param string     $key      File-optimisation key.
+		 * @return bool True when the toggle is enabled.
+		 */
+		private static function get_rollout_bool( ?array $settings, string $key ): bool {
+			if ( null === $settings ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
 					return true;
 				}
-				$value = $file['cssRolloutHealthCheck'];
-				if ( is_bool( $value ) ) {
-					return $value;
-				}
-				if ( function_exists( 'filter_var' ) ) {
-					$parsed = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					return null === $parsed ? true : $parsed;
-				}
-				return (bool) $value;
+				$settings = (array) Util::get_settings();
+			}
+			$file = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+			if ( ! array_key_exists( $key, $file ) ) {
+				return true;
+			}
+			$value = $file[ $key ];
+			if ( is_bool( $value ) ) {
+				return $value;
+			}
+			if ( function_exists( 'filter_var' ) ) {
+				$parsed = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				return null === $parsed ? true : $parsed;
+			}
+			return (bool) $value;
+		}
+
+		/**
+		 * Whether the post-apply health gate is enabled.
+		 *
+		 * Absent key defaults to enabled (fail-safe); explicit false disables.
+		 *
+		 * @since NEXT
+		 * @param array|null $settings Optional settings array.
+		 * @return bool True when the health gate runs after apply.
+		 */
+		public static function is_health_check_enabled( ?array $settings = null ): bool {
+			try {
+				return self::get_rollout_bool( $settings, 'cssRolloutHealthCheck' );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
@@ -170,25 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 		 */
 		public static function is_keep_last_good_enabled( ?array $settings = null ): bool {
 			try {
-				if ( null === $settings ) {
-					if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
-						return true;
-					}
-					$settings = (array) Util::get_settings();
-				}
-				$file = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
-				if ( ! array_key_exists( 'cssRolloutKeepLastGood', $file ) ) {
-					return true;
-				}
-				$value = $file['cssRolloutKeepLastGood'];
-				if ( is_bool( $value ) ) {
-					return $value;
-				}
-				if ( function_exists( 'filter_var' ) ) {
-					$parsed = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					return null === $parsed ? true : $parsed;
-				}
-				return (bool) $value;
+				return self::get_rollout_bool( $settings, 'cssRolloutKeepLastGood' );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
@@ -256,21 +270,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 						'hit'    => 'miss (empty)',
 					);
 				}
-				// Case-insensitive search with no strtolower() copy: the
-				// payload can be up to 1MB and this runs on every
-				// save/promote/verify call. Token list mirrors the strict
-				// pre-cache gate (contains_unsafe_css_tokens) so post-promote
-				// parity holds; the staged gate + sanitize_inline_css remain
-				// the authoritative pre-cache defense.
-				$unsafe = array( '</style', '</script', '<!--', '-->', 'javascript:', 'vbscript:', 'expression(', 'data:text/html', 'data:image/svg', '-moz-binding', 'behavior', 'behaviour' );
-				foreach ( $unsafe as $token ) {
-					if ( false !== stripos( $css, $token ) ) {
-						return array(
-							'ok'     => false,
-							'reason' => 'unsafe token: ' . $token,
-							'hit'    => 'bypass (unsafe)',
-						);
+				// Single-pass strict gate shared with the pre-cache check:
+				// entity-decoding + whitespace-tolerant + scroll-behavior
+				// safe (see Critical_CSS::contains_unsafe_css_tokens()).
+				// One preg_match runs instead of N stripos full-payload
+				// scans, and parity holds by construction.
+				$strict_available = class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'contains_unsafe_css_tokens' );
+				if ( $strict_available ) {
+					try {
+						if ( Critical_CSS::contains_unsafe_css_tokens( $css ) ) {
+							return array(
+								'ok'     => false,
+								'reason' => 'unsafe token detected',
+								'hit'    => 'bypass (unsafe)',
+							);
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
 					}
+				} elseif ( 1 === preg_match( '/<\/style|<\/script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|data\s*:\s*text\/html/i', $css ) ) {
+					// Fallback when the CCSS class is unavailable: single
+					// case-insensitive regex pass (no strtolower copy, no
+					// per-token scans of healthy payloads).
+					return array(
+						'ok'     => false,
+						'reason' => 'unsafe token detected',
+						'hit'    => 'bypass (unsafe)',
+					);
 				}
 				return array(
 					'ok'     => true,
@@ -295,12 +321,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 		 * to detect a missing-CSS 404. Never fatal: any failure returns
 		 * ok=false with a reason instead of throwing.
 		 *
+		 * Background generation workers pass $check_http=false: disk
+		 * existence + size plus the content gate already prove the write,
+		 * and a sync loopback HEAD would stack worker occupancy inside the
+		 * 25s generation budget. Explicit admin promote/rollback keeps the
+		 * loopback leg ($check_http=true).
+		 *
 		 * @since NEXT
-		 * @param string $live_path Filesystem path of the live file.
-		 * @param string $live_url  Optional public URL of the live file.
+		 * @param string $live_path  Filesystem path of the live file.
+		 * @param string $live_url   Optional public URL of the live file.
+		 * @param bool   $check_http Whether to issue the loopback HEAD probe.
 		 * @return array{ok: bool, reason: string, hit: string} Health verdict.
 		 */
-		public static function probe_live_file( string $live_path, string $live_url = '' ): array {
+		public static function probe_live_file( string $live_path, string $live_url = '', bool $check_http = true ): array {
 			try {
 				if ( '' === $live_path || ! file_exists( $live_path ) ) {
 					return array(
@@ -317,7 +350,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 						'hit'    => 'miss (empty)',
 					);
 				}
-				if ( '' !== $live_url && function_exists( 'wp_remote_head' ) && function_exists( 'is_wp_error' ) ) {
+				if ( $check_http && '' !== $live_url && function_exists( 'wp_remote_head' ) && function_exists( 'is_wp_error' ) ) {
 					try {
 						// Short 2s HEAD with no redirects: this runs inside
 						// the 25s CCSS generation budget and on promote

@@ -19,6 +19,7 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 import CriticalCssPanel, {
 	normalizeCcssEntry,
 	statusConfigFor,
+	rolloutHitLabel,
 } from '../CriticalCssPanel';
 
 describe( 'CriticalCssPanel', () => {
@@ -375,7 +376,7 @@ describe( 'safe rollout badges and actions', () => {
 
 		expect( screen.getByText( 'Staged' ) ).toBeInTheDocument();
 		expect(
-			screen.getByText( 'Hit reason: bypass (staged preview)' )
+			screen.getByText( 'Hit reason: Bypass (staged preview)' )
 		).toBeInTheDocument();
 		fireEvent.click(
 			screen.getByRole( 'button', {
@@ -409,7 +410,7 @@ describe( 'safe rollout badges and actions', () => {
 
 		expect( screen.getByText( 'Rolled Back' ) ).toBeInTheDocument();
 		expect(
-			screen.getByText( 'Hit reason: hit (last-good restored)' )
+			screen.getByText( 'Hit reason: Hit (last-good restored)' )
 		).toBeInTheDocument();
 		fireEvent.click(
 			screen.getByRole( 'button', {
@@ -491,5 +492,38 @@ describe( 'safe rollout badges and actions', () => {
 			name: 'Promote staged CSS for Home',
 		} );
 		expect( promote ).toHaveAttribute( 'aria-busy', 'false' );
+	} );
+
+	it( 'maps known rollout hit tokens and falls back to raw strings', () => {
+		expect( rolloutHitLabel( 'hit (promoted)' ) ).toBe( 'Hit (promoted)' );
+		expect( rolloutHitLabel( 'bypass (unoptimized)' ) ).toBe(
+			'Bypass (unoptimized)'
+		);
+		expect( rolloutHitLabel( 'custom future reason' ) ).toBe(
+			'custom future reason'
+		);
+		expect( rolloutHitLabel( '' ) ).toBe( '' );
+	} );
+
+	it( 'announces per-template regenerate busy state via aria-busy', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: {
+						status: 'done',
+						label: 'Home',
+						size: 0,
+					},
+				} }
+				onRegenerate={ jest.fn() }
+				onRegenerateSingle={ jest.fn() }
+			/>
+		);
+
+		const regen = screen.getByRole( 'button', {
+			name: 'Regenerate Home',
+		} );
+		expect( regen ).toHaveAttribute( 'aria-busy', 'false' );
+		expect( regen ).toHaveTextContent( 'Regenerate' );
 	} );
 } );

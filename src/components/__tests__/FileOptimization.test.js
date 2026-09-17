@@ -13,6 +13,8 @@ import FileOptimization, {
 	normalizeDeliveryMode,
 	normalizeRolloutMode,
 	normalizeRolloutBool,
+	normalizeFileOpt,
+	FILE_OPT_SYNC_KEYS,
 	stripPreviewParams,
 	withCdnRowIds,
 	stripCdnIds,
@@ -1695,6 +1697,33 @@ describe( 'FileOptimization Component', () => {
 			expect( normalizeRolloutBool( 'false' ) ).toBe( false );
 			expect( normalizeRolloutBool( '0' ) ).toBe( false );
 			expect( normalizeRolloutBool( 'no' ) ).toBe( false );
+			expect( normalizeRolloutBool( 'off' ) ).toBe( false );
+			expect( normalizeRolloutBool( '' ) ).toBe( true );
+		} );
+
+		it( 'fails safe to true for disabled/enabled/numeric like PHP filter_var', () => {
+			// PHP filter_var( ..., FILTER_NULL_ON_FAILURE ) only knows
+			// 1/true/on/yes and 0/false/off/no/'' — 'disabled',
+			// 'enabled', and '2' all fail safe to true.
+			expect( normalizeRolloutBool( 'disabled' ) ).toBe( true );
+			expect( normalizeRolloutBool( 'enabled' ) ).toBe( true );
+			expect( normalizeRolloutBool( '2' ) ).toBe( true );
+			expect( normalizeRolloutBool( 2 ) ).toBe( true );
+		} );
+
+		it( 'keeps rollout keys in the sync single source of truth', () => {
+			expect( FILE_OPT_SYNC_KEYS ).toContain( 'cssRolloutMode' );
+			expect( FILE_OPT_SYNC_KEYS ).toContain( 'cssRolloutHealthCheck' );
+			expect( FILE_OPT_SYNC_KEYS ).toContain( 'cssRolloutKeepLastGood' );
+			const next = normalizeFileOpt( {
+				cssRolloutMode: 'STAGED',
+				cssRolloutHealthCheck: 'disabled',
+				cssRolloutKeepLastGood: [ 'x' ],
+			} );
+			expect( next.cssRolloutMode ).toBe( 'staged' );
+			// 'disabled' is not a PHP-recognized false — fails safe true.
+			expect( next.cssRolloutHealthCheck ).toBe( true );
+			expect( next.cssRolloutKeepLastGood ).toBe( true );
 		} );
 	} );
 

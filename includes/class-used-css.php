@@ -1613,22 +1613,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 				try {
 					if ( Css_Rollout::is_staged_mode() ) {
+						// Staged gate (parity with CCSS stage_ccss_output):
+						// poisoned source CSS must never sit one weak-gate
+						// click from live. Fail closed (refuse the write).
+						if ( ! Css_Rollout::health_check_content( $css )['ok'] ) {
+							return false;
+						}
 						$staged = self::get_staged_path_for( $file_path );
 						if ( '' !== $staged && Util::atomic_file_put_contents( $fs, $staged, $css ) ) {
-							$slot = self::rollout_slot_for_url( $url );
-							Css_Rollout::record_event( $slot, 'staged', sprintf( 'used-CSS dry-run staged %d bytes', strlen( $css ) ), 'bypass (staged preview)' );
+							// Frontend-miss writes skip the rollout transient
+							// + log row (TTFB + option-bloat cost on every
+							// first-visitor miss); admin/worker stages still
+							// record so the SPA preview stays visible.
+							if ( self::should_record_rollout_event() ) {
+								$slot = self::rollout_slot_for_url( $url );
+								Css_Rollout::record_event( $slot, 'staged', sprintf( 'used-CSS dry-run staged %d bytes', strlen( $css ) ), 'bypass (staged preview)' );
+							}
 							return true;
 						}
 						return false;
 					}
 					if ( Css_Rollout::is_keep_last_good_enabled() && file_exists( $file_path ) ) {
-						$prior = self::read_slot_file( $file_path );
-						if ( is_string( $prior ) && '' !== trim( $prior ) ) {
-							$backup = self::get_last_good_path_for( $file_path );
-							if ( '' !== $backup ) {
-								Util::atomic_file_put_contents( $fs, $backup, $prior );
-							}
-						}
+						self::snapshot_last_good( $fs, $file_path );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -1643,7 +1649,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					// charge the first visitor after purge up to +5s. Disk
 					// write + content check already prove success; the HTTP
 					// probe still runs on promote/admin paths.
-					$slot = self::rollout_slot_for_url( $url );
 					if ( Css_Rollout::is_health_check_enabled() ) {
 						$check = Css_Rollout::health_check_content( $css );
 						if ( ! $check['ok'] ) {
@@ -1651,7 +1656,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							return false;
 						}
 					}
-					Css_Rollout::record_event( $slot, 'done', 'used-CSS direct apply', 'hit (direct)' );
+					// Frontend-miss direct applies skip the rollout
+					// transient + log row (TTFB + per-URL option-bloat
+					// cost); admin regen/promote/worker paths still record.
+					if ( self::should_record_rollout_event() ) {
+						$slot = self::rollout_slot_for_url( $url );
+						Css_Rollout::record_event( $slot, 'done', 'used-CSS direct apply', 'hit (direct)' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( $ok ) {
+				// Direct-apply success drops any stale staged sidecar so a
+				// later preview cannot offer Promote for outdated output.
+				try {
+					$stale = self::get_staged_path_for( $file_path );
+					if ( '' !== $stale && file_exists( $stale ) ) {
+						if ( function_exists( 'wp_delete_file' ) ) {
+							wp_delete_file( $stale );
+						} else {
+							unlink( $stale ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort stale staged cleanup after direct apply.
+						}
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -1714,6 +1741,87 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';
+			}
+		}
+
+		/**
+		 * Whether the current context should record rollout events.
+		 *
+		 * Frontend page-generation (process_buffer) skips the per-URL
+		 * transient + activity-log row: on a 5k-page regen that would mint
+		 * ~5k wp_options rows plus log INSERTs without a persistent object
+		 * cache, and every first-visitor miss would pay option roundtrips
+		 * on TTFB. Admin, cron, CLI, AJAX, and REST (regen/promote/admin)
+		 * contexts still record so the SPA status stays visible.
+		 *
+		 * @return bool True when rollout events should be recorded.
+		 * @since NEXT
+		 */
+		private static function should_record_rollout_event(): bool {
+			try {
+				if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) {
+					return true;
+				}
+				if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+					return true;
+				}
+				if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+					return true;
+				}
+				if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+					return true;
+				}
+				if ( defined( 'WP_CLI' ) && WP_CLI ) {
+					return true;
+				}
+				if ( function_exists( 'is_admin' ) && is_admin() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
+		 * Snapshot the live file to its last-good backup (issue #1348).
+		 *
+		 * Filesystem-level copy (no PHP-string roundtrip): the prior live
+		 * file can be up to 1MB and the old read-then-write path doubled
+		 * peak memory plus I/O on the frontend-miss path. Falls back to
+		 * read+atomic-write when copy is unavailable. Best-effort, never
+		 * fails the caller.
+		 *
+		 * @param object $fs        WP_Filesystem instance.
+		 * @param string $live_path Absolute live file path.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function snapshot_last_good( $fs, string $live_path ): void {
+			try {
+				if ( ! is_object( $fs ) || '' === $live_path || ! file_exists( $live_path ) ) {
+					return;
+				}
+				$prior = self::read_slot_file( $live_path );
+				if ( ! is_string( $prior ) || '' === trim( $prior ) ) {
+					return;
+				}
+				$backup = self::get_last_good_path_for( $live_path );
+				if ( '' === $backup ) {
+					return;
+				}
+				if ( method_exists( $fs, 'copy' ) ) {
+					try {
+						if ( $fs->copy( $live_path, $backup, true ) ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				Util::atomic_file_put_contents( $fs, $backup, $prior );
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 
@@ -1834,13 +1942,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$keep = Css_Rollout::is_keep_last_good_enabled();
 				}
 				if ( $keep && file_exists( $live_path ) ) {
-					$prior = self::read_slot_file( $live_path );
-					if ( is_string( $prior ) && '' !== trim( $prior ) ) {
-						$backup = self::get_last_good_path_for( $live_path );
-						if ( '' !== $backup ) {
-							Util::atomic_file_put_contents( $fs, $backup, $prior );
-						}
-					}
+					self::snapshot_last_good( $fs, $live_path );
 				}
 				if ( ! Util::atomic_file_put_contents( $fs, $live_path, $staged ) ) {
 					return false;
@@ -1905,14 +2007,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( '' === $live_path ) {
 					return false;
 				}
-				$backup_path = self::get_last_good_path_for( $live_path );
-				$restored    = false;
+				$backup_path          = self::get_last_good_path_for( $live_path );
+				$restored             = false;
+				$restored_from_backup = false;
 				if ( '' !== $backup_path && file_exists( $backup_path ) ) {
 					$backup = self::read_slot_file( $backup_path );
 					if ( is_string( $backup ) && '' !== trim( $backup ) ) {
 						$fs = Util::init_filesystem();
 						if ( $fs && Util::atomic_file_put_contents( $fs, $live_path, $backup ) ) {
-							$restored = true;
+							$restored             = true;
+							$restored_from_backup = true;
 						}
 					}
 				}
@@ -1938,7 +2042,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 					$note = '' !== trim( $reason ) ? substr( trim( $reason ), 0, 200 ) : 'health gate breach';
-					Css_Rollout::record_event( self::rollout_slot_for_url( $url ), 'rolled_back', 'used-CSS auto-rollback: ' . $note, $restored ? 'hit (last-good restored)' : 'bypass (unoptimized)' );
+					Css_Rollout::record_event( self::rollout_slot_for_url( $url ), 'rolled_back', 'used-CSS auto-rollback: ' . $note, $restored_from_backup ? 'hit (last-good restored)' : 'bypass (unoptimized)' );
 				}
 				return $restored;
 			} catch ( \Throwable $e ) {

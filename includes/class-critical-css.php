@@ -97,6 +97,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static array $ccss_defer_blocked = array();
 
 		/**
+		 * Per-request get_status_all() memo (issue #1348 review).
+		 *
+		 * The SPA hits two status endpoints per mount and each
+		 * promote/rollback click refetches, so the N-template fan-out
+		 * runs once per request. Reset via reset_ccss_memo() and after
+		 * every promote/rollback/direct-apply mutation.
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $status_all_memo = null;
+
+		/**
 		 * Above-fold selectors to match during extraction.
 		 *
 		 * Uses precise token-based matching to avoid false positives.
@@ -741,7 +754,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
-					Css_Rollout::record_event( $template_hash, 'done', 'staged output promoted to live', 'hit (promoted v' . ( Css_Rollout::get_state( $template_hash )['version'] + 1 ) . ')' );
+					// Versionless hit (mirrors the used-CSS path): the
+					// version is assigned inside record_event(), so
+					// precomputing get_state()+1 here would log a version
+					// that differs from the stored one under concurrency.
+					Css_Rollout::record_event( $template_hash, 'done', 'staged output promoted to live', 'hit (promoted)' );
 				}
 				try {
 					self::set_status_cache( $template_hash, 'done', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
@@ -789,13 +806,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( '' === $live_file ) {
 					return false;
 				}
-				$restored = false;
+				$restored             = false;
+				$restored_from_backup = false;
 				if ( '' !== $last_good_file && file_exists( $last_good_file ) ) {
 					$backup_css = self::read_ccss_slot_file( $last_good_file );
 					if ( '' !== trim( $backup_css ) ) {
 						$filesystem = Util::init_filesystem();
 						if ( $filesystem && Util::atomic_file_put_contents( $filesystem, $live_file, $backup_css ) ) {
-							$restored = true;
+							$restored             = true;
+							$restored_from_backup = true;
 						}
 					}
 				}
@@ -820,7 +839,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				clearstatcache( true, $live_file );
 				$note = '' !== trim( $reason ) ? substr( trim( $reason ), 0, 200 ) : 'health gate breach';
 				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
-					Css_Rollout::record_event( $template_hash, 'rolled_back', 'auto-rollback: ' . $note, $restored ? 'hit (last-good restored)' : 'bypass (unoptimized)' );
+					// Absent-live with no backup is the safe unoptimized
+					// state: report bypass, not a last-good restore that
+					// never happened.
+					Css_Rollout::record_event( $template_hash, 'rolled_back', 'auto-rollback: ' . $note, $restored_from_backup ? 'hit (last-good restored)' : 'bypass (unoptimized)' );
 				}
 				try {
 					self::set_status_cache( $template_hash, 'rolled_back', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
@@ -844,10 +866,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * failures always roll back.
 		 *
 		 * @param string $template_hash Template hash.
+		 * @param bool   $check_http    Whether to issue the loopback HEAD probe (false in background generation workers).
 		 * @return bool True when live is healthy.
 		 * @since NEXT
 		 */
-		public static function verify_live_ccss( string $template_hash ): bool {
+		public static function verify_live_ccss( string $template_hash, bool $check_http = true ): bool {
 			try {
 				if ( ! self::is_valid_template_hash( $template_hash ) ) {
 					return true;
@@ -871,7 +894,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				$probe = Css_Rollout::probe_live_file( $live_file, $live_url );
+				$probe = Css_Rollout::probe_live_file( $live_file, $live_url, $check_http );
 				if ( ! $probe['ok'] ) {
 					self::rollback_ccss( $template_hash, $probe['reason'] );
 					return false;
@@ -3326,6 +3349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$ccss_defer_blocked  = array();
 			self::$templates_memo      = null;
 			self::$pending_memo        = array();
+			self::$status_all_memo     = null;
 		}
 
 		/**
@@ -3348,6 +3372,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					unset( self::$ccss_content_cache[ $key ] );
 				}
 			}
+			// Any mutation invalidates the list fan-out memo so the next
+			// status poll in the same request (dual endpoints per mount)
+			// reflects the fresh slot state.
+			self::$status_all_memo = null;
 		}
 
 		/**
@@ -3435,6 +3463,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function get_status_all(): array {
+			// Per-request memo: the SPA hits two status endpoints per mount
+			// and each promote/rollback click refetches, so the N-template
+			// fan-out (transients + stats + preview reads) runs once per
+			// request. Mutations invalidate via self::$status_all_memo.
+			if ( null !== self::$status_all_memo ) {
+				return self::$status_all_memo;
+			}
 			$templates = self::get_templates();
 			$statuses  = array();
 
@@ -3474,7 +3509,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				try {
 					if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 						$rollout = Css_Rollout::get_state( $hash );
-						if ( 'staged' === $rollout['state'] && file_exists( self::get_ccss_staged_file( $hash ) ) ) {
+						// Single stat per template: dedupe the staged
+						// file_exists (previously checked twice per loop)
+						// and gate the file-read + 2x sha256 preview on it.
+						// The full preview payload stays available via the
+						// per-slot preview endpoint for on-demand fetch.
+						$staged_file_check = self::get_ccss_staged_file( $hash );
+						$staged_exists     = '' !== $staged_file_check && file_exists( $staged_file_check );
+						if ( 'staged' === $rollout['state'] && $staged_exists ) {
 							$statuses[ $hash ]['status'] = 'staged';
 						} elseif ( 'rolled_back' === $rollout['state'] && 'done' === $statuses[ $hash ]['status'] ) {
 							// A restored last-good still serves CSS: keep the
@@ -3483,14 +3525,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							$statuses[ $hash ]['status'] = 'rolled_back';
 						}
 						$statuses[ $hash ]['rollout'] = $rollout;
-						// On-demand preview: get_ccss_preview() reads both
-						// slot files + 2x sha256 per template, so only pay
-						// for it when a staged sidecar actually exists (the
-						// per-slot preview endpoint serves the full payload
-						// on demand). Every SPA poll hits this loop, often
-						// twice per mount (ccss + rollout status endpoints).
-						$staged_file_check = self::get_ccss_staged_file( $hash );
-						if ( '' !== $staged_file_check && file_exists( $staged_file_check ) ) {
+						if ( $staged_exists ) {
 							$preview = self::get_ccss_preview( $hash );
 							if ( ! empty( $preview['has_staged'] ) ) {
 								$statuses[ $hash ]['preview'] = $preview;
@@ -3502,7 +3537,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
+			self::$status_all_memo = $statuses;
 			return $statuses;
+		}
+
+		/**
+		 * Clear the per-request get_status_all() memo (tests + promote/rollback).
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function clear_status_all_memo(): void {
+			self::$status_all_memo = null;
 		}
 
 		/**
@@ -4436,7 +4482,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return bool True when hostile tokens are present.
 		 * @since 2.0.0
 		 */
-		private static function contains_unsafe_css_tokens( string $css ): bool {
+		/**
+		 * Strict unsafe-CSS gate shared with the rollout health check.
+		 *
+		 * Public so Css_Rollout::health_check_content() can reuse the exact
+		 * same entity-decoding + whitespace-tolerant predicate (no drift
+		 * between the pre-cache gate and the post-promote gate). Widened
+		 * from private: backward compatible.
+		 *
+		 * @param string $css CSS payload.
+		 * @return bool True when the payload must be refused.
+		 * @since NEXT
+		 */
+		public static function contains_unsafe_css_tokens( string $css ): bool {
 			$decoded = self::decode_css_entities( $css );
 			// Note: behaviou?r matches in property position (followed by a
 			// colon) AND only when it is the whole property name, so benign
@@ -5276,11 +5334,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// indeterminate result (handled inside verify_live_ccss).
 				try {
 					if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_health_check_enabled() ) {
-						if ( ! self::verify_live_ccss( $template_hash ) ) {
+						// Background worker: skip the loopback HTTP leg
+						// (disk + content checks already prove the write).
+						if ( ! self::verify_live_ccss( $template_hash, false ) ) {
 							return false;
 						}
+						// Gate passed: record done so rollout state agrees
+						// with the status cache (mirrors the used-CSS path).
+						Css_Rollout::record_event( $template_hash, 'done', 'direct apply', 'hit (direct)' );
 					} elseif ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 						Css_Rollout::record_event( $template_hash, 'done', 'direct apply', 'hit (direct)' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Direct-apply success drops any stale staged sidecar: after
+				// a stage then mode-switch to direct, the old .staged.css
+				// would otherwise keep has_staged=true with a wrong delta.
+				try {
+					$stale_staged = self::get_ccss_staged_file( $template_hash );
+					if ( '' !== $stale_staged && file_exists( $stale_staged ) ) {
+						if ( function_exists( 'wp_delete_file' ) ) {
+							wp_delete_file( $stale_staged );
+						} else {
+							unlink( $stale_staged ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort stale staged cleanup after direct apply; guarded by hash allowlist.
+						}
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );

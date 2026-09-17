@@ -29,6 +29,45 @@ const pendingConfig = ( label ) => ( {
 	label,
 } );
 
+// Known server rollout.hit tokens mapped to translated strings; unknown
+// tokens fall back to the raw server string so new reasons stay visible.
+// Server strings stay English under other locales without this map.
+// @since NEXT
+export const rolloutHitLabel = ( hit ) => {
+	if ( typeof hit !== 'string' || ! hit ) {
+		return '';
+	}
+	const map = {
+		hit: __( 'Hit', 'performance-optimisation' ),
+		'hit (direct)': __( 'Hit (direct)', 'performance-optimisation' ),
+		'hit (promoted)': __( 'Hit (promoted)', 'performance-optimisation' ),
+		'hit (last-good restored)': __(
+			'Hit (last-good restored)',
+			'performance-optimisation'
+		),
+		'bypass (staged preview)': __(
+			'Bypass (staged preview)',
+			'performance-optimisation'
+		),
+		'bypass (unoptimized)': __(
+			'Bypass (unoptimized)',
+			'performance-optimisation'
+		),
+		'bypass (no rollout)': __(
+			'Bypass (no rollout)',
+			'performance-optimisation'
+		),
+		'bypass (unsafe)': __( 'Bypass (unsafe)', 'performance-optimisation' ),
+		'bypass (error)': __( 'Bypass (error)', 'performance-optimisation' ),
+		'miss (empty)': __( 'Miss (empty)', 'performance-optimisation' ),
+		'miss (404)': __( 'Miss (404)', 'performance-optimisation' ),
+	};
+	if ( Object.hasOwn ? Object.hasOwn( map, hit ) : hit in map ) {
+		return map[ hit ];
+	}
+	return hit;
+};
+
 const STATUS_CONFIG = {
 	ready: READY_CONFIG,
 	// Copy (issue #1274 review): done === ready today, but a shared
@@ -172,6 +211,10 @@ const CriticalCssPanel = ( {
 		}
 	};
 
+	// Async contract (single feedback owner): handleRegenerate rethrows so
+	// the parent withNotification banner owns the click, while
+	// handleRegenerateSingle/handleRollout swallow + log because their
+	// parents notify internally and no caller awaits a rollout result.
 	const handleRegenerateSingle = async ( hash ) => {
 		if ( ! onRegenerateSingle ) {
 			return;
@@ -296,6 +339,7 @@ const CriticalCssPanel = ( {
 										className="wppo-button wppo-button--secondary wppo-button--small"
 										type="button"
 										disabled={ singleBusy === hash }
+										aria-busy={ singleBusy === hash }
 										aria-label={ sprintf(
 											/* translators: %s: template label. */
 											__(
@@ -308,10 +352,15 @@ const CriticalCssPanel = ( {
 											handleRegenerateSingle( hash )
 										}
 									>
-										{ __(
-											'Regenerate',
-											'performance-optimisation'
-										) }
+										{ singleBusy === hash
+											? __(
+													'Regenerating…',
+													'performance-optimisation'
+											  )
+											: __(
+													'Regenerate',
+													'performance-optimisation'
+											  ) }
 									</button>
 								) }
 								{ ( statusKey === 'staged' ||
@@ -401,7 +450,7 @@ const CriticalCssPanel = ( {
 												'Hit reason: %s',
 												'performance-optimisation'
 											),
-											hitReason
+											rolloutHitLabel( hitReason )
 										) }
 									</span>
 								) }

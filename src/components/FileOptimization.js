@@ -147,16 +147,16 @@ export const normalizeRolloutMode = ( value ) => {
 };
 
 // Normalize a rollout boolean toggle the same way PHP sanitizes it
-// (booleans pass through, 'false'/'no'/'0' parse, unrecognized fails
-// safe to true) so the UI matches server defaults on a single render.
+// Mirrors PHP Css_Rollout::get_rollout_bool() (filter_var with
+// FILTER_NULL_ON_FAILURE, fail-safe true): true is 1/true/on/yes,
+// false is 0/false/off/no/'', everything else ('disabled',
+// 'enabled', '2', arrays, objects) fails safe to true so the UI
+// toggle never disagrees with the server.
 // Exported for direct Jest coverage.
 // @since NEXT
 export const normalizeRolloutBool = ( value ) => {
 	if ( typeof value === 'boolean' ) {
 		return value;
-	}
-	if ( Array.isArray( value ) ) {
-		return true;
 	}
 	if (
 		value === undefined ||
@@ -166,14 +166,11 @@ export const normalizeRolloutBool = ( value ) => {
 		return true;
 	}
 	const s = String( value ).trim().toLowerCase();
-	if ( [ 'false', '0', 'no', 'off', 'disabled' ].includes( s ) ) {
+	if ( [ 'false', '0', 'no', 'off' ].includes( s ) ) {
 		return false;
 	}
-	if (
-		[ 'true', '1', 'yes', 'on', 'enabled' ].includes( s ) ||
-		/^[0-9]+$/.test( s )
-	) {
-		return '0' !== s;
+	if ( [ 'true', '1', 'yes', 'on' ].includes( s ) ) {
+		return true;
 	}
 	return true;
 };
@@ -210,8 +207,10 @@ const FILE_OPT_TEXTAREA_KEYS = [
 
 // Every file-optimisation key synced from incoming props in the baseline +
 // sync effects below. Single source of truth for both dep arrays so adding a
-// setting needs one edit, not three (issue #1259 review).
-const FILE_OPT_SYNC_KEYS = [
+// setting needs one edit, not three (issue #1259 review). Exported so Jest
+// can pin the sync invariant (rollout keys must stay present).
+// @since NEXT
+export const FILE_OPT_SYNC_KEYS = [
 	'safeMode',
 	'elementorSafeMode',
 	'minifyJS',
@@ -455,8 +454,9 @@ export const normalizeRegressionThreshold = ( value ) => {
 // mode via the PHP-mirroring allowlist, CCSS retries clamped 0..5, blank
 // CCSS exclusions reset to the builder defaults (mirroring PHP), font
 // subsets with the 'latin' fallback. Idempotent — safe to run on init,
-// baseline, and sync payloads.
-const normalizeFileOpt = ( source = {} ) => {
+// baseline, and sync payloads. Exported so Jest can pin the sync invariant.
+// @since NEXT
+export const normalizeFileOpt = ( source = {} ) => {
 	const next = { ...source };
 	for ( const key of FILE_OPT_TEXTAREA_KEYS ) {
 		if ( key in next ) {
@@ -1681,6 +1681,10 @@ const FileOptimization = ( {
 		}
 	};
 
+	// Single refresh per action (not per slot): a promote/rollback click
+	// refetches the list once on success instead of fanning out per
+	// template. The server memoizes get_status_all() per request and the
+	// per-slot preview endpoint serves diffs on demand.
 	const handlePromoteRollout = async ( slot ) => {
 		await withNotification(
 			( async () => {
@@ -1714,6 +1718,77 @@ const FileOptimization = ( {
 			),
 			__( 'Failed to roll back CSS.', 'performance-optimisation' )
 		);
+	};
+
+	// Used-CSS staged sidecars are keyed by page URL (REST `url` branch):
+	// expose operator promote/rollback controls next to the used-CSS
+	// actions so staged used-CSS is promotable from the SPA, not only via
+	// raw REST. Single status refresh per action, like the CCSS path.
+	// @since NEXT
+	const [ usedCssRolloutUrl, setUsedCssRolloutUrl ] = useState( '' );
+	const [ isUsedCssRollingOut, setIsUsedCssRollingOut ] = useState( false );
+	const handlePromoteUsedCss = async () => {
+		const url = usedCssRolloutUrl.trim();
+		if ( ! url ) {
+			notify( {
+				type: 'error',
+				message: __(
+					'Enter a page URL with staged used-CSS to promote.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+			return;
+		}
+		setIsUsedCssRollingOut( true );
+		await withNotification(
+			( async () => {
+				const res = await apiCall( 'css_rollout_promote', { url } );
+				if ( res?.success ) {
+					refreshUsedCssStatus();
+				}
+				return res;
+			} )(),
+			__(
+				'Staged used-CSS promoted to live.',
+				'performance-optimisation'
+			),
+			__(
+				'Failed to promote staged used-CSS.',
+				'performance-optimisation'
+			)
+		);
+		setIsUsedCssRollingOut( false );
+	};
+	const handleRollbackUsedCss = async () => {
+		const url = usedCssRolloutUrl.trim();
+		if ( ! url ) {
+			notify( {
+				type: 'error',
+				message: __(
+					'Enter a page URL to roll back.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+			return;
+		}
+		setIsUsedCssRollingOut( true );
+		await withNotification(
+			( async () => {
+				const res = await apiCall( 'css_rollout_rollback', { url } );
+				if ( res?.success ) {
+					refreshUsedCssStatus();
+				}
+				return res;
+			} )(),
+			__(
+				'Used-CSS rolled back to last-good assets.',
+				'performance-optimisation'
+			),
+			__( 'Failed to roll back used-CSS.', 'performance-optimisation' )
+		);
+		setIsUsedCssRollingOut( false );
 	};
 
 	const handleSubmit = async ( e ) => {
@@ -2351,6 +2426,92 @@ const FileOptimization = ( {
 												) }
 											</p>
 										</div>
+										{ settings.cssRolloutMode ===
+											'staged' && (
+											<div className="wppo-field wppo-mt-16">
+												<label
+													className="wppo-field-label"
+													htmlFor="wppoUsedCssRolloutUrl"
+												>
+													{ __(
+														'Promote / Roll Back Staged Used-CSS by URL',
+														'performance-optimisation'
+													) }
+												</label>
+												<div className="wppo-inline-row">
+													<input
+														className="wppo-input"
+														type="url"
+														inputMode="url"
+														id="wppoUsedCssRolloutUrl"
+														placeholder={ __(
+															'https://example.com/page/',
+															'performance-optimisation'
+														) }
+														value={
+															usedCssRolloutUrl
+														}
+														onChange={ ( e ) =>
+															setUsedCssRolloutUrl(
+																e.target.value
+															)
+														}
+													/>
+													<button
+														className="wppo-button wppo-button--primary"
+														type="button"
+														disabled={
+															isUsedCssRollingOut
+														}
+														aria-busy={
+															isUsedCssRollingOut
+														}
+														onClick={
+															handlePromoteUsedCss
+														}
+													>
+														{ isUsedCssRollingOut
+															? __(
+																	'Promoting…',
+																	'performance-optimisation'
+															  )
+															: __(
+																	'Promote',
+																	'performance-optimisation'
+															  ) }
+													</button>
+													<button
+														className="wppo-button wppo-button--secondary"
+														type="button"
+														disabled={
+															isUsedCssRollingOut
+														}
+														aria-busy={
+															isUsedCssRollingOut
+														}
+														onClick={
+															handleRollbackUsedCss
+														}
+													>
+														{ isUsedCssRollingOut
+															? __(
+																	'Rolling back…',
+																	'performance-optimisation'
+															  )
+															: __(
+																	'Roll back',
+																	'performance-optimisation'
+															  ) }
+													</button>
+												</div>
+												<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+													{ __(
+														'Staged used-CSS is keyed by page URL — enter the exact URL shown in the preview to promote it.',
+														'performance-optimisation'
+													) }
+												</p>
+											</div>
+										) }
 									</div>
 								) }
 								{ settings.minifyCSS && (
@@ -2565,7 +2726,7 @@ const FileOptimization = ( {
 												) }
 											</label>
 											<select
-												className="wppo-input"
+												className="wppo-select"
 												id="cssRolloutMode"
 												name="cssRolloutMode"
 												value={

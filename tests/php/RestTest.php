@@ -1721,6 +1721,75 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 400, $response->get_status() );
 		$this->assertFalse( $response->get_data()['success'] );
 	}
+
+	/**
+	 * Promote rejects a traversal slot instead of promoting (issue #1348).
+	 */
+	public function test_promote_css_rollout_rejects_traversal_slot(): void {
+		$response = $this->rest->promote_css_rollout(
+			new WP_REST_Request(
+				array(
+					'slot' => '../../etc/passwd',
+				)
+			)
+		);
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+	}
+
+	/**
+	 * Promote is throttled with a 429 once the 5/60 bucket is exhausted (issue #1348).
+	 *
+	 * Separate process: other test files alias get_transient() with
+	 * in-memory stores whose declarations persist per process, so a shared
+	 * stub here would be order-dependent.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_promote_css_rollout_throttled_returns_429(): void {
+		Functions\when( 'get_transient' )->justReturn(
+			array(
+				'count' => 5,
+				'start' => time(),
+			)
+		);
+		Functions\when( 'set_transient' )->justReturn( true );
+		$response = $this->rest->promote_css_rollout(
+			new WP_REST_Request(
+				array(
+					'slot' => 'abc123',
+				)
+			)
+		);
+		$this->assertSame( 429, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+	}
+
+	/**
+	 * Rollback is throttled with a 429 once the 5/60 bucket is exhausted (issue #1348).
+	 *
+	 * Separate process: see test_promote_css_rollout_throttled_returns_429.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_rollback_css_rollout_throttled_returns_429(): void {
+		Functions\when( 'get_transient' )->justReturn(
+			array(
+				'count' => 5,
+				'start' => time(),
+			)
+		);
+		Functions\when( 'set_transient' )->justReturn( true );
+		$response = $this->rest->rollback_css_rollout(
+			new WP_REST_Request(
+				array(
+					'slot' => 'abc123',
+				)
+			)
+		);
+		$this->assertSame( 429, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+	}
 }
 
 // phpcs:disable Generic.Files.OneObjectStructurePerFile
@@ -1818,6 +1887,16 @@ if ( ! class_exists( 'WP_REST_Response' ) ) {
 		 */
 		public function get_status() {
 			return $this->status;
+		}
+
+		/**
+		 * Set a response header (throttle paths set Retry-After).
+		 *
+		 * @param string $name  Header name.
+		 * @param string $value Header value.
+		 * @return void
+		 */
+		public function header( $name, $value ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Stand-in records nothing; signature must match WP_REST_Response::header().
 		}
 	}
 }

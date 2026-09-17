@@ -184,6 +184,35 @@ class CssRolloutTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Non-scalar mode input fails open to direct without a warning (issue #1348 review).
+	 */
+	public function test_sanitize_mode_rejects_array_fail_open(): void {
+		$this->assertSame( 'direct', Css_Rollout::sanitize_mode( array( 'staged' ) ) );
+		$this->assertSame( 'direct', Css_Rollout::sanitize_mode( null ) );
+	}
+
+	/**
+	 * Strict-gate parity: scroll-behavior is healthy, encoded breakouts fail (issue #1348 review).
+	 */
+	public function test_health_check_strict_gate_parity(): void {
+		$this->assertTrue( Css_Rollout::health_check_content( '.a{scroll-behavior:smooth}' )['ok'] );
+		$this->assertFalse( Css_Rollout::health_check_content( '.a{color:red}&#60;/style>' )['ok'] );
+		$this->assertFalse( Css_Rollout::health_check_content( '.a{x:expression (alert(1))}' )['ok'] );
+	}
+
+	/**
+	 * Background workers skip the loopback HTTP leg via $check_http=false (issue #1348 review).
+	 */
+	public function test_probe_skips_http_for_background_workers(): void {
+		$tmp = tempnam( sys_get_temp_dir(), 'wppo-probe-' );
+		$this->assertNotFalse( $tmp );
+		file_put_contents( $tmp, '.a{color:red}' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents,WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture write.
+		$result = Css_Rollout::probe_live_file( $tmp, 'http://127.0.0.1:9/unreachable.css', false );
+		$this->assertTrue( $result['ok'] );
+		unlink( $tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+	}
+
+	/**
 	 * Additive Util defaults preserve backward compatibility.
 	 */
 	public function test_util_defaults_additive(): void {

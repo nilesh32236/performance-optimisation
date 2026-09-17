@@ -3502,21 +3502,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'keep_last_good' => true,
 			);
 			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+					// Mirror the promote/rollback 500 branch: a per-slot
+					// request with no backing class must surface an error
+					// for retry UI instead of success with no payload.
+					if ( '' !== $slot || '' !== $url ) {
+						return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+					}
+				} else {
 					$data['mode']           = Css_Rollout::is_staged_mode() ? 'staged' : 'direct';
 					$data['health_check']   = Css_Rollout::is_health_check_enabled();
 					$data['keep_last_good'] = Css_Rollout::is_keep_last_good_enabled();
-					if ( '' !== $slot && class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_ccss_preview' ) ) {
+					if ( '' !== $slot ) {
+						if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) || ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_ccss_preview' ) ) {
+							return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+						}
 						$data['slot']    = $slot;
 						$data['state']   = Css_Rollout::get_state( $slot );
 						$data['preview'] = Critical_CSS::get_ccss_preview( $slot );
-					} elseif ( '' !== $url && class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
-						$used = new Used_CSS();
-						if ( method_exists( $used, 'get_used_css_preview' ) ) {
-							$data['url']     = $url;
-							$data['state']   = Css_Rollout::get_state( Used_CSS::rollout_slot_for_url( $url ) );
-							$data['preview'] = $used->get_used_css_preview( $url );
+					} elseif ( '' !== $url ) {
+						if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+							return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
 						}
+						$used = new Used_CSS();
+						if ( ! method_exists( $used, 'get_used_css_preview' ) ) {
+							return $this->send_response( null, false, 500, __( 'CSS rollout is unavailable.', 'performance-optimisation' ) );
+						}
+						$data['url']     = $url;
+						$data['state']   = Css_Rollout::get_state( Used_CSS::rollout_slot_for_url( $url ) );
+						$data['preview'] = $used->get_used_css_preview( $url );
 					} else {
 						$data['ccss'] = class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_status_all' ) ? Critical_CSS::get_status_all() : array();
 					}
