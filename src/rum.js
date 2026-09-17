@@ -460,6 +460,38 @@ export const sanitizeRumValues = ( raw ) => {
 	return clean;
 };
 
+/**
+ * Track the running maximum INP interaction duration across observer batches.
+ *
+ * Per the web.dev INP definition the field value is the max EventTiming
+ * duration observed on the page, but PerformanceObserver may deliver
+ * entries in multiple batches. Feed every `event`-type entry duration
+ * through this helper and report the accumulator at settle/send time.
+ * Fail-open: invalid durations leave the accumulator unchanged; never throws.
+ *
+ * @since NEXT
+ * @param {*} currentMax Current running max (ms).
+ * @param {*} duration   Candidate entry duration (ms).
+ * @return {number} Updated running max (ms), or `currentMax` unchanged when the candidate is invalid.
+ */
+export const trackInpDuration = ( currentMax, duration ) => {
+	try {
+		const candidate = Number( duration );
+		if (
+			! Number.isFinite( candidate ) ||
+			candidate < 0 ||
+			candidate > RUM_MAX_METRIC_MS
+		) {
+			return currentMax;
+		}
+		const base = Number( currentMax );
+		const normalized = Number.isFinite( base ) && base >= 0 ? base : 0;
+		return Math.max( normalized, candidate );
+	} catch {
+		return currentMax;
+	}
+};
+
 ( function () {
 	if (
 		! window.wppoRum ||
@@ -471,6 +503,7 @@ export const sanitizeRumValues = ( raw ) => {
 	const config = window.wppoRum;
 	const values = {};
 	let sent = false;
+	let maxInpDuration = -1;
 	let lcpObserver = null;
 	let clsObserver = null;
 	let inpObserver = null;
@@ -752,9 +785,18 @@ export const sanitizeRumValues = ( raw ) => {
 				if ( ! entries.length ) {
 					return;
 				}
-				values.inp = Math.round(
-					entries[ entries.length - 1 ].duration
-				);
+				for ( const entry of entries ) {
+					if ( ! entry || typeof entry.duration !== 'number' ) {
+						continue;
+					}
+					maxInpDuration = trackInpDuration(
+						maxInpDuration,
+						entry.duration
+					);
+				}
+				if ( maxInpDuration >= 0 ) {
+					values.inp = Math.round( maxInpDuration );
+				}
 			} );
 			inpObserver.observe( {
 				type: 'event',
