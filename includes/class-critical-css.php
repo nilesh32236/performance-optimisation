@@ -550,6 +550,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Whether a rollout event should be recorded (issue #1348).
+		 *
+		 * Mirrors Used_CSS::should_record_rollout_event(): background bulk
+		 * regen runs in a worker/admin/cron/CLI/REST context and records;
+		 * a frontend page-generation context skips the transient + log row
+		 * so bulk regen costs N transients + N log rows only where the SPA
+		 * can actually display them, never on TTFB.
+		 *
+		 * @return bool True when rollout events should be recorded.
+		 * @since NEXT
+		 */
+		private static function should_record_rollout_event(): bool {
+			try {
+				if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) {
+					return true;
+				}
+				if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+					return true;
+				}
+				if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+					return true;
+				}
+				if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+					return true;
+				}
+				if ( defined( 'WP_CLI' ) && WP_CLI ) {
+					return true;
+				}
+				if ( function_exists( 'is_admin' ) && is_admin() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
 		 * Read a CCSS slot file safely (live, staged, or last-good).
 		 *
 		 * Fail-open: returns '' when the file is missing, unreadable, or
@@ -610,8 +648,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( ! $filesystem || ! Util::atomic_file_put_contents( $filesystem, $staged_file, $css ) ) {
 					return false;
 				}
-				clearstatcache( true, $staged_file );
-				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+			clearstatcache( true, $staged_file );
+			if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && self::should_record_rollout_event() ) {
 					$live_css = self::read_ccss_slot_file( self::get_ccss_file( $template_hash ) );
 					$preview  = Css_Rollout::build_preview( $live_css, $css );
 					Css_Rollout::record_event( $template_hash, 'staged', sprintf( 'dry-run staged %d bytes (delta %+d)', $preview['staged_size'], $preview['delta_bytes'] ), 'bypass (staged preview)' );
@@ -654,10 +692,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( ! self::is_valid_template_hash( $template_hash ) ) {
 					return $empty;
 				}
-				$staged_css = self::read_ccss_slot_file( self::get_ccss_staged_file( $template_hash ) );
-				if ( '' === $staged_css ) {
-					return $empty;
-				}
+			$staged_css = self::read_ccss_slot_file( self::get_ccss_staged_file( $template_hash ) );
+			if ( '' === trim( $staged_css ) ) {
+				return $empty;
+			}
 				$live_css = self::read_ccss_slot_file( self::get_ccss_file( $template_hash ) );
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 					$empty['has_staged']  = true;
@@ -706,32 +744,82 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( '' === $staged_file || '' === $live_file || ! file_exists( $staged_file ) ) {
 					return false;
 				}
-				$staged_css = self::read_ccss_slot_file( $staged_file );
-				if ( '' === trim( $staged_css ) ) {
-					return false;
+			$staged_css = self::read_ccss_slot_file( $staged_file );
+			if ( '' === trim( $staged_css ) ) {
+				return false;
+			}
+			$filesystem = Util::init_filesystem();
+			if ( ! $filesystem ) {
+				return false;
+			}
+			// Per-slot promote lock (60s TTL): two admins/tabs promoting
+			// concurrently could otherwise snapshot A's unverified live
+			// as last-good and roll back over B's good live. Best-effort
+			// (transient backend may be non-persistent); the hash guard
+			// below is the authoritative protection.
+			$lock_key  = '';
+			$lock_held = false;
+			try {
+				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
+					$lock_key = class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && method_exists( 'PerformanceOptimise\Inc\Css_Rollout', 'state_key' ) ? Css_Rollout::state_key( $template_hash . '-promote-lock' ) : 'wppo_css_rollout_' . $template_hash . '-promote-lock';
+					if ( '' !== $lock_key && false !== get_transient( $lock_key ) ) {
+						return false;
+					}
+					if ( '' !== $lock_key && function_exists( 'set_transient' ) ) {
+						set_transient( $lock_key, time(), 60 );
+						$lock_held = true;
+					}
 				}
-				$filesystem = Util::init_filesystem();
-				if ( ! $filesystem ) {
-					return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$release_lock = static function () use ( &$lock_key, &$lock_held ): void {
+				try {
+					if ( $lock_held && '' !== $lock_key && function_exists( 'delete_transient' ) ) {
+						delete_transient( $lock_key );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
-				$keep_last_good = true;
-				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
-					$keep_last_good = Css_Rollout::is_keep_last_good_enabled();
-				}
-				if ( $keep_last_good && '' !== $last_good_file && file_exists( $live_file ) ) {
-					try {
+				$lock_held = false;
+			};
+			$keep_last_good = true;
+			if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
+				$keep_last_good = Css_Rollout::is_keep_last_good_enabled();
+			}
+			if ( $keep_last_good && '' !== $last_good_file && file_exists( $live_file ) ) {
+				try {
+					// Zero-copy snapshot: kernel copy instead of
+					// read-then-write so the same payload is not re-read
+					// 3× in one request (staged, live for backup, live
+					// for verify). Falls back to the in-memory staged
+					// string path when copy is unavailable.
+					$copied = false;
+					if ( method_exists( $filesystem, 'copy' ) ) {
+						try {
+							$copied = (bool) $filesystem->copy( $live_file, $last_good_file, true );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$copied = false;
+						}
+					}
+					if ( ! $copied ) {
 						$live_css = self::read_ccss_slot_file( $live_file );
 						if ( '' !== $live_css ) {
 							Util::atomic_file_put_contents( $filesystem, $last_good_file, $live_css );
 							clearstatcache( true, $last_good_file );
 						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+					} else {
+						clearstatcache( true, $last_good_file );
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
-				if ( ! Util::atomic_file_put_contents( $filesystem, $live_file, $staged_css ) ) {
-					return false;
-				}
+			}
+			if ( ! Util::atomic_file_put_contents( $filesystem, $live_file, $staged_css ) ) {
+				$release_lock();
+				return false;
+			}
 				self::invalidate_ccss_memo( $template_hash );
 				clearstatcache( true, $live_file );
 				// Post-apply health gate first: record `done` only after the
@@ -739,20 +827,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// success + double version bump). On breach the known-bad
 				// staged sidecar is deleted so status stops offering Promote
 				// for the same payload (no promote-fail loop).
-				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_health_check_enabled() ) {
-					if ( ! self::verify_live_ccss( $template_hash ) ) {
-						try {
-							if ( function_exists( 'wp_delete_file' ) ) {
-								wp_delete_file( $staged_file );
-							} elseif ( file_exists( $staged_file ) ) {
-								unlink( $staged_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort stale staged sidecar cleanup after a health-gate breach; guarded by hash allowlist.
-							}
-						} catch ( \Throwable $e ) {
-							unset( $e );
+			if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_health_check_enabled() ) {
+				// Inline gate reusing the in-memory staged string (no
+				// live re-read for the content leg): only restores
+				// last-good when live still equals the just-promoted
+				// payload, so an interleaved B is never rolled back over.
+				$healthy = true;
+				$reason  = '';
+				try {
+					$content_gate = Css_Rollout::health_check_content( $staged_css );
+					if ( ! $content_gate['ok'] ) {
+						$healthy = false;
+						$reason  = $content_gate['reason'];
+					} else {
+						$probe = Css_Rollout::probe_live_file( $live_file );
+						if ( ! $probe['ok'] ) {
+							$healthy = false;
+							$reason  = $probe['reason'];
 						}
-						return false;
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$healthy = true;
 				}
+				if ( ! $healthy ) {
+					try {
+						clearstatcache( true, $live_file );
+						$live_now = self::read_ccss_slot_file( $live_file );
+						// Only roll back when live still holds our
+						// payload; otherwise another writer interleaved
+						// and restoring would clobber their good live.
+						if ( '' !== $live_now && $live_now === $staged_css ) {
+							self::rollback_ccss( $template_hash, $reason );
+						} elseif ( '' === $live_now ) {
+							self::rollback_ccss( $template_hash, $reason );
+						}
+						unset( $live_now );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					try {
+						if ( function_exists( 'wp_delete_file' ) ) {
+							wp_delete_file( $staged_file );
+						} elseif ( file_exists( $staged_file ) ) {
+							unlink( $staged_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort stale staged sidecar cleanup after a health-gate breach; guarded by hash allowlist.
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					$release_lock();
+					return false;
+				}
+			}
 				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 					// Versionless hit (mirrors the used-CSS path): the
 					// version is assigned inside record_event(), so
@@ -765,18 +891,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				// Promote success: drop the staged sidecar so a later status
-				// cannot preview stale output. Best-effort, never fatal.
-				try {
-					if ( function_exists( 'wp_delete_file' ) ) {
-						wp_delete_file( $staged_file );
-					} elseif ( file_exists( $staged_file ) ) {
-						unlink( $staged_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort staged sidecar cleanup; guarded by hash allowlist.
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
+			// Promote success: drop the staged sidecar so a later status
+			// cannot preview stale output. Best-effort, never fatal.
+			try {
+				if ( function_exists( 'wp_delete_file' ) ) {
+					wp_delete_file( $staged_file );
+				} elseif ( file_exists( $staged_file ) ) {
+					unlink( $staged_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort staged sidecar cleanup; guarded by hash allowlist.
 				}
-				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				self::clear_status_all_memo();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$release_lock();
+			return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -3524,13 +3656,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							// the rollout block below.
 							$statuses[ $hash ]['status'] = 'rolled_back';
 						}
-						$statuses[ $hash ]['rollout'] = $rollout;
-						if ( $staged_exists ) {
-							$preview = self::get_ccss_preview( $hash );
-							if ( ! empty( $preview['has_staged'] ) ) {
-								$statuses[ $hash ]['preview'] = $preview;
-							}
-						}
+					$statuses[ $hash ]['rollout'] = $rollout;
+					// List view needs only the staged badge: sha/snippet
+					// previews are served on demand via the per-slot
+					// preview endpoint (get_ccss_preview) so each SPA
+					// mount/poll avoids N × (file reads + 2x sha256).
+					$statuses[ $hash ]['has_staged'] = $staged_exists;
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -4472,17 +4603,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
-		 * Whether decoded CSS contains tokens that could break out of a
-		 * `<style>` element or execute script when inlined.
-		 *
-		 * Fail-closed pre-cache gate used by generate_and_store(): a poisoned
-		 * source stylesheet must never reach the CCSS cache.
-		 *
-		 * @param string $css Raw critical CSS.
-		 * @return bool True when hostile tokens are present.
-		 * @since 2.0.0
-		 */
-		/**
 		 * Strict unsafe-CSS gate shared with the rollout health check.
 		 *
 		 * Public so Css_Rollout::health_check_content() can reuse the exact
@@ -4496,6 +4616,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		public static function contains_unsafe_css_tokens( string $css ): bool {
 			$decoded = self::decode_css_entities( $css );
+			// Normalize CSS backslash escapes before matching: browsers
+			// decode `j\61 vascript:` / `expression\28` at parse time, so
+			// the gate must see the same payload. Hex escapes decode to
+			// their char, single-char escapes drop the backslash.
+			$decoded = (string) preg_replace_callback(
+				'/\\\\([0-9a-f]{1,6})\\s?/i',
+				static function ( array $m ): string {
+					$code = hexdec( $m[1] );
+					if ( $code <= 0 || $code > 0x10FFFF ) {
+						return '';
+					}
+					if ( $code < 128 ) {
+						return chr( (int) $code );
+					}
+					if ( function_exists( 'mb_chr' ) ) {
+						$chr = mb_chr( (int) $code, 'UTF-8' );
+						return is_string( $chr ) ? $chr : '';
+					}
+					return '';
+				},
+				$decoded
+			);
+			$decoded = (string) preg_replace( '/\\\\(.)/s', '$1', $decoded );
 			// Note: behaviou?r matches in property position (followed by a
 			// colon) AND only when it is the whole property name, so benign
 			// selectors like .behavior-badge pass and modern hyphenated
@@ -4612,18 +4755,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * trusted-code-only hook, and a hooked callback must not be able to
 		 * reintroduce `</style>`/`<script>` past the sanitizer and gate.
 		 *
-		 * @param string $css Raw critical CSS.
+		 * @param string $css       Raw critical CSS.
+		 * @param string $cache_key Optional template identity (hash) for the
+		 *                          per-request memo. Callers that already
+		 *                          know the template pass it so the memo
+		 *                          lookup avoids hashing up to ccssMaxSize
+		 *                          (20KB) on the frontend hot path; empty
+		 *                          falls back to md5($css).
 		 * @return string Sanitized critical CSS.
 		 * @since 2.0.0
+		 * @since NEXT Optional $cache_key memo identity.
 		 */
-		private static function sanitize_inline_css( string $css ): string {
+		private static function sanitize_inline_css( string $css, string $cache_key = '' ): string {
 			// Per-request memo (issue #1235): output was already sanitized
 			// at generation time before the atomic write, so the inline_ccss()
 			// hot path would otherwise re-run the regex passes on every
 			// frontend hit. Bounded to 20 entries so unbounded variants
-			// cannot grow memory within a long-lived worker.
+			// cannot grow memory within a long-lived worker. Callers pass
+			// the template hash as identity so the lookup is O(1) without
+			// hashing the payload.
 			static $memo = array();
-			$key         = md5( $css );
+			$key         = '' !== $cache_key ? 't:' . $cache_key : md5( $css );
 			if ( array_key_exists( $key, $memo ) ) {
 				return $memo[ $key ];
 			}
@@ -5251,13 +5403,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			// Last-good backup (issue #1348, lazy): snapshot live before
 			// overwrite so the health gate can restore it on breach.
-			// Best-effort, never fails the store.
+			// Zero-copy kernel copy (no PHP-string roundtrip);
+			// best-effort, never fails the store.
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_keep_last_good_enabled() && file_exists( $file ) ) {
-					$prior = self::read_ccss_slot_file( $file );
-					if ( '' !== $prior && '' !== self::get_ccss_last_good_file( $template_hash ) && $filesystem ) {
-						Util::atomic_file_put_contents( $filesystem, self::get_ccss_last_good_file( $template_hash ), $prior );
-						clearstatcache( true, self::get_ccss_last_good_file( $template_hash ) );
+					$last_good = self::get_ccss_last_good_file( $template_hash );
+					if ( '' !== $last_good && $filesystem ) {
+						$copied = false;
+						if ( method_exists( $filesystem, 'copy' ) ) {
+							try {
+								$copied = (bool) $filesystem->copy( $file, $last_good, true );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$copied = false;
+							}
+						}
+						if ( ! $copied ) {
+							$prior = self::read_ccss_slot_file( $file );
+							if ( '' !== $prior ) {
+								Util::atomic_file_put_contents( $filesystem, $last_good, $prior );
+								clearstatcache( true, $last_good );
+							}
+						} else {
+							clearstatcache( true, $last_good );
+						}
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -5486,9 +5655,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					self::$ccss_defer_blocked[ $template_hash ] = true;
 					return;
 				}
-				echo '<style id="wppo-critical-css">' . "\n";
-				// Sanitized against HTML breakout tokens; see sanitize_inline_css().
-				echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
+			echo '<style id="wppo-critical-css">' . "\n";
+			// Sanitized against HTML breakout tokens; see sanitize_inline_css().
+			echo self::sanitize_inline_css( $content, $template_hash ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
 				echo '</style>' . "\n";
 			} else {
 				// No CCSS file yet — queue async generation and never block the

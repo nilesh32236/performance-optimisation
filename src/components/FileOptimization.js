@@ -148,29 +148,23 @@ export const normalizeRolloutMode = ( value ) => {
 
 // Normalize a rollout boolean toggle the same way PHP sanitizes it
 // Mirrors PHP Css_Rollout::get_rollout_bool() (filter_var with
-// FILTER_NULL_ON_FAILURE, fail-safe true): true is 1/true/on/yes,
-// false is 0/false/off/no/'', everything else ('disabled',
-// 'enabled', '2', arrays, objects) fails safe to true so the UI
-// toggle never disagrees with the server.
+// FILTER_NULL_ON_FAILURE, fail-safe true): only undefined/null fail
+// safe to true; '' falls through to the false allowlist to match PHP
+// filter_var('', FILTER_NULL_ON_FAILURE) === false. True is
+// 1/true/on/yes, false is 0/false/off/no/'', everything else
+// ('disabled', 'enabled', '2', arrays, objects) fails safe to true.
 // Exported for direct Jest coverage.
 // @since NEXT
 export const normalizeRolloutBool = ( value ) => {
 	if ( typeof value === 'boolean' ) {
 		return value;
 	}
-	if (
-		value === undefined ||
-		value === null ||
-		'' === String( value ).trim()
-	) {
+	if ( value === undefined || value === null ) {
 		return true;
 	}
 	const s = String( value ).trim().toLowerCase();
-	if ( [ 'false', '0', 'no', 'off' ].includes( s ) ) {
+	if ( [ 'false', '0', 'no', 'off', '' ].includes( s ) ) {
 		return false;
-	}
-	if ( [ 'true', '1', 'yes', 'on' ].includes( s ) ) {
-		return true;
 	}
 	return true;
 };
@@ -1354,47 +1348,46 @@ const FileOptimization = ( {
 		}
 	};
 
-	const withNotification = async (
-		apiCallPromise,
-		successMessage,
-		errorMessage
-	) => {
-		// Regen-scoped busy flag: the Save button stays interactive while a
-		// background regen runs.
-		setIsRegenerating( true );
-		dismiss();
+	const withNotification = useCallback(
+		async ( apiCallPromise, successMessage, errorMessage ) => {
+			// Regen-scoped busy flag: the Save button stays interactive while a
+			// background regen runs.
+			setIsRegenerating( true );
+			dismiss();
 
-		try {
-			const res = await apiCallPromise;
-			if ( res.success ) {
-				notify( {
-					type: 'success',
-					message: res.message || successMessage,
-					durationMs: 3000,
-				} );
-			} else {
+			try {
+				const res = await apiCallPromise;
+				if ( res.success ) {
+					notify( {
+						type: 'success',
+						message: res.message || successMessage,
+						durationMs: 3000,
+					} );
+				} else {
+					notify( {
+						type: 'error',
+						message: res.message || errorMessage,
+						durationMs: 3000,
+					} );
+				}
+			} catch ( err ) {
+				console.error( errorMessage, getErrorLogMessage( err ) );
 				notify( {
 					type: 'error',
-					message: res.message || errorMessage,
+					message: __(
+						'An unexpected error occurred.',
+						'performance-optimisation'
+					),
 					durationMs: 3000,
 				} );
+			} finally {
+				setIsRegenerating( false );
 			}
-		} catch ( err ) {
-			console.error( errorMessage, getErrorLogMessage( err ) );
-			notify( {
-				type: 'error',
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-		} finally {
-			setIsRegenerating( false );
-		}
-	};
+		},
+		[ notify, dismiss ]
+	);
 
-	const handleRegenerateCss = async () => {
+	const handleRegenerateCss = useCallback( async () => {
 		await withNotification(
 			( async () => {
 				const res = await apiCall( 'regenerate_ccss' );
@@ -1412,7 +1405,7 @@ const FileOptimization = ( {
 				'performance-optimisation'
 			)
 		);
-	};
+	}, [ onCcssRefresh, withNotification ] );
 
 	const handleRegenerateUsedCSS = async () => {
 		setIsRegenerating( true );
@@ -1534,97 +1527,100 @@ const FileOptimization = ( {
 	const [ singlePostId, setSinglePostId ] = useState( '' );
 	const [ singleTemplate, setSingleTemplate ] = useState( '' );
 
-	const handleRegenerateSingleCcss = async ( hash ) => {
-		// Defense-in-depth before hitting the privileged regenerate_ccss
-		// route: trim, cap length, and reject control characters. An empty
-		// input notifies instead of silently returning (dead click).
-		const raw = String( hash ?? singleTemplate ?? '' )
-			.trim()
-			.slice( 0, 200 );
-		if ( '' === raw || /[\u0000-\u001F\u007F]/.test( raw ) ) {
-			notify( {
-				type: 'error',
-				message: __(
-					'Enter a template to regenerate.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-			return;
-		}
-		const template = raw;
-		// Gate feedback on the queued count (issue #1274 review): a
-		// skipped/unknown template returns success with queued:0, which
-		// must surface the server's distinct message (info) instead of
-		// the generic "queued" success toast.
-		setIsRegenerating( true );
-		dismiss();
-		try {
-			const res = await apiCall( 'regenerate_ccss', { template } );
-			// A missing queued key is not an explicit 0: the server always
-			// sends queued on this route, so a missing key means an
-			// unexpected envelope — treat it as success, not as a skip.
-			// Any positive count is success (single-template calls queue
-			// exactly one; >= 1 also covers multi-queue responses).
-			const queued = res?.data?.queued;
-			if (
-				res?.success &&
-				( undefined === queued || Number( queued ) >= 1 )
-			) {
-				notify( {
-					type: 'success',
-					message:
-						res.message ||
-						__(
-							'Critical CSS regeneration queued for template.',
-							'performance-optimisation'
-						),
-					durationMs: 3000,
-				} );
-			} else if ( res?.success ) {
-				notify( {
-					type: 'info',
-					message:
-						res.message ||
-						__(
-							'Template skipped: nothing queued.',
-							'performance-optimisation'
-						),
-					durationMs: 3000,
-				} );
-			} else {
+	const handleRegenerateSingleCcss = useCallback(
+		async ( hash ) => {
+			// Defense-in-depth before hitting the privileged regenerate_ccss
+			// route: trim, cap length, and reject control characters. An empty
+			// input notifies instead of silently returning (dead click).
+			const raw = String( hash ?? singleTemplate ?? '' )
+				.trim()
+				.slice( 0, 200 );
+			if ( '' === raw || /[\u0000-\u001F\u007F]/.test( raw ) ) {
 				notify( {
 					type: 'error',
-					message:
-						res?.message ||
-						__(
-							'Failed to regenerate critical CSS for template.',
-							'performance-optimisation'
-						),
+					message: __(
+						'Enter a template to regenerate.',
+						'performance-optimisation'
+					),
 					durationMs: 3000,
 				} );
 				return;
 			}
-			if ( onCcssRefresh ) {
-				onCcssRefresh();
+			const template = raw;
+			// Gate feedback on the queued count (issue #1274 review): a
+			// skipped/unknown template returns success with queued:0, which
+			// must surface the server's distinct message (info) instead of
+			// the generic "queued" success toast.
+			setIsRegenerating( true );
+			dismiss();
+			try {
+				const res = await apiCall( 'regenerate_ccss', { template } );
+				// A missing queued key is not an explicit 0: the server always
+				// sends queued on this route, so a missing key means an
+				// unexpected envelope — treat it as success, not as a skip.
+				// Any positive count is success (single-template calls queue
+				// exactly one; >= 1 also covers multi-queue responses).
+				const queued = res?.data?.queued;
+				if (
+					res?.success &&
+					( undefined === queued || Number( queued ) >= 1 )
+				) {
+					notify( {
+						type: 'success',
+						message:
+							res.message ||
+							__(
+								'Critical CSS regeneration queued for template.',
+								'performance-optimisation'
+							),
+						durationMs: 3000,
+					} );
+				} else if ( res?.success ) {
+					notify( {
+						type: 'info',
+						message:
+							res.message ||
+							__(
+								'Template skipped: nothing queued.',
+								'performance-optimisation'
+							),
+						durationMs: 3000,
+					} );
+				} else {
+					notify( {
+						type: 'error',
+						message:
+							res?.message ||
+							__(
+								'Failed to regenerate critical CSS for template.',
+								'performance-optimisation'
+							),
+						durationMs: 3000,
+					} );
+					return;
+				}
+				if ( onCcssRefresh ) {
+					onCcssRefresh();
+				}
+			} catch ( err ) {
+				console.error(
+					'Failed to regenerate CCSS for template',
+					getErrorLogMessage( err )
+				);
+				notify( {
+					type: 'error',
+					message: __(
+						'An unexpected error occurred.',
+						'performance-optimisation'
+					),
+					durationMs: 3000,
+				} );
+			} finally {
+				setIsRegenerating( false );
 			}
-		} catch ( err ) {
-			console.error(
-				'Failed to regenerate CCSS for template',
-				getErrorLogMessage( err )
-			);
-			notify( {
-				type: 'error',
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-		} finally {
-			setIsRegenerating( false );
-		}
-	};
+		},
+		[ singleTemplate, notify, dismiss, onCcssRefresh ]
+	);
 
 	const handleRegenerateSingleUsedCss = async () => {
 		const postId = parseInt( singlePostId, 10 );
@@ -1685,40 +1681,54 @@ const FileOptimization = ( {
 	// refetches the list once on success instead of fanning out per
 	// template. The server memoizes get_status_all() per request and the
 	// per-slot preview endpoint serves diffs on demand.
-	const handlePromoteRollout = async ( slot ) => {
-		await withNotification(
-			( async () => {
-				const res = await apiCall( 'css_rollout_promote', {
-					slot,
-				} );
-				if ( res?.success && onCcssRefresh ) {
-					onCcssRefresh();
-				}
-				return res;
-			} )(),
-			__( 'Staged CSS promoted to live.', 'performance-optimisation' ),
-			__( 'Failed to promote staged CSS.', 'performance-optimisation' )
-		);
-	};
+	// useCallback so memo(CriticalCssPanel) keeps its bailout across the
+	// ~80-input parent re-renders.
+	const handlePromoteRollout = useCallback(
+		async ( slot ) => {
+			await withNotification(
+				( async () => {
+					const res = await apiCall( 'css_rollout_promote', {
+						slot,
+					} );
+					if ( res?.success && onCcssRefresh ) {
+						onCcssRefresh();
+					}
+					return res;
+				} )(),
+				__(
+					'Staged CSS promoted to live.',
+					'performance-optimisation'
+				),
+				__(
+					'Failed to promote staged CSS.',
+					'performance-optimisation'
+				)
+			);
+		},
+		[ onCcssRefresh, withNotification ]
+	);
 
-	const handleRollbackRollout = async ( slot ) => {
-		await withNotification(
-			( async () => {
-				const res = await apiCall( 'css_rollout_rollback', {
-					slot,
-				} );
-				if ( res?.success && onCcssRefresh ) {
-					onCcssRefresh();
-				}
-				return res;
-			} )(),
-			__(
-				'CSS rolled back to last-good assets.',
-				'performance-optimisation'
-			),
-			__( 'Failed to roll back CSS.', 'performance-optimisation' )
-		);
-	};
+	const handleRollbackRollout = useCallback(
+		async ( slot ) => {
+			await withNotification(
+				( async () => {
+					const res = await apiCall( 'css_rollout_rollback', {
+						slot,
+					} );
+					if ( res?.success && onCcssRefresh ) {
+						onCcssRefresh();
+					}
+					return res;
+				} )(),
+				__(
+					'CSS rolled back to last-good assets.',
+					'performance-optimisation'
+				),
+				__( 'Failed to roll back CSS.', 'performance-optimisation' )
+			);
+		},
+		[ onCcssRefresh, withNotification ]
+	);
 
 	// Used-CSS staged sidecars are keyed by page URL (REST `url` branch):
 	// expose operator promote/rollback controls next to the used-CSS
@@ -1726,8 +1736,8 @@ const FileOptimization = ( {
 	// raw REST. Single status refresh per action, like the CCSS path.
 	// @since NEXT
 	const [ usedCssRolloutUrl, setUsedCssRolloutUrl ] = useState( '' );
-	const [ isUsedCssRollingOut, setIsUsedCssRollingOut ] = useState( false );
-	const handlePromoteUsedCss = async () => {
+	const [ usedCssRolloutAction, setUsedCssRolloutAction ] = useState( null );
+	const handlePromoteUsedCss = useCallback( async () => {
 		const url = usedCssRolloutUrl.trim();
 		if ( ! url ) {
 			notify( {
@@ -1740,27 +1750,30 @@ const FileOptimization = ( {
 			} );
 			return;
 		}
-		setIsUsedCssRollingOut( true );
-		await withNotification(
-			( async () => {
-				const res = await apiCall( 'css_rollout_promote', { url } );
-				if ( res?.success ) {
-					refreshUsedCssStatus();
-				}
-				return res;
-			} )(),
-			__(
-				'Staged used-CSS promoted to live.',
-				'performance-optimisation'
-			),
-			__(
-				'Failed to promote staged used-CSS.',
-				'performance-optimisation'
-			)
-		);
-		setIsUsedCssRollingOut( false );
-	};
-	const handleRollbackUsedCss = async () => {
+		setUsedCssRolloutAction( 'promote' );
+		try {
+			await withNotification(
+				( async () => {
+					const res = await apiCall( 'css_rollout_promote', { url } );
+					if ( res?.success ) {
+						refreshUsedCssStatus();
+					}
+					return res;
+				} )(),
+				__(
+					'Staged used-CSS promoted to live.',
+					'performance-optimisation'
+				),
+				__(
+					'Failed to promote staged used-CSS.',
+					'performance-optimisation'
+				)
+			);
+		} finally {
+			setUsedCssRolloutAction( null );
+		}
+	}, [ usedCssRolloutUrl, notify, withNotification, refreshUsedCssStatus ] );
+	const handleRollbackUsedCss = useCallback( async () => {
 		const url = usedCssRolloutUrl.trim();
 		if ( ! url ) {
 			notify( {
@@ -1773,23 +1786,31 @@ const FileOptimization = ( {
 			} );
 			return;
 		}
-		setIsUsedCssRollingOut( true );
-		await withNotification(
-			( async () => {
-				const res = await apiCall( 'css_rollout_rollback', { url } );
-				if ( res?.success ) {
-					refreshUsedCssStatus();
-				}
-				return res;
-			} )(),
-			__(
-				'Used-CSS rolled back to last-good assets.',
-				'performance-optimisation'
-			),
-			__( 'Failed to roll back used-CSS.', 'performance-optimisation' )
-		);
-		setIsUsedCssRollingOut( false );
-	};
+		setUsedCssRolloutAction( 'rollback' );
+		try {
+			await withNotification(
+				( async () => {
+					const res = await apiCall( 'css_rollout_rollback', {
+						url,
+					} );
+					if ( res?.success ) {
+						refreshUsedCssStatus();
+					}
+					return res;
+				} )(),
+				__(
+					'Used-CSS rolled back to last-good assets.',
+					'performance-optimisation'
+				),
+				__(
+					'Failed to roll back used-CSS.',
+					'performance-optimisation'
+				)
+			);
+		} finally {
+			setUsedCssRolloutAction( null );
+		}
+	}, [ usedCssRolloutUrl, notify, withNotification, refreshUsedCssStatus ] );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
@@ -2461,16 +2482,19 @@ const FileOptimization = ( {
 														className="wppo-button wppo-button--primary"
 														type="button"
 														disabled={
-															isUsedCssRollingOut
+															null !==
+															usedCssRolloutAction
 														}
 														aria-busy={
-															isUsedCssRollingOut
+															'promote' ===
+															usedCssRolloutAction
 														}
 														onClick={
 															handlePromoteUsedCss
 														}
 													>
-														{ isUsedCssRollingOut
+														{ 'promote' ===
+														usedCssRolloutAction
 															? __(
 																	'Promoting…',
 																	'performance-optimisation'
@@ -2484,16 +2508,19 @@ const FileOptimization = ( {
 														className="wppo-button wppo-button--secondary"
 														type="button"
 														disabled={
-															isUsedCssRollingOut
+															null !==
+															usedCssRolloutAction
 														}
 														aria-busy={
-															isUsedCssRollingOut
+															'rollback' ===
+															usedCssRolloutAction
 														}
 														onClick={
 															handleRollbackUsedCss
 														}
 													>
-														{ isUsedCssRollingOut
+														{ 'rollback' ===
+														usedCssRolloutAction
 															? __(
 																	'Rolling back…',
 																	'performance-optimisation'

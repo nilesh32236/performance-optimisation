@@ -3493,10 +3493,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since NEXT
 		 */
 		public function get_css_rollout_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
-			$params = $request->get_params();
-			$slot   = isset( $params['slot'] ) ? sanitize_text_field( substr( trim( (string) $params['slot'] ), 0, 128 ) ) : '';
-			$url    = isset( $params['url'] ) ? sanitize_text_field( substr( trim( (string) $params['url'] ), 0, 2048 ) ) : '';
-			$data   = array(
+		$params = $request->get_params();
+		$slot   = isset( $params['slot'] ) ? sanitize_text_field( substr( trim( (string) $params['slot'] ), 0, 128 ) ) : '';
+		$url    = isset( $params['url'] ) ? sanitize_text_field( substr( trim( (string) $params['url'] ), 0, 2048 ) ) : '';
+		// Exactly-one guard (parity with promote/rollback): dual-supplied
+		// input must 400 instead of silently preferring slot.
+		if ( '' !== $slot && '' !== $url ) {
+			return $this->send_response( null, false, 400, __( 'Provide exactly one of slot or url.', 'performance-optimisation' ) );
+		}
+		$data   = array(
 				'mode'           => 'direct',
 				'health_check'   => true,
 				'keep_last_good' => true,

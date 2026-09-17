@@ -503,6 +503,12 @@ describe( 'safe rollout badges and actions', () => {
 			'custom future reason'
 		);
 		expect( rolloutHitLabel( '' ) ).toBe( '' );
+		// Dynamic probe codes map to the translated generic template.
+		expect( rolloutHitLabel( 'miss (500)' ) ).toBe( 'Miss (500)' );
+		expect( rolloutHitLabel( 'miss (503)' ) ).toBe( 'Miss (503)' );
+		// Inherited Object keys must not leak functions via `in`.
+		expect( rolloutHitLabel( 'toString' ) ).toBe( 'toString' );
+		expect( rolloutHitLabel( 'constructor' ) ).toBe( 'constructor' );
 	} );
 
 	it( 'announces per-template regenerate busy state via aria-busy', () => {

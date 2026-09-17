@@ -62,8 +62,22 @@ export const rolloutHitLabel = ( hit ) => {
 		'miss (empty)': __( 'Miss (empty)', 'performance-optimisation' ),
 		'miss (404)': __( 'Miss (404)', 'performance-optimisation' ),
 	};
-	if ( Object.hasOwn ? Object.hasOwn( map, hit ) : hit in map ) {
+	const hasOwn = ( obj, key ) =>
+		Object.hasOwn
+			? Object.hasOwn( obj, key )
+			: Object.prototype.hasOwnProperty.call( obj, key );
+	if ( hasOwn( map, hit ) ) {
 		return map[ hit ];
+	}
+	// probe_live_file() emits dynamic miss (<code>) for any 4xx/5xx, so
+	// map the generic prefix instead of leaking raw English strings.
+	const missMatch = /^miss \((\d{3})\)$/.exec( hit );
+	if ( missMatch ) {
+		return sprintf(
+			/* translators: %s: HTTP status code. */
+			__( 'Miss (%s)', 'performance-optimisation' ),
+			missMatch[ 1 ]
+		);
 	}
 	return hit;
 };
@@ -113,7 +127,7 @@ const STATUS_CONFIG = {
  * @since NEXT
  * @param {*} hash  Status key.
  * @param {*} entry Raw entry value.
- * @return {{statusKey: string, label: string, size: number|null, truncated: boolean, rollout: *, preview: *}} Normalized entry.
+ * @return {{statusKey: string, label: string, size: number|null, truncated: boolean, rollout: *, preview: *, hasStaged: boolean}} Normalized entry.
  */
 export const normalizeCcssEntry = ( hash, entry ) => {
 	const safeHash = typeof hash === 'string' ? hash : String( hash ?? '' );
@@ -127,6 +141,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 			truncated: false,
 			rollout: null,
 			preview: null,
+			hasStaged: false,
 		};
 	}
 	if ( ! entry || typeof entry !== 'object' ) {
@@ -137,6 +152,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 			truncated: false,
 			rollout: null,
 			preview: null,
+			hasStaged: false,
 		};
 	}
 	return {
@@ -158,6 +174,13 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 			entry.preview && typeof entry.preview === 'object'
 				? entry.preview
 				: null,
+		hasStaged:
+			true === entry.has_staged ||
+			!! (
+				entry.preview &&
+				typeof entry.preview === 'object' &&
+				entry.preview.has_staged
+			),
 	};
 };
 
@@ -290,6 +313,7 @@ const CriticalCssPanel = ( {
 							truncated,
 							rollout,
 							preview,
+							hasStaged,
 						} = normalized;
 						const config = statusConfigFor( statusKey );
 						const hitReason =
@@ -364,6 +388,7 @@ const CriticalCssPanel = ( {
 									</button>
 								) }
 								{ ( statusKey === 'staged' ||
+									hasStaged ||
 									( preview && preview.has_staged ) ) &&
 									onPromote && (
 										<button

@@ -1802,8 +1802,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! is_object( $fs ) || '' === $live_path || ! file_exists( $live_path ) ) {
 					return;
 				}
-				$prior = self::read_slot_file( $live_path );
-				if ( ! is_string( $prior ) || '' === trim( $prior ) ) {
+				// Gate on filesize only (no PHP-string roundtrip): the
+				// prior live file can be up to 1MB and reading it here
+				// doubled peak memory + I/O on the frontend-miss path.
+				// The read+atomic-write fallback below reads only when
+				// copy is unavailable.
+				$size = filesize( $live_path );
+				if ( false === $size || (int) $size <= 0 || (int) $size > 1048576 ) {
 					return;
 				}
 				$backup = self::get_last_good_path_for( $live_path );
@@ -1818,6 +1823,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
+				}
+				$prior = self::read_slot_file( $live_path );
+				if ( ! is_string( $prior ) || '' === trim( $prior ) ) {
+					return;
 				}
 				Util::atomic_file_put_contents( $fs, $backup, $prior );
 			} catch ( \Throwable $e ) {
@@ -1887,10 +1896,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( '' === $staged_path || ! file_exists( $staged_path ) ) {
 					return $empty;
 				}
-				$staged = self::read_slot_file( $staged_path );
-				if ( ! is_string( $staged ) || '' === $staged ) {
-					return $empty;
-				}
+			$staged = self::read_slot_file( $staged_path );
+			if ( ! is_string( $staged ) || '' === trim( $staged ) ) {
+				return $empty;
+			}
 				$live = file_exists( $live_path ) ? self::read_slot_file( $live_path ) : '';
 				if ( ! is_string( $live ) ) {
 					$live = '';
@@ -1954,11 +1963,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					// the known-bad staged sidecar is deleted so preview
 					// stops offering Promote for the same payload.
 					if ( Css_Rollout::is_health_check_enabled() ) {
+						// Content leg reuses the in-memory staged string
+						// (no re-read); only roll back when live still
+						// equals the just-promoted payload so an
+						// interleaved writer is never clobbered.
 						$check = Css_Rollout::health_check_content( $staged );
 						$probe = Css_Rollout::probe_live_file( $live_path, $this->get_used_css_url( $url ) );
 						if ( ! $check['ok'] || ! $probe['ok'] ) {
 							$reason = ! $check['ok'] ? $check['reason'] : $probe['reason'];
-							self::rollback_used_css( $url, $reason );
+							try {
+								clearstatcache( true, $live_path );
+								$live_now = self::read_slot_file( $live_path );
+								if ( ! is_string( $live_now ) || '' === $live_now || $live_now === $staged ) {
+									self::rollback_used_css( $url, $reason );
+								}
+								unset( $live_now );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
 							try {
 								if ( function_exists( 'wp_delete_file' ) ) {
 									wp_delete_file( $staged_path );

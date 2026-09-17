@@ -1698,7 +1698,11 @@ describe( 'FileOptimization Component', () => {
 			expect( normalizeRolloutBool( '0' ) ).toBe( false );
 			expect( normalizeRolloutBool( 'no' ) ).toBe( false );
 			expect( normalizeRolloutBool( 'off' ) ).toBe( false );
-			expect( normalizeRolloutBool( '' ) ).toBe( true );
+			// PHP filter_var('', FILTER_NULL_ON_FAILURE) === false, so ''
+			// is false (only undefined/null fail safe to true).
+			expect( normalizeRolloutBool( '' ) ).toBe( false );
+			expect( normalizeRolloutBool( '   ' ) ).toBe( false );
+			expect( normalizeRolloutBool( null ) ).toBe( true );
 		} );
 
 		it( 'fails safe to true for disabled/enabled/numeric like PHP filter_var', () => {
@@ -1784,6 +1788,78 @@ describe( 'FileOptimization Component', () => {
 				cdnURL: 'x',
 				cdnMapping: [ { cdn_url: 'a' } ],
 			} );
+		} );
+	} );
+
+	describe( 'used-CSS staged rollout by URL', () => {
+		it( 'renders the URL field in staged mode and notifies without apiCall on empty URL', async () => {
+			apiCall.mockResolvedValue( { success: true, data: {} } );
+			render(
+				<FileOptimization
+					options={ {
+						removeUnusedCSS: true,
+						cssRolloutMode: 'staged',
+					} }
+					serverRules={ {} }
+				/>
+			);
+			const urlInput = screen.getByLabelText(
+				/Promote \/ Roll Back Staged Used-CSS by URL/i
+			);
+			expect( urlInput ).toBeInTheDocument();
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /^Promote$/i } )
+			);
+			await waitFor( () =>
+				expect(
+					screen.getByText( /Enter a page URL with staged used-CSS/i )
+				).toBeInTheDocument()
+			);
+			expect( apiCall ).not.toHaveBeenCalledWith(
+				'css_rollout_promote',
+				expect.anything()
+			);
+		} );
+
+		it( 'calls promote/rollback with the URL when provided', async () => {
+			apiCall.mockImplementation( ( action ) => {
+				if ( 'used_css_status' === action ) {
+					return Promise.resolve( { success: true, data: {} } );
+				}
+				return Promise.resolve( { success: true, data: {} } );
+			} );
+			render(
+				<FileOptimization
+					options={ {
+						removeUnusedCSS: true,
+						cssRolloutMode: 'staged',
+					} }
+					serverRules={ {} }
+				/>
+			);
+			const urlInput = screen.getByLabelText(
+				/Promote \/ Roll Back Staged Used-CSS by URL/i
+			);
+			fireEvent.change( urlInput, {
+				target: { value: 'https://example.com/page/' },
+			} );
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /^Promote$/i } )
+			);
+			await waitFor( () =>
+				expect( apiCall ).toHaveBeenCalledWith( 'css_rollout_promote', {
+					url: 'https://example.com/page/',
+				} )
+			);
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Roll back/i } )
+			);
+			await waitFor( () =>
+				expect( apiCall ).toHaveBeenCalledWith(
+					'css_rollout_rollback',
+					{ url: 'https://example.com/page/' }
+				)
+			);
 		} );
 	} );
 } );

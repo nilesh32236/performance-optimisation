@@ -130,15 +130,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 		}
 
 		/**
-		 * Whether the post-apply health gate is enabled.
-		 *
-		 * Absent key defaults to enabled (fail-safe); explicit false disables.
-		 *
-		 * @since NEXT
-		 * @param array|null $settings Optional settings array.
-		 * @return bool True when the health gate runs after apply.
-		 */
-		/**
 		 * Shared fail-safe boolean reader for the rollout toggles.
 		 *
 		 * Absent key defaults to enabled (fail-safe); explicit false
@@ -288,10 +279,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
-				} elseif ( 1 === preg_match( '/<\/style|<\/script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|data\s*:\s*text\/html/i', $css ) ) {
-					// Fallback when the CCSS class is unavailable: single
-					// case-insensitive regex pass (no strtolower copy, no
-					// per-token scans of healthy payloads).
+			} elseif ( 1 === preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:|data\s*:\s*image\/svg|data\s*:\s*text\/html|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $css ) ) {
+				// Fallback when the CCSS class is unavailable: mirrors the
+				// strict token set (see Critical_CSS::
+				// contains_unsafe_css_tokens()) so staged/direct decisions
+				// agree by class availability. Single case-insensitive
+				// regex pass (no strtolower copy, no per-token scans of
+				// healthy payloads).
 					return array(
 						'ok'     => false,
 						'reason' => 'unsafe token detected',
