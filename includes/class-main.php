@@ -3657,15 +3657,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 
 					// WP 6.9+ uses native fetchpriority/in_footer via Script Loader / Script Modules.
-					// Guard with version_compare + function_exists so WP <6.9 keeps the legacy path.
+					// Guard with the canonical supports_native_script_fetchpriority()
+					// predicate (version + genuinely-6.9 API probe) so a
+					// backported/filtered version string cannot enable native
+					// writes where the API is absent; WP <6.9 keeps the legacy path.
 					// Note: WP 6.5–6.8 previously enqueued wppo-lazyload as a module with
 					// fetchpriority/in_footer args harmlessly ignored by core; now intentionally
 					// falls back to classic until 6.9 where the args are natively rendered
 					// (Trac #61734, #63486). Documented narrowing for backward compat.
-					$wp_version    = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
-					$is_wp69_plus  = version_compare( $wp_version, '6.9-alpha', '>=' );
-					$has_mod_api   = function_exists( 'wp_enqueue_script_module' ) || function_exists( 'wp_register_script_module' );
-					$use_mod_api   = $is_wp69_plus && $has_mod_api;
+					//
+					// @since NEXT.
+					$use_mod_api   = self::supports_native_script_fetchpriority();
 					$lazy_mod_args = array(
 						'in_footer'     => true,
 						'fetchpriority' => 'low',
@@ -3819,8 +3821,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( in_array( (string) $id, $excluded, true ) ) {
 					continue;
 				}
+				// Honor the shared in_footer filter (issue #1294): a false
+				// return keeps the module in the head (e.g. document.write
+				// dependencies). Guarded + fail-open via the shared helper.
+				//
+				// @since NEXT.
 				if ( method_exists( $modules, 'set_in_footer' ) ) {
-					$modules->set_in_footer( (string) $id, true );
+					if ( $this->should_move_deferred_to_footer( (string) $id ) ) {
+						$modules->set_in_footer( (string) $id, true );
+					}
 				}
 				if ( method_exists( $modules, 'set_fetchpriority' ) ) {
 					// Fill-gaps-only (issue #1218): 'high' and 'low' are preserved;
@@ -3839,11 +3848,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// add_defer_strategy(), which DOES preserve explicit 'auto':
 					// classic scripts carry no core default (get_data() returns
 					// false when unset), so explicitness is observable there.
+					// The filtered value (wppo_deferred_fetchpriority, issue
+					// #1294) is honored so an LCP-critical module can stay
+					// 'high' and a handle can suppress via falsy; '' skips.
+					//
+					// @since NEXT.
 					$existing = $this->get_module_fetchpriority( $modules, (string) $id );
 					if ( is_string( $existing ) && '' !== trim( $existing ) && 'auto' !== strtolower( trim( $existing ) ) ) {
 						continue;
 					}
-					$modules->set_fetchpriority( (string) $id, 'low' );
+					$filtered_priority = $this->get_filtered_deferred_fetchpriority( (string) $id );
+					if ( '' === $filtered_priority ) {
+						continue;
+					}
+					$modules->set_fetchpriority( (string) $id, $filtered_priority );
 				}
 			}
 		}
@@ -4133,6 +4151,92 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Resolve the filtered fetchpriority for a deferred handle.
+		 *
+		 * Shared by the native classic path (add_defer_strategy()), the
+		 * pre-6.9 regex fallback (add_fetchpriority_to_deferred()), and the
+		 * module path (apply_module_loading_strategies()) so all three honor
+		 * the same filter contract. Guarded by function_exists + has_filter
+		 * so installs without the filter keep the 'low' default with no
+		 * extra dispatch; fail-open to 'low' on any throwable and to ''
+		 * (suppress) when the filter returns a non-listed value.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $handle Script handle or module id.
+		 * @return string Validated 'high'|'low'|'auto', or '' to suppress.
+		 */
+		private function get_filtered_deferred_fetchpriority( string $handle ): string {
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_deferred_fetchpriority' ) ) {
+				return 'low';
+			}
+			try {
+				/**
+				 * Filters fetchpriority for each deferred handle.
+				 *
+				 * Default 'low' deprioritises deferred (non-render-blocking)
+				 * scripts. Return 'high' for an LCP-critical handle, falsy to
+				 * suppress, or 'auto' to defer to browser.
+				 *
+				 * @since 2.0.0
+				 *
+				 * @param string $fetchpriority Fetchpriority value.
+				 * @param string $handle        Script handle.
+				 */
+				$fetchpriority = apply_filters( 'wppo_deferred_fetchpriority', 'low', $handle );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'low';
+			}
+			if ( ! is_string( $fetchpriority ) ) {
+				return '';
+			}
+			$fetchpriority = strtolower( trim( $fetchpriority ) );
+			if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
+				return '';
+			}
+			return $fetchpriority;
+		}
+
+		/**
+		 * Whether a deferred handle should be moved to the footer.
+		 *
+		 * Shared by the native classic path (add_defer_strategy()) and the
+		 * module path (apply_module_loading_strategies()) so both honor the
+		 * same filter contract. Guarded by function_exists + has_filter;
+		 * fail-open to true (move) when the filter is absent or throws.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $handle Script handle or module id.
+		 * @return bool True when the handle should be footer-bound.
+		 */
+		private function should_move_deferred_to_footer( string $handle ): bool {
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_deferred_in_footer' ) ) {
+				return true;
+			}
+			try {
+				/**
+				 * Filters whether deferred classic scripts are moved to the footer.
+				 *
+				 * Default true on WP 6.9+ (native in_footer for deferred
+				 * scripts). Return false for a handle that must stay in
+				 * the head (e.g. document.write dependencies).
+				 *
+				 * @since 2.0.0
+				 *
+				 * @param bool   $in_footer Whether to set the footer group.
+				 * @param string $handle    Script handle.
+				 */
+				$in_footer = apply_filters( 'wppo_deferred_in_footer', true, $handle );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+			return ! empty( $in_footer );
+		}
+
+		/**
 		 * Applies defer strategy to non-logged-in users' scripts using wp_script_add_data.
 		 *
 		 * Canonical defer path on WP 6.3+ (issue #1218); the pre-6.3
@@ -4244,26 +4348,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
 						$is_gap                 = ! is_string( $existing_fetchpriority ) || '' === trim( $existing_fetchpriority );
 						if ( $is_gap ) {
-							/**
-							 * Filters fetchpriority for each deferred handle.
-							 *
-							 * Default 'low' deprioritises deferred (non-render-blocking)
-							 * scripts. Return 'high' for an LCP-critical handle, falsy to
-							 * suppress, or 'auto' to defer to browser.
-							 *
-							 * @since 2.0.0
-							 *
-							 * @param string $fetchpriority Fetchpriority value.
-							 * @param string $handle        Script handle.
-							 */
-							$fetchpriority = apply_filters( 'wppo_deferred_fetchpriority', 'low', $handle );
-							if ( ! is_string( $fetchpriority ) ) {
-								$fetchpriority = '';
-							}
-							$fetchpriority = strtolower( trim( $fetchpriority ) );
-							if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
-								$fetchpriority = '';
-							}
+							$fetchpriority = $this->get_filtered_deferred_fetchpriority( (string) $handle );
 							if ( '' !== $fetchpriority ) {
 								wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
 							}
@@ -4277,19 +4362,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// and 'in_footer' itself is never read for classic scripts,
 						// so set 'group' directly (issue #879 review). Skipped when
 						// the handle is already footer-bound and opt-out per handle.
-						/**
-						 * Filters whether deferred classic scripts are moved to the footer.
-						 *
-						 * Default true on WP 6.9+ (native in_footer for deferred
-						 * scripts). Return false for a handle that must stay in
-						 * the head (e.g. document.write dependencies).
-						 *
-						 * @since 2.0.0
-						 *
-						 * @param bool   $in_footer Whether to set the footer group.
-						 * @param string $handle    Script handle.
-						 */
-						$in_footer = apply_filters( 'wppo_deferred_in_footer', true, $handle );
+						$in_footer = $this->should_move_deferred_to_footer( (string) $handle );
 						$group     = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'group' ) : false;
 						if ( $in_footer && 1 !== (int) $group ) {
 							wp_script_add_data( $handle, 'group', 1 );
@@ -4425,8 +4498,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// on a whitespace boundary so data-*fetchpriority attributes
 					// (e.g. data-wp-fetchpriority=, which core emits alongside the
 					// real attribute) never count as a real fetchpriority.
+					// WP 6.9+ delegation (Trac #61734): when the native
+					// fetchpriority API owns this deferred handle, skip the
+					// regex stamp so core renders fetchpriority exactly once
+					// via the wp_script_add_data() write in
+					// add_defer_strategy(). Legacy WP 6.2-6.8, inline/unknown
+					// tags, and unavailable native API keep the stamp
+					// (fail-open). Delay-JS marker attributes below are
+					// preserved untouched.
+					//
+					// @since NEXT.
 					if ( ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
-						$tag = self::inject_delay_script_attr( $tag, 'fetchpriority="low" ' );
+						$is_native_deferred = self::supports_native_script_fetchpriority() && isset( $this->deferred_handles[ $handle ] );
+						if ( ! $is_native_deferred ) {
+							$tag = self::inject_delay_script_attr( $tag, 'fetchpriority="low" ' );
+						}
 					}
 					// Execution-order preservation (#1217): record the original
 					// async/defer semantics so lazyload.js can replay them —
@@ -6600,22 +6686,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Adds fetchpriority="low" to rendered script tags for deferred handles.
+		 * Adds fetchpriority to rendered script tags for deferred handles.
 		 *
 		 * Pre-6.9 fallback only: on WP 6.9+ the native fetchpriority arg passed via
-		 * wp_script_add_data() in add_defer_strategy() is rendered by core.
+		 * wp_script_add_data() in add_defer_strategy() is rendered by core
+		 * (this filter is not registered there via setup_hooks()). Honors the
+		 * shared wppo_deferred_fetchpriority filter so a handle can stay
+		 * 'high' or suppress via falsy; '' leaves the tag untouched.
+		 * Case-insensitive single-occurrence injection handles `<SCRIPT>`,
+		 * `<script\n`, and `<script>` variants via inject_delay_script_attr().
 		 *
 		 * @since 1.9.0
 		 *
 		 * @param  string $tag    The script tag HTML.
 		 * @param  string $handle The script's registered handle.
-		 * @return string Modified script tag with fetchpriority="low".
+		 * @return string Modified script tag with fetchpriority.
 		 */
 		public function add_fetchpriority_to_deferred( $tag, $handle ): string {
-			if ( isset( $this->deferred_handles[ $handle ] ) && ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
-				$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+			if ( ! isset( $this->deferred_handles[ $handle ] ) ) {
+				return $tag;
 			}
-			return $tag;
+			if ( preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
+				return $tag;
+			}
+			// @since NEXT: filtered value with has_filter guards; fail-open.
+			$fetchpriority = $this->get_filtered_deferred_fetchpriority( (string) $handle );
+			if ( '' === $fetchpriority ) {
+				return $tag;
+			}
+			return self::inject_delay_script_attr( $tag, 'fetchpriority="' . $fetchpriority . '" ' );
 		}
 
 		/**
