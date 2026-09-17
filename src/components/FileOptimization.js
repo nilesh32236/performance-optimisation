@@ -180,6 +180,10 @@ const FILE_OPT_SYNC_KEYS = [
 	'delayJSCommercePreset',
 	'delayJSBuilderPreset',
 	'delayJSInteractionPreset',
+	'delayJSConsentPreset',
+	'delayJSAnalyticsPreset',
+	'delayJSGalleryPreset',
+	'delayJSJqueryPreset',
 	'delayJSINPPreset',
 	'delayJSExternalOnly',
 	'delayJSThirdParty',
@@ -444,6 +448,22 @@ const FileOptimization = ( {
 				options.delayJSInteractionPreset !== undefined
 					? options.delayJSInteractionPreset
 					: true,
+			delayJSConsentPreset:
+				options.delayJSConsentPreset !== undefined
+					? options.delayJSConsentPreset
+					: false,
+			delayJSAnalyticsPreset:
+				options.delayJSAnalyticsPreset !== undefined
+					? options.delayJSAnalyticsPreset
+					: false,
+			delayJSGalleryPreset:
+				options.delayJSGalleryPreset !== undefined
+					? options.delayJSGalleryPreset
+					: false,
+			delayJSJqueryPreset:
+				options.delayJSJqueryPreset !== undefined
+					? options.delayJSJqueryPreset
+					: false,
 			delayJSExcludeUrls:
 				typeof options.delayJSExcludeUrls === 'string'
 					? options.delayJSExcludeUrls
@@ -3107,6 +3127,78 @@ const FileOptimization = ( {
 												name="delayJSInteractionPreset"
 												checked={
 													settings.delayJSInteractionPreset
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'Consent compatibility preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep consent banners and scanners (CookieYes, Cookiebot, Complianz, Borlabs, OneTrust) un-delayed. Off by default; enable if your banner breaks.',
+													'performance-optimisation'
+												) }
+												name="delayJSConsentPreset"
+												checked={
+													settings.delayJSConsentPreset
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'Analytics compatibility preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep analytics beacons (GA4 gtag, Matomo, Plausible) un-delayed so hits are not lost before interaction. Off by default.',
+													'performance-optimisation'
+												) }
+												name="delayJSAnalyticsPreset"
+												checked={
+													settings.delayJSAnalyticsPreset
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'Gallery compatibility preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep galleries and lightboxes (PhotoSwipe, Fancybox, Envira, FooGallery) un-delayed so they work before interaction. Off by default.',
+													'performance-optimisation'
+												) }
+												name="delayJSGalleryPreset"
+												checked={
+													settings.delayJSGalleryPreset
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'jQuery legacy preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep jQuery UI and legacy jQuery plugins un-delayed for themes with jQuery-dependent widgets. Off by default; shops are already covered by the commerce preset.',
+													'performance-optimisation'
+												) }
+												name="delayJSJqueryPreset"
+												checked={
+													settings.delayJSJqueryPreset
 												}
 												onChange={ handleChange(
 													setSettings

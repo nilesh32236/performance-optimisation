@@ -5919,6 +5919,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->defer_disabled_for_page = true;
 			}
 
+			// Per-page compat preset opt-out (#1308): a page can opt out of a
+			// globally-enabled preset without touching global settings. The
+			// preset handles are removed from the exclusion list so delay
+			// applies to them again on this page only. Manual exclusions and
+			// other presets are untouched. Fail-open: meta read errors apply
+			// no opt-out.
+			$presets_off = self::get_page_disabled_delay_presets( (int) $post_id );
+			if ( ! empty( $presets_off ) ) {
+				try {
+					$remove = array();
+					foreach ( $presets_off as $slug ) {
+						$remove = array_merge( $remove, self::get_delay_js_compat_preset_exclusions( (string) $slug ) );
+					}
+					if ( ! empty( $remove ) ) {
+						$this->exclude_delay_js          = array_values( array_diff( $this->exclude_delay_js, $remove ) );
+						$this->resolved_delay_exclusions = null;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
 			$delay_strategies = get_post_meta( $post_id, '_wppo_delay_strategies', true );
 			$delay_priorities = get_post_meta( $post_id, '_wppo_delay_priorities', true );
 
@@ -6239,6 +6261,285 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					)
 				)
 			);
+		}
+
+		/**
+		 * Apply a preset exclusion filter with fail-open guards (issue #1308).
+		 *
+		 * Shared by the opt-in compat presets so a misbehaving filter callback
+		 * degrades to the curated list, never fatal and never white screen.
+		 * Guarded by function_exists/has_filter so behaviour is identical with
+		 * and without the filter API (WP 6.2+ always provides it).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string   $filter Filter hook name.
+		 * @param string[] $preset Curated preset exclusions.
+		 * @return string[]
+		 */
+		private static function filter_compat_preset_list( string $filter, array $preset ): array {
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( $filter ) ) {
+				return $preset;
+			}
+			try {
+				$raw = apply_filters( $filter, $preset ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Intentional curated preset filter.
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
+		}
+
+		/**
+		 * Curated consent Delay JS exclusions (issue #1308).
+		 *
+		 * Consent banners and scanners (CookieYes, Cookiebot, Complianz,
+		 * Borlabs, OneTrust, …) must stay un-delayed when the consent preset
+		 * is on so banners render and scans see the real scripts. Opt-in
+		 * (default off); merged additively, never replacing manual excludes.
+		 * Filterable via wppo_delay_js_consent_exclusions. Fail-open: any
+		 * filter error degrades to the curated list (un-delayed output).
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_consent_exclusions(): array {
+			$preset = array(
+				'cookieyes',
+				'cookiebot',
+				'complianz',
+				'borlabs',
+				'onetrust',
+				'optanon',
+				'trustarc',
+				'iubenda',
+				'osano',
+				'termly',
+				'usercentrics',
+				'quantcast-choice',
+				'tarteaucitron',
+				'axeptio',
+				'seers',
+				'cookie-notice',
+				'cookie-law-info',
+				'gdpr',
+				'ccpa',
+				'consent',
+			);
+			return self::filter_compat_preset_list( 'wppo_delay_js_consent_exclusions', $preset );
+		}
+
+		/**
+		 * Curated analytics Delay JS exclusions (issue #1308).
+		 *
+		 * Analytics beacons (GA4 gtag, Matomo, Plausible, …) must stay
+		 * un-delayed when the analytics preset is on so hits are not lost
+		 * before interaction. Opt-in (default off); additive merge only.
+		 * Filterable via wppo_delay_js_analytics_exclusions. Fail-open to
+		 * the curated list on any filter error.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_analytics_exclusions(): array {
+			$preset = array(
+				'gtag',
+				'googletagmanager',
+				'google-analytics',
+				'analytics.js',
+				'ga.js',
+				'_ga',
+				'gtm',
+				'matomo',
+				'piwik',
+				'plausible',
+				'fathom',
+				'umami',
+				'clarity',
+				'crazyegg',
+				'mixpanel',
+				'segment',
+				'amplitude',
+				'posthog',
+				'statcounter',
+			);
+			return self::filter_compat_preset_list( 'wppo_delay_js_analytics_exclusions', $preset );
+		}
+
+		/**
+		 * Curated gallery Delay JS exclusions (issue #1308).
+		 *
+		 * Galleries and lightboxes beyond the slider runtimes (PhotoSwipe,
+		 * Fancybox, Envira, FooGallery, …) must stay un-delayed when the
+		 * gallery preset is on so they work pre-interaction. Opt-in
+		 * (default off); additive merge only. Filterable via
+		 * wppo_delay_js_gallery_exclusions. Fail-open to the curated list.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_gallery_exclusions(): array {
+			$preset = array(
+				'photoswipe',
+				'lightgallery',
+				'fancybox',
+				'prettyphoto',
+				'magnific-popup',
+				'featherlight',
+				'justified-gallery',
+				'envira',
+				'foogallery',
+				'nextgen',
+				'modula',
+				'jetpack-carousel',
+				'wp-block-gallery',
+				'carousel',
+				'gallery',
+			);
+			return self::filter_compat_preset_list( 'wppo_delay_js_gallery_exclusions', $preset );
+		}
+
+		/**
+		 * Curated jQuery-legacy Delay JS exclusions (issue #1308).
+		 *
+		 * Legacy jQuery-dependent widgets on non-Woo sites must stay un-delayed
+		 * when the jquery preset is on. The commerce preset already owns the
+		 * core jQuery/cart handles for shops; this opt-in preset (default
+		 * off) extends cover to jQuery UI/plugins for legacy themes.
+		 * Filterable via wppo_delay_js_jquery_exclusions. Fail-open to the
+		 * curated list on any filter error.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_jquery_exclusions(): array {
+			$preset = array(
+				'jquery',
+				'jquery-core',
+				'jquery-migrate',
+				'jquery-ui',
+				'jquery-ui-core',
+				'jquery-blockui',
+				'jquery-form',
+				'jquery-validate',
+				'jquery-cookie',
+				'jquery-cycle',
+				'jquery-easing',
+			);
+			return self::filter_compat_preset_list( 'wppo_delay_js_jquery_exclusions', $preset );
+		}
+
+		/**
+		 * Compat preset slugs keyed by their settings key (issue #1308).
+		 *
+		 * Single source of truth for the four opt-in presets: settings key
+		 * => preset slug used in per-page opt-out meta.
+		 *
+		 * @since NEXT
+		 * @return array<string, string>
+		 */
+		public static function get_delay_js_compat_preset_map(): array {
+			return array(
+				'delayJSConsentPreset'   => 'consent',
+				'delayJSAnalyticsPreset' => 'analytics',
+				'delayJSGalleryPreset'   => 'gallery',
+				'delayJSJqueryPreset'    => 'jquery',
+			);
+		}
+
+		/**
+		 * Exclusion list for one compat preset slug (issue #1308).
+		 *
+		 * Lazy-boots only the requested matcher so sites without delay pay
+		 * zero cost. Fail-open: unknown slugs return an empty list.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $slug Preset slug (consent|analytics|gallery|jquery).
+		 * @return string[]
+		 */
+		public static function get_delay_js_compat_preset_exclusions( string $slug ): array {
+			try {
+				switch ( $slug ) {
+					case 'consent':
+						return self::get_delay_js_consent_exclusions();
+					case 'analytics':
+						return self::get_delay_js_analytics_exclusions();
+					case 'gallery':
+						return self::get_delay_js_gallery_exclusions();
+					case 'jquery':
+						return self::get_delay_js_jquery_exclusions();
+					default:
+						return array();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Per-page disabled compat presets from post meta (issue #1308).
+		 *
+		 * Reads `_wppo_delay_presets_off` (array of slugs). A page can opt
+		 * out of a globally-enabled preset without touching global settings
+		 * so exceptions stay surgical. Multisite-safe: per-site post meta,
+		 * no cross-site leakage. Fail-open: any detection failure returns
+		 * an empty list (no opt-out applied).
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $post_id Optional post ID. Defaults to the current post.
+		 * @return string[]
+		 */
+		public static function get_page_disabled_delay_presets( int $post_id = 0 ): array {
+			try {
+				if ( 0 === $post_id ) {
+					if ( ! function_exists( 'get_the_ID' ) ) {
+						return array();
+					}
+					$post_id = (int) get_the_ID();
+				}
+				if ( $post_id <= 0 ) {
+					return array();
+				}
+				if ( ! function_exists( 'get_post_meta' ) ) {
+					return array();
+				}
+				$raw = get_post_meta( $post_id, '_wppo_delay_presets_off', true );
+				if ( ! is_array( $raw ) ) {
+					return array();
+				}
+				$allowed = array( 'consent', 'analytics', 'gallery', 'jquery' );
+				$off     = array();
+				foreach ( $raw as $slug ) {
+					$slug = strtolower( trim( (string) $slug ) );
+					if ( in_array( $slug, $allowed, true ) && ! in_array( $slug, $off, true ) ) {
+						$off[] = $slug;
+					}
+				}
+				return $off;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
 		}
 
 		/**
@@ -7221,6 +7522,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			|| ! empty( $this->options['file_optimisation']['delayJSInteractionPreset'] );
 			if ( $interaction_on ) {
 				$preset = array_merge( $preset, self::get_delay_js_interaction_exclusions() );
+			}
+			// Opt-in compat presets (#1308): consent, analytics, gallery, jquery.
+			// Off by default (missing key backfills to off) so upgrades preserve
+			// manual exclusions and delay behavior is unchanged. Each active
+			// preset merges additively, never replacing manual exclusions.
+			// Lazy-booted: matchers run only when their preset is enabled.
+			try {
+				foreach ( self::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
+					if ( ! empty( $this->options['file_optimisation'][ $setting_key ] ) ) {
+						$preset = array_merge( $preset, self::get_delay_js_compat_preset_exclusions( $slug ) );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 			// Breaker presets ship deduped via array_unique (#1037) so builder +
 			// commerce + user excludes never double-process; string-only values.

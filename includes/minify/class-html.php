@@ -184,25 +184,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					unset( $e );
 				}
 			}
+			// Opt-in compat presets (#1308): consent, analytics, gallery, jquery.
+			// Off by default (missing key backfills to off) so upgrades preserve
+			// manual exclusions. Lazy-booted: matchers run only when delay is
+			// enabled and their preset is on; merged additively, never replacing
+			// manual exclusions. Fail-open: matcher errors keep eager output.
+			$delay_enabled = ! empty( $this->options['file_optimisation']['delayJS'] );
+			if ( $delay_enabled && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_compat_preset_map' ) && method_exists( Main::class, 'get_delay_js_compat_preset_exclusions' ) ) {
+				try {
+					foreach ( Main::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
+						if ( ! empty( $this->options['file_optimisation'][ $setting_key ] ) ) {
+							$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_compat_preset_exclusions( (string) $slug ) );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Per-page preset opt-out (#1308): subtract opted-out preset
+				// handles so delay applies to them again on this page only.
+				if ( method_exists( Main::class, 'get_page_disabled_delay_presets' ) ) {
+					try {
+						$presets_off = Main::get_page_disabled_delay_presets();
+						if ( ! empty( $presets_off ) ) {
+							$remove = array();
+							foreach ( $presets_off as $slug ) {
+								$remove = array_merge( $remove, Main::get_delay_js_compat_preset_exclusions( (string) $slug ) );
+							}
+							if ( ! empty( $remove ) ) {
+								$this->exclude_delay_js = array_values( array_diff( $this->exclude_delay_js, $remove ) );
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			}
 			/**
 			 * Filters handles and URL fragments excluded from delay JS.
-			 *
-			 * Main::apply_per_page_delay_config() applies this filter to the
-			 * handle-level list it builds, but the rewrite that actually makes
-			 * a script inert (`type="wppo/javascript"` + `wppo-src`) happens
-			 * here. Without merging the filtered values into this list, an
-			 * exclusion registered by a theme or plugin has no effect on the
-			 * HTML rewrite: the script is still swapped to an inert type and
-			 * the browser never executes it, which silently breaks whichever
-			 * behaviour depended on it (a mobile menu, for example).
-			 *
-			 * Applying the filter to an empty array keeps append-style
-			 * callbacks working exactly as they do in Main.
-			 *
-			 * @since NEXT
-			 *
-			 * @param array<int, string> $exclusions Handles or URL fragments to keep eager.
-			 */
+				 *
+				 * Main::apply_per_page_delay_config() applies this filter to the
+				 * handle-level list it builds, but the rewrite that actually makes
+				 * a script inert (`type="wppo/javascript"` + `wppo-src`) happens
+				 * here. Without merging the filtered values into this list, an
+				 * exclusion registered by a theme or plugin has no effect on the
+				 * HTML rewrite: the script is still swapped to an inert type and
+				 * the browser never executes it, which silently breaks whichever
+				 * behaviour depended on it (a mobile menu, for example).
+				 *
+				 * Applying the filter to an empty array keeps append-style
+				 * callbacks working exactly as they do in Main.
+				 *
+				 * @since NEXT
+				 *
+				 * @param array<int, string> $exclusions Handles or URL fragments to keep eager.
+				 */
 			if ( has_filter( 'wppo_exclude_delay_js' ) ) {
 				try {
 					$this->exclude_delay_js = array_merge(

@@ -352,6 +352,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJSBuilderPreset'         => true,
 					'delayJSCommercePreset'        => true,
 					'delayJSInteractionPreset'     => true,
+					'delayJSConsentPreset'         => false,
+					'delayJSAnalyticsPreset'       => false,
+					'delayJSGalleryPreset'         => false,
+					'delayJSJqueryPreset'          => false,
 					'delayJSExcludeUrls'           => '',
 					'usedCSSExcludeUrls'           => '',
 					'delayJSIdleList'              => '',
@@ -5475,7 +5479,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Safe-default delay keys (issue #966) — external-only defaults
 				// off (fail-safe: delay everything unless asked), builder preset
 				// defaults on (fail-safe: never delay builder runtimes).
-				if ( in_array( $safe_key, array( 'delayJSExternalOnly', 'delayJSThirdParty' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSExternalOnly', 'delayJSThirdParty', 'delayJSConsentPreset', 'delayJSAnalyticsPreset', 'delayJSGalleryPreset', 'delayJSJqueryPreset' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {

@@ -146,6 +146,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$defer_disabled    = get_post_meta( $post->ID, '_wppo_defer_disabled', true );
 			$used_css_disabled = get_post_meta( $post->ID, '_wppo_used_css_disabled', true );
 			$delay_notes       = get_post_meta( $post->ID, '_wppo_delay_notes', true );
+			$presets_off_raw   = get_post_meta( $post->ID, '_wppo_delay_presets_off', true );
+			$presets_off       = is_array( $presets_off_raw ) ? array_map( 'strval', $presets_off_raw ) : array();
 
 			$disabled_scripts = is_array( $disabled_scripts ) ? $disabled_scripts : array();
 			$disabled_styles  = is_array( $disabled_styles ) ? $disabled_styles : array();
@@ -194,10 +196,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 						<?php esc_html_e( 'Disable Defer JS on this page', 'performance-optimisation' ); ?>
 					</label>
 				</p>
-				<p>
-					<label for="wppo_delay_notes"><?php esc_html_e( 'Delay notes (reason / retest date):', 'performance-optimisation' ); ?></label>
-					<textarea id="wppo_delay_notes" name="wppo_delay_notes" rows="2" style="width: 100%;" maxlength="2000" placeholder="<?php esc_attr_e( 'e.g. Hero slider broke with delay; retest after theme update.', 'performance-optimisation' ); ?>"><?php echo esc_textarea( is_string( $delay_notes ) ? $delay_notes : '' ); ?></textarea>
+			<p>
+				<label for="wppo_delay_notes"><?php esc_html_e( 'Delay notes (reason / retest date):', 'performance-optimisation' ); ?></label>
+				<textarea id="wppo_delay_notes" name="wppo_delay_notes" rows="2" style="width: 100%;" maxlength="2000" placeholder="<?php esc_attr_e( 'e.g. Hero slider broke with delay; retest after theme update.', 'performance-optimisation' ); ?>"><?php echo esc_textarea( is_string( $delay_notes ) ? $delay_notes : '' ); ?></textarea>
+			</p>
+			<div>
+				<p class="description">
+					<?php
+					esc_html_e(
+						'Re-enable delay for a globally-enabled compatibility preset on this page only (consent, analytics, gallery, jQuery).',
+						'performance-optimisation'
+					);
+					?>
 				</p>
+				<?php
+				foreach ( array(
+					'consent'   => __( 'Consent preset', 'performance-optimisation' ),
+					'analytics' => __( 'Analytics preset', 'performance-optimisation' ),
+					'gallery'   => __( 'Gallery preset', 'performance-optimisation' ),
+					'jquery'    => __( 'jQuery preset', 'performance-optimisation' ),
+				) as $preset_slug => $preset_label ) :
+					?>
+					<p>
+						<label for="wppo_delay_preset_off_<?php echo esc_attr( $preset_slug ); ?>">
+							<input
+								type="checkbox"
+								id="wppo_delay_preset_off_<?php echo esc_attr( $preset_slug ); ?>"
+								name="wppo_delay_presets_off[]"
+								value="<?php echo esc_attr( $preset_slug ); ?>"
+								<?php checked( in_array( $preset_slug, $presets_off, true ) ); ?>
+							/>
+							<?php
+							/* translators: %s: delay-JS compatibility preset label (e.g. Consent preset). */
+							echo esc_html( sprintf( __( 'Delay %s scripts on this page', 'performance-optimisation' ), $preset_label ) );
+							?>
+						</label>
+					</p>
+				<?php endforeach; ?>
+			</div>
 				<?php if ( false === $assets || ( empty( $assets['scripts'] ) && empty( $assets['styles'] ) ) ) : ?>
 					<p class="description">
 						<?php
@@ -576,7 +612,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				}
 			}
 
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			// Per-page compat preset opt-out (#1308). Checkbox-only (no JS);
+			// allowlisted slugs so arbitrary meta values can never be stored.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			$raw_presets_off = $this->get_raw_post_array( 'wppo_delay_presets_off' );
+			$allowed_presets = array( 'consent', 'analytics', 'gallery', 'jquery' );
+			$presets_off     = array();
+			foreach ( $raw_presets_off as $slug ) {
+				$slug = strtolower( trim( (string) $slug ) );
+				if ( in_array( $slug, $allowed_presets, true ) && ! in_array( $slug, $presets_off, true ) ) {
+					$presets_off[] = $slug;
+				}
+			}
+			if ( empty( $presets_off ) ) {
+				delete_post_meta( $post_id, '_wppo_delay_presets_off' );
+			} else {
+				update_post_meta( $post_id, '_wppo_delay_presets_off', $presets_off );
+			}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$raw_notes = $this->get_raw_post_string( 'wppo_delay_notes' );
 			$notes     = is_string( $raw_notes ) ? sanitize_textarea_field( $raw_notes ) : '';
 			if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {

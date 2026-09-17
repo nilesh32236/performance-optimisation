@@ -1470,6 +1470,38 @@ Filters the delay-JS slider preset exclusions (revslider, swiper, slick, etc.). 
 
 ---
 
+### `wppo_delay_js_consent_exclusions`
+Filters the delay-JS consent compatibility preset exclusions (CookieYes, Cookiebot, Complianz, Borlabs, OneTrust, etc.). Opt-in via the `delayJSConsentPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Consent preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_analytics_exclusions`
+Filters the delay-JS analytics compatibility preset exclusions (GA4 gtag, Matomo, Plausible, etc.). Opt-in via the `delayJSAnalyticsPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Analytics preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_gallery_exclusions`
+Filters the delay-JS gallery compatibility preset exclusions (PhotoSwipe, Fancybox, Envira, FooGallery, etc.). Opt-in via the `delayJSGalleryPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Gallery preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_jquery_exclusions`
+Filters the delay-JS jQuery legacy preset exclusions (jQuery UI and legacy jQuery plugins; shops stay covered by the commerce preset). Opt-in via the `delayJSJqueryPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — jQuery preset exclusion patterns.
+
+---
+
 ### `wppo_delay_js_third_party_denylist`
 Filters the curated one-click third-party delay denylist (analytics, ads, social, chat, embeds). Payment gateways (Stripe, PayPal) and consent-management banners (Cookiebot, OneTrust, TrustArc, Quantcast) are intentionally excluded from the preset so one-click mode keeps them eager; add them via the extra-denylist textarea if desired. @since NEXT.
 
