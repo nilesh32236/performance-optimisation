@@ -3126,19 +3126,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// created with autoload=yes keep the multi-tab array in
 			// alloptions on every page load. Flip the flag in place (a
 			// value-identical update_option() would early-return without
-			// touching autoload, so update the row directly). On SQL
-			// failure the version bump below is skipped so a later request
-			// retries the repair instead of marking it done.
+			// touching autoload, so update the row directly). Rows already
+			// at 'no' or 'off' (WP 6.8+ explicit opt-outs) are left alone.
+			// On SQL failure the version bump below is skipped so a later
+			// request retries the repair instead of marking it done.
 			try {
 				global $wpdb;
 				if ( isset( $wpdb->options ) ) {
 					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- one-time version-gated repair of a single known option row; value untouched.
 					$repaired = $wpdb->query(
 						$wpdb->prepare(
-							"UPDATE {$wpdb->options} SET autoload = %s WHERE option_name = %s AND autoload <> %s",
+							"UPDATE {$wpdb->options} SET autoload = %s WHERE option_name = %s AND autoload NOT IN (%s, %s)",
 							'no',
 							'wppo_settings',
-							'no'
+							'no',
+							'off'
 						)
 					);
 					if ( false === $repaired ) {
