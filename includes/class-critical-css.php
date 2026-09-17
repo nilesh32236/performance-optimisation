@@ -3563,9 +3563,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( self::generation_expired( $deadline ) ) {
 				return false;
 			}
-			// is_safe_stylesheet_url() above is the SSRF control and is
-			// stricter than WP's IP-range check. Do NOT also set
-			// reject_unsafe_urls: WP's validator rejects every private,
+			// is_safe_stylesheet_url() above is the SSRF control. Own-host
+			// fetches may legitimately target loopback/private addresses
+			// (localhost / private-IP dev sites) and use the regular API;
+			// every other (filter-allowlisted) host goes through the safe API
+			// so redirect hops are re-validated against private ranges —
+			// a plain wp_remote_get() here would SSRF a filter-allowed
+			// private/metadata host. Do NOT also set reject_unsafe_urls on
+			// the own-host path: WP's validator rejects every private,
 			// loopback and non-dotted host, so it would break critical CSS
 			// generation on localhost/staging installs (and on any site
 			// whose own hostname resolves privately) without adding
@@ -3578,16 +3583,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( 0 === $page_timeout ) {
 				return false;
 			}
-			$response = wp_remote_get(
-				$url,
-				array(
-					'timeout'             => $page_timeout,
-					// Bound the HTTP layer so a multi-MB page can never
-					// materialize fully in memory before truncation (issue #1235).
-					'limit_response_size' => self::MAX_CCSS_SOURCE_BYTES,
-					'user-agent'          => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
-				)
+			$page_args = array(
+				'timeout'             => $page_timeout,
+				// Bound the HTTP layer so a multi-MB page can never
+				// materialize fully in memory before truncation (issue #1235).
+				'limit_response_size' => self::MAX_CCSS_SOURCE_BYTES,
+				'user-agent'          => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
 			);
+			$response  = self::is_same_site_host( $url )
+			? wp_remote_get( $url, $page_args )
+			: wp_safe_remote_get( $url, $page_args );
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				return false;
@@ -3942,6 +3947,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * explicitly allowlisted via the wppo_ccss_allowed_stylesheet_host
 		 * filter. Anything else is refused — wp_http_validate_url() alone only
 		 * checks syntax, so it must never act as a default-allow fallback.
+		 * Conversely the allowlist filter must never bypass validation: an
+		 * allowlisted URL still has to pass wp_http_validate_url(), otherwise
+		 * a filter-allowed private/metadata host would SSRF through the page
+		 * fetch path in generate().
 		 *
 		 * @param string $url The stylesheet URL.
 		 * @return bool True when safe to fetch.
@@ -3967,7 +3976,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			 * @since 2.0.0
 			 */
 			if ( apply_filters( 'wppo_ccss_allowed_stylesheet_host', false, $host ) ) {
-				return true;
+				return (bool) wp_http_validate_url( $url );
 			}
 
 			if ( self::is_same_site_host( $url ) ) {

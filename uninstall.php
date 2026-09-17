@@ -68,6 +68,18 @@ if ( ! function_exists( 'wppo_cleanup_network_files' ) ) {
 					}
 				}
 			}
+			// Unique `.tmp.*` staging siblings from interrupted atomic
+			// writes carry full config source (topology) and survive the
+			// fixed-name deletes above — glob them like
+			// wppo_cleanup_dropin_artifacts() does for drop-ins.
+			$orphans = glob( $redis_config . '.tmp.*' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.glob_glob
+			if ( is_array( $orphans ) ) {
+				foreach ( $orphans as $orphan ) {
+					if ( is_file( $orphan ) ) {
+						wp_delete_file( $orphan );
+					}
+				}
+			}
 		}
 
 		// Remove Redis circuit-breaker sidecars (JSON state + parked sibling)

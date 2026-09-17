@@ -21,7 +21,9 @@ use Brain\Monkey\Functions;
  */
 class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
-	use WPPO_Test_Bootstrap;
+	use WPPO_Test_Bootstrap {
+		tearDown as protected wppoTearDown;
+	}
 
 	/**
 	 * Tracks which HTTP API was used by fetch stubs.
@@ -172,11 +174,32 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Reset static memos after each test so settings/CCSS/RUM fixtures
+	 * cannot leak into the next case, then run the shared bootstrap
+	 * teardown (Brain Monkey + Main instance reset).
+	 *
+	 * @return void
+	 */
+	protected function tearDown(): void {
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
+		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
+			\PerformanceOptimise\Inc\Image_Optimisation::clear_runtime_caches();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+			\PerformanceOptimise\Inc\Critical_CSS::reset_ccss_memo();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'clear_field_lcp_cache' ) ) {
+			\PerformanceOptimise\Inc\RUM::clear_field_lcp_cache();
+		}
+		$this->wppoTearDown();
+	}
+
+	/**
 	 * Fake successful HTTP response consumed by the remote-get stubs.
 	 *
 	 * @return array
 	 */
-	public function fake_response(): array {
+	private function fake_response(): array {
 		return array(
 			'response' => array( 'code' => 200 ),
 			'body'     => 'a{color:red}',
@@ -232,14 +255,29 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The host allowlist filter wins even when validation rejects the target.
+	 * The host allowlist filter cannot override validation failure: an
+	 * allowlisted private/metadata host stays refused so it can never
+	 * SSRF through the generate() page fetch.
 	 *
 	 * @return void
 	 */
-	public function test_filter_allowlists_external_host_even_when_validation_fails(): void {
+	public function test_filter_cannot_override_validation_failure(): void {
 		$this->filter_overrides['wppo_ccss_allowed_stylesheet_host'] = true;
 
-		$this->assertTrue( $this->invoke_private( 'is_safe_stylesheet_url', 'http://192.168.1.10/internal-theme.css' ) );
+		$this->assertFalse( $this->invoke_private( 'is_safe_stylesheet_url', 'http://192.168.1.10/internal-theme.css' ) );
+		$this->assertFalse( $this->invoke_private( 'is_safe_stylesheet_url', 'http://169.254.169.254/latest/meta-data/' ) );
+	}
+
+	/**
+	 * The host allowlist filter still admits validation-passing external
+	 * hosts (e.g. a public CDN).
+	 *
+	 * @return void
+	 */
+	public function test_filter_allowlists_external_host_passing_validation(): void {
+		$this->filter_overrides['wppo_ccss_allowed_stylesheet_host'] = true;
+
+		$this->assertTrue( $this->invoke_private( 'is_safe_stylesheet_url', 'https://fonts.cdn-example.net/s.css' ) );
 	}
 
 	/**
@@ -295,6 +333,42 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'a{color:red}', $result );
 		$this->assertSame( 1, $this->http_calls['safe'] );
 		$this->assertSame( 0, $this->http_calls['regular'] );
+	}
+
+	/**
+	 * An allowlisted external page is fetched via wp_safe_remote_get()
+	 * during generate() so redirect hops are re-validated against
+	 * private ranges instead of SSRFing via the regular API.
+	 *
+	 * @return void
+	 */
+	public function test_generate_routes_allowlisted_external_host_through_safe_api(): void {
+		$this->filter_overrides['wppo_ccss_allowed_stylesheet_host'] = true;
+
+		$source_css    = null;
+		$resolved_urls = null;
+		Critical_CSS::generate( 'https://fonts.cdn-example.net/page', $source_css, $resolved_urls, microtime( true ) + 30 );
+
+		$this->assertSame( 1, $this->http_calls['safe'] );
+		$this->assertSame( 0, $this->http_calls['regular'] );
+	}
+
+	/**
+	 * A filter-allowlisted private host is refused by generate() before
+	 * any HTTP request is made.
+	 *
+	 * @return void
+	 */
+	public function test_generate_refuses_allowlisted_private_host_without_http(): void {
+		$this->filter_overrides['wppo_ccss_allowed_stylesheet_host'] = true;
+
+		$source_css    = null;
+		$resolved_urls = null;
+		$result        = Critical_CSS::generate( 'http://169.254.169.254/', $source_css, $resolved_urls, microtime( true ) + 30 );
+
+		$this->assertFalse( $result );
+		$this->assertSame( 0, $this->http_calls['regular'] );
+		$this->assertSame( 0, $this->http_calls['safe'] );
 	}
 
 	/**

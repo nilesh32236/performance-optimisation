@@ -2027,9 +2027,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * The config file lives under the web-reachable wp-content tree and
 		 * only carries an ABSPATH guard, so a server that stops handing .php
 		 * to PHP would serve it as plain text and disclose the Redis
-		 * topology. Adds a `<Files>` deny block to wp-content/.htaccess and
+		 * topology. Adds a `<FilesMatch>` deny block to wp-content/.htaccess
+		 * (covering the `.wppo-bak` backup and `.tmp*` staging siblings) and
 		 * creates a minimal wp-content/web.config deny (only when absent, so
-		 * an existing site config is never clobbered).
+		 * an existing site config is never clobbered) with matching sibling
+		 * denies. IIS `<location>` paths cannot wildcard the unique
+		 * `.tmp.*` siblings, so defining WPPO_REDIS_CONFIG_PATH outside the
+		 * web root remains the complete fix on IIS.
 		 *
 		 * Best-effort only; failures never block enable(). Apache and
 		 * OpenLiteSpeed both read .htaccess; nginx ignores both files, so
@@ -2077,18 +2081,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$web_config = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/web.config';
 				$fs         = Util::init_filesystem();
 				if ( $fs && ! $fs->exists( $web_config ) ) {
-					$xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-					$xml .= "<configuration>\n";
-					$xml .= "  <location path=\"wppo-redis-config.php\">\n";
-					$xml .= "    <system.webServer>\n";
-					$xml .= "      <security>\n";
-					$xml .= "        <authorization>\n";
-					$xml .= "          <deny users=\"*\" />\n";
-					$xml .= "        </authorization>\n";
-					$xml .= "      </security>\n";
-					$xml .= "    </system.webServer>\n";
-					$xml .= "  </location>\n";
-					$xml .= "</configuration>\n";
+					// Deny the live config plus the backup (.wppo-bak) and
+					// staging (.tmp.*) siblings left by atomic writes — they
+					// carry full config source and would otherwise be served
+					// as plain text on IIS, mirroring the .htaccess
+					// FilesMatch rule above.
+					$deny_block  = "    <system.webServer>\n";
+					$deny_block .= "      <security>\n";
+					$deny_block .= "        <authorization>\n";
+					$deny_block .= "          <deny users=\"*\" />\n";
+					$deny_block .= "        </authorization>\n";
+					$deny_block .= "      </security>\n";
+					$deny_block .= "    </system.webServer>\n";
+					$xml         = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+					$xml        .= "<configuration>\n";
+					$xml        .= "  <location path=\"wppo-redis-config.php\">\n" . $deny_block . "  </location>\n";
+					$xml        .= "  <location path=\"wppo-redis-config.php.wppo-bak\">\n" . $deny_block . "  </location>\n";
+					$xml        .= "  <location path=\"wppo-redis-config.php.tmp\">\n" . $deny_block . "  </location>\n";
+					$xml        .= "</configuration>\n";
 					$fs->put_contents( $web_config, $xml, FS_CHMOD_FILE );
 				}
 			} catch ( \Throwable $e ) {
@@ -2391,6 +2401,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * sentinel/cluster layout). Defining WPPO_REDIS_CONFIG_PATH outside
 		 * the web root removes the exposure entirely.
 		 *
+		 * Returns false without probing when the resolved config path lives
+		 * outside WP_CONTENT_DIR (relocated via WPPO_REDIS_CONFIG_PATH or
+		 * above ABSPATH): safe by construction, and a stale wp-content
+		 * leftover must not flip the verdict to exposed.
+		 *
 		 * Detection is a loopback HTTP probe of the public config URL with
 		 * redirects followed (an http→https/login/maintenance redirect chain
 		 * is resolved instead of misread as safe). A 200 alone is not
@@ -2433,6 +2448,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! function_exists( 'content_url' ) || ! function_exists( 'wp_remote_get' ) || ! function_exists( 'wp_remote_retrieve_response_code' ) || ! function_exists( 'wp_remote_retrieve_body' ) || ! function_exists( 'is_wp_error' ) ) {
 					self::$nginx_probe_memo['server'] = false;
 					return false;
+				}
+				// Relocated configs (WPPO_REDIS_CONFIG_PATH or above ABSPATH)
+				// are safe by construction: nothing web-reachable exists at
+				// the probed content URL, so skip the loopback entirely
+				// instead of I/O-probing — and instead of misreporting a
+				// stale wp-content leftover as exposed.
+				if ( defined( 'WP_CONTENT_DIR' ) && '' !== (string) WP_CONTENT_DIR && function_exists( 'wp_normalize_path' ) ) {
+					$content_root  = rtrim( wp_normalize_path( (string) WP_CONTENT_DIR ), '/' ) . '/';
+					$resolved_path = wp_normalize_path( self::get_config_path() );
+					if ( '' !== $resolved_path && 0 !== strpos( $resolved_path, $content_root ) ) {
+						self::$nginx_probe_memo['server'] = false;
+						return false;
+					}
 				}
 				$url = content_url( self::CONFIG_FILENAME );
 				// Audit #1338: blog-prefix the per-URL key (multisite

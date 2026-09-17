@@ -142,24 +142,36 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return;
 			}
 
-			$config_file = $content_dir . '/wppo-redis-config.php';
-			// Honour an operator-relocated config outside the web root
-			// (WPPO_REDIS_CONFIG_PATH, or a file moved one level above ABSPATH),
-			// mirroring Object_Cache::get_config_path(). The historical
-			// WP_CONTENT_DIR sibling stays the fallback so existing installs
-			// keep working untouched.
-			if ( defined( 'WPPO_REDIS_CONFIG_PATH' ) && is_string( WPPO_REDIS_CONFIG_PATH ) && '' !== WPPO_REDIS_CONFIG_PATH && @file_exists( WPPO_REDIS_CONFIG_PATH ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				$config_file = WPPO_REDIS_CONFIG_PATH;
-			} elseif ( defined( 'ABSPATH' ) && '' !== (string) ABSPATH ) {
-				$above_root = dirname( rtrim( str_replace( '\\', '/', (string) ABSPATH ), '/' ) );
-				if ( '' !== $above_root ) {
-					$outside = $above_root . '/wppo-redis-config.php';
-					if ( @file_exists( $outside ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-						$config_file = $outside;
+			// Resolved once per request: this runs on the wp_cache_init hot
+			// path before any page-cache short-circuit, so repeated
+			// instantiations on the same request must not repeat the stats.
+			static $resolved_config_file = null;
+			if ( null === $resolved_config_file ) {
+				$resolved = $content_dir . '/wppo-redis-config.php';
+				// Honour an operator-relocated config outside the web root
+				// (WPPO_REDIS_CONFIG_PATH, or a file moved one level above ABSPATH),
+				// mirroring Object_Cache::get_config_path(). The constant is
+				// trusted unconditionally — like the writer side — so a
+				// mis-pointed constant can never split-brain (writer writing one
+				// path while the runtime reads another); a missing file simply
+				// includes nothing and fails open below. The historical
+				// WP_CONTENT_DIR sibling stays the fallback so existing installs
+				// keep working untouched.
+				if ( defined( 'WPPO_REDIS_CONFIG_PATH' ) && is_string( WPPO_REDIS_CONFIG_PATH ) && '' !== WPPO_REDIS_CONFIG_PATH ) {
+					$resolved = WPPO_REDIS_CONFIG_PATH;
+				} elseif ( defined( 'ABSPATH' ) && '' !== (string) ABSPATH ) {
+					$above_root = dirname( rtrim( str_replace( '\\', '/', (string) ABSPATH ), '/' ) );
+					if ( '' !== $above_root ) {
+						$outside = $above_root . '/wppo-redis-config.php';
+						if ( @file_exists( $outside ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+							$resolved = $outside;
+						}
 					}
 				}
+				$resolved_config_file = $resolved;
 			}
-			$config = array();
+			$config_file = $resolved_config_file;
+			$config      = array();
 
 			if ( file_exists( $config_file ) ) {
 				$config = include $config_file; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
@@ -187,23 +199,37 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				 * defined in wp-config.php are already defined by this point.
 				 */
 				$plugins_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : ( ( defined( 'WP_CONTENT_DIR' ) ? rtrim( WP_CONTENT_DIR, '/\\' ) : '' ) . '/plugins' );
-				$helper_file = $plugins_dir . '/performance-optimisation/includes/redis-connect-helper.php';
-				if ( ! file_exists( $helper_file ) ) {
-					// Fallback: the plugin directory may have been renamed
-					// (e.g. mu-plugins installs or custom slugs). Glob every
-					// plugin's helper and prefer a directory matching the
-					// performance-optimisation slug fragment.
-					$candidates = glob( $plugins_dir . '/*/includes/redis-connect-helper.php' );
-					if ( is_array( $candidates ) ) {
-						foreach ( $candidates as $candidate ) {
-							if ( false !== strpos( $candidate, 'performance-optimisation' ) ) {
-								$helper_file = $candidate;
-								break;
+				// Resolved hits are memoized per request alongside the config
+				// lookup: the hardcoded plugin-slug path is probed first and
+				// the glob() fallback runs at most once per found helper,
+				// never on every construction. Misses are NOT memoized — a
+				// helper that appears later in the same request is still
+				// picked up instead of pinning a stale miss.
+				static $resolved_helper_file = null;
+				$helper_file                 = $resolved_helper_file;
+				if ( null === $helper_file ) {
+					$helper_file = $plugins_dir . '/performance-optimisation/includes/redis-connect-helper.php';
+					if ( ! file_exists( $helper_file ) ) {
+						// Fallback: the plugin directory may have been renamed
+						// (e.g. mu-plugins installs or custom slugs). Glob every
+						// plugin's helper and prefer a directory matching the
+						// performance-optimisation slug fragment.
+						$helper_file = '';
+						$candidates  = glob( $plugins_dir . '/*/includes/redis-connect-helper.php' );
+						if ( is_array( $candidates ) ) {
+							foreach ( $candidates as $candidate ) {
+								if ( false !== strpos( $candidate, 'performance-optimisation' ) ) {
+									$helper_file = $candidate;
+									break;
+								}
 							}
 						}
 					}
+					if ( '' !== $helper_file ) {
+						$resolved_helper_file = $helper_file;
+					}
 				}
-				if ( file_exists( $helper_file ) ) {
+				if ( '' !== $helper_file && file_exists( $helper_file ) ) {
 					require_once $helper_file;
 				}
 			}

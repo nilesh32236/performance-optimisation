@@ -669,48 +669,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Mirrors the SSRF gate enforced by the equivalent REST handlers
 		 * (Rest::run_performance_scan()/queue_pagespeed_scan() plus
 		 * Rest::is_same_site_url()): the URL must pass wp_http_validate_url(),
-		 * use an http(s) scheme, and belong to this site's home host. Anything
-		 * else falls back to the home URL so an authenticated Abilities API
-		 * consumer can never trigger server-side fetches of arbitrary hosts.
+		 * use an http(s) scheme, and belong to this site's home host. Returns
+		 * an empty string on any mismatch so callers surface an explicit
+		 * error instead of silently scanning the home URL (which would waste
+		 * PageSpeed quota and corrupt the audit trail). Only callers that
+		 * receive no URL at all may default to the home URL.
 		 *
 		 * @since NEXT
 		 *
 		 * @param string $url Raw caller-supplied URL.
-		 * @return string Validated same-site URL, or the home URL on mismatch.
+		 * @return string Validated same-site URL, or '' on mismatch.
 		 */
-		private static function same_site_url_or_home( string $url ): string {
-			$home = Util::cached_home_url( '/' );
-			$url  = esc_url_raw( $url );
+		private static function strict_same_site_url( string $url ): string {
+			$url = esc_url_raw( $url );
 			if ( '' === $url || ! wp_http_validate_url( $url ) ) {
-				return $home;
+				return '';
 			}
 			$scheme = strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) );
 			if ( 'http' !== $scheme && 'https' !== $scheme ) {
-				return $home;
+				return '';
 			}
+			$home      = Util::cached_home_url( '/' );
 			$home_host = wp_parse_url( $home, PHP_URL_HOST );
 			$host      = wp_parse_url( $url, PHP_URL_HOST );
 			if ( ! is_string( $home_host ) || '' === $home_host || ! is_string( $host ) || strtolower( $host ) !== strtolower( $home_host ) ) {
-				return $home;
+				return '';
 			}
 			return $url;
 		}
 
 		/**
-		 * Best-effort per-actor throttle for the clear_cache ability.
+		 * Resolve an optional caller-supplied scan URL.
 		 *
-		 * Mirrors the 5/60 window Rest::clear_cache() enforces via
-		 * Rest::is_endpoint_throttled(). Fail-open when the transient API is
-		 * unavailable; the bucket key is namespaced separately from the REST
-		 * bucket so the two transports do not share a budget.
+		 * Returns the home URL when the `url` key is absent or empty, the
+		 * validated same-site URL when it passes strict_same_site_url(), and
+		 * an empty string when an explicitly supplied URL fails validation so
+		 * the caller can surface an error instead of scanning the wrong page.
 		 *
 		 * @since NEXT
 		 *
-		 * @param int $limit  Max hits per window.
-		 * @param int $window Window in seconds.
+		 * @param array $input Ability input data (optional `url` key).
+		 * @return string Resolved URL, or '' when an explicit URL is invalid.
+		 */
+		private static function resolve_scan_url( array $input ): string {
+			if ( ! isset( $input['url'] ) || '' === $input['url'] ) {
+				return Util::cached_home_url( '/' );
+			}
+			if ( ! is_string( $input['url'] ) ) {
+				return '';
+			}
+			return self::strict_same_site_url( $input['url'] );
+		}
+
+		/**
+		 * Best-effort per-actor throttle for destructive/repeatable abilities.
+		 *
+		 * Mirrors the 5/60 window Rest::clear_cache() enforces via
+		 * Rest::is_endpoint_throttled(). Fail-open when the transient API is
+		 * unavailable. Each ability gets its own bucket (via $bucket), and
+		 * the bucket key is namespaced separately from the REST bucket, so
+		 * the two transports intentionally do not share a budget: an actor
+		 * with both transports has 5/60 per transport, not a combined 5/60.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int    $limit  Max hits per window.
+		 * @param int    $window Window in seconds.
+		 * @param string $bucket Ability bucket name (e.g. 'clear_cache', 'crawler').
 		 * @return bool True when throttled.
 		 */
-		private static function is_ability_throttled( int $limit = 5, int $window = 60 ): bool {
+		private static function is_ability_throttled( int $limit = 5, int $window = 60, string $bucket = 'clear_cache' ): bool {
 			if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
 				return false;
 			}
@@ -719,10 +747,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				if ( 0 === $suffix && isset( $_SERVER['REMOTE_ADDR'] ) ) {
 					$suffix = (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Hashed into a transient key below, never output.
 				}
-				$key    = Util::transient_key( 'wppo_throttle_ability_clear_cache_' . md5( (string) $suffix ) );
-				$bucket = get_transient( $key );
+				$bucket = '' !== $bucket ? (string) preg_replace( '/[^a-z0-9_]/', '', strtolower( $bucket ) ) : 'clear_cache';
+				$key    = Util::transient_key( 'wppo_throttle_ability_' . $bucket . '_' . md5( (string) $suffix ) );
+				$stored = get_transient( $key );
 				$now    = time();
-				if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
+				if ( ! is_array( $stored ) || ! isset( $stored['count'], $stored['start'] ) || (int) $stored['start'] > $now || ( $now - (int) $stored['start'] ) >= $window ) {
 					set_transient(
 						$key,
 						array(
@@ -733,17 +762,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					);
 					return false;
 				}
-				$count = (int) $bucket['count'];
+				$count = (int) $stored['count'];
 				if ( $count >= $limit ) {
 					return true;
 				}
-				$elapsed   = $now - (int) $bucket['start'];
+				$elapsed   = $now - (int) $stored['start'];
 				$remaining = max( 1, min( $window, $window - $elapsed ) );
 				set_transient(
 					$key,
 					array(
 						'count' => $count + 1,
-						'start' => (int) $bucket['start'],
+						'start' => (int) $stored['start'],
 					),
 					$remaining
 				);
@@ -771,8 +800,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'error'   => __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ),
 				);
 			}
+			// Never fall through to a full wipe: unknown/empty scopes and a
+			// single scope without a URL are refused instead of clearing all
+			// (the schema enum is not enforced at execute time).
 			$scope = $input['scope'] ?? 'all';
-			if ( 'single' === $scope && ! empty( $input['url'] ) ) {
+			if ( ! in_array( $scope, array( 'all', 'single' ), true ) ) {
+				return array( 'cleared' => false );
+			}
+			if ( 'single' === $scope ) {
+				if ( empty( $input['url'] ) || ! is_string( $input['url'] ) ) {
+					return array( 'cleared' => false );
+				}
 				$url = esc_url_raw( $input['url'] );
 				if ( '' === $url || ! wp_http_validate_url( $url ) ) {
 					return array( 'cleared' => false );
@@ -786,20 +824,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				// Reject decoded '..' segments before resolving, mirroring the
 				// REST fallback validation (downstream safe_path_for_url() also
 				// refuses, but the refusal must surface here, not as success).
-				$decoded = rawurldecode( $url );
+				// Decode until stable (bounded 3 passes) so double-encoded
+				// sequences (%252e%252e) cannot slip past a single decode.
+				$decoded = $url;
+				for ( $i = 0; $i < 3; $i++ ) {
+					$next = rawurldecode( $decoded );
+					if ( $next === $decoded ) {
+						break;
+					}
+					$decoded = $next;
+				}
 				foreach ( explode( '/', $decoded ) as $segment ) {
 					if ( '..' === $segment ) {
 						return array( 'cleared' => false );
 					}
 				}
 				$path = wp_parse_url( $url, PHP_URL_PATH );
-				if ( ! is_string( $path ) ) {
-					return array( 'cleared' => false );
+				if ( ! is_string( $path ) || '' === $path ) {
+					// Homepage URLs carry no path component — purge '/'.
+					$path = '/';
 				}
 				return array( 'cleared' => Cache::clear_cache( $path ) );
 			}
-			Main::clear_all_cache();
-			return array( 'cleared' => true );
+			return array( 'cleared' => Cache::clear_cache() );
 		}
 
 		/**
@@ -897,7 +944,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array Scan results or error.
 		 */
 		public static function execute_run_performance_scan( array $input ): array {
-			$url    = isset( $input['url'] ) ? self::same_site_url_or_home( (string) $input['url'] ) : Util::cached_home_url( '/' );
+			$url = self::resolve_scan_url( $input );
+			if ( '' === $url ) {
+				return array( 'error' => __( 'Invalid URL: only URLs on this site may be scanned.', 'performance-optimisation' ) );
+			}
 			$result = Telemetry::scan( $url, 'manual', false );
 			if ( is_wp_error( $result ) ) {
 				return array( 'error' => $result->get_error_message() );
@@ -916,7 +966,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array{queued: bool}
 		 */
 		public static function execute_queue_pagespeed_scan( array $input ): array {
-			$url    = isset( $input['url'] ) ? self::same_site_url_or_home( (string) $input['url'] ) : Util::cached_home_url( '/' );
+			$url = self::resolve_scan_url( $input );
+			if ( '' === $url ) {
+				return array(
+					'queued' => false,
+					'error'  => __( 'Invalid URL: only URLs on this site may be scanned.', 'performance-optimisation' ),
+				);
+			}
 			$format = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
 			$job_id = Pagespeed::queue_scan( $url, $format );
 			return array( 'queued' => $job_id > 0 );
@@ -933,7 +989,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array PageSpeed results.
 		 */
 		public static function execute_get_pagespeed_results( array $input ): array {
-			$url     = isset( $input['url'] ) ? self::same_site_url_or_home( (string) $input['url'] ) : Util::cached_home_url( '/' );
+			$url = self::resolve_scan_url( $input );
+			if ( '' === $url ) {
+				return array( 'error' => __( 'Invalid URL: only URLs on this site may be scanned.', 'performance-optimisation' ) );
+			}
 			$format  = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
 			$results = Pagespeed::get_results( $url, $format );
 			return is_array( $results ) ? $results : array();
@@ -950,7 +1009,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array{suggestions: array} Suggestions.
 		 */
 		public static function execute_get_suggestions( array $input ): array {
-			$url           = isset( $input['url'] ) ? self::same_site_url_or_home( (string) $input['url'] ) : Util::cached_home_url( '/' );
+			$url = self::resolve_scan_url( $input );
+			if ( '' === $url ) {
+				return array(
+					'suggestions' => array(),
+					'error'       => __( 'Invalid URL: only URLs on this site may be scanned.', 'performance-optimisation' ),
+				);
+			}
 			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
 			$telemetry     = get_transient( $transient_key );
 			if ( false === $telemetry ) {
@@ -1401,10 +1466,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to `LiteSpeed_Crawler::crawl_batch()` when available,
 		 * otherwise returns an error payload. Omits IP rate-limiting (ability
-		 * is `manage_options` gated and therefore not anonymous). Input URLs
-		 * are validated via `wp_http_validate_url()` and capped to 20.
-		 * Same-site enforcement aligns with the home-host check formerly in
-		 * the removed `Rest::handle_crawler()` route (#900).
+		 * is `manage_options` gated and therefore not anonymous) but enforces
+		 * the same 5/60 per-actor throttle as `execute_clear_cache()` so
+		 * repeat runs cannot churn egress. Input URLs are validated via
+		 * `wp_http_validate_url()` and capped to 20. Same-site enforcement
+		 * aligns with the home-host check formerly in the removed
+		 * `Rest::handle_crawler()` route (#900); an unknown home host fails
+		 * closed instead of crawling off-site.
 		 *
 		 * @since 2.0.0
 		 *
@@ -1412,36 +1480,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array Crawler result or error.
 		 */
 		public static function execute_crawler( array $input = array() ): array {
-			$urls = array();
+			// Throttle like execute_clear_cache(): repeated 20-URL crawl
+			// runs are network/egress churn (crawler concurrency and
+			// load-limit backstops bound a single run, not its repeat rate).
+			if ( self::is_ability_throttled( 5, 60, 'crawler' ) ) {
+				return array( 'error' => __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+			}
+
+			$raw = array();
 
 			if ( ! empty( $input['url'] ) ) {
-				$urls[] = esc_url_raw( $input['url'] );
+				$raw[] = $input['url'];
 			}
 			if ( ! empty( $input['urls'] ) && is_array( $input['urls'] ) ) {
-				$urls = array_merge( $urls, array_values( array_filter( array_map( 'esc_url_raw', $input['urls'] ) ) ) );
+				$raw = array_merge( $raw, array_values( $input['urls'] ) );
 			}
-			if ( empty( $urls ) && class_exists( LiteSpeed_Crawler::class ) ) {
-				$urls = LiteSpeed_Crawler::get_urls_to_crawl( 20 );
+			if ( empty( $raw ) && class_exists( LiteSpeed_Crawler::class ) ) {
+				$raw = LiteSpeed_Crawler::get_urls_to_crawl( 20 );
 			}
 
-			// Validate, filter same-site, and cap 20-500 (spec cap 20 for ability).
-			$urls = array_values( array_filter( $urls ) );
-			$urls = array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
-			$urls = array_values( array_filter( $urls, 'wp_http_validate_url' ) );
-			// Same-site check: home-host validation (see LiteSpeed_Crawler::crawl_batch()).
+			// Same-site check: fail closed when the home host is unknown
+			// (missing option / early boot) instead of crawling off-site.
 			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
-			if ( is_string( $home_host ) && '' !== $home_host ) {
-				$urls = array_values(
-					array_filter(
-						$urls,
-						static function ( $u ) use ( $home_host ) {
-							$host = wp_parse_url( $u, PHP_URL_HOST );
-							return is_string( $host ) && strtolower( $host ) === strtolower( $home_host );
-						}
-					)
-				);
+			if ( ! is_string( $home_host ) || '' === $home_host ) {
+				return array( 'error' => __( 'Site URL unavailable.', 'performance-optimisation' ) );
 			}
-			$urls = array_slice( $urls, 0, 20 );
+
+			// Single sanitization pass: normalize, validate, same-site gate,
+			// and cap (spec cap 20 for ability).
+			$urls = array();
+			foreach ( $raw as $candidate ) {
+				if ( ! is_string( $candidate ) || '' === $candidate ) {
+					continue;
+				}
+				$candidate = esc_url_raw( $candidate );
+				if ( '' === $candidate || ! wp_http_validate_url( $candidate ) ) {
+					continue;
+				}
+				$host = wp_parse_url( $candidate, PHP_URL_HOST );
+				if ( ! is_string( $host ) || strtolower( $host ) !== strtolower( $home_host ) ) {
+					continue;
+				}
+				$urls[] = $candidate;
+			}
+			$urls = array_slice( array_values( $urls ), 0, 20 );
 
 			if ( empty( $urls ) ) {
 				return array( 'error' => __( 'No valid URLs to crawl.', 'performance-optimisation' ) );
