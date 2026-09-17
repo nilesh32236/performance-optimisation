@@ -1178,6 +1178,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * $is_auto_matched to avoid a second pattern scan; null means
 		 * "not precomputed" and falls back to matching here.
 		 *
+		 * Per-page limitation: explicit per-page interaction pins
+		 * (`_wppo_delay_strategies` meta) are handle-scoped and honored on
+		 * the script_loader_tag path (Main) only. This buffered path has no
+		 * handle, so an auto-matched tag resolves to idle here even when the
+		 * same handle is page-pinned to interaction elsewhere.
+		 *
 		 * @since 2.0.0
 		 *
 		 * @param string    $attributes      Script tag attributes string.
@@ -1402,40 +1408,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						$allow_normalized   = str_replace( ',', "\n", $allow_raw );
 						$settings_allowlist = (array) Util::process_urls( $allow_normalized );
 					} elseif ( is_array( $allow_raw ) ) {
-						// Same coerce/dedupe guard as Main: non-string/non-numeric
-						// entries map to '' then empties are filtered, so a
-						// nested-array filter return never becomes "Array".
-						$settings_allowlist = array_values(
-							array_filter(
-								array_map(
-									static function ( $v ): string {
-										return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
-									},
-									$allow_raw
-								),
-								static function ( $v ): bool {
-									return '' !== trim( (string) $v );
-								}
-							)
-						);
+						// Shared helper: nested arrays are dropped (never
+						// cast to literal "Array"), values trimmed/deduped.
+						$settings_allowlist = Util::coerce_string_list( $allow_raw );
 					}
 					$extra_parsed = array();
 					if ( is_string( $extra_raw ) && '' !== trim( $extra_raw ) ) {
 						$extra_parsed = (array) Util::process_urls( str_replace( ',', "\n", $extra_raw ) );
 					} elseif ( is_array( $extra_raw ) ) {
-						$extra_parsed = array_values(
-							array_filter(
-								array_map(
-									static function ( $v ): string {
-										return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
-									},
-									$extra_raw
-								),
-								static function ( $v ): bool {
-									return '' !== trim( (string) $v );
-								}
-							)
-						);
+						$extra_parsed = Util::coerce_string_list( $extra_raw );
 					}
 					if ( null !== $tp_key ) {
 						$tp_parse_cache[ $tp_key ] = array(
@@ -1579,8 +1560,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				// Quick-reject scripts without src before booting the pattern
 				// list or scanning content (pure-inline tags stay eager and
 				// never pay the pattern scan; avoids copying large inline
-				// bodies into a haystack).
-				if ( false === strpos( $attributes, 'src' ) ) {
+				// bodies into a haystack). Case-insensitive so uppercase
+				// <SCRIPT SRC=...> variants match parity with the
+				// script_loader_tag path.
+				if ( false === stripos( $attributes, 'src' ) ) {
 					return false;
 				}
 				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $matches ) ) {
@@ -1640,15 +1623,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private static function is_third_party_auto_delay_candidate( string $attributes, string $content, array $file_opt ): bool {
 			try {
 				// Quick-reject scripts without src before allowlist/pattern
-				// work (pure-inline tags stay eager).
-				if ( false === strpos( $attributes, 'src' ) ) {
+				// work (pure-inline tags stay eager). Case-insensitive so
+				// uppercase <SCRIPT SRC=...> variants match parity with the
+				// script_loader_tag path.
+				if ( false === stripos( $attributes, 'src' ) ) {
 					return false;
 				}
 				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $matches ) ) {
 					return false;
 				}
 				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
-				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
+				if ( '' === $src || 0 === stripos( $src, 'data:' ) || 0 === stripos( $src, 'blob:' ) ) {
 					return false;
 				}
 				// Builder/commerce guardrail: unconditional, mirrors the

@@ -2581,14 +2581,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			$mapped   = array_map(
 				static function ( $val ): string {
-					return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+					if ( is_string( $val ) || is_numeric( $val ) ) {
+						return trim( (string) $val );
+					}
+					return '';
 				},
 				$raw
 			);
 			$filtered = array_filter(
 				$mapped,
 				static function ( $val ): bool {
-					return '' !== trim( (string) $val );
+					return '' !== $val;
 				}
 			);
 			return array_values( array_unique( $filtered ) );

@@ -112,6 +112,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private array $delay_js_viewport_list = array();
 
 		/**
+		 * Handles explicitly pinned to the interaction strategy for the
+		 * current page via the Asset Manager `_wppo_delay_strategies` meta.
+		 *
+		 * The per-page config encodes an interaction override by
+		 * removing the handle from the idle/viewport lists, which is
+		 * otherwise indistinguishable from "never listed" — so the auto
+		 * third-party idle upgrade (#1314) would silently promote a
+		 * page-pinned interaction script to idle. This list preserves the
+		 * explicit choice so get_delay_strategy_for_handle() can honor
+		 * per-page-wins precedence before the auto-idle branch.
+		 *
+		 * @since NEXT
+		 * @var array<int, string>
+		 */
+		private array $delay_js_per_page_interaction = array();
+
+		/**
 		 * Map of script handles/URLs to priority ('high', 'normal', 'low').
 		 *
 		 * @var   array<string, string>
@@ -223,7 +240,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Keyed by md5 of the serialized pattern list; avoids rebuilding a
 		 * preg_quote()+preg_match() regex per pattern per script tag on the
-		 * frontend hot path (O(tags x patterns) compiles).
+		 * frontend hot path (O(tags x patterns) compiles). Bounded (200
+		 * entries, FIFO eviction) so long-lived processes cycling multisite
+		 * blogs with blog-dependent filters cannot accumulate entries
+		 * without bound.
 		 *
 		 * @since 2.0.0
 		 * @var array<string, string>
@@ -2929,7 +2949,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return;
 				}
 				$file_opts = $stored['file_optimisation'] ?? null;
-				if ( is_array( $file_opts ) && array_key_exists( 'delayJSThirdPartyAuto', $file_opts ) ) {
+				if ( is_array( $file_opts ) && isset( $file_opts['delayJSThirdPartyAuto'] ) && is_bool( $file_opts['delayJSThirdPartyAuto'] ) ) {
 					return;
 				}
 
@@ -5493,6 +5513,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			$regex = '/\b(?:' . implode( '|', $quoted ) . ')\b/';
 			self::$delay_pattern_regex_cache[ $cache_key ] = $regex;
+			if ( count( self::$delay_pattern_regex_cache ) > 200 ) {
+				self::$delay_pattern_regex_cache = array_slice( self::$delay_pattern_regex_cache, -200, 200, true );
+			}
 			return $regex;
 		}
 
@@ -6015,11 +6038,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// matching the curated auto patterns resolve to the idle strategy
 			// (same as the manual delayJSIdleList path) instead of the
 			// interaction default. Manual idle/viewport lists and per-page
-			// overrides above win. Only upgrades the interaction default: an
+			// overrides above win; an explicit per-page interaction pin below
+			// also wins. Only upgrades the interaction default: an
 			// explicit viewport default is never loosened. Builder and commerce
 			// exclusions never reach here (their tags return early). The auto
 			// pattern list lazy-boots only on this path, so it costs nothing
 			// when the toggle is off.
+			// Per-page-wins: a handle explicitly pinned to interaction for
+			// this page stays interaction even when it matches an auto
+			// vendor pattern.
+			if ( in_array( $handle, $this->delay_js_per_page_interaction, true ) ) {
+				return 'interaction';
+			}
 			if ( 'interaction' === $this->delay_js_default_strategy ) {
 				// Sandbox preview parity: read the staged (effective) slice,
 				// not raw options, so preview with staged auto=true resolves
@@ -6167,9 +6197,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				foreach ( $delay_strategies as $handle => $strategy ) {
 					if ( ! in_array( $handle, $excluded_handles, true ) ) {
 						if ( 'interaction' === $strategy ) {
-							// Remove from other lists to make it interaction.
+							// Remove from other lists to make it interaction,
+							// and record the explicit per-page choice so the
+							// auto third-party idle upgrade (#1314) does not
+							// silently promote it back to idle.
 							$this->delay_js_idle_list     = array_diff( $this->delay_js_idle_list, array( $handle ) );
 							$this->delay_js_viewport_list = array_diff( $this->delay_js_viewport_list, array( $handle ) );
+							if ( ! in_array( $handle, $this->delay_js_per_page_interaction, true ) ) {
+								$this->delay_js_per_page_interaction[] = $handle;
+							}
 						} elseif ( 'idle' === $strategy ) {
 							if ( ! in_array( $handle, $this->delay_js_idle_list, true ) ) {
 								$this->delay_js_idle_list[] = $handle;
@@ -7274,6 +7310,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * call is cheap and caching would go stale on mid-request
 		 * add/remove_filter, switch_to_blog, or sequential unit tests.
 		 *
+		 * Keep-in-sync note: this denylist overlaps ~15 vendor hosts with the
+		 * auto-mode preset in get_delay_js_third_party_auto_patterns()
+		 * (#1314). The lists are intentionally separate (manual mode pairs
+		 * keywords with a generic cross-origin rule; auto mode matches known
+		 * vendors only), so adding a vendor may need an edit in both places.
+		 *
 		 * @since NEXT
 		 * @return string[]
 		 */
@@ -7389,7 +7431,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( is_string( $raw ) ) {
 					$raw_key = 's:' . $raw;
 				} elseif ( is_array( $raw ) ) {
-					$raw_key = 'a:' . ( function_exists( 'wp_json_encode' ) ? (string) wp_json_encode( array_values( $raw ) ) : implode( "\0", array_map( 'strval', $raw ) ) );
+					$safe    = array_map(
+						static function ( $v ): string {
+							return is_string( $v ) || is_numeric( $v ) ? (string) $v : gettype( $v );
+						},
+						array_values( $raw )
+					);
+					$raw_key = 'a:' . ( function_exists( 'wp_json_encode' ) ? (string) wp_json_encode( $safe ) : implode( "\0", $safe ) );
 				} else {
 					$raw_key = 'x:' . (string) $raw;
 				}
@@ -7408,7 +7456,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$list  = array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) );
 					}
 				} elseif ( is_array( $raw ) ) {
-					$list = array_values( array_filter( array_map( 'strval', $raw ) ) );
+					// Coerce via the shared helper so nested arrays are
+					// dropped (not cast to literal 'Array').
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'coerce_string_list' ) ) {
+						$list = Util::coerce_string_list( $raw );
+					} else {
+						$list = array_values(
+							array_filter(
+								array_map(
+									static function ( $v ): string {
+										return is_string( $v ) || is_numeric( $v ) ? trim( (string) $v ) : '';
+									},
+									$raw
+								)
+							)
+						);
+					}
 				}
 				if ( $has_allow_filter ) {
 					$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $list );
@@ -7515,7 +7578,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return false;
 				}
 				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
-				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
+				if ( '' === $src || 0 === stripos( $src, 'data:' ) || 0 === stripos( $src, 'blob:' ) ) {
 					return false;
 				}
 				// User allowlist wins over everything. Handle matching uses the
@@ -7548,7 +7611,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$denylist = array_merge( $denylist, array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) ) );
 					}
 				} elseif ( is_array( $extra ) ) {
-					$denylist = array_merge( $denylist, array_values( array_filter( array_map( 'strval', $extra ) ) ) );
+					$extra_list = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'coerce_string_list' ) ? Util::coerce_string_list( $extra ) : array();
+					$denylist   = array_merge( $denylist, $extra_list );
 				}
 				foreach ( $denylist as $entry ) {
 					$entry = trim( (string) $entry );
@@ -7656,14 +7720,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static int $delay_js_third_party_auto_cache_blog = 0;
 
 		/**
+		 * Memoized pre-slash handle segments derived from the auto patterns.
+		 *
+		 * Rebuilt only when the pattern-list signature changes; shared by all
+		 * tags on the script_loader_tag hot path. Reset alongside the
+		 * auto-pattern memo in reset_delay_third_party_auto_cache().
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private static array $delay_js_third_party_auto_handle_segments = array();
+
+		/**
+		 * Compiled alternation for the memoized handle segments above.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private static string $delay_js_third_party_auto_handle_re = '';
+
+		/**
+		 * Pattern-list signature the handle-segment memo was built for.
+		 *
+		 * Null = not built yet.
+		 *
+		 * @since NEXT
+		 * @var string|null
+		 */
+		private static ?string $delay_js_third_party_auto_handle_key = null;
+
+		/**
 		 * Reset the auto third-party pattern memo (for tests).
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function reset_delay_third_party_auto_cache(): void {
-			self::$delay_js_third_party_auto_cache      = null;
-			self::$delay_js_third_party_auto_cache_blog = 0;
+			self::$delay_js_third_party_auto_cache           = null;
+			self::$delay_js_third_party_auto_cache_blog      = 0;
+			self::$delay_js_third_party_auto_handle_segments = array();
+			self::$delay_js_third_party_auto_handle_re       = '';
+			self::$delay_js_third_party_auto_handle_key      = null;
 		}
 
 		/**
@@ -7677,15 +7774,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * the built-in preset; a valid empty array is honored and disables
 		 * auto mode (silent no-op by explicit filter choice). Lazily booted:
 		 * callers must only invoke this when Delay-JS (and the auto toggle)
-		 * is enabled. Memoized per blog id so multisite sites with
-		 * blog-dependent filters never share memoized patterns.
+		 * is enabled. Memoized per blog id when no filter is registered so
+		 * multisite sites with blog-dependent filters never share memoized
+		 * patterns; bypassed when a filter is present so dynamic callbacks
+		 * always run.
 		 *
 		 * @since NEXT
 		 * @return string[]
 		 */
 		public static function get_delay_js_third_party_auto_patterns(): array {
-			$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-			if ( null !== self::$delay_js_third_party_auto_cache && $blog_id === self::$delay_js_third_party_auto_cache_blog ) {
+			$blog_id         = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			$has_auto_filter = function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_auto_patterns' );
+			// Bypass the memo when a filter is registered so mid-request
+			// add_filter/remove_filter (or throwing-callback swaps) stay
+			// visible; the no-filter preset path stays memoized per blog.
+			if ( ! $has_auto_filter && null !== self::$delay_js_third_party_auto_cache && $blog_id === self::$delay_js_third_party_auto_cache_blog ) {
 				return self::$delay_js_third_party_auto_cache;
 			}
 			$preset = array(
@@ -7737,13 +7840,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$raw = apply_filters( 'wppo_delay_js_third_party_auto_patterns', $preset );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				self::$delay_js_third_party_auto_cache      = $preset;
-				self::$delay_js_third_party_auto_cache_blog = $blog_id;
 				return $preset;
 			}
 			if ( ! is_array( $raw ) ) {
-				self::$delay_js_third_party_auto_cache      = $preset;
-				self::$delay_js_third_party_auto_cache_blog = $blog_id;
 				return $preset;
 			}
 			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'coerce_string_list' ) ) {
@@ -7766,9 +7865,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				);
 			}
 			// Empty array is a valid explicit choice: auto mode becomes a
-			// silent no-op (documented, pinned by test).
-			self::$delay_js_third_party_auto_cache      = $filtered;
-			self::$delay_js_third_party_auto_cache_blog = $blog_id;
+			// silent no-op (documented, pinned by test). Filtered results
+			// are never memoized so mid-request callback swaps stay visible.
 			return $filtered;
 		}
 
@@ -7797,28 +7895,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				$src = '';
 				if ( '' !== $tag ) {
-					if ( preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', ' ' . $tag, $matches ) ) {
-						$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
-					} elseif ( false === strpos( $tag, '<' ) ) {
+					// Plain-URL passthrough (callers pass an extracted $src):
+					// skip the tag regex entirely when the input has no '<'.
+					if ( false === strpos( $tag, '<' ) ) {
 						$src = trim( $tag );
+					} elseif ( preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', ' ' . $tag, $matches ) ) {
+						$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
 					}
 				}
 				if ( '' !== $handle ) {
-					$handle_patterns = array();
-					foreach ( $patterns as $pattern ) {
-						$pattern = trim( (string) $pattern );
-						if ( '' === $pattern ) {
-							continue;
+					// Memoize the derived pre-slash handle segments plus the
+					// compiled alternation keyed by the pattern-list
+					// signature, so T=20-50 tags of identical input share one
+					// derivation instead of rebuilding per tag. Cleared with
+					// the auto-pattern memo in
+					// reset_delay_third_party_auto_cache().
+					$sig = md5( implode( "\0", $patterns ) );
+					if ( null === self::$delay_js_third_party_auto_handle_key || $sig !== self::$delay_js_third_party_auto_handle_key ) {
+						$handle_patterns = array();
+						foreach ( $patterns as $pattern ) {
+							$pattern = trim( (string) $pattern );
+							if ( '' === $pattern ) {
+								continue;
+							}
+							$segment = explode( '/', $pattern )[0];
+							$segment = trim( (string) $segment );
+							if ( '' !== $segment ) {
+								$handle_patterns[] = $segment;
+							}
 						}
-						$segment = explode( '/', $pattern )[0];
-						$segment = trim( (string) $segment );
-						if ( '' !== $segment ) {
-							$handle_patterns[] = $segment;
-						}
+						$handle_patterns                                 = array_values( array_unique( $handle_patterns ) );
+						self::$delay_js_third_party_auto_handle_segments = $handle_patterns;
+						self::$delay_js_third_party_auto_handle_re       = ! empty( $handle_patterns ) ? self::get_delay_patterns_regex( $handle_patterns ) : '';
+						self::$delay_js_third_party_auto_handle_key      = $sig;
 					}
-					$handle_patterns = array_values( array_unique( $handle_patterns ) );
+					$handle_patterns = self::$delay_js_third_party_auto_handle_segments;
 					if ( ! empty( $handle_patterns ) ) {
-						$re = self::get_delay_patterns_regex( $handle_patterns );
+						$re = self::$delay_js_third_party_auto_handle_re;
+						if ( '' === $re ) {
+							$re                                        = self::get_delay_patterns_regex( $handle_patterns );
+							self::$delay_js_third_party_auto_handle_re = $re;
+						}
 						if ( '' !== $re ) {
 							try {
 								$hit = preg_match( $re, $handle );
@@ -7893,7 +8010,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return false;
 				}
 				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
-				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
+				if ( '' === $src || 0 === stripos( $src, 'data:' ) || 0 === stripos( $src, 'blob:' ) ) {
 					return false;
 				}
 				// Builder/commerce guardrail: unconditional, mirrors the
@@ -7907,18 +8024,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return false;
 				}
 				// User allowlist wins over auto patterns (parity with the
-				// manual third-party path). Handle matching uses the
-				// word-boundary matcher; src matching stays substring. The
-				// shared slice helper memoizes the parse per request keyed by
-				// the raw value, so per-tag cost is a memo hit, not a
-				// process_urls + filter fan-out.
+				// manual third-party path). Handle matching uses the single
+				// precompiled alternation (not one PCRE compile per entry);
+				// src matching stays substring. The shared slice helper
+				// memoizes the parse per request keyed by the raw value, so
+				// per-tag cost is a memo hit, not a process_urls + filter
+				// fan-out.
 				$file_opt_for_allow = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
-				foreach ( self::get_delay_js_third_party_allowlist_for_slice( $file_opt_for_allow ) as $allowed ) {
+				$allowlist          = self::get_delay_js_third_party_allowlist_for_slice( $file_opt_for_allow );
+				if ( '' !== (string) $handle && ! empty( $allowlist ) && $this->matches_any_delay_pattern( (string) $handle, $allowlist ) ) {
+					return false;
+				}
+				foreach ( $allowlist as $allowed ) {
 					$allowed = trim( (string) $allowed );
-					if ( '' === $allowed ) {
-						continue;
-					}
-					if ( $this->matches_delay_pattern( (string) $handle, $allowed ) || false !== stripos( $src, $allowed ) ) {
+					if ( '' !== $allowed && false !== stripos( $src, $allowed ) ) {
 						return false;
 					}
 				}

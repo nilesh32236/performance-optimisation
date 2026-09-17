@@ -414,6 +414,36 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A per-page interaction pin wins over the auto-idle upgrade.
+	 */
+	public function test_per_page_interaction_pin_wins_over_auto_idle(): void {
+		$this->stub_delay_guard_env();
+		$main       = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'delayJSThirdPartyAuto' => true,
+				),
+			)
+		);
+		$reflection = new \ReflectionClass( Main::class );
+		foreach ( array(
+			'delay_js_idle_list'            => array(),
+			'delay_js_viewport_list'        => array(),
+			'delay_js_per_page_interaction' => array( 'site-metrics' ),
+		) as $prop_name => $value ) {
+			$prop = $reflection->getProperty( $prop_name );
+			$prop->setValue( $main, $value );
+		}
+		$strategy_prop = $reflection->getProperty( 'delay_js_default_strategy' );
+		$strategy_prop->setValue( $main, 'interaction' );
+		$method = $reflection->getMethod( 'get_delay_strategy_for_handle' );
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for strategy tests.
+		$tag = '<script src="https://www.googletagmanager.com/gtm.js?id=GTM-X"></script>';
+
+		$this->assertSame( 'interaction', $method->invoke( $main, 'site-metrics', $tag, true ) );
+	}
+
+	/**
 	 * The migration backfills the additive key as off without touching other keys.
 	 */
 	public function test_migration_backfills_auto_off(): void {
@@ -449,6 +479,40 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * The migration heals a stored null/non-bool to canonical false.
+	 */
+	public function test_migration_heals_null_to_false(): void {
+		$stored = array(
+			'file_optimisation' => array(
+				'delayJS'               => true,
+				'delayJSThirdPartyAuto' => null,
+			),
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $default_value = false ) use ( &$stored ) {
+				if ( 'wppo_settings' === $option ) {
+					return $stored;
+				}
+				return $default_value;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $option, $value ) use ( &$stored ) {
+				if ( 'wppo_settings' === $option ) {
+					$stored = $value;
+					return true;
+				}
+				return false;
+			}
+		);
+
+		$main = $this->make_main( array( 'file_optimisation' => array( 'delayJS' => true ) ) );
+		$main->maybe_migrate_third_party_auto();
+
+		$this->assertFalse( $stored['file_optimisation']['delayJSThirdPartyAuto'] );
+	}
+
+	/**
 	 * The migration is a no-op when the key already exists.
 	 */
 	public function test_migration_skips_when_key_exists(): void {
@@ -477,6 +541,29 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 		$main->maybe_migrate_third_party_auto();
 
 		$this->assertSame( array(), $writes, 'Migration must not write when the key exists' );
+	}
+
+	/**
+	 * A throwing filter callback fails open to the built-in preset.
+	 */
+	public function test_auto_patterns_throwing_filter_fails_open(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook ) {
+				return 'wppo_delay_js_third_party_auto_patterns' === $hook;
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value = null ) {
+				if ( 'wppo_delay_js_third_party_auto_patterns' === $hook ) {
+					throw new \RuntimeException( 'filter boom' );
+				}
+				return $value;
+			}
+		);
+
+		$patterns = Main::get_delay_js_third_party_auto_patterns();
+
+		$this->assertContains( 'googletagmanager.com', $patterns );
 	}
 
 	/**
