@@ -684,9 +684,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			 */
 			$disable_curl = (bool) apply_filters( 'wppo_crawler_disable_curl', false );
 			if ( ! function_exists( 'curl_multi_init' ) || $disable_curl ) {
-				$success = 0;
-				$failed  = 0;
+				$success  = 0;
+				$failed   = 0;
+				$deadline = microtime( true ) + 15;
 				foreach ( $requests as $req ) {
+					// Bound worst-case runtime like the curl_multi path: once
+					// the 15s wall-clock budget is spent, the remainder counts
+					// as failed (matching per-request failure semantics) so a
+					// large URL x variant matrix cannot exceed the PHP limit.
+					if ( microtime( true ) >= $deadline ) {
+						++$failed;
+						continue;
+					}
 					$resp = wp_remote_get(
 						$req['url'],
 						array(

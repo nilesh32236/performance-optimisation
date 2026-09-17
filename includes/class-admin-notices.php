@@ -158,11 +158,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			}
 
 			if ( 'review_done' === $key ) {
-				update_option( 'wppo_review_dismissed', 1 );
+				update_option( 'wppo_review_dismissed', 1, false );
 			}
 
 			if ( 'review_snooze' === $key ) {
-				update_option( 'wppo_review_snoozed_until', time() + ( 30 * DAY_IN_SECONDS ) );
+				update_option( 'wppo_review_snoozed_until', time() + ( 30 * DAY_IN_SECONDS ), false );
 			}
 
 			if ( 'litespeed' === $key ) {

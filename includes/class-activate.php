@@ -145,6 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			Img_Converter::migrate_img_info_autoload();
 			RUM::migrate_rum_autoload();
 			Pagespeed::migrate_trends_autoload();
+			self::migrate_settings_autoload();
 			self::maybe_run_upgrades( ! $has_activation_time );
 		}
 
@@ -242,7 +243,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			Img_Converter::migrate_img_info_autoload();
 			RUM::migrate_rum_autoload();
 			Pagespeed::migrate_trends_autoload();
+			self::migrate_settings_autoload();
 			update_option( 'wppo_autoload_migrated', 1, false );
+		}
+
+		/**
+		 * Migrate the wppo_settings aggregate option to non-autoloading.
+		 *
+		 * Rows created by older releases defaulted to autoload=yes, keeping the
+		 * large multi-tab settings array in alloptions on every request. Newer
+		 * write paths pass autoload=false explicitly, but WordPress only flips
+		 * the column when the parameter is passed — so a one-time repair flips
+		 * legacy rows here. Fail-open: missing rows or DB errors are no-ops.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function migrate_settings_autoload(): void {
+			try {
+				if ( function_exists( 'wp_set_option_autoload' ) ) {
+					wp_set_option_autoload( 'wppo_settings', false );
+				} else {
+					global $wpdb;
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+					$wpdb->update(
+						$wpdb->options,
+						array( 'autoload' => 'no' ),
+						array( 'option_name' => 'wppo_settings' )
+					);
+					wp_cache_delete( 'wppo_settings', 'options' );
+					wp_cache_delete( 'alloptions', 'options' );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

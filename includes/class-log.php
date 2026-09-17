@@ -35,6 +35,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		private const SALT_KEY = 'wppo_activity_log_salt';
 
 		/**
+		 * Per-request memo of the wppo_activity_cache_version option value.
+		 *
+		 * Null until the first read in this request; afterwards the int value
+		 * for the remainder of the request. Use reset_version_cache() to
+		 * clear the memo in tests.
+		 *
+		 * @since NEXT
+		 * @var int|null
+		 */
+		private static ?int $activity_cache_version = null;
+
+		/**
 		 * Private constructor to prevent direct instantiation.
 		 *
 		 * @since 2.0.0
@@ -54,6 +66,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		 */
 		private static function salted_cache_active(): bool {
 			return function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
+		}
+
+		/**
+		 * Current activity-cache version, memoized per request.
+		 *
+		 * The version option is read on every recent_activities call (once per
+		 * paginated request); the memo reduces that to a single option lookup
+		 * per request. Log::add() bumps the stored version, so the memo is
+		 * refreshed on write within the same request.
+		 *
+		 * @since NEXT
+		 * @return int
+		 */
+		private static function activity_cache_version(): int {
+			if ( null !== self::$activity_cache_version ) {
+				return self::$activity_cache_version;
+			}
+			self::$activity_cache_version = (int) get_option( 'wppo_activity_cache_version', 0 );
+			return self::$activity_cache_version;
+		}
+
+		/**
+		 * Reset the memoized activity-cache version.
+		 *
+		 * Test-only seam: production code never needs to re-read within a
+		 * request, but unit tests that swap option stubs between cases must
+		 * clear the memo to observe the new stub.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_version_cache(): void {
+			self::$activity_cache_version = null;
 		}
 
 		/**
@@ -117,7 +162,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					// second always produce distinct salts (issue #882 review).
 					update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
 				} else {
-					update_option( 'wppo_activity_cache_version', (int) get_option( 'wppo_activity_cache_version', 0 ) + 1, false );
+					self::$activity_cache_version = (int) get_option( 'wppo_activity_cache_version', 0 ) + 1;
+					update_option( 'wppo_activity_cache_version', self::$activity_cache_version, false );
 				}
 			}
 		}
@@ -153,7 +199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				// no-op (issue #882).
 				$data = wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::SALT_KEY ) );
 			} else {
-				$cache_key = 'wppo_activity_logs_v' . (int) get_option( 'wppo_activity_cache_version', 0 ) . '_page_' . $page . '_per_page_' . $per_page;
+				$cache_key = 'wppo_activity_logs_v' . self::activity_cache_version() . '_page_' . $page . '_per_page_' . $per_page;
 				$data      = wp_cache_get( $cache_key, 'wppo_activity_logs' );
 			}
 

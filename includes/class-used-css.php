@@ -3111,53 +3111,82 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$lookup_ok = false;
 			// Hoisted unique probe first (issue #1310 review): on AS 4.x
 			// the atomic unique insert below dedupes by itself, so the
-			// full pending snapshot (up to 20 pages x 1000 rows + JSON
-			// decode per row) is pure overhead on every cron run — skip
-			// it and rely on the per-row 0-return re-check for races.
+			// full pending snapshot (up to 5 pages x 1000 rows + JSON
+			// decode per row, cached in a 5-min transient) is pure overhead
+			// on every cron run — skip it and rely on the per-row 0-return
+			// re-check for races.
 			// Util ships in-repo: no method_exists guard needed.
 			$run_use_unique = Util::supports_action_scheduler_unique();
 			if ( ! $run_use_unique && function_exists( 'as_get_scheduled_actions' ) ) {
+				// Short-TTL cache (5 min): the legacy snapshot pages the
+				// scheduler store with a json_decode per row, so reuse the
+				// pending post_id set across cron runs instead of rebuilding
+				// up to 5k decodes every run. Stale entries only risk a
+				// skipped enqueue (deduped next run); the atomic unique path
+				// above is unaffected. Every cache/store access is fail-open
+				// so a backend error keeps the per-row backstop below.
+				$scheduled_cache_key = Util::transient_key( 'wppo_used_css_scheduled' );
 				try {
-					$as_offset   = 0;
-					$as_per_page = 1000;
-					// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
-					for ( $page = 0; $page < 20; $page++ ) {
-						$batch_actions = as_get_scheduled_actions(
-							array(
-								'hook'     => 'wppo_used_css_generate',
-								'group'    => 'performance_optimisation',
-								'status'   => 'pending',
-								'per_page' => $as_per_page,
-								'offset'   => $as_offset,
-							),
-							'ARRAY_A'
-						);
-						if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
-							break;
-						}
-						foreach ( $batch_actions as $action ) {
-							if ( ! is_array( $action ) ) {
-								continue;
-							}
-							$action_args = $action['args'] ?? null;
-							if ( is_string( $action_args ) ) {
-								$decoded     = json_decode( $action_args, true );
-								$action_args = is_array( $decoded ) ? $decoded : null;
-							}
-							if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
-								$scheduled[ (int) $action_args['post_id'] ] = true;
-							}
-						}
-						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
-						if ( count( $batch_actions ) < $as_per_page ) {
-							break;
-						}
-						$as_offset += $as_per_page;
+					$cached_scheduled = get_transient( $scheduled_cache_key );
+				} catch ( \Throwable ) {
+					$cached_scheduled = false;
+				}
+				if ( is_array( $cached_scheduled ) ) {
+					foreach ( $cached_scheduled as $cached_post_id ) {
+						$scheduled[ (int) $cached_post_id ] = true;
 					}
 					$lookup_ok = true;
-				} catch ( \Throwable ) {
-					$scheduled = array();
-					$lookup_ok = false;
+				} else {
+					try {
+						$as_offset   = 0;
+						$as_per_page = 1000;
+						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+						for ( $page = 0; $page < 5; $page++ ) {
+							$batch_actions = as_get_scheduled_actions(
+								array(
+									'hook'     => 'wppo_used_css_generate',
+									'group'    => 'performance_optimisation',
+									'status'   => 'pending',
+									'per_page' => $as_per_page,
+									'offset'   => $as_offset,
+								),
+								'ARRAY_A'
+							);
+							if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
+								break;
+							}
+							foreach ( $batch_actions as $action ) {
+								if ( ! is_array( $action ) ) {
+									continue;
+								}
+								$action_args = $action['args'] ?? null;
+								if ( is_string( $action_args ) ) {
+									$decoded     = json_decode( $action_args, true );
+									$action_args = is_array( $decoded ) ? $decoded : null;
+								}
+								if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
+									$scheduled[ (int) $action_args['post_id'] ] = true;
+								}
+							}
+						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+							if ( count( $batch_actions ) < $as_per_page ) {
+								break;
+							}
+							$as_offset += $as_per_page;
+						}
+						$lookup_ok = true;
+					} catch ( \Throwable ) {
+						$scheduled = array();
+						$lookup_ok = false;
+					}
+					if ( $lookup_ok ) {
+						try {
+							set_transient( $scheduled_cache_key, array_keys( $scheduled ), 5 * MINUTE_IN_SECONDS );
+						} catch ( \Throwable $transient_error ) {
+							// Best-effort cache write: the snapshot stays valid.
+							unset( $transient_error );
+						}
+					}
 				}
 			}
 

@@ -279,6 +279,11 @@ trait WPPO_Test_Bootstrap {
 			// so processor-availability fixtures never leak across tests.
 			\PerformanceOptimise\Inc\Util::reset_html_processor_memo();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'reset_version_cache' ) ) {
+			// Activity-cache version memoizes per process: reset so each
+			// test reads its own wppo_activity_cache_version fixture.
+			\PerformanceOptimise\Inc\Log::reset_version_cache();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

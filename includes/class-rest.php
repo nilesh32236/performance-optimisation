@@ -1318,7 +1318,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$options = $merged_options;
 
-			update_option( 'wppo_settings', $options );
+			update_option( 'wppo_settings', $options, false );
 
 			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				Telemetry::invalidate_audit_cache();
@@ -1534,10 +1534,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			if ( $use_action_scheduler ) {
 				// Paginated scheduler snapshot for dedup instead of one
-				// as_has_scheduled_action() query per image (N+1). Falls back
-				// to per-item checks whenever an item was not positively
-				// confirmed (snapshot unavailable/failed/incomplete).
-				$scheduled = array();
+				// as_has_scheduled_action() query per image (N+1). The per-item
+				// store check below only runs when the snapshot is incomplete
+				// (>10k pending rows) or unavailable/failed, so a typical batch
+				// pays only the bounded snapshot queries.
+				$scheduled          = array();
+				$scheduled_complete = false;
 				if ( function_exists( 'as_get_scheduled_actions' ) ) {
 					try {
 						$statuses = array( 'pending', 'in-progress' );
@@ -1558,6 +1560,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
 							if ( ! is_array( $existing_actions ) || empty( $existing_actions ) ) {
+								$scheduled_complete = true;
 								break;
 							}
 							foreach ( $existing_actions as $action ) {
@@ -1573,14 +1576,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
 								}
 							}
-							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 							if ( count( $existing_actions ) < 1000 ) {
+								$scheduled_complete = true;
 								break;
 							}
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
-						$scheduled = array();
+						$scheduled          = array();
+						$scheduled_complete = false;
 					}
 				}
 				// Schedule background jobs via Action Scheduler with deduplication.
@@ -1598,7 +1603,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+						if ( ! $scheduled_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
 							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
@@ -1626,7 +1631,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+						if ( ! $scheduled_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
 							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
@@ -1831,7 +1836,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				unset( $snapshot_error );
 			}
 
-			if ( ! update_option( 'wppo_settings', $merged_settings ) ) {
+			if ( ! update_option( 'wppo_settings', $merged_settings, false ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 

@@ -1183,7 +1183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Excludes core options, transients/timeouts (handled by the
 		 * expired-transient purge), oEmbed cache entries, and the plugin's own
-		 * `wppo_*` options (e.g. wppo_settings must stay autoloaded).
+		 * `wppo_*` options (managed separately via the autoload migration).
 		 *
 		 * @since 2.0.0
 		 * @param int $threshold Minimum option size in bytes.
@@ -1198,16 +1198,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$autoload_values = self::get_autoloadable_values();
 			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
 
-			// Fetch a wider window than $limit: PHP-side exclusions below (core,
-			// transients, oEmbed, wppo_*, already-remediated) would otherwise
-			// silently hide candidates sitting below the SQL LIMIT cutoff.
-			$fetch = max( $limit * 5, $limit + 100 );
+			// Fetch a slightly wider window than $limit: PHP-side exclusions
+			// below (core options, already-remediated) would otherwise silently
+			// hide candidates sitting below the SQL LIMIT cutoff. Prefix-class
+			// exclusions (transients, oEmbed, wppo_*) are pushed into SQL so
+			// fewer rows enter the LENGTH() + ORDER BY filesort; the window is
+			// capped at limit+100 (max 600 rows) instead of limit*5.
+			$fetch = $limit + 100;
 
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
 			$rows = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $fetch, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-					...array_merge( $autoload_values, array( $threshold ) )
+				$wpdb->prepare( // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; LIKE exclusions passed via spread args.
+					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $fetch, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- $placeholders is count-derived; LIKE exclusions passed via spread args.
+					...array_merge( $autoload_values, array( '\_transient\_%', '\_site\_transient\_%', '\_oembed\_%', 'wppo\_%', $threshold ) )
 				),
 				ARRAY_A
 			);
