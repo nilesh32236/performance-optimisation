@@ -4267,9 +4267,9 @@ const FileOptimization = ( {
 											( typeof entry.id === 'string' ||
 												typeof entry.id === 'number' )
 									)
-									.map( ( entry ) => (
+									.map( ( entry, idx ) => (
 										<div
-											key={ entry.id }
+											key={ entry.id } // Audit #1420: stable row ids only — no idx fallback (idx still drives input ids/handlers).
 											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">
