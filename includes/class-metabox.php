@@ -698,16 +698,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		}
 
 		/**
-		 * Helper method to process disabled assets.
-		 *
-		 * @param array $raw_data      Raw input array from $_POST.
-		 * @param array $valid_handles Array of valid handles for the page.
-		 * @param array $blocked       Array of blocked handles that must never persist (issue #1406).
-		 * @return array Sanitized and whitelisted array of disabled handles.
-		 * @since 2.0.0
-		 * @since NEXT Added $blocked stripping for crafted-POST hardening.
-		 */
-		/**
 		 * Normalize an asset handle for case-insensitive comparison.
 		 *
 		 * Mirrors Asset_Manager::normalize_handle(): lowercase plus

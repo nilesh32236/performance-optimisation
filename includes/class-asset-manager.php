@@ -85,28 +85,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		);
 
 		/**
-		 * Once-per-request guard for the dequeue pass.
-		 *
-		 * The pass is hooked to three print-time actions; without a guard
-		 * one singular request re-fetches settings/post meta and rebuilds
-		 * dependency maps up to 3x. Reset via reset_request_state() (tests).
-		 *
-		 * @var bool
-		 * @since NEXT
-		 */
-		private static bool $did_dequeue_pass = false;
-
-		/**
 		 * Whether this request actually dequeued/deregistered anything.
 		 *
-		 * Used by capture_page_assets() to skip overwriting the captured
-		 * asset transient with a post-dequeue list (self-clearing loop).
-		 * Reset via reset_request_state() (tests).
+		 * Used by capture_page_assets() to prefer the pre-dequeue snapshot
+		 * over the post-dequeue list (self-clearing loop). Reset via
+		 * reset_request_state() (tests).
 		 *
 		 * @var bool
 		 * @since NEXT
 		 */
 		private static bool $stripped_any = false;
+
+		/**
+		 * Pre-dequeue asset snapshot for capture refresh (issue #1406).
+		 *
+		 * Captured at the start of dequeue_selected_assets() before any
+		 * wp_dequeue/deregister call removes entries from the registries,
+		 * so capture_page_assets() can refresh the transient from the full
+		 * pre-strip list (including newly added theme/plugin handles) even
+		 * on requests that stripped assets. Shape: array with 'scripts'
+		 * and 'styles' keys, each a list of arrays with handle/src/deps.
+		 * Reset via reset_request_state() (tests).
+		 *
+		 * @var array
+		 * @since NEXT
+		 */
+		private static array $pre_dequeue_snapshot = array(
+			'scripts' => array(),
+			'styles'  => array(),
+		);
 
 		/**
 		 * Constructor.
@@ -148,12 +155,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @since NEXT Added global gate, dependency guard, and commerce bypass.
 		 */
 		public function dequeue_selected_assets(): void {
-			// Once-per-request guard: the pass is hooked to three
-			// print-time actions; the second/third fires are no-ops.
-			if ( self::$did_dequeue_pass ) {
-				return;
-			}
-			self::$did_dequeue_pass = true;
+			// No once-per-request guard: the pass is hooked to three
+			// print-time actions (head scripts, head styles, footer
+			// scripts) and each fire must run so handles enqueued during
+			// the page body are still evaluated for dequeue. A first-fire
+			// guard would make the footer pass a no-op and leave
+			// late-enqueued dependents invisible to the guard (fail-open,
+			// but over-retaining). The pass is idempotent (re-dequeueing
+			// an already-dequeued handle is harmless) and handle counts
+			// are small, so up to 3x runs per request is negligible.
 
 			// Audit #1392: typed per convention.
 			$is_sandbox_preview = false;
@@ -225,6 +235,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 
 			global $wp_scripts, $wp_styles;
 
+			// Pre-dequeue snapshot (issue #1406): capture the full handle
+			// list with src/deps before any deregister removes entries, so
+			// capture_page_assets() can refresh the transient from the
+			// pre-strip list even when this request strips assets.
+			self::snapshot_pre_dequeue_assets( $wp_scripts, $wp_styles );
+
 			$extra_allowlist = self::get_extra_allowlist( $settings );
 
 			$safe_scripts = self::filter_safe_handles( $disabled_scripts, self::registered_map( $wp_scripts ), self::queue_list( $wp_scripts ), $extra_allowlist, 'script' );
@@ -245,17 +261,156 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		}
 
 		/**
+		 * Snapshot the current registries before any dequeue/deregister.
+		 *
+		 * Stores handle/src/deps lists so capture_page_assets() can refresh
+		 * the captured-assets transient from the pre-strip list (which still
+		 * contains the disabled handles plus any newly added theme/plugin
+		 * handles) instead of skipping the refresh while disables are
+		 * active. Fail-open: unreadable registries leave the old snapshot.
+		 *
+		 * @since NEXT
+		 * @param mixed $scripts_registry WP_Scripts instance or null.
+		 * @param mixed $styles_registry  WP_Styles instance or null.
+		 * @return void
+		 */
+		private static function snapshot_pre_dequeue_assets( $scripts_registry, $styles_registry ): void {
+			try {
+				$snapshot = array(
+					'scripts' => array(),
+					'styles'  => array(),
+				);
+				if ( is_object( $scripts_registry ) && isset( $scripts_registry->registered ) && is_array( $scripts_registry->registered ) ) {
+					foreach ( self::capture_handles( $scripts_registry ) as $handle ) {
+						if ( ! isset( $scripts_registry->registered[ $handle ] ) ) {
+							continue;
+						}
+						$registered            = $scripts_registry->registered[ $handle ];
+						$src                   = ( is_object( $registered ) && isset( $registered->src ) && is_string( $registered->src ) ) ? $registered->src : '';
+						$deps                  = ( is_object( $registered ) && isset( $registered->deps ) && is_array( $registered->deps ) ) ? array_values(
+							array_filter(
+								$registered->deps,
+								static function ( $dep ) {
+									return is_string( $dep ) && '' !== $dep;
+								}
+							)
+						) : array();
+						$snapshot['scripts'][] = array(
+							'handle' => $handle,
+							'src'    => $src,
+							'deps'   => $deps,
+						);
+					}
+				}
+				if ( is_object( $styles_registry ) && isset( $styles_registry->registered ) && is_array( $styles_registry->registered ) ) {
+					foreach ( self::capture_handles( $styles_registry ) as $handle ) {
+						if ( ! isset( $styles_registry->registered[ $handle ] ) ) {
+							continue;
+						}
+						$registered           = $styles_registry->registered[ $handle ];
+						$src                  = ( is_object( $registered ) && isset( $registered->src ) && is_string( $registered->src ) ) ? $registered->src : '';
+						$deps                 = ( is_object( $registered ) && isset( $registered->deps ) && is_array( $registered->deps ) ) ? array_values(
+							array_filter(
+								$registered->deps,
+								static function ( $dep ) {
+									return is_string( $dep ) && '' !== $dep;
+								}
+							)
+						) : array();
+						$snapshot['styles'][] = array(
+							'handle' => $handle,
+							'src'    => $src,
+							'deps'   => $deps,
+						);
+					}
+				}
+				if ( ! empty( $snapshot['scripts'] ) || ! empty( $snapshot['styles'] ) ) {
+					self::$pre_dequeue_snapshot = $snapshot;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Merge handles enqueued after the pre-dequeue snapshot into capture lists.
+		 *
+		 * Appends current-registry entries whose handles are not already in
+		 * the snapshot-derived $scripts/$styles lists, so late enqueues
+		 * between the footer dequeue pass and the wp_footer capture are not
+		 * lost. Operates by reference; fail-open on unreadable registries.
+		 *
+		 * @since NEXT
+		 * @param array $scripts             Snapshot-derived script entries (by reference).
+		 * @param array $styles              Snapshot-derived style entries (by reference).
+		 * @param mixed $scripts_registry    WP_Scripts instance or null.
+		 * @param mixed $styles_registry     WP_Styles instance or null.
+		 * @param array $per_page_strategies Per-page delay strategies keyed by handle.
+		 * @param array $per_page_priorities Per-page delay priorities keyed by handle.
+		 * @return void
+		 */
+		private static function merge_post_snapshot_assets( array &$scripts, array &$styles, $scripts_registry, $styles_registry, array $per_page_strategies, array $per_page_priorities ): void {
+			try {
+				$seen_scripts = array();
+				foreach ( $scripts as $entry ) {
+					if ( is_array( $entry ) && isset( $entry['handle'] ) && is_string( $entry['handle'] ) ) {
+						$seen_scripts[ $entry['handle'] ] = true;
+					}
+				}
+				$seen_styles = array();
+				foreach ( $styles as $entry ) {
+					if ( is_array( $entry ) && isset( $entry['handle'] ) && is_string( $entry['handle'] ) ) {
+						$seen_styles[ $entry['handle'] ] = true;
+					}
+				}
+				if ( is_object( $scripts_registry ) && isset( $scripts_registry->registered ) && is_array( $scripts_registry->registered ) ) {
+					foreach ( self::capture_handles( $scripts_registry ) as $handle ) {
+						if ( isset( $seen_scripts[ $handle ] ) || ! isset( $scripts_registry->registered[ $handle ] ) ) {
+							continue;
+						}
+						$registered = $scripts_registry->registered[ $handle ];
+						$scripts[]  = array(
+							'handle'         => $handle,
+							'src'            => ( is_object( $registered ) && isset( $registered->src ) && $registered->src ) ? $registered->src : '',
+							'deps'           => ( is_object( $registered ) && isset( $registered->deps ) ) ? $registered->deps : array(),
+							'delay_strategy' => $per_page_strategies[ $handle ] ?? null,
+							'delay_priority' => $per_page_priorities[ $handle ] ?? null,
+						);
+					}
+				}
+				if ( is_object( $styles_registry ) && isset( $styles_registry->registered ) && is_array( $styles_registry->registered ) ) {
+					foreach ( self::capture_handles( $styles_registry ) as $handle ) {
+						if ( isset( $seen_styles[ $handle ] ) || ! isset( $styles_registry->registered[ $handle ] ) ) {
+							continue;
+						}
+						$registered = $styles_registry->registered[ $handle ];
+						$styles[]   = array(
+							'handle' => $handle,
+							'src'    => ( is_object( $registered ) && isset( $registered->src ) && $registered->src ) ? $registered->src : '',
+							'deps'   => ( is_object( $registered ) && isset( $registered->deps ) ) ? $registered->deps : array(),
+						);
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Reset per-request dequeue state (tests / long-lived workers).
 		 *
-		 * Clears the once-per-request dequeue guard and the stripped-any
-		 * flag so a fresh pass and capture can run.
+		 * Clears the stripped-any flag and the pre-dequeue snapshot so a
+		 * fresh pass and capture can run.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function reset_request_state(): void {
-			self::$did_dequeue_pass = false;
-			self::$stripped_any     = false;
+			self::$stripped_any         = false;
+			self::$pre_dequeue_snapshot = array(
+				'scripts' => array(),
+				'styles'  => array(),
+			);
 		}
 
 		/**
@@ -761,9 +916,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			// Self-clearing guard: the dequeue pass runs before wp_footer,
 			// so a logged-out capture visit would otherwise store the
 			// post-dequeue list (disabled handles vanish from the metabox
-			// and the next save silently drops them). Skip overwriting the
-			// transient when this request stripped anything.
-			if ( self::$stripped_any ) {
+			// and the next save silently drops them). When this request
+			// stripped anything, refresh from the pre-dequeue snapshot
+			// instead of the post-dequeue registries: the snapshot still
+			// holds the disabled handles plus any newly added theme/plugin
+			// handles, so the transient keeps refreshing while disables
+			// are active. Without a snapshot there is nothing safe to
+			// store, so skip (legacy fail-safe).
+			$use_snapshot = self::$stripped_any && ( ! empty( self::$pre_dequeue_snapshot['scripts'] ) || ! empty( self::$pre_dequeue_snapshot['styles'] ) );
+			if ( self::$stripped_any && ! $use_snapshot ) {
 				return;
 			}
 
@@ -772,40 +933,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			$scripts = array();
 			$styles  = array();
 
-			if ( $wp_scripts instanceof \WP_Scripts ) {
-				$per_page_strategies = get_post_meta( $post_id, '_wppo_delay_strategies', true );
-				$per_page_priorities = get_post_meta( $post_id, '_wppo_delay_priorities', true );
+			$per_page_strategies = get_post_meta( $post_id, '_wppo_delay_strategies', true );
+			$per_page_priorities = get_post_meta( $post_id, '_wppo_delay_priorities', true );
 
-				if ( ! is_array( $per_page_strategies ) ) {
-					$per_page_strategies = array();
-				}
-				if ( ! is_array( $per_page_priorities ) ) {
-					$per_page_priorities = array();
-				}
-
-				foreach ( self::capture_handles( $wp_scripts ) as $handle ) {
-					if ( isset( $wp_scripts->registered[ $handle ] ) ) {
-						$registered = $wp_scripts->registered[ $handle ];
-						$scripts[]  = array(
-							'handle'         => $handle,
-							'src'            => $registered->src ? $registered->src : '',
-							'deps'           => $registered->deps,
-							'delay_strategy' => $per_page_strategies[ $handle ] ?? null,
-							'delay_priority' => $per_page_priorities[ $handle ] ?? null,
-						);
-					}
-				}
+			if ( ! is_array( $per_page_strategies ) ) {
+				$per_page_strategies = array();
+			}
+			if ( ! is_array( $per_page_priorities ) ) {
+				$per_page_priorities = array();
 			}
 
-			if ( $wp_styles instanceof \WP_Styles ) {
-				foreach ( self::capture_handles( $wp_styles ) as $handle ) {
-					if ( isset( $wp_styles->registered[ $handle ] ) ) {
-						$registered = $wp_styles->registered[ $handle ];
-						$styles[]   = array(
-							'handle' => $handle,
-							'src'    => $registered->src ? $registered->src : '',
-							'deps'   => $registered->deps,
-						);
+			if ( $use_snapshot ) {
+				foreach ( self::$pre_dequeue_snapshot['scripts'] as $entry ) {
+					if ( ! is_array( $entry ) || ! isset( $entry['handle'] ) || ! is_string( $entry['handle'] ) || '' === $entry['handle'] ) {
+						continue;
+					}
+					$handle    = $entry['handle'];
+					$scripts[] = array(
+						'handle'         => $handle,
+						'src'            => isset( $entry['src'] ) && is_string( $entry['src'] ) ? $entry['src'] : '',
+						'deps'           => isset( $entry['deps'] ) && is_array( $entry['deps'] ) ? $entry['deps'] : array(),
+						'delay_strategy' => $per_page_strategies[ $handle ] ?? null,
+						'delay_priority' => $per_page_priorities[ $handle ] ?? null,
+					);
+				}
+				foreach ( self::$pre_dequeue_snapshot['styles'] as $entry ) {
+					if ( ! is_array( $entry ) || ! isset( $entry['handle'] ) || ! is_string( $entry['handle'] ) || '' === $entry['handle'] ) {
+						continue;
+					}
+					$styles[] = array(
+						'handle' => $entry['handle'],
+						'src'    => isset( $entry['src'] ) && is_string( $entry['src'] ) ? $entry['src'] : '',
+						'deps'   => isset( $entry['deps'] ) && is_array( $entry['deps'] ) ? $entry['deps'] : array(),
+					);
+				}
+				// Merge anything enqueued after the snapshot (e.g. between
+				// the footer dequeue pass and this wp_footer capture) so
+				// late handles are not lost.
+				self::merge_post_snapshot_assets( $scripts, $styles, $wp_scripts, $wp_styles, $per_page_strategies, $per_page_priorities );
+			} else {
+				if ( $wp_scripts instanceof \WP_Scripts ) {
+					foreach ( self::capture_handles( $wp_scripts ) as $handle ) {
+						if ( isset( $wp_scripts->registered[ $handle ] ) ) {
+							$registered = $wp_scripts->registered[ $handle ];
+							$scripts[]  = array(
+								'handle'         => $handle,
+								'src'            => $registered->src ? $registered->src : '',
+								'deps'           => $registered->deps,
+								'delay_strategy' => $per_page_strategies[ $handle ] ?? null,
+								'delay_priority' => $per_page_priorities[ $handle ] ?? null,
+							);
+						}
+					}
+				}
+
+				if ( $wp_styles instanceof \WP_Styles ) {
+					foreach ( self::capture_handles( $wp_styles ) as $handle ) {
+						if ( isset( $wp_styles->registered[ $handle ] ) ) {
+							$registered = $wp_styles->registered[ $handle ];
+							$styles[]   = array(
+								'handle' => $handle,
+								'src'    => $registered->src ? $registered->src : '',
+								'deps'   => $registered->deps,
+							);
+						}
 					}
 				}
 			}
