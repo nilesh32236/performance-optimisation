@@ -613,65 +613,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$protected_scripts = class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ? Asset_Manager::get_protected_scripts() : array();
 			$protected_styles  = class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ? Asset_Manager::get_protected_styles() : array();
 
-			if ( ! $has_capture ) {
-				if ( $revert_all ) {
-					delete_post_meta( $post_id, '_wppo_disabled_scripts' );
-					delete_post_meta( $post_id, '_wppo_disabled_styles' );
-					delete_post_meta( $post_id, '_wppo_delay_strategies' );
-					delete_post_meta( $post_id, '_wppo_delay_priorities' );
-					self::clear_blocked_notice( (int) $post_id );
+			if ( is_array( $assets ) ) {
+				if ( ! empty( $assets['scripts'] ) && is_array( $assets['scripts'] ) ) {
+					$valid_scripts = array_column( $assets['scripts'], 'handle' );
 				}
-			} else {
-				if ( is_array( $assets ) ) {
-					if ( ! empty( $assets['scripts'] ) && is_array( $assets['scripts'] ) ) {
-						$valid_scripts = array_column( $assets['scripts'], 'handle' );
-					}
-					if ( ! empty( $assets['styles'] ) && is_array( $assets['styles'] ) ) {
-						$valid_styles = array_column( $assets['styles'], 'handle' );
+				if ( ! empty( $assets['styles'] ) && is_array( $assets['styles'] ) ) {
+					$valid_styles = array_column( $assets['styles'], 'handle' );
+				}
+			}
+
+			if ( $revert_all ) {
+				delete_post_meta( $post_id, '_wppo_disabled_scripts' );
+				delete_post_meta( $post_id, '_wppo_disabled_styles' );
+				delete_post_meta( $post_id, '_wppo_delay_strategies' );
+				delete_post_meta( $post_id, '_wppo_delay_priorities' );
+				self::clear_blocked_notice( (int) $post_id );
+			} elseif ( $has_capture ) {
+				// Process and whitelist disabled scripts and styles. Writes
+				// are per-post meta only, never site-wide. Protected handles
+				// are stripped here (in addition to the dequeue guard) and
+				// surfaced as a notice on the next metabox render.
+				$raw_scripts = $this->get_raw_post_array( 'wppo_disabled_scripts' );
+				$raw_styles  = $this->get_raw_post_array( 'wppo_disabled_styles' );
+
+				$disabled_scripts = $this->process_disabled_assets( $raw_scripts, $valid_scripts );
+				$disabled_styles  = $this->process_disabled_assets( $raw_styles, $valid_styles );
+
+				$blocked = array();
+				foreach ( $disabled_scripts as $handle ) {
+					if ( in_array( $handle, $protected_scripts, true ) ) {
+						$blocked[] = $handle;
 					}
 				}
-
-				if ( $revert_all ) {
-					delete_post_meta( $post_id, '_wppo_disabled_scripts' );
-					delete_post_meta( $post_id, '_wppo_disabled_styles' );
-					delete_post_meta( $post_id, '_wppo_delay_strategies' );
-					delete_post_meta( $post_id, '_wppo_delay_priorities' );
-					self::clear_blocked_notice( (int) $post_id );
-				} else {
-					// Process and whitelist disabled scripts and styles. Writes
-					// are per-post meta only, never site-wide. Protected handles
-					// are stripped here (in addition to the dequeue guard) and
-					// surfaced as a notice on the next metabox render.
-					$raw_scripts = $this->get_raw_post_array( 'wppo_disabled_scripts' );
-					$raw_styles  = $this->get_raw_post_array( 'wppo_disabled_styles' );
-
-					$disabled_scripts = $this->process_disabled_assets( $raw_scripts, $valid_scripts );
-					$disabled_styles  = $this->process_disabled_assets( $raw_styles, $valid_styles );
-
-					$blocked = array();
-					foreach ( $disabled_scripts as $handle ) {
-						if ( in_array( $handle, $protected_scripts, true ) ) {
-							$blocked[] = $handle;
-						}
+				foreach ( $disabled_styles as $handle ) {
+					if ( in_array( $handle, $protected_styles, true ) ) {
+						$blocked[] = $handle;
 					}
-					foreach ( $disabled_styles as $handle ) {
-						if ( in_array( $handle, $protected_styles, true ) ) {
-							$blocked[] = $handle;
-						}
-					}
-					if ( ! empty( $blocked ) ) {
-						$blocked          = array_values( array_unique( $blocked ) );
-						$disabled_scripts = array_values( array_diff( $disabled_scripts, $protected_scripts ) );
-						$disabled_styles  = array_values( array_diff( $disabled_styles, $protected_styles ) );
-						self::set_blocked_notice( (int) $post_id, $blocked );
-					}
-
-					update_post_meta( $post_id, '_wppo_disabled_scripts', $disabled_scripts );
-					update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
+				}
+				if ( ! empty( $blocked ) ) {
+					$blocked          = array_values( array_unique( $blocked ) );
+					$disabled_scripts = array_values( array_diff( $disabled_scripts, $protected_scripts ) );
+					$disabled_styles  = array_values( array_diff( $disabled_styles, $protected_styles ) );
+					self::set_blocked_notice( (int) $post_id, $blocked );
 				}
 
-				// Process per-page delay strategies (protected handles stripped:
-				// crafted POST input must not pin overrides onto core handles).
+				update_post_meta( $post_id, '_wppo_disabled_scripts', $disabled_scripts );
+				update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
+			}
+
+			// Process per-page delay strategies/priorities only when not
+			// reverting (a revert deletes them above and must not recreate them
+			// from the submitted selects) and only with a capture to whitelist
+			// against (MB10: no capture preserves existing meta).
+			// Protected handles stripped: crafted POST input must not pin
+			// overrides onto core handles.
+			if ( ! $revert_all && $has_capture ) {
 				$raw_strategies     = $this->get_raw_post_array( 'wppo_delay_strategies' );
 				$allowed_strategies = array( '', 'interaction', 'idle', 'viewport' );
 				$strategies         = $this->process_delay_setting( $raw_strategies, $valid_scripts, $allowed_strategies );

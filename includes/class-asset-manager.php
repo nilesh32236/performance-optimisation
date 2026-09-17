@@ -66,6 +66,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		);
 
 		/**
+		 * Per-request memoization cache for resolved asset sizes, keyed by src.
+		 *
+		 * Avoids repeating file_exists()+filesize() stat syscalls for the same
+		 * src when capture_page_assets() runs on the wp_footer hot path.
+		 *
+		 * @var   array<string,int|null>
+		 * @since NEXT
+		 */
+		private static array $size_cache = array();
+
+		/**
 		 * Constructor.
 		 *
 		 * Registers the hooks for asset dequeuing and capturing.
@@ -257,24 +268,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				if ( ! is_string( $src ) || '' === $src ) {
 					return null;
 				}
+				if ( isset( self::$size_cache[ $src ] ) ) {
+					return self::$size_cache[ $src ];
+				}
 				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_page_asset_size' ) ) {
 					$filtered = apply_filters( 'wppo_page_asset_size', null, $src );
 					if ( is_int( $filtered ) && $filtered >= 0 ) {
+						self::$size_cache[ $src ] = $filtered;
 						return $filtered;
 					}
-					if ( null !== $filtered ) {
-						return null;
-					}
+					// Any other non-null filter value (numeric string, false,
+					// etc.) is ignored so one misbehaving callback degrades
+					// to the local measurement below instead of blanking
+					// every size.
 				}
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_local_path' ) ) {
 					return null;
 				}
 				$local_path = Util::get_local_path( $src );
 				if ( '' === $local_path || ! file_exists( $local_path ) ) {
+					self::$size_cache[ $src ] = null;
 					return null;
 				}
 				$size = filesize( $local_path );
-				return ( false !== $size && $size >= 0 ) ? (int) $size : null;
+				if ( false === $size || $size < 0 ) {
+					self::$size_cache[ $src ] = null;
+					return null;
+				}
+				$resolved                 = (int) $size;
+				self::$size_cache[ $src ] = $resolved;
+				return $resolved;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return null;
@@ -300,7 +323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				if ( ! is_array( $assets ) ) {
 					return $suggestions;
 				}
-				$threshold = is_int( $threshold ) && $threshold >= 0 ? $threshold : 51200;
+				$threshold = is_numeric( $threshold ) && (int) $threshold >= 0 ? (int) $threshold : 51200;
 				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_asset_suggestion_threshold' ) ) {
 					$filtered_threshold = apply_filters( 'wppo_asset_suggestion_threshold', $threshold );
 					if ( is_numeric( $filtered_threshold ) && (int) $filtered_threshold >= 0 ) {
@@ -336,7 +359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				usort(
 					$suggestions,
 					static function ( $a, $b ) {
-						return $b['size'] - $a['size'];
+						return $b['size'] <=> $a['size'];
 					}
 				);
 			} catch ( \Throwable $e ) {
