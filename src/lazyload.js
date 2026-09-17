@@ -2503,6 +2503,16 @@ const loadImages = () => {
 					if ( document.hidden ) {
 						return;
 					}
+					// Idle-tick gate: once a full scan found nothing new, skip the
+					// repeated querySelectorAll DOM walk while there is no pending
+					// work (MutationObserver + rAF already cover new inserts).
+					if ( 0 === pendingLazyCount && emptyStreak > 0 ) {
+						ticks++;
+						if ( ticks >= MAX_TICKS ) {
+							clearSafetyScan();
+						}
+						return;
+					}
 					ticks++;
 					const elements = document.querySelectorAll(
 						getLazySelector()

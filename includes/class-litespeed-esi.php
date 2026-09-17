@@ -870,6 +870,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * @return array Allowed tags => attributes map, in wp_kses() shape.
 		 */
 		public static function get_allowed_fragment_html(): array {
+			// Note: 'style' is intentionally kept here while src/esi.js strips
+			// all style attributes client-side. The server allowlist serves
+			// direct fragment JSON consumers (which never hydrate via the ESI
+			// script); hydrated fragments get the stricter client contract.
+			// Inline styles cannot carry script in modern browsers, so this
+			// divergence is presentation-only, not script-XSS.
 			$global_attrs = array(
 				'class'  => true,
 				'id'     => true,

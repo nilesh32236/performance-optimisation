@@ -98,10 +98,12 @@ export const RUM_DEFAULT_SAMPLE_RATE = 100;
  * Sampling decision for one page view (lossy hint only, no PII).
  *
  * Keeps about `rate` percent of page views using a uniform
- * `Math.random()` roll. A rate of 100 (or any missing/invalid value)
- * always sends (fail-open to unsampled current behavior). An explicit
- * `randomValue` makes the decision deterministic for tests; otherwise
- * `Math.random()` is used. Never throws: any failure sends.
+ * `Math.random()` roll. A rate of 100 (or any missing/invalid value,
+ * including an explicit 0 which clamps fail-open to 100) always sends
+ * (fail-open to unsampled current behavior); there is intentionally no
+ * opt-out value client-side — disable sampling via the server-side rate
+ * instead. An explicit `randomValue` makes the decision deterministic for
+ * tests; otherwise `Math.random()` is used. Never throws: any failure sends.
  *
  * Boundary alignment: `roll * 100 <= rate` for a continuous roll in
  * [0, 1) is the float-domain equivalent of the server gate
@@ -276,7 +278,7 @@ export const sanitizeSlowResourceEntry = ( entry ) => {
 			! (
 				name.indexOf( 'http://' ) === 0 ||
 				name.indexOf( 'https://' ) === 0 ||
-				name.charAt( 0 ) === '/'
+				( name.charAt( 0 ) === '/' && name.charAt( 1 ) !== '/' )
 			)
 		) {
 			return null;
@@ -414,7 +416,8 @@ export const sanitizeRumValues = ( raw ) => {
 		raw.lcpUrl.length <= 2048 &&
 		( raw.lcpUrl.indexOf( 'http://' ) === 0 ||
 			raw.lcpUrl.indexOf( 'https://' ) === 0 ||
-			raw.lcpUrl.charAt( 0 ) === '/' )
+			( raw.lcpUrl.charAt( 0 ) === '/' &&
+				raw.lcpUrl.charAt( 1 ) !== '/' ) )
 	) {
 		clean.lcpUrl = raw.lcpUrl;
 	}
@@ -703,7 +706,8 @@ export const sanitizeRumValues = ( raw ) => {
 					lcpUrl.length <= 2048 &&
 					( lcpUrl.indexOf( 'http://' ) === 0 ||
 						lcpUrl.indexOf( 'https://' ) === 0 ||
-						lcpUrl.charAt( 0 ) === '/' )
+						( lcpUrl.charAt( 0 ) === '/' &&
+							lcpUrl.charAt( 1 ) !== '/' ) )
 				) {
 					values.lcpUrl = lcpUrl.slice( 0, 2048 );
 				} else {

@@ -70,7 +70,7 @@ const PluginSettings = lazy( () =>
 
 const TabFallback = () => (
 	<div className="wppo-loading-placeholder wppo-loading-placeholder--fallback">
-		<FontAwesomeIcon icon={ faSpinner } spin />
+		<FontAwesomeIcon icon={ faSpinner } spin aria-hidden="true" />
 		<span>{ __( 'Loading…', 'performance-optimisation' ) }</span>
 	</div>
 );
@@ -528,6 +528,9 @@ const App = () => {
 		// effect run plus AbortController teardown/recreation after each
 		// fetch and could abort the parallel CCSS request when serverRules
 		// resolves first.
+		// TODO (tech-debt, audit #1354): replace the hasFetched* ref gates with
+		// a query-key useCallback so the exhaustive-deps exception below is no
+		// longer needed; same minimal-deps pattern exists across components.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ activeTab, rulesRetryTrigger, ccssRefreshTrigger ] );
 
@@ -552,7 +555,10 @@ const App = () => {
 						) }
 					>
 						<div className="wppo-mobile-logo">
-							<FontAwesomeIcon icon={ faBolt } />
+							<FontAwesomeIcon
+								icon={ faBolt }
+								aria-hidden="true"
+							/>
 						</div>
 						<span className="wppo-mobile-brand__text">
 							{ __(
@@ -574,6 +580,7 @@ const App = () => {
 					>
 						<FontAwesomeIcon
 							icon={ mobileMenuOpen ? faTimes : faBars }
+							aria-hidden="true"
 						/>
 					</button>
 				</div>
@@ -600,7 +607,10 @@ const App = () => {
 				>
 					<div className="wppo-sidebar-header">
 						<div className="wppo-sidebar-logo">
-							<FontAwesomeIcon icon={ faBolt } />
+							<FontAwesomeIcon
+								icon={ faBolt }
+								aria-hidden="true"
+							/>
 						</div>
 						<h3>
 							{ __( 'Performance', 'performance-optimisation' ) }
@@ -639,6 +649,7 @@ const App = () => {
 										<FontAwesomeIcon
 											className="wppo-sidebar-icon"
 											icon={ item.icon }
+											aria-hidden="true"
 										/>
 										<span className="wppo-sidebar-label">
 											{ item.label }

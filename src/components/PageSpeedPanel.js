@@ -45,7 +45,8 @@ import { __, sprintf } from '@wordpress/i18n';
 const POLL_INTERVAL_MS = 5000;
 
 /**
- * Maximum number of poll attempts before giving up (~5 minutes).
+ * Maximum number of poll attempts before giving up (~12 minutes under
+ * backoff: 10 ticks at 5s, 10 at 10s, then 15s).
  */
 const MAX_POLL_ATTEMPTS = 60;
 
@@ -67,11 +68,14 @@ const MAX_POLL_DELAY_MS = 15000;
  * @param {number} attempts 1-based poll attempt count.
  * @return {number} Milliseconds to wait before the next tick.
  */
-const getPollDelay = ( attempts ) =>
-	Math.min(
-		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
-		MAX_POLL_DELAY_MS
-	);
+const getPollDelay = ( attempts ) => {
+	// Coerce to a finite 1-based count: Math.max( 1, NaN ) is NaN, so a
+	// non-numeric attempt count would yield a NaN delay and setTimeout would
+	// fire immediately, collapsing the backoff.
+	const n = Number( attempts );
+	const safe = Number.isFinite( n ) ? Math.max( 1, Math.ceil( n / 10 ) ) : 1;
+	return Math.min( POLL_INTERVAL_MS * safe, MAX_POLL_DELAY_MS );
+};
 
 /**
  * Score colour based on Lighthouse thresholds.
@@ -196,7 +200,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			const poll = async () => {
 				pollCountRef.current += 1;
 
-				if ( pollCountRef.current >= MAX_POLL_ATTEMPTS ) {
+				if ( pollCountRef.current > MAX_POLL_ATTEMPTS ) {
 					stopPolling();
 					if ( isMounted.current ) {
 						setPending( false );
@@ -213,21 +217,28 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 				}
 
 				let signal = null;
+				let tickController = null;
 				try {
 					// Polls are strictly sequential: the next tick is only
 					// scheduled after the previous await settles, so the
 					// previous controller (if any) is already settled and
 					// needs no abort here. A fresh controller per tick keeps
 					// stopPolling()/unmount able to cancel the in-flight poll.
-					pollSignalRef.current = new AbortController();
-					signal = pollSignalRef.current.signal;
+					tickController = new AbortController();
+					pollSignalRef.current = tickController;
+					signal = tickController.signal;
 					const response = await getPagespeedResults(
 						scanUrl,
 						scanStrategy,
 						signal
 					);
 					if ( signal.aborted ) {
-						pollSignalRef.current = null;
+						// Only clear when this tick still owns the ref: a stale
+						// tick settling late must not drop the handle needed to
+						// cancel the live request.
+						if ( pollSignalRef.current === tickController ) {
+							pollSignalRef.current = null;
+						}
 						return;
 					}
 
@@ -251,10 +262,13 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 					if ( response.data?.status === 'not_ready' ) {
 						if ( isMounted.current ) {
-							pollRef.current = setTimeout(
-								poll,
-								getPollDelay( pollCountRef.current )
-							);
+							// Pause in background tabs so hidden pages do not
+							// hammer the results endpoint for minutes; the next
+							// tick re-checks visibility before issuing a request.
+							const delay = document.hidden
+								? MAX_POLL_DELAY_MS
+								: getPollDelay( pollCountRef.current );
+							pollRef.current = setTimeout( poll, delay );
 						}
 						return;
 					}
@@ -274,7 +288,9 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					}
 				} catch ( err ) {
 					if ( err?.name === 'AbortError' ) {
-						pollSignalRef.current = null;
+						if ( pollSignalRef.current === tickController ) {
+							pollSignalRef.current = null;
+						}
 						return;
 					}
 					if ( signal && signal.aborted ) {

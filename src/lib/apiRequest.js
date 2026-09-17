@@ -127,6 +127,10 @@ let pendingRefresh = null;
  *
  * Deduplicates concurrent refreshes via a shared promise (thundering-herd
  * guard) so multiple simultaneous 403s share a single admin-ajax round-trip.
+ * Note: the AbortSignal only applies to the creator of the in-flight
+ * refresh — a second caller joining the shared promise cannot cancel it,
+ * and the creator aborting aborts the refresh for all joiners (who then
+ * observe the same rejection).
  *
  * @since 1.6.0
  * @since NEXT Accepts an optional AbortSignal so a refresh started before

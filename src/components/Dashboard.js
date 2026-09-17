@@ -31,18 +31,6 @@ import SwitchField from './common/SwitchField';
 import CheckboxOption from './common/CheckboxOption';
 import NoticeBanner from './common/NoticeBanner';
 import PerformanceAudit from './PerformanceAudit';
-// Below-fold panels are code-split so the initial admin bundle stays lean
-// (audit #1354). Above-fold cards (PerformanceAudit, WelcomePanel,
-// ImageOptimizationCard, RecentActivityCard) stay static.
-const PageSpeedPanel = lazy( () => import( './PageSpeedPanel' ) );
-const WebVitalsTrends = lazy( () => import( './WebVitalsTrends' ) );
-const WebVitalsRum = lazy( () => import( './WebVitalsRum' ) );
-const SuggestionsPanel = lazy( () => import( './SuggestionsPanel' ) );
-const SystemInfo = lazy( () => import( './SystemInfo' ) );
-const AutoloadedOptions = lazy( () => import( './AutoloadedOptions' ) );
-const LlmsPanel = lazy( () => import( './LlmsPanel' ) );
-const AiPanel = lazy( () => import( './AiPanel' ) );
-const EdgeCachePanel = lazy( () => import( './EdgeCachePanel' ) );
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
@@ -62,6 +50,19 @@ import {
 	faGlobe,
 	faUserCheck,
 } from '@fortawesome/free-solid-svg-icons';
+// Below-fold panels are code-split so the initial admin bundle stays lean
+// (audit #1354). Above-fold cards (PerformanceAudit, WelcomePanel,
+// ImageOptimizationCard, RecentActivityCard) stay static. Lazy consts sit
+// after all static imports (import/first).
+const PageSpeedPanel = lazy( () => import( './PageSpeedPanel' ) );
+const WebVitalsTrends = lazy( () => import( './WebVitalsTrends' ) );
+const WebVitalsRum = lazy( () => import( './WebVitalsRum' ) );
+const SuggestionsPanel = lazy( () => import( './SuggestionsPanel' ) );
+const SystemInfo = lazy( () => import( './SystemInfo' ) );
+const AutoloadedOptions = lazy( () => import( './AutoloadedOptions' ) );
+const LlmsPanel = lazy( () => import( './LlmsPanel' ) );
+const AiPanel = lazy( () => import( './AiPanel' ) );
+const EdgeCachePanel = lazy( () => import( './EdgeCachePanel' ) );
 
 /**
  * Shared fallback for each independently-streamed lazy panel below the fold.
@@ -74,6 +75,56 @@ const LazyPanelFallback = () => (
 		<span>{ __( 'Loading panels…', 'performance-optimisation' ) }</span>
 	</div>
 );
+
+/**
+ * Shared IntersectionObserver for all LazyPanelGate instances.
+ *
+ * One observer per gate (9 panels = 9 observers) fans out needlessly; a
+ * singleton multiplexes every gate element through a single observer with a
+ * per-element callback map.
+ *
+ * @since NEXT
+ * @type {IntersectionObserver|null}
+ */
+let sharedPanelObserver = null;
+
+/**
+ * Callbacks keyed by observed element for the shared panel observer.
+ *
+ * @since NEXT
+ * @type {Map<Element, Function>}
+ */
+const sharedPanelCallbacks = new Map();
+
+/**
+ * Return the shared panel observer, creating it on first use.
+ *
+ * @since NEXT
+ * @return {IntersectionObserver|null} Shared observer, or null when unsupported.
+ */
+const getSharedPanelObserver = () => {
+	if ( typeof IntersectionObserver === 'undefined' ) {
+		return null;
+	}
+	if ( ! sharedPanelObserver ) {
+		sharedPanelObserver = new IntersectionObserver(
+			( entries ) => {
+				for ( const entry of entries ) {
+					if ( entry.isIntersecting ) {
+						const cb = sharedPanelCallbacks.get( entry.target );
+						if ( cb ) {
+							sharedPanelCallbacks.delete( entry.target );
+							sharedPanelObserver.unobserve( entry.target );
+							cb();
+						}
+					}
+				}
+			},
+			{ rootMargin: '200px' }
+		);
+	}
+	return sharedPanelObserver;
+};
 
 /**
  * Observe an element once and report when it first enters the viewport.
@@ -94,21 +145,17 @@ const useInViewOnce = () => {
 			return;
 		}
 		const el = ref.current;
-		if ( ! el || typeof IntersectionObserver === 'undefined' ) {
+		const observer = getSharedPanelObserver();
+		if ( ! el || ! observer ) {
 			setInView( true );
 			return;
 		}
-		const observer = new IntersectionObserver(
-			( entries ) => {
-				if ( entries.some( ( entry ) => entry.isIntersecting ) ) {
-					setInView( true );
-					observer.disconnect();
-				}
-			},
-			{ rootMargin: '200px' }
-		);
+		sharedPanelCallbacks.set( el, () => setInView( true ) );
 		observer.observe( el );
-		return () => observer.disconnect();
+		return () => {
+			sharedPanelCallbacks.delete( el );
+			observer.unobserve( el );
+		};
 	}, [ inView ] );
 	return [ ref, inView ];
 };
@@ -148,7 +195,7 @@ const POLL_INTERVAL_MS = 5000;
 
 /**
  * Maximum number of image_job_status poll attempts before giving up
- * (~5 minutes at 5s), matching PageSpeedPanel's cap.
+ * (~12 minutes under backoff), matching PageSpeedPanel's cap.
  */
 const MAX_POLL_ATTEMPTS = 60;
 
@@ -170,11 +217,14 @@ const MAX_POLL_DELAY_MS = 15000;
  * @param {number} attempts 1-based poll attempt count.
  * @return {number} Milliseconds to wait before the next tick.
  */
-const getPollDelay = ( attempts ) =>
-	Math.min(
-		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
-		MAX_POLL_DELAY_MS
-	);
+const getPollDelay = ( attempts ) => {
+	// Coerce to a finite 1-based count: Math.max( 1, NaN ) is NaN, so a
+	// non-numeric attempt count would yield a NaN delay and setTimeout would
+	// fire immediately, collapsing the backoff.
+	const n = Number( attempts );
+	const safe = Number.isFinite( n ) ? Math.max( 1, Math.ceil( n / 10 ) ) : 1;
+	return Math.min( POLL_INTERVAL_MS * safe, MAX_POLL_DELAY_MS );
+};
 
 /**
  * Coerce a TTL override select value to a finite number, or undefined when
@@ -247,7 +297,9 @@ const parseVarnishPurgeUrls = ( raw ) => {
 /**
  * Normalize wppoSettings.image_info which stores arrays of file paths
  * into the {webp: count, avif: count} shape the component expects.
+ *
  * @param {Object} raw - Raw image info object.
+ * @return {{completed: Object, pending: Object, failed: Object}} Normalized counts.
  */
 const normalizeImageInfo = ( raw ) => {
 	// Later arithmetic assumes numbers: numeric strings ('5') or objects
@@ -257,10 +309,16 @@ const normalizeImageInfo = ( raw ) => {
 		const n = Number( v );
 		return Number.isFinite( n ) ? n : 0;
 	};
+	const isNumericScalar = ( bucket ) =>
+		typeof bucket === 'number' ||
+		( typeof bucket === 'string' &&
+			'' !== bucket.trim() &&
+			Number.isFinite( Number( bucket ) ) );
 	const normalize = ( bucket ) => {
-		// A numeric bucket (e.g. completed: 5) is a valid total count, not a
-		// {webp, avif} shape — count it as webp instead of discarding it.
-		if ( typeof bucket === 'number' ) {
+		// A numeric scalar bucket (e.g. completed: 5 or '5') is a valid
+		// total count, not a {webp, avif} shape — count it as webp instead
+		// of discarding it via the .webp lookups below.
+		if ( isNumericScalar( bucket ) ) {
 			return { webp: toCount( bucket ), avif: 0 };
 		}
 		return {
@@ -476,6 +534,15 @@ const Dashboard = ( {
 	const [ imgSavings, setImgSavings ] = useState( null );
 	const pollingRef = useRef( null );
 	const pollAbortRef = useRef( null );
+	// Tracks mount so a poll tick resolving after unmount never schedules a
+	// new tick (setState on an unmounted component).
+	const mountedRef = useRef( true );
+	useEffect( () => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+		};
+	}, [] );
 	const pollRetryRef = useRef( 0 );
 	const pollAttemptsRef = useRef( 0 );
 	const submittingRef = useRef( false );
@@ -568,7 +635,7 @@ const Dashboard = ( {
 	const pollJobStatus = useCallback( async () => {
 		const currentTimeout = pollingRef.current;
 		pollAttemptsRef.current += 1;
-		if ( pollAttemptsRef.current >= MAX_POLL_ATTEMPTS ) {
+		if ( pollAttemptsRef.current > MAX_POLL_ATTEMPTS ) {
 			setBgProcessing( false );
 			pollingRef.current = null;
 			notify( {
@@ -602,7 +669,7 @@ const Dashboard = ( {
 			pollRetryRef.current = 0;
 			if ( ! response.success || ! response.data ) {
 				// Malformed payload: treat as a retryable failure with backoff
-				// instead of silently rescheduling until the 5-minute timeout.
+				// instead of silently rescheduling until MAX_POLL_ATTEMPTS.
 				throw new Error( response.message || 'Status check failed' );
 			}
 			// Coerce: the endpoint may omit queued_jobs or encode it as a
@@ -664,7 +731,14 @@ const Dashboard = ( {
 				durationMs: 5000,
 			} );
 		}
-		if ( pollingRef.current === currentTimeout ) {
+		// Re-check mount/abort/identity before rescheduling: unmount may land
+		// after the await resolves but before this setTimeout runs, and the
+		// cleanup nulls pollingRef so a post-unmount tick is never scheduled.
+		if (
+			mountedRef.current &&
+			! signal.aborted &&
+			pollingRef.current === currentTimeout
+		) {
 			pollingRef.current = setTimeout(
 				pollJobStatus,
 				getPollDelay( pollAttemptsRef.current )
@@ -676,9 +750,11 @@ const Dashboard = ( {
 		return () => {
 			if ( pollingRef.current ) {
 				clearTimeout( pollingRef.current );
+				pollingRef.current = null;
 			}
 			if ( pollAbortRef.current ) {
 				pollAbortRef.current.abort();
+				pollAbortRef.current = null;
 			}
 		};
 	}, [] );

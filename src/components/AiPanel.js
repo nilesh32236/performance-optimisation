@@ -7,7 +7,7 @@ import {
 	getErrorLogMessage,
 	patchSettingsCache,
 } from '../lib/apiRequest';
-import { suggestionKey, formatValue } from './SuggestionsPanel';
+import { suggestionKey, formatValue } from '../lib/suggestions';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';

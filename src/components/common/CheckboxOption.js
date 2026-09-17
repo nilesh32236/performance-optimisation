@@ -2,7 +2,8 @@ import { useId } from '@wordpress/element';
 
 /**
  * A reusable checkbox option component with optional description and nested settings.
- *  * Improved for Premium Indigo Design System.
+ *
+ * Improved for Premium Indigo Design System.
  *
  * Prefer `children` for nested fields (textarea, inputs, hints). The legacy
  * `textarea*` props are kept for backward compatibility with existing callers

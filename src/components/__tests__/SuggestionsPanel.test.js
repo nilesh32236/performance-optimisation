@@ -280,7 +280,7 @@ describe( 'suggestionKey', () => {
 				fix_action: 'enable_server_rules',
 				description: 'Enable Gzip',
 			} )
-		).toBe( 'enable_gzip::poor::enable_server_rules::Enable Gzip' );
+		).toBe( 'enable_gzip::poor::enable_server_rules' );
 	} );
 
 	it( 'guards nullish input instead of throwing', () => {
@@ -289,7 +289,7 @@ describe( 'suggestionKey', () => {
 		expect( suggestionKey( null, 'issue-0' ) ).toBe( 'empty::issue-0' );
 	} );
 
-	it( 'disambiguates duplicates sharing all four fields', () => {
+	it( 'disambiguates duplicates sharing all three fields', () => {
 		const dup = {
 			metric: 'use_cache',
 			status: 'poor',

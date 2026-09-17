@@ -224,14 +224,25 @@ export const sanitizeEsiFragment = ( html ) => {
 		'script, iframe, frame, frameset, object, embed, applet, bgsound, keygen, basefont, link, meta, base, style'
 	).forEach( ( node ) => node.remove() );
 
-	const all = frag.querySelectorAll( '*' );
-	if ( all.length > MAX_ESI_NODES ) {
-		console.warn(
-			'WPPO ESI fragment exceeds sane node count; dropping fragment',
-			all.length
-		);
-		return document.createDocumentFragment();
+	// Early-exit node count via TreeWalker before materializing the full
+	// NodeList: a sub-1MB but >500-node fragment would otherwise pay the full
+	// querySelectorAll walk before being discarded.
+	let nodeCount = 0;
+	const walker = document.createTreeWalker(
+		frag,
+		window.NodeFilter ? window.NodeFilter.SHOW_ELEMENT : 1
+	);
+	while ( walker.nextNode() ) {
+		nodeCount++;
+		if ( nodeCount > MAX_ESI_NODES ) {
+			console.warn(
+				'WPPO ESI fragment exceeds sane node count; dropping fragment',
+				nodeCount
+			);
+			return document.createDocumentFragment();
+		}
 	}
+	const all = frag.querySelectorAll( '*' );
 
 	all.forEach( ( node ) => {
 		// Strip inline styles outright — simplest and safest since wp_kses
