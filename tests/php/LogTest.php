@@ -244,6 +244,46 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 10, $data['per_page'] );
 		$this->assertSame( 1, $data['current_page'] );
 	}
+
+	/**
+	 * The version memo reads the option once per request (audit #1325).
+	 */
+	public function test_cache_version_memoized_per_request(): void {
+		$GLOBALS['wpdb'] = new WPPO_Log_DB_Mock();
+		Log::reset_version_memo();
+
+		Functions\when( 'function_exists' )->alias(
+			static function ( $name ) {
+				return 'wp_cache_get_salted' !== $name;
+			}
+		);
+		$reads = 0;
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $fallback = false ) use ( &$reads ) {
+				if ( 'wppo_activity_cache_version' === $option ) {
+					++$reads;
+					return 7;
+				}
+				return $fallback;
+			}
+		);
+
+		Log::get_recent_activities(
+			array(
+				'page'     => 1,
+				'per_page' => 10,
+			)
+		);
+		Log::get_recent_activities(
+			array(
+				'page'     => 2,
+				'per_page' => 10,
+			)
+		);
+
+		$this->assertSame( 1, $reads );
+		Log::reset_version_memo();
+	}
 }
 
 // phpcs:disable Generic.Files.OneObjectStructurePerFile

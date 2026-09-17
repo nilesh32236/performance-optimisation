@@ -35,6 +35,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		private const SALT_KEY = 'wppo_activity_log_salt';
 
 		/**
+		 * Per-request memo of the activity cache version (audit #1325):
+		 * avoids one option lookup per paginated recent_activities call.
+		 * Blog-keyed so switch_to_blog() in multisite never serves another
+		 * site's version. Null until first read; tests may reset via
+		 * reset_version_memo().
+		 *
+		 * @since NEXT
+		 * @var array<int, int>
+		 */
+		private static $version_memo = array();
+
+		/**
+		 * Reset the version memo (tests only).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_version_memo(): void {
+			self::$version_memo = array();
+		}
+
+		/**
+		 * Get the activity cache version, memoized per request per site.
+		 *
+		 * @since NEXT
+		 * @return int
+		 */
+		private static function get_cache_version(): int {
+			$bid = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( ! isset( self::$version_memo[ $bid ] ) ) {
+				self::$version_memo[ $bid ] = (int) get_option( 'wppo_activity_cache_version', 0 );
+			}
+			return self::$version_memo[ $bid ];
+		}
+
+		/**
 		 * Private constructor to prevent direct instantiation.
 		 *
 		 * @since 2.0.0
@@ -117,7 +153,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					// second always produce distinct salts (issue #882 review).
 					update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
 				} else {
-					update_option( 'wppo_activity_cache_version', (int) get_option( 'wppo_activity_cache_version', 0 ) + 1, false );
+					$new_version = (int) get_option( 'wppo_activity_cache_version', 0 ) + 1;
+					update_option( 'wppo_activity_cache_version', $new_version, false );
+					// Keep the per-request memo coherent with the bump so a
+					// list-after-add in the same request cannot serve stale
+					// cache (audit #1325). Blog-keyed like the reader.
+					$memo_bid                        = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+					self::$version_memo[ $memo_bid ] = $new_version;
 				}
 			}
 		}
@@ -153,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				// no-op (issue #882).
 				$data = wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::SALT_KEY ) );
 			} else {
-				$cache_key = 'wppo_activity_logs_v' . (int) get_option( 'wppo_activity_cache_version', 0 ) . '_page_' . $page . '_per_page_' . $per_page;
+				$cache_key = 'wppo_activity_logs_v' . self::get_cache_version() . '_page_' . $page . '_per_page_' . $per_page;
 				$data      = wp_cache_get( $cache_key, 'wppo_activity_logs' );
 			}
 

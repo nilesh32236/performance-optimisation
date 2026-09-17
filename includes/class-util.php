@@ -270,7 +270,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// with identical values means "unchanged" (success), false
 				// with differing values means the write failed.
 				$before  = self::get_settings();
-				$updated = update_option( 'wppo_settings', $restored );
+				$updated = self::save_settings( $restored );
 				self::set_settings_cache( $restored );
 				if ( ! $updated && $before !== $restored ) {
 					// Write failed: roll the memo back so it keeps
@@ -1878,6 +1878,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			self::$settings_cache[ $bid ]        = $settings;
 			self::$settings_cache_loaded[ $bid ] = true;
 			self::ensure_settings_cache_hook();
+		}
+
+		/**
+		 * Persist wppo_settings with autoload disabled (audit #1325).
+		 *
+		 * Single owner for settings writes: the multi-tab array must never
+		 * sit in alloptions. Refreshes the per-request memo on success so
+		 * same-request reads observe the write.
+		 *
+		 * @since NEXT
+		 * @param array $settings Settings array to store.
+		 * @return bool True on success (mirrors update_option()).
+		 */
+		public static function save_settings( array $settings ): bool {
+			try {
+				$updated = update_option( 'wppo_settings', $settings, false );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( $updated ) {
+				try {
+					self::set_settings_cache( $settings );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return (bool) $updated;
 		}
 
 		/**

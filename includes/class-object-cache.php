@@ -1252,13 +1252,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return false;
 				}
 				$settings['object_cache']['outage_bypassed'] = true;
-				// Refresh the memo only on a real write: update_option()
-				// returns false both on failure and on identical values, and
-				// the value differs here, so false means the write failed and
-				// the memo must keep describing the stored state.
-				if ( update_option( 'wppo_settings', $settings ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
-					Util::set_settings_cache( $settings );
-				}
+				// Single owner (Util::save_settings) writes with autoload=false
+				// and refreshes the memo on a real write (audit #1325).
+				Util::save_settings( $settings );
 				// Recovery probe so an armed flag heals without waiting for
 				// the next admin/REST status call (mirrors the circuit
 				// probe scheduling in auto_disable_circuit()).
@@ -1320,9 +1316,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return;
 				}
 				$settings['object_cache']['outage_bypassed'] = false;
-				if ( update_option( 'wppo_settings', $settings ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
-					Util::set_settings_cache( $settings );
-				}
+				// Audit #1325: single owner writes autoload=false + memo.
+				Util::save_settings( $settings );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

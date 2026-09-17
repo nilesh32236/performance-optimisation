@@ -3118,20 +3118,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$run_use_unique = Util::supports_action_scheduler_unique();
 			if ( ! $run_use_unique && function_exists( 'as_get_scheduled_actions' ) ) {
 				try {
+					// Audit #1325: the legacy pagination ran up to 20 pages
+					// on every cron tick. Capped at 5 pages (5000 rows).
+					// Deliberately no transient memo here: a stale snapshot
+					// would miss recently-enqueued posts and re-enqueue
+					// duplicates while $lookup_ok suppresses the per-row
+					// fallback check (review feedback on #1326).
 					$as_offset   = 0;
 					$as_per_page = 1000;
+					// Capped at 5 pages (5000 rows): beyond that the dedup
+					// map is already large enough and the unique-insert path
+					// handles the rest on AS 4.x.
 					// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
-					for ( $page = 0; $page < 20; $page++ ) {
-						$batch_actions = as_get_scheduled_actions(
-							array(
-								'hook'     => 'wppo_used_css_generate',
-								'group'    => 'performance_optimisation',
-								'status'   => 'pending',
-								'per_page' => $as_per_page,
-								'offset'   => $as_offset,
-							),
-							'ARRAY_A'
-						);
+					for ( $page = 0; $page < 5; $page++ ) {
+							$batch_actions = as_get_scheduled_actions(
+								array(
+									'hook'     => 'wppo_used_css_generate',
+									'group'    => 'performance_optimisation',
+									'status'   => 'pending',
+									'per_page' => $as_per_page,
+									'offset'   => $as_offset,
+								),
+								'ARRAY_A'
+							);
 						if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
 							break;
 						}
@@ -3152,7 +3161,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						if ( count( $batch_actions ) < $as_per_page ) {
 							break;
 						}
-						$as_offset += $as_per_page;
+							$as_offset += $as_per_page;
 					}
 					$lookup_ok = true;
 				} catch ( \Throwable ) {

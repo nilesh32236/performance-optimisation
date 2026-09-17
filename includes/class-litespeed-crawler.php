@@ -686,7 +686,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			if ( ! function_exists( 'curl_multi_init' ) || $disable_curl ) {
 				$success = 0;
 				$failed  = 0;
+				// Audit #1325: bound the sequential fallback like the
+				// curl_multi path (15s wall clock). Un-attempted remainders
+				// count as failed WITHOUT blacklist penalty (never fetched).
+				$fallback_deadline = microtime( true ) + 15;
+				$remaining         = count( $requests );
 				foreach ( $requests as $req ) {
+					if ( microtime( true ) >= $fallback_deadline ) {
+						$failed += $remaining;
+						break;
+					}
+					--$remaining;
 					$resp = wp_remote_get(
 						$req['url'],
 						array(

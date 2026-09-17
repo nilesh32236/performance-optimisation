@@ -158,11 +158,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			}
 
 			if ( 'review_done' === $key ) {
-				update_option( 'wppo_review_dismissed', 1 );
+				// Audit #1325: one-shot UI marker must not autoload.
+				update_option( 'wppo_review_dismissed', 1, false );
 			}
 
 			if ( 'review_snooze' === $key ) {
-				update_option( 'wppo_review_snoozed_until', time() + ( 30 * DAY_IN_SECONDS ) );
+				update_option( 'wppo_review_snoozed_until', time() + ( 30 * DAY_IN_SECONDS ), false );
 			}
 
 			if ( 'litespeed' === $key ) {
@@ -708,7 +709,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$activation_time = get_option( 'wppo_activation_time' );
 			if ( false === $activation_time ) {
-				update_option( 'wppo_activation_time', time() );
+				update_option( 'wppo_activation_time', time(), false );
 				return;
 			}
 

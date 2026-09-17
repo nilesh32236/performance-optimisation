@@ -1318,7 +1318,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$options = $merged_options;
 
-			update_option( 'wppo_settings', $options );
+			// Audit #1325: never autoload the multi-tab settings array.
+			update_option( 'wppo_settings', $options, false );
 
 			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				Telemetry::invalidate_audit_cache();
@@ -1831,7 +1832,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				unset( $snapshot_error );
 			}
 
-			if ( ! update_option( 'wppo_settings', $merged_settings ) ) {
+			if ( ! update_option( 'wppo_settings', $merged_settings, false ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
