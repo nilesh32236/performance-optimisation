@@ -601,6 +601,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_post_meta_by_key( '_wppo_preload_image_url' );
 		delete_post_meta_by_key( '_wppo_disabled_scripts' );
 		delete_post_meta_by_key( '_wppo_disabled_styles' );
+		delete_post_meta_by_key( '_wppo_delay_presets_off' );
 
 		// Per-strategy LCP image URL post meta (`_wppo_lcp_image_url_{strategy}`,
 		// written by Pagespeed::store_lcp_image_url(), read by the LCP
