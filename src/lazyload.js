@@ -2,6 +2,34 @@
  * Cached promise for the in-progress or completed deferred script load.
  * @type {Promise<void>|null}
  */
+
+/**
+ * Extract a safe log message without leaking response bodies.
+ *
+ * Dependency-free mirror of the SPA's getErrorLogMessage(): console output
+ * persists in devtools, so only the message is logged, never full objects.
+ *
+ * @since NEXT
+ * @param {*} err Caught error value.
+ * @return {string} Safe message string.
+ */
+const getLogMessage = ( err ) => {
+	if ( err instanceof Error ) {
+		return err.message || 'Unknown error';
+	}
+	if ( typeof err === 'string' ) {
+		return err.slice( 0, 500 ) || 'Unknown error';
+	}
+	if ( err === null || typeof err === 'undefined' ) {
+		return 'Unknown error';
+	}
+	try {
+		return String( err ).slice( 0, 500 );
+	} catch {
+		return 'Unknown error';
+	}
+};
+
 let scriptLoadPromise = null;
 
 /**
@@ -27,7 +55,7 @@ const readModuleData = () => {
 	} catch ( _err ) {
 		console.warn(
 			'WPPO: invalid lazyload module data',
-			_err?.message ?? String( _err )
+			getLogMessage( _err )
 		);
 	}
 	return {};
@@ -981,10 +1009,7 @@ async function loadScriptsByPriority( scripts ) {
 			try {
 				await loadWithTimeout( script );
 			} catch ( err ) {
-				console.error(
-					'Error loading script:',
-					err?.message ?? String( err )
-				);
+				console.error( 'Error loading script:', getLogMessage( err ) );
 			} finally {
 				// Dedup rides on the live-replacement stamp inside
 				// loadScript(); this placeholder mark only covers
@@ -1001,7 +1026,7 @@ async function loadScriptsByPriority( scripts ) {
 				if ( r.status === 'rejected' ) {
 					console.error(
 						'Error loading script:',
-						r.reason?.message ?? String( r.reason )
+						getLogMessage( r.reason )
 					);
 				}
 				if ( concurrent[ i ].isConnected ) {
@@ -1057,10 +1082,7 @@ async function loadScripts() {
 		try {
 			await loadScriptsByPriority( inlineScripts );
 		} catch ( err ) {
-			console.error(
-				'Error loading script:',
-				err?.message ?? String( err )
-			);
+			console.error( 'Error loading script:', getLogMessage( err ) );
 		}
 
 		if ( document.readyState === 'loading' ) {
@@ -1104,10 +1126,7 @@ const loadIdleScripts = async () => {
 		try {
 			await loadScriptsByPriority( idleScripts );
 		} catch ( err ) {
-			console.error(
-				'Error loading idle script:',
-				err?.message ?? String( err )
-			);
+			console.error( 'Error loading idle script:', getLogMessage( err ) );
 		}
 	}
 };
@@ -1128,7 +1147,12 @@ const observeViewportScripts = () => {
 	}
 
 	if ( ! ( 'IntersectionObserver' in window ) ) {
-		loadScriptsByPriority( viewportScripts );
+		loadScriptsByPriority( viewportScripts ).catch( ( err ) =>
+			console.error(
+				'Error loading viewport scripts:',
+				getLogMessage( err )
+			)
+		);
 		return;
 	}
 
@@ -1150,7 +1174,7 @@ const observeViewportScripts = () => {
 					.catch( ( err ) =>
 						console.error(
 							'Error loading viewport scripts:',
-							err?.message ?? String( err )
+							getLogMessage( err )
 						)
 					)
 					.finally( () => {
@@ -2480,13 +2504,12 @@ const loadImages = () => {
 				window.wppoSafetyScanId = safetyScanId;
 			};
 
-			// Guard against re-entry: a re-executed module must not create a
-			// second MutationObserver on document.body.
-			if ( mutationObserver ) {
-				return;
-			}
-
-			mutationObserver = new MutationObserver( ( mutations ) => {
+			// Coalesced mutation state: burst inserts accumulate here and are
+			// processed once per frame by processMutationBatch() below.
+			// @since NEXT
+			let pendingMutationBatch = [];
+			let mutationFlushScheduled = false;
+			const processMutationBatch = ( mutations ) => {
 				const selector = getLazySelector();
 				mutations.forEach( ( mutation ) => {
 					releaseRemovedLazyNodes( mutation.removedNodes );
@@ -2529,6 +2552,39 @@ const loadImages = () => {
 						}
 					} );
 				} );
+			};
+
+			// Guard against re-entry: a re-executed module must not create a
+			// second MutationObserver on document.body.
+			if ( mutationObserver ) {
+				return;
+			}
+
+			mutationObserver = new MutationObserver( ( mutations ) => {
+				// Coalesce burst DOM inserts: collect the batch and flush once
+				// per frame so N rapid inserts cost one pass, not N subtree
+				// scans on the main thread.
+				pendingMutationBatch.push( ...mutations );
+				if ( mutationFlushScheduled ) {
+					return;
+				}
+				mutationFlushScheduled = true;
+				const flushMutations = () => {
+					mutationFlushScheduled = false;
+					const batch = pendingMutationBatch;
+					pendingMutationBatch = [];
+					processMutationBatch( batch );
+				};
+				if (
+					'typeof window' !== 'undefined' &&
+					'function' === typeof window.requestAnimationFrame
+				) {
+					window.requestAnimationFrame( flushMutations );
+				} else if ( 'function' === typeof setTimeout ) {
+					setTimeout( flushMutations, 0 );
+				} else {
+					flushMutations();
+				}
 			} );
 
 			mutationObserver.observe( document.body, {

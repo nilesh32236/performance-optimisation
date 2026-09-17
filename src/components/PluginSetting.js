@@ -176,6 +176,10 @@ const redactSecrets = ( value ) => {
  * Rejects excessive depth, oversized strings and non-plain values.
  * Server-side allowlist + PHP sanitization remains authoritative.
  *
+ * Arrays may contain plain objects (real exports carry
+ * file_optimisation.cdnMapping as an array of { key, value } rows), so
+ * items recurse with the same depth guard instead of being rejected.
+ *
  * @since 2.0.0
  * @param {*}      value Value to check.
  * @param {number} depth Current depth.
@@ -199,12 +203,7 @@ const isValidImportValue = ( value, depth ) => {
 		if ( value.length > MAX_IMPORT_NESTED_KEYS ) {
 			return false;
 		}
-		return value.every( ( item ) => {
-			if ( item !== null && typeof item === 'object' ) {
-				return false;
-			}
-			return isValidImportValue( item, depth + 1 );
-		} );
+		return value.every( ( item ) => isValidImportValue( item, depth + 1 ) );
 	}
 	if ( type === 'object' ) {
 		const proto = Object.getPrototypeOf( value );

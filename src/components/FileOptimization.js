@@ -287,6 +287,11 @@ export const stripPreviewParams = ( url ) => {
 // @since NEXT
 export const withCdnRowIds = ( mapping ) => {
 	const list = Array.isArray( mapping ) ? mapping : [];
+	const used = new Set(
+		list.map( ( entry ) =>
+			entry && typeof entry === 'object' ? entry.id : undefined
+		)
+	);
 	return list.map( ( entry, index ) => {
 		const base =
 			entry && typeof entry === 'object' && ! Array.isArray( entry )
@@ -298,7 +303,14 @@ export const withCdnRowIds = ( mapping ) => {
 		) {
 			return { ...base };
 		}
-		return { ...base, id: `cdn-row-${ index }` };
+		let candidate = `cdn-row-${ index }`;
+		let suffix = 0;
+		while ( used.has( candidate ) ) {
+			suffix += 1;
+			candidate = `cdn-row-${ index }-${ suffix }`;
+		}
+		used.add( candidate );
+		return { ...base, id: candidate };
 	} );
 };
 // Strip client-only CDN row ids before submit/baseline/dirty-compare so the
@@ -334,15 +346,23 @@ export const stripCdnIds = stripCdnRowIds;
 // Numeric clamps mirroring the server-side sanitizers so a raw server value
 // can never reach state/submit verbatim (display/UX parity — the server
 // stays authoritative).
+// Booleans/arrays fail open (true must not coerce to 1 via Number()), and
+// hex/octal/binary literals fail open to match PHP is_numeric() parity
+// (see normalizeRetries).
 // @since NEXT
 export const normalizeIdleTimeout = ( value ) => {
+	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
+		return 3000;
+	}
+	const s = String( value ?? '' ).trim();
+	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
+		return 3000;
+	}
 	let n;
 	if ( typeof value === 'number' ) {
 		n = value;
-	} else if ( '' === String( value ?? '' ).trim() ) {
-		n = NaN;
 	} else {
-		n = Number( value );
+		n = Number( s );
 	}
 	if ( ! Number.isFinite( n ) || n <= 0 ) {
 		return 3000;
@@ -351,7 +371,14 @@ export const normalizeIdleTimeout = ( value ) => {
 };
 // @since NEXT
 export const normalizeCcssMaxSize = ( value ) => {
-	const n = typeof value === 'number' ? value : Number( value );
+	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
+		return 20480;
+	}
+	const s = String( value ?? '' ).trim();
+	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
+		return 20480;
+	}
+	const n = typeof value === 'number' ? value : Number( s );
 	if ( ! Number.isFinite( n ) || n <= 0 ) {
 		return 20480;
 	}
@@ -359,7 +386,14 @@ export const normalizeCcssMaxSize = ( value ) => {
 };
 // @since NEXT
 export const normalizeRegressionThreshold = ( value ) => {
-	const n = typeof value === 'number' ? value : Number( value );
+	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
+		return 20;
+	}
+	const s = String( value ?? '' ).trim();
+	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
+		return 20;
+	}
+	const n = typeof value === 'number' ? value : Number( s );
 	if ( ! Number.isFinite( n ) ) {
 		return 20;
 	}
@@ -378,10 +412,20 @@ const normalizeFileOpt = ( source = {} ) => {
 			next[ key ] = toTextLines( next[ key ] );
 		}
 	}
-	next.usedCSSDeliveryMode = normalizeDeliveryMode(
-		next.usedCSSDeliveryMode
-	);
-	next.ccssMaxRetries = normalizeRetries( next.ccssMaxRetries );
+	// Partial slices (e.g. the sandbox promote payload, which only carries
+	// staged script keys) must not reset unrelated production fields: every
+	// default below is guarded by `in` so absent keys stay absent and the
+	// promote merge (`{ ...prev, ...synced }`) preserves custom
+	// exclusions/CDN/mode. Full payloads (init/baseline/sync) always carry
+	// these keys, so their defaults still apply there.
+	if ( 'usedCSSDeliveryMode' in next ) {
+		next.usedCSSDeliveryMode = normalizeDeliveryMode(
+			next.usedCSSDeliveryMode
+		);
+	}
+	if ( 'ccssMaxRetries' in next ) {
+		next.ccssMaxRetries = normalizeRetries( next.ccssMaxRetries );
+	}
 	// Numeric display parity: the sync path spreads raw server values, so
 	// clamp here (mirroring the server sanitizers) instead of letting
 	// out-of-range values reach state/submit verbatim. The server stays
@@ -402,20 +446,27 @@ const normalizeFileOpt = ( source = {} ) => {
 	// An empty or whitespace-only exclusions string normalizes to the
 	// builder defaults (mirroring PHP, where empty keeps defaults) so the
 	// UI never shows "no exclusions" while the server enforces the builder
-	// defaults (issue #1274 review).
-	if (
-		'string' !== typeof next.ccssExcludedPostTypes ||
-		'' === next.ccssExcludedPostTypes.trim()
-	) {
-		next.ccssExcludedPostTypes = CCSS_EXCLUDED_DEFAULT;
+	// defaults (issue #1274 review). Guarded by `in` so partial slices
+	// (sandbox promote) never inject the default over production values.
+	if ( 'ccssExcludedPostTypes' in next ) {
+		if (
+			'string' !== typeof next.ccssExcludedPostTypes ||
+			'' === next.ccssExcludedPostTypes.trim()
+		) {
+			next.ccssExcludedPostTypes = CCSS_EXCLUDED_DEFAULT;
+		}
 	}
 	// Fail-open for corrupted cache: a non-array truthy cdnMapping (e.g. a
 	// string) would crash every `.map` render site, so reset to [] here —
-	// the single choke point — instead of guarding each call site.
-	if ( ! Array.isArray( next.cdnMapping ) ) {
+	// the single choke point — instead of guarding each call site. Guarded
+	// by `in` so partial slices never wipe a production mapping.
+	if ( 'cdnMapping' in next && ! Array.isArray( next.cdnMapping ) ) {
 		next.cdnMapping = [];
 	}
-	if ( typeof next.fontSubsetSubsets !== 'string' ) {
+	if (
+		'fontSubsetSubsets' in next &&
+		typeof next.fontSubsetSubsets !== 'string'
+	) {
 		next.fontSubsetSubsets = 'latin';
 	}
 	// The textarea loop above joins arrays but maps a missing key to '':
@@ -834,7 +885,8 @@ const FileOptimization = ( {
 				}
 				if (
 					status.data.staged &&
-					typeof status.data.staged === 'object'
+					typeof status.data.staged === 'object' &&
+					Object.keys( status.data.staged ).length > 0
 				) {
 					setSandboxStaged( status.data.staged );
 				}
@@ -918,11 +970,17 @@ const FileOptimization = ( {
 					// arrays never reach controlled textareas verbatim
 					// (which would render "a,b" while the baseline stays
 					// equal and the bad display persists as clean).
+					// normalizeFileOpt() only defaults keys present in the
+					// slice, so unmentioned production fields survive the
+					// merge below instead of resetting to builder defaults.
 					const synced = normalizeFileOpt( { ...promotedSlice } );
 					// Re-attach deterministic row ids so synced server rows
 					// keep React keys instead of remounting; the baseline
-					// stays id-less to match the server payload.
-					synced.cdnMapping = withCdnRowIds( synced.cdnMapping );
+					// stays id-less to match the server payload. Guarded so
+					// a partial slice without a mapping never injects [].
+					if ( 'cdnMapping' in synced ) {
+						synced.cdnMapping = withCdnRowIds( synced.cdnMapping );
+					}
 					setSettings( ( prev ) => ( { ...prev, ...synced } ) );
 					setBaseline( ( prev ) => ( {
 						...prev,
@@ -1171,6 +1229,9 @@ const FileOptimization = ( {
 		effectiveMode === 'litespeed'
 			? 'wppo-status-badge--warning'
 			: 'wppo-status-badge--good';
+	// Shared 'none' drop-in fallback label (single source so a future
+	// textdomain/key change needs one edit, not two).
+	const noneLabel = __( 'none', 'performance-optimisation' );
 
 	const handleSaveLiteSpeedMode = async () => {
 		setSavingLiteSpeed( true );
@@ -3821,10 +3882,7 @@ const FileOptimization = ( {
 													?.advanced_cache ||
 													serverRules.litespeed.dropin
 														?.advanced_cache ||
-													__(
-														'none',
-														'performance-optimisation'
-													) }{ ' ' }
+													noneLabel }{ ' ' }
 												—{ ' ' }
 												{ __(
 													'Object cache:',
@@ -3834,10 +3892,7 @@ const FileOptimization = ( {
 													?.object_cache ||
 													serverRules.litespeed.dropin
 														?.object_cache ||
-													__(
-														'none',
-														'performance-optimisation'
-													) }
+													noneLabel }
 											</p>
 											{ ( litespeedInfo?.dropin
 												?.object_cache === 'foreign' ||

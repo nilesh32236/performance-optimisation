@@ -73,6 +73,12 @@ const coerceLongestEdge = ( value, fallback ) => {
 	if ( typeof value === 'string' && value.trim() === '' ) {
 		return fallback;
 	}
+	// PHP is_numeric() rejects hex/binary/octal literals while Number()
+	// parses them (Number('0x100') === 256), so guard explicitly to keep
+	// UI/server parity (see normalizeRetries in FileOptimization).
+	if ( typeof value === 'string' && /^0[xXoObB]/.test( value.trim() ) ) {
+		return fallback;
+	}
 	const num = Number( value );
 	if ( ! Number.isFinite( num ) ) {
 		return fallback;
@@ -1257,10 +1263,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										id="preloadFrontPageImagesUrls"
 										name="preloadFrontPageImagesUrls"
 										rows="3"
-										placeholder={ __(
-											'/wp-content/uploads/hero.jpg',
-											'performance-optimisation'
-										) }
+										placeholder="/wp-content/uploads/hero.jpg"
 										value={
 											settings.preloadFrontPageImagesUrls
 										}
