@@ -347,6 +347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJSINPPreset'             => false,
 					'delayJSExternalOnly'          => false,
 					'delayJSThirdParty'            => false,
+					'delayJSThirdPartyAuto'        => false,
 					'delayJSThirdPartyDenylist'    => '',
 					'delayJSThirdPartyAllowlist'   => '',
 					'delayJSBuilderPreset'         => true,
@@ -2564,6 +2565,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return array_values( array_filter( array_unique( array_map( 'trim', $urls ) ) ) );
 			}
 			return array_values( array_filter( array_unique( array_map( 'trim', explode( "\n", (string) $urls ) ) ) ) );
+		}
+
+		/**
+		 * Coerce an untrusted string list (e.g. filter output) to a clean list.
+		 *
+		 * Drops non-string/non-numeric entries (instead of casting arrays to
+		 * "Array"), trims, drops empties, dedupes, and reindexes. Single
+		 * shared helper for the delay-JS third-party allowlist mirrors in
+		 * Main and Minify\HTML so allowlist semantics stay in one place.
+		 *
+		 * @param mixed $raw Untrusted list value.
+		 * @return string[] Clean list.
+		 * @since NEXT
+		 */
+		public static function coerce_string_list( $raw ): array {
+			if ( ! is_array( $raw ) ) {
+				return array();
+			}
+			$mapped   = array_map(
+				static function ( $val ): string {
+					if ( is_string( $val ) || is_numeric( $val ) ) {
+						return trim( (string) $val );
+					}
+					return '';
+				},
+				$raw
+			);
+			$filtered = array_filter(
+				$mapped,
+				static function ( $val ): bool {
+					return '' !== $val;
+				}
+			);
+			return array_values( array_unique( $filtered ) );
 		}
 
 		/**
@@ -5769,17 +5804,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
-				// Safe-default delay keys (issues #966 and #1308) — external-only
-				// defaults off (fail-safe: delay everything unless asked),
-				// builder preset defaults on (fail-safe: never delay builder
-				// runtimes), and the four #1308 opt-in compat presets
-				// (consent/analytics/gallery/jquery) default off so upgrades
-				// preserve manual exclusions.
+				// Safe-default delay keys (issues #966, #1308, and #1314) —
+				// external-only defaults off (fail-safe: delay everything
+				// unless asked), builder preset defaults on (fail-safe: never
+				// delay builder runtimes), and the four #1308 opt-in compat
+				// presets (consent/analytics/gallery/jquery) default off so
+				// upgrades preserve manual exclusions.
 				if ( in_array(
 					$safe_key,
 					array(
 						'delayJSExternalOnly',
 						'delayJSThirdParty',
+						'delayJSThirdPartyAuto',
 						'delayJSConsentPreset',
 						'delayJSAnalyticsPreset',
 						'delayJSGalleryPreset',
