@@ -518,21 +518,98 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * adapted to the class's null-safe, scalar-only conventions. Field
 		 * keys vary by PHP version/host, so each one is guarded with isset().
 		 *
+		 * OPcache/JIT observability (issue #1309): reports the
+		 * `opcache.enable` and `opcache.enable_cli` ini flags plus JIT status
+		 * (`opcache.jit`, `opcache.jit_buffer_size`). Every ini read is
+		 * guarded with `function_exists( 'ini_get' )`; JIT rows additionally
+		 * require PHP 8.0+ via `defined( 'PHP_VERSION' )` +
+		 * `version_compare()`. Unreadable values render as `Not available`
+		 * and never block the screen (fail-open). Results are cached briefly
+		 * in a per-site transient via `Util::transient_key()` so the System
+		 * Info screen (already on-demand via the SPA "Load System Info"
+		 * button) never hammers `opcache_get_status()`; frontend cost is
+		 * zero and multisite transients cannot leak across sites.
+		 *
 		 * @since  1.8.0
+		 * @since  NEXT `opcache_enabled`, `opcache_enable_cli`, `jit_enabled`
+		 *               and `jit_mode` rows plus brief per-site transient cache
+		 *               with fail-open `try/catch` probing.
 		 * @return array {
-		 *     @type string $status           'Enabled' or 'Disabled'.
-		 *     @type string $detail           'not available' when the cache is unusable.
-		 *     @type string $memory_usage     Used of total memory, e.g. '100 MB of 256 MB'.
-		 *     @type string $interned_strings Interned strings usage as a percentage.
-		 *     @type string $hit_rate         Cache hit rate percentage.
-		 *     @type string $cache_full       'Yes' or 'No'.
+		 *     @type string $status            'Enabled' or 'Disabled'.
+		 *     @type string $detail            'not available' when the cache is unusable.
+		 *     @type string $memory_usage      Used of total memory, e.g. '100 MB of 256 MB'.
+		 *     @type string $interned_strings  Interned strings usage as a percentage.
+		 *     @type string $hit_rate          Cache hit rate percentage.
+		 *     @type string $cache_full        'Yes' or 'No'.
+		 *     @type string $opcache_enabled   'Enabled', 'Disabled' or 'Not available'.
+		 *     @type string $opcache_enable_cli 'Enabled', 'Disabled' or 'Not available'.
+		 *     @type string $jit_enabled       'Enabled', 'Disabled' or 'Not available'.
+		 *     @type string $jit_mode          Raw `opcache.jit` value or 'Not available'.
 		 * }
 		 */
 		public static function get_opcache(): array {
+			// Brief per-site cache: the System Info screen is already
+			// on-demand, so a short TTL here only avoids repeated
+			// opcache_get_status() probes on refresh. Fail-open to uncached.
+			try {
+				if ( function_exists( 'get_transient' ) ) {
+					$transient_key = Util::transient_key( 'wppo_sysinfo_opcache' );
+					$cached        = get_transient( $transient_key );
+					if ( is_array( $cached ) && isset( $cached['status'] ) ) {
+						return $cached;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			try {
+				$result = self::build_opcache_info();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$result = array(
+					'status'             => __( 'Disabled', 'performance-optimisation' ),
+					'detail'             => 'not available',
+					'opcache_enabled'    => self::not_available_label(),
+					'opcache_enable_cli' => self::not_available_label(),
+					'jit_enabled'        => self::not_available_label(),
+					'jit_mode'           => self::not_available_label(),
+				);
+			}
+
+			try {
+				if ( function_exists( 'set_transient' ) ) {
+					$ttl = defined( 'MINUTE_IN_SECONDS' ) ? 5 * MINUTE_IN_SECONDS : 300;
+					set_transient( Util::transient_key( 'wppo_sysinfo_opcache' ), $result, $ttl );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			return $result;
+		}
+
+		/**
+		 * Build the OPcache info rows without transient handling.
+		 *
+		 * Fail-open by contract: any unreadable probe renders `Not available`
+		 * for that row; callers wrap this in `try/catch` so a throw still
+		 * yields a renderable array.
+		 *
+		 * @since NEXT
+		 * @return array OPcache info rows (see get_opcache()).
+		 */
+		private static function build_opcache_info(): array {
+			$jit = self::get_jit_info();
+
 			if ( ! function_exists( 'opcache_get_status' ) ) {
 				return array(
-					'status' => __( 'Disabled', 'performance-optimisation' ),
-					'detail' => 'not available',
+					'status'             => __( 'Disabled', 'performance-optimisation' ),
+					'detail'             => 'not available',
+					'opcache_enabled'    => self::describe_ini_flag( 'opcache.enable' ),
+					'opcache_enable_cli' => self::describe_ini_flag( 'opcache.enable_cli' ),
+					'jit_enabled'        => $jit['enabled'],
+					'jit_mode'           => $jit['mode'],
 				);
 			}
 
@@ -541,18 +618,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			if ( false === $opcache ) {
 				return array(
-					'status' => __( 'Disabled by configuration', 'performance-optimisation' ),
-					'detail' => 'not available',
+					'status'             => __( 'Disabled by configuration', 'performance-optimisation' ),
+					'detail'             => 'not available',
+					'opcache_enabled'    => self::describe_ini_flag( 'opcache.enable' ),
+					'opcache_enable_cli' => self::describe_ini_flag( 'opcache.enable_cli' ),
+					'jit_enabled'        => $jit['enabled'],
+					'jit_mode'           => $jit['mode'],
 				);
 			}
 
 			$info = array(
-				'status'     => ! empty( $opcache['opcache_enabled'] )
+				'status'             => ! empty( $opcache['opcache_enabled'] )
 					? __( 'Enabled', 'performance-optimisation' )
 					: __( 'Disabled', 'performance-optimisation' ),
-				'cache_full' => ! empty( $opcache['cache_full'] )
+				'cache_full'         => ! empty( $opcache['cache_full'] )
 					? __( 'Yes', 'performance-optimisation' )
 					: __( 'No', 'performance-optimisation' ),
+				'opcache_enabled'    => self::describe_ini_flag( 'opcache.enable' ),
+				'opcache_enable_cli' => self::describe_ini_flag( 'opcache.enable_cli' ),
+				'jit_enabled'        => $jit['enabled'],
+				'jit_mode'           => $jit['mode'],
 			);
 
 			if ( isset( $opcache['memory_usage']['used_memory'], $opcache['memory_usage']['free_memory'] ) ) {
@@ -586,6 +671,120 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			return $info;
+		}
+
+		/**
+		 * Describe an on/off php.ini flag for display.
+		 *
+		 * Returns translated `Enabled`/`Disabled` for recognised values, or
+		 * translated `Not available` when the ini entry is absent or
+		 * unreadable. Guarded with `function_exists( 'ini_get' )` and
+		 * fail-open `try/catch` so a probe failure never blocks the screen.
+		 *
+		 * @since NEXT
+		 * @param string $key Ini key, e.g. `opcache.enable`.
+		 * @return string Display label.
+		 */
+		private static function describe_ini_flag( string $key ): string {
+			if ( ! function_exists( 'ini_get' ) ) {
+				return self::not_available_label();
+			}
+
+			try {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
+				$value = ini_get( $key );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::not_available_label();
+			}
+
+			if ( false === $value ) {
+				return self::not_available_label();
+			}
+
+			$normalized = strtolower( trim( (string) $value ) );
+			if ( in_array( $normalized, array( '1', 'on', 'true', 'yes' ), true ) ) {
+				return __( 'Enabled', 'performance-optimisation' );
+			}
+			if ( in_array( $normalized, array( '0', 'off', 'false', 'no' ), true ) ) {
+				return __( 'Disabled', 'performance-optimisation' );
+			}
+
+			return self::not_available_label();
+		}
+
+		/**
+		 * Describe JIT status for display.
+		 *
+		 * JIT exists on PHP 8.0+, so rows are gated with `defined(
+		 * 'PHP_VERSION' )` + `function_exists( 'version_compare' )` +
+		 * `version_compare()`. Reads the `opcache.jit` and
+		 * `opcache.jit_buffer_size` ini entries (guarded with
+		 * `function_exists( 'ini_get' )`); a `jit_buffer_size` of `0` means
+		 * JIT cannot engage even when `opcache.jit` names a mode. Absent
+		 * entries render as `Not available` (fail-open).
+		 *
+		 * @since NEXT
+		 * @return array{enabled:string,mode:string} Display labels.
+		 */
+		private static function get_jit_info(): array {
+			$unavailable = array(
+				'enabled' => self::not_available_label(),
+				'mode'    => self::not_available_label(),
+			);
+
+			if ( ! defined( 'PHP_VERSION' ) || ! function_exists( 'version_compare' ) ) {
+				return $unavailable;
+			}
+			if ( version_compare( PHP_VERSION, '8.0', '<' ) ) {
+				return $unavailable;
+			}
+			if ( ! function_exists( 'ini_get' ) ) {
+				return $unavailable;
+			}
+
+			try {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
+				$jit = ini_get( 'opcache.jit' );
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
+				$buffer_size = ini_get( 'opcache.jit_buffer_size' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $unavailable;
+			}
+
+			if ( false === $jit ) {
+				return $unavailable;
+			}
+
+			$mode = trim( (string) $jit );
+			if ( '' === $mode ) {
+				return $unavailable;
+			}
+
+			$disabled_modes = array( 'off', 'disable', 'disabled', '0' );
+			$buffer_off     = false === $buffer_size || '0' === trim( (string) $buffer_size );
+
+			return array(
+				'enabled' => ( in_array( strtolower( $mode ), $disabled_modes, true ) || $buffer_off )
+					? __( 'Disabled', 'performance-optimisation' )
+					: __( 'Enabled', 'performance-optimisation' ),
+				'mode'    => $mode,
+			);
+		}
+
+		/**
+		 * Translated `Not available` label for unreadable OPcache/JIT probes.
+		 *
+		 * Centralises the fallback string so every new row renders the same
+		 * fail-open label (issue #1309 acceptance: readable state shows the
+		 * status, otherwise `Not available`).
+		 *
+		 * @since NEXT
+		 * @return string Display label.
+		 */
+		private static function not_available_label(): string {
+			return __( 'Not available', 'performance-optimisation' );
 		}
 
 		/**

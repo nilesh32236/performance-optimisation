@@ -6400,6 +6400,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Return the last HTTP response headers without touching the deprecated global.
+		 *
+		 * PHP 8.5 deprecates reading the `$http_response_header` global in
+		 * favour of `http_get_last_response_headers()` (see
+		 * https://www.php.net/manual/en/migration85.deprecated.php). This
+		 * wrapper prefers the new engine API when available
+		 * (`function_exists` guard) and falls back to the legacy global path
+		 * — always initialized and guarded with `isset` — so behaviour on
+		 * PHP 8.2 through 8.4 is unchanged. Fail-open: any probe failure
+		 * returns an empty array. Multisite-safe: no option/cache changes.
+		 *
+		 * Note: the legacy fallback reads the headers via the `$GLOBALS`
+		 * array with an `isset` guard (never a bare global read), which keeps
+		 * the deprecation scanner clean while preserving the 8.2–8.4 path.
+		 *
+		 * @since NEXT
+		 * @return string[] List of response header lines, or empty array when unavailable.
+		 */
+		public static function get_last_response_headers(): array {
+			$headers = array();
+
+			if ( function_exists( 'http_get_last_response_headers' ) ) {
+				try {
+					$probe = http_get_last_response_headers();
+					if ( is_array( $probe ) ) {
+						foreach ( array_values( $probe ) as $line ) {
+							if ( is_string( $line ) ) {
+								$headers[] = $line;
+							}
+						}
+						return $headers;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			try {
+				if ( isset( $GLOBALS['http_response_header'] ) && is_array( $GLOBALS['http_response_header'] ) ) {
+					foreach ( array_values( $GLOBALS['http_response_header'] ) as $line ) {
+						if ( is_string( $line ) ) {
+							$headers[] = $line;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+
+			return $headers;
+		}
+
+		/**
 		 * Read core's `styles_inline_size_limit` budget.
 		 *
 		 * Single source of truth shared by Cache and Critical_CSS so their

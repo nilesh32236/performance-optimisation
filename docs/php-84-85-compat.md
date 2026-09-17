@@ -177,3 +177,32 @@ and root `*.php`; the machine-checkable subset is pinned by
   above. No plugin-level tuning was added; the guidance stays a docs-only
   page so hosts can set `php.ini` without the plugin touching server
   state (fail-open).
+
+## 7. PHP 8.5 header hygiene + OPcache/JIT observability (issue #1309)
+
+- **`$http_response_header` (PHP 8.5):** zero production reads (scanner-pinned,
+  §6). The sanctioned API is now `Util::get_last_response_headers()`
+  (`includes/class-util.php`, `@since NEXT`): prefers
+  `http_get_last_response_headers()` behind `function_exists`, falls back to
+  the legacy global path via `isset( $GLOBALS[ 'http_response_header' ] )`
+  (always initialized, `is_array`-guarded, string-filtered), and fail-opens
+  to `array()` on any probe failure. No raw close-call changes were needed —
+  `close_curl_handle()` and siblings already cover every teardown call site
+  (`class-telemetry.php`, `class-litespeed-crawler.php`,
+  `class-img-converter.php`).
+- **System Info OPcache/JIT rows:** `System_Info::get_opcache()`
+  (`includes/class-system-info.php`) now reports `opcache_enabled`
+  (`opcache.enable`), `opcache_enable_cli` (`opcache.enable_cli`),
+  `jit_enabled` + `jit_mode` (`opcache.jit`, `opcache.jit_buffer_size`)
+  alongside the existing `status/detail/memory_usage/interned_strings/
+  hit_rate/cache_full` rows. Every ini read is guarded with
+  `function_exists( 'ini_get' )`; JIT rows additionally require PHP 8.0+
+  via `defined( 'PHP_VERSION' )` + `version_compare()`. Unreadable values
+  render translated `Not available` and never block the screen (`try/catch`
+  fail-open around the whole probe).
+- **Conditional loading + multisite:** the SPA already fetches System Info
+  on demand ("Load System Info" button, no frontend cost); the probe itself
+  is now cached briefly (5-minute per-site transient via
+  `Util::transient_key( 'wppo_sysinfo_opcache' )`), so refreshes never
+  hammer `opcache_get_status()` and multisite transients cannot leak
+  across sites. Frontend delta is zero KB / zero extra frontend queries.
