@@ -16,6 +16,7 @@ import {
 	faLink,
 	faCheckCircle,
 	faExclamationCircle,
+	faInfoCircle,
 	faShieldAlt,
 	faTimes,
 	faNetworkWired,
@@ -431,6 +432,30 @@ const ObjectCache = ( { options = {} } ) => {
 			) }
 
 			<div className="wppo-notices-container">
+				<div className="wppo-notice wppo-notice--info">
+					<FontAwesomeIcon icon={ faInfoCircle } />
+					<div>
+						<strong>
+							{ __(
+								'Nginx servers: protect the Redis config file',
+								'performance-optimisation'
+							) }
+						</strong>
+						<p>
+							{ __(
+								'Nginx ignores .htaccess rules, so the connection file stays fetchable unless denied at server level. The file never holds the password, but add this rule to hide topology:',
+								'performance-optimisation'
+							) }
+						</p>
+						<pre>
+							<code>
+								{
+									'location = /wp-content/wppo-redis-config.php { deny all; }'
+								}
+							</code>
+						</pre>
+					</div>
+				</div>
 				{ cacheStatus.redis_missing && (
 					<div className="wppo-notice wppo-notice--error">
 						<FontAwesomeIcon icon={ faExclamationCircle } />

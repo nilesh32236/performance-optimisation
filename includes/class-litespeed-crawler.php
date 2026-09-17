@@ -155,6 +155,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				// Default stays 4.0 for backward compat; operators can expose nproc*2 via filter wppo_crawler_load_limit.
 				$use_nproc = (bool) apply_filters( 'wppo_crawler_use_nproc', false );
 				if ( $use_nproc && function_exists( 'shell_exec' ) ) {
+					// Audit #1329: hardcoded command string only — never
+					// interpolate variables here (would become RCE).
 					$nproc_raw = @shell_exec( 'nproc 2>/dev/null' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec -- nproc fallback for load limit
 					if ( is_string( $nproc_raw ) && '' !== trim( $nproc_raw ) && is_numeric( trim( $nproc_raw ) ) ) {
 						$nproc = (int) trim( $nproc_raw );
