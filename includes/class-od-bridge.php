@@ -650,6 +650,271 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		}
 
 		/**
+		 * Get normalized occluded image URLs for the current URL.
+		 *
+		 * Reads per-element occlusion/visibility signals from the real-visit
+		 * OD URL metrics and returns the normalized image URLs of elements
+		 * reported as occluded (CSS-hidden but in-viewport, e.g. hidden
+		 * carousel slides). Per-URL only (multisite-safe by construction),
+		 * memoized per request alongside `$request_memo` and bounded.
+		 * The stable-LCP winner is never reported as occluded. Fail-open:
+		 * disabled bridge, missing OD API, no metrics, or any failure
+		 * returns an empty array (callers leave markup unchanged).
+		 *
+		 * @since NEXT
+		 * @return string[] Normalized occluded image URLs (may be empty).
+		 */
+		public static function get_occluded_image_urls(): array {
+			try {
+				if ( ! self::is_enabled() ) {
+					return array();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+
+			$memo_key = self::request_memo_key( 'occluded:' );
+			if ( array_key_exists( $memo_key, self::$request_memo ) && is_array( self::$request_memo[ $memo_key ] ) ) {
+				return self::$request_memo[ $memo_key ];
+			}
+
+			try {
+				$metrics = self::get_url_metrics();
+				if ( empty( $metrics ) ) {
+					self::request_memo_set( $memo_key, array() );
+					return array();
+				}
+
+				$elements = array();
+				foreach ( $metrics as $metric ) {
+					if ( is_object( $metric ) && method_exists( $metric, 'get_elements' ) ) {
+						try {
+							$els = $metric->get_elements();
+							if ( is_array( $els ) ) {
+								foreach ( $els as $el ) {
+									$elements[] = $el;
+								}
+								continue;
+							}
+						} catch ( \Throwable $e ) {
+							self::debug_log( 'WPPO OD bridge get_elements error: ' . $e->getMessage() );
+						}
+					}
+					if ( is_array( $metric ) && isset( $metric['elements'] ) && is_array( $metric['elements'] ) ) {
+						foreach ( $metric['elements'] as $el ) {
+							$elements[] = $el;
+						}
+						continue;
+					}
+					$elements[] = $metric;
+				}
+
+				if ( empty( $elements ) ) {
+					self::request_memo_set( $memo_key, array() );
+					return array();
+				}
+
+				$lcp_norms = array();
+				try {
+					$raw_lcp = self::collect_raw_lcp_urls();
+					foreach ( $raw_lcp as $u ) {
+						$norm = Util::normalize_url( $u );
+						if ( '' !== $norm ) {
+							$lcp_norms[ $norm ] = true;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+
+				$urls = array();
+				foreach ( $elements as $el ) {
+					try {
+						if ( self::element_is_lcp( $el ) ) {
+							continue;
+						}
+						if ( ! self::element_is_occluded( $el ) ) {
+							continue;
+						}
+						$url = self::extract_url_from_element( $el );
+						if ( ! is_string( $url ) || '' === $url ) {
+							continue;
+						}
+						$scheme = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_SCHEME ) : parse_url( $url, PHP_URL_SCHEME ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+						if ( is_string( $scheme ) && '' !== $scheme && ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
+							continue;
+						}
+						$norm = Util::normalize_url( $url );
+						if ( '' === $norm ) {
+							continue;
+						}
+						if ( isset( $lcp_norms[ $norm ] ) ) {
+							continue;
+						}
+						$urls[ $norm ] = $url;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
+				}
+
+				$result = array_values( $urls );
+				self::request_memo_set( $memo_key, $result );
+				return $result;
+			} catch ( \Throwable $e ) {
+				self::debug_log( 'WPPO OD bridge occluded error: ' . $e->getMessage() );
+				return array();
+			}
+		}
+
+		/**
+		 * Whether an OD element is occluded (hidden but in-viewport).
+		 *
+		 * Covers object methods (`is_occluded()`, `isOccluded()`,
+		 * `is_visible()`/`isVisible()` false, `is_hidden()`/`isHidden()`
+		 * true), matching properties/array keys, plus a geometry fallback
+		 * (`intersectionRatio`/`intersection_ratio` of 0 with a non-empty
+		 * bounding rect, or a zero-area rect). The LCP element itself is
+		 * never occluded (callers skip LCP first). Fail-open to false.
+		 *
+		 * @since NEXT
+		 * @param mixed $element Element object or array.
+		 * @return bool True when occluded.
+		 */
+		private static function element_is_occluded( $element ): bool {
+			try {
+				if ( is_object( $element ) ) {
+					foreach ( array( 'is_occluded', 'isOccluded' ) as $method ) {
+						if ( method_exists( $element, $method ) ) {
+							try {
+								if ( (bool) $element->$method() ) {
+									return true;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+					}
+					foreach ( array( 'is_visible', 'isVisible' ) as $method ) {
+						if ( method_exists( $element, $method ) ) {
+							try {
+								if ( false === (bool) $element->$method() ) {
+									return true;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+					}
+					foreach ( array( 'is_hidden', 'isHidden' ) as $method ) {
+						if ( method_exists( $element, $method ) ) {
+							try {
+								if ( (bool) $element->$method() ) {
+									return true;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+					}
+					foreach ( array( 'is_occluded', 'isOccluded', 'occluded' ) as $prop ) {
+						if ( isset( $element->$prop ) && (bool) $element->$prop ) {
+							return true;
+						}
+					}
+					foreach ( array( 'is_visible', 'isVisible' ) as $prop ) {
+						if ( isset( $element->$prop ) && false === (bool) $element->$prop ) {
+							return true;
+						}
+					}
+					foreach ( array( 'is_hidden', 'isHidden' ) as $prop ) {
+						if ( isset( $element->$prop ) && (bool) $element->$prop ) {
+							return true;
+						}
+					}
+					return self::element_geometry_is_occluded( (array) get_object_vars( $element ) );
+				}
+
+				if ( is_array( $element ) ) {
+					foreach ( array( 'is_occluded', 'isOccluded', 'occluded' ) as $key ) {
+						if ( isset( $element[ $key ] ) && (bool) $element[ $key ] ) {
+							return true;
+						}
+					}
+					foreach ( array( 'is_visible', 'isVisible' ) as $key ) {
+						if ( array_key_exists( $key, $element ) && false === (bool) $element[ $key ] ) {
+							return true;
+						}
+					}
+					foreach ( array( 'is_hidden', 'isHidden', 'isHiddenElement' ) as $key ) {
+						if ( isset( $element[ $key ] ) && (bool) $element[ $key ] ) {
+							return true;
+						}
+					}
+					return self::element_geometry_is_occluded( $element );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
+		 * Geometry fallback for occlusion detection.
+		 *
+		 * An element with zero intersection but a non-empty bounding rect
+		 * (occluded/covered), or with a zero-area rect, counts as occluded.
+		 * Missing geometry returns false (fail-open).
+		 *
+		 * @since NEXT
+		 * @param array $data Element data as an array.
+		 * @return bool True when geometry implies occlusion.
+		 */
+		private static function element_geometry_is_occluded( array $data ): bool {
+			try {
+				$ratio = null;
+				foreach ( array( 'intersectionRatio', 'intersection_ratio', 'intersectionratio' ) as $key ) {
+					if ( isset( $data[ $key ] ) && is_numeric( $data[ $key ] ) ) {
+						$ratio = (float) $data[ $key ];
+						break;
+					}
+				}
+				$rect = null;
+				foreach ( array( 'boundingClientRect', 'bounding_client_rect', 'boundingRect', 'bounding_rect', 'rect' ) as $key ) {
+					if ( isset( $data[ $key ] ) && is_array( $data[ $key ] ) ) {
+						$rect = $data[ $key ];
+						break;
+					}
+				}
+				if ( null === $rect ) {
+					$w = $data['width'] ?? $data['boundingWidth'] ?? $data['bounding_width'] ?? null;
+					$h = $data['height'] ?? $data['boundingHeight'] ?? $data['bounding_height'] ?? null;
+					if ( null !== $w || null !== $h ) {
+						$rect = array(
+							'width'  => $w,
+							'height' => $h,
+						);
+					}
+				}
+				if ( null === $rect ) {
+					return false;
+				}
+				$w = isset( $rect['width'] ) && is_numeric( $rect['width'] ) ? (float) $rect['width'] : null;
+				$h = isset( $rect['height'] ) && is_numeric( $rect['height'] ) ? (float) $rect['height'] : null;
+				if ( null !== $w && null !== $h && $w <= 0 && $h <= 0 ) {
+					return true;
+				}
+				if ( null !== $ratio && 0.0 === $ratio && null !== $w && null !== $h && $w > 0 && $h > 0 ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
 		 * Retrieve URL metrics via the OD API.
 		 *
 		 * Tries od_get_url_metrics() first (Lab 6.9). Falls back to

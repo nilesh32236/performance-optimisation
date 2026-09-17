@@ -1001,6 +1001,35 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
 
 ---
 
+### `wppo_occlusion_fetchpriority_low_enabled`
+Filters whether OD-measured occluded (CSS-hidden but in-viewport) images are demoted to `fetchpriority=low`. Additive `image_optimisation.occlusionFetchpriorityLow` flag, default off. The true-LCP node is never demoted and `loading` is never touched, so the single-high and never-lazy+high invariants hold. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether occlusion demotion is enabled.
+
+**Example:**
+```php
+add_filter( 'wppo_occlusion_fetchpriority_low_enabled', '__return_true' );
+```
+
+---
+
+### `wppo_occlusion_fetchpriority_low_urls`
+Filters the occluded image URL list before `fetchpriority=low` demotion. @since NEXT.
+
+**Parameters:**
+- `$occluded_urls` *(string[])* — Occluded image URLs.
+- `$buffer` *(string)* — The HTML buffer being processed.
+
+**Example:**
+```php
+add_filter( 'wppo_occlusion_fetchpriority_low_urls', function( $urls, $buffer ) {
+    return array_values( array_filter( $urls ) );
+}, 10, 2 );
+```
+
+---
+
 ### `wppo_computed_css_hero_url`
 Passes a server-side computed CSS-hero background URL (e.g. derived from enqueued stylesheets where no inline `style=""` exists). Validated as an image on an allowed origin (same-origin or configured CDN); anything else is ignored. @since NEXT.
 
