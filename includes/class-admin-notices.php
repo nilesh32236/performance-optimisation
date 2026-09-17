@@ -38,6 +38,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		);
 
 		/**
+		 * Per-request memo of the object-cache circuit state.
+		 *
+		 * The circuit notice calls get_circuit_state() (get_option +
+		 * state-file reads with filesystem init); the memo keeps one admin
+		 * pageload to a single read. Reset by reset_memo_cache_for_tests().
+		 *
+		 * @since NEXT
+		 * @var array|null Null when not yet read this request.
+		 */
+		private static $circuit_state_memo = null;
+
+		/**
+		 * Whether the circuit-state memo has been populated this request.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static $circuit_state_memo_set = false;
+
+		/**
+		 * Per-request memo of the Advanced_Cache_Handler drop-in check.
+		 *
+		 * The drop-in check does filesystem init + a full get_contents of
+		 * advanced-cache.php; the memo keeps one pageload to a single
+		 * check. Reset by reset_memo_cache_for_tests().
+		 *
+		 * @since NEXT
+		 * @var bool|null Null when not yet checked this request.
+		 */
+		private static $dropin_memo = null;
+
+		/**
+		 * Reset the per-request memos (unit-test helper).
+		 *
+		 * Mirrors LiteSpeed_Integration::reset_cache(): PHPUnit runs many
+		 * invokes in one process, so tests that change circuit/drop-in
+		 * state between phases reset here instead of seeing stale memos.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_memo_cache_for_tests(): void {
+			self::$circuit_state_memo     = null;
+			self::$circuit_state_memo_set = false;
+			self::$dropin_memo            = null;
+		}
+
+		/**
+		 * Whether the current admin screen is one of the allowed notice screens.
+		 *
+		 * Notices that need I/O (circuit state, drop-in reads, loopback
+		 * probes) run only on the plugin, plugins, and update-core screens
+		 * instead of every wp-admin pageload. Unknown screens (no
+		 * get_current_screen yet, e.g. unit tests) fail open to true.
+		 *
+		 * @since NEXT
+		 * @return bool True when the notice I/O may run.
+		 */
+		private static function is_notice_screen(): bool {
+			if ( ! function_exists( 'get_current_screen' ) ) {
+				return true;
+			}
+			try {
+				$screen = get_current_screen();
+				$base   = ( is_object( $screen ) && isset( $screen->base ) && is_string( $screen->base ) ) ? $screen->base : '';
+				if ( '' !== $base && ! in_array( $base, array( 'toplevel_page_performance-optimisation', 'plugins', 'update-core' ), true ) ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return true;
+		}
+
+		/**
 		 * Register hooks.
 		 */
 		public function __construct() {
@@ -55,11 +130,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
+			// Reject non-string input before unslash/sanitize: an array
+			// (?wppo_dismiss[]=x) would TypeError sanitize_key() on PHP 8.2
+			// via admin_init (admin DoS).
+			if ( ! is_string( $_GET['wppo_dismiss'] ) || ! is_string( $_GET['_wpnonce'] ) ) {
+				return;
+			}
+
 			$key = sanitize_key( wp_unslash( $_GET['wppo_dismiss'] ) );
 
 			// Allowlist + per-notice nonce binding: a leaked/prefetched dismiss URL
 			// can replay at most its own notice within the nonce lifetime.
-			$allowed = array( 'activation', 'review_done', 'review_snooze', 'litespeed', 'avif_webp_only', 'htaccess_failure', 'object_cache_circuit' );
+			$allowed = array( 'activation', 'review_done', 'review_snooze', 'litespeed', 'avif_webp_only', 'htaccess_failure', 'object_cache_circuit', 'nginx_redis_config' );
 			if ( ! in_array( $key, $allowed, true ) ) {
 				return;
 			}
@@ -117,6 +199,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				delete_transient( Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT ) );
 			}
 
+			if ( 'nginx_redis_config' === $key ) {
+				// Timestamped dismissal that re-arms after 14 days (mirrors
+				// the circuit notice re-arm). The shared probe cache is
+				// deliberately left alone: one admin's dismiss must not force
+				// a re-probe for everyone else.
+				update_user_meta( get_current_user_id(), 'wppo_nginx_redis_config_dismissed', time() );
+			}
+
 			wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );
 			exit;
 		}
@@ -136,6 +226,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$this->maybe_competing_plugins_notice();
 			$this->maybe_litespeed_coexistence_notice();
 			$this->maybe_object_cache_circuit_notice();
+			$this->maybe_nginx_redis_config_notice();
 			$this->maybe_avif_webp_only_notice();
 			$this->maybe_builder_purge_notice();
 			$this->maybe_review_notice();
@@ -210,6 +301,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_htaccess_failure_notice(): void {
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return;
 			}
@@ -259,8 +353,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
+			// Screen-gated like the nginx notice: the circuit read
+			// (get_option + state-file reads with filesystem init) runs
+			// only on the plugin/plugins/update-core screens.
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
+
 			try {
-				$circuit = ( new Object_Cache() )->get_circuit_state();
+				if ( self::$circuit_state_memo_set && is_array( self::$circuit_state_memo ) ) {
+					$circuit = self::$circuit_state_memo;
+				} else {
+					$circuit                      = ( new Object_Cache() )->get_circuit_state();
+					self::$circuit_state_memo     = $circuit;
+					self::$circuit_state_memo_set = true;
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return;
@@ -273,6 +380,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
 			$dismissed  = (int) get_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, 0 );
 			if ( $tripped_at > 0 && $dismissed === $tripped_at ) {
+				return;
+			}
+			// A parked-sibling-only trip can synthesize tripped_at 0
+			// (filemtime unavailable): without this the notice would be
+			// undismissable, reappearing every pageload after dismiss.
+			if ( 0 === $tripped_at && $dismissed > 0 ) {
 				return;
 			}
 
@@ -295,6 +408,80 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			echo esc_html( $reason ) . ' ' . esc_html( $when ) . ' ';
 			echo esc_html__( 'Redis will be re-checked automatically, or re-enable it manually once Redis recovers.', 'performance-optimisation' );
 			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo '</p></div>';
+		}
+
+		/**
+		 * Nginx Redis-config exposure warning.
+		 *
+		 * Nginx ignores the `.htaccess`/`web.config` deny rules written by
+		 * Object_Cache::protect_config_file(), so without a manual
+		 * server-level deny the Redis config file
+		 * (`wp-content/wppo-redis-config.php`, topology but no password) is
+		 * directly fetchable. Renders only when the loopback probe in
+		 * Object_Cache::is_nginx_config_exposed() has evidence (verdict
+		 * cached in a transient plus a per-request memo, so no probe runs
+		 * on every pageload). Dismissible per user with a 14-day re-arm;
+		 * re-enabling Redis re-probes via a cleared probe cache.
+		 *
+		 * Screen-gated like maybe_review_notice(): the check (user-meta
+		 * dismiss + probe + file_exists + server-type detection) runs only
+		 * on the plugin, plugins, and update-core screens instead of every
+		 * wp-admin pageload.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function maybe_nginx_redis_config_notice(): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+				return;
+			}
+
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
+
+			$user_id = function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0;
+			if ( $user_id ) {
+				$dismissed = (int) get_user_meta( $user_id, 'wppo_nginx_redis_config_dismissed', true );
+				if ( 1 === $dismissed ) {
+					// Legacy permanent flag (pre-timestamp): migrate to a
+					// timestamp so the notice re-arms instead of hiding
+					// a future safe→exposed flip forever.
+					update_user_meta( $user_id, 'wppo_nginx_redis_config_dismissed', time() );
+					return;
+				}
+				if ( $dismissed > 1 && ( time() - $dismissed ) < ( 14 * DAY_IN_SECONDS ) ) {
+					return;
+				}
+			}
+
+			try {
+				if ( ! Object_Cache::is_nginx_config_exposed() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
+
+			$dismiss = wp_nonce_url(
+				add_query_arg( 'wppo_dismiss', 'nginx_redis_config' ),
+				'wppo_dismiss_notice_nginx_redis_config',
+				'_wpnonce'
+			);
+
+			echo '<div class="notice notice-warning" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation — Redis config exposed', 'performance-optimisation' ) . '</strong> — ';
+			echo esc_html__( 'Your server runs Nginx, which ignores .htaccess deny rules, and wp-content/wppo-redis-config.php appears directly fetchable. It holds no password but discloses Redis topology (hosts, ports, TLS mode).', 'performance-optimisation' ) . ' ';
+			echo wp_kses(
+				sprintf(
+					/* translators: %s: Nginx deny rule snippet (a <code> element) */
+					__( 'Add %s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ),
+					'<code>location = /wp-content/wppo-redis-config.php { deny all; }</code>'
+				),
+				array( 'code' => array() )
+			);
 			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
@@ -405,7 +592,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_competing_plugins_notice(): void {
-			if ( ! Advanced_Cache_Handler::is_our_dropin() ) {
+			// Screen-gated like the nginx/circuit notices: the drop-in
+			// check (filesystem init + full get_contents) must not run on
+			// every admin pageload.
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
+
+			if ( null === self::$dropin_memo ) {
+				self::$dropin_memo = Advanced_Cache_Handler::is_our_dropin();
+			}
+			if ( ! self::$dropin_memo ) {
 				return;
 			}
 
@@ -422,7 +619,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			$names = implode( ', ', array_map( 'esc_html', $found ) );
+			// Escape exactly once at output: the raw labels are imploded here
+			// and the single esc_html() below does the escaping.
+			$names = implode( ', ', $found );
 
 			echo '<div class="notice notice-info is-dismissible" role="status" aria-live="polite"><p>';
 			echo esc_html__( 'You have another page caching plugin active:', 'performance-optimisation' ) . ' ' . esc_html( $names ) . '. ';
@@ -441,6 +640,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_builder_purge_notice(): void {
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				return;
 			}
