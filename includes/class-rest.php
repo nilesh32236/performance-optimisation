@@ -1556,9 +1556,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( $use_action_scheduler ) {
 				// Paginated scheduler snapshot for dedup instead of one
 				// as_has_scheduled_action() query per image (N+1). Falls back
-				// to per-item checks whenever an item was not positively
-				// confirmed (snapshot unavailable/failed/incomplete).
-				$scheduled = array();
+				// to per-item checks only when the snapshot is incomplete
+				// (unavailable/failed/page-cap hit); a complete snapshot is
+				// trusted (audit #1338). The snapshot is best-effort: a
+				// concurrent process enqueueing between snapshot and enqueue
+				// can still duplicate — the per-item fallback narrows that
+				// window only when the snapshot is known-incomplete.
+				$scheduled         = array();
+				$snapshot_complete = false;
+				// Needed dedup keys (bounded by $jobs_cap): stop paginating as
+				// soon as every needed key is covered instead of fetching up
+				// to 10k rows.
+				$needed = array();
+				foreach ( $webp_images as $webp_image ) {
+					$needed[ $this->resolve_optimise_source_path( $webp_image, $normalized_abspath ) . '|webp' ] = true;
+				}
+				foreach ( $avif_images as $avif_image ) {
+					$needed[ $this->resolve_optimise_source_path( $avif_image, $normalized_abspath ) . '|avif' ] = true;
+				}
 				if ( function_exists( 'as_get_scheduled_actions' ) ) {
 					try {
 						$statuses = array( 'pending', 'in-progress' );
@@ -1578,7 +1593,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								'offset'   => $as_page * 1000,
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
-							if ( ! is_array( $existing_actions ) || empty( $existing_actions ) ) {
+							// Store failure is NOT complete: fall back to per-item checks
+							// rather than trusting an empty map (avoids double-queueing).
+							if ( ! is_array( $existing_actions ) ) {
+								break;
+							}
+							if ( empty( $existing_actions ) ) {
+								$snapshot_complete = true;
 								break;
 							}
 							foreach ( $existing_actions as $action ) {
@@ -1592,10 +1613,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								}
 								if ( is_array( $action_args ) && isset( $action_args[0]['source_path'], $action_args[0]['format'] ) ) {
 									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
+									// All needed keys covered: stop paginating early.
+									if ( ! empty( $needed ) && ! array_diff_key( $needed, $scheduled ) ) {
+										$snapshot_complete = true;
+										break 2;
+									}
 								}
 							}
 							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 							if ( count( $existing_actions ) < 1000 ) {
+								$snapshot_complete = true;
 								break;
 							}
 						}
@@ -1619,7 +1646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+						if ( ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
 							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
@@ -1647,7 +1674,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+						if ( ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
 							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
@@ -2722,49 +2749,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 500, __( 'Action Scheduler is not available.', 'performance-optimisation' ) );
 			}
 
-			// Check dedup before enqueuing so we can return 200 with the existing job ID instead of 202+0.
-			$dedup_args = array(
-				array(
-					'url'      => $url,
-					'strategy' => $strategy,
-				),
-			);
-			$is_deduped = function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( Pagespeed::AS_HOOK, $dedup_args, Pagespeed::AS_GROUP );
-
+			// Audit #1338: no REST-layer pre-check — queue_scan() resolves the
+			// winner's ID internally (unique insert + re-query), so a separate
+			// as_has_scheduled_action() here paid an extra scheduler read.
+			// Contract note: already_queued stays in the shape but is always
+			// false now — dedup happens inside queue_scan() and the REST layer
+			// can no longer distinguish a fresh enqueue from a deduped winner
+			// without re-introducing the query. Pollers must key off job_id
+			// (always the actionable job) rather than already_queued.
 			$job_id = Pagespeed::queue_scan( $url, $strategy );
-
-			if ( $is_deduped && $job_id > 0 ) {
-				return $this->send_response(
-					array(
-						'job_id'         => $job_id,
-						'url'            => $url,
-						'strategy'       => $strategy,
-						'already_queued' => true,
-					),
-					true,
-					200
-				);
-			}
-
-			if ( 0 === $job_id && $is_deduped ) {
-				// Deduped but existing ID could not be resolved — return 200 without ambiguous 202+0.
-				return $this->send_response(
-					array(
-						'job_id'         => 0,
-						'url'            => $url,
-						'strategy'       => $strategy,
-						'already_queued' => true,
-					),
-					true,
-					200
-				);
-			}
 
 			return $this->send_response(
 				array(
-					'job_id'   => $job_id,
-					'url'      => $url,
-					'strategy' => $strategy,
+					'job_id'         => $job_id,
+					'url'            => $url,
+					'strategy'       => $strategy,
+					'already_queued' => false,
 				),
 				true,
 				202

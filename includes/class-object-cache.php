@@ -2391,8 +2391,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					self::$nginx_probe_memo['server'] = false;
 					return false;
 				}
-				$url       = content_url( self::CONFIG_FILENAME );
-				$probe_key = self::NGINX_PROBE_TRANSIENT . '_' . md5( $url );
+				$url = content_url( self::CONFIG_FILENAME );
+				// Audit #1338: blog-prefix the per-URL key (multisite
+				// key-isolation rule). Legacy global reads below stay as
+				// migration fallbacks.
+				$probe_key = self::probe_transient_key( '_' . md5( $url ) );
 				if ( isset( self::$nginx_probe_memo[ $probe_key ] ) ) {
 					return self::$nginx_probe_memo[ $probe_key ];
 				}
@@ -2457,6 +2460,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Blog-prefixed probe transient key with back-compat fallback.
+		 *
+		 * Mirrors the guarded Util::transient_key() pattern used by the
+		 * multisite fan-out below (audit #1338 review) instead of calling
+		 * Util directly.
+		 *
+		 * @since NEXT
+		 * @param string $suffix Key suffix after the base transient name.
+		 * @return string Prefixed key, or the raw key when Util is unavailable.
+		 */
+		private static function probe_transient_key( string $suffix ): string {
+			$raw = self::NGINX_PROBE_TRANSIENT . $suffix;
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+				try {
+					return Util::transient_key( $raw );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return $raw;
+		}
+
+		/**
 		 * Drop the cached Nginx exposure probe verdict.
 		 *
 		 * Called after protect/enable/disable flows so the next admin
@@ -2478,21 +2504,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						try {
 							$url = content_url( self::CONFIG_FILENAME );
 							delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
+							delete_transient( self::probe_transient_key( '_' . md5( $url ) ) );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 						}
 					}
 					delete_transient( self::NGINX_PROBE_TRANSIENT );
-					delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
+					delete_transient( self::probe_transient_key( '' ) );
 					// Multisite fan-out: the probe verdict is keyed per site
 					// (md5 of the per-site content_url()), so clearing only
 					// the current site would leave siblings stale up to 2h
 					// after an installation-wide enable()/disable().
 					try {
 						if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_sites' ) && function_exists( 'switch_to_blog' ) && function_exists( 'restore_current_blog' ) ) {
+							// Bound the fan-out (audit #1338 review): up to 500 sites x 4
+							// deletes can stall an admin save on huge networks; siblings
+							// self-expire in 1-2h by design so a smaller sweep only delays
+							// freshness, never correctness.
+							/**
+							 * Filters how many sites the nginx probe-clear fans out to.
+							 *
+							 * @since NEXT
+							 * @param int $limit Maximum site IDs to sweep. Default 500.
+							 */
+							$clear_limit = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_nginx_probe_clear_sites', 500 ) : 500;
+							if ( $clear_limit < 1 ) {
+								$clear_limit = 1;
+							}
 							$sites = get_sites(
 								array(
-									'number' => 500,
+									'number' => $clear_limit,
 									'fields' => 'ids',
 								)
 							);
@@ -2507,10 +2548,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 										if ( function_exists( 'content_url' ) ) {
 											$site_url = content_url( self::CONFIG_FILENAME );
 											delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $site_url ) );
+											if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+												delete_transient( self::probe_transient_key( '_' . md5( $site_url ) ) );
+											}
 										}
 										delete_transient( self::NGINX_PROBE_TRANSIENT );
 										if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
-											delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
+											delete_transient( self::probe_transient_key( '' ) );
 										}
 									} catch ( \Throwable $e ) {
 										unset( $e );

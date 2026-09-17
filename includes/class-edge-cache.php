@@ -158,6 +158,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		}
 
 		/**
+		 * Maximum edge-template file size read from disk (audit #1338).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const TEMPLATE_MAX_BYTES = 1048576;
+
+		/**
+		 * Read an edge template file with a size bound.
+		 *
+		 * Single home for the probe/read/fallback pipeline shared by both
+		 * template getters (audit #1338 review): one filesize probe gates
+		 * the read, and the content is re-checked after reading so a file
+		 * swapped mid-read cannot bypass the cap (TOCTOU). Returns '' when
+		 * missing/unreadable/oversized so callers fall back to inline.
+		 *
+		 * @since NEXT
+		 * @param string $filename Template file name under templates/.
+		 * @return string File contents, or '' when unusable.
+		 */
+		private static function read_capped_template( string $filename ): string {
+			try {
+				$template_path = WPPO_PLUGIN_PATH . 'templates/' . $filename;
+				if ( function_exists( 'clearstatcache' ) ) {
+					clearstatcache( true, $template_path );
+				}
+				$template_size = @filesize( $template_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
+				if ( ! is_int( $template_size ) || $template_size <= 0 || $template_size > self::TEMPLATE_MAX_BYTES ) {
+					return '';
+				}
+				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+				if ( ! is_string( $content ) || '' === $content || strlen( $content ) > self::TEMPLATE_MAX_BYTES ) {
+					return '';
+				}
+				return $content;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Get Cloudflare Worker JS content.
 		 *
 		 * Replaces {{ORIGIN_URL}} / {{CACHE_TTL}} / {{SWR}} placeholders in
@@ -176,11 +218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			$ttl    = isset( $config['cache_ttl'] ) ? (int) $config['cache_ttl'] : 300;
 			$swr    = isset( $config['swr'] ) ? (int) $config['swr'] : 86400;
 
-			$template_path = WPPO_PLUGIN_PATH . 'templates/cloudflare-worker.js';
-			$content       = '';
-			if ( file_exists( $template_path ) && is_readable( $template_path ) ) {
-				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-			}
+			$content = self::read_capped_template( 'cloudflare-worker.js' );
 			if ( false === $content || '' === $content ) {
 				// Fallback inline template with SWR semantics.
 				$content = "export default {\n  async fetch(request, env, ctx) {\n    const cache = caches.default;\n    let response = await cache.match(request);\n    if (response) {\n      ctx.waitUntil(fetch(request).then(r=>{ if(r.ok){ const c=r.clone(); c.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}'); cache.put(request,c);} }).catch(()=>{}));\n      response.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n      response.headers.set('X-Edge-Cache','HIT');\n      return response;\n    }\n    const originRes = await fetch(request);\n    if (originRes.ok) {\n      const res = new Response(originRes.body, originRes);\n      res.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n      res.headers.set('X-Edge-Cache','MISS');\n      ctx.waitUntil(cache.put(request, res.clone()).catch(()=>{}));\n      return res;\n    }\n    return originRes;\n  }\n}\n";
@@ -259,11 +297,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			$swr    = isset( $config['swr'] ) ? (int) $config['swr'] : 86400;
 
 			// Try template file if present, else inline fallback.
-			$template_path = WPPO_PLUGIN_PATH . 'templates/bunny-edge.js';
-			$content       = '';
-			if ( file_exists( $template_path ) && is_readable( $template_path ) ) {
-				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-			}
+			$content = self::read_capped_template( 'bunny-edge.js' );
 			if ( false === $content || '' === $content ) {
 				$content = "// Bunny Edge — stale-while-revalidate for WPPO cache semantics\n// Origin: {{ORIGIN_URL}} TTL={{CACHE_TTL}} SWR={{SWR}}\nasync function handleRequest(event){\n  const request=event.request;\n  const cache=caches.default;\n  let response=await cache.match(request);\n  if(response){\n    event.waitUntil(fetch(request).then(r=>{ if(r.ok){ const c=r.clone(); c.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}'); cache.put(request,c);} }).catch(()=>{}));\n    response.headers.set('X-Edge-Cache','HIT');\n    return response;\n  }\n  const originRes=await fetch(request);\n  if(originRes.ok){\n    const res=new Response(originRes.body, originRes);\n    res.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n    res.headers.set('X-Edge-Cache','MISS');\n    event.waitUntil(cache.put(request,res.clone()).catch(()=>{}));\n    return res;\n  }\n  return originRes;\n}\naddEventListener('fetch',e=>e.respondWith(handleRequest(e)));\n";
 			}

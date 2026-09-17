@@ -522,7 +522,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				// direct-read fallback; an unreadable cache is treated as
 				// unconverged (fall through and regenerate) rather than
 				// converged, so remote URLs can never get stuck.
-				$cached           = null;
+				$cached = null;
+				// Audit #1338: stat once before either read path so a
+				// swapped/corrupt oversized file is rejected up front instead
+				// of being slurped just to strpos() it.
+				$css_size = ( file_exists( $css_file ) && is_readable( $css_file ) ) ? ( function_exists( 'wp_filesize' ) ? wp_filesize( $css_file ) : @filesize( $css_file ) ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
+				if ( is_int( $css_size ) && $css_size > 1024 * 1024 ) {
+					// Oversized cache: set the failure sentinel like every other
+					// failure return so the worker backs off instead of hot-looping.
+					set_transient( $fail_key, 1, self::backoff_ttl() );
+					return false;
+				}
 				$filesystem_probe = Util::init_filesystem();
 				if ( $filesystem_probe && method_exists( $filesystem_probe, 'get_contents' ) ) {
 					$probe = $filesystem_probe->get_contents( $css_file );
@@ -531,10 +541,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					}
 				}
 				if ( null === $cached ) {
-					$direct = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe fallback when WP_Filesystem is unavailable; writes still go through WP_Filesystem.
-					if ( is_string( $direct ) ) {
+					$direct = '';
+					if ( file_exists( $css_file ) && is_readable( $css_file ) ) {
+						$direct = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe fallback when WP_Filesystem is unavailable; writes still go through WP_Filesystem.
+					}
+					if ( is_string( $direct ) && '' !== $direct ) {
 						$cached = $direct;
 					}
+				}
+				// Post-read bound (audit #1338 review): the file could have
+				// grown between stat and read; never slurp an oversized cache
+				// into the strpos scan.
+				if ( is_string( $cached ) && strlen( $cached ) > 1024 * 1024 ) {
+					set_transient( $fail_key, 1, self::backoff_ttl() );
+					return false;
 				}
 				if ( is_string( $cached ) && false === strpos( $cached, 'fonts.gstatic.com' ) ) {
 					return true;
@@ -813,6 +833,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with a false check below.
 			$size = @filesize( $tmp );
 			if ( false === $size || 0 === $size ) {
+				if ( file_exists( $tmp ) ) {
+					wp_delete_file( $tmp );
+				}
+				set_transient( $fail_key, 1, self::backoff_ttl() );
+				return false;
+			}
+			// Audit #1338: reject oversized remote bodies before rename (a
+			// font file over 5MB is never legitimate) so a corrupt/redirected
+			// response cannot fill the cache dir uncapped.
+			if ( $size > 5 * 1024 * 1024 ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}
