@@ -15,7 +15,7 @@ import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
-const Tooltip = ( { content, children } ) => {
+const Tooltip = ( { content, children, label } ) => {
 	const [ visible, setVisible ] = useState( false );
 	const id = useId();
 
@@ -72,14 +72,15 @@ const Tooltip = ( { content, children } ) => {
 						role: 'button',
 						tabIndex: '0',
 						'aria-expanded': visible,
-						'aria-describedby': id,
+						...( ( label || typeof content !== 'string' ) && { 'aria-describedby': id } ),
 						'aria-label':
-							typeof content === 'string' && content.length < 50
+							label ||
+							( typeof content === 'string'
 								? content
 								: __(
 										'More information',
 										'performance-optimisation'
-								  ),
+								  ) ),
 				  } ) }
 			onFocus={ () => setVisible( true ) }
 			onBlur={ handleBlur }

@@ -52,3 +52,6 @@
 ## 2024-05-23 - Icon-only Tooltip Accessibility
 **Learning:** Found an accessibility issue where icon-only tooltip trigger elements (`span` with `role="button"`) lacked an accessible name for screen readers.
 **Action:** Added an `aria-label` attribute (e.g., `__( 'More information', 'performance-optimisation' )`) to the tooltip trigger element when it functions as an icon-only button without visible text.
+## 2024-05-23 - Accessible Tooltip Fallbacks
+**Learning:** For icon-only tooltips, using the full string content as `aria-label` is better than a generic fallback, even if long. When `aria-label` exactly matches the tooltip content, `aria-describedby` should be omitted to prevent screen readers from announcing the text twice. Rich/JSX content requires an explicit `label` prop.
+**Action:** Added an optional `label` prop, removed the length restriction on the string fallback, and conditionally omitted `aria-describedby` when it duplicates the label.
