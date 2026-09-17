@@ -1142,6 +1142,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Server-only outage status flag (issue #1233): clients must not
 			// pin spoofed degraded/healthy state via update_settings. Drop
 			// any client value so the array_merge below preserves the stored
+			// Removed (#925, pruned #1373): the legacy
+			// file_optimisation.removeQueryStrings key is dropped on save so it
+			// decays naturally. A legacy client that still posts the key is
+			// accepted silently (fail-open, never fatal); stored legacy values
+			// are ignored and `?ver` is always preserved.
+			if ( 'file_optimisation' === $tab && isset( $sanitized_settings['removeQueryStrings'] ) ) {
+				unset( $sanitized_settings['removeQueryStrings'] );
+			}
+
 			// server-written value, mirroring password handling.
 			if ( 'object_cache' === $tab && isset( $sanitized_settings['outage_bypassed'] ) ) {
 				unset( $sanitized_settings['outage_bypassed'] );

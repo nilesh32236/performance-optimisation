@@ -5,6 +5,8 @@
  * @package PerformanceOptimise\Tests
  */
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Source-level absence assertions read local files.
+
 use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
@@ -194,5 +196,4 @@ class MainLegacyQueryStringsTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->assertTrue( is_array( $sanitized ), 'Legacy input must not fatal sanitization' );
 	}
-
 }
