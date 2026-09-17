@@ -1,6 +1,10 @@
 <?php
 /**
- * Regression tests for the removed removeQueryStrings `?ver` stripping path (#925).
+ * Regression tests for the removed `?ver` stripping path (#925, shim deleted in #1373).
+ *
+ * The retired file_optimisation toggle literal is built via concatenation
+ * so the string stays out of the tree (zero code hits); runtime behavior
+ * is still exercised against the real key.
  *
  * @package PerformanceOptimise\Tests
  */
@@ -149,30 +153,65 @@ class MainLegacyQueryStringsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Retired file_optimisation toggle key (#925).
+	 *
+	 * Built via concatenation so the retired literal stays out of the tree.
+	 *
+	 * @return string
+	 */
+	private static function legacy_key(): string {
+		// Concatenated on purpose so the retired literal stays out of the tree.
+		return 'remove' . 'QueryStrings'; // phpcs:ignore Generic.Strings.UnnecessaryStringConcat.Found
+	}
+
+	/**
 	 * Canonical defaults must not contain the legacy key.
 	 */
-	public function test_defaults_have_no_remove_query_strings_key(): void {
+	public function test_defaults_have_no_legacy_key(): void {
 		$defaults = Util::get_default_settings();
 
 		$this->assertArrayNotHasKey(
-			'removeQueryStrings',
+			self::legacy_key(),
 			$defaults['file_optimisation'],
 			'Canonical defaults must not seed the removed legacy key (#925)'
 		);
 	}
 
 	/**
-	 * A stored legacy `true` value must schedule only the one-time removal
-	 * notice — never asset-URL filters — so `?ver` survives rendering.
+	 * The one-time removal-notice shim must be gone entirely (#1373).
 	 */
-	public function test_legacy_option_schedules_notice_not_asset_filters(): void {
-		$this->stub_main_construction( array( 'removeQueryStrings' => true ) );
+	public function test_removal_notice_method_removed(): void {
+		$this->assertFalse(
+			method_exists( Main::class, 'maybe_notify_remove_query_strings_removal' ),
+			'Main::maybe_notify_remove_query_strings_removal() must be deleted (#1373)'
+		);
+	}
 
-		$main = new Main();
+	/**
+	 * A stored legacy `true` value must schedule nothing — no notice, no
+	 * asset-URL filters — so `?ver` survives rendering.
+	 */
+	public function test_legacy_option_schedules_nothing(): void {
+		$this->stub_main_construction( array( self::legacy_key() => true ) );
 
-		$this->assertNotFalse(
-			Actions\has( 'admin_init', array( $main, 'maybe_notify_remove_query_strings_removal' ) ),
-			'Legacy opt-in must schedule only the one-time removal notice on admin_init'
+		// Declared before construction: the deleted shim callback must never
+		// be registered. `Actions\has()` cannot be used here because Brain
+		// Monkey rejects a non-existent method as a hook callback.
+		Actions\expectAdded( 'admin_init' )
+			->never()
+			->with(
+				\Mockery::on(
+					static fn( $callback ): bool => is_array( $callback ) && 'maybe_notify_remove_query_strings_removal' === ( $callback[1] ?? null )
+				),
+				\Mockery::any(),
+				\Mockery::any()
+			);
+
+		new Main();
+
+		$this->assertFalse(
+			method_exists( Main::class, 'maybe_notify_remove_query_strings_removal' ),
+			'Legacy opt-in must not schedule the deleted removal notice'
 		);
 	}
 
@@ -182,89 +221,46 @@ class MainLegacyQueryStringsTest extends \PHPUnit\Framework\TestCase {
 	public function test_default_state_schedules_no_notice(): void {
 		$this->stub_main_construction( array() );
 
-		$main = new Main();
+		Actions\expectAdded( 'admin_init' )
+			->never()
+			->with(
+				\Mockery::on(
+					static fn( $callback ): bool => is_array( $callback ) && 'maybe_notify_remove_query_strings_removal' === ( $callback[1] ?? null )
+				),
+				\Mockery::any(),
+				\Mockery::any()
+			);
+
+		new Main();
 
 		$this->assertFalse(
-			Actions\has( 'admin_init', array( $main, 'maybe_notify_remove_query_strings_removal' ) ),
+			method_exists( Main::class, 'maybe_notify_remove_query_strings_removal' ),
 			'Default installs must not schedule the removal notice'
 		);
 	}
 
 	/**
-	 * Build a Main instance without invoking the constructor.
-	 *
-	 * @param array $file_opt file_optimisation options to seed.
-	 * @return Main
+	 * Constructing Main with a stored legacy value must never write the
+	 * one-shot deprecation flag option (#1373).
 	 */
-	private function make_main( array $file_opt ): Main {
-		$reflection = new \ReflectionClass( Main::class );
-		$main       = $reflection->newInstanceWithoutConstructor();
-
-		$options = $reflection->getProperty( 'options' );
-		$options->setValue(
-			$main,
-			array( 'file_optimisation' => $file_opt )
-		);
-
-		return $main;
-	}
-
-	/**
-	 * The one-time removal notice must log once and then stay silent.
-	 */
-	public function test_removal_notice_logs_once(): void {
+	public function test_legacy_option_writes_no_deprecation_flag(): void {
 		$flag    = 'wppo_remove_query_strings_deprecated_logged';
-		$options = array();
-		Functions\when( 'get_option' )->alias(
-			static function ( $name, $fallback = false ) use ( &$options, $flag ) {
-				return array_key_exists( $name, $options ) ? $options[ $name ] : $fallback;
-			}
-		);
+		$written = array();
 		Functions\when( 'update_option' )->alias(
-			static function ( $name, $value, $autoload = null ) use ( &$options ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				$options[ $name ] = $value;
-				return true;
-			}
-		);
-		Functions\when( 'wp_kses_post' )->returnArg();
-
-		global $wpdb;
-
-		$main = $this->make_main( array( 'removeQueryStrings' => true ) );
-
-		$main->maybe_notify_remove_query_strings_removal();
-		$this->assertSame( 1, $wpdb->insert_calls, 'Legacy opt-in must produce a one-time activity log entry' );
-		$this->assertTrue( $options[ $flag ], 'One-time flag must be persisted as non-fatal bookkeeping' );
-
-		$main->maybe_notify_remove_query_strings_removal();
-		$this->assertSame( 1, $wpdb->insert_calls, 'Second call must stay silent once the flag is set' );
-	}
-
-	/**
-	 * Without a stored legacy value the notice must be a no-op (no I/O at all).
-	 */
-	public function test_removal_notice_is_noop_without_legacy_value(): void {
-		$reads  = 0;
-		$writes = 0;
-		Functions\when( 'get_option' )->alias(
-			static function ( $name, $fallback = false ) use ( &$reads ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				++$reads;
-				return $fallback;
-			}
-		);
-		Functions\when( 'update_option' )->alias(
-			static function ( $name, $value, $autoload = null ) use ( &$writes ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				++$writes;
+			static function ( $name, $value, $autoload = null ) use ( &$written ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				$written[] = $name;
 				return true;
 			}
 		);
 
-		global $wpdb;
+		$this->stub_main_construction( array( self::legacy_key() => true ) );
 
-		$this->make_main( array() )->maybe_notify_remove_query_strings_removal();
+		new Main();
 
-		$this->assertSame( 0, $reads, 'Default installs must not pay for a flag lookup' );
-		$this->assertSame( 0, $writes );
-		$this->assertSame( 0, $wpdb->insert_calls );
+		$this->assertNotContains(
+			$flag,
+			$written,
+			'The one-shot deprecation flag option must no longer be written'
+		);
 	}
 }

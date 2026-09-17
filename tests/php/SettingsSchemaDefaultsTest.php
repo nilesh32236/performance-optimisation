@@ -38,7 +38,6 @@ class SettingsSchemaDefaultsTest extends \PHPUnit\Framework\TestCase {
 	private static function expected_keys_by_tab(): array {
 		return array(
 			'file_optimisation'  => array(
-				'removeQueryStrings',
 				'removeWooCSSJS',
 				'excludeUrlToKeepJSCSS',
 				'removeCssJsHandle',
@@ -98,7 +97,6 @@ class SettingsSchemaDefaultsTest extends \PHPUnit\Framework\TestCase {
 	private static function live_values_by_tab(): array {
 		return array(
 			'file_optimisation'  => array(
-				'removeQueryStrings'    => true,
 				'removeWooCSSJS'        => false,
 				'excludeUrlToKeepJSCSS' => '',
 				'removeCssJsHandle'     => '',
@@ -234,7 +232,6 @@ class SettingsSchemaDefaultsTest extends \PHPUnit\Framework\TestCase {
 				'enableCache'         => true,
 			),
 			'file_optimisation'  => array(
-				'removeQueryStrings'    => true,
 				'removeWooCSSJS'        => false,
 				'excludeUrlToKeepJSCSS' => '',
 				'removeCssJsHandle'     => '',

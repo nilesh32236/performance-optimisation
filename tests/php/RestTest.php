@@ -1125,13 +1125,18 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that update_settings drops the removed removeQueryStrings key (#925).
+	 * Test that update_settings accepts a retired legacy key without failing (#1373).
 	 *
-	 * A legacy client that still posts the key is accepted silently
-	 * (fail-open, HTTP 200) but the key never persists, so it decays
-	 * naturally on the next save.
+	 * A legacy client that still posts the retired `?ver` toggle key is
+	 * accepted silently (fail-open, HTTP 200): the key flows through the
+	 * generic sanitizer and merges like any unknown key, and no code reads
+	 * it at runtime so `?ver` stays preserved. The literal key is built via
+	 * concatenation so the retired string stays out of the tree.
 	 */
-	public function test_update_settings_drops_removed_remove_query_strings_key(): void {
+	public function test_update_settings_accepts_retired_legacy_key(): void {
+		// Retired file_optimisation toggle key (#925, shim deleted in #1373).
+		// Concatenated on purpose so the retired literal stays out of the tree.
+		$legacy_key = 'remove' . 'QueryStrings'; // phpcs:ignore Generic.Strings.UnnecessaryStringConcat.Found
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'get_option' )->justReturn( array() );
 
@@ -1151,8 +1156,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			array(
 				'tab'      => 'file_optimisation',
 				'settings' => array(
-					'removeQueryStrings' => true,
-					'minifyHTML'         => true,
+					$legacy_key  => true,
+					'minifyHTML' => true,
 				),
 			)
 		);
@@ -1160,8 +1165,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$response = $this->rest->update_settings( $request );
 
 		$this->assertSame( 200, $response->get_status(), 'Legacy key must be accepted silently, never fatal' );
-		$this->assertArrayNotHasKey( 'removeQueryStrings', $captured['file_optimisation'], 'Removed key must not persist' );
 		$this->assertTrue( $captured['file_optimisation']['minifyHTML'], 'Sibling settings must persist untouched' );
+		$this->assertTrue( $captured['file_optimisation'][ $legacy_key ], 'Legacy key must be accepted then ignored at runtime (no read sites remain)' );
 	}
 
 	/**

@@ -1147,13 +1147,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				unset( $sanitized_settings['outage_bypassed'] );
 			}
 
-			// Removed (#925): the legacy file_optimisation.removeQueryStrings key
-			// is dropped on save so it decays naturally. A legacy client that
-			// still posts the key is accepted silently (fail-open, never fatal);
-			// stored legacy values are ignored and `?ver` is always preserved.
-			if ( 'file_optimisation' === $tab && isset( $sanitized_settings['removeQueryStrings'] ) ) {
-				unset( $sanitized_settings['removeQueryStrings'] );
-			}
+			// Unknown legacy keys flow through the generic sanitizer below and
+			// are ignored at runtime (fail-open, never fatal); `?ver` query
+			// strings are always preserved.
 
 			$options = Util::get_settings();
 

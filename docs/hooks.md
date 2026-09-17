@@ -2207,7 +2207,7 @@ Removed. The `?ver=` stripping path (`Main::strip_static_query_strings()` on
 the setting default, and the SPA toggle) is gone. `?ver=` **is** the
 cache-busting mechanism (fingerprinting) — stripping it risked stale assets
 with no measurable gain (see `docs/research/competitor-research-2026-09-08.md`
-§5). A stored legacy value is ignored (fail-open): assets always keep `?ver`,
-a one-time activity-log notice is written on `admin_init`
-(`Main::maybe_notify_remove_query_strings_removal()`), and the key is dropped
-on the next `file_optimisation` save (`Rest::update_settings()`).
+§5). A stored legacy value is ignored (fail-open): assets always keep `?ver`.
+The one-time activity-log notice shim was removed after serving its purpose,
+so the key is now simply accepted-then-ignored on `file_optimisation` saves
+(`Rest::update_settings()`): posting it still succeeds, and no code reads it.
