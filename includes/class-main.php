@@ -73,6 +73,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private ?array $resolved_delay_exclusions = null;
 
 		/**
+		 * Per-page compat preset opt-out removal list (issue #1308).
+		 *
+		 * Computed in apply_per_page_delay_config() (gated on globally-enabled
+		 * presets, manual/safe entries protected) and re-applied in
+		 * get_delay_exclusions() AFTER the `wppo_exclude_delay_js` filter, so
+		 * filter-then-subtract ordering holds on the external path too and a
+		 * filter entry matching a preset string cannot silently nullify the
+		 * page opt-out. Null when no opt-out applies.
+		 *
+		 * @var   array|null
+		 * @since NEXT
+		 */
+		private ?array $page_preset_opt_out_remove = null;
+
+		/**
 		 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
 		 *
 		 * @var   string
@@ -5509,6 +5524,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
+			// Filter-then-subtract (#1308): the per-page preset opt-out wins
+			// over filter re-adds, mirroring the Minify\HTML constructor.
+			if ( ! empty( $this->page_preset_opt_out_remove ) ) {
+				try {
+					$exclusions = array_values( array_diff( $exclusions, $this->page_preset_opt_out_remove ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
 			$this->resolved_delay_exclusions = array_values(
 				array_unique(
 					array_filter(
@@ -5920,21 +5945,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Per-page compat preset opt-out (#1308): a page can opt out of a
-			// globally-enabled preset without touching global settings. The
-			// preset handles are removed from the exclusion list so delay
-			// applies to them again on this page only. Manual exclusions and
-			// other presets are untouched. Fail-open: meta read errors apply
-			// no opt-out.
-			$presets_off = self::get_page_disabled_delay_presets( (int) $post_id );
+			// globally-enabled preset without touching global settings. Only
+			// presets that are globally enabled contribute to the removal list,
+			// so opting out on a page where the preset is off cannot strip
+			// base/manual protections. Manual exclusions and safe presets are
+			// re-protected below. Fail-open: meta read errors apply no opt-out.
+			// Early-bail: all four presets default off, so the common case skips
+			// the post-meta lookup entirely.
+			$compat_map = self::get_delay_js_compat_preset_map();
+			$file_opt   = $this->options['file_optimisation'] ?? array();
+			$any_on     = false;
+			foreach ( $compat_map as $setting_key => $map_slug ) {
+				if ( ! empty( $file_opt[ $setting_key ] ) ) {
+					$any_on = true;
+					break;
+				}
+			}
+			$presets_off = $any_on ? self::get_page_disabled_delay_presets( (int) $post_id ) : array();
 			if ( ! empty( $presets_off ) ) {
 				try {
-					$remove = array();
+					$slug_to_key = array_flip( $compat_map );
+					$chunks      = array();
 					foreach ( $presets_off as $slug ) {
-						$remove = array_merge( $remove, self::get_delay_js_compat_preset_exclusions( (string) $slug ) );
+						$slug = (string) $slug;
+						// Gate on globally-enabled presets only.
+						if ( ! isset( $slug_to_key[ $slug ] ) || empty( $file_opt[ $slug_to_key[ $slug ] ] ) ) {
+							continue;
+						}
+						$chunks[] = self::get_delay_js_compat_preset_exclusions( $slug );
 					}
+					$remove = $chunks ? array_merge( ...$chunks ) : array();
 					if ( ! empty( $remove ) ) {
-						$this->exclude_delay_js          = array_values( array_diff( $this->exclude_delay_js, $remove ) );
-						$this->resolved_delay_exclusions = null;
+						// Protect manual + base/safe entries: the additive merge
+						// above holds a single copy of overlapping strings (e.g.
+						// gtag, jquery), so diffing the raw preset list would
+						// delete manual/base-added copies too. Subtract the
+						// protected set from the removal list first.
+						$protected = self::get_delay_js_protected_exclusions( $file_opt );
+						if ( ! empty( $protected ) ) {
+							$remove = array_values( array_diff( $remove, $protected ) );
+						}
+						if ( ! empty( $remove ) ) {
+							$this->exclude_delay_js          = array_values( array_diff( $this->exclude_delay_js, $remove ) );
+							$this->resolved_delay_exclusions = null;
+							// Re-applied after the filter in get_delay_exclusions()
+							// (filter-then-subtract) so late filter registrations
+							// cannot silently nullify the page opt-out.
+							$this->page_preset_opt_out_remove = array_values( $remove );
+						}
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -6040,33 +6098,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @since 2.0.0
 			 * @param string[] $preset Builder preset exclusions.
 			 */
-			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_builder_exclusions' ) ) {
-				return $preset;
-			}
-			try {
-				$raw = apply_filters( 'wppo_delay_js_builder_exclusions', $preset );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $preset;
-			}
-			if ( ! is_array( $raw ) ) {
-				return $preset;
-			}
-			return array_values(
-				array_unique(
-					array_filter(
-						array_map(
-							static function ( $val ): string {
-								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
-							},
-							$raw
-						),
-						static function ( $val ): bool {
-							return '' !== $val;
-						}
-					)
-				)
-			);
+			return self::filter_compat_preset_list( 'wppo_delay_js_builder_exclusions', $preset );
 		}
 
 		/**
@@ -6109,33 +6141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @since 2.0.0
 			 * @param string[] $preset Commerce preset exclusions.
 			 */
-			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_commerce_exclusions' ) ) {
-				return $preset;
-			}
-			try {
-				$raw = apply_filters( 'wppo_delay_js_commerce_exclusions', $preset );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $preset;
-			}
-			if ( ! is_array( $raw ) ) {
-				return $preset;
-			}
-			return array_values(
-				array_unique(
-					array_filter(
-						array_map(
-							static function ( $val ): string {
-								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
-							},
-							$raw
-						),
-						static function ( $val ): bool {
-							return '' !== $val;
-						}
-					)
-				)
-			);
+			return self::filter_compat_preset_list( 'wppo_delay_js_commerce_exclusions', $preset );
 		}
 
 		/**
@@ -6168,33 +6174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @since 2.0.0
 			 * @param string[] $preset Slider preset exclusions.
 			 */
-			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_slider_exclusions' ) ) {
-				return $preset;
-			}
-			try {
-				$raw = apply_filters( 'wppo_delay_js_slider_exclusions', $preset );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $preset;
-			}
-			if ( ! is_array( $raw ) ) {
-				return $preset;
-			}
-			return array_values(
-				array_unique(
-					array_filter(
-						array_map(
-							static function ( $val ): string {
-								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
-							},
-							$raw
-						),
-						static function ( $val ): bool {
-							return '' !== $val;
-						}
-					)
-				)
-			);
+			return self::filter_compat_preset_list( 'wppo_delay_js_slider_exclusions', $preset );
 		}
 
 		/**
@@ -6234,33 +6214,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @since 2.0.0
 			 * @param string[] $preset Interaction preset exclusions.
 			 */
-			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_interaction_exclusions' ) ) {
-				return $preset;
-			}
-			try {
-				$raw = apply_filters( 'wppo_delay_js_interaction_exclusions', $preset );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $preset;
-			}
-			if ( ! is_array( $raw ) ) {
-				return $preset;
-			}
-			return array_values(
-				array_unique(
-					array_filter(
-						array_map(
-							static function ( $val ): string {
-								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
-							},
-							$raw
-						),
-						static function ( $val ): bool {
-							return '' !== $val;
-						}
-					)
-				)
-			);
+			return self::filter_compat_preset_list( 'wppo_delay_js_interaction_exclusions', $preset );
 		}
 
 		/**
@@ -6278,6 +6232,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string[]
 		 */
 		private static function filter_compat_preset_list( string $filter, array $preset ): array {
+			// Intentionally unmemoized: the result must always reflect the
+			// currently registered callbacks so a throwing filter degrades
+			// to the curated list on every call (fail-open). The lists are
+			// small and the unfiltered fast path short-circuits via
+			// has_filter(), so rebuilding twice per uncached page is cheap.
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( $filter ) ) {
 				return $preset;
 			}
@@ -6520,21 +6479,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( $post_id <= 0 ) {
 					return array();
 				}
+				// Blog-scoped memo: the external path and the Minify\HTML
+				// constructor read the same meta twice per uncached page.
+				static $memo = array();
+				$blog_id     = 0;
+				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
+					try {
+						if ( is_multisite() ) {
+							$blog_id = (int) get_current_blog_id();
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$blog_id = 0;
+					}
+				}
+				$memo_key = $blog_id . ':' . $post_id;
+				if ( isset( $memo[ $memo_key ] ) ) {
+					return $memo[ $memo_key ];
+				}
 				if ( ! function_exists( 'get_post_meta' ) ) {
 					return array();
 				}
 				$raw = get_post_meta( $post_id, '_wppo_delay_presets_off', true );
 				if ( ! is_array( $raw ) ) {
+					$memo[ $memo_key ] = array();
 					return array();
 				}
 				$allowed = array( 'consent', 'analytics', 'gallery', 'jquery' );
 				$off     = array();
 				foreach ( $raw as $slug ) {
+					// Skip non-scalars: corrupted nested-array meta must not
+					// emit an Array-to-string warning on PHP 8.2+.
+					if ( ! is_scalar( $slug ) ) {
+						continue;
+					}
 					$slug = strtolower( trim( (string) $slug ) );
 					if ( in_array( $slug, $allowed, true ) && ! in_array( $slug, $off, true ) ) {
 						$off[] = $slug;
 					}
 				}
+				$memo[ $memo_key ] = $off;
 				return $off;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -7457,17 +7441,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Get curated delay JS preset exclusions (jquery, recaptcha, stripe, analytics, etc.).
+		 * Base Delay JS preset exclusions (always applied, issue #966).
 		 *
 		 * Safe-by-default: WooCommerce, Elementor, and form plugins are always
-		 * excluded so checkout and forms never break. Filterable via
-		 * wppo_delay_js_exclusions. Preset prevents breakage on 10% sites.
+		 * excluded so checkout and forms never break. Shared by
+		 * get_delay_js_preset_exclusions() and
+		 * get_delay_js_protected_exclusions() so the per-page opt-out
+		 * protection set cannot drift from the merged preset.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return string[]
 		 */
-		private function get_delay_js_preset_exclusions(): array {
-			$preset = array(
+		private static function get_delay_js_base_preset_exclusions(): array {
+			return array(
 				'recaptcha',
 				'google-recaptcha',
 				'grecaptcha',
@@ -7499,6 +7485,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'elementor-frontend',
 				'elementor-pro',
 			);
+		}
+
+		/**
+		 * Manual + safe exclusions a per-page preset opt-out must never strip (issue #1308).
+		 *
+		 * The removal list for an opted-out compat preset is diffed against
+		 * this set first, so overlapping strings (e.g. gtag, jquery) that are
+		 * also contributed by manual exclusions or safe presets stay eager.
+		 * Fail-open: any detection failure returns an empty list (no
+		 * protection), degrading to the previous subtract behavior.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_opt file_optimisation settings slice.
+		 * @return string[]
+		 */
+		private static function get_delay_js_protected_exclusions( array $file_opt ): array {
+			try {
+				$protected = array( 'wppo-lazyload', 'data-wppo-preserve' );
+				if ( ! empty( $file_opt['excludeDelayJS'] ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+					try {
+						$protected = array_merge( $protected, (array) Util::process_urls( $file_opt['excludeDelayJS'] ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$protected  = array_merge( $protected, self::get_delay_js_base_preset_exclusions() );
+				$builder_on = ! isset( $file_opt['delayJSBuilderPreset'] ) || ! empty( $file_opt['delayJSBuilderPreset'] );
+				if ( $builder_on ) {
+					try {
+						$protected = array_merge( $protected, self::get_delay_js_builder_exclusions(), self::get_delay_js_slider_exclusions() );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$commerce_on = ! isset( $file_opt['delayJSCommercePreset'] ) || ! empty( $file_opt['delayJSCommercePreset'] );
+				if ( $commerce_on ) {
+					try {
+						$protected = array_merge( $protected, self::get_delay_js_commerce_exclusions() );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$interaction_on = ! isset( $file_opt['delayJSInteractionPreset'] ) || ! empty( $file_opt['delayJSInteractionPreset'] );
+				if ( $interaction_on ) {
+					try {
+						$protected = array_merge( $protected, self::get_delay_js_interaction_exclusions() );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $protected;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Get curated delay JS preset exclusions (jquery, recaptcha, stripe, analytics, etc.).
+		 *
+		 * Safe-by-default: WooCommerce, Elementor, and form plugins are always
+		 * excluded so checkout and forms never break. Filterable via
+		 * wppo_delay_js_exclusions. Preset prevents breakage on 10% sites.
+		 *
+		 * @since 2.0.0
+		 * @return string[]
+		 */
+		private function get_delay_js_preset_exclusions(): array {
+			$preset = self::get_delay_js_base_preset_exclusions();
 			// Commerce safe preset (#988): safe-by-default on; merges jQuery +
 			// cart-fragments/checkout handles unless explicitly disabled.
 			// Missing key backfills to on (per-site settings, multisite-safe).
@@ -7528,14 +7584,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// manual exclusions and delay behavior is unchanged. Each active
 			// preset merges additively, never replacing manual exclusions.
 			// Lazy-booted: matchers run only when their preset is enabled.
-			try {
-				foreach ( self::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
+			// Per-preset try/catch: a throw on one preset must not abort the
+			// remaining presets (inner getters already fail open per preset).
+			foreach ( self::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
+				try {
 					if ( ! empty( $this->options['file_optimisation'][ $setting_key ] ) ) {
 						$preset = array_merge( $preset, self::get_delay_js_compat_preset_exclusions( $slug ) );
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					continue;
 				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
 			}
 			// Breaker presets ship deduped via array_unique (#1037) so builder +
 			// commerce + user excludes never double-process; string-only values.

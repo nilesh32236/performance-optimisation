@@ -94,6 +94,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private array $exclude_delay_js;
 
 		/**
+		 * Precompiled case-insensitive alternation for $exclude_delay_js.
+		 *
+		 * Compiled once in the constructor so the per-<script> scan is a
+		 * single preg_match instead of O(patterns) strpos calls per tag.
+		 * Null when the list is empty or the regex fails to compile (callers
+		 * fall back to the strpos loop). Intentionally over-matches generic
+		 * fragments (consent, gallery, carousel, _ga, gtm) by substring over
+		 * attributes+content — fail-safe direction (keeps scripts eager),
+		 * unlike the external path which uses exact/dash/word-boundary
+		 * handle matching — so audit parity between the two paths is
+		 * approximate by design.
+		 *
+		 * @since NEXT
+		 * @var string|null
+		 */
+		private ?string $delay_exclude_re = null;
+
+		/**
 		 * Handles/URLs to load via requestIdleCallback.
 		 *
 		 * @since 2.0.0
@@ -143,7 +161,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			);
 			// Builder safe preset (#966): mirror Main::get_delay_js_builder_exclusions()
 			// via the shared static helper so the lists never drift. Safe-by-default
-			// on; missing key backfills to on. See Main::get_delay_js_preset_exclusions().
+			// on; missing key backfills to on (shared source of truth:
+			// Main::get_delay_js_builder_exclusions()).
 			$builder_on = ! isset( $this->options['file_optimisation']['delayJSBuilderPreset'] )
 				|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
 			if ( $builder_on && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_builder_exclusions' ) ) {
@@ -189,33 +208,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			// manual exclusions. Lazy-booted: matchers run only when delay is
 			// enabled and their preset is on; merged additively, never replacing
 			// manual exclusions. Fail-open: matcher errors keep eager output.
+			// Per-preset try/catch: a throw on one preset must not abort the
+			// remaining presets. Chunks merged once instead of array_merge() in
+			// a loop. Snapshot the pre-compat list so the per-page opt-out below
+			// can protect manual/safe entries.
 			$delay_enabled = ! empty( $this->options['file_optimisation']['delayJS'] );
+			$pre_compat    = $this->exclude_delay_js;
 			if ( $delay_enabled && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_compat_preset_map' ) && method_exists( Main::class, 'get_delay_js_compat_preset_exclusions' ) ) {
-				try {
-					foreach ( Main::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
-						if ( ! empty( $this->options['file_optimisation'][ $setting_key ] ) ) {
-							$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_compat_preset_exclusions( (string) $slug ) );
-						}
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				// Per-page preset opt-out (#1308): subtract opted-out preset
-				// handles so delay applies to them again on this page only.
-				if ( method_exists( Main::class, 'get_page_disabled_delay_presets' ) ) {
+				$chunks = array();
+				foreach ( Main::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
 					try {
-						$presets_off = Main::get_page_disabled_delay_presets();
-						if ( ! empty( $presets_off ) ) {
-							$remove = array();
-							foreach ( $presets_off as $slug ) {
-								$remove = array_merge( $remove, Main::get_delay_js_compat_preset_exclusions( (string) $slug ) );
-							}
-							if ( ! empty( $remove ) ) {
-								$this->exclude_delay_js = array_values( array_diff( $this->exclude_delay_js, $remove ) );
-							}
+						if ( ! empty( $this->options['file_optimisation'][ $setting_key ] ) ) {
+							$chunks[] = Main::get_delay_js_compat_preset_exclusions( (string) $slug );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
+						continue;
+					}
+				}
+				if ( ! empty( $chunks ) ) {
+					$merged = array_merge( ...$chunks );
+					if ( ! empty( $merged ) ) {
+						try {
+							$this->exclude_delay_js = array_merge( $this->exclude_delay_js, $merged );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 					}
 				}
 			}
@@ -248,6 +266,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					unset( $e );
 				}
 			}
+			// Per-page preset opt-out (#1308): subtract opted-out preset handles
+			// AFTER the wppo_exclude_delay_js merge (filter-then-subtract), so a
+			// filter entry matching a preset string cannot silently re-add an
+			// opted-out entry and nullify the page opt-out. Only globally-enabled
+			// presets contribute to the removal list, and strings already present
+			// before the compat merge (manual/safe entries) are protected, so
+			// overlapping entries (e.g. gtag, jquery) stay eager. Singular-only
+			// to match Main::apply_per_page_delay_config() parity: archives/home
+			// never re-delay inline scripts while the external path does not.
+			if ( $delay_enabled && class_exists( Main::class ) && method_exists( Main::class, 'get_page_disabled_delay_presets' ) && method_exists( Main::class, 'get_delay_js_compat_preset_exclusions' ) ) {
+				try {
+					$is_singular = ! function_exists( 'is_singular' ) || is_singular();
+					if ( $is_singular ) {
+						$presets_off = Main::get_page_disabled_delay_presets();
+						if ( ! empty( $presets_off ) ) {
+							$opt_map     = Main::get_delay_js_compat_preset_map();
+							$slug_to_key = array_flip( $opt_map );
+							$opt_chunks  = array();
+							foreach ( $presets_off as $slug ) {
+								$slug = (string) $slug;
+								if ( ! isset( $slug_to_key[ $slug ] ) || empty( $this->options['file_optimisation'][ $slug_to_key[ $slug ] ] ) ) {
+									continue;
+								}
+								$opt_chunks[] = Main::get_delay_js_compat_preset_exclusions( $slug );
+							}
+							$remove = $opt_chunks ? array_merge( ...$opt_chunks ) : array();
+							if ( ! empty( $remove ) ) {
+								$remove = array_values( array_diff( $remove, $pre_compat ) );
+								if ( ! empty( $remove ) ) {
+									$this->exclude_delay_js = array_values( array_diff( $this->exclude_delay_js, $remove ) );
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
 			$this->exclude_delay_js = array_values(
 				array_unique(
@@ -259,6 +315,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					)
 				)
 			);
+
+			// Precompile the exclusion alternation once (see $delay_exclude_re).
+			$this->delay_exclude_re = self::compile_delay_exclude_re( $this->exclude_delay_js );
 
 			// Cache delay JS strategy lists, filtering empty strings to avoid strpos('', $x) matching everything.
 			$this->delay_js_idle_list        = array_values(
@@ -307,6 +366,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			}
 
 			$this->minified_html = $this->minify_html( $html );
+		}
+
+		/**
+		 * Compile a case-insensitive substring alternation for delay exclusions.
+		 *
+		 * One preg_match per <script> tag replaces the O(patterns) strpos loop.
+		 * Fail-open: returns null on any error so callers fall back to strpos.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $exclusions Exclusion fragments.
+		 * @return string|null Ready regex, or null when unusable.
+		 */
+		private static function compile_delay_exclude_re( array $exclusions ): ?string {
+			try {
+				$quoted = array();
+				foreach ( $exclusions as $exclude ) {
+					if ( ! is_string( $exclude ) || '' === $exclude ) {
+						continue;
+					}
+					$exclude = trim( $exclude );
+					if ( '' === $exclude ) {
+						continue;
+					}
+					$quoted[] = preg_quote( $exclude, '/' );
+				}
+				if ( empty( $quoted ) ) {
+					return null;
+				}
+				$re = '/(?:' . implode( '|', $quoted ) . ')/i';
+				// Compile-time validation: alternatives are quoted literals so
+				// this cannot backtrack-catastrophically; a false return here
+				// (overlong pattern) degrades to the strpos fallback per tag.
+				set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from validating the generated alternation.
+				try {
+					$valid = preg_match( $re, '' );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$valid = false;
+				}
+				restore_error_handler();
+				return false === $valid ? null : $re;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
 		}
 
 		/**
@@ -784,14 +889,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					$should_exclude = true;
 				}
 				if ( ! $skip_delay && ! empty( $this->exclude_delay_js ) ) {
-					foreach ( $this->exclude_delay_js as $exclude ) {
-						if (
-						false !== strpos( $attributes, trim( $exclude ) ) ||
-						false !== strpos( $content, trim( $exclude ) )
-						) {
-							$should_exclude = true;
-							break;
+					// Fast path: one precompiled alternation per tag instead of
+					// O(patterns) strpos calls. Falls back to the strpos loop
+					// when the regex is unavailable or fails to run.
+					$matched = false;
+					if ( null !== $this->delay_exclude_re ) {
+						try {
+							// Validated at compile time; quoted literals cannot
+							// fail to compile here, and a false return (engine
+							// limits) falls back to the strpos loop below.
+							$re = preg_match( $this->delay_exclude_re, (string) $attributes . "\0" . (string) $content );
+							if ( 1 === $re ) {
+								$matched = true;
+							} elseif ( false === $re ) {
+								$matched = null;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$matched = null;
 						}
+					} else {
+						$matched = null;
+					}
+					if ( null === $matched ) {
+						foreach ( $this->exclude_delay_js as $exclude ) {
+							if (
+							false !== strpos( $attributes, trim( $exclude ) ) ||
+							false !== strpos( $content, trim( $exclude ) )
+							) {
+								$matched = true;
+								break;
+							}
+						}
+					}
+					if ( true === $matched ) {
+						$should_exclude = true;
 					}
 				}
 				// Sandbox preview staged excludes (issue #1163): staged

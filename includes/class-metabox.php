@@ -147,7 +147,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$used_css_disabled = get_post_meta( $post->ID, '_wppo_used_css_disabled', true );
 			$delay_notes       = get_post_meta( $post->ID, '_wppo_delay_notes', true );
 			$presets_off_raw   = get_post_meta( $post->ID, '_wppo_delay_presets_off', true );
-			$presets_off       = is_array( $presets_off_raw ) ? array_map( 'strval', $presets_off_raw ) : array();
+			$presets_off       = is_array( $presets_off_raw ) ? array_values(
+				array_filter(
+					array_map( 'strval', array_filter( $presets_off_raw, 'is_scalar' ) ),
+					static function ( $val ): bool {
+						return '' !== $val;
+					}
+				)
+			) : array();
 
 			$disabled_scripts = is_array( $disabled_scripts ) ? $disabled_scripts : array();
 			$disabled_styles  = is_array( $disabled_styles ) ? $disabled_styles : array();
@@ -214,7 +221,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 					'consent'   => __( 'Consent preset', 'performance-optimisation' ),
 					'analytics' => __( 'Analytics preset', 'performance-optimisation' ),
 					'gallery'   => __( 'Gallery preset', 'performance-optimisation' ),
-					'jquery'    => __( 'jQuery preset', 'performance-optimisation' ),
+					'jquery'    => __( 'jQuery legacy preset', 'performance-optimisation' ),
 				) as $preset_slug => $preset_label ) :
 					?>
 					<p>
@@ -619,6 +626,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$allowed_presets = array( 'consent', 'analytics', 'gallery', 'jquery' );
 			$presets_off     = array();
 			foreach ( $raw_presets_off as $slug ) {
+				// Skip non-scalars: crafted nested-array POST input must not
+				// reach the (string) cast (Array-to-string warning on PHP 8.2+).
+				if ( ! is_scalar( $slug ) ) {
+					continue;
+				}
 				$slug = strtolower( trim( (string) $slug ) );
 				if ( in_array( $slug, $allowed_presets, true ) && ! in_array( $slug, $presets_off, true ) ) {
 					$presets_off[] = $slug;
