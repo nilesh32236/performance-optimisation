@@ -49,3 +49,9 @@
 ## 2024-06-03 - Replacing Hardcoded Text Colors Properly
 **Learning:** When replacing hardcoded text colors like `#fff` in SCSS to ensure compatibility with WordPress themes (especially potential dark modes), using a background variable like `--wppo-bg-card` for a text `color` property is semantically incorrect and creates accessibility contrast failures.
 **Action:** Always map white-on-brand text to var(--wppo-text-sidebar-active, #fff) and never use background tokens (e.g. --wppo-bg-card) for the `color` property.
+## 2024-05-23 - Icon-only Tooltip Accessibility
+**Learning:** Found an accessibility issue where icon-only tooltip trigger elements (`span` with `role="button"`) lacked an accessible name for screen readers.
+**Action:** Added an `aria-label` attribute (e.g., `__( 'More information', 'performance-optimisation' )`) to the tooltip trigger element when it functions as an icon-only button without visible text.
+## 2024-05-23 - Accessible Tooltip Fallbacks
+**Learning:** For icon-only tooltips, using the full string content as `aria-label` is better than a generic fallback, even if long. When `aria-label` exactly matches the tooltip content, `aria-describedby` should be omitted to prevent screen readers from announcing the text twice. Rich/JSX content requires an explicit `label` prop.
+**Action:** Added an optional `label` prop, removed the length restriction on the string fallback, and conditionally omitted `aria-describedby` when it duplicates the label.

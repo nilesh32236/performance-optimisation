@@ -7,14 +7,16 @@
  * @param {Object}                    props
  * @param {string}                    props.content  The tooltip text.
  * @param {import('react').ReactNode} props.children The element that triggers the tooltip.
+ * @param {string}                    [props.label]  Optional accessible name for the icon-only trigger. Defaults to the string content, or a generic label for rich content.
  *
  * @since 1.5.0
  */
 import { useState, useId } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
-const Tooltip = ( { content, children } ) => {
+const Tooltip = ( { content, children, label } ) => {
 	const [ visible, setVisible ] = useState( false );
 	const id = useId();
 
@@ -71,7 +73,17 @@ const Tooltip = ( { content, children } ) => {
 						role: 'button',
 						tabIndex: '0',
 						'aria-expanded': visible,
-						'aria-describedby': id,
+						...( ( label || typeof content !== 'string' ) && {
+							'aria-describedby': id,
+						} ),
+						'aria-label':
+							label ||
+							( typeof content === 'string'
+								? content
+								: __(
+										'More information',
+										'performance-optimisation'
+								  ) ),
 				  } ) }
 			onFocus={ () => setVisible( true ) }
 			onBlur={ handleBlur }
