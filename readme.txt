@@ -4,7 +4,7 @@ Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
-Stable tag: 2.0.0
+Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -99,6 +99,18 @@ After activation, you can manage the following from the settings tabs:
 - **Tools** — Import/export settings for quick deployment across multiple sites.
 
 == Changelog ==
+
+= 2.1.0 (2026-09-17) =
+* Security: hardened ESI bridge (nonce-gated cart/nonce punch-holes with per-IP throttle, kses denylist, fail-closed), REST rate limits on cache/image/import/autoload endpoints, strict type guards, SameSite=Lax vary cookie, and an nginx-exposure probe with admin notice.
+* New: Elementor-safe mode — Combine CSS steps aside on builder pages and Elementor CSS regens auto-purge derived caches, with sandbox staging.
+* New: builder-update purge watcher with drift logging, transient-lock coalescing and bulk-regen support.
+* New: Used CSS / Critical CSS exclusion UI — excluded post types, max retries, delivery modes and CDN row scoping.
+* New: WooCommerce first-run UX with a read-only cache self-test and safe-mode call to action.
+* New: 404 fallback serving for aggregated and used CSS/JS with bounded snapshots.
+* Improvement: PHP 8.5 deprecation sweep (reflection hoisting, teardown helpers) across the backend.
+* Improvement: maintainability — shared purge-logger trait, CSS safelist helper, canonical Util/Settings helpers.
+* Improvement: icon-only tooltips now expose a proper accessible name (content string or explicit label) and skip duplicate describedby announcements.
+* Fix: unreachable code in the cron inspector and upgrade-purge wiring fixes.
 
 = 2.0.0 (2026-09-11) =
 * New: LiteSpeed/OpenLiteSpeed coexistence with Auto/WPPO/LiteSpeed/Standalone modes, native X-LiteSpeed header protocol, purge sync, ESI punch-holing, per-page/per-post-type TTL overrides and a background cache crawler.
