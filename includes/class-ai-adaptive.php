@@ -1283,6 +1283,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// `eager` is still tightened.
 			$eagerness = self::normalize_eagerness( $eagerness );
 
+			// LCP-element attribution + slow-resource audit (issue #1311):
+			// read-only candidates for preload/speculation suggestions.
+			// Additive keys with defaults; lazily booted (only queried when
+			// RUM data exists); fail-open to null/empty on any error; never
+			// auto-applied — get_suggestions() renders them as suggestions.
+			$attributed_selector = null;
+			$slow_candidates     = array();
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_top_slow_resources' ) ) {
+					if ( ! empty( $top_paths ) && is_string( $top_paths[0] ) ) {
+						$top_selector = \PerformanceOptimise\Inc\RUM::get_top_lcp_selector( $top_paths[0] );
+						if ( is_array( $top_selector ) && isset( $top_selector['selector'] ) && is_string( $top_selector['selector'] ) && '' !== $top_selector['selector'] ) {
+							$attributed_selector = array(
+								'path'     => $top_paths[0],
+								'selector' => $top_selector['selector'],
+								'n'        => isset( $top_selector['n'] ) ? (int) $top_selector['n'] : 0,
+								'lastSeen' => isset( $top_selector['lastSeen'] ) ? (int) $top_selector['lastSeen'] : 0,
+							);
+						}
+					}
+					$slow_rows = \PerformanceOptimise\Inc\RUM::get_top_slow_resources( 3 );
+					if ( is_array( $slow_rows ) ) {
+						foreach ( array_slice( $slow_rows, 0, 3 ) as $row ) {
+							if ( ! is_array( $row ) || empty( $row['url'] ) || ! is_string( $row['url'] ) ) {
+								continue;
+							}
+							$slow_candidates[] = array(
+								'url'         => $row['url'],
+								'type'        => isset( $row['type'] ) && is_string( $row['type'] ) ? $row['type'] : 'img',
+								'n'           => isset( $row['n'] ) ? (int) $row['n'] : 0,
+								'avgDuration' => isset( $row['avgDuration'] ) ? (float) $row['avgDuration'] : 0.0,
+								'maxDuration' => isset( $row['maxDuration'] ) ? (float) $row['maxDuration'] : 0.0,
+							);
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$attributed_selector = null;
+				$slow_candidates     = array();
+			}
+
 			return array(
 				'version'               => 1,
 				'prefetch_urls'         => array_values( array_filter( $prefetch_urls ) ),
@@ -1294,6 +1336,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				'field_lcp_provisional' => $field_lcp_provisional,
 				'field_lcp_samples'     => $field_lcp_samples,
 				'field_lcp_min_samples' => $field_lcp_min,
+				'attributed_lcp'        => $attributed_selector,
+				'slow_resources'        => $slow_candidates,
 				'delay_js_level'        => isset( $delay_state['level'] ) ? (string) $delay_state['level'] : 'conservative',
 				'delay_inp_p75'         => isset( $delay_state['inp_p75'] ) ? (float) $delay_state['inp_p75'] : 0.0,
 				'delay_lcp_p75'         => isset( $delay_state['lcp_p75'] ) ? (float) $delay_state['lcp_p75'] : 0.0,
@@ -2211,6 +2255,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						'settings' => array( 'speculationMode' => 'prefetch' ),
 					),
 				);
+			}
+
+			// LCP-element attribution + slow-resource audit (issue #1311):
+			// read-only preload/speculation candidates naming the exact hero
+			// element and the slowest sub-resources. Fail-open: missing keys
+			// (models persisted before attribution shipped) or lookup errors
+			// emit nothing. Suggestions only — never auto-applied.
+			try {
+				$attributed = $model['attributed_lcp'] ?? null;
+				if ( null === $attributed && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_top_slow_resources' ) ) {
+					// Models persisted before attribution shipped: live
+					// read-only fallback. Never fatal, never writes.
+					$prefetch_first = ( is_array( $prefetch ) && ! empty( $prefetch ) ) ? null : null;
+					unset( $prefetch_first );
+				}
+				if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] ) {
+					$attr_path     = isset( $attributed['path'] ) && is_string( $attributed['path'] ) ? $attributed['path'] : '';
+					$attr_selector = $attributed['selector'];
+					/* translators: %1$s LCP selector, %2$s page path. */
+					$attr_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
+					/* translators: %1$s LCP selector, %2$s page path. */
+					$attr_description = sprintf( __( 'AI: Preload hero element %1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
+					$suggestions[]    = array(
+						'metric'      => 'ai_lcp_preload',
+						'value'       => $attr_value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => $attr_description,
+						'fix_action'  => 'open_preload_tab',
+						'ai_payload'  => array(
+							'tab'      => 'preload_settings',
+							'settings' => array(),
+						),
+					);
+				}
+				$slow_list = $model['slow_resources'] ?? array();
+				if ( is_array( $slow_list ) && ! empty( $slow_list ) ) {
+					$slow_first = $slow_list[0];
+					if ( is_array( $slow_first ) && isset( $slow_first['url'] ) && is_string( $slow_first['url'] ) && '' !== $slow_first['url'] ) {
+						$slow_type = isset( $slow_first['type'] ) && is_string( $slow_first['type'] ) ? $slow_first['type'] : 'resource';
+						/* translators: %1$s resource type, %2$s resource URL. */
+						$slow_value = sprintf( __( '%1$s · %2$s', 'performance-optimisation' ), $slow_type, $slow_first['url'] );
+						/* translators: %1$s resource type, %2$s resource URL. */
+						$slow_description = sprintf( __( 'AI: Preload slow resource %1$s (%2$s)', 'performance-optimisation' ), $slow_first['url'], $slow_type );
+						$suggestions[]    = array(
+							'metric'      => 'ai_slow_resource_preload',
+							'value'       => $slow_value,
+							'unit'        => 'string',
+							'status'      => 'needs_improvement',
+							'description' => $slow_description,
+							'fix_action'  => 'open_preload_tab',
+							'ai_payload'  => array(
+								'tab'      => 'preload_settings',
+								'settings' => array(),
+							),
+						);
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 
 			// Guardrail (#908): in commerce/auth contexts suggest excluding

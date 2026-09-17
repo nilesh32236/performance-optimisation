@@ -197,6 +197,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const LCP_URL_MAX_LENGTH = 2048;
 
 		/**
+		 * Maximum length (chars) accepted for an LCP element selector.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const LCP_SELECTOR_MAX_LENGTH = 256;
+
+		/**
+		 * Maximum slow-resource entries accepted per beacon sample.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const SLOW_RESOURCES_MAX_COUNT = 5;
+
+		/**
+		 * Maximum length (chars) accepted for a slow-resource URL.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const SLOW_RESOURCE_URL_MAX_LENGTH = 2048;
+
+		/**
+		 * Maximum duration (ms) accepted for a slow-resource entry.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const SLOW_RESOURCE_MAX_DURATION_MS = 60000;
+
+		/**
+		 * Maximum distinct LCP element selectors tracked per path bucket.
+		 *
+		 * Bounds the `lcpSelectors` map added for LCP-element attribution
+		 * (issue #1311) so the aggregate option stays within its byte budget.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_LCP_SELECTORS_PER_PATH = 10;
+
+		/**
+		 * Maximum distinct slow-resource URLs tracked per path bucket.
+		 *
+		 * Bounds the `slowResources` map added for the slow-resource audit
+		 * (issue #1311) so the aggregate option stays within its byte budget.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_SLOW_RESOURCES_PER_PATH = 10;
+
+		/**
+		 * Allowlisted slow-resource initiator types.
+		 *
+		 * Mirrors the client-side allowlist (`RUM_ALLOWED_RESOURCE_TYPES`
+		 * in src/rum.js). Anything else is dropped at intake.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const ALLOWED_SLOW_RESOURCE_TYPES = array( 'img', 'script', 'css', 'link', 'font', 'fetch', 'xmlhttprequest', 'iframe' );
+
+		/**
 		 * Allowlisted effective connection types for RUM segmentation.
 		 *
 		 * Mirrors the client-side allowlist (`classifyConnectionType` in
@@ -1102,6 +1167,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			// reject the sample — the numeric path above is unchanged.
 			$sample['connection'] = self::normalize_segment_connection( $params['connection'] ?? null );
 
+			// Optional LCP element attribution (issue #1311). Lazily booted:
+			// this block only runs when the field is present, so the
+			// p75-only path is byte-identical when attribution is absent.
+			// Fail-open: invalid values omit the key, never reject the sample.
+			if ( array_key_exists( 'lcpSelector', $params ) ) {
+				$selector = self::sanitize_lcp_selector( $params['lcpSelector'] );
+				if ( '' !== $selector ) {
+					$sample['lcpSelector'] = $selector;
+				}
+			}
+
+			// Optional slow-resource audit (issue #1311). Lazily booted:
+			// only parsed when the field is present. Accepts both
+			// `slowResources` and the legacy-shaped `slow_resources` key.
+			// Fail-open: malformed entries are dropped; an empty result
+			// omits the key, never rejecting the sample.
+			$slow_raw = null;
+			if ( array_key_exists( 'slowResources', $params ) ) {
+				$slow_raw = $params['slowResources'];
+			} elseif ( array_key_exists( 'slow_resources', $params ) ) {
+				$slow_raw = $params['slow_resources'];
+			}
+			if ( null !== $slow_raw ) {
+				$slow_clean = self::sanitize_slow_resources( $slow_raw );
+				if ( ! empty( $slow_clean ) ) {
+					$sample['slowResources'] = $slow_clean;
+				}
+			}
+
 			return $sample;
 		}
 
@@ -1264,6 +1358,129 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return 'unknown';
 			}
 			return self::normalize_segment( $raw, self::ALLOWED_CONNECTIONS, 16 );
+		}
+
+		/**
+		 * Sanitize an LCP element selector attribution value.
+		 *
+		 * Additive beacon field (issue #1311): compact `tag#id`/`.class`
+		 * selector only, strict charset + length caps, markup/breakout
+		 * tokens rejected mirroring the path gate. Fail-open: returns ''
+		 * when invalid so callers omit the key and the p75-only path is
+		 * unchanged. Never fatal.
+		 *
+		 * @since NEXT
+		 * @param mixed $raw Raw selector value.
+		 * @return string Sanitized selector or ''.
+		 */
+		private static function sanitize_lcp_selector( $raw ): string {
+			try {
+				if ( ! is_string( $raw ) ) {
+					return '';
+				}
+				$cleaned = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : $raw;
+				$cleaned = trim( substr( $cleaned, 0, self::LCP_SELECTOR_MAX_LENGTH ) );
+				if ( '' === $cleaned ) {
+					return '';
+				}
+				if ( 1 !== preg_match( '/^[a-z0-9#\._\-\s>:~+\[\]="\']{1,256}$/i', $cleaned ) ) {
+					return '';
+				}
+				if ( false !== strpbrk( $cleaned, '<>"`' ) ) {
+					return '';
+				}
+				if ( false !== stripos( $cleaned, '</style' ) || false !== stripos( $cleaned, '<script' ) || false !== stripos( $cleaned, '<!--' ) || false !== strpos( $cleaned, '-->' ) || false !== stripos( $cleaned, 'javascript:' ) ) {
+					return '';
+				}
+				return $cleaned;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Normalize a slow-resource initiator type to the allowlist.
+		 *
+		 * @since NEXT
+		 * @param mixed $raw Raw initiator type.
+		 * @return string Allowlisted type or ''.
+		 */
+		private static function normalize_slow_resource_type( $raw ): string {
+			try {
+				if ( ! is_string( $raw ) ) {
+					return '';
+				}
+				$cleaned = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : $raw;
+				$cleaned = strtolower( trim( substr( $cleaned, 0, 16 ) ) );
+				return in_array( $cleaned, self::ALLOWED_SLOW_RESOURCE_TYPES, true ) ? $cleaned : '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Sanitize the slow-resource audit payload.
+		 *
+		 * Additive beacon field (issue #1311): array of at most
+		 * SLOW_RESOURCES_MAX_COUNT shaped entries. Per-entry the URL must
+		 * pass the same-origin `is_safe_lcp_url()` gate, the type must be
+		 * allowlisted, and the duration is clamped to
+		 * 0–SLOW_RESOURCE_MAX_DURATION_MS via `clamp_metric_value()`.
+		 * Malformed entries are dropped; an empty result omits the key.
+		 * Lazily booted: callers only invoke this when the field is present.
+		 * Never fatal.
+		 *
+		 * @since NEXT
+		 * @param mixed $raw Raw slowResources value.
+		 * @return array Shaped entries (possibly empty).
+		 */
+		private static function sanitize_slow_resources( $raw ): array {
+			$clean = array();
+			try {
+				if ( ! is_array( $raw ) ) {
+					return $clean;
+				}
+				$sliced = array_slice( $raw, 0, self::SLOW_RESOURCES_MAX_COUNT );
+				foreach ( $sliced as $entry ) {
+					if ( ! is_array( $entry ) ) {
+						continue;
+					}
+					$url_raw = $entry['url'] ?? ( $entry['name'] ?? null );
+					if ( ! is_string( $url_raw ) ) {
+						continue;
+					}
+					$url = trim( substr( $url_raw, 0, self::SLOW_RESOURCE_URL_MAX_LENGTH ) );
+					if ( '' === $url || ! self::is_safe_lcp_url( $url ) ) {
+						continue;
+					}
+					$type = self::normalize_slow_resource_type( $entry['type'] ?? null );
+					if ( '' === $type ) {
+						continue;
+					}
+					$duration_raw = $entry['duration'] ?? null;
+					if ( ! is_scalar( $duration_raw ) || ! is_numeric( $duration_raw ) ) {
+						continue;
+					}
+					$duration = (float) $duration_raw;
+					if ( ! is_finite( $duration ) ) {
+						continue;
+					}
+					$duration = max( 0.0, min( (float) self::SLOW_RESOURCE_MAX_DURATION_MS, $duration ) );
+					$clean[]  = array(
+						'url'      => $url,
+						'type'     => $type,
+						'duration' => $duration,
+					);
+					if ( count( $clean ) >= self::SLOW_RESOURCES_MAX_COUNT ) {
+						break;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $clean;
 		}
 
 		/**
@@ -1982,6 +2199,112 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						}
 					}
 
+					// LCP element attribution (issue #1311): bounded per-path
+					// `lcpSelectors` map counting sanitized hero selectors.
+					// Re-validated here: the queue transient is user-writable.
+					// Fail-open: malformed entries are skipped, never fatal.
+					if ( isset( $sample['lcpSelector'] ) ) {
+						$queued_selector = self::sanitize_lcp_selector( $sample['lcpSelector'] );
+						if ( '' !== $queued_selector ) {
+							if ( ! isset( $bucket['lcpSelectors'] ) || ! is_array( $bucket['lcpSelectors'] ) ) {
+								$bucket['lcpSelectors'] = array();
+							}
+							if ( isset( $bucket['lcpSelectors'][ $queued_selector ] ) && is_array( $bucket['lcpSelectors'][ $queued_selector ] ) ) {
+								++$bucket['lcpSelectors'][ $queued_selector ]['n'];
+								$bucket['lcpSelectors'][ $queued_selector ]['lastSeen'] = $ts;
+							} else {
+								$bucket['lcpSelectors'][ $queued_selector ] = array(
+									'n'        => 1,
+									'lastSeen' => $ts,
+								);
+							}
+							$selector_count = count( $bucket['lcpSelectors'] );
+							while ( $selector_count > self::MAX_LCP_SELECTORS_PER_PATH ) {
+								$evict_key = null;
+								$evict_n   = null;
+								$evict_ts  = null;
+								foreach ( $bucket['lcpSelectors'] as $key => $entry ) {
+									$entry_n  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+									$entry_ts = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
+									if ( null === $evict_key || $entry_n < $evict_n || ( $entry_n === $evict_n && $entry_ts < $evict_ts ) ) {
+										$evict_key = $key;
+										$evict_n   = $entry_n;
+										$evict_ts  = $entry_ts;
+									}
+								}
+								if ( null === $evict_key ) {
+									break;
+								}
+								unset( $bucket['lcpSelectors'][ $evict_key ] );
+								--$selector_count;
+							}
+						}
+					}
+
+					// Slow-resource audit (issue #1311): bounded per-path
+					// `slowResources` map counting sanitized sub-resource URLs
+					// with cumulative duration + slowest observation. Accepts
+					// both `slowResources` and legacy `slow_resources` queue
+					// keys. Re-validated here: the queue transient is
+					// user-writable. Fail-open: malformed entries skipped.
+					$queued_slow = $sample['slowResources'] ?? ( $sample['slow_resources'] ?? null );
+					if ( null !== $queued_slow ) {
+						$slow_clean = self::sanitize_slow_resources( $queued_slow );
+						if ( ! empty( $slow_clean ) ) {
+							if ( ! isset( $bucket['slowResources'] ) || ! is_array( $bucket['slowResources'] ) ) {
+								$bucket['slowResources'] = array();
+							}
+							foreach ( $slow_clean as $slow_entry ) {
+								$slow_url = isset( $slow_entry['url'] ) ? (string) $slow_entry['url'] : '';
+								if ( '' === $slow_url ) {
+									continue;
+								}
+								$slow_norm = ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
+									? \PerformanceOptimise\Inc\Util::normalize_url( $slow_url )
+									: '';
+								$slow_key  = '' !== $slow_norm ? $slow_norm : $slow_url;
+								if ( isset( $bucket['slowResources'][ $slow_key ] ) && is_array( $bucket['slowResources'][ $slow_key ] ) ) {
+									++$bucket['slowResources'][ $slow_key ]['n'];
+									$bucket['slowResources'][ $slow_key ]['totalDuration'] = (float) ( $bucket['slowResources'][ $slow_key ]['totalDuration'] ?? 0.0 ) + (float) $slow_entry['duration'];
+									$bucket['slowResources'][ $slow_key ]['maxDuration']   = max( (float) ( $bucket['slowResources'][ $slow_key ]['maxDuration'] ?? 0.0 ), (float) $slow_entry['duration'] );
+									$bucket['slowResources'][ $slow_key ]['lastSeen']      = $ts;
+									if ( isset( $slow_entry['type'] ) ) {
+										$bucket['slowResources'][ $slow_key ]['type'] = $slow_entry['type'];
+									}
+								} else {
+									$bucket['slowResources'][ $slow_key ] = array(
+										'url'           => $slow_url,
+										'type'          => $slow_entry['type'],
+										'n'             => 1,
+										'totalDuration' => (float) $slow_entry['duration'],
+										'maxDuration'   => (float) $slow_entry['duration'],
+										'lastSeen'      => $ts,
+									);
+								}
+							}
+							$slow_count = count( $bucket['slowResources'] );
+							while ( $slow_count > self::MAX_SLOW_RESOURCES_PER_PATH ) {
+								$evict_key = null;
+								$evict_n   = null;
+								$evict_ts  = null;
+								foreach ( $bucket['slowResources'] as $key => $entry ) {
+									$entry_n  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+									$entry_ts = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
+									if ( null === $evict_key || $entry_n < $evict_n || ( $entry_n === $evict_n && $entry_ts < $evict_ts ) ) {
+										$evict_key = $key;
+										$evict_n   = $entry_n;
+										$evict_ts  = $entry_ts;
+									}
+								}
+								if ( null === $evict_key ) {
+									break;
+								}
+								unset( $bucket['slowResources'][ $evict_key ] );
+								--$slow_count;
+							}
+						}
+					}
+
 					// Device × template × connection LCP segments (issues #986, #1143):
 					// bounded per-path `lcpSeg` map; merged via the shared
 					// merge_value_segment() helper (same reservoir + eviction
@@ -2293,6 +2616,210 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				unset( $e );
 			}
 			return null;
+		}
+
+		/**
+		 * Get the top LCP element selector attribution for a page path.
+		 *
+		 * Additive read-only lookup (issue #1311) over the `lcpSelectors`
+		 * maps stored by {@see flush_queue()}. Returns the most-observed
+		 * sanitized selector for the path only when it has been seen at
+		 * least `$min` times and was last seen within FIELD_LCP_STALE_TTL,
+		 * mirroring {@see get_field_lcp_url()}. Returns null otherwise so
+		 * callers fall through to the p75-only path. Fail-open: any failure
+		 * returns null, never fatal. No new option or transient names.
+		 *
+		 * @since NEXT
+		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
+		 * @param int|null    $min  Minimum samples (defaults to get_field_lcp_min_samples()).
+		 * @return array{selector:string,n:int,lastSeen:int}|null Top selector or null.
+		 */
+		public static function get_top_lcp_selector( ?string $path = null, ?int $min = null ): ?array {
+			try {
+				if ( null === $path ) {
+					$path = self::resolve_current_path();
+					if ( null === $path ) {
+						$raw_path = ( function_exists( 'wp_parse_url' ) && isset( $_SERVER['REQUEST_URI'] ) ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
+						$path     = is_string( $raw_path ) && '' !== $raw_path ? substr( $raw_path, 0, 512 ) : '/';
+					}
+				}
+				if ( '' === $path ) {
+					return null;
+				}
+				$normalized_path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
+				if ( null === $min ) {
+					$min = self::get_field_lcp_min_samples();
+				}
+				if ( $min < 1 ) {
+					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				}
+				$all = self::get_memoized_aggregate();
+				if ( ! is_array( $all ) || empty( $all ) ) {
+					return null;
+				}
+				$now  = function_exists( 'time' ) ? time() : 0;
+				$best = null;
+				foreach ( $all as $day_bucket ) {
+					if ( ! is_array( $day_bucket ) ) {
+						continue;
+					}
+					foreach ( $day_bucket as $bucket_path => $bucket ) {
+						if ( ! is_array( $bucket ) ) {
+							continue;
+						}
+						$bucket_norm = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( (string) $bucket_path ) : (string) $bucket_path;
+						if ( $bucket_norm !== $normalized_path ) {
+							continue;
+						}
+						$selectors = $bucket['lcpSelectors'] ?? null;
+						if ( ! is_array( $selectors ) ) {
+							continue;
+						}
+						foreach ( $selectors as $selector => $entry ) {
+							if ( ! is_string( $selector ) || '' === $selector || ! is_array( $entry ) ) {
+								continue;
+							}
+							// Re-sanitize: aggregate rows may predate the intake guard.
+							if ( '' === self::sanitize_lcp_selector( $selector ) ) {
+								continue;
+							}
+							$n         = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+							$last_seen = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
+							if ( null === $best ) {
+								$best = array(
+									'selector' => $selector,
+									'n'        => $n,
+									'lastSeen' => $last_seen,
+								);
+							} else {
+								$best['n']       += $n;
+								$best['lastSeen'] = max( $best['lastSeen'], $last_seen );
+								if ( $n >= ( $best['_raw_n'] ?? 0 ) ) {
+									$best['selector'] = $selector;
+									$best['_raw_n']   = $n;
+								}
+							}
+							if ( ! isset( $best['_raw_n'] ) ) {
+								$best['_raw_n'] = $n;
+							}
+						}
+					}
+				}
+				if ( null === $best ) {
+					return null;
+				}
+				unset( $best['_raw_n'] );
+				if ( $best['n'] < $min ) {
+					return null;
+				}
+				if ( $best['lastSeen'] <= 0 || ( $now - $best['lastSeen'] ) > self::FIELD_LCP_STALE_TTL ) {
+					return null;
+				}
+				return $best;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Get the top slow-resource audit entries across the aggregate.
+		 *
+		 * Additive read-only lookup (issue #1311) over the `slowResources`
+		 * maps stored by {@see flush_queue()}. Aggregates by normalized URL
+		 * across all days/paths, ranks by total observed count then average
+		 * duration, and returns at most `$limit` entries with same-origin
+		 * URLs only. Fail-open: any failure returns an empty array, never
+		 * fatal. No new option or transient names.
+		 *
+		 * @since NEXT
+		 * @param int $limit Maximum entries (1–10, defaults to 3).
+		 * @return array<int,array{url:string,type:string,n:int,avgDuration:float,maxDuration:float,lastSeen:int}> Top slow resources.
+		 */
+		public static function get_top_slow_resources( int $limit = 3 ): array {
+			try {
+				$limit = max( 1, min( 10, $limit ) );
+				$all   = self::get_memoized_aggregate();
+				if ( ! is_array( $all ) || empty( $all ) ) {
+					return array();
+				}
+				$merged = array();
+				foreach ( $all as $day_bucket ) {
+					if ( ! is_array( $day_bucket ) ) {
+						continue;
+					}
+					foreach ( $day_bucket as $bucket ) {
+						if ( ! is_array( $bucket ) ) {
+							continue;
+						}
+						$entries = $bucket['slowResources'] ?? null;
+						if ( ! is_array( $entries ) ) {
+							continue;
+						}
+						foreach ( $entries as $key => $entry ) {
+							if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
+								continue;
+							}
+							if ( ! self::is_same_origin_url( $entry['url'] ) ) {
+								continue;
+							}
+							$norm    = ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
+								? \PerformanceOptimise\Inc\Util::normalize_url( $entry['url'] )
+								: '';
+							$map_key = '' !== $norm ? $norm : ( is_string( $key ) ? $key : $entry['url'] );
+							if ( ! isset( $merged[ $map_key ] ) ) {
+								$merged[ $map_key ] = array(
+									'url'           => $entry['url'],
+									'type'          => isset( $entry['type'] ) && is_string( $entry['type'] ) ? $entry['type'] : 'img',
+									'n'             => 0,
+									'totalDuration' => 0.0,
+									'maxDuration'   => 0.0,
+									'lastSeen'      => 0,
+								);
+							}
+							$entry_n                              = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+							$merged[ $map_key ]['n']             += $entry_n;
+							$merged[ $map_key ]['totalDuration'] += (float) ( $entry['totalDuration'] ?? 0.0 );
+							$merged[ $map_key ]['maxDuration']    = max( (float) $merged[ $map_key ]['maxDuration'], (float) ( $entry['maxDuration'] ?? 0.0 ) );
+							$merged[ $map_key ]['lastSeen']       = max( (int) $merged[ $map_key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
+							if ( $entry_n >= ( $merged[ $map_key ]['_raw_n'] ?? 0 ) ) {
+								$merged[ $map_key ]['url'] = $entry['url'];
+								if ( isset( $entry['type'] ) && is_string( $entry['type'] ) ) {
+									$merged[ $map_key ]['type'] = $entry['type'];
+								}
+								$merged[ $map_key ]['_raw_n'] = $entry_n;
+							}
+						}
+					}
+				}
+				if ( empty( $merged ) ) {
+					return array();
+				}
+				$rows = array();
+				foreach ( $merged as $row ) {
+					unset( $row['_raw_n'] );
+					$row['avgDuration'] = $row['n'] > 0 ? (float) $row['totalDuration'] / (int) $row['n'] : 0.0;
+					unset( $row['totalDuration'] );
+					$rows[] = $row;
+				}
+				usort(
+					$rows,
+					static function ( $a, $b ) {
+						$an = isset( $a['n'] ) ? (int) $a['n'] : 0;
+						$bn = isset( $b['n'] ) ? (int) $b['n'] : 0;
+						if ( $an !== $bn ) {
+							return $bn <=> $an;
+						}
+						$ad = isset( $a['avgDuration'] ) ? (float) $a['avgDuration'] : 0.0;
+						$bd = isset( $b['avgDuration'] ) ? (float) $b['avgDuration'] : 0.0;
+						return $bd <=> $ad;
+					}
+				);
+				return array_slice( array_values( $rows ), 0, $limit );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
 		}
 
 		/**
