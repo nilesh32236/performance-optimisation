@@ -3235,6 +3235,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						);
 					}
 					$queued = Critical_CSS::regenerate_single( $template, $templates_map );
+					if ( -1 === $queued ) {
+						return $this->send_response(
+							array(
+								'mode'     => 'single',
+								'template' => $template,
+								'queued'   => 0,
+							),
+							false,
+							500,
+							__( 'Scheduler unavailable: nothing queued.', 'performance-optimisation' )
+						);
+					}
 					if ( 1 === $queued ) {
 						return $this->send_response(
 							array(

@@ -16,6 +16,14 @@ describe( 'format helpers (lib/format.js)', () => {
 			expect( formatMs( NaN ) ).toBe( '—' );
 			expect( formatMs( undefined ) ).toBe( '—' );
 		} );
+
+		it( 'renders missing telemetry as em-dash, not 0 ms', () => {
+			expect( formatMs( null ) ).toBe( '—' );
+			expect( formatMs( '' ) ).toBe( '—' );
+			expect( formatMs( '   ' ) ).toBe( '—' );
+			expect( formatMs( false ) ).toBe( '—' );
+			expect( formatMs( [] ) ).toBe( '—' );
+		} );
 	} );
 
 	describe( 'formatPercent', () => {
@@ -46,6 +54,13 @@ describe( 'format helpers (lib/format.js)', () => {
 		it( 'falls back for negative or non-finite input', () => {
 			expect( formatBytesShared( -1 ) ).toBe( '—' );
 			expect( formatBytesShared( NaN ) ).toBe( '—' );
+		} );
+
+		it( 'renders missing sizes as em-dash, not 0 B', () => {
+			expect( formatBytesShared( null ) ).toBe( '—' );
+			expect( formatBytesShared( '' ) ).toBe( '—' );
+			expect( formatBytesShared( false ) ).toBe( '—' );
+			expect( formatBytesShared( [] ) ).toBe( '—' );
 		} );
 	} );
 

@@ -3233,9 +3233,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$options  = Util::get_settings();
 				$raw      = $options['file_optimisation']['ccssExcludedPostTypes'] ?? null;
 				// Thin delegation to the shared parser so validation rules
-				// live in exactly one place (issue #1274 review).
+				// live in exactly one place (issue #1274 review). Raw is
+				// passed through so array values are preserved, not dropped.
 				$parsed = ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'parse_excluded_slugs' ) )
-					? Critical_CSS::parse_excluded_slugs( is_string( $raw ) ? $raw : array() )
+					? Critical_CSS::parse_excluded_slugs( $raw )
 					: array();
 				// Additive merge with empty-fallback, mirroring
 				// Critical_CSS::get_excluded_post_types().

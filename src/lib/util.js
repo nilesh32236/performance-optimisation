@@ -90,7 +90,12 @@ export const toTextLines = ( value ) => {
 		return value;
 	}
 	if ( Array.isArray( value ) ) {
-		return value.join( '\n' );
+		return value
+			.filter(
+				( item ) => typeof item === 'string' || typeof item === 'number'
+			)
+			.map( String )
+			.join( '\n' );
 	}
 	return '';
 };

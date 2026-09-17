@@ -51,9 +51,10 @@ const useCdnRowId = () => {
 
 // Normalize the max-retries input the same way PHP sanitizes it
 // (is_numeric whole-value check, (int) truncation, clamped 0..5,
-// fail-open to 5) so the UI never disagrees with the server on values
-// like '3.7', '+3' or '1e2' (issue #1274 review): Number() mirrors
-// PHP is_numeric(), Math.trunc() mirrors the (int) cast.
+// fail-open to 5). Number() mirrors PHP is_numeric() except for
+// hex/binary/octal literals (e.g. '0x3'): PHP is_numeric() rejects
+// them, so they are guarded explicitly to fail open to 5.
+// Math.trunc() mirrors the (int) cast for values like '3.7'.
 // Exported for direct Jest coverage.
 // @since NEXT
 export const normalizeRetries = ( value ) => {
@@ -69,6 +70,11 @@ export const normalizeRetries = ( value ) => {
 	if ( '' === s ) {
 		return 5;
 	}
+	// PHP is_numeric() rejects hex/binary/octal while Number() parses
+	// them, so guard explicitly to keep UI/server parity.
+	if ( /^0[xXoObB]/.test( s ) ) {
+		return 5;
+	}
 	const n = Number( s );
 	if ( ! Number.isFinite( n ) ) {
 		return 5;
@@ -82,9 +88,10 @@ export const normalizeRetries = ( value ) => {
 // Exported for direct Jest coverage.
 // @since NEXT
 export const normalizeDeliveryMode = ( value ) => {
-	const mode = String( value || 'file' )
-		.toLowerCase()
-		.trim();
+	if ( typeof value !== 'string' ) {
+		return 'file';
+	}
+	const mode = value.toLowerCase().trim();
 	return [ 'file', 'delay', 'async', 'remove' ].includes( mode )
 		? mode
 		: 'file';
@@ -385,44 +392,14 @@ const FileOptimization = ( {
 
 	// Backfill stable row ids so CDN-mapping rows keep identity across
 	// add/remove (index keys would reuse the wrong input state/focus).
+	// All other normalization lives in the single normalizeFileOpt() call
+	// above (issue #1274 review): no second post-spread block, so there is
+	// only one truth to keep in sync.
 	defaultSettings.cdnMapping = ( defaultSettings.cdnMapping || [] ).map(
 		( entry ) => ( {
 			...entry,
 			id: entry.id ?? cdnRowId(),
 		} )
-	);
-	// String-guard textarea-backed keys AFTER the spread so a non-string
-	// truthy payload (e.g. array from corrupted settings) cannot flow into
-	// a controlled textarea value via the ...options override above.
-	// toTextLines joins array payloads instead of clearing them (#1217 review).
-	defaultSettings.delayJSThirdPartyDenylist = toTextLines(
-		options.delayJSThirdPartyDenylist
-	);
-	defaultSettings.delayJSThirdPartyAllowlist = toTextLines(
-		options.delayJSThirdPartyAllowlist
-	);
-	defaultSettings.delayJSExcludeUrls =
-		typeof options.delayJSExcludeUrls === 'string'
-			? options.delayJSExcludeUrls
-			: '';
-	defaultSettings.usedCSSExcludeUrls =
-		typeof options.usedCSSExcludeUrls === 'string'
-			? options.usedCSSExcludeUrls
-			: '';
-	defaultSettings.ccssSafelistExtra =
-		typeof options.ccssSafelistExtra === 'string'
-			? options.ccssSafelistExtra
-			: '';
-	defaultSettings.fontSubsetSubsets =
-		typeof options.fontSubsetSubsets === 'string'
-			? options.fontSubsetSubsets
-			: 'latin';
-	defaultSettings.ccssExcludedPostTypes =
-		typeof defaultSettings.ccssExcludedPostTypes === 'string'
-			? defaultSettings.ccssExcludedPostTypes
-			: 'fl-builder-template\nelementor_library';
-	defaultSettings.ccssMaxRetries = normalizeRetries(
-		defaultSettings.ccssMaxRetries
 	);
 
 	const [ settings, setSettings ] = useState( defaultSettings );
@@ -1161,7 +1138,14 @@ const FileOptimization = ( {
 		dismiss();
 		try {
 			const res = await apiCall( 'regenerate_ccss', { template } );
-			if ( res?.success && 1 === Number( res?.data?.queued ) ) {
+			// A missing queued key is not an explicit 0: the server always
+			// sends queued on this route, so a missing key means an
+			// unexpected envelope — treat it as success, not as a skip.
+			const queued = res?.data?.queued;
+			if (
+				res?.success &&
+				( undefined === queued || 1 === Number( queued ) )
+			) {
 				notify( {
 					type: 'success',
 					message:
@@ -2066,7 +2050,7 @@ const FileOptimization = ( {
 												className="wppo-text-muted wppo-mt-8 wppo-text-small"
 											>
 												{ __(
-													'One post type per line — builder templates are skipped, never error-looped. Empty keeps the builder defaults.',
+													'One post type per line or comma-separated — builder templates are skipped, never error-looped. Empty keeps the builder defaults.',
 													'performance-optimisation'
 												) }
 											</p>

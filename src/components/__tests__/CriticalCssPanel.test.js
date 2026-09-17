@@ -16,7 +16,10 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 	faTimesCircle: { iconName: 'times-circle' },
 } ) );
 
-import CriticalCssPanel, { normalizeCcssEntry } from '../CriticalCssPanel';
+import CriticalCssPanel, {
+	normalizeCcssEntry,
+	statusConfigFor,
+} from '../CriticalCssPanel';
 
 describe( 'CriticalCssPanel', () => {
 	it( 'renders the empty state when no templates exist', () => {
@@ -291,5 +294,39 @@ describe( 'normalizeCcssEntry', () => {
 				truncated: 1,
 			} ).truncated
 		).toBe( true );
+	} );
+} );
+
+describe( 'statusConfigFor', () => {
+	it( 'resolves known keys and falls back for inherited keys', () => {
+		expect( statusConfigFor( 'skipped' ).label ).toBe( 'Skipped' );
+		expect( statusConfigFor( '__proto__' ).label ).toBe( 'Not Generated' );
+		expect( statusConfigFor( 'mystery' ).label ).toBe( 'Not Generated' );
+	} );
+
+	it( 'renders the empty state for non-object status', () => {
+		render( <CriticalCssPanel status="oops" onRegenerate={ jest.fn() } /> );
+
+		expect(
+			screen.getByText(
+				'No templates found. Save settings and regenerate.'
+			)
+		).toBeInTheDocument();
+	} );
+
+	it( 'labels per-template regenerate buttons for screen readers', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'failed', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+				onRegenerateSingle={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.getByRole( 'button', { name: 'Regenerate Home' } )
+		).toBeInTheDocument();
 	} );
 } );

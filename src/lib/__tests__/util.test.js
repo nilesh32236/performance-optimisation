@@ -152,4 +152,8 @@ describe( 'toTextLines', () => {
 		expect( toTextLines( null ) ).toBe( '' );
 		expect( toTextLines( undefined ) ).toBe( '' );
 	} );
+
+	it( 'filters non-string items instead of rendering [object Object]', () => {
+		expect( toTextLines( [ 'a', { a: 1 }, 2, null ] ) ).toBe( 'a\n2' );
+	} );
 } );

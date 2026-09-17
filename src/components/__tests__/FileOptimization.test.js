@@ -8,7 +8,10 @@ import {
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
-import FileOptimization from '../FileOptimization';
+import FileOptimization, {
+	normalizeRetries,
+	normalizeDeliveryMode,
+} from '../FileOptimization';
 
 // Mock the API request (sandbox perf test goes through the validated
 // runPerformanceScan wrapper; keep the real isValidScanUrl so validation
@@ -1541,6 +1544,45 @@ describe( 'FileOptimization Component', () => {
 					'Page cache, used CSS and critical CSS purged.'
 				)
 			).toBeInTheDocument();
+		} );
+	} );
+
+	describe( 'normalizeRetries', () => {
+		it( 'clamps valid values to 0..5 with truncation', () => {
+			expect( normalizeRetries( 3 ) ).toBe( 3 );
+			expect( normalizeRetries( '3.7' ) ).toBe( 3 );
+			expect( normalizeRetries( '+3' ) ).toBe( 3 );
+			expect( normalizeRetries( '1e2' ) ).toBe( 5 );
+			expect( normalizeRetries( 99 ) ).toBe( 5 );
+			expect( normalizeRetries( -2 ) ).toBe( 0 );
+			expect( normalizeRetries( 0 ) ).toBe( 0 );
+		} );
+
+		it( 'fails open to 5 on missing or malformed input', () => {
+			expect( normalizeRetries( undefined ) ).toBe( 5 );
+			expect( normalizeRetries( '' ) ).toBe( 5 );
+			expect( normalizeRetries( 'abc' ) ).toBe( 5 );
+			expect( normalizeRetries( [ '3' ] ) ).toBe( 5 );
+			expect( normalizeRetries( NaN ) ).toBe( 5 );
+		} );
+
+		it( 'rejects hex/binary/octal like PHP is_numeric', () => {
+			expect( normalizeRetries( '0x3' ) ).toBe( 5 );
+			expect( normalizeRetries( '0b101' ) ).toBe( 5 );
+			expect( normalizeRetries( '0o17' ) ).toBe( 5 );
+		} );
+	} );
+
+	describe( 'normalizeDeliveryMode', () => {
+		it( 'accepts allowlisted string modes case-insensitively', () => {
+			expect( normalizeDeliveryMode( 'Delay' ) ).toBe( 'delay' );
+			expect( normalizeDeliveryMode( ' async ' ) ).toBe( 'async' );
+		} );
+
+		it( 'fails open to file for non-strings and unknown modes', () => {
+			expect( normalizeDeliveryMode( [ 'delay' ] ) ).toBe( 'file' );
+			expect( normalizeDeliveryMode( 42 ) ).toBe( 'file' );
+			expect( normalizeDeliveryMode( 'eager' ) ).toBe( 'file' );
 		} );
 	} );
 

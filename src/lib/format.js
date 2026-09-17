@@ -11,7 +11,26 @@
  * @param {*} value Numeric value.
  * @return {string} Formatted value or '—' fallback.
  */
+const isMissingMetric = ( value ) => {
+	if ( value === null || value === undefined ) {
+		return true;
+	}
+	if ( typeof value === 'boolean' ) {
+		return true;
+	}
+	if ( Array.isArray( value ) ) {
+		return true;
+	}
+	if ( typeof value === 'string' && '' === value.trim() ) {
+		return true;
+	}
+	return false;
+};
+
 export const formatMs = ( value ) => {
+	if ( isMissingMetric( value ) ) {
+		return '—';
+	}
 	const num = Number( value );
 	if ( ! Number.isFinite( num ) ) {
 		return '—';
@@ -32,6 +51,9 @@ export const formatMs = ( value ) => {
  * @return {string} Formatted value or '—' fallback.
  */
 export const formatPercent = ( value ) => {
+	if ( isMissingMetric( value ) ) {
+		return '—';
+	}
 	const num = Number( value );
 	if ( ! Number.isFinite( num ) ) {
 		return '—';
@@ -52,6 +74,9 @@ export const formatPercent = ( value ) => {
  * @return {string} Formatted value or '—' fallback.
  */
 export const formatBytesShared = ( value ) => {
+	if ( isMissingMetric( value ) ) {
+		return '—';
+	}
 	const num = Number( value );
 	if ( ! Number.isFinite( num ) || num < 0 ) {
 		return '—';

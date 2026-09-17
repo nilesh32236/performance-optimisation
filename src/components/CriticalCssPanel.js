@@ -18,9 +18,9 @@ const READY_CONFIG = {
 
 const STATUS_CONFIG = {
 	ready: READY_CONFIG,
-	// Alias (issue #1274 review): done === ready, single source so a
-	// future label change needs one edit.
-	done: READY_CONFIG,
+	// Copy (issue #1274 review): done === ready today, but a shared
+	// reference would let a future mutation hit both entries.
+	done: { ...READY_CONFIG },
 	queued: {
 		icon: faClock,
 		className: 'wppo-badge--info',
@@ -160,7 +160,10 @@ const CriticalCssPanel = ( {
 		}
 	};
 
-	const entries = Object.entries( status ?? {} );
+	const entries =
+		status && typeof status === 'object' && ! Array.isArray( status )
+			? Object.entries( status )
+			: [];
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
@@ -174,7 +177,10 @@ const CriticalCssPanel = ( {
 				) }
 			</p>
 			{ entries.length > 0 ? (
-				<div className="wppo-ccss-status-list wppo-mb-16">
+				<div
+					className="wppo-ccss-status-list wppo-mb-16"
+					aria-live="polite"
+				>
 					{ entries.map( ( [ hash, entry ] ) => {
 						const normalized = normalizeCcssEntry( hash, entry );
 						const { statusKey, label, size, truncated } =
@@ -221,6 +227,14 @@ const CriticalCssPanel = ( {
 										className="wppo-button wppo-button--secondary wppo-button--small"
 										type="button"
 										disabled={ singleBusy === hash }
+										aria-label={ sprintf(
+											/* translators: %s: template label. */
+											__(
+												'Regenerate %s',
+												'performance-optimisation'
+											),
+											label
+										) }
 										onClick={ () =>
 											handleRegenerateSingle( hash )
 										}

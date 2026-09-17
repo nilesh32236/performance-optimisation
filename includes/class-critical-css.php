@@ -691,7 +691,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				$options = Util::get_settings();
 				$raw     = $options['file_optimisation']['ccssExcludedPostTypes'] ?? null;
-				$parsed  = self::parse_excluded_slugs( is_string( $raw ) ? $raw : array() );
+				// Pass raw through: the shared parser already handles
+				// string|array|mixed, so array values from imports or
+				// corrupted options are preserved, not discarded.
+				$parsed = self::parse_excluded_slugs( $raw );
 				// Additive merge: valid configured slugs join the built-in
 				// builder defaults; an empty/invalid setting keeps defaults
 				// so protection is never silently disabled.
@@ -737,6 +740,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Resolve a template slug or hash to its canonical slug (issue #1274).
+		 *
+		 * Single shared slug-to-hash resolution loop for
+		 * is_known_template() and regenerate_single() so the two can never
+		 * drift.
+		 *
+		 * @param string                    $template Template slug or template hash.
+		 * @param array<string,string>|null $templates Optional pre-enumerated template map (reuses the caller's scan).
+		 * @return string Canonical slug, or '' when unknown.
+		 * @since NEXT
+		 */
+		public static function resolve_template_slug( string $template, ?array $templates = null ): string {
+			try {
+				$template = trim( $template );
+				if ( '' === $template ) {
+					return '';
+				}
+				if ( null === $templates ) {
+					$templates = self::get_templates();
+				}
+				if ( array_key_exists( $template, $templates ) ) {
+					return $template;
+				}
+				foreach ( array_keys( $templates ) as $candidate ) {
+					if ( self::get_template_hash( (string) $candidate ) === $template ) {
+						return (string) $candidate;
+					}
+				}
+				return '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Whether a template slug or hash is a known template (issue #1274 review).
 		 *
 		 * Lets the REST layer distinguish an unknown `template` param (404)
@@ -749,27 +788,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		public static function is_known_template( string $template, ?array $templates = null ): bool {
-			try {
-				$template = trim( $template );
-				if ( '' === $template ) {
-					return false;
-				}
-				if ( null === $templates ) {
-					$templates = self::get_templates();
-				}
-				if ( array_key_exists( $template, $templates ) ) {
-					return true;
-				}
-				foreach ( array_keys( $templates ) as $candidate ) {
-					if ( self::get_template_hash( (string) $candidate ) === $template ) {
-						return true;
-					}
-				}
-				return false;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return '' !== self::resolve_template_slug( $template, $templates );
 		}
 
 		/**
@@ -5196,7 +5215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string                    $template Template slug or template hash.
 		 * @param array<string,string>|null $templates Optional pre-enumerated template map (reuses the caller's scan).
-		 * @return int 1 when queued, 0 otherwise.
+		 * @return int 1 when queued, 0 for legit skip/unknown, -1 when the scheduler is unavailable (infra failure, not a benign skip).
 		 * @since NEXT
 		 */
 		public static function regenerate_single( string $template, ?array $templates = null ): int {
@@ -5211,17 +5230,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( null === $templates ) {
 					$templates = self::get_templates();
 				}
-				$slug = '';
-				if ( array_key_exists( $template, $templates ) ) {
-					$slug = $template;
-				} else {
-					foreach ( array_keys( $templates ) as $candidate ) {
-						if ( self::get_template_hash( (string) $candidate ) === $template ) {
-							$slug = (string) $candidate;
-							break;
-						}
-					}
-				}
+				$slug = self::resolve_template_slug( $template, $templates );
 				if ( '' === $slug ) {
 					return 0;
 				}
@@ -5250,7 +5259,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						}
 					}
 				} else {
-					return 0;
+					// Distinct sentinel (issue #1274 review): a missing
+					// scheduler is infra failure, not a benign skip, so
+					// the REST layer can return an error instead of a 200.
+					return -1;
 				}
 				self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 				return 1;
