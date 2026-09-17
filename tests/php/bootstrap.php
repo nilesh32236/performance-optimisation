@@ -334,6 +334,7 @@ trait WPPO_Test_Bootstrap {
 		\Brain\Monkey\Functions\when( '__' )->returnArg( 1 );
 		\Brain\Monkey\Functions\when( 'esc_html__' )->returnArg( 1 );
 		\Brain\Monkey\Functions\when( 'esc_html' )->returnArg( 1 );
+		\Brain\Monkey\Functions\when( 'esc_attr__' )->returnArg( 1 );
 		\Brain\Monkey\Functions\when( 'esc_url_raw' )->returnArg();
 	}
 

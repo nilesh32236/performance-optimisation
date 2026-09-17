@@ -3805,7 +3805,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private function build_delayed_css_loader(): string {
-			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false,t=null;function l(){if(d){return;}d=true;if(t!==null){clearTimeout(t);t=null;}var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});t=setTimeout(l,5000);})();</script>';
+			// Audit #1325: pagehide/beforeunload clears the 5s backstop (mirrors
+			// the critical-css loader), and mouseover joins the trigger set to
+			// match the lazyload interaction contract (hover users flush early
+			// instead of riding the backstop).
+			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false,t=null;function l(){if(d){return;}d=true;if(t!==null){clearTimeout(t);t=null;}var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);window.removeEventListener(\'mouseover\',b);}function p(){if(t!==null){clearTimeout(t);t=null;}}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});window.addEventListener(\'mouseover\',b,{passive:true});window.addEventListener(\'pagehide\',p);window.addEventListener(\'beforeunload\',p);t=setTimeout(l,5000);})();</script>';
 		}
 
 		/**

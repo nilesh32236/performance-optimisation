@@ -290,11 +290,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									$is_disabled  = in_array( $script['handle'], $disabled_scripts, true );
 									$strategy     = $delay_strategies[ $script['handle'] ] ?? '';
 									$priority     = $delay_priorities[ $script['handle'] ] ?? '';
-									$note_id      = 'wppo-protected-script-' . (int) $script_index;
+									// Audit #1333: id derives from the handle
+									// (not the loop index) so the
+									// aria-describedby target survives reorders.
+									$note_id = 'wppo-protected-script-' . preg_replace( '/[^A-Za-z0-9_-]/', '-', (string) $script['handle'] ) . '-' . substr( md5( (string) $script['handle'] ), 0, 6 );
 									?>
 								<tr
 									<?php if ( $is_protected ) : ?>
-									style="opacity: 0.5;"
+									style="background-color: #f0f0f1; border-left: 4px solid #787c82;"
 								<?php endif; ?>
 								>
 									<td>
@@ -381,11 +384,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									<?php
 									$is_protected = in_array( $style['handle'], $protected_css, true );
 									$is_disabled  = in_array( $style['handle'], $disabled_styles, true );
-									$note_id      = 'wppo-protected-style-' . (int) $style_index;
+									// Audit #1333: handle-derived id (see scripts loop).
+									$note_id = 'wppo-protected-style-' . preg_replace( '/[^A-Za-z0-9_-]/', '-', (string) $style['handle'] ) . '-' . substr( md5( (string) $style['handle'] ), 0, 6 );
 									?>
 								<tr
 									<?php if ( $is_protected ) : ?>
-									style="opacity: 0.5;"
+									style="background-color: #f0f0f1; border-left: 4px solid #787c82;"
 								<?php endif; ?>
 								>
 									<td>

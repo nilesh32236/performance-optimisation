@@ -2813,6 +2813,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Whether a strict Content-Security-Policy blocks raw inline scripts.
+		 *
+		 * Mirrors Used_CSS::has_strict_csp() for the header layer (audit
+		 * #1325): inspects headers_list() for a CSP without 'unsafe-inline'.
+		 * A nonce must never be baked here because this output enters the
+		 * static page cache — callers downgrade to blocking file delivery
+		 * instead (fail-open, never unstyled).
+		 *
+		 * @since NEXT
+		 * @return bool True when inline scripts would be blocked.
+		 */
+		private static function has_strict_csp(): bool {
+			try {
+				/**
+				 * Filters whether a server-level strict CSP is active for CCSS delivery.
+				 *
+				 * Return true when a Content-Security-Policy without
+				 * 'unsafe-inline' is enforced outside PHP
+				 * (htaccess/Nginx/hosting headers), which headers_list()
+				 * cannot detect.
+				 *
+				 * @since NEXT
+				 * @param bool $strict_csp Whether a server-level strict CSP is active.
+				 */
+				if ( function_exists( 'apply_filters' ) && (bool) apply_filters( 'wppo_critical_css_strict_csp', false ) ) {
+					return true;
+				}
+				if ( function_exists( 'headers_list' ) ) {
+					foreach ( headers_list() as $header ) {
+						if ( 0 !== stripos( (string) $header, 'content-security-policy' ) ) {
+							continue;
+						}
+						if ( false === stripos( (string) $header, 'unsafe-inline' ) ) {
+							return true;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
 		 * File-first CCSS URL with mtime cache busting.
 		 *
 		 * Per-template variants are already stored as files; this exposes them
@@ -4847,6 +4891,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( null !== $content ) {
 				// Fallback when CCSS is too short (<500B) — treat as failed and inject async loadCSS guard.
 				if ( strlen( $content ) < self::MIN_INLINE_SIZE ) {
+					// Strict CSP (audit #1325): the raw loader below would be
+					// blocked without 'unsafe-inline', and a nonce must never
+					// be baked here (this output enters the static page
+					// cache). Downgrade to the blocking file variant instead
+					// (fail-open, never unstyled); without a file URL, emit
+					// nothing and defer to the full stylesheet.
+					if ( self::has_strict_csp() ) {
+						$fallback_file_url = self::get_ccss_file_url( $template_hash );
+						if ( '' !== $fallback_file_url ) {
+							// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Per-template CCSS file variant served directly (no registered handle exists for it).
+							echo '<link rel="stylesheet" id="wppo-critical-css" href="' . esc_url( $fallback_file_url ) . '" media="all" />' . "\n";
+						}
+						return;
+					}
 					// Timer handles are tracked so the media-swap fallback is
 					// cleared on pagehide/beforeunload (audit #1077 finding 5).
 					echo '<script>!function(e){"use strict";var T=[],c=function(h){var i=T.indexOf(h);if(i>-1){T.splice(i,1)}clearTimeout(h)},n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a);var h=setTimeout(function(){c(h),r.media=o||"all"},0);T.push(h),r.onload=function(){c(h),r.media=o||"all"}};e.wppoLoadCSS=n;var f=function(){for(var i=0;i<T.length;i++){clearTimeout(T[i])}T.length=0};e.addEventListener("pagehide",f),e.addEventListener("beforeunload",f)}(window);</script>' . "\n";
