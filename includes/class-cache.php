@@ -1136,7 +1136,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 							continue;
 						}
-						$src      = $wp_styles->registered[ $handle ]->src;
+						$src = $wp_styles->registered[ $handle ]->src;
+						// Allowlist second gate (issue #1409): the freshness
+						// loop must apply the same containment as
+						// fetch_remote_css() instead of mapping raw hrefs.
+						if ( ! self::is_combine_source_allowed( (string) $src ) ) {
+							continue;
+						}
 						$src_path = Util::get_local_path( (string) $src );
 						if ( '' !== $src_path && $fs->exists( $src_path ) && $fs->mtime( $src_path ) > $cache_mtime ) {
 							$source_newer = true;
@@ -1177,7 +1183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$successful_handles = $fetch_result['handles'];
 			if ( '' !== $fetch_result['error'] ) {
 				if ( $this->is_safe_css_combine_fallback_enabled() ) {
-					$log_handles = in_array( $fetch_result['error'], array( 'preg_error', 'empty_after_minify' ), true ) ? $successful_handles : $eligible_handles;
+					$log_handles = in_array( $fetch_result['error'], array( 'preg_error', 'empty_after_minify', 'sanitize_failed' ), true ) ? $successful_handles : $eligible_handles;
 					$this->log_combine_fallback( $fetch_result['error'], $log_handles );
 				}
 				return;
@@ -1302,11 +1308,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					'error'   => 'empty_after_minify',
 				);
 			}
+			// Generated-CSS sanitize (issue #1409): the combined file may be
+			// inlined by core via wp_maybe_inline_styles(), so stored CSS
+			// must carry no <style>-breakout / script-capable tokens. On
+			// sanitizer failure fail open (original link tags, last-good
+			// file kept) — never store executable content.
+			$combined_css = $this->sanitize_combined_css( (string) $combined_css );
+			if ( '' === trim( $combined_css ) ) {
+				return array(
+					'css'     => '',
+					'handles' => $successful_handles,
+					'error'   => 'sanitize_failed',
+				);
+			}
 			return array(
 				'css'     => (string) $combined_css,
 				'handles' => $successful_handles,
 				'error'   => '',
 			);
+		}
+
+		/**
+		 * Sanitize combined CSS before it is written to the cache file.
+		 *
+		 * Shared {@see Util::sanitize_inline_css()} neutralization plus a
+		 * fail-closed re-gate: when hostile tokens survive sanitization the
+		 * block is dropped (returns '') so executable content is never
+		 * stored. Clean CSS passes through byte-identical.
+		 *
+		 * @param string $combined_css Combined CSS.
+		 * @return string Sanitized CSS, or '' when refused.
+		 * @since NEXT
+		 */
+		private function sanitize_combined_css( string $combined_css ): string {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_inline_css' ) ) {
+					return $combined_css;
+				}
+				$sanitized = Util::sanitize_inline_css( $combined_css );
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'contains_unsafe_css_tokens' ) && Util::contains_unsafe_css_tokens( $sanitized ) ) {
+					return '';
+				}
+				return $sanitized;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
 		}
 
 		/**
@@ -1450,6 +1497,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether a stylesheet src is allowed to be mapped to a local read.
+		 *
+		 * Paranoid-by-default allowlist (issue #1409): delegates to the
+		 * shared {@see Util::is_css_combine_source_allowed()} gate so
+		 * traversal/off-site hrefs are never mapped to local reads. Local
+		 * relative paths pass; absolute http(s) URLs pass only when
+		 * same-site (or explicitly allowlisted via
+		 * `wppo_combine_allowed_stylesheet_host`).
+		 *
+		 * @param mixed $src Candidate stylesheet src.
+		 * @return bool True when the src may be resolved locally.
+		 * @since NEXT
+		 */
+		private static function is_combine_source_allowed( $src ): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_css_combine_source_allowed' ) ) {
+					return Util::is_css_combine_source_allowed( $src );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return is_string( $src ) && '' !== trim( $src );
+		}
+
+		/**
 		 * Computes the set of handles that belong in the combined CSS file.
 		 *
 		 * Mirrors the skip rules applied in {@see combine_css()} generation: styles
@@ -1461,6 +1533,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * classic themes the hoisting-aware dedupe below keeps `wp-block-*`
 		 * handles out of the combined file so no duplicate output or FOUC occurs
 		 * while non-block CSS still benefits from combining.
+		 *
+		 * Source allowlist (issue #1409): traversal/off-site hrefs are never
+		 * mapped to local reads — skipped here so they stay on their original
+		 * link tags (fail-open).
 		 *
 		 * @since 1.9.0
 		 *
@@ -1492,6 +1568,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 
 				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
+					continue;
+				}
+
+				// Source allowlist (issue #1409): traversal/off-site hrefs
+				// are never mapped to local reads — skipped here so they
+				// stay on their original link tags (fail-open).
+				if ( ! self::is_combine_source_allowed( (string) $style_data->src ) ) {
 					continue;
 				}
 
@@ -2160,6 +2243,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function fetch_remote_css( $url ) {
 			if ( empty( $url ) ) {
 				return '';
+			}
+
+			// Paranoid-by-default allowlist (issue #1409): every href is
+			// attacker-controlled until allowlisted. Traversal sequences and
+			// off-site URLs are never mapped to local reads — the handle is
+			// skipped and the caller fails open to the original link tags.
+			if ( ! self::is_combine_source_allowed( $url ) ) {
+				return false;
 			}
 
 			$css_file = Util::get_local_path( $url );

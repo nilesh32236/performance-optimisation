@@ -1302,7 +1302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						__( 'Used-CSS purging skipped: WP_HTML_Tag_Processor is unavailable (requires WordPress 6.2+). Serving unprocessed CSS instead.', 'performance-optimisation' )
 					);
 				}
-				return $combined_css;
+				return self::sanitize_generated_css( $combined_css );
 			}
 
 			$used_selectors = $this->extract_selectors( $html );
@@ -1316,10 +1316,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// large input) fails back to the full stylesheet, never fatal.
 			if ( $this->is_regression_guard_tripped( $combined_css, $purged ) ) {
 				$this->log_used_css_fallback( 'regression_guard', array_keys( $css_assets ) );
-				return $combined_css;
+				return self::sanitize_generated_css( $combined_css );
 			}
 
-			return $purged;
+			return self::sanitize_generated_css( $purged );
+		}
+
+		/**
+		 * Sanitize generated used-CSS before it is stored or served.
+		 *
+		 * Defense-in-depth (issue #1409): neutralizes `</style>` /
+		 * `<script>` breakout tokens and script-capable CSS vectors via the
+		 * shared {@see Util::sanitize_inline_css()} worker. Clean CSS passes
+		 * through byte-identical; a sanitizer failure drops the block ('')
+		 * so callers fail open to unoptimized output. The pre-store gate in
+		 * {@see Used_CSS::save_used_css()} re-checks for surviving tokens.
+		 *
+		 * @param string $css Generated CSS.
+		 * @return string Sanitized CSS.
+		 * @since NEXT
+		 */
+		private static function sanitize_generated_css( string $css ): string {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_inline_css' ) ) {
+					return Util::sanitize_inline_css( $css );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+			return $css;
 		}
 
 		/**
@@ -1560,6 +1586,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			//
 			// @since 2.0.0 Empty-domain refusal.
 			if ( '' === $this->domain ) {
+				return false;
+			}
+
+			// Generated-CSS sanitize (issue #1409): script-capable payloads
+			// (`</style>`, `<script>`, `expression()` / `javascript:` /
+			// `behavior` / `-moz-binding` vectors) are neutralized before
+			// the atomic write so executable content is never stored. On
+			// sanitizer failure (or surviving hostile tokens) the write is
+			// refused and the last-good file is kept — fail open to
+			// unoptimized output, never fatal.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_inline_css' ) ) {
+					$css = Util::sanitize_inline_css( $css );
+					if ( '' === trim( $css ) ) {
+						return false;
+					}
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'contains_unsafe_css_tokens' ) && Util::contains_unsafe_css_tokens( $css ) ) {
+						return false;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return false;
 			}
 
@@ -3615,14 +3663,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		private static function fetch_css_content_static( string $url ) {
-			$local_path = Util::get_local_path( $url );
-			if ( '' !== $local_path ) {
-				$fs = Util::init_filesystem();
-				if ( $fs && $fs->exists( $local_path ) ) {
-					return $fs->get_contents( $local_path );
+			// Source allowlist (issue #1409): off-site/traversal hrefs are
+			// never mapped to local reads. Only allowlisted (local relative
+			// or same-site) hrefs resolve via get_local_path(), with the
+			// validate_minify_path() second gate; anything else falls
+			// through to the remote fetch (or refusal below).
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_css_combine_source_allowed' ) ) {
+				try {
+					if ( Util::is_css_combine_source_allowed( $url ) ) {
+						$local_path = Util::get_local_path( $url );
+						if ( '' !== $local_path && method_exists( 'PerformanceOptimise\Inc\Util', 'validate_minify_path' ) ) {
+							$local_path = Util::validate_minify_path( $local_path );
+						}
+						if ( '' !== $local_path ) {
+							$fs = Util::init_filesystem();
+							if ( $fs && $fs->exists( $local_path ) ) {
+								return $fs->get_contents( $local_path );
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} else {
+				$local_path = Util::get_local_path( $url );
+				if ( '' !== $local_path ) {
+					$fs = Util::init_filesystem();
+					if ( $fs && $fs->exists( $local_path ) ) {
+						return $fs->get_contents( $local_path );
+					}
 				}
 			}
 
+			// Remote fallback serves CDN-hosted stylesheets: only http(s)
+			// (or protocol-relative) URLs are fetched
+			// (wp_safe_remote_get() rejects unsafe URLs); relative paths
+			// already had their local attempt above and wrappers never
+			// reach the HTTP layer.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable (unit-stubbed environments always provide wp_parse_url()).
+			$scheme = strtolower( (string) ( function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_SCHEME ) : parse_url( $url, PHP_URL_SCHEME ) ) );
+			if ( '' === $scheme ) {
+				if ( 0 !== strpos( ltrim( $url ), '//' ) ) {
+					return false;
+				}
+			} elseif ( 'http' !== $scheme && 'https' !== $scheme ) {
+				return false;
+			}
 			$response = wp_safe_remote_get( $url, array( 'timeout' => 15 ) );
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				return false;

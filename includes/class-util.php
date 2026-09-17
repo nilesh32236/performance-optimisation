@@ -3163,6 +3163,221 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether a stylesheet href is allowed to be mapped to a local file read.
+		 *
+		 * Paranoid-by-default allowlist for the CSS combine / used-CSS pipelines
+		 * (issue #1409): every href is treated as attacker-controlled until
+		 * allowlisted. Relative paths (no host) are local by construction and
+		 * allowed when free of traversal sequences; absolute http(s) URLs are
+		 * allowed only when the host matches the home host
+		 * ({@see Util::is_same_site_host()}) or is explicitly allowlisted via
+		 * the `wppo_combine_allowed_stylesheet_host` filter (default-deny,
+		 * mirroring the Critical CSS `wppo_ccss_allowed_stylesheet_host`
+		 * pattern). Everything else — empty input, NUL bytes, `..` (literal
+		 * or single-decoded), stream wrappers / non-http(s) schemes, and
+		 * off-site hosts — is refused so traversal/off-site hrefs are never
+		 * mapped to local reads. Callers fail open (skip the handle, serve
+		 * original link tags, keep last-good CSS).
+		 *
+		 * @param mixed $src Candidate stylesheet src/href.
+		 * @return bool True when the href may be resolved to a local read.
+		 * @since NEXT
+		 */
+		public static function is_css_combine_source_allowed( $src ): bool {
+			try {
+				if ( ! is_string( $src ) || '' === trim( $src ) ) {
+					return false;
+				}
+				if ( false !== strpos( $src, "\0" ) ) {
+					return false;
+				}
+				$trimmed = trim( $src );
+				if ( false !== strpos( $trimmed, '..' ) ) {
+					return false;
+				}
+				$decoded = rawurldecode( $trimmed );
+				if ( false !== strpos( $decoded, "\0" ) || false !== strpos( $decoded, '..' ) ) {
+					return false;
+				}
+				// Protocol-relative URLs (//host/path) carry a host — check it.
+				$probe = $trimmed;
+				if ( 0 === strpos( $probe, '//' ) ) {
+					$probe = 'http:' . $probe;
+				}
+				if ( ! function_exists( 'wp_parse_url' ) ) {
+					return false;
+				}
+				$host = wp_parse_url( $probe, PHP_URL_HOST );
+				if ( is_string( $host ) && '' !== $host ) {
+					$scheme = strtolower( (string) wp_parse_url( $probe, PHP_URL_SCHEME ) );
+					// A host with no scheme is protocol-relative (allowed
+					// subject to the same-site check below); an explicit
+					// non-http(s) scheme is never a local asset reference.
+					if ( '' !== $scheme && 'http' !== $scheme && 'https' !== $scheme ) {
+						return false;
+					}
+					if ( self::is_same_site_host( $probe ) ) {
+						return true;
+					}
+					if ( function_exists( 'has_filter' ) && has_filter( 'wppo_combine_allowed_stylesheet_host' ) ) {
+						try {
+							$allowed = apply_filters( 'wppo_combine_allowed_stylesheet_host', false, strtolower( $host ) );
+							if ( $allowed ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+					return false;
+				}
+				// No host: reject scheme-bearing payloads (data:, javascript:,
+				// php://, file://, ...) that are never local asset references.
+				// The drive-letter carve-out keeps Windows paths from
+				// false-positive matching (mirrors get_local_path()).
+				if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#', $trimmed ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $trimmed ) ) {
+					return false;
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Decode numeric/hex HTML entities in CSS so encoded payloads cannot
+		 * smuggle `<` past the sanitizer (e.g. `&#60;script&#62;`, `&#x3c;`,
+		 * `&lt;`). Bounded to two passes; triple-encoded remnants are
+		 * neutralized downstream by the `&` escape in
+		 * {@see Util::sanitize_inline_css_tokens()}.
+		 *
+		 * Shared with the Critical CSS pipeline (identical semantics to
+		 * `Critical_CSS::decode_css_entities()`).
+		 *
+		 * @param string $css Raw CSS.
+		 * @return string Entity-decoded CSS.
+		 * @since NEXT
+		 */
+		public static function decode_css_entities( string $css ): string {
+			for ( $i = 0; $i < 2; ++$i ) {
+				$decoded = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				if ( ! is_string( $decoded ) ) {
+					break;
+				}
+				if ( $decoded === $css ) {
+					break;
+				}
+				$css = $decoded;
+			}
+			return $css;
+		}
+
+		/**
+		 * Whether decoded CSS contains tokens that could break out of a
+		 * `<style>` element or execute script when inlined.
+		 *
+		 * Shared fail-closed pre-store gate (identical semantics to
+		 * `Critical_CSS::contains_unsafe_css_tokens()`): `</style>`,
+		 * `<script`, HTML comments, `expression()` / `javascript:` /
+		 * `vbscript:` / `file:` / `expect:` vectors, script-capable
+		 * `data:` URLs, the `behavior`/`behaviour` property in property
+		 * position only, `-moz-binding`, and entity remnants.
+		 *
+		 * @param string $css Raw CSS.
+		 * @return bool True when hostile tokens are present.
+		 * @since NEXT
+		 */
+		public static function contains_unsafe_css_tokens( string $css ): bool {
+			$decoded = self::decode_css_entities( $css );
+			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:|data\s*:\s*image\/svg|data\s*:\s*text\/html|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
+		}
+
+		/**
+		 * Sanitize generated CSS for safe storage inside a `<style>` context.
+		 *
+		 * Token-breaking worker shared by the combine / used-CSS pipelines
+		 * (identical semantics to `Critical_CSS::sanitize_inline_css_tokens()`).
+		 * Fail-closed: a sanitizer error drops the block (returns '').
+		 *
+		 * @param string $css Raw CSS.
+		 * @return string Sanitized CSS.
+		 * @since NEXT
+		 */
+		public static function sanitize_inline_css_tokens( string $css ): string {
+			try {
+				$css = self::decode_css_entities( $css );
+				$css = str_ireplace( '</style', '<\/style', $css );
+				$css = str_ireplace( '<script', '<\script', $css );
+				$css = str_ireplace( '<!--', '<\!--', $css );
+				$css = str_ireplace( '-->', '--\>', $css );
+				$css = (string) preg_replace_callback(
+					'/expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				$css = (string) preg_replace_callback(
+					'/data\s*:\s*image\/svg|data\s*:\s*text\/html/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				$css = (string) preg_replace_callback(
+					'/(?<![-\w])behaviou?r(?=\s*:)/i',
+					static function (): string {
+						return 'behavio\\r';
+					},
+					$css
+				);
+				$css = str_ireplace( '-moz-binding', '-moz-bindin\g', $css );
+				$css = (string) preg_replace_callback(
+					'/&(?=#\d|#x[0-9a-f]|lt|gt|amp|quot);?/i',
+					static function (): string {
+						return "\\26 ";
+					},
+					$css
+				);
+				$css = str_replace( '<', '\3c ', $css );
+			} catch ( \Throwable $e ) {
+				return '';
+			}
+			return $css;
+		}
+
+		/**
+		 * Sanitize generated CSS for safe output inside a `<style>` tag.
+		 *
+		 * Applies {@see Util::sanitize_inline_css_tokens()} before and after
+		 * the `wppo_sanitize_inline_css` filter so hooked code cannot
+		 * reintroduce breakout tokens. Non-string filter output is discarded.
+		 *
+		 * @param string $css Raw CSS.
+		 * @return string Sanitized CSS.
+		 * @since NEXT
+		 */
+		public static function sanitize_inline_css( string $css ): string {
+			$css = self::sanitize_inline_css_tokens( $css );
+			if ( function_exists( 'has_filter' ) && has_filter( 'wppo_sanitize_inline_css' ) ) {
+				try {
+					$filtered = apply_filters( 'wppo_sanitize_inline_css', $css );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $css;
+				}
+				if ( ! is_string( $filtered ) ) {
+					return $css;
+				}
+				$css = self::sanitize_inline_css_tokens( $filtered );
+			}
+			return $css;
+		}
+
+		/**
 		 * Normalize a raw host value into a safe cache-key domain.
 		 *
 		 * Lowercases, converts IDN to ASCII, strips any port, and applies the
