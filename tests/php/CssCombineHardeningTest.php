@@ -87,6 +87,10 @@ class CssCombineHardeningTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( Util::is_css_combine_source_allowed( 'http://example.com/wp-content/themes/my-theme/style.css' ) );
 		$this->assertTrue( Util::is_css_combine_source_allowed( 'https://example.com/wp-content/themes/my-theme/style.css' ) );
 		$this->assertTrue( Util::is_css_combine_source_allowed( '//example.com/wp-content/themes/my-theme/style.css' ) );
+		// Benign filenames containing `..` (not as a path segment) stay on
+		// the combine path (segment-only dot-dot check).
+		$this->assertTrue( Util::is_css_combine_source_allowed( '/wp-content/themes/my-theme/app..v2.css' ) );
+		$this->assertTrue( Util::is_css_combine_source_allowed( 'https://example.com/wp-content/themes/my-theme/app..v2.css' ) );
 	}
 
 	/**

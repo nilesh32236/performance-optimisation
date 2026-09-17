@@ -4007,6 +4007,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function decode_css_entities( string $css ): string {
+			// Single source of truth lives in Util (issue #1409 review):
+			// delegate so token-pattern fixes land in one place; the local
+			// copy below is a degraded-path fallback only.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'decode_css_entities' ) ) {
+				try {
+					return Util::decode_css_entities( $css );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			for ( $i = 0; $i < 2; ++$i ) {
 				$decoded = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 				if ( ! is_string( $decoded ) ) {
@@ -4032,6 +4042,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function contains_unsafe_css_tokens( string $css ): bool {
+			// Delegate to the shared Util gate (single source of truth);
+			// local regex below is a degraded-path fallback only.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'contains_unsafe_css_tokens' ) ) {
+				try {
+					return Util::contains_unsafe_css_tokens( $css );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			$decoded = self::decode_css_entities( $css );
 			// Note: behaviou?r matches in property position (followed by a
 			// colon) AND only when it is the whole property name, so benign
@@ -4065,6 +4084,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function sanitize_inline_css_tokens( string $css ): string {
+			// Delegate to the shared Util worker (single source of truth);
+			// local copy below is a degraded-path fallback only.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_inline_css_tokens' ) ) {
+				try {
+					return Util::sanitize_inline_css_tokens( $css );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			try {
 				$css = self::decode_css_entities( $css );
 				$css = str_ireplace( '</style', '<\/style', $css );

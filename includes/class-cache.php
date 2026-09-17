@@ -1518,7 +1518,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return is_string( $src ) && '' !== trim( $src );
+			// Fail closed when the shared gate is unavailable (paranoid by
+			// default): never map an unchecked href to a local read.
+			return false;
 		}
 
 		/**

@@ -3173,8 +3173,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * ({@see Util::is_same_site_host()}) or is explicitly allowlisted via
 		 * the `wppo_combine_allowed_stylesheet_host` filter (default-deny,
 		 * mirroring the Critical CSS `wppo_ccss_allowed_stylesheet_host`
-		 * pattern). Everything else — empty input, NUL bytes, `..` (literal
-		 * or single-decoded), stream wrappers / non-http(s) schemes, and
+		 * pattern). Everything else — empty input, NUL bytes, `..` path
+		 * segments (literal or single-decoded, segment-only so benign
+		 * `app..v2.css` filenames still pass), stream wrappers / non-http(s) schemes, and
 		 * off-site hosts — is refused so traversal/off-site hrefs are never
 		 * mapped to local reads. Callers fail open (skip the handle, serve
 		 * original link tags, keep last-good CSS).
@@ -3192,11 +3193,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return false;
 				}
 				$trimmed = trim( $src );
-				if ( false !== strpos( $trimmed, '..' ) ) {
+				// Segment-only dot-dot check (parity with
+				// sanitize_cache_url_path()): a benign filename containing
+				// `..` (e.g. `app..v2.css`) must not be over-blocked while
+				// real traversal segments (`/../`, `..\`) still refuse.
+				if ( 1 === preg_match( '#(^|[/\\\\])\.\.([/\\\\]|$)#', $trimmed ) ) {
 					return false;
 				}
 				$decoded = rawurldecode( $trimmed );
-				if ( false !== strpos( $decoded, "\0" ) || false !== strpos( $decoded, '..' ) ) {
+				if ( false !== strpos( $decoded, "\0" ) || 1 === preg_match( '#(^|[/\\\\])\.\.([/\\\\]|$)#', $decoded ) ) {
 					return false;
 				}
 				// Protocol-relative URLs (//host/path) carry a host — check it.
@@ -3252,8 +3257,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * neutralized downstream by the `&` escape in
 		 * {@see Util::sanitize_inline_css_tokens()}.
 		 *
-		 * Shared with the Critical CSS pipeline (identical semantics to
-		 * `Critical_CSS::decode_css_entities()`).
+		 * Shared with the Critical CSS pipeline (single source of truth:
+		 * `Critical_CSS::decode_css_entities()` delegates here).
 		 *
 		 * @param string $css Raw CSS.
 		 * @return string Entity-decoded CSS.
@@ -3277,8 +3282,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Whether decoded CSS contains tokens that could break out of a
 		 * `<style>` element or execute script when inlined.
 		 *
-		 * Shared fail-closed pre-store gate (identical semantics to
-		 * `Critical_CSS::contains_unsafe_css_tokens()`): `</style>`,
+		 * Shared fail-closed pre-store gate (single source of truth:
+		 * `Critical_CSS::contains_unsafe_css_tokens()` delegates here): `</style>`,
 		 * `<script`, HTML comments, `expression()` / `javascript:` /
 		 * `vbscript:` / `file:` / `expect:` vectors, script-capable
 		 * `data:` URLs, the `behavior`/`behaviour` property in property
@@ -3297,7 +3302,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Sanitize generated CSS for safe storage inside a `<style>` context.
 		 *
 		 * Token-breaking worker shared by the combine / used-CSS pipelines
-		 * (identical semantics to `Critical_CSS::sanitize_inline_css_tokens()`).
+		 * (single source of truth: `Critical_CSS::sanitize_inline_css_tokens()`
+		 * delegates here).
 		 * Fail-closed: a sanitizer error drops the block (returns '').
 		 *
 		 * @param string $css Raw CSS.

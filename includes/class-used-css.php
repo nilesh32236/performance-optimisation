@@ -3667,7 +3667,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// never mapped to local reads. Only allowlisted (local relative
 			// or same-site) hrefs resolve via get_local_path(), with the
 			// validate_minify_path() second gate; anything else falls
-			// through to the remote fetch (or refusal below).
+			// through to the remote fetch (or refusal below). When the shared
+			// allowlist gate is unavailable the local attempt is skipped
+			// entirely (fail closed — never map an unchecked href to a local
+			// read).
 			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_css_combine_source_allowed' ) ) {
 				try {
 					if ( Util::is_css_combine_source_allowed( $url ) ) {
@@ -3684,14 +3687,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
-				}
-			} else {
-				$local_path = Util::get_local_path( $url );
-				if ( '' !== $local_path ) {
-					$fs = Util::init_filesystem();
-					if ( $fs && $fs->exists( $local_path ) ) {
-						return $fs->get_contents( $local_path );
-					}
 				}
 			}
 
