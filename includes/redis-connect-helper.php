@@ -91,6 +91,49 @@ if ( ! function_exists( 'wppo_redis_connect' ) ) {
 	}
 }
 
+if ( ! function_exists( 'wppo_redis_connect_timeout' ) ) {
+	/**
+	 * Resolve a bounded Redis boot connect timeout in seconds.
+	 *
+	 * Reads `$config['timeout']` (numeric seconds), defaults to the legacy
+	 * 0.5s when absent/invalid, honours the `wppo_object_cache_connect_timeout`
+	 * filter when WordPress is booted, then clamps to a 50ms floor and a
+	 * 300ms ceiling so a filter-supplied 5s can never stall boot TTFB.
+	 * Never throws; fail-open to 0.3s.
+	 *
+	 * @since NEXT
+	 * @param mixed $config Redis configuration (expects array with optional `timeout` key).
+	 * @return float Bounded timeout in seconds (0.05–0.3).
+	 */
+	function wppo_redis_connect_timeout( $config ) {
+		try {
+			$t = 0.5;
+			if ( is_array( $config ) && isset( $config['timeout'] ) && is_numeric( $config['timeout'] ) ) {
+				$t = (float) $config['timeout'];
+			}
+			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_object_cache_connect_timeout' ) ) {
+				$filtered = apply_filters( 'wppo_object_cache_connect_timeout', $t, is_array( $config ) ? $config : array() );
+				if ( is_numeric( $filtered ) ) {
+					$t = (float) $filtered;
+				}
+			}
+			if ( function_exists( 'is_finite' ) && ! is_finite( $t ) ) {
+				return 0.3;
+			}
+			if ( $t < 0.05 ) {
+				return 0.05;
+			}
+			if ( $t > 0.3 ) {
+				return 0.3;
+			}
+			return (float) $t;
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			return 0.3;
+		}
+	}
+}
+
 if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 	/**
 	 * Establishes a Redis Cluster connection.
@@ -119,7 +162,7 @@ if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 			);
 		}
 
-		$timeout    = 0.5;
+		$timeout    = function_exists( 'wppo_redis_connect_timeout' ) ? wppo_redis_connect_timeout( $config ) : 0.5;
 		$password   = $config['password'] ?? '';
 		$persistent = ! empty( $config['persistent'] );
 
@@ -167,7 +210,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 		$use_tls      = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
 		$password     = $config['password'] ?? '';
 		$database     = isset( $config['database'] ) ? (int) $config['database'] : 0;
-		$timeout      = 0.5;
+		$timeout      = function_exists( 'wppo_redis_connect_timeout' ) ? wppo_redis_connect_timeout( $config ) : 0.5;
 		$retry        = 0;
 		$read_timeout = 0;
 		$errors       = array();
@@ -261,7 +304,7 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 		$port     = isset( $config['port'] ) ? (int) $config['port'] : 6379;
 		$password = $config['password'] ?? '';
 		$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
-		$timeout  = 0.5;
+		$timeout  = function_exists( 'wppo_redis_connect_timeout' ) ? wppo_redis_connect_timeout( $config ) : 0.5;
 
 		if ( $use_tls && 0 !== strpos( $host, 'tls://' ) ) {
 			$host = 'tls://' . $host;

@@ -197,6 +197,19 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return;
 			}
 
+			// Bounded boot timeout: even when filters supply larger values
+			// the connect path never stalls boot beyond 300ms. Resolved
+			// after the helper load so the drop-in pre-WP boot (no
+			// apply_filters/has_filter) still falls back to the legacy 0.5s.
+			if ( function_exists( 'wppo_redis_connect_timeout' ) ) {
+				try {
+					$timeout = wppo_redis_connect_timeout( $config );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$timeout = 0.3;
+				}
+			}
+
 			try {
 				$connection = wppo_redis_connect( $config );
 
@@ -721,16 +734,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 				return $this->redis->set( $formatted_key, $data );
 			} catch ( \Throwable $e ) {
-				// First failed write after a healthy connection: degrade to the
-				// in-memory store and log once so outages are diagnosable
-				// without flooding the log.
-				$this->redis_connected = false;
-				// Drop the replica handle too: get()/get_multiple() prefer it
-				// over the primary, so a stale connected flag plus a dead
-				// replica could route reads to a broken connection.
-				$this->redis_replica = null;
-				$this->log_redis_failure_once( 'WPPO Redis object cache: write failed — ' . $e->getMessage() . ' Dropping to memory until next boot.' );
-				$this->record_redis_failure( 'write_fail', $e->getMessage() );
+				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
 				$this->cache[ $formatted_key ] = $data;
 				return true;
 			}
