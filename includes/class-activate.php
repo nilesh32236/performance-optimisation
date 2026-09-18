@@ -117,7 +117,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			$has_activation_time = (bool) get_option( 'wppo_activation_time' );
 			if ( ! $has_activation_time ) {
-				update_option( 'wppo_activation_time', time() );
+				// Explicit no-autoload: write-once timestamp, never needed early (audit #1469).
+				update_option( 'wppo_activation_time', time(), false );
 			}
 
 			// Record the current version so fresh installs skip the one-time

@@ -438,7 +438,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$img_converter     = new Img_Converter( $options );
 				$img_info          = Img_Converter::get_img_info();
 				$conversion_format = $format ? $format : ( $options['image_optimisation']['conversionFormat'] ?? 'webp' );
-				$batch_size        = $options['image_optimisation']['batch'] ?? 50;
+				// Clamp: an unclamped batch setting would run an unbounded number
+				// of synchronous GD/Imagick conversions in one invocation (audit #1469).
+				$batch_size = max( 1, min( 100, (int) ( $options['image_optimisation']['batch'] ?? 50 ) ) );
 
 				$formats_to_process = array();
 				if ( 'both' === $conversion_format ) {
@@ -2174,21 +2176,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			if ( function_exists( 'as_get_scheduled_actions' ) ) {
 				try {
 					// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+					// Bulk OBJECT fetch: a single store query returning hydrated
+					// action objects. The previous 'ids' + per-ID
+					// as_get_scheduled_action() loop issued up to 100 sequential
+					// store reads (N+1, audit #1469).
 					$actions = as_get_scheduled_actions(
 						array(
 							'status'   => 'pending',
 							'per_page' => 100,
-						),
-						'ids'
+						)
 					);
 					// phpcs:enable
 					$as_hooks = array();
 					if ( is_array( $actions ) ) {
-						foreach ( $actions as $action_id ) {
-							if ( function_exists( 'as_get_scheduled_action' ) ) {
-								$action = as_get_scheduled_action( $action_id );
-								if ( is_object( $action ) && method_exists( $action, 'get_hook' ) ) {
-									$as_hooks[] = (string) $action->get_hook();
+						foreach ( $actions as $action ) {
+							if ( is_object( $action ) && method_exists( $action, 'get_hook' ) ) {
+								$as_hooks[] = (string) $action->get_hook();
+							} elseif ( ( is_int( $action ) || is_string( $action ) ) && function_exists( 'as_get_scheduled_action' ) ) {
+								// Back-compat: some AS versions ignore the return
+								// format and hand back IDs; hydrate those only.
+								$single = as_get_scheduled_action( $action );
+								if ( is_object( $single ) && method_exists( $single, 'get_hook' ) ) {
+									$as_hooks[] = (string) $single->get_hook();
 								}
 							}
 						}

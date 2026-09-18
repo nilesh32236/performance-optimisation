@@ -130,6 +130,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
+					// Cap unbounded file-to-memory reads: skip minification above
+					// the threshold (filterable, default 1MB) before buffering the
+					// full file plus the Minify parse (audit #1469).
+					/**
+					 * Filters the maximum source size minified in one pass.
+					 *
+					 * @since NEXT
+					 * @param int $bytes Maximum bytes. Default 1048576 (1MB).
+					 */
+					$max_bytes = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_minify_max_bytes', 1048576 ) : 1048576;
+					if ( $max_bytes > 0 ) {
+						$source_size = filesize( $this->file_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- size probe before WP_Filesystem buffers the file.
+						if ( false !== $source_size && $source_size > $max_bytes ) {
+							return '';
+						}
+					}
 					$js_content = $this->filesystem->get_contents( $this->file_path );
 					if ( false === $js_content ) {
 						return '';

@@ -1650,7 +1650,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				$conversion_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
 
-				$batch_size = $options['image_optimisation']['batch'] ?? 50;
+				// Clamp: shares the raw-read pattern with the CLI convert path —
+				// bound synchronous conversions per cron run (audit #1469).
+				$batch_size = max( 1, min( 100, (int) ( $options['image_optimisation']['batch'] ?? 50 ) ) );
 
 				$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 

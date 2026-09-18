@@ -135,6 +135,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		private static $health_memo_time = 0.0;
 
 		/**
+		 * When true, invoke_cleanup_method() skips its per-call
+		 * invalidate_counts_cache() so batch callers (clean_all()/auto_clean())
+		 * can invalidate once after the loop (audit #1469).
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static $defer_counts_invalidation = false;
+
+		/**
 		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
 		 *
 		 * @since 2.0.0
@@ -325,6 +335,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * revisions per parent post.
 		 *
 		 * @since 1.3.0
+		 * @since NEXT Add `wppo_revisions_advanced_time_budget` wall-clock budget; large
+		 *             backlogs return a partial count and resume on the next run.
 		 *
 		 * @param int $max_age_days Maximum age in days (clamped to 1-365; audit #1362); revisions older than now - $max_age_days will be eligible for deletion.
 		 * @param int $keep_latest  Number of most recent revisions to retain per parent post.
@@ -341,10 +353,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$max_age_seconds = $max_age_days * DAY_IN_SECONDS;
 			$cutoff_date_gmt = gmdate( 'Y-m-d H:i:s', time() - $max_age_seconds );
 
+			// Time-box a single invocation so huge revision backlogs cannot
+			// exceed cron/REST wall-clock limits; remaining parents are picked
+			// up on the next scheduled run (mirrors clean_unattached_media()).
+			/**
+			 * Filters the wall-clock budget for one advanced-revision-cleanup pass.
+			 *
+			 * @since NEXT
+			 * @param int $seconds Budget in seconds. Default 20.
+			 */
+			$budget = (int) apply_filters( 'wppo_revisions_advanced_time_budget', 20 );
+			if ( $budget < 1 ) {
+				$budget = 20;
+			}
+			$deadline = microtime( true ) + $budget;
+
 			$greatest_parent_id = 0;
 			$has_more           = true;
 
 			do {
+				if ( microtime( true ) >= $deadline ) {
+					break;
+				}
 				$wpdb->last_error = '';
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$parent_ids = $wpdb->get_col(
@@ -367,6 +397,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$has_more           = ( count( $parent_ids ) === 200 );
 
 				foreach ( $parent_ids as $parent_id ) {
+					if ( microtime( true ) >= $deadline ) {
+						break 2;
+					}
 					$last_date      = null;
 					$last_id        = 0;
 					$first_page     = true;
@@ -374,6 +407,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$pending_delete = array();
 
 					do {
+						if ( microtime( true ) >= $deadline ) {
+							break;
+						}
 						$wpdb->last_error = '';
 						if ( $first_page && null === $last_date ) {
 							// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -2393,30 +2429,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$affected_tables = array();
 
 			list( $rev_max_age, $rev_keep ) = self::get_revision_defaults();
-			foreach ( $methods as $key => $method ) {
-				if ( 'revisions' === $key ) {
-					$res = self::invoke_cleanup_method( $method, $rev_max_age, $rev_keep );
-				} else {
-					$res = self::invoke_cleanup_method( $method );
-				}
-				$results[ $key ] = $res;
-				/**
-				 * Fires after each individual cleanup type completes.
-				 *
-				 * @since 2.0.0
-				 *
-				 * @param string $type  Cleanup type.
-				 * @param int    $count Number of rows deleted.
-				 */
-				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- documented hook
-				do_action( 'wppo_database_cleanup_completed', $key, is_wp_error( $res ) || false === $res ? 0 : (int) $res );
-				if ( ! is_wp_error( $res ) && false !== $res && (int) $res > 0 ) {
-					$total_deleted += (int) $res;
-					if ( isset( self::TABLE_MAP[ $key ] ) ) {
-						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $key ] );
+			// Defer per-type counts invalidation; a single invalidate below
+			// covers the whole run (audit #1469: was up to 9 salt-bumps).
+			self::$defer_counts_invalidation = true;
+			try {
+				foreach ( $methods as $key => $method ) {
+					if ( 'revisions' === $key ) {
+						$res = self::invoke_cleanup_method( $method, $rev_max_age, $rev_keep );
+					} else {
+						$res = self::invoke_cleanup_method( $method );
+					}
+					$results[ $key ] = $res;
+					/**
+					 * Fires after each individual cleanup type completes.
+					 *
+					 * @since 2.0.0
+					 *
+					 * @param string $type  Cleanup type.
+					 * @param int    $count Number of rows deleted.
+					 */
+					// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- documented hook
+					do_action( 'wppo_database_cleanup_completed', $key, is_wp_error( $res ) || false === $res ? 0 : (int) $res );
+					if ( ! is_wp_error( $res ) && false !== $res && (int) $res > 0 ) {
+						$total_deleted += (int) $res;
+						if ( isset( self::TABLE_MAP[ $key ] ) ) {
+							$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $key ] );
+						}
 					}
 				}
+			} finally {
+				self::$defer_counts_invalidation = false;
 			}
+			self::invalidate_counts_cache();
 
 			// Standalone Action Scheduler branch (own method, not in CLEANUP_METHOD_MAP).
 			// clean_action_scheduler() returns int only (fail-open 0), so no
@@ -2482,36 +2526,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$failures        = array();
 			$affected_tables = array();
 
-			foreach ( $methods as $method ) {
-				if ( 'clean_revisions_advanced' === $method ) {
-					$result = self::invoke_cleanup_method( $method, $max_age, $keep );
-				} else {
-					$result = self::invoke_cleanup_method( $method );
-				}
+			// Defer per-type counts invalidation; a single invalidate below
+			// covers the whole run (audit #1469).
+			self::$defer_counts_invalidation = true;
+			try {
+				foreach ( $methods as $method ) {
+					if ( 'clean_revisions_advanced' === $method ) {
+						$result = self::invoke_cleanup_method( $method, $max_age, $keep );
+					} else {
+						$result = self::invoke_cleanup_method( $method );
+					}
 
-				if ( is_wp_error( $result ) ) {
-					$labels = array(
-						'clean_revisions_advanced' => __( 'Revisions', 'performance-optimisation' ),
-						'clean_auto_drafts'        => __( 'Auto Drafts', 'performance-optimisation' ),
-						'clean_trashed_posts'      => __( 'Trashed Posts', 'performance-optimisation' ),
-						'clean_spam_comments'      => __( 'Spam Comments', 'performance-optimisation' ),
-						'clean_trashed_comments'   => __( 'Trashed Comments', 'performance-optimisation' ),
-						'clean_expired_transients' => __( 'Expired Transients', 'performance-optimisation' ),
-						'clean_orphan_postmeta'    => __( 'Orphan Post Meta', 'performance-optimisation' ),
-						'clean_unattached_media'   => __( 'Unattached Media', 'performance-optimisation' ),
-						'clean_oembed_cache'       => __( 'oEmbed Cache', 'performance-optimisation' ),
-					);
-					$label  = $labels[ $method ] ?? $method;
-					// Translators: %s is the cleanup type label.
-					Log::add( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
-					$failures[] = $method;
-				} elseif ( 0 < $result ) { // Audit #1434: Yoda.
-					$type = self::METHOD_TO_TYPE[ $method ] ?? '';
-					if ( isset( self::TABLE_MAP[ $type ] ) ) {
-						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $type ] );
+					if ( is_wp_error( $result ) ) {
+						$labels = array(
+							'clean_revisions_advanced' => __( 'Revisions', 'performance-optimisation' ),
+							'clean_auto_drafts'        => __( 'Auto Drafts', 'performance-optimisation' ),
+							'clean_trashed_posts'      => __( 'Trashed Posts', 'performance-optimisation' ),
+							'clean_spam_comments'      => __( 'Spam Comments', 'performance-optimisation' ),
+							'clean_trashed_comments'   => __( 'Trashed Comments', 'performance-optimisation' ),
+							'clean_expired_transients' => __( 'Expired Transients', 'performance-optimisation' ),
+							'clean_orphan_postmeta'    => __( 'Orphan Post Meta', 'performance-optimisation' ),
+							'clean_unattached_media'   => __( 'Unattached Media', 'performance-optimisation' ),
+							'clean_oembed_cache'       => __( 'oEmbed Cache', 'performance-optimisation' ),
+						);
+						$label  = $labels[ $method ] ?? $method;
+						// Translators: %s is the cleanup type label.
+						Log::add( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
+						$failures[] = $method;
+					} elseif ( 0 < $result ) { // Audit #1434: Yoda.
+						$type = self::METHOD_TO_TYPE[ $method ] ?? '';
+						if ( isset( self::TABLE_MAP[ $type ] ) ) {
+							$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $type ] );
+						}
 					}
 				}
+			} finally {
+				self::$defer_counts_invalidation = false;
 			}
+			self::invalidate_counts_cache();
 
 			// Thin AS delegation so WP-Cron starvation does not leave the queue
 			// to grow unbounded (issue #1106). Fail-open: a 0 return is not a
@@ -2778,7 +2830,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( false === $res ) {
 				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
-			self::invalidate_counts_cache();
+			// Batch callers set self::$defer_counts_invalidation around their
+			// loop and invalidate once afterwards, so a full run performs one
+			// salt-bump instead of up to 9 (audit #1469).
+			if ( ! self::$defer_counts_invalidation ) {
+				self::invalidate_counts_cache();
+			}
 			return $res;
 		}
 
