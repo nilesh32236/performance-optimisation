@@ -361,7 +361,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$limit  = max( 1, min( 100, $limit ) );
 			$result = Database_Cleanup::get_autoloaded_options( $limit );
 
-			return $this->send_response( array( 'options' => $result ) );
+			try {
+				return $this->send_response(
+					array(
+						'options'              => $result,
+						'total_autoload_bytes' => Database_Cleanup::get_autoload_total_bytes(),
+						'size_limit'           => Database_Cleanup::get_autoload_size_limit(),
+					)
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $this->send_response( array( 'options' => $result ) );
+			}
 		}
 
 		/**
