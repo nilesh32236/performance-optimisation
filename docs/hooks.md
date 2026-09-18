@@ -2200,7 +2200,7 @@ jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
 ---
 
 ### `wppo_autoload_critical_threshold`
-Filters the critical autoload payload threshold in bytes (issue #1461). The audit flags `is_critical` when total autoload bytes meet or exceed this value. Default `819200` (800 KB per the WordPress 6.6 guidance). Non-numeric or negative filter output falls back to the default (fail-open). @since NEXT.
+Filters the critical autoload payload threshold in bytes (issue #1461). The audit flags `is_critical` when total autoload bytes meet or exceed this value. Default `819200` (800 KB per the WordPress 6.6 guidance). Non-numeric, zero, or negative filter output falls back to the default (fail-open). @since NEXT.
 
 **Parameters:**
 - `$threshold` *(int)* — Threshold in bytes.

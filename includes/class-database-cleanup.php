@@ -1212,11 +1212,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Defaults to {@see AUTOLOAD_CRITICAL_BYTES} (800 KB per the WP 6.6
 		 * guidance) absent a `wppo_autoload_critical_threshold` filter.
-		 * Non-numeric or negative filter output falls back to the constant
-		 * (fail-open: audit-only, never fatal).
+		 * Non-numeric, zero, or negative filter output falls back to the
+		 * constant (fail-open: audit-only, never fatal). Zero is rejected
+		 * because it would flag every site as critical.
 		 *
 		 * @since NEXT
-		 * @return int Threshold in bytes (>= 0).
+		 * @return int Threshold in bytes (> 0).
 		 */
 		public static function get_autoload_critical_threshold(): int {
 			try {
@@ -1227,7 +1228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$filtered = apply_filters( 'wppo_autoload_critical_threshold', self::AUTOLOAD_CRITICAL_BYTES );
 				if ( is_numeric( $filtered ) ) {
 					$value = (int) $filtered;
-					if ( $value >= 0 ) {
+					if ( $value > 0 ) {
 						return $value;
 					}
 				}
@@ -1240,15 +1241,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Whether the autoload payload is at or above the critical threshold.
 		 *
+		 * Single definition of the critical verdict: every caller
+		 * ({@see get_autoload_audit()}, Abilities, REST) delegates here so
+		 * the comparison cannot drift.
+		 *
 		 * @since NEXT
-		 * @param int|null $total Optional total bytes (defaults to {@see get_autoload_total_bytes()}).
+		 * @param int|null $total     Optional total bytes (defaults to {@see get_autoload_total_bytes()}).
+		 * @param int|null $threshold Optional threshold bytes (defaults to {@see get_autoload_critical_threshold()}; pass the already-resolved value to avoid a second filter call).
 		 * @return bool True when $total >= critical threshold.
 		 */
-		public static function is_autoload_critical( ?int $total = null ): bool {
+		public static function is_autoload_critical( ?int $total = null, ?int $threshold = null ): bool {
 			if ( null === $total ) {
 				$total = self::get_autoload_total_bytes();
 			}
-			return $total >= self::get_autoload_critical_threshold();
+			if ( null === $threshold ) {
+				$threshold = self::get_autoload_critical_threshold();
+			}
+			return $total >= $threshold;
 		}
 
 		/**
@@ -1257,21 +1266,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Reuses the shared {@see get_autoloadable_values()} predicate via
 		 * {@see get_autoload_total_bytes()}, {@see get_autoload_count()} and
 		 * {@see get_autoloaded_options()} so totals, counts and lists agree
-		 * with each other and with Site Health.
+		 * with each other and with Site Health. The SUM/COUNT scalars are
+		 * cached in a 5-minute transient (multisite-safe via
+		 * {@see Util::transient_key()}) so repeated dashboard polling costs
+		 * one top-N SELECT instead of three full wp_options scans; the
+		 * threshold is resolved live (filter, no DB cost) and the critical
+		 * verdict delegates to {@see is_autoload_critical()}.
 		 *
 		 * @since NEXT
 		 * @param int $limit Maximum number of options to return.
 		 * @return array{total_autoload_bytes:int,count:int,critical_threshold:int,is_critical:bool,options:array}
 		 */
 		public static function get_autoload_audit( int $limit = 20 ): array {
-			$limit     = max( 1, min( 100, $limit ) );
-			$total     = self::get_autoload_total_bytes();
+			$limit = max( 1, min( 100, $limit ) );
+			$total = null;
+			$count = null;
+			// Null when the transient API is unavailable (unit stubs): fall
+			// through to live queries below (fail-open).
+			$cache_key = null;
+			try {
+				if ( function_exists( 'get_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$cache_key = Util::transient_key( 'wppo_autoload_audit_scalars' );
+					$cached    = get_transient( $cache_key );
+					if ( is_array( $cached ) && isset( $cached['total'], $cached['count'] ) ) {
+						$total = max( 0, (int) $cached['total'] );
+						$count = max( 0, (int) $cached['count'] );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$total = null;
+				$count = null;
+			}
+			if ( null === $total || null === $count ) {
+				$total = self::get_autoload_total_bytes();
+				$count = self::get_autoload_count();
+				try {
+					if ( null !== $cache_key && function_exists( 'set_transient' ) ) {
+						set_transient(
+							$cache_key,
+							array(
+								'total' => $total,
+								'count' => $count,
+							),
+							300
+						);
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			$threshold = self::get_autoload_critical_threshold();
 			return array(
 				'total_autoload_bytes' => $total,
-				'count'                => self::get_autoload_count(),
+				'count'                => $count,
 				'critical_threshold'   => $threshold,
-				'is_critical'          => $total >= $threshold,
+				'is_critical'          => self::is_autoload_critical( $total, $threshold ),
 				'options'              => self::get_autoloaded_options( $limit ),
 			);
 		}
@@ -1279,8 +1329,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Compare the reported total against wp_load_alloptions() size.
 		 *
-		 * Read-only and fail-open: when `wp_load_alloptions()` is unavailable
-		 * (pre-6.2 floor or unit stubs) the comparison is skipped and
+		 * Read-only diagnostic helper, exercised in product via the
+		 * `autoloaded_options` REST route with `?parity=1` (opt-in: the
+		 * `wp_load_alloptions()` + `serialize()` measurement is too heavy
+		 * for every dashboard poll). Fail-open: when
+		 * `wp_load_alloptions()` is unavailable (pre-6.2 floor or unit
+		 * stubs) the comparison is skipped and
 		 * `matches_within_rounding` is true so the audit never blocks.
 		 * Serialization framing differs from SUM(LENGTH()), so exact equality
 		 * is wrong — parity holds within max(1024, 1% of total).
@@ -2942,6 +2996,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					// Remediate/revert change autoload totals: the Abilities
 					// transient (10-min TTL) must not serve stale parity data.
 					delete_transient( Util::transient_key( 'wppo_abilities_autoloaded' ) );
+					// Audit scalars (5-min TTL in get_autoload_audit()) must
+					// not serve stale totals after a remediate/revert.
+					delete_transient( Util::transient_key( 'wppo_autoload_audit_scalars' ) );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

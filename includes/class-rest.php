@@ -353,13 +353,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * List the largest autoloaded options.
 		 *
+		 * Returns the full {@see Database_Cleanup::get_autoload_audit()}
+		 * payload (totals, critical flag, top-N list). Optional `parity=1`
+		 * attaches the read-only {@see Database_Cleanup::get_autoload_parity()}
+		 * `wp_load_alloptions()` comparison (opt-in: too heavy by default).
+		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_autoloaded_options( \WP_REST_Request $request ): \WP_REST_Response {
-			$limit  = isset( $request->get_params()['limit'] ) ? absint( $request->get_params()['limit'] ) : 20;
+			$params = $request->get_params();
+			$limit  = isset( $params['limit'] ) ? absint( $params['limit'] ) : 20;
 			$limit  = max( 1, min( 100, $limit ) );
 			$result = Database_Cleanup::get_autoload_audit( $limit );
+			if ( ! empty( $params['parity'] ) ) {
+				try {
+					$result['parity'] = Database_Cleanup::get_autoload_parity();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
 			return $this->send_response( $result );
 		}

@@ -1014,7 +1014,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 						$result['critical_threshold'] = (int) $cached['critical_threshold'];
 					} else {
 						$result['critical_threshold'] = Database_Cleanup::get_autoload_critical_threshold();
-						$result['is_critical']        = (int) $cached['autoloaded_size'] >= $result['critical_threshold'];
+						$result['is_critical']        = Database_Cleanup::is_autoload_critical( (int) $cached['autoloaded_size'], $result['critical_threshold'] );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -1028,10 +1028,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				$threshold     = Database_Cleanup::get_autoload_critical_threshold();
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				// Same shape as the success paths so consumers never branch
+				// on a missing key (fail-open: not critical by default).
 				return array(
 					'autoloaded_count'   => 0,
 					'autoloaded_size'    => 0,
 					'autoloaded_size_mb' => 0.0,
+					'critical_threshold' => Database_Cleanup::AUTOLOAD_CRITICAL_BYTES,
+					'is_critical'        => false,
 					'options'            => array(),
 				);
 			}
@@ -1040,7 +1044,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				'autoloaded_size'    => $autoload_size,
 				'autoloaded_size_mb' => round( $autoload_size / ( 1024 * 1024 ), 2 ),
 				'critical_threshold' => $threshold,
-				'is_critical'        => $autoload_size >= $threshold,
+				'is_critical'        => Database_Cleanup::is_autoload_critical( $autoload_size, $threshold ),
 				'options'            => $options,
 			);
 			set_transient( $cache_key, $result, 10 * MINUTE_IN_SECONDS );
