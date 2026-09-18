@@ -1712,8 +1712,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					} else {
 						return $img_tag;
 					}
-					$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $img_tag );
-					$has_height = (bool) preg_match( '/\bheight=["\']\d+["\']/i', $img_tag );
+					$has_width  = false;
+					$has_height = false;
+					if ( 1 === preg_match( '/\bwidth\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', $img_tag, $wm ) ) {
+						$w_val     = trim( $wm[1], "\"' \t\n\r\0\x0B" );
+						$has_width = is_numeric( $w_val );
+						if ( ! $has_width ) {
+							// Strip the non-numeric placeholder (e.g. width="auto"
+							// or width="") so the backfill below leaves exactly
+							// one width attribute instead of duplicates.
+							$img_tag = (string) preg_replace( '/\s+width\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $img_tag, 1 );
+						}
+					}
+					if ( 1 === preg_match( '/\bheight\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', $img_tag, $hm ) ) {
+						$h_val      = trim( $hm[1], "\"' \t\n\r\0\x0B" );
+						$has_height = is_numeric( $h_val );
+						if ( ! $has_height ) {
+							$img_tag = (string) preg_replace( '/\s+height\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $img_tag, 1 );
+						}
+					}
 
 					if ( ! $has_width || ! $has_height ) {
 						if ( ! $this->is_dimension_lookup_allowed( $src_url ) ) {
@@ -1781,8 +1798,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$data_src = $processor->get_attribute( 'src' );
 					}
 					if ( null !== $data_src && '' !== trim( (string) $data_src ) ) {
-						$has_width  = null !== $processor->get_attribute( 'width' );
-						$has_height = null !== $processor->get_attribute( 'height' );
+						$has_width  = is_numeric( $processor->get_attribute( 'width' ) );
+						$has_height = is_numeric( $processor->get_attribute( 'height' ) );
 						if ( ! $has_width || ! $has_height ) {
 							if ( ! $this->is_dimension_lookup_allowed( (string) $data_src ) ) {
 								$out .= $processor->serialize_token();
@@ -1836,7 +1853,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * existence + LRU size lookup). Fail-open: returns null so the caller
 		 * falls through to the regex fallback.
 		 *
-		 * @since 2.2.0 Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
+		 * @since 2.2.0
+		 * @since NEXT Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -6537,8 +6555,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 
 				// Add missing width and height attributes if possible.
-				$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $img_tag );
-				$has_height = (bool) preg_match( '/\bheight=["\']\d+["\']/i', $img_tag );
+				$has_width  = false;
+				$has_height = false;
+				if ( 1 === preg_match( '/\bwidth\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', $img_tag, $wm ) ) {
+					$w_val     = trim( $wm[1], "\"' \t\n\r\0\x0B" );
+					$has_width = is_numeric( $w_val );
+					if ( ! $has_width ) {
+						// Strip the non-numeric placeholder (e.g. width="auto"
+						// or width="") so the backfill below leaves exactly
+						// one width attribute instead of duplicates.
+						$img_tag = (string) preg_replace( '/\s+width\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $img_tag, 1 );
+					}
+				}
+				if ( 1 === preg_match( '/\bheight\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', $img_tag, $hm ) ) {
+					$h_val      = trim( $hm[1], "\"' \t\n\r\0\x0B" );
+					$has_height = is_numeric( $h_val );
+					if ( ! $has_height ) {
+						$img_tag = (string) preg_replace( '/\s+height\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $img_tag, 1 );
+					}
+				}
 
 				if ( ! $has_width || ! $has_height ) {
 					$local_path = Util::get_local_path( $original_src );
@@ -8466,10 +8501,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$has_h = is_numeric( $tags->get_attribute( 'height' ) );
 							if ( ! $has_w || ! $has_h ) {
 								$tag_src = $tags->get_attribute( 'src' );
-								if ( ! is_string( $tag_src ) || '' === trim( $tag_src ) ) {
+								if ( ! is_string( $tag_src ) || '' === trim( $tag_src ) || ! $this->is_dimension_lookup_allowed( (string) $tag_src ) ) {
 									$tag_src = $tags->get_attribute( 'data-src' );
 								}
-								if ( ! is_string( $tag_src ) || '' === trim( $tag_src ) ) {
+								if ( ! is_string( $tag_src ) || '' === trim( $tag_src ) || ! $this->is_dimension_lookup_allowed( (string) $tag_src ) ) {
 									$tag_src = $lcp_url;
 								}
 								$hero_src = (string) $tag_src;
