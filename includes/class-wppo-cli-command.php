@@ -438,7 +438,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$img_converter     = new Img_Converter( $options );
 				$img_info          = Img_Converter::get_img_info();
 				$conversion_format = $format ? $format : ( $options['image_optimisation']['conversionFormat'] ?? 'webp' );
-				$batch_size        = $options['image_optimisation']['batch'] ?? 50;
+				// Audit #1469: clamp — an unbounded setting would convert
+				// synchronously in-process without limit.
+				$batch_size = max( 1, min( 200, (int) ( $options['image_optimisation']['batch'] ?? 50 ) ) );
 
 				$formats_to_process = array();
 				if ( 'both' === $conversion_format ) {
@@ -521,7 +523,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * INF/NAN, recursion) — a bare (string) cast would log an empty
 		 * string with no error signal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $data Data to encode and log.
 		 * @return void
 		 */
@@ -593,7 +595,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 */
 		public function settings( array $args, array $assoc_args ): void {
 			$action = $args[0] ?? 'get';
-			$tab    = $args[1] ?? null;
+			// Audit #1434: sanitize the option key + log/output surface.
+			$tab = isset( $args[1] ) ? sanitize_key( (string) $args[1] ) : null;
 
 			$options = Util::get_settings();
 			// On fresh installs the option does not exist yet — fall back to
@@ -1114,7 +1117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * Verify live site state (self-verification gate for the autonomous maintenance loop).
 		 *
 		 * Reads LIVE state only — options, filesystem, drop-ins, Redis, cron —
-		 * and never cached transients (`wppo_cache_size`, `wppo_total_js_css`,
+		 * and never cached transients (`wppo_total_js_css`,
 		 * System Info drop-in verdict cache). Read-only: never writes options,
 		 * files, or schedules.
 		 *
@@ -1777,7 +1780,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * `fail` is reserved for directories that are genuinely unwritable by
 		 * everyone (no write bits at all) or that cannot be stat'd.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int|null    $euid Effective UID of the current process (null when posix is unavailable).
 		 * @param array|false $stat stat() result for the directory (false when stat failed).
 		 * @param string      $root Absolute cache root path, used in the detail message.
@@ -2182,12 +2185,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					);
 					// phpcs:enable
 					$as_hooks = array();
-					if ( is_array( $actions ) ) {
-						foreach ( $actions as $action_id ) {
-							if ( function_exists( 'as_get_scheduled_action' ) ) {
-								$action = as_get_scheduled_action( $action_id );
-								if ( is_object( $action ) && method_exists( $action, 'get_hook' ) ) {
-									$as_hooks[] = (string) $action->get_hook();
+					if ( is_array( $actions ) && ! empty( $actions ) ) {
+						// Audit #1469: single bulk hook lookup instead of N+1 per-ID
+						// object hydrations (one store read per action ID).
+						global $wpdb;
+						$action_ids = array_map( 'absint', $actions );
+						if ( ! empty( $action_ids ) && isset( $wpdb ) ) {
+							$placeholders = implode( ',', array_fill( 0, count( $action_ids ), '%d' ) );
+							// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk read-only mapping for CLI verify.
+							$hook_rows = $wpdb->get_col(
+								$wpdb->prepare(
+									"SELECT DISTINCT hook FROM {$wpdb->prefix}actionscheduler_actions WHERE action_id IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+									...$action_ids
+								)
+							);
+							if ( is_array( $hook_rows ) ) {
+								foreach ( $hook_rows as $hook_name ) {
+									if ( is_string( $hook_name ) && '' !== $hook_name ) {
+										$as_hooks[] = $hook_name;
+									}
 								}
 							}
 						}

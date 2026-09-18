@@ -153,7 +153,7 @@ if ( ! function_exists( 'wppo_cleanup_redis_state_files' ) ) {
 	 * wp_delete_file() with one retry (mirroring the redis-config pattern),
 	 * and never fatal — missing files or methods count as success.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	function wppo_cleanup_redis_state_files(): void {
@@ -235,7 +235,7 @@ if ( ! function_exists( 'wppo_cleanup_redis_config_htaccess_block' ) ) {
 	 * does not exist so no new file is created. Missing marker or file
 	 * counts as success.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	function wppo_cleanup_redis_config_htaccess_block(): void {
@@ -410,7 +410,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 	 * per-site inside wppo_cleanup_site() so the multisite loop below clears
 	 * every blog; never fatals and never touches foreign hooks/groups.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	function wppo_clear_scheduled_jobs(): void {
@@ -584,6 +584,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			'wppo_used_css_last_targeted_regen',       // Used_CSS::TARGETED_REGEN_OPTION (issue #1220).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
+			'wppo_ai_css_refresh_snapshots',           // AI_Adaptive::CSS_REFRESH_SNAPSHOT_OPTION (issue #1407).
 		);
 		foreach ( $wppo_options as $wppo_option ) {
 			delete_option( $wppo_option );

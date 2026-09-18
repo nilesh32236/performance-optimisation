@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
@@ -22,7 +22,19 @@ import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import NoticeBanner from './common/NoticeBanner';
 import FeatureCard from './common/FeatureCard';
+import StatusBadge from './common/StatusBadge';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+
+/**
+ * Fallback critical autoload threshold in bytes (800 KB per the WordPress 6.6
+ * guidance). Used when the REST audit payload lacks the server-resolved
+ * critical_threshold (old cached payloads). Mirrors
+ * Database_Cleanup::AUTOLOAD_CRITICAL_BYTES.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+const CRITICAL_THRESHOLD_FALLBACK = 819200;
 
 /**
  * Validate an option name client-side before it reaches the privileged
@@ -45,6 +57,9 @@ export const isValidOptionName = ( optionName ) =>
  */
 const AutoloadedOptions = () => {
 	const [ options, setOptions ] = useState( [] );
+	const [ audit, setAudit ] = useState( null );
+	const [ totalBytes, setTotalBytes ] = useState( null );
+	const [ sizeLimit, setSizeLimit ] = useState( null );
 	const [ loading, setLoading ] = useState( true );
 	const [ report, setReport ] = useState( null );
 	const [ appliedSummary, setAppliedSummary ] = useState( null );
@@ -85,6 +100,24 @@ const AutoloadedOptions = () => {
 						return;
 					}
 					setOptions( response.data.options );
+					setAudit( {
+						total: response.data.total_autoload_bytes ?? null,
+						count: response.data.count ?? null,
+						threshold:
+							response.data.critical_threshold ??
+							CRITICAL_THRESHOLD_FALLBACK,
+						isCritical: response.data.is_critical ?? false,
+					} );
+					// Total vs Site Health threshold (fail-open: absent/non-numeric
+					// leaves the card unchanged at today's list).
+					const total = Number( response.data.total_autoload_bytes );
+					setTotalBytes(
+						Number.isFinite( total ) && total >= 0 ? total : null
+					);
+					const limit = Number( response.data.size_limit );
+					setSizeLimit(
+						Number.isFinite( limit ) && limit > 0 ? limit : null
+					);
 				} else {
 					if ( ! isMounted.current ) {
 						return;
@@ -223,8 +256,10 @@ const AutoloadedOptions = () => {
 					type: 'success',
 					message: sprintf(
 						/* translators: %d: number of options remediated. */
-						__(
+						_n(
+							'Remediation applied to %d option.',
 							'Remediation applied to %d options.',
+							response.data.applied?.length || 0,
 							'performance-optimisation'
 						),
 						response.data.applied?.length || 0
@@ -486,14 +521,14 @@ const AutoloadedOptions = () => {
 			icon={ <FontAwesomeIcon icon={ faDatabase } /> }
 			actions={
 				loading && (
-					<FontAwesomeIcon
-						icon={ faSpinner }
-						spin
-						aria-label={ __(
-							'Loading…',
-							'performance-optimisation'
-						) }
-					/>
+					<span role="status" aria-live="polite">
+						<FontAwesomeIcon
+							icon={ faSpinner }
+							spin
+							aria-hidden="true"
+						/>
+						{ __( 'Loading…', 'performance-optimisation' ) }
+					</span>
 				)
 			}
 		>
@@ -503,6 +538,24 @@ const AutoloadedOptions = () => {
 					'performance-optimisation'
 				) }
 			</p>
+			{ Number.isFinite( totalBytes ) &&
+				Number.isFinite( sizeLimit ) &&
+				sizeLimit > 0 && (
+					<p className="wppo-text-small">
+						{ sprintf(
+							/* translators: 1: total autoloaded size, 2: Site Health size limit. */
+							__(
+								'Autoloaded data: %1$s / %2$s (Site Health limit).',
+								'performance-optimisation'
+							),
+							formatBytes( totalBytes ),
+							formatBytes( sizeLimit )
+						) }{ ' ' }
+						<StatusBadge
+							status={ totalBytes < sizeLimit ? 'good' : 'poor' }
+						/>
+					</p>
+				) }
 			{ notice && (
 				<NoticeBanner
 					type={ notice.type }
@@ -510,12 +563,36 @@ const AutoloadedOptions = () => {
 					onDismiss={ dismiss }
 				/>
 			) }
+			{ audit?.isCritical && (
+				<p
+					className="wppo-notice wppo-notice--warning"
+					role="status"
+					aria-live="polite"
+				>
+					{ sprintf(
+						/* translators: %1$s: total autoload size, %2$s: critical threshold. */
+						__(
+							'Critical: autoload payload %1$s meets or exceeds the %2$s WordPress 6.6 threshold.',
+							'performance-optimisation'
+						),
+						formatBytes( audit.total || 0 ),
+						formatBytes(
+							audit.threshold || CRITICAL_THRESHOLD_FALLBACK
+						)
+					) }
+				</p>
+			) }
 			{ body }
 			{ options.length > 0 && (
 				<p className="wppo-text-muted wppo-text-small">
 					{ sprintf(
 						/* translators: %d: number of options listed */
-						__( 'Showing %d options.', 'performance-optimisation' ),
+						_n(
+							'Showing %d option.',
+							'Showing %d options.',
+							options.length,
+							'performance-optimisation'
+						),
 						options.length
 					) }
 				</p>

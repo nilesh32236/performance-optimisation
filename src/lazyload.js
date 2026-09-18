@@ -1,3 +1,5 @@
+import { redactLogSecrets } from './lib/logSecrets';
+
 /**
  * Cached promise for the in-progress or completed deferred script load.
  * @type {Promise<void>|null}
@@ -13,18 +15,28 @@
  * @param {*} err Caught error value.
  * @return {string} Safe message string.
  */
+// Audit #1401: shared redaction — a credential-bearing message redacted
+// in the SPA must not log verbatim from this bundle.
 const getLogMessage = ( err ) => {
+	let message;
 	if ( err instanceof Error ) {
-		return err.message || 'Unknown error';
-	}
-	if ( typeof err === 'string' ) {
-		return err.slice( 0, 500 ) || 'Unknown error';
-	}
-	if ( err === null || typeof err === 'undefined' ) {
+		message = err.message || 'Unknown error';
+	} else if ( typeof err === 'string' ) {
+		message = err.slice( 0, 500 ) || 'Unknown error';
+	} else if ( err === null || typeof err === 'undefined' ) {
 		return 'Unknown error';
+	} else {
+		try {
+			message = String( err ).slice( 0, 500 );
+		} catch {
+			return 'Unknown error';
+		}
 	}
 	try {
-		return String( err ).slice( 0, 500 );
+		return ( redactLogSecrets( message ) || 'Unknown error' ).slice(
+			0,
+			500
+		);
 	} catch {
 		return 'Unknown error';
 	}
@@ -769,6 +781,26 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
 ] );
 
 /**
+ * Tokenize + lowercase + shape-check a raw attribute value, then keep only
+ * allowlisted tokens (audit #1401): single pipeline behind both iframe
+ * sanitizers so tightening the token shape in one cannot miss the other.
+ *
+ * @since NEXT
+ * @param {string} value      Raw attribute value.
+ * @param {RegExp} split      Split pattern.
+ * @param {Set}    allowedSet Allowlisted tokens.
+ * @return {Array} Kept tokens.
+ */
+const sanitizeTokenList = ( value, split, allowedSet ) =>
+	String( value )
+		.split( split )
+		.map( ( token ) => token.trim().toLowerCase() )
+		.filter(
+			( token ) =>
+				token && /^[a-z-]+$/.test( token ) && allowedSet.has( token )
+		);
+
+/**
  * Sanitize a stored `allow` value: keep only known-safe Permissions-Policy
  * tokens, return '' when nothing safe remains.
  *
@@ -776,18 +808,8 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
  * @param {string} value Raw allow attribute value.
  * @return {string} Sanitized value ('' when unsafe/empty).
  */
-const sanitizeIframeAllow = ( value ) => {
-	const tokens = String( value )
-		.split( ';' )
-		.map( ( token ) => token.trim().toLowerCase() )
-		.filter(
-			( token ) =>
-				token &&
-				/^[a-z-]+$/.test( token ) &&
-				IFRAME_ALLOW_TOKENS.has( token )
-		);
-	return tokens.join( '; ' );
-};
+const sanitizeIframeAllow = ( value ) =>
+	sanitizeTokenList( value, ';', IFRAME_ALLOW_TOKENS ).join( '; ' );
 
 /**
  * Sanitize a stored `sandbox` value: keep only known-safe tokens (never
@@ -803,14 +825,7 @@ const sanitizeIframeSandbox = ( value ) => {
 	if ( ! raw ) {
 		return '';
 	}
-	const tokens = raw
-		.split( /\s+/ )
-		.filter(
-			( token ) =>
-				token &&
-				/^[a-z-]+$/.test( token ) &&
-				IFRAME_SANDBOX_TOKENS.has( token )
-		);
+	const tokens = sanitizeTokenList( raw, /\s+/, IFRAME_SANDBOX_TOKENS );
 	return tokens.length ? tokens.join( ' ' ) : null;
 };
 
@@ -1692,16 +1707,30 @@ const delayedScripts = document.querySelectorAll(
 const idleScripts = document.querySelectorAll(
 	'script[data-wppo-delay-strategy="idle"]'
 );
+// Audit #1420: tracked handle so teardownLazyload() can cancel a late
+// idle callback instead of it re-creating observers after teardown.
+let idleScriptsHandle = null;
+const cancelIdleScripts = () => {
+	if ( idleScriptsHandle === null ) {
+		return;
+	}
+	if ( 'cancelIdleCallback' in window ) {
+		window.cancelIdleCallback( idleScriptsHandle );
+	} else {
+		clearTimeout( idleScriptsHandle );
+	}
+	idleScriptsHandle = null;
+};
 if ( idleScripts.length > 0 ) {
 	if ( 'requestIdleCallback' in window ) {
-		window.requestIdleCallback( loadIdleScripts, {
+		idleScriptsHandle = window.requestIdleCallback( loadIdleScripts, {
 			timeout: ( delayConfig && delayConfig.idleTimeout ) || 3000,
 		} );
 	} else {
 		// Fallback: load after a short delay.
 		// requestIdleCallback's timeout is a deadline (max wait), while setTimeout is a minimum delay.
 		// Use a shorter explicit delay to avoid excessive waiting when rIC is unavailable.
-		setTimeout(
+		idleScriptsHandle = setTimeout(
 			loadIdleScripts,
 			Math.min( 2000, ( delayConfig && delayConfig.idleTimeout ) || 3000 )
 		);
@@ -1833,6 +1862,7 @@ const clearSafetyScan = () => {
  */
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
+	cancelIdleScripts();
 	if ( loadImagesTimer !== null ) {
 		clearTimeout( loadImagesTimer );
 		loadImagesTimer = null;
@@ -2901,6 +2931,7 @@ const loadImages = () => {
 								} );
 								el.load();
 								if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+									// Autoplay-policy rejections are expected (muted/invisible media); intentionally silent.
 									el.play().catch( () => {} );
 								}
 							}
@@ -3158,6 +3189,7 @@ const loadImages = () => {
 							} );
 							el.load();
 							if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+								// Autoplay-policy rejections are expected (muted/invisible media); intentionally silent.
 								el.play().catch( () => {} );
 							}
 							el.classList.remove( 'wppo-lazy-video' );
@@ -3451,7 +3483,33 @@ const initVideoPlaceholders = () => {
 			videoFallbackTimers.add( fallbackTimer );
 		};
 
+		// Audit #1420: keyboard + AT path — the placeholder is a
+		// focusable button-role element, not click-only.
+		if ( ! el.hasAttribute( 'tabindex' ) ) {
+			el.setAttribute( 'tabindex', '0' );
+		}
+		if ( ! el.hasAttribute( 'role' ) ) {
+			el.setAttribute( 'role', 'button' );
+		}
+		if ( ! el.hasAttribute( 'aria-label' ) ) {
+			// Audit #1354: PHP-provided translation via module data
+			// (server-localized); English fallback otherwise.
+			el.setAttribute(
+				'aria-label',
+				typeof moduleData.videoPlayerLabel === 'string' &&
+					moduleData.videoPlayerLabel
+					? moduleData.videoPlayerLabel
+					: 'Play video'
+			);
+		}
 		el.addEventListener( 'click', loadVideo );
+		el.addEventListener( 'keydown', ( event ) => {
+			if ( event.key !== 'Enter' && event.key !== ' ' ) {
+				return;
+			}
+			event.preventDefault();
+			loadVideo();
+		} );
 	} );
 };
 

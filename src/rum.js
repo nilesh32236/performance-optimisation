@@ -643,7 +643,10 @@ export const sanitizeRumValues = ( raw ) => {
 			body: payload,
 			credentials: 'omit',
 			keepalive: true,
-		} ).catch( () => {} );
+		} ).catch( () => {
+			// Audit #1420: fire-and-forget beacon — network errors are
+			// expected (offline/navigation) and intentionally silent.
+		} );
 	};
 
 	// TTFB + FCP from navigation and paint timing.

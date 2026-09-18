@@ -879,4 +879,80 @@ class OdBridgeTest extends \PHPUnit\Framework\TestCase {
 			$this->assertSame( $expected_threshold, OD_Bridge::get_exclude_first_images_count() );
 		}
 	}
+
+	/**
+	 * Test get_occluded_image_urls returns occluded URLs and excludes the LCP winner (issue #1426).
+	 */
+	public function test_get_occluded_image_urls_excludes_lcp(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		$hero_url                   = 'https://example.com/wp-content/uploads/hero.jpg';
+		$hidden_url                 = 'https://example.com/wp-content/uploads/carousel-hidden.jpg';
+		$this->od_metrics           = array(
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 1200,
+					'lcp'           => array(
+						'src'   => $hero_url,
+						'isLCP' => true,
+					),
+					'elements'      => array(
+						array(
+							'src'         => $hero_url,
+							'isLCP'       => true,
+							'is_occluded' => true,
+						),
+						array(
+							'src'         => $hidden_url,
+							'is_occluded' => true,
+						),
+						array(
+							'src' => 'https://example.com/wp-content/uploads/visible.jpg',
+						),
+					),
+				)
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$occluded = OD_Bridge::get_occluded_image_urls();
+		$this->assertContains( $hidden_url, $occluded );
+		$this->assertNotContains( $hero_url, $occluded );
+		$this->assertNotContains( 'https://example.com/wp-content/uploads/visible.jpg', $occluded );
+	}
+
+	/**
+	 * Test get_occluded_image_urls returns empty when OD is disabled or metrics are absent (issue #1426 fail-open).
+	 */
+	public function test_get_occluded_image_urls_empty_when_disabled_or_absent(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => false ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'get_option' )->alias(
+			function ( $name, $fallback = false ) {
+				return isset( $this->options[ $name ] ) ? $this->options[ $name ] : ( 'wppo_settings' === $name ? $this->options : $fallback );
+			}
+		);
+
+		$this->od_metrics           = array(
+			array(
+				'elements' => array(
+					array(
+						'src'         => 'https://example.com/wp-content/uploads/carousel-hidden.jpg',
+						'is_occluded' => true,
+					),
+				),
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( array(), OD_Bridge::get_occluded_image_urls() );
+	}
 }

@@ -42,7 +42,7 @@ import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -177,6 +177,80 @@ const normalizeImageInfo = ( raw ) => {
 	};
 };
 
+/**
+ * One Woo self-test check list (audit #1401).
+ *
+ * The five lists (routes/fragments/editor/preload/cart) shared one shape
+ * with different data + remediation kinds; a tri-state fix in 4/5 copies
+ * used to leave one list mislabeling FAIL as pass.
+ *
+ * @since NEXT
+ * @param {Object} props             Component props.
+ * @param {Array}  props.items       Check entries ({ path|key, pass }).
+ * @param {string} props.kind        Remediation kind for getWooRuleRemediation.
+ * @param {string} props.idPrefix    Key prefix.
+ * @param {string} props.pathKey     Entry field holding the label ('path'|'key').
+ * @param {string} [props.listLabel] Accessible label for the list.
+ * @return {Element} Check list.
+ */
+const WooCheckList = ( { items, kind, idPrefix, pathKey, listLabel } ) => (
+	<ul
+		className="wppo-woo-self-test"
+		{ ...( listLabel ? { 'aria-label': listLabel } : {} ) }
+	>
+		{ items.map( ( check, index ) => (
+			<li key={ `${ check?.[ pathKey ] ?? idPrefix }-${ index }` }>
+				<span>{ check?.[ pathKey ] }</span>
+				{ ' — ' }
+				<span>
+					{ getWooCheckCopy(
+						check?.pass,
+						__( 'Bypassed (pass)', 'performance-optimisation' ),
+						__( 'Cacheable (fail)', 'performance-optimisation' )
+					) }
+				</span>
+				{ check?.pass === false && (
+					<>
+						{ ' — ' }
+						<span className="wppo-text-muted wppo-text-small">
+							{ getWooRuleRemediation( kind, check?.pass ) }
+						</span>
+					</>
+				) }
+			</li>
+		) ) }
+	</ul>
+);
+
+/**
+ * Shared TTL duration options (audit #1401).
+ *
+ * The Posts/Pages/Products selects shared one 7-option list copy-pasted
+ * 3×; a duration added to 2 of 3 silently diverged per-type expiry.
+ *
+ * @since NEXT
+ * @return {Element} Option elements.
+ */
+const TTL_DURATIONS = [
+	{ value: '', label: __( 'Inherit global', 'performance-optimisation' ) },
+	{ value: 0, label: __( 'Never expire', 'performance-optimisation' ) },
+	{ value: 1, label: __( '1 hour', 'performance-optimisation' ) },
+	{ value: 6, label: __( '6 hours', 'performance-optimisation' ) },
+	{ value: 12, label: __( '12 hours', 'performance-optimisation' ) },
+	{ value: 24, label: __( '24 hours', 'performance-optimisation' ) },
+	{ value: 48, label: __( '48 hours', 'performance-optimisation' ) },
+	{ value: 168, label: __( '1 week', 'performance-optimisation' ) },
+];
+const TtlDurationOptions = () => (
+	<>
+		{ TTL_DURATIONS.map( ( opt ) => (
+			<option key={ String( opt.value ) } value={ opt.value }>
+				{ opt.label }
+			</option>
+		) ) }
+	</>
+);
+
 const Dashboard = ( {
 	activities,
 	activitiesError = false,
@@ -227,6 +301,7 @@ const Dashboard = ( {
 	const [ state, setState ] = useState( {
 		// Audit #1354: localized zero instead of hardcoded '0 B'.
 		totalCacheSize: getWppoSettings( 'cache_size', formatBytes( 0 ) ),
+		cachedPages: getWppoSettings( 'cache_count', 0 ),
 		totalJs: getWppoSettings( 'total_js_css.js', 0 ),
 		totalCss: getWppoSettings( 'total_js_css.css', 0 ),
 		imageInfo: normalizeImageInfo( getWppoSettings( 'image_info', {} ) ),
@@ -302,8 +377,12 @@ const Dashboard = ( {
 						res.data.safe_preview_url || prev.safe_preview_url,
 				} ) );
 			}
-		} catch {
+		} catch ( statusError ) {
 			// Fail-open: keep the seeded wppoSettings value.
+			console.error(
+				'Failed refreshing upgrade purge status:',
+				getErrorLogMessage( statusError )
+			);
 		}
 	}, [] );
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
@@ -384,8 +463,15 @@ const Dashboard = ( {
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
-	const { imageInfo, loading, totalCacheSize, totalJs, totalCss, dbCounts } =
-		state;
+	const {
+		imageInfo,
+		loading,
+		totalCacheSize,
+		cachedPages,
+		totalJs,
+		totalCss,
+		dbCounts,
+	} = state;
 	const { completed = {}, pending = {}, failed = {} } = imageInfo;
 
 	const updateState = useCallback( ( updates ) => {
@@ -588,7 +674,9 @@ const Dashboard = ( {
 
 	const onClearCache = useCallback(
 		( e ) => {
-			e.preventDefault();
+			if ( e && typeof e.preventDefault === 'function' ) {
+				e.preventDefault();
+			}
 			handleLoading( 'clear_cache', true );
 			apiCall( 'clear_cache', { action: 'clear_cache' } )
 				.then( ( data ) => {
@@ -604,6 +692,7 @@ const Dashboard = ( {
 						refreshUpgradePurgeStatus();
 						updateState( {
 							totalCacheSize: formatBytes( 0 ),
+							cachedPages: 0,
 							totalJs: 0,
 							totalCss: 0,
 						} );
@@ -764,7 +853,12 @@ const Dashboard = ( {
 					} );
 				}
 			} )
-			.catch( () =>
+			.catch( ( dashboardError ) => {
+				// Audit #1420: log before notify.
+				console.error(
+					'Dashboard request failed:',
+					getErrorLogMessage( dashboardError )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -772,8 +866,8 @@ const Dashboard = ( {
 						'performance-optimisation'
 					),
 					durationMs: 5000,
-				} )
-			)
+				} );
+			} )
 			.finally( () => handleLoading( 'remove_images', false ) );
 	}, [ handleLoading, notify ] );
 
@@ -814,13 +908,18 @@ const Dashboard = ( {
 						} );
 					}
 				} )
-				.catch( () =>
+				.catch( ( dashboardError ) => {
+					// Audit #1420: log before notify.
+					console.error(
+						'Dashboard request failed:',
+						getErrorLogMessage( dashboardError )
+					);
 					notify( {
 						type: 'error',
 						message: failureMessage,
 						durationMs: 5000,
-					} )
-				)
+					} );
+				} )
 				.finally( () => setSaving( false ) );
 		},
 		[ cacheSettings, notify ]
@@ -1126,6 +1225,10 @@ const Dashboard = ( {
 	const cacheSizeUnit = isCacheMissing
 		? __( 'Cache missing', 'performance-optimisation' )
 		: '';
+	const rawCachedPages = Number( cachedPages ?? 0 );
+	const cachedPagesCount = Number.isFinite( rawCachedPages )
+		? Math.max( 0, Math.floor( rawCachedPages ) )
+		: 0;
 	const optimizedFilesCount = ( totalJs || 0 ) + ( totalCss || 0 );
 
 	let dbBadgeClass = 'wppo-status-badge--good';
@@ -1368,8 +1471,31 @@ const Dashboard = ( {
 					</span>
 					<span className="wppo-stat-unit">
 						{ renderCacheStatus() }
+						{ ! isCacheMissing && (
+							<>
+								{ ' • ' }
+								{ sprintf(
+									/* translators: %d: cached page file count. */
+									__(
+										'%d pages',
+										'performance-optimisation'
+									),
+									cachedPagesCount
+								) }
+							</>
+						) }
 					</span>
 					<div className="wppo-stat-footer">
+						<LoadingSubmitButton
+							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
+							isLoading={ !! loading.clear_cache }
+							onClick={ onClearCache }
+							type="button"
+							label={ __(
+								'Purge Cache',
+								'performance-optimisation'
+							) }
+						/>
 						<button
 							type="button"
 							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
@@ -1395,7 +1521,12 @@ const Dashboard = ( {
 						{ optimizedFilesCount }
 					</span>
 					<span className="wppo-stat-unit">
-						{ __( 'files', 'performance-optimisation' ) }
+						{ _n(
+							'file',
+							'files',
+							optimizedFilesCount,
+							'performance-optimisation'
+						) }
 					</span>
 					<div className="wppo-stat-footer">
 						<button
@@ -1418,7 +1549,12 @@ const Dashboard = ( {
 					</div>
 					<span className="wppo-stat-value">{ dbOverheadCount }</span>
 					<span className="wppo-stat-unit">
-						{ __( 'items', 'performance-optimisation' ) }
+						{ _n(
+							'item',
+							'items',
+							dbOverheadCount,
+							'performance-optimisation'
+						) }
 						<span
 							className={ `wppo-status-badge ${ dbBadgeClass }` }
 						>
@@ -1552,33 +1688,7 @@ const Dashboard = ( {
 						onChange={ handleTtlPostChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
-						<option value="">
-							{ __(
-								'Inherit global',
-								'performance-optimisation'
-							) }
-						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
+						<TtlDurationOptions />
 					</select>
 				</div>
 				<div className="wppo-field">
@@ -1596,33 +1706,7 @@ const Dashboard = ( {
 						onChange={ handleTtlPageChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
-						<option value="">
-							{ __(
-								'Inherit global',
-								'performance-optimisation'
-							) }
-						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
+						<TtlDurationOptions />
 					</select>
 				</div>
 				<div className="wppo-field">
@@ -1643,33 +1727,7 @@ const Dashboard = ( {
 						onChange={ handleTtlProductChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
-						<option value="">
-							{ __(
-								'Inherit global',
-								'performance-optimisation'
-							) }
-						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
+						<TtlDurationOptions />
 					</select>
 					<p
 						id="wppoTtlOverrides-desc"
@@ -1774,42 +1832,12 @@ const Dashboard = ( {
 							</p>
 						) }
 						{ Array.isArray( wooSelfTest.checks ) && (
-							<ul className="wppo-woo-self-test">
-								{ wooSelfTest.checks.map( ( check, index ) => (
-									<li
-										key={ `${
-											check?.path ?? 'check'
-										}-${ index }` }
-									>
-										<span>{ check?.path }</span>
-										{ ' — ' }
-										<span>
-											{ getWooCheckCopy(
-												check?.pass,
-												__(
-													'Bypassed (pass)',
-													'performance-optimisation'
-												),
-												__(
-													'Cacheable (fail)',
-													'performance-optimisation'
-												)
-											) }
-										</span>
-										{ check?.pass === false && (
-											<>
-												{ ' — ' }
-												<span className="wppo-text-muted wppo-text-small">
-													{ getWooRuleRemediation(
-														'route',
-														check?.pass
-													) }
-												</span>
-											</>
-										) }
-									</li>
-								) ) }
-							</ul>
+							<WooCheckList
+								items={ wooSelfTest.checks }
+								kind="route"
+								idPrefix="check"
+								pathKey="path"
+							/>
 						) }
 						{ Array.isArray( wooSelfTest.fragment_checks ) &&
 							wooSelfTest.fragment_checks.length > 0 && (
@@ -1820,51 +1848,16 @@ const Dashboard = ( {
 											'performance-optimisation'
 										) }
 									</p>
-									<ul
-										className="wppo-woo-self-test"
-										aria-label={ __(
+									<WooCheckList
+										items={ wooSelfTest.fragment_checks }
+										kind="fragment"
+										idPrefix="fragment"
+										pathKey="path"
+										listLabel={ __(
 											'Fragment probes (query-string)',
 											'performance-optimisation'
 										) }
-									>
-										{ wooSelfTest.fragment_checks.map(
-											( check, index ) => (
-												<li
-													key={ `${
-														check?.path ??
-														'fragment'
-													}-${ index }` }
-												>
-													<span>{ check?.path }</span>
-													{ ' — ' }
-													<span>
-														{ getWooCheckCopy(
-															check?.pass,
-															__(
-																'Bypassed (pass)',
-																'performance-optimisation'
-															),
-															__(
-																'Cacheable (fail)',
-																'performance-optimisation'
-															)
-														) }
-													</span>
-													{ check?.pass === false && (
-														<>
-															{ ' — ' }
-															<span className="wppo-text-muted wppo-text-small">
-																{ getWooRuleRemediation(
-																	'fragment',
-																	check?.pass
-																) }
-															</span>
-														</>
-													) }
-												</li>
-											)
-										) }
-									</ul>
+									/>
 								</>
 							) }
 						{ Array.isArray( wooSelfTest.editor_checks ) &&
@@ -1876,50 +1869,16 @@ const Dashboard = ( {
 											'performance-optimisation'
 										) }
 									</p>
-									<ul
-										className="wppo-woo-self-test"
-										aria-label={ __(
+									<WooCheckList
+										items={ wooSelfTest.editor_checks }
+										kind="editor"
+										idPrefix="editor"
+										pathKey="path"
+										listLabel={ __(
 											'Editor bypass probes (admin + previews)',
 											'performance-optimisation'
 										) }
-									>
-										{ wooSelfTest.editor_checks.map(
-											( check, index ) => (
-												<li
-													key={ `${
-														check?.url ?? 'editor'
-													}-${ index }` }
-												>
-													<span>{ check?.url }</span>
-													{ ' — ' }
-													<span>
-														{ getWooCheckCopy(
-															check?.pass,
-															__(
-																'Bypassed (pass)',
-																'performance-optimisation'
-															),
-															__(
-																'Cacheable (fail)',
-																'performance-optimisation'
-															)
-														) }
-													</span>
-													{ check?.pass === false && (
-														<>
-															{ ' — ' }
-															<span className="wppo-text-muted wppo-text-small">
-																{ getWooRuleRemediation(
-																	'editor',
-																	check?.pass
-																) }
-															</span>
-														</>
-													) }
-												</li>
-											)
-										) }
-									</ul>
+									/>
 								</>
 							) }
 						{ Array.isArray( wooSelfTest.preload_checks ) &&
@@ -1931,50 +1890,16 @@ const Dashboard = ( {
 											'performance-optimisation'
 										) }
 									</p>
-									<ul
-										className="wppo-woo-self-test"
-										aria-label={ __(
+									<WooCheckList
+										items={ wooSelfTest.preload_checks }
+										kind="preload"
+										idPrefix="preload"
+										pathKey="path"
+										listLabel={ __(
 											'Preload probes (faceted URLs skipped)',
 											'performance-optimisation'
 										) }
-									>
-										{ wooSelfTest.preload_checks.map(
-											( check, index ) => (
-												<li
-													key={ `${
-														check?.path ?? 'preload'
-													}-${ index }` }
-												>
-													<span>{ check?.path }</span>
-													{ ' — ' }
-													<span>
-														{ getWooCheckCopy(
-															check?.pass,
-															__(
-																'Skipped (pass)',
-																'performance-optimisation'
-															),
-															__(
-																'Queued (fail)',
-																'performance-optimisation'
-															)
-														) }
-													</span>
-													{ check?.pass === false && (
-														<>
-															{ ' — ' }
-															<span className="wppo-text-muted wppo-text-small">
-																{ getWooRuleRemediation(
-																	'preload',
-																	check?.pass
-																) }
-															</span>
-														</>
-													) }
-												</li>
-											)
-										) }
-									</ul>
+									/>
 								</>
 							) }
 						{ Array.isArray( wooSelfTest.cart_checks ) &&
@@ -1986,50 +1911,16 @@ const Dashboard = ( {
 											'performance-optimisation'
 										) }
 									</p>
-									<ul
-										className="wppo-woo-self-test"
-										aria-label={ __(
+									<WooCheckList
+										items={ wooSelfTest.cart_checks }
+										kind="cart"
+										idPrefix="cart"
+										pathKey="key"
+										listLabel={ __(
 											'Guest-cart survival (page + object cache on)',
 											'performance-optimisation'
 										) }
-									>
-										{ wooSelfTest.cart_checks.map(
-											( check, index ) => (
-												<li
-													key={ `${
-														check?.key ?? 'cart'
-													}-${ index }` }
-												>
-													<span>{ check?.key }</span>
-													{ ' — ' }
-													<span>
-														{ getWooCheckCopy(
-															check?.pass,
-															__(
-																'Bypassed (pass)',
-																'performance-optimisation'
-															),
-															__(
-																'Cacheable (fail)',
-																'performance-optimisation'
-															)
-														) }
-													</span>
-													{ check?.pass === false && (
-														<>
-															{ ' — ' }
-															<span className="wppo-text-muted wppo-text-small">
-																{ getWooRuleRemediation(
-																	'cart',
-																	check?.pass
-																) }
-															</span>
-														</>
-													) }
-												</li>
-											)
-										) }
-									</ul>
+									/>
 								</>
 							) }
 					</div>

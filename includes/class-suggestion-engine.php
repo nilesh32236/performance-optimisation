@@ -61,6 +61,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		 * enabled (guard: never auto-applies — caller must render Apply UX).
 		 * Returns an empty list when the AI feature is disabled or unavailable.
 		 *
+		 * GET-with-side-effect (issue #1407, intentional): served by the
+		 * `ai_suggestions` GET endpoint, so rendering may enqueue at most
+		 * one used-CSS regen job per regressed URL per cooldown window
+		 * (minimum 1 day) when the css-refresh opt-in is on. See
+		 * AI_Adaptive::get_suggestions() for the full side-effect contract.
+		 *
 		 * @since 2.0.0
 		 * @return array[] Array of suggestion objects.
 		 */
@@ -79,14 +85,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				if ( ! is_array( $s ) || empty( $s['metric'] ) ) {
 					continue;
 				}
+				// Audit #1434: allowlist status to the documented contract; drop
+				// raw ai_payload (unsanitized nested data must not reach REST).
+				$status = isset( $s['status'] ) ? (string) $s['status'] : 'needs_improvement';
+				if ( ! in_array( $status, array( 'good', 'needs_improvement', 'poor' ), true ) ) {
+					$status = 'needs_improvement';
+				}
 				$validated[] = self::build(
 					(string) $s['metric'],
 					$s['value'] ?? '',
 					(string) ( $s['unit'] ?? 'string' ),
-					(string) ( $s['status'] ?? 'needs_improvement' ),
+					$status,
 					(string) ( $s['description'] ?? $s['metric'] ),
 					(string) ( $s['fix_action'] ?? 'no_action_required' )
-				) + ( isset( $s['ai_payload'] ) ? array( 'ai_payload' => $s['ai_payload'] ) : array() );
+				);
 			}
 			return $validated;
 		}

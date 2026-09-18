@@ -239,7 +239,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 *
 		 * Split out from fetch_via_curl() so tests can stub the transport layer.
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @param  string $url URL to request.
 		 * @return array {
 		 *     @type string|false $raw_response Raw response (headers + body), or false on transport failure.
@@ -299,7 +299,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * Mirrors the original single-hop parsing: only the final header block
 		 * is considered (robust against interim 100 Continue responses).
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @param  string $header_raw Raw header text (everything before the body).
 		 * @return array Lowercase header name => value map.
 		 */
@@ -329,7 +329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * URL: wp_http_validate_url(), http/https schemes only, and the same
 		 * host as this website's home URL.
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @param  string $location    Raw Location header value.
 		 * @param  string $current_url URL of the response that sent the Location.
 		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
@@ -362,7 +362,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				if ( 0 === strpos( $location, '/' ) ) {
 					$resolved = $scheme . '://' . $host . $port . $location;
 				} else {
-					$resolved = $scheme . '://' . $host . $port . $base_dir . '/' . $location;
+					// Audit #1434: rtrim — dirname('/') yields '//path'.
+					$resolved = $scheme . '://' . $host . $port . rtrim( $base_dir, '/' ) . '/' . $location;
 				}
 			}
 
@@ -396,7 +397,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * (transport failure or terminal non-200/non-3xx status), matching the
 		 * pre-hardening behaviour of scan().
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @param  string $url Validated scan URL.
 		 * @return array|\WP_Error|null {
 		 *     Success payload on a 200 response, WP_Error on an unsafe hop or
@@ -480,7 +481,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * by resolve_redirect() before the next request is issued (same rules
 		 * as the cURL path).
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @param  string $url Validated scan URL.
 		 * @return array|\WP_Error Success payload, or WP_Error on failure/unsafe hop/hop limit.
 		 */
@@ -748,8 +749,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				// closure runs up to N times per scan on the request thread,
 				// so initializing the filesystem abstraction per asset would
 				// dominate the scan cost; reads are local-only and fail-open.
-				$local_path = Util::get_local_path( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists,WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Local read-only size probe on the scan hot path; WP_Filesystem init per asset is disproportionate, failures return 0.
-				if ( $local_path && file_exists( $local_path ) ) {
+				$local_path = Util::get_local_path( $url );
+				// Audit #1434: ignore moved to the file_exists() line it covers.
+				if ( $local_path && file_exists( $local_path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local read-only probe on the scan hot path; WP_Filesystem init per asset is disproportionate.
 					// Race guard: the file can vanish between file_exists()
 					// and filesize(), which would emit a warning — return 0
 					// quietly instead.

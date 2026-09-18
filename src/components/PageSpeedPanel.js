@@ -34,7 +34,7 @@ import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 import NoticeBanner from './common/NoticeBanner';
 
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 // apiKeyConfigured is now derived inside the component for reactivity.
 
@@ -94,6 +94,30 @@ const scoreStatus = ( score ) => {
  * @param {string} props.label Category label.
  * @param {number} props.score 0–100 integer.
  */
+/**
+ * Format a fetched_at timestamp for the current locale (audit #1420).
+ *
+ * Falls back to the raw value when parsing fails.
+ *
+ * @since NEXT
+ * @param {string} raw Raw timestamp.
+ * @return {string} Localized date/time or the raw value.
+ */
+const formatFetchedAt = ( raw ) => {
+	if ( ! raw ) {
+		return '';
+	}
+	try {
+		const date = new Date( raw );
+		if ( Number.isNaN( date.getTime() ) ) {
+			return raw;
+		}
+		return date.toLocaleString();
+	} catch {
+		return raw;
+	}
+};
+
 const ScoreGauge = ( { label, score } ) => {
 	const status = scoreStatus( score );
 	// Audit #1354: expose metric context to screen readers.
@@ -101,7 +125,12 @@ const ScoreGauge = ( { label, score } ) => {
 		<div
 			className={ `wppo-score-gauge wppo-score-gauge--${ status }` }
 			role="img"
-			aria-label={ `${ label }: ${ score }` }
+			aria-label={ sprintf(
+				/* translators: 1: gauge label, 2: score value. */
+				__( '%1$s: %2$s', 'performance-optimisation' ),
+				label,
+				score
+			) }
 		>
 			<div className="wppo-score-gauge__circle" aria-hidden="true">
 				<span className="wppo-score-gauge__value">{ score }</span>
@@ -483,7 +512,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			{ pending && (
 				<div
 					className="wppo-notice wppo-notice--info"
-					role="alert"
+					role="status" // Audit #1420: in-progress notices are status, not alert.
 					aria-live="polite"
 				>
 					<FontAwesomeIcon
@@ -567,7 +596,8 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							? __( 'Desktop', 'performance-optimisation' )
 							: __( 'Mobile', 'performance-optimisation' ) }
 						{ ' · ' }
-						{ result.fetched_at }
+						{ /* Audit #1420: locale-aware date. */ }
+						{ formatFetchedAt( result.fetched_at ) }
 					</p>
 				</div>
 			) }

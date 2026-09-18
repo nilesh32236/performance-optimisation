@@ -123,6 +123,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
+					// Audit #1469: filesize probe before buffering — huge sources
+					// skip minification instead of exhausting memory.
+					$src_size = $this->filesystem->size( $this->file_path );
+					if ( false !== $src_size && $src_size > 1048576 ) {
+						return '';
+					}
 					$css_content = $this->filesystem->get_contents( $this->file_path );
 					if ( false === $css_content ) {
 						return '';
@@ -308,7 +314,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @param mixed  $display Desired font-display value (swap|block|fallback|optional|auto). Falsy disables injection.
 		 * @return string The modified CSS content.
 		 * @since 2.0.0
-		 * @since NEXT Added optional $display parameter with block normalization.
+		 * @since 2.2.0 Added optional $display parameter with block normalization.
 		 */
 		public static function inject_font_display_swap( $css, $display = 'swap' ) {
 			$display_validated = is_string( $display ) ? strtolower( trim( $display ) ) : '';

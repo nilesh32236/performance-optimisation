@@ -92,15 +92,16 @@ jobs:
           files and never run gh/issue commands (the research job has no
           GitHub token). CI captures your final message and
           writes/validates every file itself.
-          Spawn each of the 8 named specialists below as a sub-agent named
+          Spawn each of the 9 named specialists below as a sub-agent named
           verbatim `wppo-lane-researcher` (Task tool), passing the lane brief
           in the task prompt. Do NOT research serially yourself; do NOT use
           other agent names; split work INSIDE a lane brief if needed:
           - core-researcher, competitor-researcher, security-researcher,
             user-voice-researcher, code-auditor, benchmark-analyst,
-            compatibility-auditor, reviewer — plus one orchestrator (you)
-            that reconciles the lane results into the final output.
-          - Budgets (STRICT): ≤12 sub-agents total, 4-6 searches/lane, 3-5
+            compatibility-auditor, design-researcher, reviewer — plus one
+            orchestrator (you) that reconciles the lane results into the
+            final output.
+          - Budgets (STRICT): ≤12 sub-agents total, 4-6 searches/lane, 2-4
             findings/lane, 15 total max. High score first.
           - Every lane RETURNS ITS FINDINGS AS MESSAGE TEXT (evidence, URLs,
             versions, dates). NO lane writes /tmp/lane-*.md or ANY file — CI
@@ -127,7 +128,7 @@ jobs:
             trust in confidence scoring. List "Searches performed" per lane;
             "None found" only after 3 searches.
 
-          LANES — 8 FIXED SPECIALISTS (all REQUIRED — none optional):
+          LANES — 9 FIXED SPECIALISTS (all REQUIRED — none optional):
           - core-researcher (L1 WordPress Core): new hooks/functions/APIs,
             Script/Style loading strategies (defer/async/module/
             fetchpriority), Interactivity API, HTML API
@@ -166,6 +167,15 @@ jobs:
             multisite safety, fail-open cache, atomic .htaccess /
             advanced-cache.php writes, Redis outage fallback, Imagick/GD
             chain, nonce/capability, uninstall cleanup + fallback per proposal.
+          - design-researcher (L9 Design/Usability): competitor
+            admin/settings-UX parity incl. WP Rocket/Perfmatters/
+            FlyingPress/LiteSpeed onboarding+guidance, WP admin design
+            trends, usability pain points from 1-3 star reviews/forums/
+            reddit mentioning confusing UI, a11y gaps in our SPA; every
+            finding needs a Current Implementation anchor in src/ +
+            .wppo- SCSS; use existing categories competitor-gap|
+            user-request|standout-differentiator; scores/tiers/gates
+            unchanged.
           - reviewer (orchestrator support): validates evidence, dedups by
             fingerprint, applies tiers, sorts by score. Orchestrator
             reconciles lane findings (message text) into the final JSON.
@@ -238,7 +248,7 @@ jobs:
              estimated_impact:{queries,frontend_kb,request_ms},
              measured_impact:null,
              fallback,acceptance_criteria[]}]}
-             - lanes[] REQUIRED: one entry per specialist lane — all 8 —
+             - lanes[] REQUIRED: one entry per specialist lane — all 9 —
                with REAL counts (searches performed, sources consulted,
                findings produced). "None found" for a lane is only valid
                with searches_performed > 0 documented there.

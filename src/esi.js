@@ -34,6 +34,7 @@
  */
 
 import { __ } from '@wordpress/i18n';
+import { redactLogSecrets } from './lib/logSecrets';
 
 /**
  * Extract a safe log message without leaking response bodies.
@@ -47,17 +48,25 @@ import { __ } from '@wordpress/i18n';
  * @return {string} Safe message string.
  */
 const getEsiLogMessage = ( err ) => {
+	let message;
 	if ( err instanceof Error ) {
-		return err.message || 'Unknown error';
-	}
-	if ( typeof err === 'string' ) {
-		return err.slice( 0, 500 ) || 'Unknown error';
-	}
-	if ( err === null || typeof err === 'undefined' ) {
+		message = err.message || 'Unknown error';
+	} else if ( typeof err === 'string' ) {
+		message = err.slice( 0, 500 ) || 'Unknown error';
+	} else if ( err === null || typeof err === 'undefined' ) {
 		return 'Unknown error';
+	} else {
+		try {
+			message = String( err ).slice( 0, 500 );
+		} catch {
+			return 'Unknown error';
+		}
 	}
 	try {
-		return String( err ).slice( 0, 500 );
+		return ( redactLogSecrets( message ) || 'Unknown error' ).slice(
+			0,
+			500
+		);
 	} catch {
 		return 'Unknown error';
 	}
@@ -456,7 +465,15 @@ const refreshEsiNonce = ( signal, staleNonce = '' ) => {
 	} )
 		.then( ( response ) => ( response.ok ? response.json() : null ) )
 		.then( ( data ) => extractFragmentHtml( data ) )
-		.catch( () => '' );
+		.catch( ( refreshError ) => {
+			// Audit #1420: log the redacted failure like other hydration
+			// failures; resolve empty so hydration continues.
+			console.warn(
+				'WPPO ESI fragment hydration failed:',
+				getEsiLogMessage( refreshError )
+			);
+			return '';
+		} );
 
 	pendingNonceRefresh = refresh.finally( () => {
 		pendingNonceRefresh = null;
