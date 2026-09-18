@@ -785,10 +785,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				}
 				// Process completed handles.
 				while ( ( $info = curl_multi_info_read( $mh ) ) ) { // phpcs:ignore Generic.CodeAnalysis.AssignmentInCondition.FoundInWhileCondition,WordPress.WP.AlternativeFunctions.curl_curl_multi_info_read -- intentional loop
-					$ch   = $info['handle'];
-					$code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- crawler requires curl
-					$err  = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
-					$url  = $index_to_url[ ( is_object( $ch ) ? spl_object_id( $ch ) : (int) $ch ) ] ?? '';
+					$ch      = $info['handle'];
+					$code    = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- crawler requires curl
+					$err     = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
+					$map_key = is_object( $ch ) ? spl_object_id( $ch ) : (int) $ch;
+					$url     = $index_to_url[ $map_key ] ?? '';
+					unset( $index_to_url[ $map_key ] );
 					if ( '' !== $url ) {
 						if ( '' !== $err || $code >= 400 || 0 === $code ) {
 							self::record_failure( $url );
