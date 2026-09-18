@@ -876,15 +876,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Per-endpoint transient throttle for heavy admin endpoints.
-		 *
-		 * @since NEXT
-		 * @param string $endpoint Endpoint slug.
-		 * @param int    $limit    Max hits per window.
-		 * @param int    $window   Window in seconds.
-		 * @return bool True when throttled.
-		 */
-		/**
 		 * Per-request static throttle buckets (audit #1453).
 		 *
 		 * Fallback when the transient API is unavailable: bounds bursts
@@ -901,13 +892,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			static $buckets = array();
 			$now = time();
 			if ( ! isset( $buckets[ $endpoint ] ) || $now - $buckets[ $endpoint ]['at'] >= $window ) {
-				$buckets[ $endpoint ] = array( 'at' => $now, 'hits' => 1 );
+				$buckets[ $endpoint ] = array(
+				'at'   => $now,
+				'hits' => 1,
+			);
 				return false;
 			}
-			$buckets[ $endpoint ]['hits']++;
+			++$buckets[ $endpoint ]['hits'];
 			return $buckets[ $endpoint ]['hits'] > $limit;
 		}
 
+		/**
+		 * Per-endpoint transient throttle for heavy admin endpoints.
+		 *
+		 * @since NEXT
+		 * @param string $endpoint Endpoint slug.
+		 * @param int    $limit    Max hits per window.
+		 * @param int    $window   Window in seconds.
+		 * @return bool True when throttled.
+		 */
 		private function is_endpoint_throttled( string $endpoint, int $limit = 10, int $window = 60 ): bool {
 			// Fail-open when the transient API is unavailable (unit stubs
 			// without the transient helpers): throttling is best-effort.
