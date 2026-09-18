@@ -651,8 +651,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			if ( $filesystem ) {
 				$filesystem->put_contents( $css_file, $css, FS_CHMOD_FILE );
 			} else {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-				file_put_contents( $css_file, $css );
+				// Audit #1453: containment assert before the raw fallback write
+				// ($css_file is internally constructed, never user-controlled).
+				$resolved_css = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $css_file ) : $css_file;
+				$content_root = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
+				if ( '' !== $content_root && 0 === strpos( $resolved_css, $content_root ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+					file_put_contents( $css_file, $css );
+				}
 			}
 
 			// Capped-run convergence: the per-run cap above can leave remote

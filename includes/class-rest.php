@@ -884,6 +884,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param int    $window   Window in seconds.
 		 * @return bool True when throttled.
 		 */
+		/**
+		 * Per-request static throttle buckets (audit #1453).
+		 *
+		 * Fallback when the transient API is unavailable: bounds bursts
+		 * within a single request lifecycle. Request-scoped by design —
+		 * cross-request throttling still needs transients.
+		 *
+		 * @since NEXT
+		 * @param string $endpoint Endpoint slug.
+		 * @param int    $limit    Max hits per window.
+		 * @param int    $window   Window in seconds.
+		 * @return bool True when throttled.
+		 */
+		private static function static_throttle_hit( string $endpoint, int $limit, int $window ): bool {
+			static $buckets = array();
+			$now = time();
+			if ( ! isset( $buckets[ $endpoint ] ) || $now - $buckets[ $endpoint ]['at'] >= $window ) {
+				$buckets[ $endpoint ] = array( 'at' => $now, 'hits' => 1 );
+				return false;
+			}
+			$buckets[ $endpoint ]['hits']++;
+			return $buckets[ $endpoint ]['hits'] > $limit;
+		}
+
 		private function is_endpoint_throttled( string $endpoint, int $limit = 10, int $window = 60 ): bool {
 			// Fail-open when the transient API is unavailable (unit stubs
 			// without the transient helpers): throttling is best-effort.
@@ -898,7 +922,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						unset( $e );
 					}
 				}
-				return false;
+				// Audit #1453: static per-request fallback bucket so a transient
+				// outage degrades throttling instead of disabling it.
+				return self::static_throttle_hit( $endpoint, $limit, $window );
 			}
 			try {
 				// Per-user/IP key so one actor cannot exhaust the budget for
@@ -2424,7 +2450,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					if ( defined( 'WPPO_REDIS_PASSWORD' ) && ! apply_filters( 'wppo_redis_allow_request_password', false ) ) {
 						return '';
 					}
-					return sanitize_text_field( (string) $value );
+					// Audit #1453: no tag-stripping on passwords (mangles strong
+					// secrets) — string cast + length clamp only. Never
+					// persisted (unset/flag-only downstream); HTTPS-only for
+					// admin REST calls carrying a password.
+					if ( ! is_string( $value ) && ! is_numeric( $value ) ) {
+						return '';
+					}
+					return substr( (string) $value, 0, 512 );
 				case 'use_tls':
 				case 'persistent':
 					return (bool) $value;

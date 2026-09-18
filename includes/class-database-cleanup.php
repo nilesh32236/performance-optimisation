@@ -257,7 +257,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			do {
 				$wpdb->last_error = '';
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Direct query necessary for batched cleanup helper with dynamic SELECT.
-				$ids = $wpdb->get_col( $select_sql );
+				// Audit #1453: static-SQL-only sink — reject placeholders so a
+			// future caller cannot interpolate dynamic values here.
+			if ( false !== strpos( $select_sql, '%' ) ) {
+				return false;
+			}
+			$ids = $wpdb->get_col( $select_sql );
 
 				if ( ! empty( $wpdb->last_error ) ) {
 					return false;
