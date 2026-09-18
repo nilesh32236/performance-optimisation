@@ -4,8 +4,9 @@
  *
  * Fresh installs must allocate zero `*_migrated` rows, steady-state runs
  * must be zero-write no-ops, unparseable stored versions must fail open
- * (skip the shim, still roll the version forward), and genuine upgrades
- * must run the one-shot backfills exactly once.
+ * (run the cheap idempotent autoload backfills, skip the expensive flush,
+ * still roll the version forward), and genuine upgrades must run the
+ * one-shot backfills exactly once (only when predating the backfill floor).
  *
  * @package PerformanceOptimise\Tests
  */
@@ -206,8 +207,10 @@ class ActivateUpgradeGatingTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Fail-open: an empty stored version skips the shim but still rolls
-	 * the version forward instead of re-running writes every request.
+	 * Fail-open: an empty stored version still runs the cheap idempotent
+	 * autoload backfills (so a legacy install missing its version row does
+	 * not keep autoload=yes bloat forever) while still rolling the version
+	 * forward instead of re-running writes every request.
 	 */
 	public function test_empty_version_fails_open(): void {
 		$this->stub_options( array( 'wppo_version' => '' ) );
@@ -216,11 +219,13 @@ class ActivateUpgradeGatingTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( array( array( 'wppo_version', WPPO_VERSION ) ), $this->writes );
 		$this->assert_no_migrated_rows();
-		$this->assertSame( 0, $this->autoload_calls );
+		$this->assertSame( 3, $this->autoload_calls );
+		$this->assertSame( 0, $this->log_calls );
 	}
 
 	/**
-	 * Fail-open: a garbage stored version is treated as already-migrated.
+	 * Fail-open: a garbage stored version still runs the cheap idempotent
+	 * autoload backfills before rolling the version forward.
 	 */
 	public function test_garbage_version_fails_open(): void {
 		$this->stub_options( array( 'wppo_version' => 'not-a-version!!' ) );
@@ -229,7 +234,41 @@ class ActivateUpgradeGatingTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( array( array( 'wppo_version', WPPO_VERSION ) ), $this->writes );
 		$this->assert_no_migrated_rows();
-		$this->assertSame( 0, $this->autoload_calls );
+		$this->assertSame( 3, $this->autoload_calls );
+		$this->assertSame( 0, $this->log_calls );
+	}
+
+	/**
+	 * A dotted-garbage stored version (`1....`) is implausible and must
+	 * take the fail-open path, not the genuine-upgrade path.
+	 */
+	public function test_dotted_garbage_version_fails_open(): void {
+		$this->stub_options( array( 'wppo_version' => '1....' ) );
+
+		Activate::maybe_run_upgrades( false );
+
+		$this->assertSame( array( array( 'wppo_version', WPPO_VERSION ) ), $this->writes );
+		$this->assert_no_migrated_rows();
+		$this->assertSame( 3, $this->autoload_calls );
+		$this->assertSame( 0, $this->log_calls );
+	}
+
+	/**
+	 * A hyphenated prerelease suffix (e.g. `2.0.0-rc-1`) is a plausible
+	 * stored version, not garbage: it must take the genuine-upgrade path
+	 * rather than the fail-open skip.
+	 */
+	public function test_prerelease_version_is_plausible(): void {
+		$this->stub_options( array( 'wppo_version' => '2.0.0-rc-1' ) );
+
+		Activate::maybe_run_upgrades( false );
+
+		// Treated as a genuine stored version below the current release
+		// (not garbage): the version rolls forward with no flush log for
+		// versions at/above the legacy floor.
+		$this->assertContains( array( 'wppo_version', WPPO_VERSION ), $this->writes );
+		$this->assert_no_migrated_rows();
+		$this->assertSame( 0, $this->log_calls );
 	}
 
 	/**

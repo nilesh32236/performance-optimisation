@@ -45,6 +45,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		private const LEGACY_FLUSH_FLOOR = '1.8.1';
 
 		/**
+		 * Version floor for the one-time autoload=no backfills.
+		 *
+		 * The aggregate options (`wppo_img_info`, RUM aggregates, PageSpeed
+		 * trends) created by older releases defaulted to autoload=yes. Releases
+		 * at/above this floor already create them with autoload=no, so upgrades
+		 * from such versions skip the backfill writes entirely instead of
+		 * re-running them on every future version bump.
+		 *
+		 * @var string
+		 * @since NEXT
+		 */
+		private const AUTOLOAD_BACKFILL_FLOOR = '2.0.0';
+
+		/**
 		 * Anchored match for an uncommented `define( 'WP_CACHE', false );`.
 		 *
 		 * Anchored to start-of-line (multiline `^` plus leading horizontal
@@ -196,9 +210,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * successfully.
 		 *
 		 * Fail-open: when the stored version is missing or unparseable on a
-		 * non-fresh path, the shim is skipped (treated as already-migrated)
-		 * while still rolling the version forward, rather than re-running
-		 * writes. Uses per-site get_option() so multisite sites migrate
+		 * non-fresh path, the cheap idempotent autoload backfills still run
+		 * (so a legacy install that lost its version row does not keep
+		 * autoload=yes bloat forever) while the expensive legacy cache flush
+		 * is skipped, and the version still rolls forward rather than
+		 * re-running writes. Uses per-site get_option() so multisite sites migrate
 		 * independently with no cross-site leakage.
 		 *
 		 * @param bool $is_fresh_install True when running from a brand-new
@@ -211,16 +227,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			// Brand-new install: no legacy keys can exist yet, so record the
 			// version and skip the pointless full flush and log entry.
+			// Guarded: never fatal when the version constant is unavailable.
 			if ( $is_fresh_install ) {
-				update_option( self::VERSION_OPTION, WPPO_VERSION, false );
+				if ( defined( 'WPPO_VERSION' ) ) {
+					update_option( self::VERSION_OPTION, WPPO_VERSION, false );
+				}
 				return;
 			}
 
 			// Fail-open: without a plausible stored version there is nothing to
-			// compare against — skip the one-shot writes instead of re-running
-			// them, but still roll the version forward. Never fatal.
+			// compare against — run the cheap idempotent autoload backfills (so
+			// a legacy install missing its version row still sheds autoload=yes
+			// bloat) but skip the expensive legacy flush, then still roll the
+			// version forward. Guarded: never fatal when the version constant
+			// is unavailable.
 			if ( ! is_string( $stored_version ) || '' === $stored_version || ! self::is_plausible_version( $stored_version ) ) {
-				update_option( self::VERSION_OPTION, WPPO_VERSION, false );
+				Img_Converter::migrate_img_info_autoload();
+				RUM::migrate_rum_autoload();
+				Pagespeed::migrate_trends_autoload();
+				if ( defined( 'WPPO_VERSION' ) ) {
+					update_option( self::VERSION_OPTION, WPPO_VERSION, false );
+				}
 				return;
 			}
 
@@ -234,11 +261,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			// Genuine upgrade path only: one-time backfill for the large
 			// aggregate options created by older releases with autoload=yes.
-			// The helpers are idempotent and the version roll-forward below
-			// keeps them one-shot, so no marker option is allocated.
-			Img_Converter::migrate_img_info_autoload();
-			RUM::migrate_rum_autoload();
-			Pagespeed::migrate_trends_autoload();
+			// Gated on a fixed floor (releases at/above it already create the
+			// rows with autoload=no) so routine future version bumps pay zero
+			// backfill writes and never wipe the field-LCP cache again. The
+			// helpers are idempotent and the version roll-forward below keeps
+			// them one-shot, so no marker option is allocated.
+			if ( version_compare( $stored_version, self::AUTOLOAD_BACKFILL_FLOOR, '<' ) ) {
+				Img_Converter::migrate_img_info_autoload();
+				RUM::migrate_rum_autoload();
+				Pagespeed::migrate_trends_autoload();
+			}
 
 			// One-time eviction: legacy unsalted keys can only exist once, on
 			// installs that predate the release shipping this fix. Gate on a fixed
@@ -265,15 +297,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 *
 		 * Guards the one-shot version gate against empty/garbage rows (e.g. a
 		 * manually deleted or corrupted `wppo_version` option) so version
-		 * detection failure fails open (skip the shim) instead of re-running
-		 * migration writes on every request.
+		 * detection failure fails open (cheap backfills only, no flush)
+		 * instead of re-running migration writes on every request.
 		 *
 		 * @param string $stored_version Raw stored version value.
-		 * @return bool True when the value looks like a dotted version number.
+		 * @return bool True when the value looks like a dotted version number,
+		 *              optionally followed by a single `-`/`+` prerelease/build
+		 *              suffix (dots and hyphens allowed, e.g. `2.0.0-rc-1`).
 		 * @since NEXT
 		 */
 		private static function is_plausible_version( string $stored_version ): bool {
-			return (bool) preg_match( '/^\d[\d.]*(?:[-+][0-9A-Za-z.]+)?$/', $stored_version );
+			return (bool) preg_match( '/^\d+(?:\.\d+)*(?:[-+][0-9A-Za-z.-]+)?$/', $stored_version );
 		}
 
 		/**
