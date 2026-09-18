@@ -91,6 +91,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 					(string) ( $s['description'] ?? $s['metric'] ),
 					(string) ( $s['fix_action'] ?? 'no_action_required' )
 				);
+				// Preserve the AI one-click Apply payload (AiPanel.js gates the
+				// Apply button on suggestion.ai_payload). Re-sanitized
+				// server-side by update_settings on apply.
+				if ( isset( $s['ai_payload'] ) && is_array( $s['ai_payload'] ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					$validated[ count( $validated ) - 1 ]['ai_payload'] = Util::sanitize_settings_recursively( $s['ai_payload'] );
+				}
 			}
 			return $validated;
 		}

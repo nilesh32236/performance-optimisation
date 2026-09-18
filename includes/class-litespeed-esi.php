@@ -464,9 +464,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				// Visible failure signal for partial deploys: src/esi.js
 				// imports @wordpress/i18n for translated aria-labels, so a
 				// missing asset file would otherwise ship an untranslated or
-				// broken hydration client with no log.
-				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-					Log::add( 'WPPO ESI: build/esi.asset.php missing; falling back to wp-i18n dependencies.' );
+				// broken hydration client with no log. Always fires
+				// wppo_debug_log (no DB writes); mirrors to the activity log
+				// throttled to once per day so the persistent missing-asset
+				// condition cannot spam wppo_activity_logs on every enqueue.
+				if ( function_exists( 'do_action' ) ) {
+					do_action( 'wppo_debug_log', 'WPPO ESI: build/esi.asset.php missing; falling back to wp-i18n dependencies.' );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
+					$notice_key = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::transient_key( 'wppo_esi_asset_notice' ) : 'wppo_esi_asset_notice';
+					if ( false === get_transient( $notice_key ) ) {
+						set_transient( $notice_key, 1, DAY_IN_SECONDS );
+						Log::add( 'WPPO ESI: build/esi.asset.php missing; falling back to wp-i18n dependencies.' );
+					}
 				}
 			}
 

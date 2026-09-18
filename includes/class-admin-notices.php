@@ -188,6 +188,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			if ( 'object_cache_circuit' === $key ) {
 				// Dismiss only this trip: persist its tripped_at timestamp so
 				// the next trip (newer timestamp) automatically re-arms the notice.
+				// Note: capability + per-notice nonce were already verified above
+				// (early return on failure), so reaching here is authenticated.
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) || ! defined( 'PerformanceOptimise\Inc\Object_Cache::CIRCUIT_DISMISSED_OPTION' ) ) {
 					wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );
 					exit;
