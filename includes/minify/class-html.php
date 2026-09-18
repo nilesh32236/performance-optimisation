@@ -106,7 +106,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * handle matching — so audit parity between the two paths is
 		 * approximate by design.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string|null
 		 */
 		private ?string $delay_exclude_re = null;
@@ -117,7 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * One preg_match per tag replaces the O(list) strpos scans in
 		 * get_delay_strategy_for_inline(). Null when the list is empty.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string|null
 		 */
 		private ?string $delay_idle_re = null;
@@ -125,7 +125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Precompiled alternation for the viewport strategy list.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string|null
 		 */
 		private ?string $delay_viewport_re = null;
@@ -136,7 +136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * Quick-reject gate in get_delay_priority_for_inline(): a single
 		 * preg_match decides whether the linear level-resolution loop runs.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string|null
 		 */
 		private ?string $delay_priority_re = null;
@@ -298,7 +298,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				 * Applying the filter to an empty array keeps append-style
 				 * callbacks working exactly as they do in Main.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 *
 				 * @param array<int, string> $exclusions Handles or URL fragments to keep eager.
 				 */
@@ -426,7 +426,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * One preg_match per <script> tag replaces the O(patterns) strpos loop.
 		 * Fail-open: returns null on any error so callers fall back to strpos.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string[] $exclusions Exclusion fragments.
 		 * @return string|null Ready regex, or null when unusable.
@@ -473,7 +473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * stays clean; nested arrays encode deterministically. Returns null
 		 * when the values cannot be encoded (callers skip the cache).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed $allow_raw Allowlist raw setting value.
 		 * @param mixed $extra_raw Denylist raw setting value.
@@ -1372,7 +1372,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * handle keywords, also add a matching src/attribute fragment to the
 		 * denylist (or filter) so both paths agree.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $attributes Script attributes string.
 		 * @param string $content    Inline script content.
 		 * @param array  $file_opt   Effective file_optimisation slice.
@@ -1550,7 +1550,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * so handle-keyword matches only apply on the script_loader_tag path
 		 * (Main); buffered matching is src-substring only.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $attributes Script attributes string.
 		 * @param string $content    Inline script content (ignored; kept for signature parity).
 		 * @return bool True on match.
@@ -1614,7 +1614,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * overrides are applied by the caller, so auto patterns merge
 		 * additively. Fail-open to false on any error.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $attributes Script attributes string.
 		 * @param string $content    Inline script content (ignored except for signature parity).
 		 * @param array  $file_opt   Effective file_optimisation slice.

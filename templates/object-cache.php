@@ -67,11 +67,64 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 		/**
 		 * Constructor.
+		 *
+		 * Pre-boot safe: is_multisite()/get_current_blog_id() do not exist
+		 * until WordPress boots, and $table_prefix may be unset when this
+		 * drop-in loads via WP_CONTENT_DIR. All three are guarded so a
+		 * killed Redis never turns into a pre-boot fatal.
 		 */
 		public function __construct() {
 			global $table_prefix;
 
-			$this->blog_prefix = ( is_multisite() ? get_current_blog_id() : $table_prefix ) . ':';
+			// Resolve $table_prefix once so the multisite / single-site /
+			// pre-boot branches below cannot diverge.
+			$table_prefix_str = '';
+			try {
+				if ( isset( $table_prefix ) && is_scalar( $table_prefix ) && '' !== (string) $table_prefix ) {
+					$table_prefix_str = (string) $table_prefix;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$table_prefix_str = '';
+			}
+
+			$prefix = '';
+			try {
+				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
+					try {
+						$is_ms = is_multisite();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$is_ms = false;
+					}
+					if ( $is_ms ) {
+						try {
+							$prefix = (string) get_current_blog_id();
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$prefix = '';
+						}
+						if ( '' === $prefix ) {
+							$prefix = $table_prefix_str;
+						}
+					} else {
+						$prefix = $table_prefix_str;
+					}
+				} else {
+					$prefix = $table_prefix_str;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$prefix = $table_prefix_str;
+			}
+			if ( '' === $prefix ) {
+				// Never share one constant keyspace across sites: fall back
+				// to a file-unique prefix so unresolved tenants fail
+				// isolated instead of reading each other's entries.
+				$prefix = md5( __FILE__ );
+			}
+
+			$this->blog_prefix = $prefix . ':';
 
 			$this->connect_redis();
 		}
@@ -278,7 +331,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * prefer it over the primary), logs once per outage window, and
 		 * counts toward the file-based circuit breaker. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $error_code Machine-readable failure code.
 		 * @param string $reason     Human-readable failure description.
 		 * @return void
@@ -1035,7 +1088,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * degrades to uncached (false) rather than fatal.
 		 *
 		 * @since 2.0.0 Post-flush verification sample added; returns false when stale keys remain.
-		 * @since NEXT Multisite scoping note for the object_cache_allow_flush_all filter added.
+		 * @since 2.2.0 Multisite scoping note for the object_cache_allow_flush_all filter added.
 		 * @return bool True when the prefix verifies clean, false otherwise.
 		 */
 		public function flush() {

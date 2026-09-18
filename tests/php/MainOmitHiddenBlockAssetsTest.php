@@ -7,7 +7,7 @@
  * filter-throw path, and deferral to core 6.9 hoisting.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 
 use PerformanceOptimise\Inc\Main;

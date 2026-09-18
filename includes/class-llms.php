@@ -8,7 +8,7 @@
  * with ETag/304, Link header and head <link>.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
