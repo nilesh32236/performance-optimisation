@@ -2904,6 +2904,561 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Transient prefix for the per-URL CSS-refresh cooldown (issue #1407).
+		 *
+		 * The full key is the prefix plus md5() of the resolved URL,
+		 * blog-qualified via Util::transient_key() so multisite sites cool
+		 * down independently. Stored value is the queue timestamp.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const CSS_REFRESH_COOLDOWN_PREFIX = 'wppo_ai_css_refresh_';
+
+		/**
+		 * Option storing per-URL before/after LCP snapshots (autoload=no).
+		 *
+		 * Per-site option, hence inherently multisite-safe. Bounded to 20
+		 * entries; proves the refresh loop with before/after LCP numbers.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const CSS_REFRESH_SNAPSHOT_OPTION = 'wppo_ai_css_refresh_snapshots';
+
+		/**
+		 * Default per-URL CSS-refresh cooldown in days.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const CSS_REFRESH_COOLDOWN_DAYS = 7;
+
+		/**
+		 * Whether RUM-triggered CSS refresh on LCP regression is enabled.
+		 *
+		 * Additive opt-in living in
+		 * `wppo_settings[ai_adaptive][css_refresh_on_lcp_regression]`
+		 * (default false/suggest-only). Filterable via
+		 * `wppo_ai_css_refresh_enabled`. Fail-open to false: any failure
+		 * keeps the loop suggestion-only.
+		 *
+		 * @return bool True when a regression may queue a CSS regen job.
+		 * @since NEXT
+		 */
+		public static function is_css_refresh_enabled(): bool {
+			try {
+				$enabled = false;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					$enabled  = ! empty( $settings['ai_adaptive']['css_refresh_on_lcp_regression'] );
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters whether RUM-triggered CSS refresh may queue jobs.
+					 *
+					 * @since NEXT
+					 * @param bool $enabled Whether the CSS-refresh opt-in is on.
+					 */
+					$enabled = (bool) apply_filters( 'wppo_ai_css_refresh_enabled', $enabled );
+				}
+				return $enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Resolve the per-URL CSS-refresh cooldown window in days.
+		 *
+		 * Reads the additive `ai_adaptive.css_refresh_cooldown_days`
+		 * setting, falling back to CSS_REFRESH_COOLDOWN_DAYS. Filterable via
+		 * `wppo_ai_css_refresh_cooldown_days`. Fail-open to 7.
+		 *
+		 * A 0-day window would re-queue on every suggestions render while
+		 * the regression persists (dedup would rely solely on
+		 * as_has_scheduled_action() for pending jobs), so the effective
+		 * floor is 1 day: stored/filtered values below 1 are normalized up.
+		 *
+		 * @return int Cooldown days (>=1).
+		 * @since NEXT
+		 */
+		public static function css_refresh_cooldown_days(): int {
+			try {
+				$days = self::CSS_REFRESH_COOLDOWN_DAYS;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
+						$raw = $settings['ai_adaptive']['css_refresh_cooldown_days'];
+						if ( is_numeric( $raw ) && (int) $raw >= 0 ) {
+							$days = (int) $raw;
+						}
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the per-URL CSS-refresh cooldown window.
+					 *
+					 * Values below 1 are normalized up to 1 (see
+					 * css_refresh_cooldown_days()).
+					 *
+					 * @since NEXT
+					 * @param int $days Cooldown days.
+					 */
+					$filtered = apply_filters( 'wppo_ai_css_refresh_cooldown_days', $days );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 0 ) {
+						$days = (int) $filtered;
+					}
+				}
+				if ( $days < 1 ) {
+					$days = 1;
+				}
+				return $days >= 1 ? $days : self::CSS_REFRESH_COOLDOWN_DAYS;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::CSS_REFRESH_COOLDOWN_DAYS;
+			}
+		}
+
+		/**
+		 * Resolve a trend anomaly key back to its scanned URL.
+		 *
+		 * Trend keys are opaque (`md5( esc_url_raw( $url ) ) . '_' . strategy`,
+		 * see Pagespeed::record_trend()) and cannot be reversed, so
+		 * forward-match over home + `performance_audit.high_value_urls`
+		 * (mirroring Cron::web_vitals_rescan_cron() enumeration, capped at
+		 * 20 raw entries). Fail-open: returns '' when nothing matches.
+		 *
+		 * Lazy by design: called only when an LCP regression fired, so the
+		 * happy path (no regression) performs zero extra queries.
+		 *
+		 * @param string $trend_key Trend key (`md5(url)_strategy`).
+		 * @return string Resolved absolute URL, or '' when unresolvable.
+		 * @since NEXT
+		 */
+		public static function resolve_anomaly_url( string $trend_key ): string {
+			try {
+				if ( '' === $trend_key ) {
+					return '';
+				}
+				$candidates = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'cached_home_url' ) ) {
+						$candidates[] = Util::cached_home_url( '/' );
+					}
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+						$settings   = Util::get_settings();
+						$high_value = $settings['performance_audit']['high_value_urls'] ?? array();
+						if ( is_string( $high_value ) ) {
+							$high_value = preg_split( '/[\r\n,]+/', $high_value );
+						}
+						if ( is_array( $high_value ) ) {
+							$high_value = array_slice( array_values( $high_value ), 0, 20 );
+							foreach ( $high_value as $high_url ) {
+								if ( is_string( $high_url ) && '' !== trim( $high_url ) ) {
+									$candidates[] = trim( $high_url );
+								}
+							}
+						}
+					}
+				}
+				foreach ( $candidates as $candidate ) {
+					if ( ! is_string( $candidate ) || '' === $candidate ) {
+						continue;
+					}
+					$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( $candidate ) : $candidate;
+					if ( ! is_string( $clean ) || '' === $clean ) {
+						continue;
+					}
+					foreach ( array( 'mobile', 'desktop' ) as $strategy ) {
+						$candidate_key = md5( $clean ) . '_' . $strategy;
+						if ( function_exists( 'hash_equals' ) ) {
+							if ( hash_equals( $trend_key, $candidate_key ) ) {
+								return $clean;
+							}
+						} elseif ( $candidate_key === $trend_key ) {
+							return $clean;
+						}
+					}
+				}
+				return '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Whether a URL is the site homepage.
+		 *
+		 * Core post-ID lookup returns 0 for the front page, so the queue path
+		 * needs an explicit homepage check before degrading to
+		 * suggestion-only. Comparison is trailing-slash insensitive.
+		 *
+		 * @param string $url Absolute URL.
+		 * @return bool True when the URL is the homepage.
+		 * @since NEXT
+		 */
+		public static function is_homepage_url( string $url ): bool {
+			try {
+				if ( '' === $url ) {
+					return false;
+				}
+				$home = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'cached_home_url' ) ) {
+					$home = Util::cached_home_url( '/' );
+				} elseif ( function_exists( 'home_url' ) ) {
+					$home = home_url( '/' );
+				}
+				if ( ! is_string( $home ) || '' === $home ) {
+					return false;
+				}
+				$normalize = static function ( $value ) {
+					$value = strtolower( trim( (string) $value ) );
+					return rtrim( $value, '/' );
+				};
+				return $normalize( $url ) === $normalize( $home );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Resolve the static front-page post ID, if one is configured.
+		 *
+		 * Fail-open: any failure returns 0 so callers degrade to
+		 * suggestion-only with the distinct `homepage` reason.
+		 *
+		 * @return int Front-page post ID (>0), or 0 when none configured.
+		 * @since NEXT
+		 */
+		public static function resolve_front_page_post_id(): int {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return 0;
+				}
+				// WordPress retains a stale page_on_front value after
+				// switching back to latest-posts, so gate on show_on_front
+				// to avoid queueing a regen against a page that is no
+				// longer the front page (fail-open: return 0).
+				if ( 'page' !== get_option( 'show_on_front' ) ) {
+					return 0;
+				}
+				$front_id = (int) get_option( 'page_on_front' );
+				return $front_id > 0 ? $front_id : 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Resolve a URL to its post ID for single-post used-CSS queueing.
+		 *
+		 * Guarded: returns 0 when url_to_postid() is unavailable or the URL
+		 * maps to no post (e.g. the home page when no static front page is
+		 * configured). Homepage URLs with a static front page resolve via
+		 * resolve_front_page_post_id(); other unresolvable URLs degrade to
+		 * suggestion-only with the distinct `homepage` reason.
+		 *
+		 * @param string $url Absolute URL.
+		 * @return int Post ID (>0), or 0 when unresolvable.
+		 * @since NEXT
+		 */
+		public static function resolve_anomaly_post_id( string $url ): int {
+			try {
+				if ( '' === $url ) {
+					return 0;
+				}
+				if ( function_exists( 'url_to_postid' ) ) {
+					$post_id = (int) url_to_postid( $url );
+					if ( $post_id > 0 ) {
+						return $post_id;
+					}
+				}
+				// Front-page fallback: url_to_postid() returns 0 for the
+				// homepage, so a configured static front page resolves here.
+				if ( self::is_homepage_url( $url ) ) {
+					return self::resolve_front_page_post_id();
+				}
+				return 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Record the before/after LCP snapshot for a refresh decision.
+		 *
+		 * Bounded to the 20 most recent entries in the per-site
+		 * CSS_REFRESH_SNAPSHOT_OPTION (autoload=no). Best-effort: never
+		 * throws, never fatal when the options API is missing.
+		 *
+		 * @param string $snapshot_key Snapshot key (md5 of URL or trend key).
+		 * @param array  $entry Snapshot entry (url, before_lcp, current_lcp, queued, ...).
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function record_css_refresh_snapshot( string $snapshot_key, array $entry ): void {
+			try {
+				if ( '' === $snapshot_key || ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				$stored = get_option( self::CSS_REFRESH_SNAPSHOT_OPTION, array() );
+				if ( ! is_array( $stored ) ) {
+					$stored = array();
+				}
+				$stored[ $snapshot_key ] = $entry;
+				if ( count( $stored ) > 20 ) {
+					$stored = array_slice( $stored, -20, 20, true );
+				}
+				update_option( self::CSS_REFRESH_SNAPSHOT_OPTION, $stored, false );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Get the stored before/after LCP snapshot for a URL.
+		 *
+		 * Powers the admin-notice proof around a refresh. Fail-open: any
+		 * failure returns an empty array.
+		 *
+		 * @param string $url Absolute URL.
+		 * @return array Snapshot entry, or empty array when none stored.
+		 * @since NEXT
+		 */
+		public static function get_css_refresh_snapshot( string $url ): array {
+			try {
+				if ( '' === $url || ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$stored = get_option( self::CSS_REFRESH_SNAPSHOT_OPTION, array() );
+				if ( ! is_array( $stored ) ) {
+					return array();
+				}
+				$entry = $stored[ md5( $url ) ] ?? array();
+				return is_array( $entry ) ? $entry : array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Bridge an LCP anomaly to a guarded single used-CSS regen job.
+		 *
+		 * Self-healing CSS (issue #1407): on a field-LCP regression for a
+		 * URL, queue at most one `wppo_used_css_generate` job per URL per
+		 * cooldown window — and only when the
+		 * `ai_adaptive.css_refresh_on_lcp_regression` opt-in is on (default
+		 * off/suggest-only). Non-LCP anomalies never queue.
+		 *
+		 * Fail-open by design: toggle-off, unresolvable URL, missing post,
+		 * homepage without a static front page, excluded post type,
+		 * scheduler absence, enqueue failure, or any throwable returns
+		 * `queued => false` with a machine-readable `reason`; last-good CSS
+		 * is kept (nothing is ever deleted here) so output degrades to the
+		 * current un-refreshed CSS, never fatal. Only singular posts are
+		 * queued: the homepage resolves via the static front page
+		 * (`page_on_front`) and otherwise degrades with reason `homepage`.
+		 *
+		 * Lazy boot: no extra queries unless an LCP regression fired; the
+		 * queue path adds one transient read plus (only on an actual queue)
+		 * one snapshot option write. Non-queueing decisions perform no
+		 * option writes, and unresolvable trend keys are never stored in
+		 * the bounded proof option so they cannot evict genuine entries.
+		 *
+		 * @param array    $anomaly Anomaly array from detect_anomalies().
+		 * @param int|null $now Optional current timestamp (tests).
+		 * @return array{queued:bool,reason:string,url:string,post_id:int,before_lcp:float,current_lcp:float} Refresh decision.
+		 * @since NEXT
+		 */
+		public static function maybe_queue_css_refresh( array $anomaly, ?int $now = null ): array {
+			$fallback = array(
+				'queued'      => false,
+				'reason'      => 'error',
+				'url'         => '',
+				'post_id'     => 0,
+				'before_lcp'  => 0.0,
+				'current_lcp' => 0.0,
+			);
+			try {
+				if ( 'lcp' !== ( $anomaly['metric'] ?? '' ) ) {
+					$fallback['reason'] = 'non-lcp';
+					return $fallback;
+				}
+				$baseline = isset( $anomaly['baseline'] ) ? (float) $anomaly['baseline'] : 0.0;
+				$current  = isset( $anomaly['current'] ) ? (float) $anomaly['current'] : 0.0;
+				if ( $baseline <= 0 || $current <= 0 ) {
+					$fallback['reason'] = 'invalid-sample';
+					return $fallback;
+				}
+				$fallback['before_lcp']  = $baseline;
+				$fallback['current_lcp'] = $current;
+				$trend_key               = isset( $anomaly['key'] ) ? (string) $anomaly['key'] : '';
+				$url                     = self::resolve_anomaly_url( $trend_key );
+				$fallback['url']         = $url;
+				if ( '' === $url ) {
+					$fallback['reason'] = 'unresolvable-url';
+					return $fallback;
+				}
+				if ( ! self::is_css_refresh_enabled() ) {
+					$fallback['reason'] = 'opt-out';
+					return $fallback;
+				}
+				$cooldown_key = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$cooldown_key = Util::transient_key( self::CSS_REFRESH_COOLDOWN_PREFIX . md5( $url ) );
+				} else {
+					$cooldown_key = self::CSS_REFRESH_COOLDOWN_PREFIX . md5( $url );
+				}
+				if ( function_exists( 'get_transient' ) && get_transient( $cooldown_key ) ) {
+					$fallback['reason'] = 'cooldown';
+					return $fallback;
+				}
+				$resolved_now        = self::anomaly_now( $now );
+				$post_id             = self::resolve_anomaly_post_id( $url );
+				$fallback['post_id'] = $post_id;
+				if ( $post_id <= 0 ) {
+					$fallback['reason'] = self::is_homepage_url( $url ) ? 'homepage' : 'no-post';
+					return $fallback;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'is_excluded_post' ) ) {
+					try {
+						if ( Used_CSS::is_excluded_post( $post_id ) ) {
+							$fallback['reason'] = 'excluded-post';
+							return $fallback;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					$fallback['reason'] = 'scheduler-unavailable';
+					return $fallback;
+				}
+				$job_args = array( 'post_id' => $post_id );
+				// Atomic-first on AS 4.x (issue #1407 review, same pattern as
+				// the #1408 used_css_regenerate fix): the `$unique` insert
+				// dedupes hook+args+group in the store, closing the
+				// check-then-act race where two concurrent suggestion renders
+				// both passed as_has_scheduled_action() and double-queued. A 0
+				// return is ambiguous (deduped vs failure), so re-probe the
+				// guard once to report "already queued" honestly.
+				$job_id = 0;
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
+						$job_id = (int) Util::enqueue_unique_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+					} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
+						$already_pending = false;
+						if ( function_exists( 'as_has_scheduled_action' ) ) {
+							try {
+								$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$already_pending = false;
+							}
+						}
+						if ( $already_pending ) {
+							$fallback['reason'] = 'already-queued';
+							return $fallback;
+						}
+						$job_id = (int) as_enqueue_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$job_id = 0;
+				}
+				if ( $job_id <= 0 ) {
+					$already_pending = false;
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$already_pending = false;
+						}
+					}
+					if ( $already_pending ) {
+						$fallback['reason'] = 'already-queued';
+						return $fallback;
+					}
+					$fallback['reason'] = 'enqueue-failed';
+					return $fallback;
+				}
+				self::set_css_refresh_cooldown( $cooldown_key, $resolved_now );
+				self::record_css_refresh_snapshot(
+					md5( $url ),
+					array(
+						'url'         => $url,
+						'trend_key'   => $trend_key,
+						'before_lcp'  => $baseline,
+						'current_lcp' => $current,
+						'queued'      => true,
+						'reason'      => 'queued',
+						'post_id'     => $post_id,
+						'job_id'      => $job_id,
+						'queued_at'   => $resolved_now,
+					)
+				);
+				if ( function_exists( 'do_action' ) ) {
+					/**
+					 * Fires after an LCP regression queues a used-CSS refresh.
+					 *
+					 * Lets the critical-CSS layer hook a template refresh in
+					 * without coupling the bridge to template mapping. In-repo
+					 * consumer: Main::on_ai_css_refresh_queued() regenerates the
+					 * matching critical-CSS template (`home`/`page`/`single`).
+					 *
+					 * @since NEXT
+					 * @param string $url regressed URL.
+					 * @param int    $post_id Queued post ID.
+					 * @param array  $anomaly The firing LCP anomaly.
+					 */
+					do_action( 'wppo_ai_css_refresh_queued', $url, $post_id, $anomaly );
+				}
+				$fallback['queued'] = true;
+				$fallback['reason'] = 'queued';
+				return $fallback;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
+		}
+
+		/**
+		 * Arm the per-URL CSS-refresh cooldown transient.
+		 *
+		 * Best-effort: a missing transient API is a no-op. The effective
+		 * cooldown floor is 1 day (see css_refresh_cooldown_days()), so a
+		 * queued regen always arms the transient. Never throws.
+		 *
+		 * @param string $cooldown_key Blog-aware transient key.
+		 * @param int    $now Current timestamp.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function set_css_refresh_cooldown( string $cooldown_key, int $now ): void {
+			try {
+				if ( '' === $cooldown_key || ! function_exists( 'set_transient' ) ) {
+					return;
+				}
+				$days = self::css_refresh_cooldown_days();
+				if ( $days < 1 ) {
+					$days = 1;
+				}
+				$day_seconds = defined( 'DAY_IN_SECONDS' ) ? (int) DAY_IN_SECONDS : 86400;
+				set_transient( $cooldown_key, $now, $days * $day_seconds );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Describe the provisional (collecting-data) anomaly state.
 		 *
 		 * Thin or absent data never pages — this read-only helper reports
@@ -3219,6 +3774,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Always returns suggestion-shaped arrays but the caller should gate
 		 * display on is_enabled() (guard: never auto-apply).
+		 *
+		 * GET-with-side-effect (issue #1407, intentional): this method is
+		 * served by the `ai_suggestions` GET endpoint (via
+		 * Suggestion_Engine::from_ai_adaptive()), so merely rendering the
+		 * dashboard may mutate state. When a field-LCP regression fires,
+		 * rendering the LCP suggestion bridges to
+		 * maybe_queue_css_refresh(), which may enqueue at most one
+		 * `wppo_used_css_generate` Action Scheduler job per URL per
+		 * cooldown window (minimum 1 day, default 7) plus one cooldown
+		 * transient and one bounded (20-entry) snapshot-option write, only
+		 * on an actual queue, plus the `wppo_ai_css_refresh_queued`
+		 * action. The bridge runs only when the
+		 * `ai_adaptive.css_refresh_on_lcp_regression` opt-in is on
+		 * (default off/suggest-only), only for admin-capability (`manage_options`)
+		 * callers, and is fail-open (any failure degrades to a plain
+		 * suggestion-only card). There is no per-URL confirmation: every
+		 * new regression auto-queues once per cooldown window. Callers
+		 * that need a pure suggest-only render must ensure the opt-in is
+		 * off (or the `wppo_ai_css_refresh_enabled` filter returns false).
 		 *
 		 * @return array[]
 		 * @since 2.0.0
@@ -3763,7 +4337,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 			if ( is_array( $anomalies ) && ! empty( $anomalies ) ) {
-				$anomaly        = $anomalies[0];
+				$anomaly = $anomalies[0];
+				// Fail-closed: only explicit 'cls'/'lcp' metrics render; unknown
+				// or missing metrics contribute zero suggestions (mirrors the
+				// maybe_queue_css_refresh() gate which treats non-'lcp' as non-lcp).
+				$anomaly_metric = $anomaly['metric'] ?? '';
 				$anomaly_path   = isset( $anomaly['path'] ) && is_string( $anomaly['path'] ) && '' !== $anomaly['path'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['path'], 0, 128, 'UTF-8' ) : substr( $anomaly['path'], 0, 128 ) ) : '';
 				$anomaly_window = isset( $anomaly['window'] ) && is_string( $anomaly['window'] ) && '' !== $anomaly['window'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['window'], 0, 128, 'UTF-8' ) : substr( $anomaly['window'], 0, 128 ) ) : '';
 				// Enriched anomaly context (issue #1384): every rendered
@@ -3777,7 +4355,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					'delta'    => isset( $anomaly['delta'] ) ? (float) $anomaly['delta'] : 0.0,
 					'samples'  => isset( $anomaly['samples'] ) ? (int) $anomaly['samples'] : 0,
 				);
-				if ( 'cls' === ( $anomaly['metric'] ?? 'lcp' ) ) {
+				if ( 'cls' === $anomaly_metric ) {
 					$change_abs = isset( $anomaly['change_abs'] ) ? (float) $anomaly['change_abs'] : 0.0;
 					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
 						/* translators: 1: CLS absolute increase vs baseline, 2: affected path, 3: compared window. */
@@ -3827,7 +4405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							'anomaly'  => $anomaly_context,
 						),
 					);
-				} else {
+				} elseif ( 'lcp' === $anomaly_metric ) {
 					$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
 					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
 						/* translators: 1: LCP percentage increase vs baseline, 2: affected path, 3: compared window. */
@@ -3839,17 +4417,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						$value       = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
 						$description = __( 'AI: LCP regression detected', 'performance-optimisation' );
 					}
+					// RUM-triggered CSS refresh loop (issue #1407): bridge the
+					// firing LCP anomaly to a guarded single used-CSS regen
+					// job. Lazy: runs only when a regression fired, so the
+					// happy path performs no extra queries. Fail-open: any
+					// throwable keeps the plain suggestion-only card.
+					$css_refresh = array(
+						'queued'      => false,
+						'reason'      => 'opt-out',
+						'url'         => '',
+						'post_id'     => 0,
+						'before_lcp'  => isset( $anomaly['baseline'] ) ? (float) $anomaly['baseline'] : 0.0,
+						'current_lcp' => isset( $anomaly['current'] ) ? (float) $anomaly['current'] : 0.0,
+					);
+					try {
+						$css_refresh = self::maybe_queue_css_refresh( $anomaly );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					if ( ! empty( $css_refresh['queued'] ) ) {
+						$description = __( 'AI: LCP regression detected — used-CSS refresh queued', 'performance-optimisation' );
+					}
 					$suggestions[] = array(
 						'metric'      => 'ai_lcp_regression',
 						'value'       => $value,
 						'unit'        => 'string',
 						'status'      => 'needs_improvement',
 						'description' => $description,
-						'fix_action'  => 'open_image_optimization_tab',
+						'fix_action'  => 'open_file_optimization_tab',
 						'ai_payload'  => array(
-							'tab'      => 'image_optimisation',
-							'settings' => array(),
-							'anomaly'  => $anomaly_context,
+							'tab'         => 'file_optimisation',
+							'settings'    => array(),
+							'anomaly'     => $anomaly_context,
+							'css_refresh' => $css_refresh,
 						),
 					);
 				}

@@ -9,6 +9,8 @@ use PerformanceOptimise\Inc\AI_Adaptive;
 use PerformanceOptimise\Inc\RUM;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 /**
  * Tests is_enabled gate, heuristic learn and suggestion generation.
@@ -2575,6 +2577,265 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$suggestions = AI_Adaptive::get_suggestions();
 		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_lcp_preload' ) );
 		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' ) );
+	}
+
+	/**
+	 * Build an LCP anomaly whose trend key forward-resolves to the test home URL.
+	 *
+	 * The stubbed home_url() returns http://example.com + path, so the home
+	 * candidate is http://example.com/ (esc_url_raw is identity in tests).
+	 *
+	 * @since NEXT
+	 *
+	 * @return array LCP anomaly array.
+	 */
+	private function make_resolvable_lcp_anomaly(): array {
+		return array(
+			'key'        => md5( 'http://example.com/' ) . '_mobile',
+			'metric'     => 'lcp',
+			'baseline'   => 2000.0,
+			'current'    => 3000.0,
+			'change_pct' => 50.0,
+		);
+	}
+
+	/**
+	 * Stub the scheduler + post-resolution helpers for CSS-refresh tests.
+	 *
+	 * @since NEXT
+	 *
+	 * @param int   $post_id Post ID returned by url_to_postid().
+	 * @param array $enqueued Captured enqueue calls (by reference).
+	 * @param int   $job_id Job ID returned by the enqueue stub.
+	 * @return void
+	 */
+	private function stub_css_refresh_scheduler( int $post_id, array &$enqueued, int $job_id = 99 ): void {
+		Functions\when( 'url_to_postid' )->justReturn( $post_id );
+		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			static function ( $hook, $args = array(), $group = '' ) use ( &$enqueued, $job_id ) {
+				$enqueued[] = array( $hook, $args, $group );
+				return $job_id;
+			}
+		);
+	}
+
+	/**
+	 * Seed wppo_settings with the CSS-refresh opt-in state.
+	 *
+	 * @since NEXT
+	 *
+	 * @param bool $enabled Whether the opt-in toggle is on.
+	 * @return void
+	 */
+	private function seed_css_refresh_settings( bool $enabled ): void {
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive'       => array(
+				'enabled'                       => true,
+				'css_refresh_on_lcp_regression' => $enabled,
+				'css_refresh_cooldown_days'     => 7,
+			),
+			// Merged detect_anomalies() pages only with RUM collection on.
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		Util::reset_cached_home_urls();
+		AI_Adaptive::reset_model_memo();
+	}
+
+	/**
+	 * Test an LCP regression queues exactly one job when opted in.
+	 *
+	 * Given toggle-on When the bridge runs Then one used-CSS job is queued
+	 * with before/after LCP proof recorded.
+	 *
+	 * Runs in a separate process so the Action Scheduler stubs cannot leak
+	 * into later test classes (a Brain Monkey stub shell throws
+	 * MissingFunctionExpectations once its test ends, which would flip
+	 * function_exists-guarded branches elsewhere).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_maybe_queue_css_refresh_queues_single_job_when_opted_in(): void {
+		$this->install_stubs();
+		$this->seed_css_refresh_settings( true );
+		$enqueued = array();
+		$this->stub_css_refresh_scheduler( 123, $enqueued );
+
+		$result = AI_Adaptive::maybe_queue_css_refresh( $this->make_resolvable_lcp_anomaly(), 1700000000 );
+
+		$this->assertTrue( $result['queued'] );
+		$this->assertSame( 'queued', $result['reason'] );
+		$this->assertSame( 'http://example.com/', $result['url'] );
+		$this->assertSame( 123, $result['post_id'] );
+		$this->assertSame( 2000.0, $result['before_lcp'] );
+		$this->assertSame( 3000.0, $result['current_lcp'] );
+		$this->assertCount( 1, $enqueued );
+		$this->assertSame( 'wppo_used_css_generate', $enqueued[0][0] );
+		$this->assertSame( array( 'post_id' => 123 ), $enqueued[0][1] );
+		$snapshot = AI_Adaptive::get_css_refresh_snapshot( 'http://example.com/' );
+		$this->assertTrue( $snapshot['queued'] );
+		$this->assertSame( 2000.0, $snapshot['before_lcp'] );
+		$this->assertSame( 3000.0, $snapshot['current_lcp'] );
+	}
+
+	/**
+	 * Test a second trigger inside the cooldown queues nothing.
+	 *
+	 * Given a queued refresh When the bridge reruns inside the window Then
+	 * no second job is queued (reason cooldown).
+	 *
+	 * Isolated in a separate process so the scheduler stubs cannot leak
+	 * (see test_maybe_queue_css_refresh_queues_single_job_when_opted_in).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_maybe_queue_css_refresh_cooldown_suppresses_second_job(): void {
+		$this->install_stubs();
+		$this->seed_css_refresh_settings( true );
+		$enqueued = array();
+		$this->stub_css_refresh_scheduler( 123, $enqueued );
+
+		$first = AI_Adaptive::maybe_queue_css_refresh( $this->make_resolvable_lcp_anomaly(), 1700000000 );
+		$this->assertTrue( $first['queued'] );
+
+		$second = AI_Adaptive::maybe_queue_css_refresh( $this->make_resolvable_lcp_anomaly(), 1700000000 + 3600 );
+		$this->assertFalse( $second['queued'] );
+		$this->assertSame( 'cooldown', $second['reason'] );
+		$this->assertCount( 1, $enqueued );
+	}
+
+	/**
+	 * Test toggle-off never queues and stays suggestion-only.
+	 *
+	 * Given toggle-off When regression occurs Then no job is queued, the
+	 * reason is opt-out, and before/after LCP proof is still recorded for
+	 * the admin notice.
+	 *
+	 * Isolated in a separate process so the scheduler stubs cannot leak
+	 * (see test_maybe_queue_css_refresh_queues_single_job_when_opted_in).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_maybe_queue_css_refresh_toggle_off_queues_nothing(): void {
+		$this->install_stubs();
+		$this->seed_css_refresh_settings( false );
+		$enqueued = array();
+		$this->stub_css_refresh_scheduler( 123, $enqueued );
+
+		$result = AI_Adaptive::maybe_queue_css_refresh( $this->make_resolvable_lcp_anomaly(), 1700000000 );
+
+		$this->assertFalse( $result['queued'] );
+		$this->assertSame( 'opt-out', $result['reason'] );
+		$this->assertSame( 'http://example.com/', $result['url'] );
+		$this->assertSame( 2000.0, $result['before_lcp'] );
+		$this->assertSame( 3000.0, $result['current_lcp'] );
+		$this->assertCount( 0, $enqueued );
+	}
+
+	/**
+	 * Test non-LCP anomalies never queue.
+	 *
+	 * Isolated in a separate process so the scheduler stubs cannot leak
+	 * (see test_maybe_queue_css_refresh_queues_single_job_when_opted_in).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_maybe_queue_css_refresh_ignores_cls_anomaly(): void {
+		$this->install_stubs();
+		$this->seed_css_refresh_settings( true );
+		$enqueued = array();
+		$this->stub_css_refresh_scheduler( 123, $enqueued );
+
+		$result = AI_Adaptive::maybe_queue_css_refresh(
+			array(
+				'key'        => md5( 'http://example.com/' ) . '_mobile',
+				'metric'     => 'cls',
+				'baseline'   => 0.05,
+				'current'    => 0.12,
+				'change_abs' => 0.07,
+			),
+			1700000000
+		);
+
+		$this->assertFalse( $result['queued'] );
+		$this->assertSame( 'non-lcp', $result['reason'] );
+		$this->assertCount( 0, $enqueued );
+	}
+
+	/**
+	 * Test the LCP suggestion carries the CSS-refresh payload (toggle off).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_lcp_regression_carries_css_refresh_payload(): void {
+		$this->install_stubs();
+		$this->seed_css_refresh_settings( false );
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		// Seed the model so get_suggestions() skips heuristic_learn().
+		$this->options[ AI_Adaptive::OPTION ]    = array(
+			'version'   => 1,
+			'eagerness' => 'conservative',
+		);
+		$home_key                                = md5( 'http://example.com/' ) . '_mobile';
+		$this->options['wppo_web_vitals_trends'] = array(
+			$home_key => $this->snapshots_for_value( 'lcp', 2000.0, 3000.0 ),
+		);
+		$this->options['wppo_web_vitals_rum']    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$lcp         = $this->find_suggestion( $suggestions, 'ai_lcp_regression' );
+		$this->assertNotNull( $lcp );
+		$this->assertSame( 'open_file_optimization_tab', $lcp['fix_action'] );
+		$this->assertArrayHasKey( 'css_refresh', $lcp['ai_payload'] );
+		$this->assertFalse( $lcp['ai_payload']['css_refresh']['queued'] );
+		$this->assertSame( 'opt-out', $lcp['ai_payload']['css_refresh']['reason'] );
+		$this->assertSame( 2000.0, $lcp['ai_payload']['css_refresh']['before_lcp'] );
+		$this->assertSame( 3000.0, $lcp['ai_payload']['css_refresh']['current_lcp'] );
+	}
+
+	/**
+	 * Build trend snapshots: 10 baseline samples + three current samples.
+	 *
+	 * Three degraded samples satisfy the persistence gate merged from master
+	 * (anomaly_persistence_windows default 3: every trailing window must breach).
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $metric Metric key.
+	 * @param float  $baseline_value Baseline value.
+	 * @param float  $current_value Current value.
+	 * @return array Snapshots.
+	 */
+	private function snapshots_for_value( string $metric, float $baseline_value, float $current_value ): array {
+		$snapshots = array();
+		for ( $i = 0; $i < 10; $i++ ) {
+			$snapshots[] = array( $metric => $baseline_value );
+		}
+		for ( $i = 0; $i < 3; $i++ ) {
+			$snapshots[] = array( $metric => $current_value );
+		}
+		return $snapshots;
 	}
 
 	/**

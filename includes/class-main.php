@@ -750,6 +750,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['ai_adaptive']['anomaly_min_samples'] ) ) {
 				$this->options['ai_adaptive']['anomaly_min_samples'] = 10;
 			}
+			if ( ! isset( $this->options['ai_adaptive']['css_refresh_on_lcp_regression'] ) ) {
+				$this->options['ai_adaptive']['css_refresh_on_lcp_regression'] = false;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
+				$this->options['ai_adaptive']['css_refresh_cooldown_days'] = 7;
+			}
 			// Existing installs whose stored settings predate the RUM-segmented
 			// speculation auto-tune keys (issue #1425) inherit the opt-in-off
 			// defaults in-memory here (no database write on front-end requests);
@@ -1811,6 +1817,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Register Action Scheduler callback for background used-CSS generation.
 			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 1 );
+
+			// Self-healing CSS (issue #1407): refresh the matching
+			// critical-CSS template when an LCP regression queues a
+			// used-CSS regen, so critical-CSS-driven regressions self-heal
+			// too. Fail-open inside the handler, never fatal.
+			add_action( 'wppo_ai_css_refresh_queued', array( $this, 'on_ai_css_refresh_queued' ), 10, 3 );
 
 			// Register out-of-band Google Fonts download (keeps the frontend output-buffer hot path non-blocking).
 			add_action( 'wppo_google_fonts_download', array( 'PerformanceOptimise\Inc\Google_Fonts', 'handle_queued_download_action' ), 10, 1 );
@@ -3897,6 +3909,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				array( 'post_id' => $post_id ),
 				'performance_optimisation'
 			);
+		}
+
+		/**
+		 * Refresh the matching critical-CSS template after an LCP-triggered used-CSS refresh.
+		 *
+		 * In-repo consumer for the `wppo_ai_css_refresh_queued` action fired by
+		 * AI_Adaptive::maybe_queue_css_refresh() (issue #1407): maps the queued
+		 * post to its coarse template (`home` for the front page, `page` for
+		 * pages, `single` otherwise) and regenerates that single template via
+		 * Critical_CSS::regenerate_single(). Fail-open: any failure (unknown
+		 * template, missing scheduler, throwable) is swallowed so the used-CSS
+		 * job that already queued is never affected.
+		 *
+		 * @param string $url regressed URL.
+		 * @param int    $post_id Queued post ID.
+		 * @param array  $anomaly The firing LCP anomaly.
+		 * @return void
+		 * @since NEXT
+		 */
+		public function on_ai_css_refresh_queued( $url, $post_id, $anomaly ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			try {
+				$post_id = (int) $post_id;
+				if ( $post_id <= 0 ) {
+					return;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) || ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'regenerate_single' ) ) {
+					return;
+				}
+				$template = 'single';
+				if ( is_string( $url ) && '' !== $url && class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'is_homepage_url' ) ) {
+					try {
+						if ( AI_Adaptive::is_homepage_url( $url ) ) {
+							$template = 'home';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( 'home' !== $template && function_exists( 'get_post_type' ) ) {
+					try {
+						if ( 'page' === get_post_type( $post_id ) ) {
+							$template = 'page';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				try {
+					\PerformanceOptimise\Inc\Critical_CSS::regenerate_single( $template );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

@@ -3595,6 +3595,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Get AI suggestions.
 		 *
+		 * GET-with-side-effect (issue #1407, intentional): when the
+		 * `ai_adaptive.css_refresh_on_lcp_regression` opt-in is on and a
+		 * field-LCP regression fires, rendering the LCP suggestion may
+		 * enqueue at most one used-CSS regen job per URL per cooldown
+		 * window (minimum 1 day) plus one transient and one bounded
+		 * snapshot-option write, only on an actual queue. Admin-capability
+		 * (`manage_options`) gated; fail-open to a suggestion-only card.
+		 * See AI_Adaptive::get_suggestions() for the full contract.
+		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.0.0

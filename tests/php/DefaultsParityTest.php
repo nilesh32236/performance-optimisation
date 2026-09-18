@@ -70,25 +70,28 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		// Field-LCP min samples (issue #986): additive key, 20 by default.
 		// Dismissed suggestions (issue #1036): additive key, empty by default.
 		// Anomaly detection (issue #1040): additive keys, 7-day cooldown + 10 min samples.
+		// RUM-triggered CSS refresh (issue #1407): additive keys, opt-in off + 7-day per-URL cooldown.
 		// RUM-segmented speculation auto-tune (issue #1425): additive keys,
 		// opt-in off + min 20 samples + max 5 URLs by default.
 		// RUM anomaly digest tolerance band (issue #1445): 5% relative + 0.01 absolute.
 		// p75 anomaly hardening (issue #1384): additive keys, 3-window persistence + 10 RUM samples.
 		$this->assertSame(
 			array(
-				'enabled'                      => false,
-				'use_wp_ai_client'             => false,
-				'field_lcp_min_samples'        => 20,
-				'dismissed_suggestions'        => array(),
-				'anomaly_cooldown_days'        => 7,
-				'anomaly_min_samples'          => 10,
-				'speculation_autotune_enabled' => false,
-				'speculation_min_samples'      => 20,
-				'speculation_max_urls'         => 5,
-				'anomaly_tolerance_pct'        => 5.0,
-				'anomaly_tolerance_abs'        => 0.01,
-				'anomaly_persistence_windows'  => 3,
-				'anomaly_p75_min_samples'      => 10,
+				'enabled'                       => false,
+				'use_wp_ai_client'              => false,
+				'field_lcp_min_samples'         => 20,
+				'dismissed_suggestions'         => array(),
+				'anomaly_cooldown_days'         => 7,
+				'anomaly_min_samples'           => 10,
+				'css_refresh_on_lcp_regression' => false,
+				'css_refresh_cooldown_days'     => 7,
+				'speculation_autotune_enabled'  => false,
+				'speculation_min_samples'       => 20,
+				'speculation_max_urls'          => 5,
+				'anomaly_tolerance_pct'         => 5.0,
+				'anomaly_tolerance_abs'         => 0.01,
+				'anomaly_persistence_windows'   => 3,
+				'anomaly_p75_min_samples'       => 10,
 			),
 			$defaults['ai_adaptive']
 		);

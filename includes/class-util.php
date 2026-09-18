@@ -132,6 +132,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_used_css_last_targeted_regen',       // Used_CSS::TARGETED_REGEN_OPTION (issue #1220).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
+			'wppo_ai_css_refresh_snapshots',           // AI_Adaptive::CSS_REFRESH_SNAPSHOT_OPTION (issue #1407).
 		);
 
 		/**
@@ -495,19 +496,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enabled' => false,
 				),
 				'ai_adaptive'           => array(
-					'enabled'                      => false,
-					'use_wp_ai_client'             => false,
-					'field_lcp_min_samples'        => 20,
-					'dismissed_suggestions'        => array(),
-					'anomaly_cooldown_days'        => 7,
-					'anomaly_min_samples'          => 10,
-					'speculation_autotune_enabled' => false,
-					'speculation_min_samples'      => 20,
-					'speculation_max_urls'         => 5,
-					'anomaly_tolerance_pct'        => 5.0,
-					'anomaly_tolerance_abs'        => 0.01,
-					'anomaly_persistence_windows'  => 3,
-					'anomaly_p75_min_samples'      => 10,
+					'enabled'                       => false,
+					'use_wp_ai_client'              => false,
+					'field_lcp_min_samples'         => 20,
+					'dismissed_suggestions'         => array(),
+					'anomaly_cooldown_days'         => 7,
+					'anomaly_min_samples'           => 10,
+					'css_refresh_on_lcp_regression' => false,
+					'css_refresh_cooldown_days'     => 7,
+					'speculation_autotune_enabled'  => false,
+					'speculation_min_samples'       => 20,
+					'speculation_max_urls'          => 5,
+					'anomaly_tolerance_pct'         => 5.0,
+					'anomaly_tolerance_abs'         => 0.01,
+					'anomaly_persistence_windows'   => 3,
+					'anomaly_p75_min_samples'       => 10,
 				),
 				'edge_cache'            => array(
 					'enabled' => false,

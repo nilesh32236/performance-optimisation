@@ -1208,6 +1208,37 @@ Filters the minimum numeric samples before an anomaly arm may fire (trend arm an
 
 ---
 
+### `wppo_ai_css_refresh_enabled`
+Filters whether RUM-triggered CSS refresh may queue jobs (issue #1407). @since NEXT. Default off/suggest-only via `ai_adaptive.css_refresh_on_lcp_regression`; fail-open to false.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether the CSS-refresh opt-in is on.
+
+**Example:**
+```php
+add_filter( 'wppo_ai_css_refresh_enabled', '__return_true' );
+```
+
+---
+
+### `wppo_ai_css_refresh_cooldown_days`
+Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since NEXT. Non-numeric or negative values fail open to the current setting.
+
+**Parameters:**
+- `$days` *(int)* — Cooldown days (default 7, from `ai_adaptive.css_refresh_cooldown_days`; values below 1 are normalized up to 1).
+
+---
+
+### `wppo_ai_css_refresh_queued`
+Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since NEXT. In-repo consumer `Main::on_ai_css_refresh_queued()` regenerates the matching critical-CSS template (`home`/`page`/`single`); third parties may hook additional template refreshes without coupling the bridge to template mapping.
+
+**Parameters:**
+- `$url` *(string)* — Regressed URL.
+- `$post_id` *(int)* — Queued post ID.
+- `$anomaly` *(array)* — The firing LCP anomaly.
+
+---
+
 ### `wppo_ai_anomaly_tolerance_pct`
 Filters the relative tolerance band (percent) above a relative digest arm threshold (issue #1445). The LCP/INP digest arm fires only when the recent-window median clears `baseline * 1.3 * (1 + tolerance/100)`, so borderline wobble inside the band stays silent. @since NEXT.
 
