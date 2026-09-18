@@ -859,19 +859,113 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 */
 		public static function get_slow_path_downgrade_target( string $eagerness ): string {
 			$current = self::normalize_eagerness( $eagerness );
-			$ladder  = array(
+			$target  = self::eagerness_from_level( self::eagerness_level( $current ) - 1 );
+			return self::normalize_eagerness( $target );
+		}
+
+		/**
+		 * Numeric level for an allowlisted eagerness value (ladder helper).
+		 *
+		 * Centralizes the conservative(0) < moderate(1) < eager(2) ladder so
+		 * the downgrade target and the stale-model clamp in get_suggestions()
+		 * cannot drift apart when the ladder changes. Unknown values floor
+		 * to conservative (0).
+		 *
+		 * @since NEXT
+		 * @param string $eagerness Allowlisted eagerness value.
+		 * @return int Numeric ladder level (0-2).
+		 */
+		private static function eagerness_level( string $eagerness ): int {
+			$ladder = array(
 				'conservative' => 0,
 				'moderate'     => 1,
 				'eager'        => 2,
 			);
+			return $ladder[ $eagerness ] ?? 0;
+		}
+
+		/**
+		 * Eagerness value for a numeric ladder level (ladder helper).
+		 *
+		 * Inverse of eagerness_level(): levels are clamped to 0-2 so a
+		 * one-step downgrade from conservative floors at conservative.
+		 *
+		 * @since NEXT
+		 * @param int $level Numeric ladder level.
+		 * @return string Allowlisted eagerness value.
+		 */
+		private static function eagerness_from_level( int $level ): string {
 			$reverse = array(
 				0 => 'conservative',
 				1 => 'moderate',
 				2 => 'eager',
 			);
-			$level   = $ladder[ $current ] ?? 0;
-			$target  = $reverse[ max( 0, $level - 1 ) ] ?? 'conservative';
-			return self::normalize_eagerness( $target );
+			return $reverse[ max( 0, min( 2, $level ) ) ] ?? 'conservative';
+		}
+
+		/**
+		 * Device/template/connection labels for a slow-path segment.
+		 *
+		 * Centralizes the segment triple extraction shared by the slow-path
+		 * preload and downgrade cards so copy stays consistent.
+		 *
+		 * @since NEXT
+		 * @param mixed $segment Segment descriptor (or null).
+		 * @return array{0:string,1:string,2:string} Device, template, connection labels.
+		 */
+		private static function slow_segment_labels( $segment ): array {
+			$segment = is_array( $segment ) ? $segment : array();
+			return array(
+				isset( $segment['device'] ) ? (string) $segment['device'] : 'unknown',
+				isset( $segment['template'] ) ? (string) $segment['template'] : 'unknown',
+				self::segment_connection( $segment ),
+			);
+		}
+
+		/**
+		 * Sanitize a persisted/live slow-path preload URL for suggestion copy.
+		 *
+		 * Trims + truncates to 2048 chars, drops empty esc_url_raw() output,
+		 * and re-checks same-origin (strict variant when available) so a
+		 * stale or tampered model value (off-origin, javascript:) can never
+		 * be rendered into suggestion copy. Fail-open to '' on any error.
+		 *
+		 * @since NEXT
+		 * @param mixed $url Raw URL value.
+		 * @return string Sanitized URL or '' when invalid.
+		 */
+		private static function sanitize_slow_preload_url( $url ): string {
+			try {
+				if ( ! is_string( $url ) ) {
+					return '';
+				}
+				$url = substr( trim( $url ), 0, 2048 );
+				if ( '' === $url ) {
+					return '';
+				}
+				if ( function_exists( 'esc_url_raw' ) ) {
+					$clean = esc_url_raw( $url );
+					if ( ! is_string( $clean ) || '' === trim( $clean ) ) {
+						return '';
+					}
+					$url = trim( $clean );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
+						if ( ! \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( $url ) ) {
+							return '';
+						}
+					} elseif ( method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
+						if ( ! \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url ) ) {
+							return '';
+						}
+					}
+				}
+				return $url;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
 		}
 
 		/**
@@ -2414,11 +2508,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					$slow_p75         = isset( $model['slow_path_p75'] ) ? (float) $model['slow_path_p75'] : 0.0;
 					$slow_samples     = isset( $model['slow_path_samples'] ) ? (int) $model['slow_path_samples'] : 0;
 					$slow_min         = isset( $model['slow_path_min_samples'] ) ? (int) $model['slow_path_min_samples'] : $slow_min;
-					$slow_preload_url = isset( $model['slow_path_preload_url'] ) && is_string( $model['slow_path_preload_url'] ) ? trim( $model['slow_path_preload_url'] ) : '';
-					$slow_downgrade   = isset( $model['slow_path_downgrade'] ) && is_string( $model['slow_path_downgrade'] ) ? $model['slow_path_downgrade'] : self::get_slow_path_downgrade_target( $eagerness );
-					if ( '' !== $slow_preload_url ) {
-						$slow_preload_url = substr( $slow_preload_url, 0, 2048 );
-					}
+					$slow_preload_url = isset( $model['slow_path_preload_url'] ) ? self::sanitize_slow_preload_url( $model['slow_path_preload_url'] ) : '';
 				} else {
 					$live_slow = self::get_slow_top_path_state();
 					if ( is_array( $live_slow ) ) {
@@ -2428,8 +2518,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						$slow_p75         = isset( $live_slow['p75'] ) ? (float) $live_slow['p75'] : 0.0;
 						$slow_samples     = isset( $live_slow['samples'] ) ? (int) $live_slow['samples'] : 0;
 						$slow_min         = isset( $live_slow['min_samples'] ) ? (int) $live_slow['min_samples'] : $slow_min;
-						$slow_preload_url = isset( $live_slow['preload_url'] ) && is_string( $live_slow['preload_url'] ) ? trim( $live_slow['preload_url'] ) : '';
-						$slow_downgrade   = self::get_slow_path_downgrade_target( $eagerness );
+						$slow_preload_url = isset( $live_slow['preload_url'] ) ? self::sanitize_slow_preload_url( $live_slow['preload_url'] ) : '';
 					}
 				}
 				// Re-derive the downgrade from the live eagerness when the
@@ -2438,14 +2527,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$slow_downgrade = self::get_slow_path_downgrade_target( $eagerness );
 				if ( isset( $model['slow_path_downgrade'] ) && is_string( $model['slow_path_downgrade'] ) && in_array( $model['slow_path_downgrade'], array( 'conservative', 'moderate', 'eager' ), true ) ) {
 					$candidate_downgrade = self::normalize_eagerness( $model['slow_path_downgrade'] );
-					$ladder              = array(
-						'conservative' => 0,
-						'moderate'     => 1,
-						'eager'        => 2,
-					);
 					// Never let a stale persisted value loosen above the
 					// freshly derived one-step-down target.
-					if ( ( $ladder[ $candidate_downgrade ] ?? 0 ) <= ( $ladder[ $slow_downgrade ] ?? 0 ) ) {
+					if ( self::eagerness_level( $candidate_downgrade ) <= self::eagerness_level( $slow_downgrade ) ) {
 						$slow_downgrade = $candidate_downgrade;
 					}
 				}
@@ -2555,9 +2639,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// dismissed-suggestions filter below.
 			try {
 				if ( $slow_is_slow && ! self::is_suggestion_dismissed( 'ai_slow_path_preload' ) ) {
-					$slow_device     = ( is_array( $slow_segment ) && isset( $slow_segment['device'] ) ) ? (string) $slow_segment['device'] : 'unknown';
-					$slow_template   = ( is_array( $slow_segment ) && isset( $slow_segment['template'] ) ) ? (string) $slow_segment['template'] : 'unknown';
-					$slow_connection = self::segment_connection( $slow_segment );
+					list( $slow_device, $slow_template, $slow_connection ) = self::slow_segment_labels( $slow_segment );
 					if ( '' !== $slow_preload_url ) {
 						/* translators: %1$s preload URL, %2$s page path. */
 						$slow_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $slow_preload_url, '' !== $slow_path ? $slow_path : __( 'top page', 'performance-optimisation' ) );
@@ -2583,9 +2665,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					);
 				}
 				if ( $slow_is_slow && ! self::is_suggestion_dismissed( 'ai_speculation_downgrade' ) ) {
-					$slow_device     = ( is_array( $slow_segment ) && isset( $slow_segment['device'] ) ) ? (string) $slow_segment['device'] : 'unknown';
-					$slow_template   = ( is_array( $slow_segment ) && isset( $slow_segment['template'] ) ) ? (string) $slow_segment['template'] : 'unknown';
-					$slow_connection = self::segment_connection( $slow_segment );
+					list( $slow_device, $slow_template, $slow_connection ) = self::slow_segment_labels( $slow_segment );
 					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds. */
 					$downgrade_value = sprintf( __( '%1$s · %2$s · %3$s · %4$s · p75 %5$s', 'performance-optimisation' ), $slow_downgrade, $slow_device, $slow_template, $slow_connection, self::format_p75_seconds( $slow_p75 ) );
 					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds, %6$d sample count. */
@@ -2605,6 +2685,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+
+			// Slow path wins the speculation-eagerness advice (issue #1463):
+			// the base ai_speculation_eagerness card (emitted above with the
+			// current eagerness) contradicts the ai_speculation_downgrade
+			// card (one step down) for the same speculationEagerness setting.
+			// Suppress the base card post-hoc when slow so only one
+			// speculation-eagerness payload is offered.
+			if ( $slow_is_slow ) {
+				$suggestions = array_values(
+					array_filter(
+						$suggestions,
+						static function ( $s ) {
+							return ! ( is_array( $s ) && ( $s['metric'] ?? '' ) === 'ai_speculation_eagerness' );
+						}
+					)
+				);
 			}
 
 			// Guardrail (#908): in commerce/auth contexts suggest excluding
