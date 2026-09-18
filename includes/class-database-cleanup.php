@@ -942,6 +942,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public const AUTOLOAD_SIZE_THRESHOLD = 1024;
 
 		/**
+		 * Critical autoload payload size in bytes (800 KB).
+		 *
+		 * WordPress 6.6 performance guidance flags autoload payloads at or
+		 * above 800 KB as critical (see
+		 * https://developer.wordpress.org/advanced-administration/performance/optimization/,
+		 * https://make.wordpress.org/core/2024/06/18/options-api-disabling-autoload-for-large-options/,
+		 * https://core.trac.wordpress.org/ticket/61276). Filterable via
+		 * `wppo_autoload_critical_threshold`.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_CRITICAL_BYTES = 819200;
+
+		/**
 		 * Maximum number of options a single remediation pass will touch.
 		 *
 		 * @since 2.0.0
@@ -1190,6 +1205,127 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				return 0;
 			}
 			return null === $count ? 0 : (int) $count;
+		}
+
+		/**
+		 * Resolve the critical autoload threshold in bytes.
+		 *
+		 * Defaults to {@see AUTOLOAD_CRITICAL_BYTES} (800 KB per the WP 6.6
+		 * guidance) absent a `wppo_autoload_critical_threshold` filter.
+		 * Non-numeric or negative filter output falls back to the constant
+		 * (fail-open: audit-only, never fatal).
+		 *
+		 * @since NEXT
+		 * @return int Threshold in bytes (>= 0).
+		 */
+		public static function get_autoload_critical_threshold(): int {
+			try {
+				if ( ! function_exists( 'apply_filters' ) ) {
+					return self::AUTOLOAD_CRITICAL_BYTES;
+				}
+				/** Filters the critical autoload payload threshold in bytes. @since NEXT @param int $threshold Threshold in bytes. */
+				$filtered = apply_filters( 'wppo_autoload_critical_threshold', self::AUTOLOAD_CRITICAL_BYTES );
+				if ( is_numeric( $filtered ) ) {
+					$value = (int) $filtered;
+					if ( $value >= 0 ) {
+						return $value;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return self::AUTOLOAD_CRITICAL_BYTES;
+		}
+
+		/**
+		 * Whether the autoload payload is at or above the critical threshold.
+		 *
+		 * @since NEXT
+		 * @param int|null $total Optional total bytes (defaults to {@see get_autoload_total_bytes()}).
+		 * @return bool True when $total >= critical threshold.
+		 */
+		public static function is_autoload_critical( ?int $total = null ): bool {
+			if ( null === $total ) {
+				$total = self::get_autoload_total_bytes();
+			}
+			return $total >= self::get_autoload_critical_threshold();
+		}
+
+		/**
+		 * Single-call autoload audit payload aligned to WP 6.6 semantics.
+		 *
+		 * Reuses the shared {@see get_autoloadable_values()} predicate via
+		 * {@see get_autoload_total_bytes()}, {@see get_autoload_count()} and
+		 * {@see get_autoloaded_options()} so totals, counts and lists agree
+		 * with each other and with Site Health.
+		 *
+		 * @since NEXT
+		 * @param int $limit Maximum number of options to return.
+		 * @return array{total_autoload_bytes:int,count:int,critical_threshold:int,is_critical:bool,options:array}
+		 */
+		public static function get_autoload_audit( int $limit = 20 ): array {
+			$limit     = max( 1, min( 100, $limit ) );
+			$total     = self::get_autoload_total_bytes();
+			$threshold = self::get_autoload_critical_threshold();
+			return array(
+				'total_autoload_bytes' => $total,
+				'count'                => self::get_autoload_count(),
+				'critical_threshold'   => $threshold,
+				'is_critical'          => $total >= $threshold,
+				'options'              => self::get_autoloaded_options( $limit ),
+			);
+		}
+
+		/**
+		 * Compare the reported total against wp_load_alloptions() size.
+		 *
+		 * Read-only and fail-open: when `wp_load_alloptions()` is unavailable
+		 * (pre-6.2 floor or unit stubs) the comparison is skipped and
+		 * `matches_within_rounding` is true so the audit never blocks.
+		 * Serialization framing differs from SUM(LENGTH()), so exact equality
+		 * is wrong — parity holds within max(1024, 1% of total).
+		 *
+		 * @since NEXT
+		 * @return array{reported:int,alloptions_bytes:int,delta:int,matches_within_rounding:bool}
+		 */
+		public static function get_autoload_parity(): array {
+			$reported = self::get_autoload_total_bytes();
+			if ( ! function_exists( 'wp_load_alloptions' ) ) {
+				return array(
+					'reported'                => $reported,
+					'alloptions_bytes'        => 0,
+					'delta'                   => 0,
+					'matches_within_rounding' => true,
+				);
+			}
+			try {
+				$alloptions = wp_load_alloptions();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'reported'                => $reported,
+					'alloptions_bytes'        => 0,
+					'delta'                   => 0,
+					'matches_within_rounding' => true,
+				);
+			}
+			if ( ! is_array( $alloptions ) ) {
+				return array(
+					'reported'                => $reported,
+					'alloptions_bytes'        => 0,
+					'delta'                   => 0,
+					'matches_within_rounding' => true,
+				);
+			}
+			$bytes     = strlen( serialize( $alloptions ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Size measurement only; serialized payload is never stored or unserialized.
+			$delta     = abs( $reported - $bytes );
+			$tolerance = max( 1024, (int) ( 0.01 * max( $reported, $bytes ) ) );
+			return array(
+				'reported'                => $reported,
+				'alloptions_bytes'        => $bytes,
+				'delta'                   => $delta,
+				'matches_within_rounding' => $delta <= $tolerance,
+			);
 		}
 
 		/**

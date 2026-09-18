@@ -359,9 +359,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function get_autoloaded_options( \WP_REST_Request $request ): \WP_REST_Response {
 			$limit  = isset( $request->get_params()['limit'] ) ? absint( $request->get_params()['limit'] ) : 20;
 			$limit  = max( 1, min( 100, $limit ) );
-			$result = Database_Cleanup::get_autoloaded_options( $limit );
+			$result = Database_Cleanup::get_autoload_audit( $limit );
 
-			return $this->send_response( array( 'options' => $result ) );
+			return $this->send_response( $result );
 		}
 
 		/**

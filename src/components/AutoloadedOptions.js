@@ -45,6 +45,7 @@ export const isValidOptionName = ( optionName ) =>
  */
 const AutoloadedOptions = () => {
 	const [ options, setOptions ] = useState( [] );
+	const [ audit, setAudit ] = useState( null );
 	const [ loading, setLoading ] = useState( true );
 	const [ report, setReport ] = useState( null );
 	const [ appliedSummary, setAppliedSummary ] = useState( null );
@@ -85,6 +86,12 @@ const AutoloadedOptions = () => {
 						return;
 					}
 					setOptions( response.data.options );
+					setAudit( {
+						total: response.data.total_autoload_bytes ?? null,
+						count: response.data.count ?? null,
+						threshold: response.data.critical_threshold ?? 819200,
+						isCritical: response.data.is_critical ?? false,
+					} );
 				} else {
 					if ( ! isMounted.current ) {
 						return;
@@ -511,6 +518,23 @@ const AutoloadedOptions = () => {
 					message={ notice.message }
 					onDismiss={ dismiss }
 				/>
+			) }
+			{ audit?.isCritical && (
+				<p
+					className="wppo-notice wppo-notice--warning"
+					role="status"
+					aria-live="polite"
+				>
+					{ sprintf(
+						/* translators: %1$s: total autoload size, %2$s: critical threshold. */
+						__(
+							'Critical: autoload payload %1$s meets or exceeds the %2$s WordPress 6.6 threshold.',
+							'performance-optimisation'
+						),
+						formatBytes( audit.total || 0 ),
+						formatBytes( audit.threshold || 819200 )
+					) }
+				</p>
 			) }
 			{ body }
 			{ options.length > 0 && (
