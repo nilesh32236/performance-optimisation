@@ -24,7 +24,7 @@ import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
 import CheckboxOption from './common/CheckboxOption';
 
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 
 // Keep in sync with PHP Util::ALLOWED_SETTINGS_KEYS (single source).
 // At runtime the list is also available as wppoSettings.allowedSettingsKeys
@@ -381,6 +381,31 @@ const PluginSetting = ( { options } ) => {
 			: ''
 	);
 	const [ savingMonitoring, setSavingMonitoring ] = useState( false );
+
+	// Audit #1420: resync when the global arrives late. Per-key deps so
+	// parent re-renders do not reset the form; saving guards so an
+	// in-progress edit is never clobbered.
+	const liveAudit =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.performance_audit ?? {}
+			: {};
+	useEffect( () => {
+		if ( ! savingMonitoring && ! savingAutoRescan ) {
+			setServerTimingEnabled( !! liveAudit.server_timing_enabled );
+			setRumEnabled( !! liveAudit.rum_enabled );
+			setHighValueUrls(
+				Array.isArray( liveAudit.high_value_urls )
+					? liveAudit.high_value_urls.join( '\n' )
+					: ''
+			);
+		}
+	}, [
+		liveAudit.server_timing_enabled,
+		liveAudit.rum_enabled,
+		liveAudit.high_value_urls,
+		savingMonitoring,
+		savingAutoRescan,
+	] );
 	const [ baseline, setBaseline ] = useState( {
 		newApiKey: '',
 		autoRescan,
@@ -408,68 +433,103 @@ const PluginSetting = ( { options } ) => {
 	);
 	useUnsavedChanges( currentMonitoringSettings, baseline );
 
-	const saveMonitoring = async () => {
-		setSavingMonitoring( true );
+	// Audit #1401: shared saver owning dismiss/apiCall/notify/baseline/undo
+	// with a guaranteed flag reset — the three savers below keep only
+	// payload building and post-save side effects.
+	const savePerformanceAudit = async (
+		settingsPatch,
+		{
+			setSaving,
+			successNotice,
+			errorNotice,
+			catchNotice,
+			logLabel,
+			onSuccess,
+		}
+	) => {
+		setSaving( true );
 		dismissApiKey();
 		try {
 			const currentSettings =
 				typeof wppoSettings !== 'undefined'
 					? wppoSettings?.settings?.performance_audit ?? {}
 					: {};
-			const urls = highValueUrls
-				.split( '\n' )
-				.map( ( url ) => url.trim() )
-				.filter( Boolean );
-			// Defense-in-depth: drop non-same-origin http(s) lines client-side
-			// (mirrors runPerformanceScan/queuePagespeedScan). Server-side host
-			// allowlisting + rate limiting remains authoritative.
-			const validUrls = urls.filter( isValidScanUrl );
-			const invalidUrls = urls.filter(
-				( url ) => ! isValidScanUrl( url )
-			);
-			if ( invalidUrls.length > 0 && validUrls.length === 0 ) {
-				notifyApiKey( {
-					type: 'error',
-					message: sprintf(
-						/* translators: %s: comma-separated list of rejected URLs */
-						__(
-							'No valid URLs to save. Rejected: %s. URLs must be same-origin http(s) URLs.',
-							'performance-optimisation'
-						),
-						invalidUrls.join( ', ' )
-					),
-				} );
-				return;
-			}
 			const response = await apiCall( 'update_settings', {
 				tab: 'performance_audit',
-				settings: {
-					...currentSettings,
-					server_timing_enabled: serverTimingEnabled,
-					rum_enabled: rumEnabled,
-					high_value_urls: validUrls,
-				},
+				settings: { ...currentSettings, ...settingsPatch },
 			} );
 			if ( response.success ) {
-				const savedHighValueUrls = validUrls.join( '\n' );
-				if ( invalidUrls.length > 0 ) {
-					setHighValueUrls( savedHighValueUrls );
-				}
 				setUndoAvailable( true );
-				setBaseline( ( prev ) => ( {
-					...prev,
-					serverTimingEnabled,
-					rumEnabled,
-					highValueUrls: savedHighValueUrls,
-				} ) );
+				if ( onSuccess ) {
+					onSuccess( response );
+				}
 				notifyApiKey(
+					typeof successNotice === 'function'
+						? successNotice( response )
+						: successNotice
+				);
+			} else {
+				notifyApiKey( {
+					type: 'error',
+					message: response.message || errorNotice,
+				} );
+			}
+		} catch ( err ) {
+			notifyApiKey( {
+				type: 'error',
+				message: catchNotice || errorNotice,
+			} );
+			console.error( logLabel, getErrorLogMessage( err ) );
+		} finally {
+			setSaving( false );
+		}
+	};
+
+	const saveMonitoring = async () => {
+		const urls = highValueUrls
+			.split( '\n' )
+			.map( ( url ) => url.trim() )
+			.filter( Boolean );
+		// Defense-in-depth: drop non-same-origin http(s) lines client-side
+		// (mirrors runPerformanceScan/queuePagespeedScan). Server-side host
+		// allowlisting + rate limiting remains authoritative.
+		const validUrls = urls.filter( isValidScanUrl );
+		const invalidUrls = urls.filter( ( url ) => ! isValidScanUrl( url ) );
+		if ( invalidUrls.length > 0 && validUrls.length === 0 ) {
+			setSavingMonitoring( true );
+			notifyApiKey( {
+				type: 'error',
+				message: sprintf(
+					/* translators: %s: comma-separated list of rejected URLs */
+					__(
+						'No valid URLs to save. Rejected: %s. URLs must be same-origin http(s) URLs.',
+						'performance-optimisation'
+					),
+					invalidUrls.join( ', ' )
+				),
+			} );
+			setSavingMonitoring( false );
+			return;
+		}
+		const savedHighValueUrls = validUrls.join( '\n' );
+		await savePerformanceAudit(
+			{
+				server_timing_enabled: serverTimingEnabled,
+				rum_enabled: rumEnabled,
+				high_value_urls: validUrls,
+			},
+			{
+				setSaving: setSavingMonitoring,
+				successNotice: () =>
 					invalidUrls.length > 0
 						? {
 								type: 'warning',
 								message: sprintf(
-									/* translators: 1: number of skipped URLs, 2: comma-separated list of skipped URLs */
-									__(
-										'Monitoring settings saved. Skipped %1$s invalid URL(s): %2$s.',
+									/* translators: 1: skipped count, 2: skipped URLs. */
+									_n(
+										'Monitoring settings saved. Skipped %1$s invalid URL: %2$s.',
+										'Monitoring settings saved. Skipped %1$s invalid URLs: %2$s.',
+										invalidUrls.length,
 										'performance-optimisation'
 									),
 									invalidUrls.length,
@@ -482,137 +542,85 @@ const PluginSetting = ( { options } ) => {
 									'Monitoring settings saved.',
 									'performance-optimisation'
 								),
-						  }
-				);
-			} else {
-				notifyApiKey( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save monitoring settings.',
-							'performance-optimisation'
-						),
-				} );
-			}
-		} catch ( err ) {
-			notifyApiKey( {
-				type: 'error',
-				message: __(
+						  },
+				errorNotice: __(
+					'Failed to save monitoring settings.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
 					'Error saving monitoring settings.',
 					'performance-optimisation'
 				),
-			} );
-			console.error(
-				'Save monitoring error:',
-				getErrorLogMessage( err )
-			);
-		} finally {
-			setSavingMonitoring( false );
-		}
+				logLabel: 'Save monitoring error:',
+				onSuccess: () => {
+					if ( invalidUrls.length > 0 ) {
+						setHighValueUrls( savedHighValueUrls );
+					}
+					setBaseline( ( prev ) => ( {
+						...prev,
+						serverTimingEnabled,
+						rumEnabled,
+						highValueUrls: savedHighValueUrls,
+					} ) );
+				},
+			}
+		);
 	};
 
 	const saveAutoRescan = async () => {
-		setSavingAutoRescan( true );
-		dismissApiKey();
-		try {
-			const currentSettings =
-				typeof wppoSettings !== 'undefined'
-					? wppoSettings?.settings?.performance_audit ?? {}
-					: {};
-			const response = await apiCall( 'update_settings', {
-				tab: 'performance_audit',
-				settings: {
-					...currentSettings,
-					auto_rescan: autoRescan,
-				},
-			} );
-			if ( response.success ) {
-				setBaseline( ( prev ) => ( { ...prev, autoRescan } ) );
-				setUndoAvailable( true );
-				notifyApiKey( {
+		await savePerformanceAudit(
+			{ auto_rescan: autoRescan },
+			{
+				setSaving: setSavingAutoRescan,
+				successNotice: {
 					type: 'success',
 					message: __(
 						'Auto-rescan frequency saved.',
 						'performance-optimisation'
 					),
-				} );
-			} else {
-				notifyApiKey( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save auto-rescan frequency.',
-							'performance-optimisation'
-						),
-				} );
-			}
-		} catch ( err ) {
-			notifyApiKey( {
-				type: 'error',
-				message: __(
+				},
+				errorNotice: __(
+					'Failed to save auto-rescan frequency.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
 					'Error saving auto-rescan frequency.',
 					'performance-optimisation'
 				),
-			} );
-			console.error(
-				'Save auto-rescan error:',
-				getErrorLogMessage( err )
-			);
-		} finally {
-			setSavingAutoRescan( false );
-		}
+				logLabel: 'Save auto-rescan error:',
+				onSuccess: () => {
+					setBaseline( ( prev ) => ( { ...prev, autoRescan } ) );
+				},
+			}
+		);
 	};
 
 	const saveApiKey = async () => {
-		setSavingApiKey( true );
-		dismissApiKey();
-		try {
-			const currentSettings =
-				typeof wppoSettings !== 'undefined'
-					? wppoSettings?.settings?.performance_audit ?? {}
-					: {};
-			const trimmedKey = newApiKey.trim();
-			const response = await apiCall( 'update_settings', {
-				tab: 'performance_audit',
-				settings: {
-					...currentSettings,
-					...( trimmedKey ? { pagespeed_api_key: trimmedKey } : {} ),
-				},
-			} );
-			if ( response.success ) {
-				setNewApiKey( '' );
-				setApiKeyConfigured( true );
-				setUndoAvailable( true );
-				setBaseline( ( prev ) => ( { ...prev, newApiKey: '' } ) );
-				notifyApiKey( {
+		const trimmedKey = newApiKey.trim();
+		await savePerformanceAudit(
+			{ ...( trimmedKey ? { pagespeed_api_key: trimmedKey } : {} ) },
+			{
+				setSaving: setSavingApiKey,
+				successNotice: {
 					type: 'success',
 					message: __( 'API key saved.', 'performance-optimisation' ),
-				} );
-			} else {
-				notifyApiKey( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save API key.',
-							'performance-optimisation'
-						),
-				} );
-			}
-		} catch ( err ) {
-			notifyApiKey( {
-				type: 'error',
-				message: __(
+				},
+				errorNotice: __(
+					'Failed to save API key.',
+					'performance-optimisation'
+				),
+				catchNotice: __(
 					'Error saving API key.',
 					'performance-optimisation'
 				),
-			} );
-			console.error( 'Save API key error:', getErrorLogMessage( err ) );
-		} finally {
-			setSavingApiKey( false );
-		}
+				logLabel: 'Save API key error:',
+				onSuccess: () => {
+					setNewApiKey( '' );
+					setApiKeyConfigured( true );
+					setBaseline( ( prev ) => ( { ...prev, newApiKey: '' } ) );
+				},
+			}
+		);
 	};
 
 	// Activity log state
@@ -634,11 +642,30 @@ const PluginSetting = ( { options } ) => {
 			.split( '.' )[ 0 ];
 	};
 
+	// Audit #1420: abortable log fetch — unmount/rapid pagination cannot
+	// set state on an unmounted component.
+	const logControllerRef = useRef( null );
+	useEffect( () => {
+		return () => {
+			if ( logControllerRef.current ) {
+				logControllerRef.current.abort();
+			}
+		};
+	}, [] );
+
 	const loadActivityLog = async ( page = 1 ) => {
+		if ( logControllerRef.current ) {
+			logControllerRef.current.abort();
+		}
+		logControllerRef.current = new AbortController();
+		const signal = logControllerRef.current.signal;
 		setLogLoading( true );
 		dismissLog();
 		try {
-			const data = await fetchRecentActivities( page );
+			const data = await fetchRecentActivities( page, signal );
+			if ( signal.aborted ) {
+				return;
+			}
 			if ( data?.activities ) {
 				setLogEntries( data.activities );
 				setLogPage( data.current_page || 1 );
@@ -646,6 +673,10 @@ const PluginSetting = ( { options } ) => {
 				setLogLoaded( true );
 			}
 		} catch ( err ) {
+			// Audit #1420: aborts are expected (unmount/pagination), not errors.
+			if ( signal.aborted || err?.name === 'AbortError' ) {
+				return;
+			}
 			notifyLog( {
 				type: 'error',
 				message: __(
@@ -658,7 +689,9 @@ const PluginSetting = ( { options } ) => {
 				getErrorLogMessage( err )
 			);
 		} finally {
-			setLogLoading( false );
+			if ( ! signal.aborted ) {
+				setLogLoading( false );
+			}
 		}
 	};
 
@@ -730,7 +763,9 @@ const PluginSetting = ( { options } ) => {
 		const reader = new FileReader();
 		readerRef.current = reader;
 
-		reader.onerror = () => {
+		// Audit #1401: one shared failure handler — byte-identical twins
+		// drift (e.g. only one clears the failed selection).
+		const handleReaderFailure = () => {
 			readerRef.current = null;
 			if ( cancelledRef.current ) {
 				return;
@@ -742,19 +777,8 @@ const PluginSetting = ( { options } ) => {
 			setIsImporting( false );
 			resetFileInput();
 		};
-
-		reader.onabort = () => {
-			readerRef.current = null;
-			if ( cancelledRef.current ) {
-				return;
-			}
-			notifyImport( {
-				type: 'error',
-				message: __( 'Error reading file', 'performance-optimisation' ),
-			} );
-			setIsImporting( false );
-			resetFileInput();
-		};
+		reader.onerror = handleReaderFailure;
+		reader.onabort = handleReaderFailure;
 
 		reader.onload = ( e ) => {
 			readerRef.current = null;
@@ -971,7 +995,12 @@ const PluginSetting = ( { options } ) => {
 												{ entry.activity }
 											</div>
 											{ entry.created_at && (
-												<time className="wppo-activity-time">
+												<time
+													className="wppo-activity-time"
+													dateTime={
+														entry.created_at
+													}
+												>
 													{ new Date(
 														entry.created_at.replace(
 															' ',
@@ -1032,6 +1061,8 @@ const PluginSetting = ( { options } ) => {
 						className={ `wppo-notice wppo-notice--${
 							apiKeyConfigured ? 'success' : 'warning'
 						} wppo-mb-16` }
+						role="status"
+						aria-live="polite"
 					>
 						<FontAwesomeIcon
 							icon={
@@ -1040,6 +1071,7 @@ const PluginSetting = ( { options } ) => {
 									: faExclamationCircle
 							}
 							className="wppo-mr-8"
+							aria-hidden="true"
 						/>
 						{ apiKeyConfigured
 							? __(
@@ -1163,7 +1195,12 @@ const PluginSetting = ( { options } ) => {
 				{ /* Monitoring: Server-Timing + high-value URLs */ }
 				<FeatureCard
 					title={ __( 'Monitoring', 'performance-optimisation' ) }
-					icon={ <i className="fas fa-tachometer-alt"></i> }
+					icon={
+						<i
+							className="fas fa-tachometer-alt"
+							aria-hidden="true"
+						></i>
+					} // Audit #1420: decorative.
 				>
 					<CheckboxOption
 						checked={ serverTimingEnabled }

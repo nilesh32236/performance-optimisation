@@ -105,12 +105,15 @@ const TrendSeries = ( { strategy, trends } ) => {
 					viewBox={ `0 0 ${ SPARK_WIDTH } ${ SPARK_HEIGHT }` }
 					role="img"
 					aria-label={ sprintf(
-						/* translators: %s: strategy (mobile or desktop) */
+						/* translators: %s: translated strategy (mobile or desktop) */
 						__(
 							'%s performance score trend chart',
 							'performance-optimisation'
 						),
-						strategy
+						// Audit #1420: translate the strategy before interpolation.
+						strategy === 'desktop'
+							? __( 'Desktop', 'performance-optimisation' )
+							: __( 'Mobile', 'performance-optimisation' )
 					) }
 				>
 					<polyline
@@ -210,6 +213,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 						icon={ faSpinner }
 						spin
 						className="wppo-mr-8"
+						aria-hidden="true"
 					/>
 					{ __( 'Loading trends…', 'performance-optimisation' ) }
 				</p>

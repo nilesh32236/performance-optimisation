@@ -26,6 +26,7 @@ Use this skill on a weekly schedule to check for new WordPress features, APIs, h
 | Database API | `$wpdb` improvements, query optimizations |
 | Lazy Loading | Core lazy loading additions |
 | WebP/AVIF | Core image format support changes |
+| Design/Usability | Competitor admin/settings-UX parity, WP admin design trends, usability pain points, SPA a11y gaps (see `docs/admin-design-plan.md`) |
 
 ## Audit Process
 
@@ -38,6 +39,7 @@ Use this skill on a weekly schedule to check for new WordPress features, APIs, h
    - For each area in the table above, grep the plugin code for relevant function/hook usage
    - Check if WordPress introduced a more efficient way to do the same thing
    - Check if WordPress fixed a bug that the plugin is working around
+   - For Design/Usability findings, anchor every proposal in `src/` + `.wppo-` SCSS and cross-check `docs/admin-design-plan.md` for the phased admin plan
 
 3. **Evaluate relevance**:
    - Is the new feature relevant to this plugin's functionality?

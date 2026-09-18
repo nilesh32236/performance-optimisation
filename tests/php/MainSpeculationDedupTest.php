@@ -9,7 +9,7 @@
  * (cart, checkout, nonce URLs, logged-in visitors, plain permalinks).
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 
 use PerformanceOptimise\Inc\Main;
@@ -20,7 +20,7 @@ use Brain\Monkey\Functions;
  * Tests the WP 6.8 core-parity speculation-rules dedup.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;

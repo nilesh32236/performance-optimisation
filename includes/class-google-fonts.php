@@ -107,7 +107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Fail-open: unknown values fall back to `swap`, any throwable
 		 * returns `swap` so fonts never block rendering.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string font-display value, or '' when injection is disabled.
 		 */
 		public static function get_font_display(): string {
@@ -145,7 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * woff-only block is untouched and metric-fallback + preload
 		 * behavior is unchanged (no FOUT regression).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $css Stylesheet CSS.
 		 * @return string CSS with woff2-first src ordering.
 		 */
@@ -197,7 +197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * (comma-separated, default `latin`) are dropped. Fail-open: disabled
 		 * by default, and any parse failure returns the CSS unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $css Stylesheet CSS.
 		 * @return string Possibly subset-filtered CSS.
 		 */
@@ -457,11 +457,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					'url' => $url,
 				),
 			);
-			if ( function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_enqueue_async_action' ) ) {
+			if ( function_exists( 'as_enqueue_async_action' ) ) {
 				try {
-					if ( ! as_has_scheduled_action( self::AS_HOOK, $payload, 'performance_optimisation' ) ) {
-						as_enqueue_async_action( self::AS_HOOK, $payload, 'performance_optimisation' );
-					}
+					// Atomic-first on AS 4.x (issue #1408): the `$unique` insert
+					// dedupes hook+args+group in the store, closing the
+					// check-then-act race where two concurrent requests both passed
+					// as_has_scheduled_action() and double-queued the same download.
+					// The legacy guard survives inside the helper for older
+					// schedulers, so no explicit pre-check is needed here.
+					Util::enqueue_unique_async_action( self::AS_HOOK, $payload, 'performance_optimisation' );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -651,8 +655,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			if ( $filesystem ) {
 				$filesystem->put_contents( $css_file, $css, FS_CHMOD_FILE );
 			} else {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-				file_put_contents( $css_file, $css );
+				// Audit #1453: containment assert before the raw fallback write
+				// ($css_file is internally constructed, never user-controlled).
+				$resolved_css = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $css_file ) : $css_file;
+				$content_root = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
+				if ( '' !== $content_root && 0 === strpos( $resolved_css, $content_root ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+					file_put_contents( $css_file, $css );
+				}
 			}
 
 			// Capped-run convergence: the per-run cap above can leave remote

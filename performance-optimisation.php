@@ -5,7 +5,7 @@
  * Requires at least: 6.2
  * Requires PHP:      8.2
  * Tested up to:      7.1
- * Version:           2.1.0
+ * Version:           2.2.0
  * Author:            Nilesh Kanzariya
  * Author URI:        https://github.com/nilesh32236
  * License:           GPL-2.0-or-later
@@ -34,7 +34,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '2.1.0' );
+	define( 'WPPO_VERSION', '2.2.0' );
 }
 
 // Minimum supported runtimes (mirrors the plugin header above).
@@ -229,7 +229,7 @@ if ( ! function_exists( 'wppo_render_missing_autoload_notice' ) ) {
 	/**
 	 * Admin notice when vendor/autoload.php is missing (audit #1362).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	function wppo_render_missing_autoload_notice(): void {

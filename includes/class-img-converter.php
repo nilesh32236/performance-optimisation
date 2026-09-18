@@ -276,8 +276,186 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					'height' => (int) $matches[2],
 				);
 			}
-
 			return array();
+		}
+
+		/**
+		 * Size-aware quality offset for the smart-quality heuristic.
+		 *
+		 * Maps source dimensions to a `[-10, +10]` offset: small sub-sizes
+		 * and thumbnails go negative for byte savings while large full-size
+		 * images stay neutral/slightly positive for fidelity. Pure compute,
+		 * no DB/HTTP, multisite-safe. The caller clamps the total delta via
+		 * `apply_smart_quality_offsets()` so the per-type/size delta stays
+		 * bounded to ±10.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $size Optional source dimensions ('width'/'height'). Empty means full-size original.
+		 * @return int Offset in `[-10, +10]`.
+		 */
+		public static function get_smart_quality_size_offset( array $size ): int {
+			$width  = isset( $size['width'] ) ? (int) $size['width'] : 0;
+			$height = isset( $size['height'] ) ? (int) $size['height'] : 0;
+			if ( 1 > $width || 1 > $height ) {
+				return 0;
+			}
+
+			$edge = max( $width, $height );
+			if ( 150 >= $edge ) {
+				return -8;
+			}
+			if ( 300 >= $edge ) {
+				return -5;
+			}
+			if ( 768 >= $edge ) {
+				return -3;
+			}
+			if ( 1600 >= $edge ) {
+				return 0;
+			}
+			return 2;
+		}
+
+		/**
+		 * Whether a source image looks like a hero/LCP candidate.
+		 *
+		 * Fail-open filename heuristic only (no DB/HTTP, zero queries):
+		 * matches `hero`, `lcp`, `cover`, `featured`, or `banner` as
+		 * delimiter-separated tokens in the filename stem (start, `.`,
+		 * `_`, `-`, space boundaries) so `recovery.jpg`/`discover.png` do not
+		 * false-positive. Multisite-safe: per-site file paths only, no
+		 * cross-site state is read.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $source_image Filesystem path to the source image.
+		 * @return bool True when the file looks like a hero candidate.
+		 */
+		public static function is_hero_candidate_image( string $source_image ): bool {
+			if ( '' === $source_image ) {
+				return false;
+			}
+			$base = strtolower( (string) basename( $source_image ) );
+			if ( '' === $base ) {
+				return false;
+			}
+			$stem = strtolower( (string) pathinfo( $base, PATHINFO_FILENAME ) );
+			if ( '' === $stem ) {
+				return false;
+			}
+			if ( 1 === preg_match( '/(^|[._\- ])(hero|lcp|cover|featured|banner)([._\- ]|$)/', $stem ) ) {
+				return true;
+			}
+			return false;
+		}
+
+		/**
+		 * Role-aware quality offset for the smart-quality heuristic.
+		 *
+		 * Hero/LCP candidates go positive for fidelity, thumbnail-class
+		 * files (`-150x150`-style suffixes, `thumb` names, or tiny
+		 * `-{W}x{H}` sub-sizes) go negative for savings, everything else
+		 * stays neutral. Fail-open: any probe failure returns 0 so the
+		 * flat rule is unchanged. Multisite-safe: per-site file paths
+		 * only, no cross-site state.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $source_image Filesystem path to the source image.
+		 * @return int Offset in `[-10, +10]`.
+		 */
+		public static function get_smart_quality_role_offset( string $source_image = '' ): int {
+			if ( '' === $source_image ) {
+				return 0;
+			}
+			if ( self::is_hero_candidate_image( $source_image ) ) {
+				return 5;
+			}
+			$base = strtolower( (string) basename( $source_image ) );
+			$stem = strtolower( (string) pathinfo( $base, PATHINFO_FILENAME ) );
+			if ( 1 === preg_match( '/(^|[._-])thumb([._-]|$)/', $stem ) ) {
+				return -5;
+			}
+			if ( 1 === preg_match( '/-(\d+)x(\d+)(?:\.[a-z0-9]+)?$/i', $base, $matches ) ) {
+				$edge = max( (int) $matches[1], (int) $matches[2] );
+				if ( 320 >= $edge ) {
+					return -5;
+				}
+			}
+			return 0;
+		}
+
+		/**
+		 * Apply size + role offsets to a base quality with bounded delta.
+		 *
+		 * Sums both offsets, clamps the total delta to ±10 versus `$base`,
+		 * then clamps the absolute result to 1-100. This single clamp is
+		 * what guarantees the "quality delta bounded to ±10 per type and
+		 * size" acceptance criterion.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $base        Base quality (1-100) before offsets.
+		 * @param int $size_offset Size-aware offset (`[-10, +10]`).
+		 * @param int $role_offset Role-aware offset (`[-10, +10]`).
+		 * @return int Adjusted quality (1-100) within ±10 of `$base`.
+		 */
+		public static function apply_smart_quality_offsets( int $base, int $size_offset, int $role_offset ): int {
+			$base        = min( 100, max( 1, $base ) );
+			$size_offset = min( 10, max( -10, $size_offset ) );
+			$role_offset = min( 10, max( -10, $role_offset ) );
+			$delta       = min( 10, max( -10, $size_offset + $role_offset ) );
+			return min( 100, max( 1, $base + $delta ) );
+		}
+
+		/**
+		 * Order attachment IDs hero-first for the conversion queue.
+		 *
+		 * Stable partition: hero candidates (see `is_hero_candidate_image()`)
+		 * move to the front in their original relative order, everything
+		 * else keeps its order behind them. Fail-open: returns the input
+		 * unchanged when `get_attached_file()` is unavailable or any probe
+		 * throws. Multisite-safe: `get_attached_file()` resolves per-site
+		 * upload paths, no cross-site state is shared.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $attachment_ids Attachment IDs in scan order.
+		 * @return array Reordered IDs with hero candidates first.
+		 */
+		public static function order_queue_hero_first( array $attachment_ids ): array {
+			if ( 2 > count( $attachment_ids ) ) {
+				return $attachment_ids;
+			}
+			if ( ! function_exists( 'get_attached_file' ) ) {
+				return $attachment_ids;
+			}
+			try {
+				$hero = array();
+				$rest = array();
+				foreach ( $attachment_ids as $attachment_id ) {
+					$file = '';
+					try {
+						$file = (string) get_attached_file( (int) $attachment_id );
+					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: unresolvable IDs stay in place.
+						unset( $e );
+						$file = '';
+					}
+					if ( '' !== $file && self::is_hero_candidate_image( $file ) ) {
+						$hero[] = $attachment_id;
+					} else {
+						$rest[] = $attachment_id;
+					}
+				}
+				if ( empty( $hero ) ) {
+					return $attachment_ids;
+				}
+				return array_merge( $hero, $rest );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep scan order.
+				unset( $e );
+				return $attachment_ids;
+			}
 		}
 
 		/**
@@ -336,7 +514,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Imagick fallback when GD `imageavif()` is missing (Imagick-only
 		 * AVIF hosts). Fail-open: any probe failure means false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when Imagick reports an AVIF delegate.
 		 */
@@ -389,7 +567,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Fail-open: returns false on any failure; callers fall back to
 		 * WebP, else the original.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @param string $dest_path    Filesystem path for the `.avif` output.
@@ -407,6 +585,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			if ( ! file_exists( $source_image ) || ! is_readable( $source_image ) ) {
+				return false;
+			}
+
+			// Audit #1411: sniff-gate at the sink — never readImage() a file
+			// whose magic bytes do not declare an allowed bitmap MIME.
+			$sniffed = function_exists( 'wp_get_image_mime' ) ? wp_get_image_mime( $source_image ) : '';
+			if ( ! is_string( $sniffed ) || ! self::is_allowed_source_mime( $sniffed ) ) {
 				return false;
 			}
 
@@ -501,7 +686,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			$threshold = (int) $threshold;
-			if ( $threshold < 0 ) {
+			if ( 0 > $threshold ) { // Audit #1434: Yoda.
 				$threshold = 0;
 			}
 
@@ -794,8 +979,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @param int $channels Channel count (clamped to 1-4, default 4).
 		 * @return bool True when the image exceeds the budget and must be skipped.
 		 */
+		/**
+		 * Whether a detected source MIME may reach an image decoder (audit #1411).
+		 *
+		 * Defense-in-depth before Imagick::readImage(): getimagesize() magic-byte
+		 * parsing already rejects non-images, but an explicit allowlist ensures a
+		 * polyglot accepted by a lenient parser can never reach a delegate-based
+		 * decoder (PostScript/SVG/MVG RCE class). Fail-closed: unknown mimes skip.
+		 *
+		 * @since 2.2.0
+		 * @param string $mime Detected MIME (e.g. from getimagesize()).
+		 * @return bool True when the MIME is a decodable bitmap type.
+		 */
+		public static function is_allowed_source_mime( string $mime ): bool {
+			return in_array( strtolower( trim( $mime ) ), array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' ), true );
+		}
+
+		/**
+		 * Channels-aware pre-decode pixel-budget check against the PHP memory limit.
+		 *
+		 * Estimates `width * height * channels` bytes (1 byte per channel)
+		 * and refuses when it exceeds half the PHP `memory_limit`, leaving
+		 * headroom for the GD bitmap plus encoder overhead. Falls back to the
+		 * `wppo_max_source_pixels` budget when the limit is unlimited or
+		 * unknown. Fail-open direction: oversize returns true (caller skips
+		 * the decode and serves the original), never fatal.
+		 *
+		 * @since 2.0.0
+		 *
+		 * @param int $width    Source width in pixels.
+		 * @param int $height   Source height in pixels.
+		 * @param int $channels Channel count (clamped to 1-4, default 4).
+		 * @return bool True when the image exceeds the budget and must be skipped.
+		 */
 		public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
-			if ( $width <= 0 || $height <= 0 ) {
+			if ( 0 >= $width || 0 >= $height ) { // Audit #1434: Yoda.
 				// Corrupt headers (non-positive dimensions) are not an
 				// oversize skip: return false so the caller falls through
 				// to the normal `failed` path instead of `skipped`.
@@ -922,7 +1140,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * step fails. Only ever shrinks — never enlarges. Multisite-safe:
 		 * pure compute, no options/DB writes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param resource|\GdImage $image  Decoded GD image resource.
 		 * @param int               $width  Source width in pixels.
@@ -1004,7 +1222,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * original file is never modified. Multisite-safe: pure compute, no
 		 * options/DB writes, no cross-site unlink.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int $width    Source width in pixels.
 		 * @param int $height   Source height in pixels.
@@ -1088,7 +1306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				/**
 				 * Filter the memory-safe longest edge in pixels.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param int $safe     Computed safe longest edge in pixels.
 				 * @param int $width    Source width in pixels.
 				 * @param int $height   Source height in pixels.
@@ -1122,7 +1340,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * below still runs inside the caller's try/catch. Multisite-safe:
 		 * pure compute, no options/DB writes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param \Imagick $imagick Imagick instance to guard.
 		 * @return void
@@ -1164,7 +1382,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * "cannot decode safely" and skip, not fall back to a full-size
 		 * `imagecreatefrom*()`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source    Absolute filesystem path to the source image.
 		 * @param int    $safe_edge Memory-safe longest edge in pixels.
@@ -1243,6 +1461,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * visual quality (AVIF's efficiency). Falls back to the flat 82
 		 * default chain otherwise.
 		 *
+		 * Size-aware and role-aware offsets (each `[-10, +10]`, total delta
+		 * clamped to ±10 via `apply_smart_quality_offsets()`) tune bytes
+		 * perceptually: heroes keep fidelity while thumbnails/sub-sizes get
+		 * savings. Existing quality filters override the heuristic: a valid
+		 * `wppo_smart_quality_value` return wins outright, while
+		 * `jpeg_quality` / `wp_editor_set_quality` filters (already honoured
+		 * inside the core resolution chain) suppress the offsets so the
+		 * filtered base is used verbatim. Note: those two core filters are
+		 * registered by many themes/plugins, so on such sites the heuristic
+		 * offsets are intentionally a no-op (a WP_DEBUG notice is logged).
+		 * Invalid filter results fail open to the current flat rule. Small
+		 * files keep skipping downstream in `convert_image()` via
+		 * `should_skip_small_file()`.
+		 *
 		 * Format authority lives in `resolve_output_format()`, which defers to
 		 * core's `image_editor_output_format` filter (guarded by `has_filter()`
 		 * and `function_exists()`); this method owns only the numeric mapping
@@ -1250,11 +1482,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * @since 2.0.0
 		 *
-		 * @param string $mime Output MIME type (e.g. 'image/avif').
-		 * @param array  $size Optional source dimensions ('width'/'height').
+		 * @param string $mime         Output MIME type (e.g. 'image/avif').
+		 * @param array  $size         Optional source dimensions ('width'/'height').
+		 * @param string $source_image Optional source filesystem path for size/role offsets.
 		 * @return int The encode quality to use (1-100).
 		 */
-		public function get_smart_quality( string $mime, array $size = array() ): int {
+		public function get_smart_quality( string $mime, array $size = array(), string $source_image = '' ): int {
 			$smart = $this->options['image_optimisation']['smartQuality'] ?? true;
 			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_smart_quality' ) ) {
 				/**
@@ -1266,6 +1499,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$smart = apply_filters( 'wppo_smart_quality', (bool) $smart );
 			}
 
+			// The effective size (derived from the `-WxH` suffix when `$size`
+			// is empty) feeds both the base resolution and the offsets so
+			// direct callers with a suffixed `$source_image` get consistent
+			// inputs.
+			$effective_size = $size;
+			if ( empty( $effective_size ) && '' !== $source_image ) {
+				$effective_size = $this->get_source_image_dimensions( $source_image );
+			}
 			if ( $smart && 'image/avif' === $mime ) {
 				// Explicit encoder chain (issue #1258): GD `imageavif()`
 				// (PHP >= 8.2), then Imagick AVIF delegate, then WebP.
@@ -1275,14 +1516,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				// is_avif_encoder_available() / is_imagick_avif_available()).
 				$gd_avif_available = function_exists( 'imageavif' ) && version_compare( PHP_VERSION, '8.2', '>=' );
 				if ( $gd_avif_available || self::is_imagick_avif_available() ) {
-					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
-					$quality      = max( 1, $webp_quality - 20 );
-					return min( 100, max( 1, $quality ) );
+					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $effective_size );
+					$base         = min( 100, max( 1, $webp_quality - 20 ) );
+				} else {
+					$base = $this->resolve_encode_quality( 'image/webp', 82, $effective_size );
 				}
-				return $this->resolve_encode_quality( 'image/webp', 82, $size );
+			} else {
+				$base = $this->resolve_encode_quality( $mime, 82, $effective_size );
 			}
 
-			return $this->resolve_encode_quality( $mime, 82, $size );
+			$base = min( 100, max( 1, (int) $base ) );
+			if ( ! $smart ) {
+				return $base;
+			}
+
+			// Explicit numeric override wins over the heuristic when valid.
+			// Only int and numeric-string returns are honoured; booleans
+			// (notably `__return_true`/`__return_false`), floats, and other
+			// types fail open to the flat base instead of coercing (e.g.
+			// `true` must not become quality 1).
+			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_smart_quality_value' ) ) {
+				/**
+				 * Filter the resolved smart quality value.
+				 *
+				 * @since NEXT
+				 * @param int    $quality      Base quality before size/role offsets.
+				 * @param string $mime         Output MIME type.
+				 * @param array  $effective_size Effective source dimensions ('width'/'height'), derived from the `-WxH` suffix when `$size` is empty.
+				 * @param string $source_image Source filesystem path (may be empty).
+				 */
+				$override = apply_filters( 'wppo_smart_quality_value', $base, $mime, $effective_size, $source_image );
+				if ( is_int( $override ) || ( is_string( $override ) && is_numeric( $override ) ) ) {
+					$override = (int) $override;
+					if ( 1 <= $override && 100 >= $override ) {
+						return $override;
+					}
+				}
+				// Invalid filter result: fail open to the flat rule.
+				return $base;
+			}
+
+			// Existing core quality filters already shaped `$base` via the
+			// resolution chain above; honour them verbatim by skipping the
+			// heuristic offsets. Core `jpeg_quality` /
+			// `wp_editor_set_quality` filters are common in themes/plugins,
+			// so this path is a documented no-op for offsets; a WP_DEBUG
+			// notice is logged to keep the suppression visible.
+			if ( function_exists( 'has_filter' ) && ( has_filter( 'jpeg_quality' ) || has_filter( 'wp_editor_set_quality' ) ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					static $logged = false;
+					if ( ! $logged ) {
+						$logged = true;
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only notice documenting the documented offset suppression.
+						error_log( 'WPPO: smart quality offsets suppressed by jpeg_quality/wp_editor_set_quality filter; using filtered base quality.' );
+					}
+				}
+				return $base;
+			}
+			$size_offset = self::get_smart_quality_size_offset( $effective_size );
+			$role_offset = '' !== $source_image ? self::get_smart_quality_role_offset( $source_image ) : 0;
+
+			return self::apply_smart_quality_offsets( $base, $size_offset, $role_offset );
 		}
 
 		/**
@@ -1293,7 +1587,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * gates local LQIP placeholder emission (issue #1158). Fail-open:
 		 * any probe failure returns true so conversion behaviour is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when oversized siblings should be discarded.
 		 */
@@ -1303,7 +1597,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				/**
 				 * Filter the size-compare smart-compress + local LQIP pipeline.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param bool $enabled Whether the pipeline is enabled.
 				 */
 				$enabled = apply_filters( 'wppo_smart_pipeline_enabled', (bool) $enabled );
@@ -1320,7 +1614,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Fail-open (returns false) when the pipeline is disabled, when
 		 * either file is missing/unreadable, or when sizes cannot be measured.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source_path  Filesystem path to the source image.
 		 * @param string $sibling_path Filesystem path to the converted sibling.
@@ -1350,7 +1644,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			/**
 			 * Filter whether an oversized converted sibling is discarded.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param bool   $discard      Whether to discard the sibling.
 			 * @param string $source_path  Filesystem path to the source image.
 			 * @param string $sibling_path Filesystem path to the converted sibling.
@@ -1370,7 +1664,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * traversal path can never delete outside it. Fail-open keeps the
 		 * file intact on any failure.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source_path  Filesystem path to the source image.
 		 * @param string $sibling_path Filesystem path to the converted sibling.
@@ -1414,7 +1708,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * the discarded one as `skipped`); only the aggregate return value
 		 * reflects the both-must-win contract.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @param string $sibling_path Filesystem path to the converted sibling.
@@ -1543,11 +1837,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$size = $this->get_source_image_dimensions( $source_image );
 
 				if ( 'both' === $format ) {
-					$avif_quality = $this->get_smart_quality( 'image/avif', $size );
-					$webp_quality = $this->get_smart_quality( 'image/webp', $size );
+					$avif_quality = $this->get_smart_quality( 'image/avif', $size, $source_image );
+					$webp_quality = $this->get_smart_quality( 'image/webp', $size, $source_image );
 				} else {
 					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
-					$quality = $this->get_smart_quality( $mime, $size );
+					$quality = $this->get_smart_quality( $mime, $size, $source_image );
 				}
 			}
 			if ( -1 === $quality ) {
@@ -1610,6 +1904,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			if ( empty( $image_info ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
+				return false;
+			}
+
+			// Audit #1411: explicit MIME allowlist before any decoder — a
+			// polyglot that slips past header parsing never reaches Imagick.
+			$detected_mime = isset( $image_info['mime'] ) && is_string( $image_info['mime'] ) ? $image_info['mime'] : '';
+			if ( ! self::is_allowed_source_mime( $detected_mime ) ) {
+				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}
 
@@ -3434,22 +3736,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				update_option( 'wppo_img_scan_cursor', min( array_map( 'intval', $tail_ids ) ), false );
 			}
 			$all_ids = array_merge( is_array( $head_ids ) ? $head_ids : array(), is_array( $tail_ids ) ? $tail_ids : array() );
-			$new_max = max( array_map( 'intval', $all_ids ) );
-			if ( $new_max > $cursor_max ) {
-				update_option( 'wppo_img_scan_cursor_max', $new_max, false );
-			}
-
-			// Same eligibility list as the queue gate itself.
-			$convertible = (array) apply_filters(
-				'wppo_convertible_image_extensions',
-				array( 'jpg', 'jpeg', 'png', 'webp' )
-			);
-
-			$queued = 0;
-
-			// Prime post + postmeta caches for the batch so the per-ID
-			// get_attached_file() calls below do not each issue post and
-			// postmeta lookups.
+			// Prime post + postmeta caches BEFORE hero probing so the
+			// get_attached_file() calls inside order_queue_hero_first() and
+			// the loop below hit warm caches instead of issuing per-ID
+			// post/postmeta lookups.
 			$prime_ids = array_map( 'intval', (array) $all_ids );
 			if ( ! empty( $prime_ids ) ) {
 				try {
@@ -3463,6 +3753,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					unset( $e );
 				}
 			}
+			// Hero-first ordering (issue #1387): hero candidates convert
+			// before bulk library items so LCP-adjacent outputs exist
+			// earlier. Fail-open: unchanged order when unresolvable.
+			$all_ids = self::order_queue_hero_first( $all_ids );
+			$new_max = max( array_map( 'intval', $all_ids ) );
+			if ( $new_max > $cursor_max ) {
+				update_option( 'wppo_img_scan_cursor_max', $new_max, false );
+			}
+
+			// Same eligibility list as the queue gate itself.
+			$convertible = (array) apply_filters(
+				'wppo_convertible_image_extensions',
+				array( 'jpg', 'jpeg', 'png', 'webp' )
+			);
+
+			$queued = 0;
 
 			foreach ( $all_ids as $attachment_id ) {
 				$file = get_attached_file( (int) $attachment_id );

@@ -566,7 +566,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * The canonical resolver prefers the additive ai_adaptive setting over
 	 * the legacy image_optimisation key so both read paths share one gate.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_get_field_lcp_url_prefers_ai_adaptive_min_samples(): void {
 		$this->install_stubs();
@@ -602,7 +602,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * A huge admin value (1000000) must not perpetually pin auto-tune to
 	 * provisional; zero/negative values fail open to the 20 default.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_get_field_lcp_min_samples_clamps_extreme_values(): void {
 		$this->install_stubs();
@@ -983,7 +983,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a beacon connection is aggregated into a 3-part segment key.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_collect_aggregates_connection_segment(): void {
 		$this->install_stubs();
@@ -1014,7 +1014,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that an invalid connection buckets as unknown without rejecting the sample.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_collect_falls_back_to_unknown_connection(): void {
 		$this->install_stubs();
@@ -1042,7 +1042,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the segmented p75 reader exposes the connection dimension.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_get_field_lcp_p75_by_segment_exposes_connection(): void {
 		$this->install_stubs();
@@ -1080,7 +1080,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the sample rate defaults to 100 when unset.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_get_sample_rate_defaults_to_100(): void {
 		$this->install_stubs();
@@ -1098,7 +1098,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that invalid sample rates clamp to 100 (fail-open to unsampled).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_get_sample_rate_clamps_invalid_values(): void {
 		$this->install_stubs();
@@ -1117,7 +1117,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the sampling decision is deterministic for an explicit roll.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_should_keep_sample_decides_by_roll(): void {
 		$this->install_stubs();
@@ -1136,7 +1136,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * The wp_rand() stub returns 2, so a rate of 1 deterministically drops.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_collect_drops_sample_when_rate_minimal(): void {
 		$this->install_stubs();
@@ -1165,7 +1165,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the high-traffic auto-throttle halves the effective rate.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_effective_rate_throttles_under_high_traffic(): void {
 		$this->install_stubs();
@@ -1191,7 +1191,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a non-numeric throttle-threshold filter falls back to default.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_effective_rate_ignores_non_numeric_threshold_filter(): void {
 		$this->install_stubs();
@@ -1222,7 +1222,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that aggregate bounds hold under a 10x traffic replay.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_aggregate_bounds_hold_at_replay(): void {
 		$this->install_stubs();
@@ -1255,7 +1255,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that print_config() emits the sampling gate for the beacon.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_print_config_emits_sample_rate(): void {
 		$this->install_stubs();
@@ -1290,7 +1290,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * The queued samples must be left untouched for the lock holder.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_flush_returns_early_when_lock_held(): void {
 		$this->install_stubs();
@@ -1321,7 +1321,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that flush_queue() always clears the lock.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_flush_clears_lock(): void {
 		$this->install_stubs();
@@ -1351,7 +1351,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * the first beacon schedules the flush event and the second must not
 	 * issue another wp_next_scheduled() query.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_cron_scheduled_only_on_empty_to_nonempty_transition(): void {
 		$this->install_stubs();
@@ -1398,7 +1398,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the transient fallback queue stays capped at QUEUE_MAX (100).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_queue_capped_at_max_without_object_cache(): void {
 		$this->install_stubs();
@@ -1432,7 +1432,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Simulates 20 sequential appends through wp_cache_add/wp_cache_get
 	 * semantics (atomic add) and asserts all samples survive.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_atomic_append_preserves_all_samples_with_object_cache(): void {
 		$this->install_stubs();
@@ -1570,7 +1570,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * The shaped `type` key and the raw ResourceTiming `initiatorType` key
 	 * must both pass intake (client/server parity).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_collect_stores_lcp_selector_and_slow_resources(): void {
 		$this->install_stubs();
@@ -1617,7 +1617,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Markup, child combinators (`>`, rejected server-side), double quotes
 	 * and `javascript:` must never reach the aggregate.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_collect_drops_malicious_lcp_selector(): void {
 		$this->install_stubs();
@@ -1652,7 +1652,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Cross-origin URLs, disallowed types and non-numeric durations are
 	 * dropped; extreme durations are clamped to 0–60000ms, never rejected.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_collect_sanitizes_slow_resources(): void {
 		$this->install_stubs();
@@ -1711,7 +1711,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Counts must aggregate per selector first: unrelated selectors must
 	 * neither inflate the sample gate nor share freshness.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_get_top_lcp_selector_aggregates_per_selector(): void {
 		$this->install_stubs();
@@ -1766,7 +1766,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Freshness is per-selector: a fresh unrelated selector must not rescue
 	 * a stale winner through a shared max() lastSeen.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_get_top_lcp_selector_freshness_is_per_selector(): void {
 		$this->install_stubs();
@@ -1801,7 +1801,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Rows rank by observed count then average duration; cross-origin rows
 	 * are excluded even when seeded directly into the aggregate.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_get_top_slow_resources_ranks_and_filters(): void {
 		$this->install_stubs();

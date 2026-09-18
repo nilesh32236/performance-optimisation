@@ -48,7 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * pending jobs, so completed work was re-queued unconditionally.
 		 * Per-site option (core get_option is multisite-safe).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const LAST_FULL_REGEN_OPTION = 'wppo_used_css_last_full_regen';
@@ -59,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Matches the wppo_used_css_cron every-5-hours schedule; filterable
 		 * via wppo_used_css_regen_cooldown.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const FULL_REGEN_COOLDOWN_SECONDS = 18000;
@@ -71,7 +71,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * by this cooldown so a burst of updates cannot flood the scheduler.
 		 * Per-site option (core get_option is multisite-safe).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const TARGETED_REGEN_OPTION = 'wppo_used_css_last_targeted_regen';
@@ -81,7 +81,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * Filterable via wppo_used_css_targeted_cooldown.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const TARGETED_REGEN_COOLDOWN_SECONDS = 3600;
@@ -95,7 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * - remove: strip full stylesheets; auto-downgrades to delay when the
 		 *           builder smoke check fails (never unstyled, never fatal).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		public const DELIVERY_MODES = array( 'file', 'delay', 'async', 'remove' );
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Age in seconds after which used-CSS counts as stale for the UI warning (issue #1220).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const STALE_THRESHOLD_SECONDS = 86400;
@@ -115,7 +115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * ensures the slowest pages are queued first. Overridable per site
 		 * via `file_optimisation.usedCssQueueCap`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const DEFAULT_USED_CSS_QUEUE_CAP = 50;
@@ -123,7 +123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Hard upper bound for the used-CSS per-run cap read.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MAX_USED_CSS_QUEUE_CAP = 500;
@@ -135,7 +135,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * or stale variant files fall back to the single file (or the
 		 * deferred full stylesheet) — never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		public const VIEWPORT_VARIANTS = array( 'mobile', 'desktop' );
@@ -582,7 +582,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * backslash escapes), so comment markers inside strings never open
 		 * or close a comment. Unterminated comments are dropped (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $css Raw CSS content.
 		 * @return string CSS without comments.
 		 */
@@ -787,7 +787,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * `@import url("a;b.css")`) never terminates the prelude early.
 		 * Backslash escapes inside quotes are honoured (e.g. "a\";b").
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $css    Full CSS content.
 		 * @param int    $offset At-rule start offset (the '@').
 		 * @param int    $length Length of $css.
@@ -826,7 +826,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Find the end offset (one past '}') of a regular rule, skipping
 		 * quoted segments and backslash escapes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $css    Full CSS content.
 		 * @param int    $offset Rule start offset.
 		 * @param int    $length Length of $css.
@@ -1473,7 +1473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * fails closed. Mirrors Cache::is_path_contained().
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added realpath symlink containment via Util::validate_cache_write_path().
+		 * @since 2.2.0 Added realpath symlink containment via Util::validate_cache_write_path().
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
@@ -1810,7 +1810,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $file_path Absolute used-CSS file path.
 		 * @return string Sibling fallback path, or '' when not applicable.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_purge_fallback_path( string $file_path ): string {
 			try {
@@ -1843,7 +1843,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $file_path The used-CSS file about to be deleted.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function retain_purge_fallback( string $file_path ): void {
 			try {
@@ -1938,7 +1938,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $url Page URL.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function delete_variant_files_for_url( string $url ): void {
 			try {
@@ -2108,7 +2108,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Fail-open: any failure returns the default.
 		 *
 		 * @return int Cooldown seconds (>= 0).
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function get_full_regen_cooldown(): int {
 			// The class constant is the default (5 hours); the filter below
@@ -2125,7 +2125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				 * when not forced. Explicit operator paths (builder purge
 				 * after a wipe, manual REST/ability triggers) pass $force.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 *
 				 * @param int $cooldown Cooldown in seconds. Default 5 hours.
 				 */
@@ -2144,7 +2144,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Fail-open: an unreadable timestamp never blocks work.
 		 *
 		 * @return bool True when the last full regen is newer than the cooldown.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_full_regen_cooled_down(): bool {
 			try {
@@ -2170,7 +2170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * callers hit the cooldown instead of re-scanning. Fail-open.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function mark_full_regen(): void {
 			try {
@@ -2190,7 +2190,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param array|null $file_opts Optional file_optimisation settings (defaults to plugin settings).
 		 * @return string One of self::DELIVERY_MODES.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_used_css_delivery_mode( ?array $file_opts = null ): string {
 			try {
@@ -2215,7 +2215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Fail-open: unreadable storage returns 0.
 		 *
 		 * @return int Unix timestamp, or 0 when never recorded.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_last_full_regen_time(): int {
 			try {
@@ -2238,7 +2238,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Read-only and fail-open.
 		 *
 		 * @return array{last_regen:int,last_regen_human:string,is_stale:bool,cooldown_remaining:int,delivery_mode:string}
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_staleness_info(): array {
 			$info = array(
@@ -2288,7 +2288,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Fail-open: any failure returns the default.
 		 *
 		 * @return int Cooldown seconds (>= 0).
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function get_targeted_regen_cooldown(): int {
 			return self::get_effective_targeted_cooldown();
@@ -2302,7 +2302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * time the gate enforces. Fail-open: any failure returns the default.
 		 *
 		 * @return int Cooldown seconds (>= 0).
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function get_effective_targeted_cooldown(): int {
 			$default = self::TARGETED_REGEN_COOLDOWN_SECONDS;
@@ -2316,7 +2316,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				 * Bounds how often builder/theme updates may queue bounded
 				 * targeted requeues.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 *
 				 * @param int $cooldown Cooldown in seconds. Default 1 hour.
 				 */
@@ -2335,7 +2335,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Fail-open: an unreadable timestamp never blocks work.
 		 *
 		 * @return bool True when the last targeted regen is newer than the cooldown.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_targeted_regen_cooled_down(): bool {
 			try {
@@ -2359,7 +2359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Fail-open.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function mark_targeted_regen(): void {
 			try {
@@ -2385,7 +2385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $reason Short reason for logging (e.g. 'builder-update').
 		 * @param int    $cap    Maximum posts to requeue in this pass.
 		 * @return int Number of jobs queued.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function request_targeted_regen( string $reason = '', int $cap = 20 ): int {
 			try {
@@ -2529,7 +2529,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string      $modified_gmt Post modification time (GMT, Y-m-d H:i:s).
 		 * @param string|null $permalink Optional pre-resolved permalink (scan path passes its batch map so the URL is resolved once per post, not twice).
 		 * @return bool True when regeneration can be skipped for this post.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_variant_fresh_for_post( int $post_id, string $modified_gmt, ?string $permalink = null ): bool {
 			try {
@@ -2587,7 +2587,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * backstops. Fail-open: returns false when the lookup APIs are
 		 * unavailable or throw.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $args Action arguments.
 		 * @return bool True when a matching job is pending or running.
 		 */
@@ -2637,9 +2637,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param bool|null  $already_scheduled Optional out flag: set to true when the job was already pending (hint-hit, pre-check hit, or lost unique-race) rather than newly scheduled; false when a new job was inserted. Untouched (stays false) on skip/failure. Lets bulk callers count only genuinely new jobs (issue #1310).
 		 * @return bool True when a job was queued or already scheduled; false when skipped as fresh or on failure.
 		 * @since 2.0.0
-		 * @since NEXT Optional $scheduled_hints for batched targeted regen.
-		 * @since NEXT Optional $instance to avoid per-post re-construction.
-		 * @since NEXT Optional $already_scheduled out flag distinguishing already-pending from newly-scheduled.
+		 * @since 2.2.0 Optional $scheduled_hints for batched targeted regen.
+		 * @since 2.2.0 Optional $instance to avoid per-post re-construction.
+		 * @since 2.2.0 Optional $already_scheduled out flag distinguishing already-pending from newly-scheduled.
 		 */
 		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null, ?self $instance = null, ?bool &$already_scheduled = null ): bool {
 			$already_scheduled = false;
@@ -2828,7 +2828,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * MAX_USED_CSS_QUEUE_CAP.
 		 *
 		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_used_css_queue_cap(): int {
 			try {
@@ -2859,7 +2859,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * verbatim). Fail-open: any error returns false.
 		 *
 		 * @return bool True when split variants should be emitted/served.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_viewport_variants_enabled(): bool {
 			try {
@@ -2883,7 +2883,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $variant Variant slug ('mobile'|'desktop').
 		 * @return string Variant filename, or '' when refused.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_variant_filename( string $variant ): string {
 			if ( ! in_array( $variant, self::VIEWPORT_VARIANTS, true ) ) {
@@ -2901,7 +2901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $url     Page URL.
 		 * @param string $variant Variant slug ('mobile'|'desktop').
 		 * @return string Filesystem path, or '' when refused/disabled.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_used_css_variant_path( string $url = '', string $variant = 'mobile' ): string {
 			try {
@@ -2931,7 +2931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $url     Page URL.
 		 * @param string $variant Variant slug ('mobile'|'desktop').
 		 * @return string Usable filesystem path, or '' when none.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function resolve_used_css_path( string $url = '', string $variant = 'mobile' ): string {
 			try {
@@ -2976,7 +2976,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $handle Stylesheet handle.
 		 * @return bool True when stripping is safe; false for block-library.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_safe_to_strip_handle( string $handle ): bool {
 			if ( '' === trim( $handle ) ) {
@@ -3005,7 +3005,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $html       Page HTML.
 		 * @param string $purged_css Purged CSS candidate.
 		 * @return bool True when it is safe to serve the purged CSS.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function passes_elementor_smoke( string $html, string $purged_css ): bool {
 			if ( class_exists( 'PerformanceOptimise\Inc\Css_Safelist' ) ) {
@@ -3050,8 +3050,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *                    Per-post freshness still applies.
 		 * @return int Number of jobs queued.
 		 * @since 1.9.0
-		 * @since NEXT Added $force parameter, cooldown, and per-post freshness skip.
-		 * @since NEXT Capped per-run queue with RUM-worst-first ordering (issue #1164).
+		 * @since 2.2.0 Added $force parameter, cooldown, and per-post freshness skip.
+		 * @since 2.2.0 Capped per-run queue with RUM-worst-first ordering (issue #1164).
 		 */
 		public function regenerate_all( bool $force = false ): int {
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
@@ -3359,7 +3359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * this pipeline.
 		 *
 		 * @return string[] Excluded post type slugs.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_excluded_post_types(): array {
 			try {
@@ -3395,7 +3395,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param int $post_id Post ID.
 		 * @return bool True when the post should be skipped.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_excluded_post( int $post_id ): bool {
 			try {
@@ -3750,7 +3750,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string   $mode               Requested delivery mode.
 		 * @param string[] $handles            Stripped stylesheet handles.
 		 * @return string Effective delivery mode.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function resolve_effective_delivery_mode( string $buffer_after_strip, string $mode, array $handles ): string {
 			try {
@@ -3805,7 +3805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * the full styles always arrive. Tiny, dependency-free, fail-open.
 		 *
 		 * @return string Inline script tag.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function build_delayed_css_loader(): string {
 			// Audit #1325: pagehide/beforeunload clears the 5s backstop (mirrors
@@ -3825,7 +3825,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $handle Style handle.
 		 * @return string Full URL with ver query, or '' when unresolvable.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function get_handle_url_with_ver( string $handle ): string {
 			try {
@@ -3856,7 +3856,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $handle Style handle.
 		 * @return string Media attribute value.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function get_handle_media( string $handle ): string {
 			try {
@@ -3887,7 +3887,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $buffer Optional HTML buffer to scan for a meta CSP tag.
 		 * @return bool True when a strict CSP is detected.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function has_strict_csp( string $buffer = '' ): bool {
 			try {
@@ -3931,7 +3931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param array  $handles      Array of style handles to remove and include in fallback.
 		 * @return string Modified HTML buffer.
 		 * @since 1.9.0
-		 * @since NEXT Added file/delay/async/remove delivery modes.
+		 * @since 2.2.0 Added file/delay/async/remove delivery modes.
 		 */
 		private function inject_used_css( string $buffer, string $used_css_url, array $handles ): string {
 			global $wp_styles;
@@ -4038,7 +4038,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			 * has_strict_csp() cannot detect. Forces async/delay delivery modes
 			 * to downgrade to the blocking file mode.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param bool $strict_csp Whether a server-level strict CSP is active.
 			 */
 			$server_strict_csp = (bool) apply_filters( 'wppo_used_css_strict_csp', false );

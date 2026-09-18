@@ -340,62 +340,52 @@ export const stripCdnRowIds = ( source = {} ) => {
 		} ),
 	};
 };
-// Backward-compatibility alias for the pre-rename `stripCdnIds` export
-// (kept so existing imports/tests keep working).
-// @since NEXT
-export const stripCdnIds = stripCdnRowIds;
 // Numeric clamps mirroring the server-side sanitizers so a raw server value
 // can never reach state/submit verbatim (display/UX parity — the server
 // stays authoritative).
+// Audit #1401: shared guarded-number core behind the sibling
+// normalizers (idle/ccss/regression) so PHP-parity fixes land once.
+// Returns { ok, n }: ok=false means fail open to the caller default.
+// @since NEXT
+const parseGuardedNumber = ( value ) => {
+	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
+		return { ok: false, n: 0 };
+	}
+	const s = String( value ?? '' ).trim();
+	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
+		return { ok: false, n: 0 };
+	}
+	const n = typeof value === 'number' ? value : Number( s );
+	if ( ! Number.isFinite( n ) ) {
+		return { ok: false, n: 0 };
+	}
+	return { ok: true, n };
+};
+
 // Booleans/arrays fail open (true must not coerce to 1 via Number()), and
 // hex/octal/binary literals fail open to match PHP is_numeric() parity
 // (see normalizeRetries).
 // @since NEXT
 export const normalizeIdleTimeout = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 3000;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 3000;
-	}
-	let n;
-	if ( typeof value === 'number' ) {
-		n = value;
-	} else {
-		n = Number( s );
-	}
-	if ( ! Number.isFinite( n ) || n <= 0 ) {
+	const { ok, n } = parseGuardedNumber( value );
+	if ( ! ok || n <= 0 ) {
 		return 3000;
 	}
 	return Math.min( 20000, Math.max( 500, Math.trunc( n ) ) );
 };
 // @since NEXT
 export const normalizeCcssMaxSize = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 20480;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 20480;
-	}
-	const n = typeof value === 'number' ? value : Number( s );
-	if ( ! Number.isFinite( n ) || n <= 0 ) {
+	const { ok, n } = parseGuardedNumber( value );
+	if ( ! ok || n <= 0 ) {
 		return 20480;
 	}
 	return Math.trunc( n );
 };
+
 // @since NEXT
 export const normalizeRegressionThreshold = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return 20;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return 20;
-	}
-	const n = typeof value === 'number' ? value : Number( s );
-	if ( ! Number.isFinite( n ) ) {
+	const { ok, n } = parseGuardedNumber( value );
+	if ( ! ok ) {
 		return 20;
 	}
 	const t = Math.trunc( n );
@@ -711,8 +701,12 @@ const FileOptimization = ( {
 			if ( res && res.success && res.data ) {
 				setUsedCssStatus( res.data );
 			}
-		} catch {
+		} catch ( statusError ) {
 			// Fail-open: leave the banner hidden.
+			console.error(
+				'Failed refreshing used-CSS status:',
+				getErrorLogMessage( statusError )
+			);
 		}
 	}, [] );
 	useEffect( () => {
@@ -757,8 +751,12 @@ const FileOptimization = ( {
 						res.data.safe_preview_url || prev.safe_preview_url,
 				} ) );
 			}
-		} catch {
+		} catch ( upgradeError ) {
 			// Fail-open: keep the seeded wppoSettings value.
+			console.error(
+				'Failed refreshing upgrade purge status:',
+				getErrorLogMessage( upgradeError )
+			);
 		}
 	}, [] );
 	// Note: no auto-fetch on mount/tab-open — the status is seeded from
@@ -882,12 +880,19 @@ const FileOptimization = ( {
 			return;
 		}
 		sandboxHydratedRef.current = true;
-		let cancelled = false;
+		// Audit #1420: AbortController (not just a flag) so tab-switch
+		// aborts the network request.
+		const controller = new AbortController();
 		( async () => {
 			try {
-				const status = await apiCall( 'sandbox_preview', {}, 'GET' );
+				const status = await apiCall(
+					'sandbox_preview',
+					{},
+					'GET',
+					controller.signal
+				);
 				if (
-					cancelled ||
+					controller.signal.aborted ||
 					! status ||
 					! status.success ||
 					! status.data
@@ -904,13 +909,20 @@ const FileOptimization = ( {
 				if ( status.data.preview_url ) {
 					setSandboxPreviewUrl( status.data.preview_url );
 				}
-			} catch {
+			} catch ( sandboxError ) {
 				// Best-effort: the stage/promote/discard controls still work
 				// without prior status.
+				// Tab-switch aborts are expected, not errors.
+				if ( sandboxError?.name !== 'AbortError' ) {
+					console.error(
+						'Failed fetching sandbox preview:',
+						getErrorLogMessage( sandboxError )
+					);
+				}
 			}
 		} )();
 		return () => {
-			cancelled = true;
+			controller.abort();
 		};
 	}, [ activeSubTab ] );
 	const handleSandboxSave = async () => {
@@ -1628,21 +1640,30 @@ const FileOptimization = ( {
 		}
 	};
 
+	// Audit #1420: hoisted handler (was an inline per-render closure).
+	const handleSinglePostIdChange = useCallback(
+		( e ) => setSinglePostId( e.target.value ),
+		[]
+	);
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
 		setIsSaving( true );
 		dismiss();
+		// Audit #1420: snapshot before await so edits typed during the save
+		// cannot be clobbered by a render-time baseline.
+		const submitSnapshot = stripCdnRowIds( { ...settings } );
 		try {
 			const res = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
 				// Strip client-only CDN row ids: they are React keys, not
 				// settings, and must never persist server-side.
-				settings: stripCdnRowIds( { ...settings } ),
+				settings: submitSnapshot,
 			} );
 			if ( res.success ) {
-				setBaseline( stripCdnRowIds( { ...settings } ) );
+				setBaseline( submitSnapshot );
 				setIsDirty( false );
 				notify( {
 					type: 'success',
@@ -2216,10 +2237,8 @@ const FileOptimization = ( {
 													// placeholders — translators could break them.
 													placeholder="123"
 													value={ singlePostId }
-													onChange={ ( e ) =>
-														setSinglePostId(
-															e.target.value
-														)
+													onChange={
+														handleSinglePostIdChange
 													}
 												/>
 												<button
@@ -4240,10 +4259,17 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 								</p>
-								{ ( settings.cdnMapping || [] ).map(
-									( entry, idx ) => (
+								{ ( settings.cdnMapping || [] )
+									// Audit #1420: id-less rows cannot key stably — drop them.
+									.filter(
+										( entry ) =>
+											entry &&
+											( typeof entry.id === 'string' ||
+												typeof entry.id === 'number' )
+									)
+									.map( ( entry, idx ) => (
 										<div
-											key={ entry.id ?? idx }
+											key={ entry.id } // Audit #1420: stable row ids only — no idx fallback (idx still drives input ids/handlers).
 											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">
@@ -4430,8 +4456,7 @@ const FileOptimization = ( {
 												) }
 											</button>
 										</div>
-									)
-								) }
+									) ) }
 								{ ( settings.cdnMapping || [] ).length < 5 && (
 									<button
 										className="wppo-button wppo-button--secondary wppo-mt-12"

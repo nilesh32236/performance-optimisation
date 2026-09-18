@@ -13,7 +13,7 @@ import FileOptimization, {
 	normalizeDeliveryMode,
 	stripPreviewParams,
 	withCdnRowIds,
-	stripCdnIds,
+	stripCdnRowIds,
 } from '../FileOptimization';
 
 // Mock the API request (sandbox perf test goes through the validated
@@ -1470,10 +1470,12 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
 
 		await waitFor( () => {
+			// Audit #1420: sandbox fetch carries an AbortSignal now.
 			expect( apiCall ).toHaveBeenCalledWith(
 				'sandbox_preview',
 				{},
-				'GET'
+				'GET',
+				expect.any( AbortSignal )
 			);
 		} );
 		await waitFor( () => {
@@ -1703,7 +1705,7 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
-	describe( 'withCdnRowIds / stripCdnIds', () => {
+	describe( 'withCdnRowIds / stripCdnRowIds', () => {
 		it( 'assigns deterministic index ids and preserves existing ids', () => {
 			const rows = withCdnRowIds( [
 				{ cdn_url: 'a' },
@@ -1715,7 +1717,7 @@ describe( 'FileOptimization Component', () => {
 		} );
 
 		it( 'strips client ids without touching other keys', () => {
-			const stripped = stripCdnIds( {
+			const stripped = stripCdnRowIds( {
 				cdnURL: 'x',
 				cdnMapping: [ { id: 'cdn-row-0', cdn_url: 'a' } ],
 			} );

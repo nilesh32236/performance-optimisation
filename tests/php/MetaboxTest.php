@@ -242,9 +242,10 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'interaction', $output );
 		$this->assertStringContainsString( 'high', $output );
 		$this->assertStringContainsString( 'protected', $output );
-		// Every header cell in the scripts (5) and styles (3) tables must
-		// declare its column scope so AT can associate data cells (audit #1077).
-		$this->assertSame( 8, substr_count( $output, 'scope="col"' ), 'All Asset Manager <th> cells must carry scope="col"' );
+		// Every header cell in the scripts (6, incl. Size) and styles (4,
+		// incl. Size) tables must declare its column scope so AT can
+		// associate data cells (audit #1077).
+		$this->assertSame( 10, substr_count( $output, 'scope="col"' ), 'All Asset Manager <th> cells must carry scope="col"' );
 		$this->assertStringNotContainsString( '<script', $output );
 		$this->assertStringNotContainsString( 'addEventListener', $output );
 		$this->assertStringNotContainsString( 'onclick=', $output );
@@ -471,6 +472,239 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		} finally {
 			unset( $_POST['wppo_preload_image_nonce'], $_POST['wppo_disable_auto_lcp'] );
 		}
+	}
+
+	/**
+	 * The Size column renders for scripts and styles, with an em dash
+	 * when the captured entry has no measured size.
+	 *
+	 * @since NEXT
+	 */
+	public function test_render_asset_manager_shows_size_column(): void {
+		$assets = array(
+			'timestamp' => time(),
+			'scripts'   => array(
+				array(
+					'handle' => 'heavy-slider',
+					'src'    => 'http://example.com/slider.js',
+					'size'   => 204800,
+				),
+				array(
+					'handle' => 'unknown-size',
+					'src'    => 'http://example.com/unknown.js',
+				),
+			),
+			'styles'    => array(),
+		);
+
+		Functions\when( 'get_post_meta' )->justReturn( array() );
+		Functions\when( 'get_transient' )->justReturn( $assets );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'human_time_diff' )->justReturn( '5 minutes' );
+		Functions\when( 'wp_nonce_field' )->echoArg( 2 );
+
+		$output = $this->capture_render( array( $this->make_metabox(), 'render_asset_manager_metabox' ) );
+
+		$this->assertStringContainsString( 'Size', $output );
+		$this->assertStringContainsString( '200.0 KB', $output );
+		$this->assertStringNotContainsString( '<script', $output );
+	}
+
+	/**
+	 * The suggest-only assistant lists heavy candidates without checking
+	 * any disable box for them.
+	 *
+	 * @since NEXT
+	 */
+	public function test_render_asset_manager_suggests_without_auto_disabling(): void {
+		$assets = array(
+			'timestamp' => time(),
+			'scripts'   => array(
+				array(
+					'handle' => 'heavy-slider',
+					'src'    => 'http://example.com/slider.js',
+					'size'   => 204800,
+				),
+			),
+			'styles'    => array(),
+		);
+
+		Functions\when( 'get_post_meta' )->justReturn( array() );
+		Functions\when( 'get_transient' )->justReturn( $assets );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'human_time_diff' )->justReturn( '5 minutes' );
+		Functions\when( 'wp_nonce_field' )->echoArg( 2 );
+
+		$output = $this->capture_render( array( $this->make_metabox(), 'render_asset_manager_metabox' ) );
+
+		$this->assertStringContainsString( 'Assistant suggestions', $output );
+		$this->assertStringContainsString( 'heavy-slider', $output );
+		// No disable checkbox may be pre-checked for the suggested handle.
+		$this->assertStringNotContainsString( 'checked', $output );
+	}
+
+	/**
+	 * A pending blocked-handle notice renders once, server-side (the React
+	 * NoticeBanner cannot run inside the iframed post editor).
+	 *
+	 * @since NEXT
+	 */
+	public function test_render_asset_manager_shows_blocked_notice_once(): void {
+		$assets = array(
+			'timestamp' => time(),
+			'scripts'   => array(
+				array(
+					'handle' => 'jquery',
+					'src'    => 'http://example.com/jquery.js',
+				),
+			),
+			'styles'    => array(),
+		);
+
+		Functions\when( 'get_post_meta' )->justReturn( array() );
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) use ( $assets ) {
+				return false !== strpos( (string) $key, 'blocked' ) ? array( 'jquery' ) : $assets;
+			}
+		);
+		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'human_time_diff' )->justReturn( '5 minutes' );
+		Functions\when( 'wp_nonce_field' )->echoArg( 2 );
+
+		$output = $this->capture_render( array( $this->make_metabox(), 'render_asset_manager_metabox' ) );
+
+		$this->assertStringContainsString( 'Protected handles were not disabled', $output );
+		$this->assertStringContainsString( 'jquery', $output );
+		$this->assertStringContainsString( 'role="alert"', $output );
+	}
+
+	/**
+	 * Invoke the private save_asset_manager_settings() with a stubbed WP API.
+	 *
+	 * @param array $post_data $_POST fixture.
+	 * @param mixed $transient get_transient() return value.
+	 * @param array $saved     Collected update_post_meta writes (by key).
+	 * @param array $deleted   Collected delete_post_meta keys.
+	 * @return void
+	 */
+	private function invoke_save_asset_manager( array $post_data, $transient, array &$saved, array &$deleted ): void {
+		foreach ( $post_data as $key => $value ) {
+			$_POST[ $key ] = $value;
+		}
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( true );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'get_transient' )->justReturn( $transient );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'update_post_meta' )->alias(
+			function ( $post_id, $key, $value ) use ( &$saved ) {
+				$saved[ $key ] = $value;
+				return true;
+			}
+		);
+		Functions\when( 'delete_post_meta' )->alias(
+			function ( $post_id, $key ) use ( &$deleted ) {
+				$deleted[] = $key;
+				return true;
+			}
+		);
+
+		try {
+			$metabox    = $this->make_metabox();
+			$reflection = new \ReflectionClass( $metabox );
+			$method     = $reflection->getMethod( 'save_asset_manager_settings' );
+			$method->invokeArgs( $metabox, array( 123 ) );
+		} finally {
+			foreach ( array_keys( $post_data ) as $key ) {
+				unset( $_POST[ $key ] );
+			}
+		}
+	}
+
+	/**
+	 * MB10 guard: with no capture yet, existing disables are preserved
+	 * instead of being overwritten to [].
+	 *
+	 * @since NEXT
+	 */
+	public function test_save_preserves_disables_when_no_assets_captured(): void {
+		$saved   = array();
+		$deleted = array();
+		$this->invoke_save_asset_manager(
+			array( 'wppo_asset_manager_nonce' => 'valid-nonce' ),
+			false,
+			$saved,
+			$deleted
+		);
+
+		$this->assertArrayNotHasKey( '_wppo_disabled_scripts', $saved );
+		$this->assertArrayNotHasKey( '_wppo_disabled_styles', $saved );
+		$this->assertNotContains( '_wppo_disabled_scripts', $deleted );
+	}
+
+	/**
+	 * Protected handles submitted for disabling are stripped and reported
+	 * via the flash notice; only per-post meta is written, never site-wide.
+	 *
+	 * @since NEXT
+	 */
+	public function test_save_blocks_protected_handles_with_notice(): void {
+		$assets = array(
+			'scripts' => array(
+				array( 'handle' => 'my-plugin' ),
+				array( 'handle' => 'jquery' ),
+			),
+			'styles'  => array(),
+		);
+
+		$saved   = array();
+		$deleted = array();
+		$this->invoke_save_asset_manager(
+			array(
+				'wppo_asset_manager_nonce' => 'valid-nonce',
+				'wppo_disabled_scripts'    => array( 'jquery', 'my-plugin' ),
+			),
+			$assets,
+			$saved,
+			$deleted
+		);
+
+		$this->assertSame( array( 'my-plugin' ), array_values( $saved['_wppo_disabled_scripts'] ) );
+		$this->assertSame( array(), $saved['_wppo_delay_strategies'], 'No delay input was posted' );
+	}
+
+	/**
+	 * One-click revert deletes every per-page disable on the page only.
+	 *
+	 * @since NEXT
+	 */
+	public function test_save_revert_clears_all_disables(): void {
+		$assets = array(
+			'scripts' => array(
+				array( 'handle' => 'my-plugin' ),
+			),
+			'styles'  => array(),
+		);
+
+		$saved   = array();
+		$deleted = array();
+		$this->invoke_save_asset_manager(
+			array(
+				'wppo_asset_manager_nonce'  => 'valid-nonce',
+				'wppo_asset_manager_revert' => '1',
+				'wppo_disabled_scripts'     => array( 'my-plugin' ),
+			),
+			$assets,
+			$saved,
+			$deleted
+		);
+
+		$this->assertContains( '_wppo_disabled_scripts', $deleted );
+		$this->assertContains( '_wppo_disabled_styles', $deleted );
+		$this->assertArrayNotHasKey( '_wppo_disabled_scripts', $saved );
 	}
 
 	/**
