@@ -196,8 +196,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 					return '';
 				}
 				$candidate = trim( $url_path );
-				if ( 0 === strpos( $candidate, 'http://' ) || 0 === strpos( $candidate, 'https://' ) ) {
+				if ( 0 === stripos( $candidate, 'http://' ) || 0 === stripos( $candidate, 'https://' ) ) {
 					return esc_url_raw( $candidate );
+				}
+				if ( 0 === strpos( $candidate, '//' ) ) {
+					return esc_url_raw( 'https:' . $candidate );
 				}
 				if ( function_exists( 'home_url' ) ) {
 					return esc_url_raw( home_url( '/' . ltrim( $candidate, '/' ) ) );

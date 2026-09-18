@@ -152,8 +152,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 					return '';
 				}
 				$candidate = trim( $url_path );
-				if ( 0 === strpos( $candidate, 'http://' ) || 0 === strpos( $candidate, 'https://' ) ) {
+				if ( 0 === stripos( $candidate, 'http://' ) || 0 === stripos( $candidate, 'https://' ) ) {
 					return esc_url_raw( $candidate );
+				}
+				if ( 0 === strpos( $candidate, '//' ) ) {
+					return esc_url_raw( 'https:' . $candidate );
 				}
 				if ( function_exists( 'home_url' ) ) {
 					return esc_url_raw( home_url( '/' . ltrim( $candidate, '/' ) ) );
@@ -192,8 +195,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 				return;
 			}
 
-			if ( 'single_page' === $type && is_string( $url_path ) && '' !== $url_path ) {
-				$path_for_url = '/' . ltrim( $url_path, '/' );
+			if ( 'single_page' === $type && is_string( $url_path ) && '' !== trim( $url_path ) ) {
+				$path_for_url = self::normalize_litespeed_path( $url_path );
+				if ( '' === $path_for_url ) {
+					return;
+				}
 				LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
 				// Stale/private split for single page.
 				$scope = 'public';
@@ -214,13 +220,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 
 			// Fallback: if caller passes raw path with 'all' already handled,
 			// any non-empty url_path as single URL.
-			if ( is_string( $url_path ) && '' !== $url_path ) {
-				$path_for_url = '/' . ltrim( $url_path, '/' );
-				LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
-				if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'queue_purge_tags' ) ) {
-					LiteSpeed_Integration::queue_purge_tags( array( 'D', 'B', 'C', 'W', 'REST' ), 'public' );
+			if ( is_string( $url_path ) && '' !== trim( $url_path ) ) {
+				$path_for_url = self::normalize_litespeed_path( $url_path );
+				if ( '' !== $path_for_url ) {
+					LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
+					if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'queue_purge_tags' ) ) {
+						LiteSpeed_Integration::queue_purge_tags( array( 'D', 'B', 'C', 'W', 'REST' ), 'public' );
+					}
 				}
 			}
+		}
+
+		/**
+		 * Normalize a purge target to a LiteSpeed path.
+		 *
+		 * Absolute URLs (any scheme case) are reduced to their path (+ query)
+		 * so 'https://example.com/about/' purges '/about/' instead of the
+		 * mangled '/https://...'. Protocol-relative '//host/path' targets are
+		 * parsed the same way. Plain paths are returned with a leading slash.
+		 * Returns '' when unresolvable.
+		 *
+		 * @since NEXT
+		 * @param mixed $url_path Page path or absolute URL.
+		 * @return string LiteSpeed path or ''.
+		 */
+		private static function normalize_litespeed_path( $url_path ): string {
+			if ( ! is_string( $url_path ) ) {
+				return '';
+			}
+			$candidate = trim( $url_path );
+			if ( '' === $candidate ) {
+				return '';
+			}
+			$to_parse = null;
+			if ( 0 === stripos( $candidate, 'http://' ) || 0 === stripos( $candidate, 'https://' ) ) {
+				$to_parse = $candidate;
+			} elseif ( 0 === strpos( $candidate, '//' ) ) {
+				$to_parse = 'https:' . $candidate;
+			}
+			if ( null !== $to_parse ) {
+				$parts = function_exists( 'wp_parse_url' ) ? wp_parse_url( $to_parse ) : parse_url( $to_parse ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable (unit contexts).
+				if ( ! is_array( $parts ) ) {
+					return '/';
+				}
+				$path = isset( $parts['path'] ) && '' !== $parts['path'] ? $parts['path'] : '/';
+				if ( ! empty( $parts['query'] ) ) {
+					$path .= '?' . $parts['query'];
+				}
+				return '/' . ltrim( $path, '/' );
+			}
+			return '/' . ltrim( $candidate, '/' );
 		}
 
 		/**
