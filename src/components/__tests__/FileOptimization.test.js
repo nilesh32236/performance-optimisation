@@ -1854,6 +1854,21 @@ describe( 'FileOptimization Component', () => {
 					elementorSafeMode: false,
 				} )
 			).toBe( false );
+			expect(
+				isSafePresetActive( {
+					minifyJS: true,
+					minifyCSS: true,
+					deferJS: true,
+					delayJS: true,
+					delayJSBuilderPreset: true,
+					delayJSCommercePreset: true,
+					delayJSInteractionPreset: true,
+					delayJSJqueryPreset: true,
+					delayJSSafeMode: true,
+					elementorSafeMode: true,
+					combineCSS: true,
+				} )
+			).toBe( false );
 			expect( isSafePresetActive( {} ) ).toBe( false );
 		} );
 
@@ -1876,6 +1891,19 @@ describe( 'FileOptimization Component', () => {
 			);
 			expect( resolvePresetBundle( 'aggressive' ) ).toEqual(
 				expect.objectContaining( { combineCSS: true } )
+			);
+
+			// A partial server copy falls back to the local mirror instead
+			// of applying a 1-key preset under a full-success message.
+			global.wppoSettings.presetBundles = {
+				safe: { minifyJS: true },
+				aggressive: { minifyJS: true },
+			};
+			expect( getServerPresetBundle( 'safe' ) ).toBeNull();
+			expect( getServerPresetBundle( 'aggressive' ) ).toBeNull();
+			expect( resolvePresetBundle( 'safe' ) ).toBe( SAFE_PRESET_BUNDLE );
+			expect( resolvePresetBundle( 'aggressive' ) ).toBe(
+				AGGRESSIVE_PRESET_BUNDLE
 			);
 		} );
 

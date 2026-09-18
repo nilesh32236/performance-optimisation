@@ -200,10 +200,12 @@ export const isAggressiveDelay = ( values = {} ) => {
 };
 
 // Whether the Safe preset bundle is fully active (issue #1442): the
-// minify/defer/delay pipelines plus all four exclusion presets and the
-// two safe-mode guards (delayJSSafeMode, elementorSafeMode) the bundle
-// applies, so disabling any of them clears the confirmation instead of
-// overstating safety. Exported for direct Jest coverage.
+// minify/defer/delay pipelines plus all four exclusion presets, the two
+// safe-mode guards (delayJSSafeMode, elementorSafeMode) the bundle applies,
+// and combineCSS off (the bundle pins it false — FOUC risk — while
+// Aggressive pins it true), so enabling CSS combining after applying Safe
+// clears the confirmation instead of overstating safety. Exported for
+// direct Jest coverage.
 // @since NEXT
 export const isSafePresetActive = ( values = {} ) => {
 	if (
@@ -220,7 +222,8 @@ export const isSafePresetActive = ( values = {} ) => {
 		values.delayJSInteractionPreset &&
 		values.delayJSJqueryPreset &&
 		values.delayJSSafeMode &&
-		values.elementorSafeMode
+		values.elementorSafeMode &&
+		! values.combineCSS
 	);
 };
 
@@ -252,7 +255,10 @@ export const PRESET_BUNDLE_KEYS = Object.freeze( [
 // authoritative bundles as wppoSettings.presetBundles ({ safe,
 // aggressive }); the exported SAFE_/AGGRESSIVE_PRESET_BUNDLE constants
 // above are fallback mirrors for when the global is absent (tests,
-// cached pages). Prefer the server copy so the two can never drift.
+// cached pages). Prefer the server copy so the two can never drift. A
+// partial server copy (only a subset of keys boolean) is rejected with
+// null so the caller falls back to the full local mirror instead of
+// applying e.g. a 1-key preset while the UI reports a full success.
 // Exported for direct Jest coverage.
 // @since NEXT
 export const getServerPresetBundle = ( name ) => {
@@ -264,6 +270,17 @@ export const getServerPresetBundle = ( name ) => {
 		0 === Object.keys( server ).length
 	) {
 		return null;
+	}
+	// Require full key coverage of the expected bundle before trusting the
+	// server copy: the safe mirror carries 15 keys while the aggressive
+	// mirror carries 12, so coverage is checked against the matching
+	// fallback mirror rather than the PRESET_BUNDLE_KEYS union.
+	const expected =
+		'aggressive' === name ? AGGRESSIVE_PRESET_BUNDLE : SAFE_PRESET_BUNDLE;
+	for ( const key of Object.keys( expected ) ) {
+		if ( typeof server[ key ] !== 'boolean' ) {
+			return null;
+		}
 	}
 	const filtered = {};
 	for ( const key of PRESET_BUNDLE_KEYS ) {

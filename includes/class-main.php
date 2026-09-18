@@ -6787,9 +6787,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * True when the minify/defer/delay pipelines are on together with all
 		 * four safe exclusion presets plus the two safe-mode guards
-		 * (`delayJSSafeMode`, `elementorSafeMode`) the bundle applies, so
-		 * disabling any of them clears the confirmation instead of
-		 * overstating safety. Fail-open: any failure returns false.
+		 * (`delayJSSafeMode`, `elementorSafeMode`) the bundle applies, and
+		 * with `combineCSS` off (the bundle pins it false — FOUC risk —
+		 * while Aggressive pins it true), so enabling CSS combining after
+		 * applying Safe clears the confirmation instead of overstating
+		 * safety. Fail-open: any failure returns false.
 		 *
 		 * @since NEXT
 		 * @param array<string, mixed> $file_opt file_optimisation settings slice.
@@ -6814,6 +6816,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( empty( $file_opt[ $key ] ) ) {
 						return false;
 					}
+				}
+				if ( ! empty( $file_opt['combineCSS'] ) ) {
+					return false;
 				}
 				return true;
 			} catch ( \Throwable $e ) {

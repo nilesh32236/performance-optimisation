@@ -126,6 +126,10 @@ class SafePresetBundleTest extends \PHPUnit\Framework\TestCase {
 		$no_elementor['elementorSafeMode'] = false;
 		$this->assertFalse( Main::is_safe_preset_active( $no_elementor ), 'Disabling elementorSafeMode must clear the safe-active confirmation.' );
 
+		$combine_on               = $safe;
+		$combine_on['combineCSS'] = true;
+		$this->assertFalse( Main::is_safe_preset_active( $combine_on ), 'Enabling combineCSS must clear the safe-active confirmation (FOUC risk).' );
+
 		$pipelines_off            = $safe;
 		$pipelines_off['delayJS'] = false;
 		$this->assertFalse( Main::is_safe_preset_active( $pipelines_off ) );
