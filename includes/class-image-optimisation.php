@@ -3461,6 +3461,107 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether the current view may emit an automatic LCP hero preload.
+		 *
+		 * Single view gate for the hero pipeline (issue #1441): the hero
+		 * preload plus lazy exclusion run on frontend content views
+		 * (singular posts/pages and the front page, where the LCP hero
+		 * lives) and never on admin, feeds, embeds, previews, or AMP
+		 * endpoints. Every conditional is guarded with `function_exists()`
+		 * and the WordPress version is checked with `version_compare()`
+		 * against 6.2 with a legacy fallback to eligible (true) when the
+		 * conditionals or version string are unreachable (e.g. unit
+		 * contexts), so output equals current behaviour there. AMP is
+		 * detected via the `amp_is_request()`, `is_amp_endpoint()`, and
+		 * `ampforwp_is_amp_endpoint()` helpers (each guarded) plus the
+		 * `amp_is_canonical` filter (guarded with `has_filter()`), so no
+		 * unguarded calls exist. Fail-open to eligible (true): any failure
+		 * preserves current behaviour, never fatal or white-screen.
+		 *
+		 * @since NEXT
+		 * @return bool True when the hero pipeline may run on this view.
+		 */
+		private function is_hero_preload_eligible_view(): bool {
+			try {
+				if ( function_exists( 'is_admin' ) && is_admin() ) {
+					return false;
+				}
+				if ( function_exists( 'is_feed' ) && is_feed() ) {
+					return false;
+				}
+				if ( function_exists( 'is_embed' ) && is_embed() ) {
+					return false;
+				}
+				if ( function_exists( 'is_preview' ) && is_preview() ) {
+					return false;
+				}
+				if ( function_exists( 'amp_is_request' ) && amp_is_request() ) {
+					return false;
+				}
+				if ( function_exists( 'is_amp_endpoint' ) && is_amp_endpoint() ) {
+					return false;
+				}
+				if ( function_exists( 'ampforwp_is_amp_endpoint' ) && ampforwp_is_amp_endpoint() ) {
+					return false;
+				}
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'amp_is_canonical' ) ) {
+					try {
+						if ( apply_filters( 'amp_is_canonical', false ) ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+					if ( version_compare( $GLOBALS['wp_version'], '6.2', '<' ) ) {
+						return false;
+					}
+				} elseif ( function_exists( 'get_bloginfo' ) ) {
+					try {
+						$wp_version = (string) get_bloginfo( 'version' );
+						if ( '' !== $wp_version && version_compare( $wp_version, '6.2', '<' ) ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$has_singular   = function_exists( 'is_singular' );
+				$has_front_page = function_exists( 'is_front_page' );
+				if ( $has_singular || $has_front_page ) {
+					$is_singular   = false;
+					$is_front_page = false;
+					try {
+						$is_singular = $has_singular ? (bool) is_singular() : false;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+					try {
+						$is_front_page = $has_front_page ? (bool) is_front_page() : false;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+					if ( ! $is_singular && ! $is_front_page ) {
+						// Non-content views (archives, search, 404) keep
+						// current behaviour for measured/stored heroes:
+						// only the heuristic-only auto path is view-gated
+						// by callers, so return eligible here and let the
+						// per-caller buffer/null-buffer distinction decide.
+						// Feeds/AMP/admin already bailed above.
+						return true;
+					}
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Read the manual per-post LCP URL picker value (`_wppo_lcp_preload_url`).
 		 *
 		 * The manual picker is the fallback path: it wins over auto-detect
@@ -3478,7 +3579,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! function_exists( 'is_singular' ) || ! function_exists( 'get_the_ID' ) || ! function_exists( 'get_post_meta' ) ) {
 					return '';
 				}
-				if ( ! is_singular() ) {
+				$is_singular = false;
+				try {
+					$is_singular = (bool) is_singular();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return '';
+				}
+				if ( ! $is_singular ) {
+					try {
+						if ( function_exists( 'is_front_page' ) && is_front_page() ) {
+							$is_singular = true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! $is_singular ) {
 					return '';
 				}
 				$post_id = (int) get_the_ID();
@@ -4186,6 +4303,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function get_auto_lcp_preload_data(): array {
 			try {
+				if ( ! $this->is_hero_preload_eligible_view() ) {
+					return array();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
 				if ( $this->is_auto_lcp_disabled_for_post() ) {
 					return array();
 				}
@@ -4464,6 +4588,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				try {
 					if ( $this->is_auto_lcp_disabled_for_post() ) {
+						if ( null === $buffer ) {
+							$this->lazy_lcp_exclusion_url     = '';
+							$this->lazy_lcp_exclusion_url_key = $memo_key;
+						}
+						return '';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					if ( ! $this->is_hero_preload_eligible_view() ) {
 						if ( null === $buffer ) {
 							$this->lazy_lcp_exclusion_url     = '';
 							$this->lazy_lcp_exclusion_url_key = $memo_key;
@@ -4869,22 +5004,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * elsewhere).
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Resolves the stable signal candidate when empty,
+		 * @since NEXT Resolves the auto hero candidate when empty (manual
+		 * picker over stable signals over stored data, null-buffer chain),
 		 * enforces per-URL dedup + per-post disable + lazy-exclusion
 		 * coupling with `fetchpriority="high"`.
 		 *
-		 * @param string $img_url The URL of the image to preload. Empty resolves the stable signal candidate.
+		 * @param string $img_url The URL of the image to preload. Empty resolves the auto hero candidate.
 		 * @return void
 		 */
 		public function generate_img_preload( $img_url = '' ) {
 			try {
 				$img_url = is_string( $img_url ) ? trim( $img_url ) : '';
 				if ( '' === $img_url ) {
-					// Empty input resolves the stable signal candidate;
-					// get_stable_signal_lcp_url() already honours the
-					// per-post disable. An explicit URL is explicit
-					// opt-in and is unaffected by the disable.
-					$img_url = $this->get_stable_signal_lcp_url();
+					// Empty input resolves the unified auto chain
+					// (manual picker wins, then OD real-visit data, then
+					// stored PageSpeed, then the stable RUM/OD signal tier;
+					// null buffer so no DOM heuristic). The view gate and
+					// per-post disable suppress only this auto path — an
+					// explicit URL below is explicit opt-in and unaffected.
+					try {
+						if ( ! $this->is_hero_preload_eligible_view() ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					$img_url = $this->resolve_auto_lcp_url();
+					if ( '' === $img_url ) {
+						$img_url = $this->get_stable_signal_lcp_url();
+					}
 				}
 				if ( '' === $img_url ) {
 					return;
@@ -7791,6 +7939,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			try {
 				if ( isset( $image_optimisation['lcpHeroPreload'] ) && empty( $image_optimisation['lcpHeroPreload'] ) ) {
 					return $buffer;
+				}
+				try {
+					if ( ! $this->is_hero_preload_eligible_view() ) {
+						return $buffer;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 				if ( false === strpos( $buffer, '<img' ) ) {
 					return $buffer;
