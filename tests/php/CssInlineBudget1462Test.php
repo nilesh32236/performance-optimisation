@@ -22,7 +22,15 @@ use Brain\Monkey\Functions;
  */
 class CssInlineBudget1462Test extends \PHPUnit\Framework\TestCase {
 
-	use WPPO_Test_Bootstrap;
+	// The class defines its own setUp() below (shadowing the trait's), so
+	// the trait bootstrap is aliased to run it explicitly. Without a Brain
+	// Monkey session, Functions\when() cannot Patchwork-redefine scheduler
+	// functions eval-declared by earlier test files in the same process
+	// (e.g. ActionSchedulerUniquePurge1310Test) and those foreign stubs
+	// stay live for these tests.
+	use WPPO_Test_Bootstrap {
+		WPPO_Test_Bootstrap::setUp as private bootstrapSetUp;
+	}
 
 	/**
 	 * In-memory option map backing the get_option stub.
@@ -37,7 +45,7 @@ class CssInlineBudget1462Test extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	protected function setUp(): void {
-		parent::setUp();
+		$this->bootstrapSetUp();
 		$this->option_map = array();
 		Functions\when( 'has_filter' )->justReturn( false );
 		Functions\when( 'apply_filters' )->alias(
@@ -64,6 +72,11 @@ class CssInlineBudget1462Test extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		Functions\when( 'update_option' )->justReturn( true );
+		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'get_stylesheet' )->justReturn( 'twentytwentyfour' );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( true );
 		Functions\when( 'add_action' )->justReturn( true );
 		Functions\when( 'absint' )->alias(
 			static function ( $value ) {
@@ -229,33 +242,110 @@ class CssInlineBudget1462Test extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Targeted regen caps the queue at the requested bound (default 20).
 	 *
+	 * Seeds renderable sample URLs for all five base templates so the
+	 * capped run provably queues work (a 0-job run would also satisfy a
+	 * bare upper-bound assertion and hide a broken cap).
+	 *
 	 * @return void
 	 */
 	public function test_request_targeted_regen_caps_queue(): void {
 		$this->option_map['wppo_settings'] = array( 'file_optimisation' => array() );
 		Util::clear_settings_cache();
 		Functions\when( 'get_page_templates' )->justReturn( array() );
-		Functions\when( 'get_posts' )->justReturn( array() );
-		$enqueued = 0;
-		Functions\when( 'as_enqueue_async_action' )->alias(
-			static function () use ( &$enqueued ) {
-				++$enqueued;
-				return $enqueued;
+		Functions\when( 'get_posts' )->justReturn( array( 7, 8, 9 ) );
+		Functions\when( 'get_permalink' )->alias(
+			static function ( $post_id ) {
+				return 'http://example.com/?p=' . (int) $post_id;
 			}
 		);
-		if ( function_exists( 'as_schedule_single_action' ) ) {
-			// Brain Monkey defines it only when stubbed; leave unstubbed.
-			$this->assertTrue( true );
-		}
+		Functions\when( 'setup_postdata' )->justReturn( true );
+		Functions\when( 'get_the_time' )->alias(
+			static function ( $format ) {
+				return 'Y' === $format ? '2026' : '01';
+			}
+		);
+		Functions\when( 'get_month_link' )->alias(
+			static function () {
+				return 'http://example.com/2026/01/';
+			}
+		);
+		Functions\when( 'wp_reset_postdata' )->justReturn( true );
+		$enqueued = 0;
+		$next_id  = static function () use ( &$enqueued ) {
+			++$enqueued;
+			return $enqueued;
+		};
+		Functions\when( 'as_enqueue_async_action' )->alias( $next_id );
+		// The unique-scheduler path prefers as_schedule_single_action();
+		// stub it on the same counter so both enqueue routes queue work.
+		Functions\when( 'as_schedule_single_action' )->alias( $next_id );
 
+		// Five renderable templates (index/home/single/page/archive) with
+		// a cap of 2 queue exactly 2 — proving the cap binds real work.
 		$queued = Critical_CSS::request_targeted_regen( 'builder-update', 2 );
 
-		$this->assertLessThanOrEqual( 2, $queued );
-		$this->assertGreaterThanOrEqual( 0, $queued );
+		$this->assertGreaterThan( 0, $queued );
+		$this->assertSame( 2, $queued );
 
-		// Default cap path also stays bounded at 20.
+		// Default cap path queues all five templates: non-empty and bounded at 20.
 		Critical_CSS::reset_ccss_memo();
 		$queued_default = Critical_CSS::request_targeted_regen( 'theme-update' );
+		$this->assertGreaterThan( 0, $queued_default );
+		$this->assertSame( 5, $queued_default );
 		$this->assertLessThanOrEqual( 20, $queued_default );
+	}
+
+	/**
+	 * A repeat targeted regen inside the burst-throttle window queues nothing.
+	 *
+	 * @return void
+	 */
+	public function test_request_targeted_regen_burst_throttle(): void {
+		$this->option_map['wppo_settings'] = array( 'file_optimisation' => array() );
+		Util::clear_settings_cache();
+		Functions\when( 'get_page_templates' )->justReturn( array() );
+		Functions\when( 'get_posts' )->justReturn( array( 7 ) );
+		Functions\when( 'get_permalink' )->alias(
+			static function ( $post_id ) {
+				return 'http://example.com/?p=' . (int) $post_id;
+			}
+		);
+		Functions\when( 'setup_postdata' )->justReturn( true );
+		Functions\when( 'get_the_time' )->justReturn( '2026' );
+		Functions\when( 'get_month_link' )->alias(
+			static function () {
+				return 'http://example.com/2026/01/';
+			}
+		);
+		Functions\when( 'wp_reset_postdata' )->justReturn( true );
+		Functions\when( 'as_enqueue_async_action' )->justReturn( 1 );
+
+		// Simulate a previous pass inside the 3600s window: the burst
+		// collapses instead of stacking another pass.
+		$this->option_map[ Critical_CSS::TARGETED_REGEN_OPTION ] = time();
+		Util::clear_settings_cache();
+
+		$this->assertSame( 0, Critical_CSS::request_targeted_regen( 'builder-update', 2 ) );
+		$this->assertTrue( Critical_CSS::is_targeted_regen_cooled_down() );
+	}
+
+	/**
+	 * Committed-bytes ledger feeds the effective budget (issue #1462 wiring).
+	 *
+	 * @return void
+	 */
+	public function test_committed_inline_bytes_ledger_reduces_budget(): void {
+		Util::clear_settings_cache();
+		Util::reset_committed_inline_bytes();
+
+		$this->assertSame( 0, Critical_CSS::estimate_committed_inline_bytes() );
+
+		Util::add_committed_inline_bytes( 4800 );
+		$this->assertSame( 4800, Critical_CSS::estimate_committed_inline_bytes() );
+		// Default cap 20480 is tighter than the 6.9 40KB core limit.
+		$this->assertSame( 20480 - 4800, Critical_CSS::get_effective_ccss_budget( Critical_CSS::estimate_committed_inline_bytes() ) );
+
+		Util::reset_committed_inline_bytes();
+		$this->assertSame( 0, Critical_CSS::estimate_committed_inline_bytes() );
 	}
 }

@@ -375,6 +375,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const TARGETED_REGEN_CAP = 20;
 
 		/**
+		 * Option holding the last targeted-regeneration timestamp (issue #1462).
+		 *
+		 * Gives request_targeted_regen() the same burst throttle the used-CSS
+		 * pipeline already has (Used_CSS::TARGETED_REGEN_OPTION), so a burst
+		 * of builder/theme saves collapses into one bounded pass instead of
+		 * stacking up to 20 jobs per save. Per-site option (core get_option
+		 * is multisite-safe). Deleted on uninstall.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const TARGETED_REGEN_OPTION = 'wppo_ccss_last_targeted_regen';
+
+		/**
+		 * Targeted-regeneration burst-throttle window in seconds (issue #1462).
+		 *
+		 * Matches the used-CSS TARGETED_REGEN_COOLDOWN_SECONDS so both
+		 * pipelines share one cadence; filterable via
+		 * wppo_ccss_targeted_cooldown.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const TARGETED_REGEN_COOLDOWN_SECONDS = 3600;
+
+		/**
 		 * Cached microtime() availability probe for the hot deadline path.
 		 *
 		 * @since NEXT
@@ -628,7 +654,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Record a completed full-regeneration scan (issue #1462).
 		 *
 		 * Written whenever regenerate_all() performs a scan so repeat callers
-		 * hit the cooldown instead of re-scanning. Fail-open.
+		 * hit the cooldown instead of re-scanning. The stamp is written
+		 * unconditionally — even when zero jobs were queued (empty template
+		 * set, all skipped, scheduler unavailable) — matching the Used_CSS
+		 * pipeline's documented choice: a scan happened, so the next caller
+		 * waits out the window instead of re-scanning in a tight loop.
+		 * Fail-open.
 		 *
 		 * @return void
 		 * @since NEXT
@@ -644,14 +675,103 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Effective targeted-regeneration cooldown in seconds (issue #1462).
+		 *
+		 * Filterable via `wppo_ccss_targeted_cooldown` when a listener is
+		 * registered (repo convention: has_filter() before apply_filters());
+		 * invalid filter output is ignored and negative values heal to the
+		 * default so a rogue filter can never corrupt the throttle. A zero
+		 * value is honoured (throttle disabled) — unlike the full-regen
+		 * cooldown, which must never be disabled.
+		 *
+		 * @return int Cooldown in seconds (>= 0).
+		 * @since NEXT
+		 */
+		public static function get_targeted_regen_cooldown(): int {
+			try {
+				$cooldown = self::TARGETED_REGEN_COOLDOWN_SECONDS;
+				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_targeted_cooldown' ) ) {
+					/**
+					 * Filter the critical-CSS targeted-regeneration cooldown (issue #1462).
+					 *
+					 * Bounds how often builder/theme updates may queue bounded
+					 * targeted requeues. Return 0 to disable the throttle.
+					 *
+					 * @since NEXT
+					 *
+					 * @param int $cooldown Cooldown in seconds. Default 3600.
+					 */
+					$filtered = apply_filters( 'wppo_ccss_targeted_cooldown', $cooldown );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 0 ) {
+						$cooldown = (int) $filtered;
+					}
+				}
+				return $cooldown >= 0 ? (int) $cooldown : self::TARGETED_REGEN_COOLDOWN_SECONDS;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::TARGETED_REGEN_COOLDOWN_SECONDS;
+			}
+		}
+
+		/**
+		 * Whether a targeted regeneration is inside the throttle window (issue #1462).
+		 *
+		 * Mirrors Used_CSS::is_targeted_regen_cooled_down(). Fail-open: an
+		 * unreadable timestamp never blocks work.
+		 *
+		 * @return bool True when the last targeted regen is newer than the cooldown.
+		 * @since NEXT
+		 */
+		public static function is_targeted_regen_cooled_down(): bool {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return false;
+				}
+				$last = (int) get_option( self::TARGETED_REGEN_OPTION, 0 );
+				if ( $last <= 0 ) {
+					return false;
+				}
+				return ( time() - $last ) < self::get_targeted_regen_cooldown();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Record a targeted-regeneration pass (issue #1462).
+		 *
+		 * Written only when request_targeted_regen() queued at least one job,
+		 * so an empty pass (all skipped, scheduler unavailable) never starts
+		 * the throttle window. Fail-open.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function mark_targeted_regen(): void {
+			try {
+				if ( function_exists( 'update_option' ) ) {
+					update_option( self::TARGETED_REGEN_OPTION, time(), false );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Bytes already committed to inline output on this request (issue #1462).
 		 *
 		 * Coordination point between the per-URL used-CSS pipeline and the
-		 * per-template critical-CSS pipeline: used CSS is committed first and
-		 * critical CSS gets the remainder of the core inline budget. Defaults
-		 * to 0 (used CSS ships as an external file in its default delivery
-		 * mode, so nothing is committed); overridable via the
-		 * `wppo_committed_inline_bytes` filter when a listener is registered.
+		 * per-template critical-CSS pipeline: critical CSS gets the remainder
+		 * of the core inline budget after prior commits. Sources, in priority
+		 * order: the request-global Util ledger (inline_ccss() records every
+		 * block it inlines; future inline emitters record via
+		 * Util::add_committed_inline_bytes()), then the
+		 * `wppo_committed_inline_bytes` filter when a listener is registered
+		 * (wins over the ledger so operators can account for bytes committed
+		 * outside the plugin). Defaults to 0 — used CSS ships as an external
+		 * file in every delivery mode (file/async/delay/remove, never inline),
+		 * so nothing is committed in the default configuration.
 		 *
 		 * @return int Committed inline bytes (>= 0).
 		 * @since NEXT
@@ -659,6 +779,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		public static function estimate_committed_inline_bytes(): int {
 			try {
 				$committed = 0;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_committed_inline_bytes' ) ) {
+					try {
+						$committed = max( 0, (int) Util::get_committed_inline_bytes() );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_committed_inline_bytes' ) ) {
 					$filtered = apply_filters( 'wppo_committed_inline_bytes', $committed );
 					if ( is_numeric( $filtered ) && (int) $filtered > 0 ) {
@@ -703,10 +830,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Used CSS (per-URL) is committed first; critical CSS (per-template)
 		 * is split so the combined inline output fits core's
-		 * `styles_inline_size_limit`. The deferred remainder is served as the
-		 * cacheable external file variant (repeat-visit asset) instead of
-		 * render-blocking overflow. Fail-open: any uncertainty returns the
-		 * inputs unmodified for the caller to handle with its file fallback.
+		 * `styles_inline_size_limit`. Called live by inline_ccss(): when the
+		 * split reports a deferred remainder, inline_ccss() serves the whole
+		 * per-template file variant (the cacheable repeat-visit asset) instead
+		 * of inlining a truncated prefix — so the `deferred` substring is a
+		 * fit signal for the caller, not a second asset that is enqueued.
+		 * Fail-open: any uncertainty returns the inputs unmodified for the
+		 * caller to handle with its file fallback.
 		 *
 		 * @param string $ccss Critical CSS content for the current template.
 		 * @param string $used_css Used-CSS content already committed inline ('' when file-delivered).
@@ -756,9 +886,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Counterpart to Used_CSS::request_targeted_regen(): requeues at most
 		 * $cap templates (RUM-worst-first) instead of the full set, so a burst
-		 * of builder updates cannot flood the scheduler. Templates with no
-		 * renderable sample URL are marked `skipped`, never queued. Fail-open:
-		 * any uncertainty returns 0, never fatal.
+		 * of builder updates cannot flood the scheduler. A 3600s burst
+		 * throttle (TARGETED_REGEN_OPTION, shared cadence with the used-CSS
+		 * pipeline) collapses repeat saves into one pass — the throttle stamp
+		 * is written only when at least one job was queued, so empty passes
+		 * never block legitimate retries. Templates with no renderable sample
+		 * URL are marked `skipped`, never queued. Fail-open: any uncertainty
+		 * returns 0, never fatal.
 		 *
 		 * Multisite-safe: per-site options only.
 		 *
@@ -773,6 +907,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					return 0;
 				}
 				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return 0;
+				}
+				if ( self::is_targeted_regen_cooled_down() ) {
 					return 0;
 				}
 				$cap       = $cap > 0 ? min( $cap, 100 ) : self::TARGETED_REGEN_CAP;
@@ -810,18 +947,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 					}
 				}
-				if ( $queued > 0 && class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-					try {
-						Log::add(
-							sprintf(
+				if ( $queued > 0 ) {
+					self::mark_targeted_regen();
+					if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+						try {
+							Log::add(
+								sprintf(
 								/* translators: 1: number of jobs, 2: reason */
-								__( 'Targeted critical-CSS regen queued %1$d jobs (%2$s).', 'performance-optimisation' ),
-								$queued,
-								'' !== $reason ? $reason : 'update'
-							)
-						);
-					} catch ( \Throwable $e ) {
-						unset( $e );
+									__( 'Targeted critical-CSS regen queued %1$d jobs (%2$s).', 'performance-optimisation' ),
+									$queued,
+									'' !== $reason ? $reason : 'update'
+								)
+							);
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 					}
 				}
 				return $queued;
@@ -5230,14 +5370,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// (used CSS already committed + this CCSS block) stays within
 				// core's `styles_inline_size_limit` (40KB on WP 6.9+, 20KB
 				// before) and the configured `ccssMaxSize` cap — the tighter
-				// wins, minus already-committed bytes. Over-budget output is
-				// never inlined: serve the per-template file variant with
-				// mtime cache busting instead (repeat-visit cacheable asset).
-				// The plain stylesheet link is render-blocking, so there is
-				// no FOUC; the remaining full stylesheets are still deferred
-				// by defer_stylesheets().
-				$budget = self::get_effective_ccss_budget( self::estimate_committed_inline_bytes() );
-				if ( strlen( $content ) > $budget ) {
+				// wins, minus already-committed bytes. The split runs through
+				// the shared coordinate_inline_budgets() helper so the
+				// inline/deferred decision can never drift from its tests; a
+				// stub of exactly $committed bytes stands in for the
+				// already-committed output (used CSS ships file-delivered, so
+				// the stub is normally empty and costs nothing). Over-budget
+				// output is never inlined: serve the per-template file variant
+				// with mtime cache busting instead (repeat-visit cacheable
+				// asset). The plain stylesheet link is render-blocking, so
+				// there is no FOUC; the remaining full stylesheets are still
+				// deferred by defer_stylesheets().
+				$committed = self::estimate_committed_inline_bytes();
+				$used_stub = $committed > 0 ? str_repeat( ' ', $committed ) : '';
+				$split     = self::coordinate_inline_budgets( $content, $used_stub );
+				if ( '' !== $split['deferred'] ) {
 					$file_url = self::get_ccss_file_url( $template_hash );
 					if ( '' !== $file_url ) {
 						// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Per-template CCSS file variant served directly (no registered handle exists for it).
@@ -5256,8 +5403,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				echo '<style id="wppo-critical-css">' . "\n";
 				// Sanitized against HTML breakout tokens; see sanitize_inline_css().
-				echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
+				echo self::sanitize_inline_css( $split['inline'] ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
 				echo '</style>' . "\n";
+				// Record the inlined bytes so later emitters in this request
+				// see the reduced remainder (see estimate_committed_inline_bytes()).
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'add_committed_inline_bytes' ) ) {
+					try {
+						Util::add_committed_inline_bytes( strlen( $split['inline'] ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 			} else {
 				// No CCSS file yet — queue async generation and never block the
 				// response. generate() fetches the page with a 30s timeout, so

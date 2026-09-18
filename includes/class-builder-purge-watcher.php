@@ -1995,7 +1995,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 						// Operators can restore the legacy forced full requeue
 						// via the wppo_builder_ccss_full_regen filter.
 						$full = false;
-						if ( function_exists( 'apply_filters' ) ) {
+						if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_builder_ccss_full_regen' ) ) {
 							try {
 								/**
 								 * Restore the legacy forced full critical-CSS requeue after a builder purge.
