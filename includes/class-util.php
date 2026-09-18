@@ -335,6 +335,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'usedCssRumPriority'           => true,
 					'ccssQueueCap'                 => 5,
 					'ccssGenTimeout'               => 25,
+					'ccssInlineBudgetKb'           => 14,
+					'ccssCommerceExclude'          => true,
+					'ccssChecksumRegen'            => true,
 					'ccssExcludedPostTypes'        => "fl-builder-template\nelementor_library",
 					'ccssMaxRetries'               => 5,
 					'usedCssQueueCap'              => 50,
@@ -6240,6 +6243,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 					$timeout                = is_numeric( $value ) ? (int) $value : 25;
 					$sanitized[ $safe_key ] = ( $timeout >= 1 && $timeout <= 120 ) ? $timeout : 25;
+					continue;
+				}
+
+				// CCSS gzipped inline budget (issue #1388) — int clamped to
+				// 1-100 (KB). Unrecognized values fail open to 14 so inline
+				// output stays bounded. Read-time clamping in
+				// get_ccss_inline_budget_bytes() is defense-in-depth.
+				if ( 'ccssInlineBudgetKb' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 14;
+						continue;
+					}
+					$budget                 = is_numeric( $value ) ? (int) $value : 14;
+					$sanitized[ $safe_key ] = ( $budget >= 1 && $budget <= 100 ) ? $budget : 14;
+					continue;
+				}
+
+				// CCSS commerce exclusion + checksum regen toggles (issue
+				// #1388) — booleans via ! empty() so absent/unchecked stays
+				// false and any truthy input enables. Pinned before the
+				// generic scalar branch so '0'/'' can never enable them.
+				if ( in_array( $safe_key, array( 'ccssCommerceExclude', 'ccssChecksumRegen' ), true ) ) {
+					$sanitized[ $safe_key ] = ! empty( $value );
 					continue;
 				}
 

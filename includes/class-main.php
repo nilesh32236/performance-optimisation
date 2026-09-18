@@ -822,6 +822,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['ccssGenTimeout'] ) ) {
 				$this->options['file_optimisation']['ccssGenTimeout'] = 25;
 			}
+			// Existing installs whose stored settings predate the 14 KB
+			// gzipped inline-budget guard, the cart/checkout inline
+			// exclusion, and the checksum-triggered regen keys (issue #1388)
+			// inherit the defaults in-memory here (no database write on
+			// front-end requests); the persisted values are backfilled once
+			// by maybe_migrate_css_queue_defaults() on admin_init.
+			if ( ! isset( $this->options['file_optimisation']['ccssInlineBudgetKb'] ) ) {
+				$this->options['file_optimisation']['ccssInlineBudgetKb'] = 14;
+			}
+			if ( ! isset( $this->options['file_optimisation']['ccssCommerceExclude'] ) ) {
+				$this->options['file_optimisation']['ccssCommerceExclude'] = true;
+			}
+			if ( ! isset( $this->options['file_optimisation']['ccssChecksumRegen'] ) ) {
+				$this->options['file_optimisation']['ccssChecksumRegen'] = true;
+			}
 			if ( ! isset( $this->options['file_optimisation']['usedCssQueueCap'] ) ) {
 				$this->options['file_optimisation']['usedCssQueueCap'] = 50;
 			}
@@ -2063,6 +2078,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return void
 		 * @since 2.2.0 Also backfills the 25s `ccssGenTimeout` generation budget.
+		 * @since NEXT Also backfills the #1388 keys (`ccssInlineBudgetKb`,
+		 *        `ccssCommerceExclude`, `ccssChecksumRegen`).
 		 */
 		public function maybe_migrate_css_queue_defaults(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -2081,6 +2098,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'ccssViewportVariants' => false,
 				'usedCSSDeliveryMode'  => 'file',
 				'ccssGenTimeout'       => 25,
+				'ccssInlineBudgetKb'   => 14,
+				'ccssCommerceExclude'  => true,
+				'ccssChecksumRegen'    => true,
 			);
 			$changed  = false;
 			foreach ( $defaults as $key => $default ) {
@@ -2105,7 +2125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			Log::add( __( 'Added default RUM-weighted CSS queue settings and CCSS generation timeout (25s, single-variant behaviour kept).', 'performance-optimisation' ) );
+			Log::add( __( 'Added default RUM-weighted CSS queue settings, CCSS generation timeout (25s, single-variant behaviour kept), 14 KB inline budget, commerce exclusion, and checksum regen.', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -3844,6 +3864,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public function on_save_post_queue_used_css( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
 				return;
+			}
+
+			// Checksum-triggered CCSS regen (issue #1388): fires only when
+			// the locally-available source CSS changed since generation; a
+			// plain post save with unchanged CSS queues nothing. Runs
+			// independently of the removeUnusedCSS gate below. Guarded with
+			// class/method_exists plus legacy fallback (no-op when the CCSS
+			// pipeline is unavailable). Fail-open inside, never fatal.
+			if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'maybe_regen_on_save' ) ) {
+				try {
+					\PerformanceOptimise\Inc\Critical_CSS::maybe_regen_on_save( $post_id, $post );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 			$options = Util::get_settings();
