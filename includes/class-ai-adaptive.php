@@ -35,6 +35,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private static ?array $model_memo = null;
 
 		/**
+		 * Per-request memo of the RUM anomaly digest result.
+		 *
+		 * Live-path fallback in get_suggestions() calls
+		 * get_rum_anomaly_digest() with null args; without a memo every
+		 * admin render pays a full paths x dates scan. Null means not
+		 * computed yet for the current blog; any array (including empty)
+		 * is a valid memoized result. Only the live path (null $rum, null
+		 * $now) is memoized — injected args (tests) always compute fresh.
+		 * Reset via reset_rum_anomaly_digest_memo() (tests).
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $rum_digest_memo = null;
+
+		/**
+		 * Whether the digest memo holds a computed value.
+		 *
+		 * Distinguishes "not computed yet" (false) from a computed empty
+		 * digest (memo is array(), still a valid cached result).
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $rum_digest_memo_computed = false;
+
+		/**
+		 * Blog ID the digest memo was computed for (multisite safety).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private static int $rum_digest_memo_blog = 0;
+
+		/**
 		 * Option storing the learned model (autoload=no).
 		 *
 		 * @var string
@@ -102,6 +137,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 */
 		public static function reset_model_memo(): void {
 			self::$model_memo = null;
+		}
+
+		/**
+		 * Reset the per-request RUM anomaly digest memo (for testing).
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function reset_rum_anomaly_digest_memo(): void {
+			self::$rum_digest_memo          = null;
+			self::$rum_digest_memo_computed = false;
+			self::$rum_digest_memo_blog     = 0;
+		}
+
+		/**
+		 * Resolve the blog ID for digest memo scoping (multisite safety).
+		 *
+		 * Fail-open to 0 when the multisite API is unavailable (unit tests).
+		 *
+		 * @return int Current blog ID or 0 when unavailable.
+		 * @since NEXT
+		 */
+		private static function rum_digest_memo_blog_id(): int {
+			try {
+				if ( function_exists( 'get_current_blog_id' ) ) {
+					return (int) get_current_blog_id();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 0;
 		}
 
 		/**
@@ -2341,6 +2407,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @since NEXT
 		 */
 		public static function get_rum_anomaly_digest( ?array $rum = null, ?int $now = null ): array {
+			// Per-request memo (live path only): repeated
+			// get_suggestions() calls in one request share one scan.
+			$is_live = ( null === $rum && null === $now );
+			if ( $is_live ) {
+				try {
+					$blog_id = self::rum_digest_memo_blog_id();
+					if ( self::$rum_digest_memo_computed && $blog_id === self::$rum_digest_memo_blog ) {
+						return is_array( self::$rum_digest_memo ) ? self::$rum_digest_memo : array();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			try {
+				$result = self::compute_rum_anomaly_digest( $rum, $now );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$result = array();
+			}
+			if ( $is_live ) {
+				try {
+					self::$rum_digest_memo          = is_array( $result ) ? $result : array();
+					self::$rum_digest_memo_computed = true;
+					self::$rum_digest_memo_blog     = self::rum_digest_memo_blog_id();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return is_array( $result ) ? $result : array();
+		}
+
+		/**
+		 * Compute the RUM anomaly digest (unmemoized worker).
+		 *
+		 * See get_rum_anomaly_digest() for the contract; this worker
+		 * always scans fresh so injected args (tests) never hit the memo.
+		 *
+		 * @param array|null $rum Optional RUM aggregate for testability.
+		 * @param int|null   $now Optional current timestamp for testability.
+		 * @return array[] At most one digest anomaly.
+		 * @since NEXT
+		 */
+		private static function compute_rum_anomaly_digest( ?array $rum = null, ?int $now = null ): array {
 			try {
 				if ( null === $rum ) {
 					if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_aggregate_readonly' ) ) {
@@ -3660,6 +3769,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						'ai_payload'  => array(
 							'tab'      => 'file_optimisation',
 							'settings' => array(),
+							'anomaly'  => $anomaly_context,
 						),
 					);
 				} else {
