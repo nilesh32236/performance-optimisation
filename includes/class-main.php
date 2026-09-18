@@ -4911,33 +4911,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * (changeset 56033, issue #1466) so the native strategy write never
 		 * fights core output: core renders a handle blocking when it carries
 		 * an inline `after` script, when a blocking queued dependent relies
-		 * on it, or when it is a module/import-map script. When the registry
-		 * exposes a publicly-invocable get_eligible_loading_strategy(), that
-		 * verdict is authoritative. Otherwise a manual fallback inspects the
-		 * registered extras/dependencies. Fail-open: true on any unreadable
-		 * state so output degrades to the current behaviour, never fatal or
-		 * white-screen. Note: the unit-test WP_Scripts stand-in declares the
-		 * core method private, so is_callable() is false there and tests
-		 * exercise the manual fallback path by design.
+		 * on it, or when it is a module/import-map script. Core keeps
+		 * get_eligible_loading_strategy() private with pre-stamp semantics
+		 * ('' when no intended strategy is set), so it can neither be called
+		 * nor reused here; eligibility is decided by the manual fallback
+		 * below, which is the only path that can run against real core. The
+		 * existing supports_native_defer_strategy() method_exists probe
+		 * already covers capability detection. Fail-open: true on any
+		 * unreadable state so output degrades to the current behaviour, never
+		 * fatal or white-screen.
+		 *
+		 * Dependents are judged against the run's intended set plus live
+		 * state (issue #1466 review): a queued dependent carrying no explicit
+		 * strategy counts as deferred when this run intends to defer it, so
+		 * the verdict never depends on queue order. Transitive poisoning is
+		 * handled by recursing into each deferred dependent with a visited
+		 * set (mirroring core's $checked param): a dependent that is itself
+		 * blocked by a third handle poisons its own dependencies.
 		 *
 		 * @since NEXT
 		 *
-		 * @param object $wp_scripts WP_Scripts registry.
-		 * @param string $handle     Script handle.
+		 * @param object   $wp_scripts WP_Scripts registry.
+		 * @param string   $handle     Script handle.
+		 * @param string[] $intended   Handles this run intends to defer (pass
+		 *                             the interactivity guard and exclusion
+		 *                             list). Defaults to empty for direct calls.
+		 * @param bool[]   $checked    Visited handles for the recursion guard
+		 *                             (mirrors core's $checked). Callers leave
+		 *                             this at its default; a fresh map is used
+		 *                             per top-level evaluation.
 		 * @return bool True when the handle may receive strategy defer.
 		 */
-		private function is_defer_eligible_for_handle( object $wp_scripts, string $handle ): bool {
+		private function is_defer_eligible_for_handle( object $wp_scripts, string $handle, array $intended = array(), array &$checked = array() ): bool {
 			if ( '' === $handle ) {
 				return true;
 			}
-			try {
-				if ( is_callable( array( $wp_scripts, 'get_eligible_loading_strategy' ) ) ) {
-					return 'defer' === $wp_scripts->get_eligible_loading_strategy( $handle );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			if ( isset( $checked[ $handle ] ) ) {
 				return true;
 			}
+			$checked[ $handle ] = true;
 
 			try {
 				if ( ! isset( $wp_scripts->registered ) || ! is_array( $wp_scripts->registered ) ) {
@@ -5013,7 +5025,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						}
 					}
 					$is_deferred_dependent = is_string( $strategy ) && in_array( strtolower( trim( $strategy ) ), array( 'async', 'defer' ), true );
-					if ( ! $is_deferred_dependent ) {
+					if ( ! $is_deferred_dependent && ! in_array( $queued, $intended, true ) ) {
+						return false;
+					}
+					// Transitive gate (issue #1466 review): a deferred (or
+					// about-to-defer) dependent that is itself ineligible
+					// poisons this handle, mirroring core's
+					// filter_eligible_strategies() recursion.
+					if ( ! $this->is_defer_eligible_for_handle( $wp_scripts, $queued, $intended, $checked ) ) {
 						return false;
 					}
 				}
@@ -5183,13 +5202,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// are covered.
 			$supports_fetchpriority = self::supports_native_script_fetchpriority();
 
+			$interactivity_handles = array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' );
+
+			// Intended set, first pass (issue #1466 review): snapshot the handles
+			// this run intends to defer — interactivity guard plus the cheap
+			// exclusion filter — so eligibility below judges each dependent
+			// against intended-plus-stamped strategies instead of mid-loop write
+			// order (queue-order independence). Excluded handles stay out, so
+			// their dependencies correctly observe them as blocking.
+			//
+			// @since NEXT.
+			$intended_defer_handles = array();
+			foreach ( $wp_scripts->queue as $queued_handle ) {
+				$queued_handle = (string) $queued_handle;
+				if ( '' === $queued_handle ) {
+					continue;
+				}
+				if ( in_array( $queued_handle, $interactivity_handles, true ) ) {
+					continue;
+				}
+				if ( in_array( $queued_handle, $this->exclude_defer_js, true ) ) {
+					continue;
+				}
+				$intended_defer_handles[] = $queued_handle;
+			}
+
 			foreach ( $wp_scripts->queue as $handle ) {
 				// Interactivity runtime guard (issue #1201): never deprioritize or
 				// move the block-interactivity runtime, even if a site filters the
 				// preset away. Mirrors apply_module_loading_strategies(). Fail-open.
 				//
 				// @since NEXT.
-				if ( in_array( (string) $handle, array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' ), true ) ) {
+				if ( in_array( (string) $handle, $interactivity_handles, true ) ) {
+					continue;
+				}
+				// Cheap exclusion filter first (issue #1466 review): explicitly
+				// excluded handles skip the O(queue) eligibility scan entirely.
+				//
+				// @since NEXT.
+				if ( in_array( $handle, $this->exclude_defer_js, true ) ) {
 					continue;
 				}
 				// Eligibility gate (issue #1466): consult core's eligible
@@ -5200,58 +5251,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// fetchpriority/group) with queue order untouched.
 				//
 				// @since NEXT.
-				if ( ! $this->is_defer_eligible_for_handle( $wp_scripts, (string) $handle ) ) {
+				if ( ! $this->is_defer_eligible_for_handle( $wp_scripts, (string) $handle, $intended_defer_handles ) ) {
 					continue;
 				}
-				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
-					// Fill-gaps-only for the strategy itself (issue #1184): never
-					// overwrite an explicit async/defer strategy stamped by core,
-					// a theme, or another plugin — rewriting async to defer would
-					// change execution semantics. Core stores the strategy via
-					// wp_script_add_data( $handle, 'strategy', ... ), so read it
-					// back via WP_Scripts::get_data() (guarded; fail-open writes
-					// when the store is unreadable). Fetchpriority/in_footer below
-					// still apply to the already-deferred handle.
-					//
-					// @since NEXT.
-					$existing_strategy = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'strategy' ) : false;
-					$has_strategy      = is_string( $existing_strategy ) && in_array( strtolower( trim( $existing_strategy ) ), array( 'async', 'defer' ), true );
-					if ( ! $has_strategy ) {
-						wp_script_add_data( $handle, 'strategy', 'defer' );
-					}
-					$this->deferred_handles[ $handle ] = true;
-					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
-					// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
-					// Fill-gaps-only (issue #1218): never overwrite an explicit
-					// fetchpriority value — 'high', 'low', and explicit 'auto'
-					// are all preserved; only a missing/empty value counts as a
-					// gap. Explicit 'auto' IS distinguishable here (classic
-					// scripts carry no core default — get_data() returns false
-					// when unset), unlike the module path where core defaults
-					// every registration to 'auto'.
-					if ( $supports_fetchpriority && function_exists( 'wp_script_add_data' ) ) {
-						$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
-						$is_gap                 = ! is_string( $existing_fetchpriority ) || '' === trim( $existing_fetchpriority );
-						if ( $is_gap ) {
-							$fetchpriority = $this->get_filtered_deferred_fetchpriority( (string) $handle );
-							if ( '' !== $fetchpriority ) {
-								wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
-							}
+				// Fill-gaps-only for the strategy itself (issue #1184): never
+				// overwrite an explicit async/defer strategy stamped by core,
+				// a theme, or another plugin — rewriting async to defer would
+				// change execution semantics. Core stores the strategy via
+				// wp_script_add_data( $handle, 'strategy', ... ), so read it
+				// back via WP_Scripts::get_data() (guarded; fail-open writes
+				// when the store is unreadable). Fetchpriority/in_footer below
+				// still apply to the already-deferred handle.
+				//
+				// @since NEXT.
+				$existing_strategy = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'strategy' ) : false;
+				$has_strategy      = is_string( $existing_strategy ) && in_array( strtolower( trim( $existing_strategy ) ), array( 'async', 'defer' ), true );
+				if ( ! $has_strategy ) {
+					wp_script_add_data( $handle, 'strategy', 'defer' );
+				}
+				$this->deferred_handles[ $handle ] = true;
+				// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
+				// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
+				// Fill-gaps-only (issue #1218): never overwrite an explicit
+				// fetchpriority value — 'high', 'low', and explicit 'auto'
+				// are all preserved; only a missing/empty value counts as a
+				// gap. Explicit 'auto' IS distinguishable here (classic
+				// scripts carry no core default — get_data() returns false
+				// when unset), unlike the module path where core defaults
+				// every registration to 'auto'.
+				if ( $supports_fetchpriority && function_exists( 'wp_script_add_data' ) ) {
+					$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
+					$is_gap                 = ! is_string( $existing_fetchpriority ) || '' === trim( $existing_fetchpriority );
+					if ( $is_gap ) {
+						$fetchpriority = $this->get_filtered_deferred_fetchpriority( (string) $handle );
+						if ( '' !== $fetchpriority ) {
+							wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
 						}
 					}
-					if ( $supports_fetchpriority ) {
-						// Native in_footer for deferred classic scripts on WP 6.9+
-						// (Trac #63486). Core reads the 'group' data key for footer
-						// placement — wp_enqueue_script()'s args handler
-						// (_wp_scripts_add_args_data()) maps in_footer to group=1,
-						// and 'in_footer' itself is never read for classic scripts,
-						// so set 'group' directly (issue #879 review). Skipped when
-						// the handle is already footer-bound and opt-out per handle.
-						$in_footer = $this->should_move_deferred_to_footer( (string) $handle );
-						$group     = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'group' ) : false;
-						if ( $in_footer && 1 !== (int) $group ) {
-							wp_script_add_data( $handle, 'group', 1 );
-						}
+				}
+				if ( $supports_fetchpriority ) {
+					// Native in_footer for deferred classic scripts on WP 6.9+
+					// (Trac #63486). Core reads the 'group' data key for footer
+					// placement — wp_enqueue_script()'s args handler
+					// (_wp_scripts_add_args_data()) maps in_footer to group=1,
+					// and 'in_footer' itself is never read for classic scripts,
+					// so set 'group' directly (issue #879 review). Skipped when
+					// the handle is already footer-bound and opt-out per handle.
+					$in_footer = $this->should_move_deferred_to_footer( (string) $handle );
+					$group     = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'group' ) : false;
+					if ( $in_footer && 1 !== (int) $group ) {
+						wp_script_add_data( $handle, 'group', 1 );
 					}
 				}
 			}
