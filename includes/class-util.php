@@ -2288,55 +2288,266 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 
-			if ( false !== strpos( $path, "\0" ) ) {
-				return '';
-			}
-
-			if ( false !== strpos( $path, '..' ) ) {
-				return '';
-			}
-
-			$trimmed = ltrim( $path );
-			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $trimmed ) ) {
-				return '';
-			}
-			if ( 0 === stripos( $trimmed, 'data:' ) || 0 === stripos( $trimmed, 'phar:' ) ) {
-				return '';
-			}
-			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#i', $trimmed ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $trimmed ) ) {
-				return '';
-			}
-
-			if ( 'php' === strtolower( pathinfo( $path, PATHINFO_EXTENSION ) ) ) {
-				return '';
-			}
-
-			if ( function_exists( 'realpath' ) ) {
-				$resolved = realpath( $path );
-				if ( false === $resolved ) {
+			try {
+				if ( false !== strpos( $path, "\0" ) ) {
 					return '';
 				}
-			} else {
-				$resolved = $path;
-			}
 
-			if ( function_exists( 'wp_normalize_path' ) ) {
-				$normalized = wp_normalize_path( $resolved );
-			} else {
-				$normalized = str_replace( '\\', '/', (string) $resolved );
-			}
+				if ( false !== strpos( $path, '..' ) ) {
+					return '';
+				}
 
-			if ( false !== strpos( $normalized, "\0" ) ) {
+				// Overlong-UTF-8 traversal markers (%c0%ae, %c1%9c, ...):
+				// single-decode below yields raw 0xC0/0xC1 bytes, but reject
+				// the literal markers too so intent is explicit and logged.
+				if ( false !== stripos( $path, '%c0' ) || false !== stripos( $path, '%c1' ) ) {
+					return '';
+				}
+
+				// Single-decode + re-check (fail closed): catches %2e%2e,
+				// ..%2f, %252e-safe (stays literal "%2e", harmless), %70har:.
+				// Single decode only — mirroring sanitize_cache_url_path()
+				// semantics — so double-encoded input cannot smuggle "..".
+				$decoded = rawurldecode( $path );
+				if ( false !== strpos( $decoded, "\0" ) ) {
+					return '';
+				}
+				if ( false !== strpos( $decoded, '..' ) ) {
+					return '';
+				}
+				if ( false !== strpos( $decoded, "\xc0" ) || false !== strpos( $decoded, "\xc1" ) ) {
+					return '';
+				}
+
+				$trimmed     = ltrim( $path );
+				$dec_trimmed = ltrim( $decoded );
+				foreach ( array( $trimmed, $dec_trimmed ) as $candidate ) {
+					if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $candidate ) ) {
+						return '';
+					}
+					if ( 0 === stripos( $candidate, 'data:' ) || 0 === stripos( $candidate, 'phar:' ) ) {
+						return '';
+					}
+					if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#i', $candidate ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $candidate ) ) {
+						return '';
+					}
+				}
+
+				// UNC / protocol-relative targets are never valid source
+				// files (e.g. \\server\share, //server/share).
+				foreach ( array( $trimmed, $dec_trimmed ) as $candidate ) {
+					$slash_norm = str_replace( '\\', '/', $candidate );
+					if ( 0 === strpos( $slash_norm, '//' ) ) {
+						return '';
+					}
+				}
+
+				// Executable targets: strip query/fragment (?/#) and
+				// trailing "/." segments (file.php/., file.php?x) before
+				// the case-insensitive extension check.
+				if ( self::is_minify_executable_target( $path ) || self::is_minify_executable_target( $decoded ) ) {
+					return '';
+				}
+
+				if ( function_exists( 'realpath' ) ) {
+					$resolved = realpath( $path );
+					if ( false === $resolved ) {
+						return '';
+					}
+				} else {
+					$resolved = $path;
+				}
+
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$normalized = wp_normalize_path( $resolved );
+				} else {
+					$normalized = str_replace( '\\', '/', (string) $resolved );
+				}
+
+				if ( false !== strpos( $normalized, "\0" ) ) {
+					return '';
+				}
+				if ( false !== strpos( $normalized, '..' ) ) {
+					return '';
+				}
+
+				foreach ( self::get_minify_allowed_roots() as $root ) {
+					if ( ! is_string( $root ) || '' === $root ) {
+						continue;
+					}
+					if ( $normalized === $root || 0 === strpos( $normalized, rtrim( $root, '/' ) . '/' ) ) {
+						return (string) $resolved;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return '';
 			}
 
-			foreach ( self::get_minify_allowed_roots() as $root ) {
-				if ( ! is_string( $root ) || '' === $root ) {
-					continue;
+			return '';
+		}
+
+		/**
+		 * Whether a minify source path points at an executable target.
+		 *
+		 * Strips query/fragment suffixes (?/#) and trailing "/.", "/",
+		 * whitespace segments (so `file.php/.`, `file.php?x` cannot dodge
+		 * the check), then matches the extension case-insensitively
+		 * against executable types (php variants, phtml, phar). Never
+		 * throws — non-string or unparseable input reads as executable
+		 * (fail closed) only when it cannot be proven safe; plain
+		 * non-executable paths return false.
+		 *
+		 * @param string $path Candidate filesystem path.
+		 * @return bool True when the target is executable and must be rejected.
+		 * @since NEXT
+		 */
+		private static function is_minify_executable_target( $path ): bool {
+			try {
+				if ( ! is_string( $path ) || '' === $path ) {
+					return true;
 				}
-				if ( $normalized === $root || 0 === strpos( $normalized, rtrim( $root, '/' ) . '/' ) ) {
-					return (string) $resolved;
+				$clean = (string) strtok( $path, '?#' );
+				if ( false === $clean ) {
+					return true;
 				}
+				$clean = rtrim( $clean, "/\\ \t\n\r\0\x0B." );
+				if ( '' === $clean ) {
+					return true;
+				}
+				$ext = strtolower( pathinfo( $clean, PATHINFO_EXTENSION ) );
+				if ( '' === $ext ) {
+					return false;
+				}
+				static $executable = array(
+					'php'   => true,
+					'php2'  => true,
+					'php3'  => true,
+					'php4'  => true,
+					'php5'  => true,
+					'php7'  => true,
+					'php8'  => true,
+					'phtml' => true,
+					'phar'  => true,
+				);
+				return isset( $executable[ $ext ] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a minify write target (cache dir or cache file) may be written.
+		 *
+		 * Write-side containment gate for the minify cache: rejects
+		 * non-string/empty input, NUL bytes, literal and single-decoded
+		 * "..", overlong-UTF-8 markers, stream wrappers/schemes, UNC and
+		 * protocol-relative targets, and executable file targets, then
+		 * requires the symlink-aware resolution (via
+		 * {@see Util::resolve_realpath()} with lexical fallback for
+		 * not-yet-existing cache files) to sit inside one of
+		 * {@see Util::get_minify_allowed_roots()} with a trailing-slash
+		 * boundary. Never throws — false means "do not touch the disk".
+		 *
+		 * @param mixed $path Candidate write path (dir or file).
+		 * @return bool True when the target may be written.
+		 * @since NEXT
+		 */
+		public static function is_minify_write_path_allowed( $path ): bool {
+			return '' !== self::validate_minify_write_path( $path );
+		}
+
+		/**
+		 * Validates a minify write target and returns its normalized form.
+		 *
+		 * Same gate as {@see Util::is_minify_write_path_allowed()} but
+		 * returns the normalized path on success or '' on failure.
+		 *
+		 * @param mixed $path Candidate write path (dir or file).
+		 * @return string Normalized allowed path, or '' when rejected.
+		 * @since NEXT
+		 */
+		public static function validate_minify_write_path( $path ): string {
+			if ( ! is_string( $path ) || '' === $path ) {
+				return '';
+			}
+
+			try {
+				if ( false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+					return '';
+				}
+				if ( false !== stripos( $path, '%c0' ) || false !== stripos( $path, '%c1' ) ) {
+					return '';
+				}
+
+				$decoded = rawurldecode( $path );
+				if ( false !== strpos( $decoded, "\0" ) || false !== strpos( $decoded, '..' ) ) {
+					return '';
+				}
+				if ( false !== strpos( $decoded, "\xc0" ) || false !== strpos( $decoded, "\xc1" ) ) {
+					return '';
+				}
+
+				$trimmed     = ltrim( $path );
+				$dec_trimmed = ltrim( $decoded );
+				foreach ( array( $trimmed, $dec_trimmed ) as $candidate ) {
+					if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $candidate ) ) {
+						return '';
+					}
+					if ( 0 === stripos( $candidate, 'data:' ) || 0 === stripos( $candidate, 'phar:' ) ) {
+						return '';
+					}
+					if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#i', $candidate ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $candidate ) ) {
+						return '';
+					}
+					if ( 0 === strpos( str_replace( '\\', '/', $candidate ), '//' ) ) {
+						return '';
+					}
+				}
+
+				if ( self::is_minify_executable_target( $path ) || self::is_minify_executable_target( $decoded ) ) {
+					return '';
+				}
+
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$normalized = wp_normalize_path( $path );
+				} else {
+					$normalized = str_replace( '\\', '/', $path );
+				}
+				if ( '' === $normalized ) {
+					return '';
+				}
+				// Absolute-path contract: Unix "/" or Windows "X:/" (or
+				// "X:\"). Relative, UNC, and protocol-relative inputs fail
+				// closed here.
+				if ( 0 !== strpos( $normalized, '/' ) && ! (bool) preg_match( '#^[a-zA-Z]:/#', $normalized ) ) {
+					return '';
+				}
+
+				// Symlink-aware resolution with lexical fallback for
+				// not-yet-existing cache files/dirs (same pattern as
+				// validate_cache_write_path()).
+				$resolved = self::resolve_realpath( $normalized );
+				if ( null === $resolved ) {
+					$resolved = $normalized;
+				}
+				if ( false !== strpos( $resolved, "\0" ) || false !== strpos( $resolved, '..' ) ) {
+					return '';
+				}
+
+				foreach ( self::get_minify_allowed_roots() as $root ) {
+					if ( ! is_string( $root ) || '' === $root ) {
+						continue;
+					}
+					$prefix = rtrim( $root, '/' ) . '/';
+					if ( $resolved === $root || 0 === strpos( $resolved, $prefix ) ) {
+						return $normalized;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
 			}
 
 			return '';
@@ -3931,6 +4142,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( false !== strpos( $htaccess_file, "\0" ) || false !== strpos( $htaccess_file, '..' ) ) {
 				return false;
 			}
+			// Encoded-traversal corpus: single-decode + re-check so
+			// %2e%2e, ..%2f, %c0%ae and wrapper-encoded payloads fail
+			// closed even when the literal form looks benign.
+			if ( false !== stripos( $htaccess_file, '%c0' ) || false !== stripos( $htaccess_file, '%c1' ) ) {
+				return false;
+			}
+			try {
+				$decoded = rawurldecode( $htaccess_file );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( false !== strpos( $decoded, "\0" ) || false !== strpos( $decoded, '..' ) ) {
+				return false;
+			}
+			if ( false !== strpos( $decoded, "\xc0" ) || false !== strpos( $decoded, "\xc1" ) ) {
+				return false;
+			}
 			try {
 				$base = basename( $htaccess_file );
 			} catch ( \Throwable $e ) {
@@ -3938,6 +4167,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return false;
 			}
 			if ( '.htaccess' !== $base ) {
+				return false;
+			}
+			try {
+				$dec_base = basename( $decoded );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( '.htaccess' !== $dec_base ) {
 				return false;
 			}
 			try {

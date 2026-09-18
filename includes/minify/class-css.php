@@ -89,16 +89,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 					}
 				}
 			}
-			$this->cache_dir        = $cache_dir;
-			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
-			$content_dir_normalized = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
-			$cache_inside           = ( '' !== $content_dir_normalized && 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
-
-			if ( ! $cache_inside ) {
+			$this->cache_dir = '';
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'validate_minify_write_path' ) ) {
+				$validated_cache_dir = Util::validate_minify_write_path( $cache_dir );
+				if ( '' !== $validated_cache_dir ) {
+					$this->cache_dir = $validated_cache_dir;
+				}
+			} else {
+				$this->cache_dir = $cache_dir;
+			}
+			if ( '' === $this->cache_dir ) {
 				$this->cache_url = Util::cached_content_url( '/' );
 			} else {
-				$path            = str_replace( $content_dir_normalized, '', $cache_dir_normalized );
-				$this->cache_url = Util::cached_content_url( $path );
+				$cache_dir_normalized   = wp_normalize_path( $this->cache_dir );
+				$content_dir_normalized = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
+				$cache_inside           = ( '' !== $content_dir_normalized && 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
+
+				if ( ! $cache_inside ) {
+					$this->cache_url = Util::cached_content_url( '/' );
+				} else {
+					$path            = str_replace( $content_dir_normalized, '', $cache_dir_normalized );
+					$this->cache_url = Util::cached_content_url( $path );
+				}
 			}
 			$this->filesystem = Util::init_filesystem();
 		}
@@ -111,10 +123,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 */
 		public function minify() {
 			// Audit #1362: readability pre-gate before WP_Filesystem boots below.
-			if ( empty( $this->file_path ) || ! is_readable( $this->file_path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable -- Filesystem object not yet initialized at this pre-gate.
+			// Fail closed on a rejected cache_dir (poisoned/filtered target):
+			// keep serving unminified, never write outside allowed roots.
+			if ( empty( $this->file_path ) || empty( $this->cache_dir ) || ! is_readable( $this->file_path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable -- Filesystem object not yet initialized at this pre-gate.
 				return '';
 			}
 			$cache_file = $this->get_cache_file_path();
+			if ( '' === $cache_file ) {
+				return '';
+			}
 
 			$min_dir = dirname( $cache_file );
 			if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
@@ -160,8 +177,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @since 1.0.0
 		 */
 		public function get_cache_file_path(): string {
-			$filename = md5( $this->file_path ) . '.css';
-			return "{$this->cache_dir}/{$filename}";
+			if ( '' === $this->cache_dir || '' === $this->file_path ) {
+				return '';
+			}
+			$filename  = md5( $this->file_path ) . '.css';
+			$candidate = "{$this->cache_dir}/{$filename}";
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_minify_write_path_allowed' ) ) {
+				if ( ! Util::is_minify_write_path_allowed( $candidate ) ) {
+					return '';
+				}
+			}
+			return $candidate;
 		}
 
 		/**
@@ -172,6 +198,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @since 1.0.0
 		 */
 		private function save_min_file( $css, $file_path ) {
+			if ( ! is_string( $file_path ) || '' === $file_path ) {
+				return;
+			}
+			// Write-side containment: never land bytes outside allowlisted
+			// roots even if cache_dir was poisoned after construction.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_minify_write_path_allowed' ) ) {
+				if ( ! Util::is_minify_write_path_allowed( $file_path ) ) {
+					return;
+				}
+			}
+			if ( ! $this->filesystem || ! method_exists( $this->filesystem, 'put_contents' ) ) {
+				return;
+			}
 			$gzip_file_path = $file_path . '.gz';
 
 			$this->filesystem->put_contents( $file_path, $css, FS_CHMOD_FILE );
