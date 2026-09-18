@@ -3455,7 +3455,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			$queued = Critical_CSS::regenerate_all();
+			$queued = Critical_CSS::regenerate_all( true );
 
 			// Suspended while deferJS/delayJS is active: regenerate_all()
 			// preserves existing variants and queues nothing (issue #1090).

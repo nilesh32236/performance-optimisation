@@ -6974,5 +6974,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			return (int) apply_filters( 'styles_inline_size_limit', $default );
 		}
+
+		/**
+		 * Remaining inline budget after bytes already committed (issue #1462).
+		 *
+		 * Pure helper so per-URL used CSS and per-template critical CSS can
+		 * share one budget instead of each inlining up to the full core
+		 * `styles_inline_size_limit`. Fail-open: any uncertainty returns the
+		 * full limit minus the committed bytes, never fatal.
+		 *
+		 * Multisite-safe: no storage, per-call arithmetic only.
+		 *
+		 * @param int      $already_inlined Bytes already committed to inline output on this request.
+		 * @param int|null $limit Optional budget override (defaults to get_styles_inline_limit()).
+		 * @return int Remaining bytes available for inline output (>= 0).
+		 * @since NEXT
+		 */
+		public static function get_remaining_inline_budget( int $already_inlined = 0, ?int $limit = null ): int {
+			try {
+				$budget    = null === $limit ? self::get_styles_inline_limit() : (int) $limit;
+				$budget    = $budget > 0 ? $budget : self::get_styles_inline_limit();
+				$remaining = $budget - max( 0, $already_inlined );
+				return $remaining > 0 ? (int) $remaining : 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Split CSS into an inline prefix and a deferred remainder (issue #1462).
+		 *
+		 * Inlines exactly what fits inside the core `styles_inline_size_limit`
+		 * budget (40KB on WP 6.9+, 20KB before) and leaves the remainder for
+		 * a deferred external stylesheet, so first visits inline without
+		 * render-blocking overflow and repeat visits use the cacheable asset.
+		 * The cut lands on the last closing brace at or under the limit so
+		 * output never ends mid-rule. Fail-open: CSS failures degrade to
+		 * unoptimised output (full CSS deferred), never fatal or white-screen.
+		 *
+		 * @param string   $css CSS content to split.
+		 * @param int|null $limit Optional budget override (defaults to get_styles_inline_limit()).
+		 * @return array{inline: string, deferred: string} Inline prefix and deferred remainder.
+		 * @since NEXT
+		 */
+		public static function split_css_for_inline_budget( string $css, ?int $limit = null ): array {
+			try {
+				if ( '' === $css ) {
+					return array(
+						'inline'   => '',
+						'deferred' => '',
+					);
+				}
+				$budget = null === $limit ? self::get_styles_inline_limit() : (int) $limit;
+				if ( $budget <= 0 ) {
+					$budget = self::get_styles_inline_limit();
+				}
+				if ( strlen( $css ) <= $budget ) {
+					return array(
+						'inline'   => $css,
+						'deferred' => '',
+					);
+				}
+				$cut = strrpos( substr( $css, 0, $budget ), '}' );
+				if ( false === $cut ) {
+					return array(
+						'inline'   => '',
+						'deferred' => $css,
+					);
+				}
+				return array(
+					'inline'   => substr( $css, 0, $cut + 1 ),
+					'deferred' => substr( $css, $cut + 1 ),
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'inline'   => '',
+					'deferred' => $css,
+				);
+			}
+		}
 	}
 }
