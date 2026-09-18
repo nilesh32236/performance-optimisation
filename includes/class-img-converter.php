@@ -323,7 +323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Fail-open filename heuristic only (no DB/HTTP, zero queries):
 		 * matches `hero`, `lcp`, `cover`, `featured`, or `banner` as
 		 * delimiter-separated tokens in the filename stem (start, `.`,
-		 * `_`, `-` boundaries) so `recovery.jpg`/`discover.png` do not
+		 * `_`, `-`, space boundaries) so `recovery.jpg`/`discover.png` do not
 		 * false-positive. Multisite-safe: per-site file paths only, no
 		 * cross-site state is read.
 		 *
@@ -344,10 +344,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( '' === $stem ) {
 				return false;
 			}
-			foreach ( array( '/(^|[._-])hero([._-]|$)/', '/(^|[._-])lcp([._-]|$)/', '/(^|[._-])cover([._-]|$)/', '/(^|[._-])featured([._-]|$)/', '/(^|[._-])banner([._-]|$)/' ) as $pattern ) {
-				if ( 1 === preg_match( $pattern, $stem ) ) {
-					return true;
-				}
+			if ( 1 === preg_match( '/(^|[._\- ])(hero|lcp|cover|featured|banner)([._\- ]|$)/', $stem ) ) {
+				return true;
 			}
 			return false;
 		}
