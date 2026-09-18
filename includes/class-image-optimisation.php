@@ -1604,7 +1604,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Post-processes the serialized buffer to add missing width/height attributes to lazy-loaded images.
 		 *
+		 * Eager heroes excluded from lazy keep `src` (never `data-src`), so
+		 * the lookup prefers `data-src` and falls back to `src` — otherwise
+		 * a dimension-less hero keeps causing CLS (issue #1467). Fail-open:
+		 * unknown local paths leave the tag untouched.
+		 *
 		 * @since 2.0.0
+		 * @since NEXT Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
 		 *
 		 * @param string $buffer The HTML buffer after WP_HTML_Tag_Processor serialization.
 		 * @return string The modified buffer.
@@ -1625,17 +1631,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			$result = preg_replace_callback(
-				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
+				'#<img\b[^>]*>#i',
 				function ( $matches ) {
-					$img_tag    = $matches[0];
-					$data_src   = $matches[1];
+					$img_tag = $matches[0];
+					$src_url = '';
+					if ( 1 === preg_match( '#\sdata-src=["\']([^"\']+)["\']#i', $img_tag, $m ) && '' !== trim( $m[1] ) ) {
+						$src_url = $m[1];
+					} elseif ( 1 === preg_match( '#\ssrc=["\']([^"\']+)["\']#i', $img_tag, $m ) && '' !== trim( $m[1] ) ) {
+						$src_url = $m[1];
+					} else {
+						return $img_tag;
+					}
 					$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $img_tag );
 					$has_height = (bool) preg_match( '/\bheight=["\']\d+["\']/i', $img_tag );
 
 					if ( ! $has_width || ! $has_height ) {
-						$local_path = Util::get_local_path( $data_src );
+						try {
+							$local_path = Util::get_local_path( $src_url );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							return $img_tag;
+						}
 						if ( ! empty( $local_path ) && $this->cached_file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
-							$size = $this->get_cached_image_size( $local_path );
+							try {
+								$size = $this->get_cached_image_size( $local_path );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								return $img_tag;
+							}
 							if ( is_array( $size ) ) {
 								if ( ! $has_width ) {
 									$img_tag = preg_replace( '/<img\b/i', '<img width="' . (int) $size[0] . '"', $img_tag, 1 );
@@ -1658,6 +1681,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Processor-based dimension injection using serialize_token().
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -1680,13 +1704,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				if ( 'IMG' === $tag && ! $is_closer ) {
 					$data_src = $processor->get_attribute( 'data-src' );
-					if ( null !== $data_src ) {
+					if ( null === $data_src || '' === trim( (string) $data_src ) ) {
+						$data_src = $processor->get_attribute( 'src' );
+					}
+					if ( null !== $data_src && '' !== trim( (string) $data_src ) ) {
 						$has_width  = null !== $processor->get_attribute( 'width' );
 						$has_height = null !== $processor->get_attribute( 'height' );
 						if ( ! $has_width || ! $has_height ) {
-							$local_path = Util::get_local_path( (string) $data_src );
+							try {
+								$local_path = Util::get_local_path( (string) $data_src );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$out .= $processor->serialize_token();
+								continue;
+							}
 							if ( ! empty( $local_path ) && $this->cached_file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
-								$size = $this->get_cached_image_size( $local_path );
+								try {
+									$size = $this->get_cached_image_size( $local_path );
+								} catch ( \Throwable $e ) {
+									unset( $e );
+									$out .= $processor->serialize_token();
+									continue;
+								}
 								if ( is_array( $size ) ) {
 									if ( ! $has_width ) {
 										$processor->set_attribute( 'width', (string) (int) $size[0] );
@@ -1721,6 +1760,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * falls through to the regex fallback.
 		 *
 		 * @since NEXT
+		 * @since NEXT Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -1732,7 +1772,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$tags = new \WP_HTML_Tag_Processor( $buffer );
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 					$data_src = $tags->get_attribute( 'data-src' );
-					if ( null === $data_src ) {
+					if ( null === $data_src || '' === trim( (string) $data_src ) ) {
+						$data_src = $tags->get_attribute( 'src' );
+					}
+					if ( null === $data_src || '' === trim( (string) $data_src ) ) {
 						continue;
 					}
 					// Mirror the regex fallback's quoted-numeric gate: empty,
@@ -1743,11 +1786,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( $has_width && $has_height ) {
 						continue;
 					}
-					$local_path = Util::get_local_path( (string) $data_src );
+					try {
+						$local_path = Util::get_local_path( (string) $data_src );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
 					if ( empty( $local_path ) || ! $this->cached_file_exists( $local_path ) || ! is_readable( $local_path ) || ! is_file( $local_path ) ) {
 						continue;
 					}
-					$size = $this->get_cached_image_size( $local_path );
+					try {
+						$size = $this->get_cached_image_size( $local_path );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
 					if ( ! is_array( $size ) ) {
 						continue;
 					}
@@ -7846,6 +7899,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$tags->set_attribute( 'data-wppo-hero', '1' );
 							$changed = true;
 						}
+						// Stable dimensions for the eager hero (issue #1467):
+						// a dimension-less hero causes CLS, so backfill any
+						// missing width/height from the local file when the
+						// tag carries no numeric value. Fail-open: unknown
+						// paths leave the tag untouched.
+						try {
+							$has_w = is_numeric( $tags->get_attribute( 'width' ) );
+							$has_h = is_numeric( $tags->get_attribute( 'height' ) );
+							if ( ! $has_w || ! $has_h ) {
+								$hero_path = Util::get_local_path( $lcp_url );
+								if ( '' !== $hero_path && $this->cached_file_exists( $hero_path ) && is_readable( $hero_path ) && is_file( $hero_path ) ) {
+									$hero_size = $this->get_cached_image_size( $hero_path );
+									if ( is_array( $hero_size ) ) {
+										if ( ! $has_w ) {
+											$tags->set_attribute( 'width', (string) (int) $hero_size[0] );
+											$changed = true;
+										}
+										if ( ! $has_h ) {
+											$tags->set_attribute( 'height', (string) (int) $hero_size[1] );
+											$changed = true;
+										}
+									}
+								}
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 						break;
 					}
 				}
@@ -9028,6 +9108,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$buffer
 					);
 					if ( null !== $buffer ) {
+						// Pre-6.2 regex path has no Tag Processor: still
+						// backfill stable dimensions (issue #1467) so eager
+						// heroes keep CLS-safe width/height without the HTML API.
+						$buffer = $this->post_process_img_dimensions( $buffer );
 						$buffer = $this->post_process_auto_sizes( $buffer );
 					}
 				}
