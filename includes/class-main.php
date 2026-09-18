@@ -3499,9 +3499,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// dynamic-path, so a stale Util can never warm
 						// faceted or wc-ajax URLs.
 						try {
-							$warm_path = (string) wp_parse_url( $url, PHP_URL_PATH );
-							$warm_qs   = (string) wp_parse_url( $url, PHP_URL_QUERY );
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( $warm_path, $warm_qs, '' ) ) {
+							$warm_path       = (string) wp_parse_url( $url, PHP_URL_PATH );
+							$warm_qs         = (string) wp_parse_url( $url, PHP_URL_QUERY );
+							$warm_rest_route = '';
+							if ( '' !== $warm_qs ) {
+								$warm_params = array();
+								parse_str( $warm_qs, $warm_params );
+								if ( isset( $warm_params['rest_route'] ) && is_string( $warm_params['rest_route'] ) ) {
+									$warm_rest_route = $warm_params['rest_route'];
+								}
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
+								if ( Util::is_woo_store_api_request( $warm_path, $warm_qs, '' ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_request( $warm_path, '', $warm_rest_route ) ) ) {
+									return;
+								}
+							} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && ( Util::is_woo_store_api_path( $warm_path ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_path( $warm_rest_route ) ) ) ) {
+								return;
+							} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $warm_path, '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $warm_qs ) ) ) ) {
 								return;
 							}
 							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
