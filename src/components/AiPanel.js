@@ -225,17 +225,25 @@ const AiPanel = () => {
 	};
 
 	const [ applyingMetrics, setApplyingMetrics ] = useState( [] );
+	// Per-suggestion in-flight key (issue #1407): shared with the
+	// regenerate button so two cards with the same metric never share
+	// one disabled flag. Falls through post_id → url → metric.
+	const suggestionActionKey = ( suggestion ) =>
+		suggestion?.ai_payload?.css_refresh?.post_id ||
+		suggestion?.ai_payload?.css_refresh?.url ||
+		suggestion.metric;
 	const handleApply = async ( suggestion ) => {
 		const payload = suggestion.ai_payload;
 		if ( ! payload ) {
 			return;
 		}
+		const applyKey = suggestionActionKey( suggestion );
 		// Audit #1354: disable while in flight so double-clicks cannot
 		// fire duplicate update_settings requests.
-		if ( applyingMetrics.includes( suggestion.metric ) ) {
+		if ( applyingMetrics.includes( applyKey ) ) {
 			return;
 		}
-		setApplyingMetrics( ( prev ) => [ ...prev, suggestion.metric ] );
+		setApplyingMetrics( ( prev ) => [ ...prev, applyKey ] );
 		try {
 			const currentTabSettings =
 				typeof wppoSettings !== 'undefined'
@@ -277,7 +285,7 @@ const AiPanel = () => {
 			} );
 		} finally {
 			setApplyingMetrics( ( prev ) =>
-				prev.filter( ( metric ) => metric !== suggestion.metric )
+				prev.filter( ( metric ) => metric !== applyKey )
 			);
 		}
 	};
@@ -351,10 +359,7 @@ const AiPanel = () => {
 	};
 
 	const [ regeneratingMetrics, setRegeneratingMetrics ] = useState( [] );
-	const regenerateKey = ( suggestion ) =>
-		suggestion?.ai_payload?.css_refresh?.post_id ||
-		suggestion?.ai_payload?.css_refresh?.url ||
-		suggestion.metric;
+	const regenerateKey = suggestionActionKey;
 	const handleRegenerateCss = async ( suggestion ) => {
 		const postId = suggestion?.ai_payload?.css_refresh?.post_id;
 		if ( ! postId ) {
@@ -571,7 +576,7 @@ const AiPanel = () => {
 										className="wppo-button wppo-button--sm wppo-button--primary"
 										onClick={ () => handleApply( s ) }
 										disabled={ applyingMetrics.includes(
-											s.metric
+											suggestionActionKey( s )
 										) }
 										aria-label={ sprintf(
 											// translators: %s is the suggestion description.

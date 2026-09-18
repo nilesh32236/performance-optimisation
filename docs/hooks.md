@@ -1225,7 +1225,7 @@ add_filter( 'wppo_ai_css_refresh_enabled', '__return_true' );
 Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since NEXT. Non-numeric or negative values fail open to the current setting.
 
 **Parameters:**
-- `$days` *(int)* — Cooldown days (default 7, from `ai_adaptive.css_refresh_cooldown_days`; 0 skips the cooldown transient).
+- `$days` *(int)* — Cooldown days (default 7, from `ai_adaptive.css_refresh_cooldown_days`; values below 1 are normalized up to 1).
 
 ---
 

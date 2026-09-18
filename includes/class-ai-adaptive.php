@@ -2976,7 +2976,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * setting, falling back to CSS_REFRESH_COOLDOWN_DAYS. Filterable via
 		 * `wppo_ai_css_refresh_cooldown_days`. Fail-open to 7.
 		 *
-		 * @return int Cooldown days (>=0; 0 skips the cooldown transient).
+		 * A 0-day window would re-queue on every suggestions render while
+		 * the regression persists (dedup would rely solely on
+		 * as_has_scheduled_action() for pending jobs), so the effective
+		 * floor is 1 day: stored/filtered values below 1 are normalized up.
+		 *
+		 * @return int Cooldown days (>=1).
 		 * @since NEXT
 		 */
 		public static function css_refresh_cooldown_days(): int {
@@ -2995,6 +3000,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					/**
 					 * Filters the per-URL CSS-refresh cooldown window.
 					 *
+					 * Values below 1 are normalized up to 1 (see
+					 * css_refresh_cooldown_days()).
+					 *
 					 * @since NEXT
 					 * @param int $days Cooldown days.
 					 */
@@ -3003,7 +3011,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						$days = (int) $filtered;
 					}
 				}
-				return $days >= 0 ? $days : self::CSS_REFRESH_COOLDOWN_DAYS;
+				if ( $days < 1 ) {
+					$days = 1;
+				}
+				return $days >= 1 ? $days : self::CSS_REFRESH_COOLDOWN_DAYS;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return self::CSS_REFRESH_COOLDOWN_DAYS;
@@ -3393,9 +3404,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Arm the per-URL CSS-refresh cooldown transient.
 		 *
-		 * Best-effort: a missing transient API or a 0-day window is a
-		 * no-op (dedup then relies on as_has_scheduled_action()). Never
-		 * throws.
+		 * Best-effort: a missing transient API is a no-op. The effective
+		 * cooldown floor is 1 day (see css_refresh_cooldown_days()), so a
+		 * queued regen always arms the transient. Never throws.
 		 *
 		 * @param string $cooldown_key Blog-aware transient key.
 		 * @param int    $now Current timestamp.
@@ -3408,8 +3419,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return;
 				}
 				$days = self::css_refresh_cooldown_days();
-				if ( $days <= 0 ) {
-					return;
+				if ( $days < 1 ) {
+					$days = 1;
 				}
 				$day_seconds = defined( 'DAY_IN_SECONDS' ) ? (int) DAY_IN_SECONDS : 86400;
 				set_transient( $cooldown_key, $now, $days * $day_seconds );
@@ -3735,16 +3746,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Always returns suggestion-shaped arrays but the caller should gate
 		 * display on is_enabled() (guard: never auto-apply).
 		 *
-		 * Read-path queue note (issue #1407): when a field-LCP regression
-		 * fires, rendering the LCP suggestion bridges to
+		 * GET-with-side-effect (issue #1407, intentional): this method is
+		 * served by the `ai_suggestions` GET endpoint (via
+		 * Suggestion_Engine::from_ai_adaptive()), so merely rendering the
+		 * dashboard may mutate state. When a field-LCP regression fires,
+		 * rendering the LCP suggestion bridges to
 		 * maybe_queue_css_refresh(), which may enqueue at most one
-		 * `wppo_used_css_generate` job per URL per 7-day cooldown window
-		 * (plus one cooldown transient and one bounded snapshot-option
-		 * write, only on an actual queue). The bridge runs only when the
+		 * `wppo_used_css_generate` Action Scheduler job per URL per
+		 * cooldown window (minimum 1 day, default 7) plus one cooldown
+		 * transient and one bounded (20-entry) snapshot-option write, only
+		 * on an actual queue, plus the `wppo_ai_css_refresh_queued`
+		 * action. The bridge runs only when the
 		 * `ai_adaptive.css_refresh_on_lcp_regression` opt-in is on
-		 * (default off/suggest-only), only for admin-capability callers of
-		 * the `ai_suggestions` GET endpoint, and is fail-open (any failure
-		 * degrades to a plain suggestion-only card).
+		 * (default off/suggest-only), only for admin-capability (`manage_options`)
+		 * callers, and is fail-open (any failure degrades to a plain
+		 * suggestion-only card). There is no per-URL confirmation: every
+		 * new regression auto-queues once per cooldown window. Callers
+		 * that need a pure suggest-only render must ensure the opt-in is
+		 * off (or the `wppo_ai_css_refresh_enabled` filter returns false).
 		 *
 		 * @return array[]
 		 * @since 2.0.0
