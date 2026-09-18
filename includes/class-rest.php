@@ -1585,16 +1585,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$jobs_queued          = 0;
 
 			if ( $use_action_scheduler ) {
-				// Paginated scheduler snapshot for dedup instead of one
-				// as_has_scheduled_action() query per image (N+1). Falls back
-				// to per-item checks only when the snapshot is incomplete
-				// (unavailable/failed/page-cap hit); a complete snapshot is
-				// trusted (audit #1338). The snapshot is best-effort: a
-				// concurrent process enqueueing between snapshot and enqueue
-				// can still duplicate — the per-item fallback narrows that
-				// window only when the snapshot is known-incomplete.
-				$scheduled         = array();
-				$snapshot_complete = false;
+				// Paginated scheduler snapshot for in-request dedup instead of
+				// one as_has_scheduled_action() query per image (N+1, audit
+				// #1338). The snapshot is best-effort and advisory only: the
+				// atomic `$unique` enqueue below (issue #1408) is the dedup
+				// authority, so a concurrent enqueue between snapshot and
+				// enqueue still dedupes safely in the store.
+				$scheduled = array();
 				// Needed dedup keys (bounded by $jobs_cap): stop paginating as
 				// soon as every needed key is covered instead of fetching up
 				// to 10k rows.
@@ -1624,13 +1621,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								'offset'   => $as_page * 1000,
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
-							// Store failure is NOT complete: fall back to per-item checks
-							// rather than trusting an empty map (avoids double-queueing).
+							// Store failure yields a partial map at worst: the
+							// atomic `$unique` enqueue below still dedupes.
 							if ( ! is_array( $existing_actions ) ) {
 								break;
 							}
 							if ( empty( $existing_actions ) ) {
-								$snapshot_complete = true;
 								break;
 							}
 							foreach ( $existing_actions as $action ) {
@@ -1646,14 +1642,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
 									// All needed keys covered: stop paginating early.
 									if ( ! empty( $needed ) && ! array_diff_key( $needed, $scheduled ) ) {
-										$snapshot_complete = true;
 										break 2;
 									}
 								}
 							}
 							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 							if ( count( $existing_actions ) < 1000 ) {
-								$snapshot_complete = true;
 								break;
 							}
 						}
@@ -1663,6 +1657,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 				// Schedule background jobs via Action Scheduler with deduplication.
+				// Atomic-first on AS 4.x (issue #1408): Util::enqueue_unique_async_action()
+				// passes the explicit `$unique` flag so hook+args+group dedupe happens
+				// atomically in the store — no racy check-then-act and no per-item
+				// as_has_scheduled_action() SELECT (saves N queries per bulk request).
+				// The snapshot above stays as an in-flight/in-request map only; a 0
+				// return means deduped-or-failed and is never counted as queued.
 				foreach ( $webp_images as $webp_image ) {
 					$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
@@ -1677,17 +1677,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
-							$scheduled[ $dedup_key ] = true;
-							continue;
-						}
-						as_enqueue_async_action(
+						$job_id                  = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
 						$scheduled[ $dedup_key ] = true;
-						++$jobs_queued;
+						if ( $job_id > 0 ) {
+							++$jobs_queued;
+						}
 					}
 				}
 
@@ -1705,17 +1703,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
-							$scheduled[ $dedup_key ] = true;
-							continue;
-						}
-						as_enqueue_async_action(
+						$job_id                  = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
 						$scheduled[ $dedup_key ] = true;
-						++$jobs_queued;
+						if ( $job_id > 0 ) {
+							++$jobs_queued;
+						}
 					}
 				}
 
@@ -3065,22 +3061,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 				$job_args = array( 'post_id' => $post_id );
-				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
-					return $this->send_response(
-						array(
-							'mode'    => 'single',
-							'post_id' => $post_id,
-						),
-						true,
-						202,
-						__( 'Used CSS regeneration already queued.', 'performance-optimisation' )
-					);
+				// Atomic-first on AS 4.x (issue #1408): the `$unique` insert dedupes
+				// hook+args+group in the store, closing the check-then-act race where
+				// two concurrent requests both passed as_has_scheduled_action() and
+				// double-queued. A 0 return is ambiguous (deduped vs failure), so
+				// re-probe the guard once to report "already queued" honestly.
+				$job_id = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+				if ( 0 === $job_id ) {
+					$already_pending = false;
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$already_pending = false;
+						}
+					}
+					if ( $already_pending ) {
+						return $this->send_response(
+							array(
+								'mode'    => 'single',
+								'post_id' => $post_id,
+							),
+							true,
+							202,
+							__( 'Used CSS regeneration already queued.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response( null, false, 500, __( 'Used CSS regeneration could not be queued.', 'performance-optimisation' ) );
 				}
-				as_enqueue_async_action(
-					'wppo_used_css_generate',
-					$job_args,
-					'performance_optimisation'
-				);
 				return $this->send_response(
 					array(
 						'mode'    => 'single',
