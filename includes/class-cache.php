@@ -6515,6 +6515,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( $to_free > 0 ) {
 					self::evict_oldest_cache_entries( $to_free );
 					$evicted = true;
+					// Re-read the file count after byte eviction so the
+					// count phase below budgets against post-eviction
+					// state instead of over-evicting on a stale value.
+					// Fail-open: a 0 re-read only defers count eviction
+					// to the next throttled run.
+					$files = self::get_cache_file_count();
 				}
 				$cap_files = (int) ( $status['cap_files'] ?? 0 );
 				if ( $cap_files > 0 && $files >= $cap_files ) {
@@ -6569,8 +6575,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						continue;
 					}
 					$size = (int) ( $entries[ $i ]['size'] ?? 0 );
-					$instance->delete_cache_files( $file );
-					$freed += $size;
+					if ( $instance->delete_cache_files( $file ) ) {
+						$freed += $size;
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -6621,8 +6628,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( '' === $file || ! $instance->is_path_contained( $file ) ) {
 						continue;
 					}
-					$instance->delete_cache_files( $file );
-					++$removed;
+					if ( $instance->delete_cache_files( $file ) ) {
+						++$removed;
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
