@@ -41,7 +41,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		 * site's version. Null until first read; tests may reset via
 		 * reset_version_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<int, int>
 		 */
 		private static array $version_memo = array(); // Audit #1434: typed.
@@ -49,7 +49,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		/**
 		 * Reset the version memo (tests only).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_version_memo(): void {
@@ -59,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		/**
 		 * Get the activity cache version, memoized per request per site.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int
 		 */
 		private static function get_cache_version(): int {

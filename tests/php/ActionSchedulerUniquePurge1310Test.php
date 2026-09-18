@@ -430,6 +430,35 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * AS 4.2 double-schedule fixture (issue #1408): two consecutive
+	 * unique enqueues of the same hook+args+group queue a single job —
+	 * the first returns its ID, the second returns 0 — and both inserts
+	 * pass the explicit `$unique` flag.
+	 *
+	 * Runs in a separate process with a 4.x-shaped store-deduping stub so
+	 * reflection detects unique support.
+	 *
+	 * @since NEXT
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_double_schedule_with_unique_flag_queues_single_job(): void {
+		if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+			eval( 'function as_enqueue_async_action( $hook, $args = array(), $group = "", $unique = false, $priority = 10 ) { $GLOBALS["wppo_1408_calls"][] = func_get_args(); $key = $hook . "|" . json_encode( $args ) . "|" . $group; if ( isset( $GLOBALS["wppo_1408_registry"][ $key ] ) ) { return 0; } $GLOBALS["wppo_1408_registry"][ $key ] = true; return 101; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only 4.x-shaped store-deduping scheduler stub in an isolated process.
+		}
+		$GLOBALS['wppo_1408_calls']    = array();
+		$GLOBALS['wppo_1408_registry'] = array();
+		$args                          = array( 'post_id' => 9 );
+		$first                         = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+		$second                        = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+		$this->assertSame( 101, $first );
+		$this->assertSame( 0, $second );
+		$this->assertCount( 2, $GLOBALS['wppo_1408_calls'] );
+		$this->assertTrue( $GLOBALS['wppo_1408_calls'][0][3] );
+		$this->assertTrue( $GLOBALS['wppo_1408_calls'][1][3] );
+	}
+
+	/**
 	 * A broken legacy guard must not fail the enqueue (fail-open).
 	 *
 	 * Regression coverage for stale test doubles (or a half-loaded

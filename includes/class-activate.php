@@ -66,7 +66,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * `# define(...)`, `/* define(...)`, `* define(...)`) can never match.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const WP_CACHE_FALSE_PATTERN = '/^[ \t]*define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\)\s*;/mi';
 
@@ -77,7 +77,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * really enabled the constant instead of trusting a bare substring.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const WP_CACHE_TRUE_PATTERN = '/^[ \t]*define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)/mi';
 
@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * Guarded WP_CACHE enable block appended when the constant is absent.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const WP_CACHE_GUARD_BLOCK = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
 
@@ -131,7 +131,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			$has_activation_time = (bool) get_option( 'wppo_activation_time' );
 			if ( ! $has_activation_time ) {
-				update_option( 'wppo_activation_time', time() );
+				// Audit #1469: explicit no-autoload (write-once timestamp).
+				update_option( 'wppo_activation_time', time(), false );
 			}
 
 			// Capture the stored version before rolling it forward below, so the
@@ -358,7 +359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @param string $contents Current wp-config.php contents.
 		 * @param bool   $runtime_defined_false Whether WP_CACHE is already defined false at runtime.
 		 * @return string|null New file contents, or null when no write should happen.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function build_wp_cache_contents( string $contents, bool $runtime_defined_false ): ?string {
 			// If WP_CACHE is defined as false, try to replace it with true.

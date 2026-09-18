@@ -39,7 +39,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * probable injection payloads; legitimate plugin rules are short.
 		 *
 		 * @var int
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const MAX_RULE_LINE_LENGTH = 4096;
 
@@ -55,7 +55,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * sites. Fail-open: missing transient functions simply skip.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const FAILURE_TRANSIENT = 'wppo_htaccess_failure';
 
@@ -444,7 +444,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * touched, so no cross-site leakage; only the per-site `.htaccess`
 		 * path is ever written by update_rules().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when an `.htaccess` write may proceed.
 		 */
 		public static function supports_htaccess(): bool {
@@ -461,7 +461,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		/**
 		 * Blog-aware transient key for the persistent .htaccess failure flag.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Transient key (blog-prefixed on multisite).
 		 */
 		public static function get_failure_transient_key(): string {
@@ -481,7 +481,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * Fail-open: any throwable or missing transient API reads as "no
 		 * failure" so the admin never white-screens over a notice flag.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when a previous write failed and no success cleared it.
 		 */
 		public static function has_htaccess_failure(): bool {
@@ -503,7 +503,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * persists, for 30 days or until a verified success (or an explicit
 		 * dismiss) clears it. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function flag_htaccess_failure(): void {
@@ -525,7 +525,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 *
 		 * Never throws; a failed delete only leaves the notice until its TTL.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function clear_htaccess_failure(): void {
@@ -551,7 +551,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * single-block assertion in verify_htaccess_contents(). Fail closed:
 		 * callers must abort the write and leave the file unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $rules Raw rules lines.
 		 * @return array|false The rules unchanged when valid, false when rejected.
@@ -741,7 +741,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * very old code paths. Fail closed: false means "do not touch the
 		 * filesystem" and callers leave existing content byte-identical.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $htaccess_file Absolute .htaccess path candidate.
 		 * @return bool True when the target may be written.
