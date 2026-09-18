@@ -1163,15 +1163,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function get_autoload_total_bytes(): int {
 			global $wpdb;
+			if ( ! isset( $wpdb->options ) ) {
+				return 0;
+			}
 			$autoload_values = self::get_autoloadable_values();
 			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
-			$total = $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-					...$autoload_values
-				)
-			);
+			try {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
+				$total = $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+						...$autoload_values
+					)
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
 			return null === $total ? 0 : (int) $total;
 		}
 
