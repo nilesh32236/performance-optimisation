@@ -117,6 +117,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return int Action Scheduler job ID.
 		 */
 		public static function queue_scan( string $url, string $strategy = 'mobile' ): int {
+			// Audit #1434: allowlist before enqueue — an invalid strategy must
+			// not reach the Google API request.
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 				return 0;
 			}
@@ -155,7 +160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * pending (issue #1310 review). Fail-open: returns 0 when the lookup
 		 * API is unavailable or finds nothing.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $args Action arguments.
 		 * @return int Pending job ID, or 0 when none is found.
 		 */
@@ -215,6 +220,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		public static function run_scan( array $args ): void {
 			$url      = isset( $args['url'] ) ? esc_url_raw( $args['url'] ) : '';
 			$strategy = isset( $args['strategy'] ) ? sanitize_text_field( $args['strategy'] ) : 'mobile';
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 
 			if ( empty( $url ) ) {
 				Log::add( __( 'PageSpeed scan skipped: empty URL.', 'performance-optimisation' ) );
@@ -328,8 +336,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$http_code = (int) wp_remote_retrieve_response_code( $response );
 
 			if ( 200 !== $http_code ) {
-				// Translators: %1$d is the HTTP status code, %2$s is the URL.
-				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url( $url ) );
+				// Audit #1434: raw for storage (esc_url display-encoding pollutes stored data).
+				/* translators: %1$d: HTTP status code, %2$s: URL. */
+				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url_raw( $url ) );
 				Log::add( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
@@ -367,8 +376,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				sprintf(
 					/* translators: %1$s is the URL, %2$s is the strategy (mobile/desktop), %3$d is the performance score. */
 					__( 'PageSpeed scan completed for %1$s (%2$s). Performance score: %3$d.', 'performance-optimisation' ),
-					esc_url( $url ),
-					esc_html( $strategy ),
+					esc_url_raw( $url ),
+					sanitize_key( $strategy ),
 					(int) ( $prepared['scores']['performance'] ?? 0 )
 				)
 			);
@@ -386,6 +395,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return array|false Prepared result array, or false if not ready.
 		 */
 		public static function get_results( string $url, string $strategy = 'mobile' ) {
+			// Audit #1434: allowlist at the sink (covers direct callers).
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 			return get_transient( self::get_transient_key( $url, $strategy ) );
 		}
 
@@ -751,7 +764,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * url/snippet/score fields, so unbounded API payloads (headings,
 		 * debugData, full node trees) never bloat the transient.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $details Raw details array from the API.
 		 * @return array Sanitized details.
 		 */
@@ -814,7 +827,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * Allows only <img src> (length-capped) so stored transients stay
 		 * bounded without losing the parse target.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $snippet Raw snippet from the API.
 		 * @return string Sanitized snippet.
 		 */
@@ -936,7 +949,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * so the scanned URL compares equal to the home URL; the previous
 		 * add_query_arg( array(), $url ) normalisation did this implicitly.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Raw URL.
 		 * @return string Sanitised URL without empty query/fragment.
 		 */

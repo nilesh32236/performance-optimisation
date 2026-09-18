@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 import {
 	apiCall,
 	getErrorLogMessage,
@@ -136,7 +136,7 @@ const STEPS = [
 
 		settings: {
 			tab: 'cache_settings',
-			payload: { enableCache: true },
+			payload: { enableCache: true, wooSafeMode: true },
 		},
 		isEnabled: () =>
 			getWppoSettings()?.settings?.cache_settings?.enableCache ?? false,
@@ -364,9 +364,15 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 				);
 				notify( {
 					type: 'error',
-					message: __(
-						'The WooCommerce self-test timed out after 5 seconds. Please retry.',
-						'performance-optimisation'
+					message: sprintf(
+						/* translators: %d: timeout in seconds, derived from WOO_SELF_TEST_TIMEOUT_MS. */
+						_n(
+							'The WooCommerce self-test timed out after %d second. Please retry.',
+							'The WooCommerce self-test timed out after %d seconds. Please retry.',
+							Math.round( WOO_SELF_TEST_TIMEOUT_MS / 1000 ),
+							'performance-optimisation'
+						),
+						Math.round( WOO_SELF_TEST_TIMEOUT_MS / 1000 )
 					),
 					durationMs: 5000,
 				} );
@@ -429,6 +435,52 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 					durationMs: 5000,
 				} );
 				return;
+			}
+
+			// Onboarding proof (issue #1383): after page cache is enabled,
+			// auto-run the read-only WooCommerce self-test so cart/checkout/
+			// account and Store API routes are proven uncached before the
+			// merchant goes live. Best-effort: never blocks dismissal. On an
+			// explicit FAIL the panel stays visible so the FAIL banner (via
+			// useNotice + NoticeBanner) surfaces instead of being dismissed
+			// away with the proof hidden.
+			if ( step.key === 'cache' ) {
+				const autoController =
+					typeof AbortController !== 'undefined'
+						? new AbortController()
+						: null;
+				wooAbortRef.current = autoController;
+				try {
+					const testRes = await runWooSelfTest(
+						autoController?.signal
+					);
+					if (
+						dismissedRef.current ||
+						wooAbortRef.current !== autoController ||
+						autoController?.signal?.aborted
+					) {
+						return;
+					}
+					if ( testRes?.success && testRes?.data ) {
+						setWooSelfTest( testRes.data );
+						const descriptor = getWooSelfTestNotice( testRes.data );
+						notify( { ...descriptor, durationMs: 5000 } );
+						if ( shouldShowWooFixCta( testRes.data ) ) {
+							return;
+						}
+					}
+				} catch ( selfTestError ) {
+					// Best-effort proof — log for debuggability, then
+					// continue to dismiss.
+					console.error(
+						'Woo self-test proof failed:',
+						getErrorLogMessage( selfTestError )
+					);
+				} finally {
+					if ( wooAbortRef.current === autoController ) {
+						wooAbortRef.current = null;
+					}
+				}
 			}
 
 			const dismissRes = await dismissWelcome().catch(

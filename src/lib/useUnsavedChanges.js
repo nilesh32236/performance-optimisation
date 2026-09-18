@@ -83,7 +83,13 @@ export const stableStringify = ( value ) => {
  * @param {Object} baseline Baseline derived from props / defaults.
  */
 const useUnsavedChanges = ( settings, baseline ) => {
-	const { setIsDirty } = useContext( UnsavedChangesContext );
+	// Audit #1420: guard a missing provider — destructuring undefined
+	// crashes every effect in every form using this hook.
+	const unsavedContext = useContext( UnsavedChangesContext );
+	const setIsDirty =
+		unsavedContext && typeof unsavedContext.setIsDirty === 'function'
+			? unsavedContext.setIsDirty
+			: () => {};
 
 	const baselineKey = useMemo(
 		() => stableStringify( baseline ),
@@ -101,13 +107,15 @@ const useUnsavedChanges = ( settings, baseline ) => {
 
 	useEffect( () => {
 		return () => {
-			// On unmount the form is no longer visible; if we were the
-			// dirty owner, clear the flag so a newly mounted tab starts clean.
-			// The App guard captures pending navigation synchronously before
-			// unmount, so clearing here does not race with the confirm dialog.
-			setIsDirty( false );
+			// On unmount the form is no longer visible; clear the flag only
+			// if this form still owns the dirtiness (audit #1420: an
+			// unconditional clear can wipe dirtiness owned by another
+			// still-mounted form during Suspense transitions).
+			if ( baselineKey !== settingsKey ) {
+				setIsDirty( false );
+			}
 		};
-	}, [ setIsDirty ] );
+	}, [ setIsDirty, baselineKey, settingsKey ] );
 };
 
 export default useUnsavedChanges;

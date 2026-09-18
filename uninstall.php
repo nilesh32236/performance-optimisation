@@ -153,7 +153,7 @@ if ( ! function_exists( 'wppo_cleanup_redis_state_files' ) ) {
 	 * wp_delete_file() with one retry (mirroring the redis-config pattern),
 	 * and never fatal — missing files or methods count as success.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	function wppo_cleanup_redis_state_files(): void {
@@ -235,7 +235,7 @@ if ( ! function_exists( 'wppo_cleanup_redis_config_htaccess_block' ) ) {
 	 * does not exist so no new file is created. Missing marker or file
 	 * counts as success.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	function wppo_cleanup_redis_config_htaccess_block(): void {
@@ -410,7 +410,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 	 * per-site inside wppo_cleanup_site() so the multisite loop below clears
 	 * every blog; never fatals and never touches foreign hooks/groups.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	function wppo_clear_scheduled_jobs(): void {

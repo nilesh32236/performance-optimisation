@@ -13,7 +13,7 @@
  * writing to plugins/languages. Original .mo remains the fallback.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;

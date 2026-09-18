@@ -1470,10 +1470,12 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
 
 		await waitFor( () => {
+			// Audit #1420: sandbox fetch carries an AbortSignal now.
 			expect( apiCall ).toHaveBeenCalledWith(
 				'sandbox_preview',
 				{},
-				'GET'
+				'GET',
+				expect.any( AbortSignal )
 			);
 		} );
 		await waitFor( () => {

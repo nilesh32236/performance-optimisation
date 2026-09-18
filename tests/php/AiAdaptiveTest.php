@@ -109,6 +109,48 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Install stubs forcing a non-commerce context (issue #1463).
+	 *
+	 * The Woo-presence test in this file eval-declares Woo helpers
+	 * process-wide, which would otherwise cap eagerness site-wide for every
+	 * later test. Forcing the context via the filter keeps slow-path
+	 * downgrade expectations deterministic regardless of test order.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	private function install_non_commerce_stubs(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+	}
+
+	/**
+	 * Install stubs forcing a commerce context (issue #1463).
+	 *
+	 * Explicit counterpart of install_non_commerce_stubs(): pins the
+	 * commerce guardrail on regardless of test order or login stubs.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	private function install_commerce_stubs(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+	}
+
+	/**
 	 * Test is_enabled returns false when disabled.
 	 *
 	 * @return void
@@ -1210,7 +1252,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * heuristic path exercises connection-aware copy.
 	 *
 	 * @since 2.0.0
-	 * @since NEXT Segment fixture carries the `connection` dimension.
+	 * @since 2.2.0 Segment fixture carries the `connection` dimension.
 	 *
 	 * @param int $segment_n Segment sample count.
 	 * @return void
@@ -1292,7 +1334,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * default 20-sample gate) When the heuristic runs Then eagerness stays
 	 * conservative with no override — suggest-only below threshold.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -1335,7 +1377,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * REST/UI copy never pairs an eager suggestion with provisional (0/20)
 	 * copy. Provisional stays true: no qualified segment was observed.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -1363,7 +1405,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * same data learns `eager`. Pins the additive setting on the heuristic
 	 * path (the preload path is pinned in RumTest).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -1406,12 +1448,12 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * baseline, the slowest segment drives `eager` and the suggestion copy
 	 * carries its device, template, and connection.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
 	public function test_learn_slowest_segment_wins_with_connection(): void {
-		$this->install_stubs();
+		$this->install_non_commerce_stubs();
 		$today                                   = gmdate( 'Y-m-d' );
 		$this->options['wppo_web_vitals_rum']    = array(
 			$today => array(
@@ -1463,9 +1505,14 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 4500.0, $model['field_lcp_p75'] );
 
 		$suggestions = AI_Adaptive::get_suggestions();
-		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
-		$this->assertNotNull( $eagerness );
-		$this->assertStringContainsString( 'slow-2g', $eagerness['value'] );
+		// Slow path wins (issue #1463): the qualified slow segment (p75
+		// 4500ms) suppresses the base eagerness card so only the one-step
+		// downgrade payload is offered; the segment labels route onto it.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertStringContainsString( 'slow-2g', $downgrade['value'] );
+		$this->assertSame( 'moderate', $downgrade['ai_payload']['settings']['speculationEagerness'] );
 	}
 
 	/**
@@ -1476,7 +1523,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_learn_at_threshold_routes_segmented_p75(): void {
-		$this->install_stubs();
+		$this->install_non_commerce_stubs();
 		$this->seed_segmented_rum( 20 );
 		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
 		Functions\when( 'is_admin' )->justReturn( false );
@@ -1490,11 +1537,15 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 4000.0, $model['field_lcp_p75'] );
 
 		$suggestions = AI_Adaptive::get_suggestions();
-		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
-		$this->assertNotNull( $eagerness );
-		$this->assertStringContainsString( 'mobile', $eagerness['value'] );
-		$this->assertStringContainsString( 'single', $eagerness['value'] );
-		$this->assertStringContainsString( 'p75', $eagerness['value'] );
+		// Slow path wins (issue #1463): the base eagerness card is
+		// suppressed; the segment-routed copy lives on the downgrade card.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertStringContainsString( 'mobile', $downgrade['value'] );
+		$this->assertStringContainsString( 'single', $downgrade['value'] );
+		$this->assertStringContainsString( 'p75', $downgrade['value'] );
+		$this->assertSame( 'moderate', $downgrade['ai_payload']['settings']['speculationEagerness'] );
 		$field = $this->find_suggestion( $suggestions, 'ai_field_lcp_tune' );
 		$this->assertNotNull( $field );
 		$this->assertStringContainsString( 'mobile', $field['value'] );
@@ -1546,6 +1597,32 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 			$snapshots[] = array( $metric => $baseline_value );
 		}
 		$snapshots[] = array( $metric => $current_value );
+		return array( 'key1' => $snapshots );
+	}
+
+	/**
+	 * Build a single-key trends map with baseline samples + N degraded trailing windows.
+	 *
+	 * Exercises the three-window ratio-persistence gate (issue #1384):
+	 * every trailing window breaches the ratio/delta threshold.
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $metric Metric key ('lcp'|'cls').
+	 * @param int    $baseline_count Number of baseline samples.
+	 * @param float  $baseline_value Baseline sample value.
+	 * @param float  $degraded_value Degraded trailing-window value.
+	 * @param int    $degraded_count Number of degraded trailing windows.
+	 * @return array Trends map.
+	 */
+	private function make_anomaly_trends_persisted( string $metric, int $baseline_count, float $baseline_value, float $degraded_value, int $degraded_count = 3 ): array {
+		$snapshots = array();
+		for ( $i = 0; $i < $baseline_count; $i++ ) {
+			$snapshots[] = array( $metric => $baseline_value );
+		}
+		for ( $i = 0; $i < $degraded_count; $i++ ) {
+			$snapshots[] = array( $metric => $degraded_value );
+		}
 		return array( 'key1' => $snapshots );
 	}
 
@@ -1602,7 +1679,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_detect_anomalies_requires_rum_corroboration(): void {
 		$this->install_stubs();
-		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
 
 		$undersampled = $this->make_anomaly_rum( 'lcp', 5, 2600.0 );
 		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $undersampled, 1700000000 ) );
@@ -1612,6 +1689,109 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertCount( 1, $anomalies );
 		$this->assertSame( 'lcp', $anomalies[0]['metric'] );
 		$this->assertEqualsWithDelta( 50.0, $anomalies[0]['change_pct'], 0.001 );
+	}
+
+	/**
+	 * Test a single noisy window never pages without persistence.
+	 *
+	 * Given one degraded trailing window with corroborating RUM When
+	 * evaluated Then no page fires — three persisted windows are
+	 * required (issue #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_single_window_no_page(): void {
+		$this->install_stubs();
+		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 ) );
+	}
+
+	/**
+	 * Test three persisted windows page with an enriched payload.
+	 *
+	 * Given three degraded trailing windows with corroborating RUM When
+	 * evaluated Then one notice fires carrying route plus p75 plus
+	 * baseline plus delta plus samples (issue #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_three_window_page_enriched(): void {
+		$this->install_stubs();
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+
+		$anomalies = AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 );
+		$this->assertCount( 1, $anomalies );
+		$anomaly = $anomalies[0];
+		$this->assertSame( 'key1', $anomaly['route'] );
+		$this->assertSame( 'key1', $anomaly['key'] );
+		$this->assertEqualsWithDelta( 2000.0, $anomaly['baseline'], 0.001 );
+		$this->assertEqualsWithDelta( 3000.0, $anomaly['current'], 0.001 );
+		$this->assertEqualsWithDelta( 1000.0, $anomaly['delta'], 0.001 );
+		$this->assertSame( 13, $anomaly['samples'] );
+		$this->assertArrayHasKey( 'p75', $anomaly );
+		$this->assertGreaterThan( 0.0, $anomaly['p75'] );
+	}
+
+	/**
+	 * Test the live path emits zero notices with RUM disabled.
+	 *
+	 * Given persisted trend regressions but RUM collection off When
+	 * evaluated via the live (null aggregate) path Then zero notices
+	 * appear and the provisional state reports rum_disabled (issue
+	 * #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_rum_disabled_returns_empty(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => false ),
+		);
+		Util::clear_settings_cache();
+		// Stored RUM data must not matter while collection is disabled.
+		$this->options['wppo_web_vitals_rum'] = $this->make_anomaly_rum( 'lcp', 50, 2600.0 );
+
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, null, 1700000000 ) );
+
+		$state = AI_Adaptive::get_anomaly_provisional_state( $trends, null, 1700000000 );
+		$this->assertTrue( $state['provisional'] );
+		$this->assertSame( 'rum_disabled', $state['reason'] );
+	}
+
+	/**
+	 * Test thin data surfaces a provisional state, never a page.
+	 *
+	 * Given undersampled trend history When the provisional state is
+	 * read Then it reports trends_thin; given satisfied floors it
+	 * reports ready (issue #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_anomaly_provisional_state_thin_and_ready(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+
+		$thin  = $this->make_anomaly_trends( 'lcp', 4, 2000.0, 3000.0 );
+		$state = AI_Adaptive::get_anomaly_provisional_state( $thin, $this->make_anomaly_rum( 'lcp', 50, 2600.0 ), 1700000000 );
+		$this->assertTrue( $state['provisional'] );
+		$this->assertSame( 'trends_thin', $state['reason'] );
+
+		$persisted = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
+		$ready     = AI_Adaptive::get_anomaly_provisional_state( $persisted, $this->make_anomaly_rum( 'lcp', 12, 2600.0 ), 1700000000 );
+		$this->assertFalse( $ready['provisional'] );
+		$this->assertSame( 'ready', $ready['reason'] );
 	}
 
 	/**
@@ -1627,7 +1807,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_detect_anomalies_cooldown_single_banner(): void {
 		$this->install_stubs();
-		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
 		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
 		$now    = 1700000000;
 
@@ -1655,7 +1835,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 		$now = 1700000000;
 
-		$shift = $this->make_anomaly_trends( 'cls', 10, 0.05, 0.12 );
+		$shift = $this->make_anomaly_trends_persisted( 'cls', 10, 0.05, 0.12 );
 		$rum   = $this->make_anomaly_rum( 'cls', 12, 0.10 );
 		$fired = AI_Adaptive::detect_anomalies( $shift, $rum, $now );
 		$this->assertCount( 1, $fired );
@@ -1672,6 +1852,65 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test CLS RUM corroboration requires the absolute shift, not just a non-negative average.
+	 *
+	 * Given a near-zero CLS baseline with persisted trend degradation When
+	 * field data sits barely above the baseline Then no page fires (the
+	 * old rum_avg >= baseline check was vacuous there); when field data
+	 * confirms the +0.05 absolute shift Then one notice fires (issue
+	 * #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_cls_rum_requires_absolute_shift(): void {
+		$this->install_stubs();
+		$now    = 1700000000;
+		$trends = $this->make_anomaly_trends_persisted( 'cls', 10, 0.0, 0.08 );
+
+		$thin_field = $this->make_anomaly_rum( 'cls', 12, 0.02 );
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $thin_field, $now ) );
+
+		unset( $this->options['wppo_ai_anomaly_last_alarm'] );
+
+		$confirming = $this->make_anomaly_rum( 'cls', 12, 0.08 );
+		$fired      = AI_Adaptive::detect_anomalies( $trends, $confirming, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'cls', $fired[0]['metric'] );
+	}
+
+	/**
+	 * Test a filtered persistence of 30 is clamped to a reachable value.
+	 *
+	 * Trend history holds 30 snapshots per URL+strategy while detection
+	 * needs persistence+1 samples, so persistence=30 could never fire.
+	 * Given a filter requesting 30 windows When evaluated over a full
+	 * 30-snapshot history Then the clamp (29) keeps the value reachable
+	 * and one notice fires (issue #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_persistence_clamped_to_reachable_max(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_anomaly_persistence_windows' === $hook ) {
+					return 30;
+				}
+				return $value;
+			}
+		);
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 1, 2000.0, 3000.0, 29 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+
+		$fired = AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'lcp', $fired[0]['metric'] );
+	}
+
+	/**
 	 * Test detector throwables degrade to an empty result (fail-open).
 	 *
 	 * @since 2.0.0
@@ -1685,10 +1924,198 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 				throw new \Exception( 'filter exploded' );
 			}
 		);
-		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 10, 2000.0, 3000.0 );
 		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
 
 		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 ) );
+	}
+
+	/**
+	 * Build a multi-date RUM aggregate for digest tests.
+	 *
+	 * Each window is array( date, path, n, avg ).
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $metric Metric key ('lcp'|'inp'|'cls').
+	 * @param array  $windows Window rows.
+	 * @return array RUM aggregate.
+	 */
+	private function make_digest_rum( string $metric, array $windows ): array {
+		$rum = array();
+		foreach ( $windows as $w ) {
+			list( $date, $path, $n, $avg ) = $w;
+			if ( ! isset( $rum[ $date ] ) ) {
+				$rum[ $date ] = array();
+			}
+			if ( ! isset( $rum[ $date ][ $path ] ) ) {
+				$rum[ $date ][ $path ] = array();
+			}
+			$rum[ $date ][ $path ][ $metric ] = array(
+				'n'   => $n,
+				'sum' => (float) $n * $avg,
+			);
+		}
+		return $rum;
+	}
+
+	/**
+	 * Test undersampled digest windows never alert.
+	 *
+	 * Given a window below 10 samples When evaluated Then no digest —
+	 * and a single date bucket (no baseline) also stays silent.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_rum_digest_undersampled_returns_empty(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+		$now = 1700000000;
+
+		$thin_recent = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 5, 3000.0 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $thin_recent, $now ) );
+
+		$thin_baseline = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 5, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 3000.0 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $thin_baseline, $now ) );
+
+		$single_date = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-10', '/pricing/', 50, 3000.0 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $single_date, $now ) );
+	}
+
+	/**
+	 * Test movement inside the tolerance band stays silent.
+	 *
+	 * A +32.5% LCP shift clears the +30% arm but not the 5% tolerance
+	 * band (effective bar 2730ms); a +40% shift clears both and alerts.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_rum_digest_tolerance_suppresses_borderline(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+		$now = 1700000000;
+
+		$inside = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 2650.0 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $inside, $now ) );
+
+		$outside = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 2800.0 ),
+			)
+		);
+		$fired   = AI_Adaptive::get_rum_anomaly_digest( $outside, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'lcp', $fired[0]['metric'] );
+		$this->assertEqualsWithDelta( 40.0, $fired[0]['change_pct'], 0.001 );
+	}
+
+	/**
+	 * Test a real regression links path plus window without touching settings.
+	 *
+	 * The alert carries the affected path, the compared window, and a
+	 * read-only source marker; no settings mutation happens (the digest
+	 * only persists the shared cooldown timestamp).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_rum_digest_alert_links_path_and_window(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$now = 1700000000;
+
+		$rum   = $this->make_digest_rum(
+			'inp',
+			array(
+				array( '2026-09-01', '/checkout/', 12, 150.0 ),
+				array( '2026-09-10', '/checkout/', 12, 250.0 ),
+			)
+		);
+		$fired = AI_Adaptive::get_rum_anomaly_digest( $rum, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'inp', $fired[0]['metric'] );
+		$this->assertSame( '/checkout/', $fired[0]['path'] );
+		$this->assertSame( 'rum:/checkout/', $fired[0]['key'] );
+		$this->assertSame( 'rum-digest', $fired[0]['source'] );
+		$this->assertStringContainsString( '2026-09-10', $fired[0]['window'] );
+		$this->assertStringContainsString( '2026-09-01', $fired[0]['window'] );
+		$this->assertEqualsWithDelta( 66.67, $fired[0]['change_pct'], 0.01 );
+		$this->assertSame( 12, $fired[0]['samples'] );
+
+		// Read-only w.r.t. settings: the digest persists only the shared
+		// cooldown timestamp, never touches wppo_settings.
+		$settings = $this->options['wppo_settings'];
+		$this->assertSame( array( 'ai_adaptive' => array( 'enabled' => true ) ), $settings );
+		$this->assertArrayHasKey( 'wppo_ai_anomaly_last_alarm', $this->options );
+	}
+
+	/**
+	 * Test the CLS digest arm uses an absolute delta plus tolerance.
+	 *
+	 * A +0.055 absolute shift stays silent inside the 0.05 + 0.01 band;
+	 * a +0.07 shift alerts.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_rum_digest_cls_absolute_delta_with_tolerance(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+		$now = 1700000000;
+
+		$inside = $this->make_digest_rum(
+			'cls',
+			array(
+				array( '2026-09-01', '/', 12, 0.05 ),
+				array( '2026-09-10', '/', 12, 0.105 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $inside, $now ) );
+
+		$outside = $this->make_digest_rum(
+			'cls',
+			array(
+				array( '2026-09-01', '/', 12, 0.05 ),
+				array( '2026-09-10', '/', 12, 0.12 ),
+			)
+		);
+		$fired   = AI_Adaptive::get_rum_anomaly_digest( $outside, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'cls', $fired[0]['metric'] );
+		$this->assertEqualsWithDelta( 0.07, $fired[0]['change_abs'], 0.0001 );
 	}
 
 	/**
@@ -1940,7 +2367,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * cannot misfire as global advice. Commerce contexts still cap the
 	 * applied eagerness payload at moderate.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -2005,21 +2432,24 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotNull( $field );
 		$this->assertStringContainsString( '4g', $field['value'] );
 		$this->assertStringContainsString( 'mobile', $field['value'] );
-		$eagerness = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
-		$this->assertNotNull( $eagerness );
-		$this->assertStringContainsString( '4g', $eagerness['value'] );
-		$this->assertSame( 'eager', $eagerness['ai_payload']['settings']['speculationEagerness'] );
+		// Slow path wins (issue #1463): the base eagerness card is
+		// suppressed; the connection-routed copy lives on the downgrade card.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertStringContainsString( '4g', $downgrade['value'] );
+		$this->assertSame( 'moderate', $downgrade['ai_payload']['settings']['speculationEagerness'] );
 	}
 
 	/**
 	 * Test commerce contexts cap the connection-routed eagerness payload.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
 	public function test_connection_routed_eagerness_caps_at_moderate_in_commerce_context(): void {
-		$this->install_stubs();
+		$this->install_commerce_stubs();
 		$today                                   = gmdate( 'Y-m-d' );
 		$this->options['wppo_web_vitals_rum']    = array(
 			$today => array(
@@ -2049,10 +2479,14 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'moderate', $model['eagerness'] );
 
 		$suggestions = AI_Adaptive::get_suggestions();
-		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
-		$this->assertNotNull( $eagerness );
-		$this->assertStringContainsString( 'slow-2g', $eagerness['value'] );
-		$this->assertSame( 'moderate', $eagerness['ai_payload']['settings']['speculationEagerness'] );
+		// Slow path wins (issue #1463): the base eagerness card is
+		// suppressed; the capped downgrade (moderate one step down to
+		// conservative) carries the connection-routed copy.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertStringContainsString( 'slow-2g', $downgrade['value'] );
+		$this->assertSame( 'conservative', $downgrade['ai_payload']['settings']['speculationEagerness'] );
 	}
 
 	/**
@@ -2062,7 +2496,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * `ai_lcp_preload` / `ai_slow_resource_preload` suggestions targeting
 	 * the preload tab with empty settings payloads (never auto-applied).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_get_suggestions_emits_attribution_preload_candidates(): void {
@@ -2125,7 +2559,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Missing `attributed_lcp` / `slow_resources` keys fail open: no fatal,
 	 * no attribution suggestions, pre-existing suggestions unaffected.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_get_suggestions_omits_attribution_without_model_keys(): void {
@@ -2196,11 +2630,13 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function seed_css_refresh_settings( bool $enabled ): void {
 		$this->options['wppo_settings'] = array(
-			'ai_adaptive' => array(
+			'ai_adaptive'       => array(
 				'enabled'                       => true,
 				'css_refresh_on_lcp_regression' => $enabled,
 				'css_refresh_cooldown_days'     => 7,
 			),
+			// Merged detect_anomalies() pages only with RUM collection on.
+			'performance_audit' => array( 'rum_enabled' => true ),
 		);
 		Util::clear_settings_cache();
 		Util::reset_cached_home_urls();
@@ -2379,7 +2815,10 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Build trend snapshots: 10 baseline samples + one current sample.
+	 * Build trend snapshots: 10 baseline samples + three current samples.
+	 *
+	 * Three degraded samples satisfy the persistence gate merged from master
+	 * (anomaly_persistence_windows default 3: every trailing window must breach).
 	 *
 	 * @since NEXT
 	 *
@@ -2393,7 +2832,216 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		for ( $i = 0; $i < 10; $i++ ) {
 			$snapshots[] = array( $metric => $baseline_value );
 		}
-		$snapshots[] = array( $metric => $current_value );
+		for ( $i = 0; $i < 3; $i++ ) {
+			$snapshots[] = array( $metric => $current_value );
+		}
 		return $snapshots;
+	}
+
+	/**
+	 * Seed a slow-top-path model (issue #1463) with legacy dual preload keys.
+	 *
+	 * The legacy `attributed_lcp` / `slow_resources` keys let the test pin
+	 * the slow-path suppression branch; `eagerness=moderate` pins the
+	 * contradictory-card branch (base card emitted, downgrade=conservative).
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $preload_url Preload URL to persist.
+	 * @param string $downgrade   Persisted downgrade value.
+	 * @return void
+	 */
+	private function seed_slow_path_model( string $preload_url = 'http://example.com/hero.jpg', string $downgrade = 'conservative' ): void {
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls'         => array( 'http://example.com/a/', 'http://example.com/b/' ),
+			'exclude_js'            => array(),
+			'exclude_css'           => array(),
+			'eagerness'             => 'moderate',
+			'field_lcp_segment'     => array(
+				'device'     => 'mobile',
+				'template'   => 'single',
+				'connection' => '4g',
+			),
+			'field_lcp_p75'         => 4000.0,
+			'field_lcp_provisional' => false,
+			'field_lcp_samples'     => 25,
+			'field_lcp_min_samples' => 20,
+			'attributed_lcp'        => array(
+				'selector' => 'img#hero-image',
+				'path'     => '/slow/',
+			),
+			'slow_resources'        => array(
+				array(
+					'url'  => 'http://example.com/slow.js',
+					'type' => 'script',
+				),
+			),
+			'slow_path_slow'        => true,
+			'slow_path_path'        => '/slow/',
+			'slow_path_segment'     => array(
+				'device'     => 'mobile',
+				'template'   => 'single',
+				'connection' => '4g',
+			),
+			'slow_path_p75'         => 4000.0,
+			'slow_path_samples'     => 25,
+			'slow_path_min_samples' => 20,
+			'slow_path_preload_url' => $preload_url,
+			'slow_path_downgrade'   => $downgrade,
+		);
+	}
+
+	/**
+	 * Test a slow path emits one preload + downgrade and suppresses contradictions.
+	 *
+	 * Given a qualified slow model (p75 4000ms, 25/20 samples, eagerness
+	 * moderate) When suggestions render Then exactly one consolidated
+	 * `ai_slow_path_preload` plus `ai_speculation_downgrade=conservative`
+	 * appear, the base `ai_speculation_eagerness` card is suppressed (no
+	 * contradictory payloads), the legacy dual preloads are suppressed,
+	 * and prefetch collapses to 1 URL.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_slow_path_emits_consolidated_tune(): void {
+		$this->install_non_commerce_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->seed_slow_path_model();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+
+		$preload = $this->find_suggestion( $suggestions, 'ai_slow_path_preload' );
+		$this->assertNotNull( $preload );
+		$this->assertStringContainsString( 'http://example.com/hero.jpg', $preload['value'] );
+
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertSame( 'conservative', $downgrade['ai_payload']['settings']['speculationEagerness'] );
+
+		// Contradictory base card suppressed when slow.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		// Legacy dual preloads suppressed in favour of the consolidated card.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_lcp_preload' ) );
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' ) );
+
+		// Prefetch collapses to a single URL on slow paths.
+		$prefetch = $this->find_suggestion( $suggestions, 'ai_prefetch_urls' );
+		$this->assertNotNull( $prefetch );
+		$this->assertSame( 'http://example.com/a/', $prefetch['value'] );
+	}
+
+	/**
+	 * Test below-threshold slow models emit nothing new.
+	 *
+	 * Given a slow-flagged model with p75 below 2500ms When suggestions
+	 * render Then no slow-path cards appear and static defaults stay (the
+	 * base eagerness card is kept, no speculation change is forced).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_below_threshold_emits_no_slow_tune(): void {
+		$this->install_non_commerce_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->seed_slow_path_model();
+		$this->options[ AI_Adaptive::OPTION ]['slow_path_p75'] = 1500.0;
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_path_preload' ) );
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' ) );
+		// No suppression below threshold: the base card stays.
+		$this->assertNotNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+	}
+
+	/**
+	 * Test the one-step downgrade ladder floors at conservative.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_slow_path_downgrade_target_ladder(): void {
+		$this->install_non_commerce_stubs();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$this->assertSame( 'moderate', AI_Adaptive::get_slow_path_downgrade_target( 'eager' ) );
+		$this->assertSame( 'conservative', AI_Adaptive::get_slow_path_downgrade_target( 'moderate' ) );
+		$this->assertSame( 'conservative', AI_Adaptive::get_slow_path_downgrade_target( 'conservative' ) );
+	}
+
+	/**
+	 * Test a stale persisted downgrade never loosens above the fresh target.
+	 *
+	 * Given eagerness=eager (fresh target moderate) with a persisted
+	 * `eager` downgrade When suggestions render Then the emitted downgrade
+	 * is clamped to moderate, never loosened back to eager.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_stale_downgrade_never_loosens(): void {
+		$this->install_non_commerce_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->seed_slow_path_model( 'http://example.com/hero.jpg', 'eager' );
+		$this->options[ AI_Adaptive::OPTION ]['eagerness'] = 'eager';
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$downgrade   = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertSame( 'moderate', $downgrade['ai_payload']['settings']['speculationEagerness'] );
+	}
+
+	/**
+	 * Test a tampered persisted preload URL falls back to manual-hero copy.
+	 *
+	 * Given a qualified slow model with a `javascript:` preload URL When
+	 * suggestions render Then the URL is dropped and the copy names the
+	 * manual metabox hero as winning instead of rendering the payload.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_tampered_preload_url_falls_back(): void {
+		$this->install_non_commerce_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->seed_slow_path_model( 'javascript:alert(1)', 'conservative' );
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$preload     = $this->find_suggestion( $suggestions, 'ai_slow_path_preload' );
+		$this->assertNotNull( $preload );
+		$this->assertStringNotContainsString( 'javascript:', $preload['value'] );
+		$this->assertStringContainsString( 'manual hero wins', $preload['value'] );
 	}
 }

@@ -92,8 +92,13 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		} )
 			.then( ( response ) => {
 				if ( ! response.ok ) {
-					// Handle 403 Forbidden (likely invalid nonce) by refreshing the nonce.
-					if ( 403 === response.status && ! isRetry ) {
+					// Handle 401/403 (likely invalid nonce) by refreshing the
+					// nonce — mirrors apiCall() (audit #1420).
+					if (
+						( 403 === response.status ||
+							401 === response.status ) &&
+						! isRetry
+					) {
 						return refreshNonce().then( ( success ) => {
 							if ( success ) {
 								return postJsonRequest(
@@ -160,9 +165,11 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		formData.append( 'action', 'wppo_get_nonce' );
 		formData.append( 'nonce', wppoObject.nonce_refresh );
 
+		// Audit #1420: pagehide aborts the refresh too (was unabortable).
 		const refreshPromise = fetch( wppoObject.ajaxUrl, {
 			method: 'POST',
 			body: formData,
+			...( pageController ? { signal: pageController.signal } : {} ),
 		} )
 			.then( ( response ) => {
 				if ( ! response.ok ) {
@@ -183,10 +190,13 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				return false;
 			} )
 			.catch( ( error ) => {
-				console.error(
-					'Failed to refresh nonce:',
-					getErrorLogMessage( error )
-				);
+				// Audit #1420: pagehide aborts are expected, not errors.
+				if ( error?.name !== 'AbortError' ) {
+					console.error(
+						'Failed to refresh nonce:',
+						getErrorLogMessage( error )
+					);
+				}
 				return false;
 			} );
 
@@ -311,6 +321,21 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		fallbackTimers.clear();
 	} );
 
+	// Audit #1420: busy guard — disable the clicked item while the
+	// request is in flight so double-click cannot double-clear.
+	const withBusyItem = ( item, task ) => {
+		if ( item.getAttribute( 'aria-disabled' ) === 'true' ) {
+			return;
+		}
+		item.setAttribute( 'aria-disabled', 'true' );
+		item.setAttribute( 'aria-busy', 'true' );
+		const release = () => {
+			item.removeAttribute( 'aria-disabled' );
+			item.removeAttribute( 'aria-busy' );
+		};
+		task().then( release, release );
+	};
+
 	const clearAllCacheBtn = document.querySelector(
 		'#wp-admin-bar-wppo_clear_all .ab-item'
 	);
@@ -318,39 +343,42 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	if ( clearAllCacheBtn ) {
 		clearAllCacheBtn.addEventListener( 'click', function ( event ) {
 			event.preventDefault();
-			postJsonRequest( '/clear_cache', { action: 'clear_cache' } )
-				.then( ( res ) => {
-					if ( res.success ) {
+			const item = this;
+			withBusyItem( item, () =>
+				postJsonRequest( '/clear_cache', { action: 'clear_cache' } )
+					.then( ( res ) => {
+						if ( res.success ) {
+							showNotice(
+								getNoticeString(
+									'cacheCleared',
+									'Cache cleared successfully.'
+								)
+							);
+						} else {
+							showNotice(
+								res.message ||
+									getNoticeString(
+										'clearFailed',
+										'Failed to clear cache.'
+									),
+								'error'
+							);
+						}
+					} )
+					.catch( ( error ) => {
+						console.error(
+							'Cache clear failed: ',
+							getErrorLogMessage( error )
+						);
 						showNotice(
 							getNoticeString(
-								'cacheCleared',
-								'Cache cleared successfully.'
-							)
-						);
-					} else {
-						showNotice(
-							res.message ||
-								getNoticeString(
-									'clearFailed',
-									'Failed to clear cache.'
-								),
+								'clearRetry',
+								'Failed to clear cache. Please try again.'
+							),
 							'error'
 						);
-					}
-				} )
-				.catch( ( error ) => {
-					console.error(
-						'Cache clear failed: ',
-						getErrorLogMessage( error )
-					);
-					showNotice(
-						getNoticeString(
-							'clearRetry',
-							'Failed to clear cache. Please try again.'
-						),
-						'error'
-					);
-				} );
+					} )
+			);
 		} );
 	}
 
@@ -361,6 +389,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	if ( clearCacheBtn ) {
 		clearCacheBtn.addEventListener( 'click', function ( event ) {
 			event.preventDefault();
+			const item = this;
 			let path = window.location.pathname;
 			let decodedPath;
 			try {
@@ -377,42 +406,44 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			) {
 				path = '/';
 			}
-			postJsonRequest( '/clear_cache', {
-				action: 'clear_single_page_cache',
-				path,
-			} )
-				.then( ( res ) => {
-					if ( res.success ) {
+			withBusyItem( item, () =>
+				postJsonRequest( '/clear_cache', {
+					action: 'clear_single_page_cache',
+					path,
+				} )
+					.then( ( res ) => {
+						if ( res.success ) {
+							showNotice(
+								getNoticeString(
+									'pageCleared',
+									'Page cache cleared successfully.'
+								)
+							);
+						} else {
+							showNotice(
+								res.message ||
+									getNoticeString(
+										'pageFailed',
+										'Failed to clear page cache.'
+									),
+								'error'
+							);
+						}
+					} )
+					.catch( ( error ) => {
+						console.error(
+							'Page cache clear failed: ',
+							getErrorLogMessage( error )
+						);
 						showNotice(
 							getNoticeString(
-								'pageCleared',
-								'Page cache cleared successfully.'
-							)
-						);
-					} else {
-						showNotice(
-							res.message ||
-								getNoticeString(
-									'pageFailed',
-									'Failed to clear page cache.'
-								),
+								'pageRetry',
+								'Failed to clear page cache. Please try again.'
+							),
 							'error'
 						);
-					}
-				} )
-				.catch( ( error ) => {
-					console.error(
-						'Page cache clear failed: ',
-						getErrorLogMessage( error )
-					);
-					showNotice(
-						getNoticeString(
-							'pageRetry',
-							'Failed to clear page cache. Please try again.'
-						),
-						'error'
-					);
-				} );
+					} )
+			);
 		} );
 	}
 } );

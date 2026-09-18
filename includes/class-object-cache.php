@@ -121,7 +121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Exposed so the standalone uninstall context can remove the orphan
 		 * block without hard-coding the string.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const CONFIG_HTACCESS_MARKER = 'WPPO Redis Config';
@@ -135,7 +135,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * protect_config_file(); Nginx ignores those files and needs a
 		 * server-level deny (see is_nginx_config_exposed()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const CONFIG_FILENAME = 'wppo-redis-config.php';
@@ -150,7 +150,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * kept only as a legacy read/migration path for pre-fix installs
 		 * (see is_nginx_config_exposed()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const NGINX_PROBE_TRANSIENT = 'wppo_nginx_config_probe';
@@ -164,7 +164,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * switch_to_blog() mid-request. The `'server'` key holds the
 		 * deterministic non-Nginx false. Reset by clear_nginx_probe_cache().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string,bool>
 		 */
 		private static $nginx_probe_memo = array();
@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * reset_circuit_memo_for_tests() and invalidated in
 		 * auto_disable_circuit()/clear_circuit_state().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array|null Null when not yet read this request.
 		 */
 		private static $circuit_state_memo = null;
@@ -187,7 +187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Whether the circuit-state memo has been populated this request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static $circuit_state_memo_set = false;
@@ -201,7 +201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * a half-written live file that would fatal the object-cache drop-in
 		 * (which does a bare `include` of the config) on the next request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const CONFIG_TMP_SUFFIX = '.tmp';
@@ -223,7 +223,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Only the canonical WP_CONTENT_DIR/object-cache.php.wppo-disabled
 		 * path is returned.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[] Absolute paths (empty when WP_CONTENT_DIR is undefined).
 		 */
 		public static function get_uninstall_sidecar_paths(): array {
@@ -324,7 +324,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * - `last_failure`: latest recorded failure payload ({ code, message, time }) or null.
 		 *
 		 * @since 1.4.0
-		 * @since NEXT Added `bypassed`, circuit, `serializers` and `last_failure` keys; fail-open outage short-circuit (at most one reconnect attempt per request per site).
+		 * @since 2.2.0 Added `bypassed`, circuit, `serializers` and `last_failure` keys; fail-open outage short-circuit (at most one reconnect attempt per request per site).
 		 * @return array The status array described above.
 		 */
 		public function get_status() {
@@ -425,8 +425,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						}
 					}
 				} catch ( \Throwable $te ) {
+					// Audit #1434: capture before unset — $te is undefined after.
+					$telemetry_message = $te->getMessage();
 					unset( $te );
-					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $te->getMessage() : __( 'Redis telemetry error.', 'performance-optimisation' );
+					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $telemetry_message : __( 'Redis telemetry error.', 'performance-optimisation' );
 				} finally {
 					if ( method_exists( $redis, 'close' ) ) {
 						try {
@@ -437,9 +439,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 				}
 			} catch ( \Throwable $e ) {
+				// Audit #1434: capture before unset — $e is undefined after.
+				$connection_message = $e->getMessage();
 				unset( $e );
 				$status['redis_reachable'] = false;
-				$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getMessage() : __( 'Redis connection error.', 'performance-optimisation' );
+				$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $connection_message : __( 'Redis connection error.', 'performance-optimisation' );
 			}
 
 			return $status;
@@ -448,7 +452,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Reset the per-request circuit-state memo (unit-test helper).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_circuit_memo_for_tests(): void {
@@ -883,7 +887,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * for site A must never short-circuit site B's different Redis
 		 * config — the scope check resets the flag when the blog changes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static $outage_bypassed = false;
@@ -891,7 +895,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Blog ID the in-request bypass was armed for (see $outage_bypassed).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private static $outage_blog_id = 0;
@@ -903,7 +907,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * generic one, keeping admin/REST diagnostics stable across the
 		 * bypassed request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var \WP_Error|null
 		 */
 		private static $outage_error = null;
@@ -911,7 +915,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Resolve the current blog ID for outage-bypass scoping (never fatals).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Current blog ID, or 0 when unavailable.
 		 */
 		private static function current_outage_blog_id(): int {
@@ -933,7 +937,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * while the static is process-global; without this a site-A outage
 		 * would short-circuit site B's healthy Redis after switch_to_blog().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private static function sync_outage_scope(): void {
@@ -953,7 +957,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Arm the in-request bypass for the current blog.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_Error $error Original failure to replay to repeat callers.
 		 * @return void
 		 */
@@ -973,7 +977,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * permanent misconfiguration as a transient outage. The in-request
 		 * bypass still short-circuits those (single attempt per request).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $code Failure code.
 		 * @param string $message Failure message (scanned for auth signals).
 		 * @return bool True when the failure may heal without config changes.
@@ -1010,7 +1014,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * paths; strip those plus tags and truncate, mirroring
 		 * redis_error_payload() hygiene.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $message Raw message.
 		 * @return string Scrubbed message (max 200 chars).
 		 */
@@ -1046,7 +1050,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * bypass before connecting so recovery is always detectable.
 		 *
 		 * @since 1.4.0
-		 * @since NEXT Blog-scoped bypass short-circuit (no cross-site leakage after switch_to_blog()).
+		 * @since 2.2.0 Blog-scoped bypass short-circuit (no cross-site leakage after switch_to_blog()).
 		 * @param array $config Configuration array.
 		 * @return \Redis|\RedisCluster|\WP_Error
 		 */
@@ -1079,11 +1083,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * site-specific); the in-request bypass is blog-scoped and resets on
 		 * switch_to_blog(); no cross-site leakage.
 		 *
+		 * On a transient outage the plugin-side circuit is also tripped
+		 * (see trip_circuit_on_outage()): the drop-in is parked when it is
+		 * ours, the disabled-state bridge plus CIRCUIT_OPTION mirror plus
+		 * the blog-prefixed notice transient are armed, and the recovery
+		 * probe is scheduled — all best-effort and never fatal, so a killed
+		 * Redis serves 200 uncached with the notice armed.
+		 *
 		 * Expects a pre-filtered `$config` (callers: get_redis_config() or
 		 * ping() already apply `wppo_object_cache_config`); this helper never
 		 * re-applies the filter, so non-idempotent filters run exactly once.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $config Connection configuration (pre-filtered).
 		 * @return \Redis|\RedisCluster|\WP_Error Connected client, or WP_Error (including `redis_bypassed` while bypassed).
 		 */
@@ -1140,6 +1151,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 							unset( $e );
 						}
 					}
+					// Trip the plugin-side circuit (park + bridge + notice +
+					// probe) without another network round-trip. Best-effort
+					// and never fatal; skips itself when already open or when
+					// a foreign drop-in is in place.
+					try {
+						$this->trip_circuit_on_outage( $outage_error );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 				return $outage_error;
 			}
@@ -1152,7 +1172,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Whether the in-request outage bypass is armed (current site).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when subsequent cache calls short-circuit to uncached in this request.
 		 */
 		public static function is_outage_bypassed(): bool {
@@ -1166,7 +1186,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Never touches the persistent status flag — use clear_outage_flag()
 		 * (via ping/enable) for that.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_outage_bypass(): void {
@@ -1183,7 +1203,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * the bypass path). Fail-open: returns false when settings are
 		 * unavailable or malformed.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when Redis was recorded as bypassed until recovery.
 		 */
 		public function is_outage_flagged(): bool {
@@ -1226,7 +1246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * wp_next_scheduled) so an armed flag cannot stay stale when no
 		 * further fallback/ping callers run.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True on the unarmed → armed transition (callers log only then); false when already armed or unavailable.
 		 */
 		private function arm_outage_flag(): bool {
@@ -1275,7 +1295,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * arm_outage_flag(). No-op when already clear (no extra DB write),
 		 * so the hot success path stays query-free.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function clear_outage_flag(): void {
@@ -1324,6 +1344,200 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Trip the plugin-side circuit after a transient outage (fail open, never fatal).
+		 *
+		 * Class-layer twin of the drop-in's trip_circuit_breaker() for the
+		 * wppo_redis_outage_fallback() path: parks our own drop-in (foreign
+		 * drop-ins are never touched), writes the wppo-redis-disabled.json
+		 * bridge, mirrors state into CIRCUIT_OPTION, arms the blog-prefixed
+		 * CIRCUIT_NOTICE_TRANSIENT (WEEK TTL) plus the FAIL_TRANSIENT mirror,
+		 * schedules the wppo_object_cache_probe recovery event, and logs.
+		 * No network round-trip is paid here — the caller already has the
+		 * WP_Error. Skips itself when the circuit is already open or when a
+		 * foreign drop-in is in place. Every step is best-effort inside
+		 * try/catch so a killed Redis serves 200 uncached with the notice
+		 * armed instead of fataling.
+		 *
+		 * @since NEXT
+		 * @param \WP_Error $error Original transient failure.
+		 * @return void
+		 */
+		private function trip_circuit_on_outage( $error ): void {
+			try {
+				if ( ! $error instanceof \WP_Error ) {
+					return;
+				}
+				$code = (string) $error->get_error_code();
+				$msg  = (string) $error->get_error_message();
+				if ( ! self::is_transient_outage_error( $code, $msg ) ) {
+					return;
+				}
+				try {
+					$state = $this->get_circuit_state();
+					if ( is_array( $state ) && ! empty( $state['open'] ) ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return;
+				}
+
+				$tripped_at = time();
+				$clean_msg  = trim( (string) preg_replace( '/<[^>]*>/', '', $msg ) );
+				// Harden the persisted reason: Redis messages can embed
+				// operator-controlled host/port text, and the value is
+				// mirrored to CIRCUIT_OPTION, transients, and the disabled
+				// bridge. Display sites escape (admin notice uses esc_html(),
+				// REST status scrubs), but sanitize before storage too.
+				// Guarded: the trip path must never fatal on missing WP
+				// sanitizers (see log_redis_failure() Brain Monkey note).
+				if ( function_exists( 'sanitize_text_field' ) ) {
+					try {
+						$clean_msg = sanitize_text_field( $clean_msg );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( '' === $clean_msg ) {
+					$clean_msg = __( 'Redis connection failed.', 'performance-optimisation' );
+				}
+				$reason     = substr( $clean_msg, 0, 200 );
+				$clean_code = strtolower( (string) preg_replace( '/[^a-zA-Z0-9_\-]/', '', $code ) );
+				if ( '' === $clean_code ) {
+					$clean_code = 'redis_error';
+				}
+				$clean_code = substr( $clean_code, 0, 64 );
+
+				// Counting is owned by the failures-file writer (drop-in
+				// increments wppo-redis-failures.json); this trip path only
+				// mirrors the current count, matching auto_disable_circuit()
+				// and the "re-trips must not bump the count" expectation.
+				$failures = 0;
+				try {
+					$counter = $this->read_json_state_file( $this->get_failures_path() );
+					if ( is_array( $counter ) && isset( $counter['count'] ) ) {
+						$failures = (int) $counter['count'];
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+
+				$payload = array(
+					'reason'     => $reason,
+					'error_code' => $clean_code,
+					'tripped_at' => $tripped_at,
+					'failures'   => $failures,
+				);
+
+				try {
+					$wp_filesystem = Util::init_filesystem();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$wp_filesystem = false;
+				}
+				if ( $wp_filesystem ) {
+					try {
+						if ( file_exists( $this->dropin_path ) && $this->is_own_dropin() && method_exists( $wp_filesystem, 'move' ) ) {
+							$moved = $wp_filesystem->move( $this->dropin_path, $this->get_parked_path(), true );
+							if ( $moved ) {
+								$this->own_dropin_memo = null;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					try {
+						if ( function_exists( 'wp_json_encode' ) ) {
+							$encoded = wp_json_encode( $payload );
+						} else {
+							$encoded = json_encode( $payload ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Early fallback when wp_json_encode() is unavailable.
+						}
+						if ( is_string( $encoded ) && '' !== $encoded && method_exists( $wp_filesystem, 'put_contents' ) ) {
+							$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+							$wp_filesystem->put_contents( $this->get_disabled_state_path(), $encoded, $chmod );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				try {
+					if ( function_exists( 'update_option' ) ) {
+						update_option(
+							self::CIRCUIT_OPTION,
+							array(
+								'open'       => true,
+								'tripped_at' => $tripped_at,
+								'reason'     => $reason,
+								'error_code' => $clean_code,
+								'failures'   => $failures,
+							),
+							false
+						);
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					if ( function_exists( 'set_transient' ) ) {
+						$week = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+						$day  = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
+						set_transient(
+							Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ),
+							array(
+								'tripped_at' => $tripped_at,
+								'reason'     => $reason,
+							),
+							$week
+						);
+						set_transient(
+							Util::transient_key( self::FAIL_TRANSIENT ),
+							array(
+								'count'   => $failures,
+								'updated' => $tripped_at,
+							),
+							$day
+						);
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+
+				self::$circuit_state_memo     = null;
+				self::$circuit_state_memo_set = false;
+
+				try {
+					if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
+						System_Info::flush_dropin_cache();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					Log::add( __( 'Object Cache circuit breaker tripped — serving uncached after Redis outage.', 'performance-optimisation' ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_event' ) && ! wp_next_scheduled( 'wppo_object_cache_probe' ) ) {
+						wp_schedule_event( time(), 'wppo_object_cache_probe', 'wppo_object_cache_probe' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Ensure the Redis connection helper file is loaded and a helper
 		 * function from it is available.
 		 *
@@ -1332,7 +1546,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * an unreadable/absent helper file returns false instead of
 		 * fataling on a bare require_once.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $helper_function Helper function name that must exist after loading.
 		 * @return bool True when the helper function is available.
 		 */
@@ -1351,7 +1565,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Race-tolerant filesize(): clears the stat cache and suppresses the
 		 * TOCTOU warning when the file vanishes between checks.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $path File path.
 		 * @return int|false Size in bytes or false.
 		 */
@@ -1520,7 +1734,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * ABSPATH guard inside the config makes include-based verification
 		 * fragile outside a booted WordPress request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $contents Candidate config source.
 		 * @return bool True when the source has the expected config shape.
 		 */
@@ -1560,7 +1774,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Multisite-safe by construction: the config path is
 		 * installation-wide, no per-site options are read or written here.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $content       Rendered config PHP source.
 		 * @param mixed  $wp_filesystem Filesystem object from `Util::init_filesystem()`.
 		 * @return bool|\WP_Error True on verified publish, WP_Error on any failure.
@@ -1737,7 +1951,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Best-effort delete of a staging tmp path; never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed  $wp_filesystem Filesystem object.
 		 * @param string $path          Tmp path to remove.
 		 * @return void
@@ -1763,7 +1977,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * that writer's verification (fail-closed), never corrupts the live
 		 * config.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $wp_filesystem Filesystem object.
 		 * @return void
 		 */
@@ -1824,6 +2038,176 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 					if ( '' !== $entry && 0 === strpos( $entry, $prefix ) ) {
 						$this->delete_config_tmp_quietly( $wp_filesystem, $dir . '/' . $entry );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Publish the object-cache drop-in atomically with a foreign re-check.
+		 *
+		 * Reads the template, verifies the plugin marker plus PHP open tag
+		 * plus PHP syntax, re-checks ownership immediately before the rename
+		 * (a foreign drop-in appearing mid-write is never overwritten), then
+		 * renames via tmp sibling and re-verifies the live file. A foreign
+		 * file is left untouched; any other failure leaves the previous file
+		 * (or no file) in place so the site fails open uncached, never fatal.
+		 *
+		 * @since NEXT
+		 * @param mixed $wp_filesystem Filesystem object from Util::init_filesystem().
+		 * @return bool|\WP_Error True on verified publish, WP_Error (foreign_dropin/write_error) on failure.
+		 */
+		private function publish_dropin_atomic( $wp_filesystem ) {
+			if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'put_contents' ) || ! method_exists( $wp_filesystem, 'get_contents' ) || ! method_exists( $wp_filesystem, 'exists' ) || ! method_exists( $wp_filesystem, 'move' ) || ! method_exists( $wp_filesystem, 'delete' ) ) {
+				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+			}
+			try {
+				$template = $wp_filesystem->get_contents( $this->template_path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$template = false;
+			}
+			if ( ! is_string( $template ) || '' === $template ) {
+				// Unit-test filesystems (see ObjectCacheAtomicConfigWriteTest)
+				// only model wp-content paths; the template itself always
+				// ships with the plugin, so fall back to a direct guarded
+				// read rather than failing the publish.
+				try {
+					if ( is_readable( $this->template_path ) ) {
+						$size = filesize( $this->template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+						if ( false !== $size && $size > 0 && $size < 1048576 ) {
+							$direct = file_get_contents( $this->template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+							if ( is_string( $direct ) && '' !== $direct ) {
+								$template = $direct;
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( ! is_string( $template ) || '' === $template || false === strpos( $template, self::DROPIN_MARKER ) || 0 !== strpos( ltrim( $template ), '<?php' ) ) {
+				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+			}
+			try {
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'verify_php_syntax' ) && ! Util::verify_php_syntax( $template ) ) {
+					return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+			}
+			try {
+				if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
+					return new \WP_Error( 'foreign_dropin', __( 'Another Object Cache drop-in is already present. Please disable it before enabling this one.', 'performance-optimisation' ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+			}
+
+			$tmp = '';
+			try {
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_tmp_path' ) ) {
+					$tmp = Util::atomic_tmp_path( $this->dropin_path );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$tmp = '';
+			}
+			if ( ! is_string( $tmp ) || '' === $tmp ) {
+				$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
+				$rand_part = 0;
+				try {
+					if ( function_exists( 'wp_rand' ) ) {
+						$rand_part = wp_rand( 100000, 999999 );
+					} else {
+						$rand_part = mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback only when wp_rand() is unavailable; uniqueness is all that is needed for the tmp suffix.
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$rand_part = mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Exception fallback; uniqueness is all that is needed for the tmp suffix.
+				}
+				$tmp = $this->dropin_path . '.tmp.' . time() . '.' . $rand_part . '.' . $uniq_part;
+			}
+			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+
+			try {
+				if ( ! $wp_filesystem->put_contents( $tmp, $template, $chmod ) ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+				}
+				$staged = $wp_filesystem->get_contents( $tmp );
+				if ( ! is_string( $staged ) || $staged !== $template || false === strpos( $staged, self::DROPIN_MARKER ) ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+				}
+				// Ownership may have changed while tmp was staged; never
+				// overwrite a foreign drop-in that appeared mid-write.
+				if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'foreign_dropin', __( 'Another Object Cache drop-in is already present. Please disable it before enabling this one.', 'performance-optimisation' ) );
+				}
+				if ( ! $wp_filesystem->move( $tmp, $this->dropin_path, true ) ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+				}
+				$live = $wp_filesystem->get_contents( $this->dropin_path );
+				if ( ! is_string( $live ) || $live !== $template || false === strpos( $live, self::DROPIN_MARKER ) ) {
+					// Leave the live file untouched on read-back mismatch
+					// (FS eventual consistency / adapter read skew): the
+					// docblock contract is that any failure leaves the
+					// previous file (or no file) in place, and deleting a
+					// previously good drop-in here would be destructive.
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+				}
+				$this->sweep_orphan_dropin_tmp( $wp_filesystem, $tmp );
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+			}
+		}
+
+		/**
+		 * Sweep orphan object-cache drop-in staging siblings (best-effort, never throws).
+		 *
+		 * @since NEXT
+		 * @param mixed  $wp_filesystem Filesystem object.
+		 * @param string $current_tmp   Tmp path just consumed (already moved; skipped when still listed).
+		 * @return void
+		 */
+		private function sweep_orphan_dropin_tmp( $wp_filesystem, string $current_tmp = '' ): void {
+			try {
+				if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'dirlist' ) || ! function_exists( 'dirname' ) || ! function_exists( 'basename' ) ) {
+					return;
+				}
+				$dir    = dirname( $this->dropin_path );
+				$prefix = basename( $this->dropin_path ) . '.tmp.';
+				try {
+					$list = $wp_filesystem->dirlist( $dir );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return;
+				}
+				if ( ! is_array( $list ) ) {
+					return;
+				}
+				foreach ( $list as $name => $info ) {
+					$entry = is_string( $name ) ? $name : '';
+					if ( '' === $entry && is_array( $info ) && isset( $info['name'] ) && is_string( $info['name'] ) ) {
+						$entry = $info['name'];
+					}
+					if ( '' !== $entry && 0 === strpos( $entry, $prefix ) ) {
+						$full = $dir . '/' . $entry;
+						if ( '' !== $current_tmp && $full === $current_tmp ) {
+							continue;
+						}
+						$this->delete_config_tmp_quietly( $wp_filesystem, $full );
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -1925,10 +2309,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			// the next admin pageload re-probes instead of serving stale state.
 			self::clear_nginx_probe_cache();
 
-			// Copy drop-in.
-			if ( ! $wp_filesystem->copy( $this->template_path, $this->dropin_path, true, FS_CHMOD_FILE ) ) {
+			// Atomic drop-in publish: tmp-plus-rename with marker verification
+			// and a foreign re-check immediately before the rename, so a
+			// crash never leaves a half-written drop-in and a foreign file
+			// appearing mid-write is never overwritten.
+			$dropin_published = $this->publish_dropin_atomic( $wp_filesystem );
+			if ( is_wp_error( $dropin_published ) ) {
 				$wp_filesystem->delete( $this->config_path );
-				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+				return $dropin_published;
 			}
 
 			// The drop-in file changed — invalidate the memoized ownership
@@ -2027,7 +2415,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Until that rule exists, is_nginx_config_exposed() reports the
 		 * file as fetchable and Admin_Notices surfaces a warning.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private static function protect_config_file(): void {
@@ -2230,7 +2618,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * stale verdict can never bypass the foreign-drop-in refusal or
 		 * wrongly refuse after enable().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool|null Null when not yet computed.
 		 */
 		private $own_dropin_memo = null;
@@ -2335,7 +2723,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Absolute path of the Redis config file ('' when undeterminable).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string
 		 */
 		public static function get_config_path(): string {
@@ -2381,7 +2769,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * blocked loopback (WP_Error) stays "unknown" and re-probes next
 		 * request instead of pinning a stale safe verdict.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the config file looks directly fetchable.
 		 */
 		public static function is_nginx_config_exposed(): bool {
@@ -2473,7 +2861,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * multisite fan-out below (audit #1338 review) instead of calling
 		 * Util directly.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $suffix Key suffix after the base transient name.
 		 * @return string Prefixed key, or the raw key when Util is unavailable.
 		 */
@@ -2500,7 +2888,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * path: one admin's dismiss must not force a re-probe for everyone
 		 * else.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function clear_nginx_probe_cache(): void {
@@ -2528,15 +2916,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 							// deletes can stall an admin save on huge networks; siblings
 							// self-expire in 1-2h by design so a smaller sweep only delays
 							// freshness, never correctness.
+							// Audit #1469: default to current-site only (0) — the
+							// current site is already cleared inline above and
+							// siblings self-expire via the 1-2h TTL, so the
+							// switch_to_blog() fan-out no longer runs synchronously
+							// inside enable()/disable() admin paths unless opted in.
 							/**
 							 * Filters how many sites the nginx probe-clear fans out to.
 							 *
-							 * @since NEXT
-							 * @param int $limit Maximum site IDs to sweep. Default 500.
+							 * @since 2.2.0
+							 * @param int $limit Maximum site IDs to sweep. Default 0 (current site only; siblings self-expire via TTL).
 							 */
-							$clear_limit = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_nginx_probe_clear_sites', 500 ) : 500;
+							$clear_limit = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_nginx_probe_clear_sites', 0 ) : 0;
 							if ( $clear_limit < 1 ) {
-								$clear_limit = 1;
+								return;
 							}
 							$sites = get_sites(
 								array(
@@ -2610,7 +3003,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 *
 		 * On failure sets last_flush_error (see get_last_flush_error()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the scoped flush succeeded, false otherwise.
 		 */
 		public function flush_scoped(): bool {

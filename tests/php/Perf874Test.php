@@ -366,27 +366,41 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that bump_stats_cache() deletes all stats transients (audit #874
-	 * finding 6).
+	 * Test that bump_stats_cache() deletes the canonical stats transients
+	 * (audit #874 finding 6, issue #1464 mirror consolidation).
+	 *
+	 * The retired split mirrors (`wppo_cache_size` / `wppo_cache_count`)
+	 * are no longer written anywhere, so bump leaves them alone: a stale
+	 * legacy row (written by an older release) is harmless because nothing
+	 * reads it, and the bulk transient LIKE sweep on uninstall still
+	 * removes it.
 	 */
 	public function test_bump_stats_cache_deletes_transients(): void {
 		$this->install_stubs();
 
 		$keys = array(
 			Util::transient_key( 'wppo_cache_stats' ),
-			Util::transient_key( 'wppo_cache_size' ),
-			Util::transient_key( 'wppo_cache_count' ),
 			Util::transient_key( 'wppo_total_js_css' ),
+			Util::transient_key( 'wppo_cache_stats_stale' ),
+			Util::stampede_stale_key( Util::transient_key( 'wppo_cache_stats' ) ),
 		);
 		foreach ( $keys as $k ) {
 			$this->transients[ $k ] = 1;
 		}
+		// A stale split-mirror row from an older release must survive the
+		// bump untouched (nothing reads it anymore).
+		$legacy_key                            = Util::transient_key( 'wppo_cache_size' );
+		$this->transients[ $legacy_key ]       = 'stale';
+		$legacy_count_key                      = Util::transient_key( 'wppo_cache_count' );
+		$this->transients[ $legacy_count_key ] = 7;
 
 		Cache::bump_stats_cache();
 
 		foreach ( $keys as $k ) {
 			$this->assertArrayNotHasKey( $k, $this->transients, "Expected $k to be deleted" );
 		}
+		$this->assertSame( 'stale', $this->transients[ $legacy_key ] );
+		$this->assertSame( 7, $this->transients[ $legacy_count_key ] );
 	}
 
 	/**

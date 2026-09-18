@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBrain } from '@fortawesome/free-solid-svg-icons';
@@ -35,6 +35,7 @@ const AiPanel = () => {
 	const [ cssRefreshOnLcpRegression, setCssRefreshOnLcpRegression ] =
 		useState( !! initial.css_refresh_on_lcp_regression );
 	const [ saving, setSaving ] = useState( false );
+	const suggestRunRef = useRef( null );
 	const [ learning, setLearning ] = useState( false );
 	const [ model, setModel ] = useState( null );
 	const [ suggestions, setSuggestions ] = useState( [] );
@@ -107,7 +108,13 @@ const AiPanel = () => {
 		const controller = new AbortController();
 		fetchModel( controller.signal );
 		fetchSuggestions( controller.signal );
-		return () => controller.abort();
+		return () => {
+			controller.abort();
+			if ( suggestRunRef.current ) {
+				suggestRunRef.current.abort();
+				suggestRunRef.current = null;
+			}
+		};
 	}, [ fetchModel, fetchSuggestions ] );
 
 	const handleSave = async () => {
@@ -145,7 +152,15 @@ const AiPanel = () => {
 					),
 					durationMs: 3000,
 				} );
-				fetchSuggestions();
+				// Audit #1420: abort the previous post-save refresh so a
+				// stale response cannot overwrite newer state after rapid saves.
+				if ( suggestRunRef.current ) {
+					suggestRunRef.current.abort();
+				}
+				suggestRunRef.current = new AbortController();
+				fetchSuggestions( suggestRunRef.current.signal ).catch(
+					() => {}
+				);
 			} else {
 				notify( {
 					type: 'error',
@@ -157,7 +172,11 @@ const AiPanel = () => {
 						),
 				} );
 			}
-		} catch {
+		} catch ( saveError ) {
+			console.error(
+				'Save AI settings failed:',
+				getErrorLogMessage( saveError )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -194,7 +213,8 @@ const AiPanel = () => {
 						__( 'Failed to learn.', 'performance-optimisation' ),
 				} );
 			}
-		} catch {
+		} catch ( learnError ) {
+			console.error( 'Learn failed:', getErrorLogMessage( learnError ) );
 			notify( {
 				type: 'error',
 				message: __( 'Failed to learn.', 'performance-optimisation' ),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from '@wordpress/element';
+import { useState, useEffect, useContext, useMemo } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
@@ -205,6 +205,12 @@ const ImageOptimization = ( { options = {} } ) => {
 	] );
 
 	const [ isLoading, setIsLoading ] = useState( false );
+	// Audit #1420: single memoized change handler instead of a new
+	// closure per input per render (mirrors FileOptimization).
+	const onFieldChange = useMemo(
+		() => handleChange( setSettings ),
+		[ setSettings ]
+	);
 	const { notice, notify, dismiss } = useNotice();
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
@@ -267,6 +273,10 @@ const ImageOptimization = ( { options = {} } ) => {
 
 	const applyLcpCandidate = async () => {
 		if ( ! lcpCandidate || ! lcpCandidate.url ) {
+			return;
+		}
+		// Audit #1420: guard rapid clicks like PreloadSettings handleResume.
+		if ( isApplyingLcp ) {
 			return;
 		}
 		setIsApplyingLcp( true );
@@ -430,6 +440,10 @@ const ImageOptimization = ( { options = {} } ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
+		// Audit #1420: re-entrancy guard like PreloadSettings.
+		if ( isLoading ) {
+			return;
+		}
 		setIsLoading( true );
 		// Audit #1354: clear any prior notice before a new save attempt.
 		dismiss();
@@ -465,11 +479,18 @@ const ImageOptimization = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( error ) {
+			// Audit #1420: raw backend text stays in console; UI gets the
+			// translated generic string.
+			console.error(
+				'Save image settings failed:',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
-				message:
-					error.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {
@@ -499,7 +520,8 @@ const ImageOptimization = ( { options = {} } ) => {
 					<p className="wppo-text-muted wppo-text-small">
 						{ __( 'Source:', 'performance-optimisation' ) }{ ' ' }
 						{ lcpSourceLabels[ lcpCandidateSource ] ||
-							lcpCandidateSource }
+							// Audit #1420: translated fallback; raw token only in console.
+							__( 'Unknown source', 'performance-optimisation' ) }
 					</p>
 				) }
 				<LoadingSubmitButton
@@ -577,7 +599,7 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="lazyLoadImages"
 							checked={ settings.lazyLoadImages }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 
 						{ settings.lazyLoadImages && (
@@ -599,7 +621,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										inputMode="numeric"
 										name="excludeFirstImages"
 										value={ settings.excludeFirstImages }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										aria-describedby="excludeFirstImages-desc"
 									/>
 									<p
@@ -623,7 +645,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									) }
 									name="lazyLoadNative"
 									checked={ settings.lazyLoadNative }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -638,7 +660,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									checked={
 										settings.lazyLoadBackgroundImages
 									}
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<div className="wppo-field">
 									<label
@@ -655,7 +677,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										id="placeholderType"
 										name="placeholderType"
 										value={ settings.placeholderType }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 									>
 										<option value="none">
 											{ __(
@@ -746,7 +768,7 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="wrapInPicture"
 							checked={ settings.wrapInPicture }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 
 						<SwitchField
@@ -760,7 +782,7 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="autoAltText"
 							checked={ settings.autoAltText }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 
 						<SwitchField
@@ -774,7 +796,7 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="lazyRenderBelowFold"
 							checked={ settings.lazyRenderBelowFold }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 
 						{ settings.lazyRenderBelowFold && (
@@ -792,7 +814,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									checked={
 										settings.lazyRenderExcludeBuilders
 									}
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 							</div>
 						) }
@@ -815,7 +837,7 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="lazyLoadVideos"
 							checked={ settings.lazyLoadVideos }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 
 						{ settings.lazyLoadVideos && (
@@ -831,7 +853,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									) }
 									name="enableVideoPlaceholder"
 									checked={ settings.enableVideoPlaceholder }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 							</div>
 						) }
@@ -856,7 +878,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									'performance-optimisation'
 								) }
 								value={ settings.excludeVideos }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 								aria-describedby="excludeVideos-desc"
 							/>
 							<p
@@ -904,7 +926,7 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="convertImg"
 							checked={ settings.convertImg }
-							onChange={ handleChange( setSettings ) }
+							onChange={ onFieldChange }
 						/>
 
 						{ settings.convertImg && (
@@ -924,7 +946,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										id="conversionFormat"
 										name="conversionFormat"
 										value={ settings.conversionFormat }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 									>
 										<option value="webp">
 											{ __(
@@ -966,7 +988,7 @@ const ImageOptimization = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 										value={ settings.excludeConvertImages }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										aria-describedby="excludeConvertImages-desc"
 									/>
 									<p
@@ -993,7 +1015,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										checked={
 											settings.discardOversizedSibling
 										}
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 									/>
 								</div>
 							</div>
@@ -1075,7 +1097,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								) }
 								name="forceServerSideConversion"
 								checked={ settings.forceServerSideConversion }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 						</div>
 					</div>
@@ -1106,7 +1128,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								inputMode="numeric"
 								name="maxWidthImgSize"
 								value={ settings.maxWidthImgSize }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 								aria-describedby="maxWidthImgSize-desc"
 							/>
 							<p
@@ -1149,7 +1171,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									'performance-optimisation'
 								) }
 								value={ settings.excludeSize }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 								aria-describedby="excludeSize-desc"
 							/>
 							<p
@@ -1181,7 +1203,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								step="1"
 								name="maxLongestEdgePx"
 								value={ settings.maxLongestEdgePx }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 								aria-describedby="maxLongestEdgePx-desc"
 							/>
 							<p
@@ -1226,7 +1248,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								) }
 								name="autoPreloadLCP"
 								checked={ settings.autoPreloadLCP }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 						</div>
 						<div>
@@ -1241,7 +1263,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								) }
 								name="prioritizeLCPImages"
 								checked={ settings.prioritizeLCPImages }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 						</div>
 						<div>
@@ -1256,7 +1278,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								) }
 								name="preloadFrontPageImages"
 								checked={ settings.preloadFrontPageImages }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 							{ settings.preloadFrontPageImages && (
 								<div className="wppo-field wppo-mt-12">
@@ -1278,7 +1300,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										value={
 											settings.preloadFrontPageImagesUrls
 										}
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										aria-describedby="preloadFrontPageImagesUrls-desc"
 									/>
 									<p
@@ -1305,7 +1327,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								) }
 								name="preloadPostTypeImage"
 								checked={ settings.preloadPostTypeImage }
-								onChange={ handleChange( setSettings ) }
+								onChange={ onFieldChange }
 							/>
 							{ settings.preloadPostTypeImage && (
 								<>

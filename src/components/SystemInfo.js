@@ -38,18 +38,16 @@ const InfoRow = ( { label, value } ) => (
 );
 
 /**
- * Humanize an unmapped machine key for display.
+ * Humanize an unmapped machine key for display (audit #1420).
+ *
+ * Explicit labels for known keys live in the label map below; this fallback
+ * returns the RAW key (not synthesized English) so unmapped backend keys
+ * never bypass i18n with made-up translations.
  *
  * @param {string} key Machine key (snake_case).
- * @return {string} Title-cased label.
+ * @return {string} Raw key.
  */
-const humanizeKey = ( key ) =>
-	String( key )
-		.split( '_' )
-		.map( ( word ) =>
-			word ? word[ 0 ].toUpperCase() + word.slice( 1 ) : word
-		)
-		.join( ' ' );
+const humanizeKey = ( key ) => String( key );
 
 /**
  * A labelled table of InfoRow items.

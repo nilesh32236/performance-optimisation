@@ -120,16 +120,30 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Imagick AVIF probe must return a boolean and never fatal.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_is_imagick_avif_available_returns_bool(): void {
 		$this->assertIsBool( Img_Converter::is_imagick_avif_available() );
 	}
 
 	/**
+	 * Source MIME allowlist: bitmap types pass, delegates/polyglots fail closed (audit #1411).
+	 *
+	 * @since 2.2.0
+	 */
+	public function test_is_allowed_source_mime_allowlist(): void {
+		foreach ( array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'IMAGE/PNG ' ) as $ok ) {
+			$this->assertTrue( Img_Converter::is_allowed_source_mime( $ok ), $ok );
+		}
+		foreach ( array( '', 'image/svg+xml', 'application/postscript', 'text/html', 'image/bmp', 'image/tiff' ) as $bad ) {
+			$this->assertFalse( Img_Converter::is_allowed_source_mime( $bad ), $bad );
+		}
+	}
+
+	/**
 	 * Imagick AVIF encoder must fail open on bad inputs (never fatal).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_encode_avif_via_imagick_fail_open(): void {
 		$converter = new Img_Converter( $this->options );
@@ -142,7 +156,7 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Apache-aware next-gen gate must be server-agnostic (no LiteSpeed needed).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_apache_gate_enabled_without_litespeed(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4.41 (Ubuntu)';
@@ -159,7 +173,7 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Apache-aware gate must stay off when conversion is disabled.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_apache_gate_off_without_convert(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4.41 (Ubuntu)';
@@ -176,7 +190,7 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Plain Apache hosts must get the Accept-aware AVIF-before-WebP block.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_htaccess_nextgen_on_plain_apache(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4.41 (Ubuntu)';
@@ -208,7 +222,7 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Htaccess must omit the next-gen block when conversion is disabled.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_htaccess_omits_nextgen_without_convert(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4.41 (Ubuntu)';
@@ -232,7 +246,7 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	 * identical rules, so a cache flush (which never touches .htaccess)
 	 * cannot silently change the emitted block.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_htaccess_rules_stable_across_calls(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4.41 (Ubuntu)';
@@ -253,7 +267,7 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Nginx rules must try AVIF before WebP with Vary: Accept.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_nginx_try_files_avif_before_webp_with_vary(): void {
 		$this->stub_settings(
@@ -282,7 +296,7 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Negotiation matrix: modern browsers get AVIF, Firefox 65-92 gets WebP, old Safari gets original.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_client_accepts_avif_negotiation_matrix(): void {
 		$optimisation = new Image_Optimisation( $this->options );
