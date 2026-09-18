@@ -181,16 +181,20 @@ class PreloadHonestStatus1428Test extends \PHPUnit\Framework\TestCase {
 	 */
 	public static function randomized_query_provider(): array {
 		return array(
-			'epoch timestamp matches'        => array( 'https://example.com/app.js?ver=1718720000', true ),
-			'uniqid hex matches'             => array( 'https://example.com/app.js?ver=665e7a1b9c3d4', true ),
-			'mixed alnum token matches'      => array( 'https://example.com/app.js?ver=abc123def456', true ),
-			'YYYYMMDD date stays combinable' => array( 'https://example.com/app.js?ver=20240101', false ),
-			'semver stays combinable'        => array( 'https://example.com/app.js?ver=1.2.3', false ),
-			'short plain version'            => array( 'https://example.com/app.js?ver=123', false ),
-			'non-version key ignored'        => array( 'https://example.com/app.js?foo=1718720000', false ),
-			'semicolon separator detected'   => array( 'https://example.com/app.js?ver=1;_=1718720000', true ),
-			'empty src'                      => array( '', false ),
-			'no query'                       => array( 'https://example.com/app.js', false ),
+			'epoch timestamp matches'              => array( 'https://example.com/app.js?ver=1718720000', true ),
+			'uniqid hex matches'                   => array( 'https://example.com/app.js?ver=665e7a1b9c3d4', true ),
+			'mixed alnum token matches'            => array( 'https://example.com/app.js?ver=abc123def456', true ),
+			'YYYYMMDD date stays combinable'       => array( 'https://example.com/app.js?ver=20240101', false ),
+			'md5 content hash stays combinable'    => array( 'https://example.com/app.js?ver=d41d8cd98f00b204e9800998ecf8427e', false ),
+			'sha1 content hash stays combinable'   => array( 'https://example.com/app.js?ver=da39a3ee5e6b4b0d3255bfef95601890afd80709', false ),
+			'sha256 content hash stays combinable' => array( 'https://example.com/app.js?ver=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', false ),
+			'stable hash plus randomized pair still matches' => array( 'https://example.com/app.js?ver=d41d8cd98f00b204e9800998ecf8427e&_=1718720000', true ),
+			'semver stays combinable'              => array( 'https://example.com/app.js?ver=1.2.3', false ),
+			'short plain version'                  => array( 'https://example.com/app.js?ver=123', false ),
+			'non-version key ignored'              => array( 'https://example.com/app.js?foo=1718720000', false ),
+			'semicolon separator detected'         => array( 'https://example.com/app.js?ver=1;_=1718720000', true ),
+			'empty src'                            => array( '', false ),
+			'no query'                             => array( 'https://example.com/app.js', false ),
 		);
 	}
 

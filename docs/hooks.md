@@ -599,6 +599,8 @@ add_filter( 'wppo_exclude_minification', function( $exclude, $file_path, $handle
 ### `wppo_exclude_randomized_from_combine`
 Filters whether a randomized query-string asset (`?ver=<timestamp|uniqid|rand>`) stays excluded from the combine/minify pipeline (issue #1428). Default `true` when the `cacheRandomizedQueryGuard` setting is on. Return `false` to force-combine a matching asset.
 
+Stable content hashes (`md5` 32 / `sha1` 40 / `sha256` 64 hex chars) are deterministic per file and stay combinable by default — only `uniqid`-length hex churn is excluded. Non-canonical hex lengths that are in fact stable (e.g. a truncated 20-char content hash) can opt back in with this filter.
+
 **Parameters:**
 - `$excluded` *(bool)* — Default `true` for randomized matches.
 - `$handle` *(string)* — Registered script or style handle.

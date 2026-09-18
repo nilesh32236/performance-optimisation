@@ -6668,7 +6668,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Matches `?ver=<timestamp|uniqid|rand>`-style churn that would
 		 * regenerate combined output on every request and defeat the
-		 * file-count cap. Fail-open: any parse failure returns false.
+		 * file-count cap. Stable content hashes (`md5` 32 / `sha1` 40 /
+		 * `sha256` 64 hex chars) are deterministic per file and stay
+		 * combinable. Fail-open: any parse failure returns false.
 		 * Filterable via `wppo_exclude_randomized_from_combine`.
 		 *
 		 * @since NEXT
@@ -6706,12 +6708,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					}
 					$decoded = function_exists( 'urldecode' ) ? urldecode( $value ) : $value;
 					// Long digit runs (epoch timestamps, 10+ digits so YYYYMMDD
-					// date versions stay combinable), long hex (uniqid/md5),
-					// or mixed alnum tokens.
+					// date versions stay combinable), long hex (uniqid-style
+					// churn), or mixed alnum tokens.
 					if ( 1 === preg_match( '/^\d{10,}$/', $decoded ) ) {
 						return true;
 					}
 					if ( 1 === preg_match( '/^[0-9a-f]{10,}$/i', $decoded ) ) {
+						// Stable content hashes (md5 32 / sha1 40 / sha256 64)
+						// are deterministic per file content, not per-request
+						// churn, so they stay combinable. Non-canonical hex
+						// lengths can still opt out via the
+						// wppo_exclude_randomized_from_combine filter.
+						$hex_len = strlen( $decoded );
+						if ( 32 === $hex_len || 40 === $hex_len || 64 === $hex_len ) {
+							continue;
+						}
 						return true;
 					}
 					if ( 1 === preg_match( '/^[0-9a-z]{12,}$/i', $decoded ) && 1 === preg_match( '/[0-9]/', $decoded ) && 1 === preg_match( '/[a-z]/i', $decoded ) ) {
@@ -6772,6 +6783,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				// Surface a persisted warning flag so the SPA can render it
 				// without re-walking the directory on every admin request.
+				// Self-healing: when the fresh walk reports `ok`, any stale
+				// flag left from an earlier breach is deleted immediately so
+				// the SPA stops warning on recovery instead of lingering
+				// until the 12h TTL expires.
 				$warn_key = '';
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
 					$warn_key = Util::transient_key( 'wppo_cache_size_warning' );
@@ -6781,7 +6796,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( 'warn' === $status['state'] || 'over' === $status['state'] ) {
 						$status['warning'] = true;
 					} elseif ( false !== $flag ) {
-						$status['warning'] = true;
+						if ( function_exists( 'delete_transient' ) ) {
+							try {
+								delete_transient( $warn_key );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
 					}
 				}
 			} catch ( \Throwable $e ) {
