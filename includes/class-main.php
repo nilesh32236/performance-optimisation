@@ -728,6 +728,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['ai_adaptive']['anomaly_min_samples'] ) ) {
 				$this->options['ai_adaptive']['anomaly_min_samples'] = 10;
 			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_persistence_windows'] ) ) {
+				$this->options['ai_adaptive']['anomaly_persistence_windows'] = 3;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_p75_min_samples'] ) ) {
+				$this->options['ai_adaptive']['anomaly_p75_min_samples'] = 10;
+			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
 				$this->options['edge_cache'] = array();

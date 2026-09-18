@@ -70,14 +70,17 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		// Field-LCP min samples (issue #986): additive key, 20 by default.
 		// Dismissed suggestions (issue #1036): additive key, empty by default.
 		// Anomaly detection (issue #1040): additive keys, 7-day cooldown + 10 min samples.
+		// p75 anomaly hardening (issue #1384): additive keys, 3-window persistence + 10 RUM samples.
 		$this->assertSame(
 			array(
-				'enabled'               => false,
-				'use_wp_ai_client'      => false,
-				'field_lcp_min_samples' => 20,
-				'dismissed_suggestions' => array(),
-				'anomaly_cooldown_days' => 7,
-				'anomaly_min_samples'   => 10,
+				'enabled'                     => false,
+				'use_wp_ai_client'            => false,
+				'field_lcp_min_samples'       => 20,
+				'dismissed_suggestions'       => array(),
+				'anomaly_cooldown_days'       => 7,
+				'anomaly_min_samples'         => 10,
+				'anomaly_persistence_windows' => 3,
+				'anomaly_p75_min_samples'     => 10,
 			),
 			$defaults['ai_adaptive']
 		);
