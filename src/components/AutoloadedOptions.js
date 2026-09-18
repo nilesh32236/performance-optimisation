@@ -26,6 +26,17 @@ import StatusBadge from './common/StatusBadge';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 /**
+ * Fallback critical autoload threshold in bytes (800 KB per the WordPress 6.6
+ * guidance). Used when the REST audit payload lacks the server-resolved
+ * critical_threshold (old cached payloads). Mirrors
+ * Database_Cleanup::AUTOLOAD_CRITICAL_BYTES.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+const CRITICAL_THRESHOLD_FALLBACK = 819200;
+
+/**
  * Validate an option name client-side before it reaches the privileged
  * autoload_remediate endpoint. Mirrors the wp_options.option_name column
  * (varchar(191)): non-empty string, max 191 chars, conservative charset.
@@ -46,6 +57,7 @@ export const isValidOptionName = ( optionName ) =>
  */
 const AutoloadedOptions = () => {
 	const [ options, setOptions ] = useState( [] );
+	const [ audit, setAudit ] = useState( null );
 	const [ totalBytes, setTotalBytes ] = useState( null );
 	const [ sizeLimit, setSizeLimit ] = useState( null );
 	const [ loading, setLoading ] = useState( true );
@@ -88,6 +100,14 @@ const AutoloadedOptions = () => {
 						return;
 					}
 					setOptions( response.data.options );
+					setAudit( {
+						total: response.data.total_autoload_bytes ?? null,
+						count: response.data.count ?? null,
+						threshold:
+							response.data.critical_threshold ??
+							CRITICAL_THRESHOLD_FALLBACK,
+						isCritical: response.data.is_critical ?? false,
+					} );
 					// Total vs Site Health threshold (fail-open: absent/non-numeric
 					// leaves the card unchanged at today's list).
 					const total = Number( response.data.total_autoload_bytes );
@@ -542,6 +562,25 @@ const AutoloadedOptions = () => {
 					message={ notice.message }
 					onDismiss={ dismiss }
 				/>
+			) }
+			{ audit?.isCritical && (
+				<p
+					className="wppo-notice wppo-notice--warning"
+					role="status"
+					aria-live="polite"
+				>
+					{ sprintf(
+						/* translators: %1$s: total autoload size, %2$s: critical threshold. */
+						__(
+							'Critical: autoload payload %1$s meets or exceeds the %2$s WordPress 6.6 threshold.',
+							'performance-optimisation'
+						),
+						formatBytes( audit.total || 0 ),
+						formatBytes(
+							audit.threshold || CRITICAL_THRESHOLD_FALLBACK
+						)
+					) }
+				</p>
 			) }
 			{ body }
 			{ options.length > 0 && (

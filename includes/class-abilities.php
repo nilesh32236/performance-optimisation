@@ -1006,18 +1006,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				if ( isset( $cached['options'] ) && is_array( $cached['options'] ) ) {
 					$result['options'] = $cached['options'];
 				}
+				// Backfill the 800KB critical signal for pre-upgrade cache
+				// entries that lack it (fail-open to live computation).
+				try {
+					if ( isset( $cached['is_critical'], $cached['critical_threshold'] ) ) {
+						$result['is_critical']        = (bool) $cached['is_critical'];
+						$result['critical_threshold'] = (int) $cached['critical_threshold'];
+					} else {
+						$result['critical_threshold'] = Database_Cleanup::get_autoload_critical_threshold();
+						$result['is_critical']        = Database_Cleanup::is_autoload_critical( (int) $cached['autoloaded_size'], $result['critical_threshold'] );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 				return $result;
 			}
 			try {
-				$autoloaded    = Database_Cleanup::get_autoload_count();
-				$autoload_size = Database_Cleanup::get_autoload_total_bytes();
-				$options       = Database_Cleanup::get_autoloaded_options( 20 );
+				$audit         = Database_Cleanup::get_autoload_audit( 20 );
+				$autoloaded    = $audit['count'];
+				$autoload_size = $audit['total_autoload_bytes'];
+				$options       = $audit['options'];
+				$threshold     = $audit['critical_threshold'];
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				// Same shape as the success paths so consumers never branch
+				// on a missing key (fail-open: not critical by default).
 				return array(
 					'autoloaded_count'   => 0,
 					'autoloaded_size'    => 0,
 					'autoloaded_size_mb' => 0.0,
+					'critical_threshold' => Database_Cleanup::AUTOLOAD_CRITICAL_BYTES,
+					'is_critical'        => false,
 					'options'            => array(),
 				);
 			}
@@ -1025,6 +1044,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				'autoloaded_count'   => $autoloaded,
 				'autoloaded_size'    => $autoload_size,
 				'autoloaded_size_mb' => round( $autoload_size / ( 1024 * 1024 ), 2 ),
+				'critical_threshold' => $threshold,
+				'is_critical'        => Database_Cleanup::is_autoload_critical( $autoload_size, $threshold ),
 				'options'            => $options,
 			);
 			set_transient( $cache_key, $result, 10 * MINUTE_IN_SECONDS );
