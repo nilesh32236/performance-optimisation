@@ -78,6 +78,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * purgeCache endpoint, so single-page clears cannot purge Bunny for
 		 * one URL — that limitation is documented and the Bunny zone is left
 		 * untouched (next full purge clears it). When lock is active, no-op.
+		 * When no zone config exists, returns true with a logged skip before
+		 * taking the lock (no HTTP). Scoped single-page failures never
+		 * escalate to purge_everything (fail-open).
 		 *
 		 * Bunny purge uses WPPO_BUNNY_API_KEY + edge_cache.bunnyPullZoneId
 		 * via api.bunny.net/pullzone/{id}/purgeCache POST.
@@ -111,6 +114,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 				return true;
 			}
 
+			// Is-configured guard before touching the transient lock: an
+			// unconfigured 'all' purge must not take the lock, perform HTTP,
+			// or silently no-op — it returns true with a logged skip
+			// (fail-open, ~50ms + outbound calls saved per save).
+			if ( class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) && ! Edge_Cache::is_configured() ) {
+				self::log_skip( 'edge', 'not configured' );
+				return true;
+			}
+
 			$settings       = Util::get_settings();
 			$edge           = isset( $settings['edge_cache'] ) && is_array( $settings['edge_cache'] ) ? $settings['edge_cache'] : array();
 			$cache_settings = isset( $settings['cache_settings'] ) && is_array( $settings['cache_settings'] ) ? $settings['cache_settings'] : array();
@@ -126,13 +138,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 				// pull zones are all-or-nothing (documented above).
 				$page_url = self::resolve_page_url( $url_path );
 				if ( '' === $page_url ) {
+					self::log_skip( 'cloudflare-edge', 'single-page: unresolvable URL' );
 					return true;
 				}
 				if ( '' === $cf_zone || '' === $cf_token ) {
+					self::log_skip( 'cloudflare-edge', 'not configured' );
 					return true;
 				}
 				self::set_purge_lock();
-				return self::purge_cloudflare_files( $cf_zone, $cf_token, $page_url );
+				$scoped_ok = self::purge_cloudflare_files( $cf_zone, $cf_token, $page_url );
+				if ( ! $scoped_ok ) {
+					// Fail-open: a failed scoped purge degrades to an
+					// unpurged edge page — never escalate to purge_everything.
+					return false;
+				}
+				return true;
 			}
 			self::set_purge_lock();
 
@@ -159,13 +179,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * Resolve a single-page purge target to an absolute URL.
 		 *
 		 * Accepts an absolute URL or a path; paths are resolved against the
-		 * home URL. Returns '' when unresolvable.
+		 * home URL. Returns '' when unresolvable. Public so CDN_Purger can
+		 * share one implementation instead of duplicating it.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Made public for CDN_Purger scoped single-page purges.
 		 * @param mixed $url_path Page path or absolute URL.
 		 * @return string Absolute URL or ''.
 		 */
-		private static function resolve_page_url( $url_path ): string {
+		public static function resolve_page_url( $url_path ): string {
 			try {
 				if ( ! is_string( $url_path ) || '' === trim( $url_path ) ) {
 					return '';
@@ -289,6 +311,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		private static function log_failure( string $service, string $detail ): void {
 			do_action( 'wppo_debug_log', 'Edge purge failed [' . $service . ']: ' . $detail );
 			self::mirror_to_activity_log( $service, $detail );
+		}
+
+		/**
+		 * Surface a skipped purge via the debug log (no HTTP performed).
+		 *
+		 * Skips are debug-log only (never mirrored to the activity log) so
+		 * unconfigured sites do not spam `wppo_activity_logs` on every save.
+		 *
+		 * @since NEXT
+		 * @param string $service Service.
+		 * @param string $detail  Reason.
+		 * @return void
+		 */
+		private static function log_skip( string $service, string $detail ): void {
+			try {
+				do_action( 'wppo_debug_log', 'Edge purge skipped [' . $service . ']: ' . $detail );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

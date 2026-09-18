@@ -57,6 +57,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 */
 		public static function purge( string $zone, string $token, string $log_tag = 'cloudflare', string $fail_prefix = 'CDN purge failed' ): bool {
 			if ( '' === $zone || '' === $token ) {
+				self::log_skip( $log_tag, 'not configured', $fail_prefix );
 				return false;
 			}
 
@@ -103,6 +104,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 */
 		public static function purge_files( string $zone, string $token, array $urls, string $log_tag = 'cloudflare', string $fail_prefix = 'CDN purge failed' ): bool {
 			if ( '' === $zone || '' === $token || empty( $urls ) ) {
+				self::log_skip( $log_tag, 'not configured', $fail_prefix );
 				return false;
 			}
 
@@ -115,6 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 				)
 			);
 			if ( empty( $files ) ) {
+				self::log_skip( $log_tag, 'not configured', $fail_prefix );
 				return false;
 			}
 
@@ -168,6 +171,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 */
 		private static function log_failure( string $service, string $detail, string $fail_prefix = 'CDN purge failed' ): void {
 			do_action( 'wppo_debug_log', $fail_prefix . ' [' . $service . ']: ' . $detail );
+		}
+
+		/**
+		 * Surface a skipped purge via wppo_debug_log (no HTTP performed).
+		 *
+		 * Derives the skip prefix from the caller's failure prefix so existing
+		 * debug-log filters keep matching their provider ('CDN purge skipped'
+		 * vs 'Edge purge skipped').
+		 *
+		 * @since NEXT
+		 * @param string $service     Log tag (e.g. cloudflare, cloudflare-edge).
+		 * @param string $detail      Reason (e.g. 'not configured').
+		 * @param string $fail_prefix Caller failure prefix.
+		 * @return void
+		 */
+		private static function log_skip( string $service, string $detail, string $fail_prefix = 'CDN purge failed' ): void {
+			$skip_prefix = false !== strpos( $fail_prefix, 'failed' ) ? str_replace( 'failed', 'skipped', $fail_prefix ) : $fail_prefix . ' (skipped)';
+			try {
+				do_action( 'wppo_debug_log', $skip_prefix . ' [' . $service . ']: ' . $detail );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 	}
 }

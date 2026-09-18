@@ -47,6 +47,9 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 				'wp_remote_retrieve_response_code',
 				'apply_filters',
 				'do_action',
+				'home_url',
+				'wp_json_encode',
+				'is_wp_error',
 			)
 		);
 		Functions\when( 'get_option' )->alias(
@@ -58,6 +61,17 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'apply_filters' )->returnArg( 2 );
 		Functions\when( 'do_action' )->justReturn( null );
+		Functions\when( 'home_url' )->alias(
+			static function ( $path = '' ) {
+				return 'http://example.com' . $path;
+			}
+		);
+		Functions\when( 'wp_json_encode' )->alias(
+			static function ( $data ) {
+				return json_encode( $data ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
+			}
+		);
+		Functions\when( 'is_wp_error' )->justReturn( false );
 		Functions\when( 'wp_remote_request' )->alias(
 			function ( $url, $args = array() ) {
 				$this->requests[] = array(
@@ -115,7 +129,7 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that Cloudflare purge returns false without a configured zone.
+	 * Test that Cloudflare purge returns true with a logged skip without a configured zone.
 	 */
 	public function test_purge_cloudflare_skips_without_zone(): void {
 		$this->install_stubs();
@@ -125,11 +139,21 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 				'cloudflareZoneId' => '',
 			)
 		);
+		$logged = array();
+		Functions\when( 'do_action' )->alias(
+			function ( $hook, $message = null ) use ( &$logged ) {
+				if ( 'wppo_debug_log' === $hook ) {
+					$logged[] = $message;
+				}
+			}
+		);
 
 		$result = CDN_Purger::purge_all();
 
-		$this->assertFalse( $result );
+		$this->assertTrue( $result );
 		$this->assertCount( 0, $this->requests );
+		$this->assertNotEmpty( $logged );
+		$this->assertStringContainsString( 'skipped', $logged[0] );
 	}
 
 	/**
@@ -170,10 +194,20 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that a single-page clear makes zero Cloudflare requests.
+	 * Test that a single-page clear issues a scoped Cloudflare files purge, never purge-everything.
 	 */
 	public function test_purge_all_skips_single_page_type_for_cloudflare(): void {
 		$this->install_stubs();
+		Functions\when( 'home_url' )->alias(
+			static function ( $path = '' ) {
+				return 'http://example.com' . $path;
+			}
+		);
+		Functions\when( 'wp_json_encode' )->alias(
+			static function ( $data ) {
+				return json_encode( $data ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
+			}
+		);
 		$this->set_cache_settings(
 			array(
 				'cdnPurgeService'  => 'cloudflare',
@@ -184,7 +218,10 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 		$result = CDN_Purger::purge_all( 'single_page', '/about/' );
 
 		$this->assertTrue( $result );
-		$this->assertCount( 0, $this->requests );
+		$this->assertCount( 1, $this->requests );
+		$body = json_decode( $this->requests[0]['args']['body'], true );
+		$this->assertSame( array( 'http://example.com/about/' ), $body['files'] );
+		$this->assertArrayNotHasKey( 'purge_everything', $body );
 	}
 
 	/**

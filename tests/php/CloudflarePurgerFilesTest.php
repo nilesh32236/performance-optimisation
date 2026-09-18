@@ -190,7 +190,7 @@ class CloudflarePurgerFilesTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that empty or all-blank URL lists short-circuit without HTTP.
+	 * Test that empty or all-blank URL lists short-circuit without HTTP (with a logged skip).
 	 */
 	public function test_purge_files_empty_list_skips_http(): void {
 		$this->install_stubs();
@@ -200,7 +200,8 @@ class CloudflarePurgerFilesTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( Cloudflare_Purger::purge_files( '', 'tok', array( 'https://example.com/a/' ) ) );
 		$this->assertFalse( Cloudflare_Purger::purge_files( 'z123', '', array( 'https://example.com/a/' ) ) );
 		$this->assertCount( 0, $this->requests );
-		$this->assertCount( 0, $this->logged );
+		$this->assertCount( 4, $this->logged );
+		$this->assertStringContainsString( 'skipped', $this->logged[0] );
 	}
 
 	/**

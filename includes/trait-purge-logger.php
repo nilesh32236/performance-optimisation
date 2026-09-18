@@ -61,5 +61,26 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 				unset( $e );
 			}
 		}
+
+		/**
+		 * Surface a skipped purge via the debug log (no HTTP performed).
+		 *
+		 * Skips are debug-log only (never mirrored to the activity log) so
+		 * unconfigured sites do not spam `wppo_activity_logs` on every save.
+		 * Fail-open: logging never breaks the purge path.
+		 *
+		 * @since NEXT
+		 * @param string $service    Service tag (e.g. 'cloudflare', 'cloudflare-edge', 'varnish', 'bunny-edge').
+		 * @param string $detail     Reason (e.g. 'not configured').
+		 * @param string $log_prefix Debug-log prefix (default 'CDN purge skipped').
+		 * @return void
+		 */
+		private static function log_purge_skip( string $service, string $detail, string $log_prefix = 'CDN purge skipped' ): void {
+			try {
+				do_action( 'wppo_debug_log', $log_prefix . ' [' . $service . ']: ' . $detail );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
 	}
 }

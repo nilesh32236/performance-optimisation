@@ -1355,7 +1355,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wp_footer', array( 'PerformanceOptimise\Inc\RUM', 'print_config' ), 90 );
 
 			// Edge/CDN cache purge on full cache clear (Cloudflare / Varnish).
-			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\CDN_Purger', 'purge_all' ) );
+			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\CDN_Purger', 'purge_all' ), 10, 2 );
 			// N2 Edge HTML adapter — purge alongside CDN_Purger (stale-while-revalidate).
 			if ( class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 				add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Edge_Purger', 'purge_all' ), 20, 2 );

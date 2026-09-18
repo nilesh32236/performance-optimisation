@@ -38,9 +38,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * Purge the configured third-party cache.
 		 *
 		 * Hooks into wppo_after_cache_clear so a full cache clear also empties
-		 * the CDN/edge cache. Single-page clears only invalidate this plugin's
-		 * own static files and deliberately skip the edge purge: wiping the
-		 * whole zone for one page would be disproportionate.
+		 * the CDN/edge cache. Single-page clears issue a URL-scoped
+		 * Cloudflare purge_files for the page URL and never purge_everything:
+		 * wiping the whole zone for one page would be disproportionate.
+		 * Varnish single-page clears stay a logged no-op (fail-open) because
+		 * the configured endpoints are server-level PURGE targets with no
+		 * per-URL mapping. When no zone config exists, returns true with a
+		 * logged skip and performs no HTTP.
 		 *
 		 * The $url_path parameter is deliberately untyped: this method runs
 		 * as a WP hook callback (wppo_after_cache_clear via
@@ -48,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * non-string payloads instead of throwing a TypeError.
 		 *
 		 * @param string $type     Clear type ('all' or 'single_page').
-		 * @param mixed  $url_path Page path for single-page clears (unused; edge purges are all-or-nothing).
+		 * @param mixed  $url_path Page path (or absolute URL) for single-page clears.
 		 * @return bool True when no purge was needed or all requests succeeded.
 		 *
 		 * @since 2.0.0 The $type and $url_path parameters were added.
@@ -59,14 +63,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 			// purgeSync is enabled (loop-safe via Util::transient_key lock).
 			self::purge_litespeed( $type, $url_path );
 
-			if ( 'all' !== $type ) {
-				return true;
-			}
-
 			$options = Util::get_settings();
 			$cache   = isset( $options['cache_settings'] ) && is_array( $options['cache_settings'] ) ? $options['cache_settings'] : array();
 
 			$service = isset( $cache['cdnPurgeService'] ) ? sanitize_text_field( (string) $cache['cdnPurgeService'] ) : 'none';
+
+			if ( 'single_page' === $type ) {
+				return self::purge_single_page( $cache, $service, $url_path );
+			}
+
+			if ( 'all' !== $type ) {
+				return true;
+			}
+
+			if ( ! self::is_configured() ) {
+				self::log_skip( $service, 'not configured' );
+				return true;
+			}
 
 			if ( 'cloudflare' === $service ) {
 				return self::purge_cloudflare( $cache );
@@ -76,6 +89,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 			}
 
 			return true;
+		}
+
+		/**
+		 * Handle a single-page clear with a scoped purge, never purge-all.
+		 *
+		 * Cloudflare resolves $url_path to an absolute URL and issues a
+		 * purge_files call. Anything unresolvable, unconfigured, or
+		 * non-Cloudflare falls back to the previous skip-single-page
+		 * behaviour (logged skip, no HTTP, fail-open).
+		 *
+		 * @since NEXT
+		 * @param array  $cache   cache_settings values.
+		 * @param string $service Sanitized cdnPurgeService value.
+		 * @param mixed  $url_path Page path (or absolute URL) for single-page clears.
+		 * @return bool True when skipped or the scoped purge succeeded.
+		 */
+		private static function purge_single_page( array $cache, string $service, $url_path ): bool {
+			if ( 'cloudflare' !== $service ) {
+				self::log_skip( $service, 'single-page: no scoped purge for service' );
+				return true;
+			}
+			$page_url = self::resolve_page_url( $url_path );
+			if ( '' === $page_url ) {
+				self::log_skip( $service, 'single-page: unresolvable URL' );
+				return true;
+			}
+			$zone  = isset( $cache['cloudflareZoneId'] ) ? sanitize_text_field( (string) $cache['cloudflareZoneId'] ) : '';
+			$token = defined( self::TOKEN_CONSTANT ) ? (string) constant( self::TOKEN_CONSTANT ) : '';
+			if ( '' === $zone || '' === $token ) {
+				self::log_skip( $service, 'not configured' );
+				return true;
+			}
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
+				self::log_skip( $service, 'single-page: transport unavailable' );
+				return true;
+			}
+			return Cloudflare_Purger::purge_files( $zone, $token, array( $page_url ), 'cloudflare', 'CDN purge failed' );
+		}
+
+		/**
+		 * Resolve a single-page purge target to an absolute URL.
+		 *
+		 * Reuses Edge_Purger::resolve_page_url() when available so both
+		 * purgers share one implementation; falls back to a local
+		 * home_url() resolution otherwise. Returns '' when unresolvable.
+		 *
+		 * @since NEXT
+		 * @param mixed $url_path Page path or absolute URL.
+		 * @return string Absolute URL or ''.
+		 */
+		private static function resolve_page_url( $url_path ): string {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) && method_exists( 'PerformanceOptimise\Inc\Edge_Purger', 'resolve_page_url' ) ) {
+					return (string) Edge_Purger::resolve_page_url( $url_path );
+				}
+				if ( ! is_string( $url_path ) || '' === trim( $url_path ) ) {
+					return '';
+				}
+				$candidate = trim( $url_path );
+				if ( 0 === strpos( $candidate, 'http://' ) || 0 === strpos( $candidate, 'https://' ) ) {
+					return esc_url_raw( $candidate );
+				}
+				if ( function_exists( 'home_url' ) ) {
+					return esc_url_raw( home_url( '/' . ltrim( $candidate, '/' ) ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
 		}
 
 		/**
@@ -257,6 +339,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 */
 		private static function log_failure( string $service, string $detail ): void {
 			self::log_purge_failure( $service, $detail, 'CDN purge failed', 'wppo_cdn_purge_log_lock', 60 );
+		}
+
+		/**
+		 * Surface a skipped purge via the debug log (no HTTP performed).
+		 *
+		 * @since NEXT
+		 * @param string $service Service name.
+		 * @param string $detail  Reason.
+		 * @return void
+		 */
+		private static function log_skip( string $service, string $detail ): void {
+			self::log_purge_skip( $service, $detail, 'CDN purge skipped' );
 		}
 	}
 }
