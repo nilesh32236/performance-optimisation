@@ -153,7 +153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * serve/store/preload guard so a new builder param added here reaches
 		 * all three layers without regex drift.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		public const EDITOR_PREVIEW_PARAMS = array(
@@ -188,7 +188,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * {@see self::restore_settings_snapshot()}. Multisite-safe: stored via
 		 * plain per-site `get_option()`/`update_option()`, never network-wide.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const SETTINGS_SNAPSHOT_OPTION = 'wppo_settings_snapshot';
@@ -196,7 +196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Read the stored prior-settings snapshot.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array|null Snapshot array with `settings` + `taken_at` keys, or null when absent/malformed.
 		 */
 		public static function get_settings_snapshot(): ?array {
@@ -221,7 +221,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Fail-open: any failure returns false and must never block the
 		 * settings save that triggered it.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array|null $settings Settings to snapshot (defaults to the current stored settings).
 		 * @return bool True when the snapshot was written.
 		 */
@@ -250,7 +250,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Fail-open: snapshot-restore failure leaves the current settings
 		 * intact and returns null; never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array|null The restored settings array, or null when no valid snapshot exists or the write failed.
 		 */
 		public static function restore_settings_snapshot(): ?array {
@@ -491,14 +491,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enabled' => false,
 				),
 				'ai_adaptive'           => array(
-					'enabled'               => false,
-					'use_wp_ai_client'      => false,
-					'field_lcp_min_samples' => 20,
-					'dismissed_suggestions' => array(),
-					'anomaly_cooldown_days' => 7,
-					'anomaly_min_samples'   => 10,
-					'anomaly_tolerance_pct' => 5.0,
-					'anomaly_tolerance_abs' => 0.01,
+					'enabled'                     => false,
+					'use_wp_ai_client'            => false,
+					'field_lcp_min_samples'       => 20,
+					'dismissed_suggestions'       => array(),
+					'anomaly_cooldown_days'       => 7,
+					'anomaly_min_samples'         => 10,
+					'anomaly_tolerance_pct'       => 5.0,
+					'anomaly_tolerance_abs'       => 0.01,
+					'anomaly_persistence_windows' => 3,
+					'anomaly_p75_min_samples'     => 10,
 				),
 				'edge_cache'            => array(
 					'enabled' => false,
@@ -899,7 +901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Pure static helper: no I/O, multisite-safe. Fail-open: detection
 		 * failure returns true (treated as faceted, never preloaded/cached).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string|null $query_string Raw query string. Defaults to `$_SERVER['QUERY_STRING']`.
 		 * @return bool True when faceted params are present.
 		 */
@@ -983,7 +985,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * and subdirectory installs (`/subsite/wp-admin/`) all bypass the static
 		 * cache. Fail-open: detection failure returns true (never cached).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $path Request path (leading slash optional).
 		 * @return bool True when the path is an admin entry point.
 		 */
@@ -1011,7 +1013,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * guards and by preload exclusion. Fail-open: detection failure returns
 		 * true (treated as preview, never cached).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $path         Request path (leading slash optional).
 		 * @param string $query_string Raw query string (without leading `?`).
 		 * @param string $rest_route   Optional `rest_route` value (plain permalinks).
@@ -1074,7 +1076,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * check so preload can never warm a URL the serve path blocks.
 		 * Fail-open: detection failure returns true (treated as dynamic).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url        Absolute URL.
 		 * @param string $query      Optional pre-parsed query string (parsed from $url when '').
 		 * @param string $rest_route Optional pre-parsed rest_route value.
@@ -1141,7 +1143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * previews and wp-admin URLs are never warmed. Fail-open: detection
 		 * failure returns true (never preload).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Absolute URL.
 		 * @return bool True when the URL must bypass cache/preload.
 		 */
@@ -1187,7 +1189,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * returns true (fail-open to uncached, never fatal). Multisite-safe:
 		 * per-request state only.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the current request must bypass the cache.
 		 */
 		public static function is_editor_preview_request(): bool {
@@ -1337,9 +1339,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * are written.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added additive `editor_checks` (wp-admin + builder/core preview bypass probes).
-		 * @since NEXT Added additive `fragment_checks` (wc-ajax / add-to-cart / plain-permalink Store API fragment probes, issue #1197).
-		 * @since NEXT Added additive `preload_checks` (faceted-URL preload-skip probes), `cart_checks` (guest-cart survival probes) and `force_exclude` (fail-closed recommendation, issue #1256).
+		 * @since 2.2.0 Added additive `editor_checks` (wp-admin + builder/core preview bypass probes).
+		 * @since 2.2.0 Added additive `fragment_checks` (wc-ajax / add-to-cart / plain-permalink Store API fragment probes, issue #1197).
+		 * @since 2.2.0 Added additive `preload_checks` (faceted-URL preload-skip probes), `cart_checks` (guest-cart survival probes) and `force_exclude` (fail-closed recommendation, issue #1256).
 		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, fragment_checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, editor_checks: array<int, array{url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, preload_checks: array<int, array{url: string, path: string, skipped: bool, pass: bool, error?: string}>, cart_checks: array<int, array{key: string, url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, force_exclude: bool, all_pass: bool} Structured self-test result.
 		 */
 		public static function woo_cache_self_test(): array {
@@ -1702,7 +1704,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Per-blog memo for the canonical home host (see get_canonical_host()).
 		 *
 		 * @var array<int, string>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static array $canonical_host_cache = array();
 
@@ -1710,7 +1712,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Per-value memo for normalized cache hosts (see normalize_cache_host()).
 		 *
 		 * @var array<string, string>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static array $normalized_host_cache = array();
 
@@ -1743,7 +1745,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * decision into another (multisite-safe).
 		 *
 		 * @var array<int, bool>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static array $purge_fallback_memo = array();
 
@@ -1769,7 +1771,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * over calling the individual resetters so future memos are not
 		 * silently missed by test setUp() methods.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_runtime_caches(): void {
@@ -1889,7 +1891,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * sit in alloptions. Refreshes the per-request memo on success so
 		 * same-request reads observe the write.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $settings Settings array to store.
 		 * @return bool True on success (mirrors update_option()).
 		 */
@@ -2191,7 +2193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * to the defaults so a poisoned filter can never open the tree.
 		 *
 		 * @return string[] Normalized absolute root paths.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_minify_allowed_roots(): array {
 			$defaults = array();
@@ -2269,7 +2271,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param mixed $path Candidate filesystem path.
 		 * @return bool True when the path resolves inside an allowed root.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_minify_path_allowed( $path ): bool {
 			return '' !== self::validate_minify_path( $path );
@@ -2283,7 +2285,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param mixed $path Candidate filesystem path.
 		 * @return string Resolved allowed path, or '' when rejected.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function validate_minify_path( $path ): string {
 			if ( ! is_string( $path ) || '' === $path ) {
@@ -2455,7 +2457,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $imagesizes Responsive sizes for image preloads (optional).
 		 * @since 1.0.0
 		 * @since 2.0.0 Echoes only in front-end HTML contexts; returns the tag and delegates building to get_preload_link().
-		 * @since NEXT Adds $imagesrcset/$imagesizes for LCP image preloads.
+		 * @since 2.2.0 Adds $imagesrcset/$imagesizes for LCP image preloads.
 		 */
 		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '', $imagesrcset = '', $imagesizes = '' ) {
 			$link_tag = self::get_preload_link( $href, $rel, $resource_type, $crossorigin, $type, $media, $fetchpriority, $imagesrcset, $imagesizes );
@@ -2497,7 +2499,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $imagesrcset Responsive srcset for image preloads (optional).
 		 * @param string $imagesizes Responsive sizes for image preloads (optional).
 		 * @since 2.0.0
-		 * @since NEXT Adds $imagesrcset/$imagesizes for LCP image preloads.
+		 * @since 2.2.0 Adds $imagesrcset/$imagesizes for LCP image preloads.
 		 * @return string The sanitized `<link ...>` tag.
 		 */
 		public static function get_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '', $imagesrcset = '', $imagesizes = '' ): string {
@@ -2564,7 +2566,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * nine positional parameters ($fetchpriority vs $imagesrcset). The
 		 * legacy positional {@see get_preload_link()} delegates here.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $href Resource URL.
 		 * @param array  $args Optional args: rel, as, crossorigin, type, media, fetchpriority, imagesrcset, imagesizes.
 		 * @return string Sanitized `<link ...>` tag.
@@ -2608,7 +2610,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param mixed $raw Untrusted list value.
 		 * @return string[] Clean list.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function coerce_string_list( $raw ): array {
 			if ( ! is_array( $raw ) ) {
@@ -2807,7 +2809,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * branches re-implemented across Image_Optimisation, Img_Converter,
 		 * Used_CSS and Critical_CSS so a fix here reaches every pipeline.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Raw URL.
 		 * @return string Absolute URL or '' when empty/data:.
 		 */
@@ -2831,7 +2833,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Thin canonical wrapper over {@see normalize_url()} so image and CSS
 		 * pipelines share one key derivation instead of parallel copies.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Raw URL.
 		 * @return string Normalized key or ''.
 		 */
@@ -2995,7 +2997,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Only `http`/`https` are touched; any other scheme (or a scheme-less
 		 * value) is returned unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url URL to normalize.
 		 * @return string URL carrying the canonical scheme.
 		 */
@@ -3027,7 +3029,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Always returns `'http'` or `'https'`, so the result is safe to pass
 		 * to `set_url_scheme()`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Either 'http' or 'https'.
 		 */
 		public static function canonical_scheme(): string {
@@ -3077,7 +3079,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Memoized lowercase home host for same-site checks, keyed by blog.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<int, string>
 		 */
 		private static $same_site_home_host = array();
@@ -3090,7 +3092,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * compared raw === and was the outlier). Host-only — no scheme or
 		 * syntax validation; use is_same_site_url() for full checks.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url URL to check.
 		 * @return bool True when hosts match and home host is known.
 		 */
@@ -3121,7 +3123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * part), and Abilities::same_site_url_or_home() all funnel here so
 		 * port/case/IDN edge cases cannot drift apart.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url URL to check.
 		 * @return bool True when safe.
 		 */
@@ -3151,7 +3153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Validate a caller-supplied URL as same-site, else the fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url      Caller URL (already esc_url_raw'd by caller).
 		 * @param string $fallback Fallback (home URL, or '' to fail closed).
 		 * @return string Same-site URL or the fallback.
@@ -3249,7 +3251,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $raw_host Raw input key.
 		 * @param string $normalized Normalized result.
 		 * @return string The normalized result (passthrough for `return` sites).
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function memoize_normalized_host( string $raw_host, string $normalized ): string {
 			if ( count( self::$normalized_host_cache ) > 64 ) {
@@ -3295,7 +3297,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Uncached canonical-host resolution backing get_canonical_host().
 		 *
 		 * @return string Canonical lowercase host, or '' when unresolvable.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function resolve_canonical_host(): string {
 			if ( ! function_exists( 'home_url' ) || ! function_exists( 'wp_parse_url' ) ) {
@@ -3351,7 +3353,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *                                  same-host absolute URLs map to their path, others refuse.
 		 * @return string Sanitized relative path or empty string.
 		 * @since 2.0.0
-		 * @since NEXT Added the optional $allowed_host foreign-host refusal.
+		 * @since 2.2.0 Added the optional $allowed_host foreign-host refusal.
 		 */
 		public static function sanitize_cache_url_path( ?string $url_path, ?string $allowed_host = null ): string {
 			$raw_input = (string) $url_path;
@@ -3494,7 +3496,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Pure static helper: no I/O, no settings reads. Multisite-safe.
 		 *
 		 * @return string[] Lowercase cache-neutral query param names.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_cache_query_allowlist(): array {
 			$defaults = array(
@@ -3575,7 +3577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string|null $query_string Raw query string. Defaults to `$_SERVER['QUERY_STRING']`.
 		 * @return bool True when the request must bypass the cache.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function has_uncacheable_query( ?string $query_string = null ): bool {
 			try {
@@ -3724,7 +3726,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $domain Canonical domain directory segment.
 		 * @param string $path Absolute file or directory path to check.
 		 * @return bool True when contained.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_realpath_contained( string $cache_root_dir, string $domain, string $path ): bool {
 			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
@@ -3837,7 +3839,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $lexical_path Normalized absolute path to resolve.
 		 * @return string|null Resolved absolute path, or null when unresolvable.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function resolve_realpath( string $lexical_path ): ?string {
 			if ( '' === $lexical_path || ! function_exists( 'realpath' ) || ! function_exists( 'dirname' ) ) {
@@ -3894,7 +3896,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $domain Canonical domain directory segment.
 		 * @param string $path Absolute file path to validate.
 		 * @return bool True when the target may be written.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function validate_cache_write_path( string $cache_root_dir, string $domain, string $path ): bool {
 			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
@@ -3924,7 +3926,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $htaccess_file Absolute .htaccess path candidate.
 		 * @return bool True when the target may be written.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_htaccess_path_allowed( string $htaccess_file ): bool {
 			if ( '' === $htaccess_file ) {
@@ -4469,7 +4471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param mixed  $fs Filesystem object.
 		 * @param string $path Final file path (backup is `$path.wppo-bak`).
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function delete_php_backup( $fs, string $path ): void {
 			try {
@@ -4508,7 +4510,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * RUM::supports_script_strategy() and LiteSpeed_ESI::supports_script_strategy()
 		 * (audit follow-up): both now delegate here so floor bumps cannot drift.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True on WP 6.3+.
 		 */
 		public static function supports_script_strategy(): bool {
@@ -4585,7 +4587,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * {@see reset_action_scheduler_unique_cache()} to clear the memo in
 		 * tests.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the `$unique` parameter may be passed.
 		 */
 		public static function supports_action_scheduler_unique(): bool {
@@ -4623,7 +4625,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * request, but unit tests that swap scheduler stubs between cases
 		 * must clear the memo to observe the new stub.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_action_scheduler_unique_cache(): void {
@@ -4634,7 +4636,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Unmemoized Action Scheduler unique-support probe.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the `$unique` parameter may be passed.
 		 */
 		private static function probe_action_scheduler_unique(): bool {
@@ -4668,7 +4670,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Memoized per function name: repeated reflection is paid once per
 		 * request no matter how many jobs a bulk path enqueues.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $function_name Function name to inspect.
 		 * @param int    $min_params    Minimum parameter count that implies `$unique` support.
 		 * @return bool True when the function exists and declares at least `$min_params` parameters.
@@ -4700,7 +4702,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * review). A missing or throwing guard degrades to "not scheduled"
 		 * rather than failing the enqueue.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $hook  Action hook.
 		 * @param array  $args  Action arguments.
 		 * @param string $group Action group.
@@ -4729,7 +4731,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Callers pass the extra groups so every legacy fallback below
 		 * probes the same disjunction the atomic path dedupes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string   $hook         Action hook.
 		 * @param array    $args         Action arguments.
 		 * @param string   $group        Primary action group.
@@ -4760,7 +4762,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * 3-argument enqueue on older scheduler versions. Never fatal: any
 		 * scheduler API failure returns 0.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string   $hook         Action hook.
 		 * @param array    $args         Action arguments.
 		 * @param string   $group        Action group.
@@ -4811,7 +4813,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Same fail-open contract as {@see enqueue_unique_async_action()} but
 		 * for delayed single actions.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int      $timestamp    When the job will run.
 		 * @param string   $hook         Action hook.
 		 * @param array    $args         Action arguments.
@@ -4863,7 +4865,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * filter. When disabled, {@see get_with_stampede_lock()} degrades to a
 		 * plain get-or-rebuild without coalescing (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when coalescing is active.
 		 */
 		public static function is_stampede_guard_enabled(): bool {
@@ -4876,7 +4878,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			/**
 			 * Filters whether the stampede guard coalesces hot-key rebuilds.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param bool $enabled Whether the guard is enabled.
 			 */
 			return (bool) apply_filters( 'wppo_stampede_guard_enabled', (bool) $guard );
@@ -4892,7 +4894,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * best-effort: rebuilds slower than the TTL (slow-origin telemetry
 		 * fetches) may expire mid-rebuild and duplicate work rather than stall.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Lock TTL clamped to 2-5 seconds.
 		 */
 		public static function stampede_lock_ttl(): int {
@@ -4907,7 +4909,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			/**
 			 * Filters the stampede lock TTL in seconds (clamped to 2-5s after filtering).
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param int $ttl Lock TTL in seconds.
 			 */
 			$ttl = (int) apply_filters( 'wppo_stampede_lock_ttl', $ttl );
@@ -4926,7 +4928,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Prefers `wp_generate_uuid4()` with a `uniqid() + mt_rand()` fallback
 		 * so concurrent workers never share an owner (release is owner-checked).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Unique owner token (never empty).
 		 */
 		public static function generate_stampede_owner(): string {
@@ -4965,7 +4967,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * option/DB row). Fail-open: any throwable means "not acquired"
 		 * (caller serves stale).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $lock_key Blog-aware lock key (use transient_key()).
 		 * @param string $owner    Unique owner token from generate_stampede_owner().
 		 * @param int    $ttl      Lock TTL in seconds (clamped to 2-5s; best-effort
@@ -5016,7 +5018,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Owner-checked so a slow worker never deletes a successor's lock after
 		 * its own TTL expired. Fail-open: throwables are swallowed (never fatal).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $lock_key Blog-aware lock key.
 		 * @param string $owner    Owner token that acquired the lock.
 		 * @param string $group    Object-cache group for the lock.
@@ -5067,7 +5069,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * the current blog prefix only `_stale` is appended; bare keys are
 		 * still qualified via {@see transient_key()} so they stay isolated.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $key Value cache key as passed to get_with_stampede_lock().
 		 * @return string Stale-copy key.
 		 */
@@ -5108,7 +5110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * (fail-open); a missing index entry only means the stale copy lives
 		 * out its TTL.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $key Stale-copy transient key.
 		 * @param int    $ttl Stale TTL in seconds (converted to an absolute expiry).
 		 * @return void
@@ -5161,7 +5163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * so purges can find it). Callers must still delete the stale key
 		 * wherever they invalidate the fresh key (purge paths do so).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string   $key     Value cache key as read/written by $args get/set (caller-qualified).
 		 * @param callable $rebuild Zero-arg rebuild callback. Returning false or WP_Error means
 		 *                          "not cacheable" (stale served when available).
@@ -5366,6 +5368,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$write_cached( $key, $fresh, $ttl );
 			$write_stale( $stale_key, $fresh, $stale_ttl );
 			return $fresh;
+		}
+
+		/**
+		 * Coalesce concurrent alloptions loads behind a stampede lock.
+		 *
+		 * Forty concurrent cold `alloptions` misses each hit the database via
+		 * `wp_load_alloptions()` unless they are collapsed: this wrapper runs
+		 * `$rebuild` (normally the single database query) under
+		 * {@see get_with_stampede_lock()} so exactly one worker rebuilds while
+		 * the rest wait a bounded interval (retries × delay, defaults ≈ 8 ×
+		 * 50ms) and then serve the fresh or stale copy. Fail-open throughout:
+		 * lock/Redis failures serve stale or dynamic uncached — never fatal.
+		 *
+		 * Multisite-safe: the coalescing key is blog-qualified via
+		 * {@see transient_key()}, so site A's miss never serves site B's
+		 * options and there is no cross-site leakage.
+		 *
+		 * @since NEXT
+		 * @param callable $rebuild Zero-arg rebuild callback performing the single database query. Returning false or WP_Error means "not cacheable" (stale served when available).
+		 * @param array    $args    Optional overrides for `ttl`, `stale_ttl`, `lock_ttl`, `retries`, `retry_delay_us`, and `group` (see get_with_stampede_lock()).
+		 * @return mixed Fresh value, stale fallback, rebuild result, or false on total miss failure.
+		 */
+		public static function get_alloptions_with_stampede_lock( callable $rebuild, array $args = array() ): mixed {
+			$key      = self::transient_key( 'wppo_alloptions' );
+			$defaults = array(
+				'ttl'            => 5 * ( defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS : 60 ),
+				'stale_ttl'      => defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400,
+				'retries'        => 8,
+				'retry_delay_us' => 50000,
+			);
+			$merged   = array_merge( $defaults, $args );
+			try {
+				return self::get_with_stampede_lock( $key, $rebuild, $merged );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				try {
+					return $rebuild();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			}
 		}
 
 		/**
@@ -5587,7 +5631,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}
 		 * so the allowlist lives in one place with its own unit test.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $value Raw value.
 		 * @return string Allowlisted mode ('auto' fallback).
 		 */
@@ -5601,7 +5645,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $value Raw overrides.
 		 * @return array Sanitized overrides.
 		 */
@@ -5637,7 +5681,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $value Raw mapping entries.
 		 * @return array Sanitized mapping.
 		 */
@@ -5729,7 +5773,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * key-name heuristic (exclude/preload/delay/url/cdn) is unit-testable
 		 * in isolation and the main loop stays a readable dispatcher.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $safe_key Sanitized key.
 		 * @param mixed  $value    Raw value.
 		 * @return mixed Sanitized value.
@@ -5760,7 +5804,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * every tab in {@see get_default_settings()} must appear here so a new
 		 * tab key can never be silently dropped or stored unsanitized.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array<string,string> Tab slug => sanitizer method name.
 		 */
 		public static function get_settings_sanitizer_map(): array {
@@ -5789,7 +5833,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * exists so the sanitizer map covers every schema tab with a named,
 		 * testable method.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
 		 */
@@ -5804,7 +5848,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * exists so the sanitizer map covers every schema tab with a named,
 		 * testable method.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
 		 */
@@ -6315,7 +6359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * fallback on even when the setting is off (fail-open kill-switch).
 		 * Multisite-safe: reads the per-site `wppo_settings` option.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when purge-fallback retention/serving is active.
 		 */
 		public static function is_purge_fallback_enabled(): bool {
@@ -6348,7 +6392,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				/**
 				 * Filters whether the post-purge last-good fallback is enabled.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param bool $enabled Whether the purge fallback is enabled.
 				 */
 				$filtered = apply_filters( 'wppo_purge_fallback_enabled', $enabled );
@@ -6377,7 +6421,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Pure path math only — no filesystem or containment checks; callers
 		 * re-check containment via their own validators.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $file_path Absolute derived-asset path.
 		 * @return string Sibling fallback path, or '' when not applicable.
 		 */
@@ -6454,7 +6498,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * inputs are refused so gzip bytes can never poison `fallback.css`.
 		 * Writes prefer atomic + `FS_CHMOD_FILE`. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param object   $fs         Filesystem exposing exists()/size()/copy()/get_contents()/put_contents().
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @param string   $file_path  The derived file about to be deleted.
@@ -6550,7 +6594,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * unavailable, so a fallback hit never pays a full-file read it can
 		 * avoid. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param object $fs       Filesystem exposing size()/get_contents().
 		 * @param string $fallback Absolute fallback path.
 		 * @return bool True when the fallback exists with non-empty content.
@@ -6592,7 +6636,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * one per directory. Returns true when the caller should log.
 		 * Fail-open: logging failures never affect serving. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the caller should write its log row.
 		 */
 		public static function purge_fallback_should_log(): bool {
@@ -6814,7 +6858,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * production call sites use curl_share handles yet, so this is
 		 * forward-compat API for future callers.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed       $sh          cURL share handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -6847,7 +6891,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * production call sites use finfo handles yet, so this is
 		 * forward-compat API for future callers.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed       $finfo       Finfo handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -6880,7 +6924,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * production call sites use XML parsers yet, so this is
 		 * forward-compat API for future callers.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed       $parser      XML parser to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -6929,8 +6973,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * store, which may hold stale headers from an earlier request
 		 * (notably in long-lived PHP-FPM workers).
 		 *
-		 * @since NEXT
-		 * @since NEXT `$legacy_source` parameter for the scope-blind legacy path.
+		 * @since 2.2.0
+		 * @since 2.2.0 `$legacy_source` parameter for the scope-blind legacy path.
 		 * @param array|null $legacy_source Optional explicit header lines for the
 		 *                                  legacy path (string-filtered).
 		 * @return string[] List of response header lines, or empty array when unavailable.

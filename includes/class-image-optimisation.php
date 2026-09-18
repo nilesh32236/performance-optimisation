@@ -57,7 +57,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * slice keeps pinned heroes when auto + manual overlap. Competitor
 		 * parity (one hero preload) with a hard cap against preload waste.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const MAX_LCP_PRELOADS = 2;
 
@@ -70,7 +70,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * for `<img>`, plus carriers of denylisted URL attributes
 		 * (`use`/`a` for href, `table`/`body`/`td`/`th` for background).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private const HARDENED_TAGS = array( 'img', 'image', 'source', 'video', 'iframe', 'audio', 'embed', 'object', 'svg', 'math', 'use', 'a', 'table', 'body', 'td', 'th' );
@@ -82,7 +82,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * stay in parity (issue #1271 follow-up). `srcdoc` is dropped
 		 * unconditionally; the rest are removed only when scriptable.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private const HARDENED_URL_ATTRS = array( 'src', 'data-src', 'data', 'codebase', 'usemap', 'poster', 'srcdoc', 'background', 'lowsrc', 'href', 'xlink:href', 'action', 'formaction', 'cite', 'longdesc' );
@@ -90,7 +90,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Srcset-family attributes filtered candidate-by-candidate.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private const HARDENED_SRCSET_ATTRS = array( 'srcset', 'data-srcset' );
@@ -101,7 +101,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `is_event_attribute_name()` spares these so valid attributes
 		 * (`only`, `one`, `online`, `once`, `onto`, `onion`) survive.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private const BENIGN_ON_PREFIX_ATTRS = array( 'only', 'one', 'online', 'once', 'onto', 'onion' );
@@ -227,7 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * In-memory only, multisite-safe by construction.
 		 *
 		 * @var array<string,bool>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static array $preload_emitted_urls = array();
 
@@ -304,7 +304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * the memo and re-resolves (issue #1216). Null until first resolved.
 		 *
 		 * @var string|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?string $current_lcp_url_key = null;
 
@@ -316,7 +316,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `maybe_preload_hero_image()`. Null until first null-buffer resolved.
 		 *
 		 * @var string|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?string $lazy_lcp_exclusion_url_key = null;
 
@@ -333,7 +333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * URL or ''.
 		 *
 		 * @var string|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?string $fetchpriority_lcp_url = null;
 
@@ -341,7 +341,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Current-URL key the `$fetchpriority_lcp_url` memo was resolved for.
 		 *
 		 * @var string|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?string $fetchpriority_lcp_key = null;
 
@@ -356,7 +356,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * the URL or ''. Reset via `clear_instance_lcp_memo()`.
 		 *
 		 * @var string|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?string $manual_lcp_url = null;
 
@@ -364,7 +364,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Post-ID key the `$manual_lcp_url` memo was resolved for.
 		 *
 		 * @var int|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?int $manual_lcp_url_key = null;
 
@@ -379,7 +379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * then the verdict. Reset via `clear_instance_lcp_memo()`.
 		 *
 		 * @var bool|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?bool $auto_lcp_disabled = null;
 
@@ -387,7 +387,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Post-ID key the `$auto_lcp_disabled` memo was resolved for.
 		 *
 		 * @var int|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?int $auto_lcp_disabled_key = null;
 
@@ -402,7 +402,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * the URL or ''. Reset via `clear_instance_lcp_memo()`.
 		 *
 		 * @var string|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?string $stable_signal_lcp_url = null;
 
@@ -410,7 +410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Current-URL key the `$stable_signal_lcp_url` memo was resolved for.
 		 *
 		 * @var string|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?string $stable_signal_lcp_url_key = null;
 
@@ -423,7 +423,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * buffer once per request. Bounded: reset once past 30 entries.
 		 *
 		 * @var array<string, string>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static $heuristic_lcp_memo = array();
 
@@ -433,7 +433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * one site's titles into another site's map (audit #1338 review).
 		 * Each blog bucket is capped at 200 entries (drop-oldest).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<int, array<string, string>>
 		 */
 		private static $deferred_alt_entries = array();
@@ -442,7 +442,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Per-request memo of the persistent alt map, keyed by blog id
 		 * (see get_derived_alt_map).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<int, array<string, string>|null>
 		 */
 		private static $derived_alt_memo = array();
@@ -452,7 +452,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * commit cycle. Re-armed whenever the buffer drains so long-lived
 		 * processes that buffer after a commit still persist.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static $alt_commit_registered = false;
@@ -465,7 +465,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * first placeholder lookup per request.
 		 *
 		 * @var array|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static $placeholder_info_cache = null;
 
@@ -473,7 +473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Data-src URL => ABSPATH-relative path cache for placeholder lookups.
 		 *
 		 * @var array<string, string>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static $placeholder_path_cache = array();
 
@@ -526,7 +526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * skipped by the other and exactly one hint prints per resource.
 		 * Fail-open: any failure returns false (caller emits normally).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
 		 * @return bool True when the URL + media pair already emitted.
@@ -548,7 +548,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * pipeline's preload_images() skips the duplicate. Reset with
 		 * {@see clear_runtime_caches()}. Never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
 		 * @return void
@@ -570,7 +570,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * state. Bounded (30 entries), reset with
 		 * {@see clear_runtime_caches()}. Never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The raw preload URL.
 		 * @return void
 		 */
@@ -601,7 +601,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * non-empty `Util::normalize_url()` forms. Fail-open to an empty
 		 * list. In-memory only.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[] Normalized direct-preload URLs.
 		 */
 		private static function get_direct_preload_normalized_urls(): array {
@@ -635,7 +635,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * the instance pipeline and the public has/mark helpers share one
 		 * key space. See that method for the query/media rationale.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
@@ -676,7 +676,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * run first in `get_all_preload_data()` and claim the slot first.
 		 * Fail-open: any failure returns false (caller emits normally).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The raw hero URL.
 		 * @return bool True when the URL already emitted with any media.
 		 */
@@ -717,7 +717,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * manual lists win by order. Fail-open: any failure returns true
 		 * (caller emits normally, never a white screen).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string      $url    The raw hero URL.
 		 * @param string      $media  The preload media attribute ('' for buffer companions).
 		 * @param string|null $buffer Optional HTML buffer to scan for an existing hint.
@@ -751,7 +751,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * released so the sibling emitter may still emit exactly one preload
 		 * instead of being suppressed into zero. Fail-open: never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url   The raw hero URL.
 		 * @param string $media The preload media attribute ('' for buffer companions).
 		 * @return void
@@ -775,7 +775,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * (guarded with `function_exists()`). Fail-closed: any failure returns
 		 * false (candidate skipped, page fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL host matches a configured CDN host.
 		 */
@@ -832,7 +832,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * covered by the same-origin check. Fail-closed per URL, fail-open per
 		 * page (caller skips the hint, markup otherwise untouched).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded.
 		 */
@@ -857,7 +857,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * availability. Fail-open to false is never fatal; callers fall back to
 		 * regex scanning.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the HTML API may be used.
 		 */
 		private function is_html_api_available(): bool {
@@ -896,7 +896,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `function_exists()`/`has_filter()` so behaviour is unchanged when no
 		 * callback is registered. Fail-open to ''.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string|null $buffer Optional HTML buffer passed to the filter for context.
 		 * @return string The computed hero URL, or empty string.
 		 */
@@ -934,7 +934,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * (no CLS: only the loading/fetchpriority attributes change).
 		 * Fail-open: any failure returns the buffer unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $buffer The HTML buffer.
 		 * @return string The buffer with high-priority nodes forced eager.
 		 */
@@ -1011,7 +1011,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * cross-page reuse within one process self-corrects even without an
 		 * explicit reset; the reset remains the guaranteed path.)
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public function clear_instance_lcp_memo(): void {
@@ -1523,7 +1523,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Processor blocks `data:` URIs in `src`. Fail-open: returns null on
 		 * any failure so the caller falls through to the regex fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure (triggers regex fallback).
 		 */
@@ -1720,7 +1720,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * existence + LRU size lookup). Fail-open: returns null so the caller
 		 * falls through to the regex fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -1932,7 +1932,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * handling). Fail-open: returns null so the caller falls through to
 		 * the regex fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -1972,7 +1972,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * regex fallback (which requires quoted-numeric dimensions, so empty,
 		 * boolean or non-numeric values count as missing here too).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_HTML_Tag_Processor $tags   The tag processor on an `<img>` or `<source>` tag.
 		 * @param bool                   $is_img Whether the current tag is an `<img>` (vs `<source>`).
 		 * @return void
@@ -2162,7 +2162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Guards `class_exists('WP_HTML_Tag_Processor')` so WP 6.2 behaviour
 		 * stays byte-identical when the Tag Processor is unavailable.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $picture_html Serialized `<picture>...</picture>` block.
 		 * @return array{0:string,1:string} Tuple of (img tag, src); empty strings when none found.
@@ -2241,7 +2241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * denylist/escape gate without a DB write. Explicit `false`
 		 * restores the legacy byte-identical rewrite path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when comment image markup must be sanitized.
 		 */
 		private function is_comment_hardening_enabled(): bool {
@@ -2260,7 +2260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * before the scheme check. Fail-open: undecodable input returns
 		 * false so the caller keeps its existing validity gate.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Raw attribute URL value.
 		 * @return bool True when the URL is scriptable.
 		 */
@@ -2289,7 +2289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * smuggle a scheme past the gate. `data:image/svg+xml` is treated
 		 * as scriptable (raster-only allowlist: png/jpeg/gif/webp/avif).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Raw attribute URL value.
 		 * @return bool True when the URL is scriptable.
 		 */
@@ -2342,7 +2342,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Single shared gate for the regex and Tag Processor sanitizer
 		 * paths so they stay in parity (issue #1271 follow-up).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $value Raw style value.
 		 * @return bool True when the style value is hostile.
 		 */
@@ -2378,7 +2378,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `explode(',', ...)` would split. The negative lookahead keeps
 		 * `base64` payload commas intact.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $raw Raw srcset attribute value.
 		 * @return string[] Trimmed non-empty candidate items.
 		 */
@@ -2424,7 +2424,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * TypeErrors on PHP 8.2. Shared by the regex and Tag Processor
 		 * srcset loops (issue #1271 follow-up).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $item Single srcset candidate item.
 		 * @return string[] Two-element [url, descriptor] array.
 		 */
@@ -2445,7 +2445,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `online`). Shared by the regex and Tag Processor sanitizer
 		 * paths so they stay in parity (issue #1271 follow-up).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $name Raw attribute name.
 		 * @return bool True when the attribute is an event handler.
 		 */
@@ -2466,7 +2466,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * minimum supported WP 6.2 core, and per-tag filtered passes would
 		 * re-parse the full buffer N times.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $tag_name Upper-case tag name from `get_tag()`.
 		 * @return bool True when the tag is in `HARDENED_TAGS`.
 		 */
@@ -2484,7 +2484,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Regex alternation for the hardening tag scope (e.g. `img|image|...`).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Alternation safe for `#<(...)\b` patterns.
 		 */
 		private function hardened_tag_alternation(): string {
@@ -2511,7 +2511,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Processor) gets the same gate. Fail-open: returns the input tag
 		 * unchanged on any PCRE failure.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $tag Raw opening tag HTML.
 		 * @return string Sanitized tag.
 		 */
@@ -2663,7 +2663,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * regression). Fail-open: returns the input buffer unchanged when
 		 * hardening is disabled, the buffer is empty, or PCRE fails.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $buffer Full HTML buffer.
 		 * @return string Sanitized buffer.
 		 */
@@ -2720,7 +2720,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `<img onerror>` / `<a xlink:href="javascript:">` /
 		 * `<mi href="javascript:">` cannot survive into cached HTML.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $block Full svg/math block HTML.
 		 * @return string Sanitized block.
 		 */
@@ -2761,7 +2761,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * byte-identical. Never fatals: any failure leaves the tag
 		 * untouched for the caller to skip or fail open.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param object $tags Active `WP_HTML_Tag_Processor` positioned on a tag.
 		 * @return void
 		 */
@@ -3418,7 +3418,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * CDN URLs) carry image-ish query params. A non-image URL is never
 		 * preloaded. Any failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded as an image.
 		 */
@@ -3470,7 +3470,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * value fails the `is_image_lcp_url()` guard. Fail-open: any failure
 		 * returns an empty string, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string The manual LCP image URL, or empty string.
 		 */
 		private function get_manual_lcp_url(): string {
@@ -3527,7 +3527,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * fails open by falling through to the next tier) returns false
 		 * (candidate skipped), never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded.
 		 */
@@ -3588,7 +3588,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * and `version_compare()` with a legacy fallback to the unmodified
 		 * gap-fill behaviour. Fail-open: any failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when core may be consulted for a node verdict.
 		 */
 		private function is_core_loading_optimization_available(): bool {
@@ -3638,7 +3638,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * would be dead data inviting future misuse.
 		 * Fail-open: any failure returns null.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $tags Tag processor positioned on an `<img>` node.
 		 * @return array{decoding?:string}|null Core's verdict, or null.
 		 */
@@ -3687,7 +3687,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * (empty meta) by default so existing behaviour is unchanged.
 		 * Fail-open: any failure returns false (auto-LCP stays enabled).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when auto-LCP must be skipped for this post.
 		 */
 		private function is_auto_lcp_disabled_for_post(): bool {
@@ -3734,7 +3734,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * disable meta is set, when no stable signal exists, or on any
 		 * failure (fail-open to no-preload, never broken markup).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string The stable signal LCP image URL, or empty string.
 		 */
 		private function get_stable_signal_lcp_url(): string {
@@ -3818,7 +3818,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * picker is explicit opt-in and still applies. Fail-open: any
 		 * failure returns ''.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string The OD-only LCP image URL, or empty string.
 		 */
 		private function resolve_od_only_lcp_url(): string {
@@ -3886,7 +3886,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * is ever emitted. Multisite-safe: the
 		 * stored tier uses `Util::transient_key()` blog-aware keys.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string|null $buffer Optional HTML buffer for the heuristic fallback.
 		 * @return string The LCP image URL, or empty string when none resolves.
 		 */
@@ -3977,7 +3977,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * a plain `href` preload). Callers must never emit srcset without
 		 * sizes: when either value is empty both are treated as empty.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $lcp_url The resolved LCP image URL.
 		 * @return array{srcset: string, sizes: string} Responsive data (empty strings when unavailable).
 		 */
@@ -4033,7 +4033,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * string when no match or no srcset exists. Fail-open: any failure
 		 * returns ''.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string      $lcp_url The resolved LCP image URL.
 		 * @param string|null $buffer  Optional HTML buffer to scan.
 		 * @return string The srcset value, or empty string.
@@ -4082,7 +4082,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * empty string when no match or no sizes exists. Fail-open: any
 		 * failure returns ''.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string      $lcp_url The resolved LCP image URL.
 		 * @param string|null $buffer  Optional HTML buffer to scan.
 		 * @return string The sizes value, or empty string.
@@ -4134,7 +4134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `get_all_preload_data()` so it wins the normalized-URL dedup.
 		 * Fail-open: any failure returns an empty list.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array List of preload items (zero or one item).
 		 */
 		private function get_manual_lcp_preload_data(): array {
@@ -4176,11 +4176,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * hero eager, keeping exclusion and emission consistent.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
+		 * @since 2.2.0 Resolves via the unified `resolve_auto_lcp_url()` chain
 		 * (OD → stored PageSpeed → heuristic) with a text-LCP guard; emits at
 		 * most one item. Adds the RUM-gated `preload_settings.autoLcpPreload`
 		 * path (off by default, manual lists win, never lazy+high).
-		 * @since NEXT RUM gates only the RUM-dependent tiers: with RUM
+		 * @since 2.2.0 RUM gates only the RUM-dependent tiers: with RUM
 		 * unsatisfied the OD-only subset still resolves.
 		 * @return array List of preload items (zero or one item).
 		 */
@@ -4228,7 +4228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * current manual behavior; fail-open only via the legacy
 		 * `autoPreloadLCP` path handled by the caller. Never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when RUM gating passes.
 		 */
 		private function is_auto_lcp_rum_satisfied(): bool {
@@ -4364,7 +4364,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * long-lived instance reused across pages re-resolves per page
 		 * instead of serving the first page's hero everywhere. Never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Memo key (possibly empty).
 		 */
 		private function get_lcp_memo_key(): string {
@@ -4392,7 +4392,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * exclusion stay consistent because both resolve with the buffer.
 		 * Bounded (reset past 30 entries); fail-open to ''.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $buffer HTML buffer to scan.
 		 * @return string Heuristic LCP URL, or empty string.
 		 */
@@ -4431,7 +4431,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Fail-open: any failure returns an empty string, never fatal.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
+		 * @since 2.2.0 Resolves via the unified `resolve_auto_lcp_url()` chain
 		 * so the never-lazy URL is always the same URL that gets preloaded.
 		 * The optional `$buffer` enables the P2 DOM-first heuristic tier so
 		 * `add_delay_load_img()` stays in parity with
@@ -4727,7 +4727,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * can never expand to N media-variant links.
 		 *
 		 * @since 1.5.1
-		 * @since NEXT Keeps the largest MAX_LCP_PRELOADS widths (the likely
+		 * @since 2.2.0 Keeps the largest MAX_LCP_PRELOADS widths (the likely
 		 * hero variants) instead of the smallest; media ranges are generated
 		 * after the slice so coverage stays gapless.
 		 * @param string $srcset             The srcset string from the image tag.
@@ -4785,7 +4785,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Prepares a URL for preloading, handling specific prefixes and resolving relative paths.
 		 *
 		 * @since 1.5.1
-		 * @since NEXT Adds optional $imagesrcset/$imagesizes for responsive LCP heroes.
+		 * @since 2.2.0 Adds optional $imagesrcset/$imagesizes for responsive LCP heroes.
 		 * @param string $img_url The original URL to prepare.
 		 * @param string $imagesrcset Optional responsive srcset for the preload link.
 		 * @param string $imagesizes Optional sizes for the preload link.
@@ -4869,7 +4869,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * elsewhere).
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Resolves the stable signal candidate when empty,
+		 * @since 2.2.0 Resolves the stable signal candidate when empty,
 		 * enforces per-URL dedup + per-post disable + lazy-exclusion
 		 * coupling with `fetchpriority="high"`.
 		 *
@@ -5001,7 +5001,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * and markup is emitted unoptimised, never fatal. Output transform
 		 * only, hence multisite-safe by construction.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array  $tag_attr Image attributes (src/width/height/loading/decoding/fetchpriority).
 		 * @param string $context  Context string passed to core (kept per call-site:
@@ -5033,7 +5033,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `fetchpriority="high"`. When both are present the high hint is
 		 * dropped so the hero gets high+eager and below-fold gets lazy.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $attrs Triple to sanitize (loading/fetchpriority/decoding).
 		 * @return array Sanitized triple.
@@ -5054,7 +5054,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * below-fold images.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Excluded images pass `$allow_lazy = false` so core's
+		 * @since 2.2.0 Excluded images pass `$allow_lazy = false` so core's
 		 * `loading="lazy"` is never stamped on an image the user excluded from
 		 * lazy-loading; the exclusion wins and the high-priority default applies.
 		 *
@@ -5333,7 +5333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Merges the request buffer into the persistent map in one write.
 		 * Fail-open: any failure drops the buffer silently.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function commit_derived_alt_map(): void {
@@ -6127,7 +6127,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * (Tag Processor set_attribute() escapes on output; regex splices
 		 * use esc_attr()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $video_id YouTube video ID.
 		 * @return string Default thumbnail alt text.
 		 */
@@ -6154,7 +6154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * filters are privileged code, so no new XSS frontier is introduced,
 		 * but future untrusted callers must sanitize separately.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $html Button or placeholder HTML to validate.
 		 * @return string Validated HTML with accessible button names.
 		 */
@@ -6221,7 +6221,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Trusted-filter contract: this only re-adds the alt text — it is
 		 * not a sanitizer (see ensure_video_play_button_label()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $html     Placeholder HTML to validate.
 		 * @param string $video_id YouTube video ID used in the default alt.
 		 * @return string Validated HTML with a meaningful thumbnail alt.
@@ -6288,7 +6288,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * content image that lacks a non-empty one. Fail-open: any parse
 		 * failure returns the input unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $html     Placeholder HTML to validate.
 		 * @param string $video_id YouTube video ID used in the default alt.
 		 * @return string HTML with the fallback image alt repaired, or unchanged.
@@ -6919,6 +6919,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed buffer.
 		 */
 		public function prioritize_lcp_in_buffer( $filtered_output, $output = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string (false/null) into the filter.
+			// An output-buffer callback must always return a string — fail
+			// open to the raw $output when it carries page HTML (priority 30
+			// runs after cache/used-CSS, so collapsing to '' would wipe
+			// output earlier filters already processed), else to '' without
+			// consuming the one-shot so a later real pass can still run.
+			if ( ! is_string( $filtered_output ) ) {
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
+			}
 			// One-shot per instance (issue #881 review): the 6.9+ enhancement
 			// filter and the legacy fallback buffer both call this method on
 			// the shared Main instance; a mid-request flip of the enhancement
@@ -6964,7 +6977,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// Fail-open: detection failure leaves $lcp_url empty and the
 				// markup unmodified, never fatal.
 				//
-				// @since NEXT Unified resolution via resolve_auto_lcp_url().
+				// @since 2.2.0 Unified resolution via resolve_auto_lcp_url().
 				$lcp_url = '';
 				if ( $prioritize_enabled ) {
 					try {
@@ -7013,8 +7026,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				return $buffer;
 			} catch ( \Throwable $e ) {
-				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed: ' . $e->getMessage(), array( 'exception' => $e ) );
-				return $filtered_output;
+				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed.', array( 'exception' => $e ) );
+				if ( is_string( $filtered_output ) && '' !== $filtered_output ) {
+					return $filtered_output;
+				}
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
 			}
 		}
 
@@ -7055,7 +7074,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Fail-open: any failure (unresolvable candidate, missing core
 		 * API, unexpected input) returns `$attr` unchanged, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed $attr       Image attributes (expected array).
 		 * @param mixed $attachment Attachment post object, ID, or array with ID.
@@ -7194,7 +7213,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * The DOM-heuristic tier is skipped (no buffer in filter context).
 		 * Fail-open to ''.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string The validated LCP image URL, or empty string.
 		 */
 		private function resolve_fetchpriority_lcp_url(): string {
@@ -7233,7 +7252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * attachment is the hero itself — a thumbnail/sidebar reuse of the
 		 * same attachment at a smaller size stays lazy. Fail-open to false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $candidate      The rendered file URL to test.
 		 * @param string $normalized_lcp Normalized LCP URL (size suffix stripped).
 		 * @param string $exact_lcp      Normalized LCP URL (size suffix preserved).
@@ -7425,7 +7444,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * pass through untouched, otherwise sibling `<source data-srcset>` /
 		 * `data-sizes` placeholders are promoted. Fail-open per tag.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $block Serialized `<picture>...</picture>` block.
 		 * @return string The block with eager-picture sources promoted.
@@ -7468,7 +7487,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * processor is unavailable or the token stream ends with a parse
 		 * error so the caller falls back to the byte-identical regex path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null The buffer with sources promoted, or null on failure.
@@ -7576,7 +7595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * never core's loading value), then forces eager + high so the hero is
 		 * never lazy. Guarantees one valid triple per element (never lazy+high).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param object $tags Tag/HTML processor positioned on the hero <img>.
 		 * @return bool True when any attribute was added, changed, or removed.
@@ -7645,7 +7664,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * ignored by old browsers).
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Callers pass the unified `resolve_auto_lcp_url()` target so
+		 * @since 2.2.0 Callers pass the unified `resolve_auto_lcp_url()` target so
 		 * the never-lazy/fetchpriority stamp always matches the preloaded URL.
 		 *
 		 * @param string      $buffer  The HTML buffer.
@@ -7776,7 +7795,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * are only filled. Fail-open: any failure returns the buffer unchanged.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
+		 * @since 2.2.0 Resolves via the unified `resolve_auto_lcp_url()` chain
 		 * (OD → stored PageSpeed → in-viewport heuristic) and emits at most
 		 * one preload link with `imagesrcset` when the hero carries a srcset.
 		 * Accepts a pre-resolved LCP URL so all buffer passes share one target.
@@ -7946,7 +7965,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `visibility:hidden` inline style), and tiny dimensions (`width` /
 		 * `height` attributes <= 10px). Fail-open: any failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_HTML_Tag_Processor $tags The tag processor on the candidate `<img>`.
 		 * @param string                 $src  The candidate src URL.
 		 * @return bool True when the candidate should be skipped.
@@ -8058,7 +8077,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * caller falls through to the regex fallback. Fail-open: any parse
 		 * failure returns null (caller then runs the legacy scan).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $buffer           The HTML buffer.
 		 * @param string $needle           Normalized target URL.
 		 * @param string $needle_exact     Normalized target URL without size-suffix collapsing.
@@ -8213,7 +8232,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * preload-dedup key builder. Kept private: external callers use
 		 * has_emitted_preload()/mark_preload_emitted().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $url The image URL to normalize.
 		 * @param bool   $strip_size_suffix Whether to strip WP size suffixes.
@@ -8278,7 +8297,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * parse failure falls back to the normalized URL + media key.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Delegates to build_preload_dedup_key() so the shared
+		 * @since 2.2.0 Delegates to build_preload_dedup_key() so the shared
 		 * cross-emitter helpers use the identical key space.
 		 *
 		 * @param string $url   The raw preload URL.
@@ -8302,8 +8321,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * heuristic).
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Adds `<style>`-block fallback for stylesheet heroes.
-		 * @since NEXT Adds a pre-6.2 regex fallback for inline `style=""`
+		 * @since 2.2.0 Adds `<style>`-block fallback for stylesheet heroes.
+		 * @since 2.2.0 Adds a pre-6.2 regex fallback for inline `style=""`
 		 * heroes when the HTML API is unavailable.
 		 *
 		 * @param string $buffer The HTML buffer.
@@ -8456,9 +8475,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * lists stay authoritative: automation only fills the gap.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Accepts a pre-resolved LCP URL so buffer passes share one
+		 * @since 2.2.0 Accepts a pre-resolved LCP URL so buffer passes share one
 		 * unified target instead of re-resolving stored data per pass.
-		 * @since NEXT Uses the centralised hero slot, the same-origin/CDN
+		 * @since 2.2.0 Uses the centralised hero slot, the same-origin/CDN
 		 * allowlist, stylesheet-block heroes, and the computed-URL filter.
 		 *
 		 * @param string      $buffer  The HTML buffer.
@@ -9241,7 +9260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * and WordPress size-suffix variants). Used to keep the LCP hero out
 		 * of LQIP blur even if it ever reaches the placeholder path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string   $url                  The image URL to test.
 		 * @param string[] $exclude_imgs         The never-lazy exclusion list.
@@ -9298,7 +9317,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * disables both. Placeholders are server-side only (inline data-URI /
 		 * dominant-color attributes) — zero external HTTP either way.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when LQIP placeholder emission is enabled.
 		 */
@@ -9308,7 +9327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				/**
 				 * Filter the size-compare smart-compress + local LQIP pipeline.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param bool $enabled Whether the pipeline is enabled.
 				 */
 				return (bool) apply_filters( 'wppo_smart_pipeline_enabled', $enabled );
@@ -9328,7 +9347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * excluded from blur; data: URIs are never touched. Fail-open:
 		 * returns an empty array on any failure or when disabled.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string   $src_url              The image src URL.
 		 * @param string[] $exclude_imgs         The never-lazy exclusion list.
@@ -9862,7 +9881,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Fail-safe: any failure returns false (caller falls back to the
 		 * positional skip and the scoped window check).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed  $processor Tag processor positioned on the candidate tag.
 		 * @param string $lower_cls Lowercased class + id string of the candidate.
@@ -9913,7 +9932,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * only removes false-positive skips (missed optimisation), never
 		 * mistags a hero.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $buffer The HTML buffer to scan.
 		 * @return bool[] LCP presence by section/div sequence index.
@@ -9956,7 +9975,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * bodies, or attribute values does not count.
 		 * Fail-safe: any failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed $processor Tag processor positioned on the current tag.
 		 * @return bool True when the current tag carries an LCP marker.

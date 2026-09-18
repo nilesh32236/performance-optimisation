@@ -1195,6 +1195,22 @@ Filters the absolute tolerance band added to the CLS digest threshold (issue #14
 
 ---
 
+### `wppo_ai_anomaly_persistence_windows`
+Filters the number of trailing windows that must each breach the ratio/delta gate before an anomaly may page (single noisy windows never page). @since NEXT. Values are clamped to 1–29 (trend history holds 30 snapshots and detection needs persistence+1 samples for a non-empty baseline, so 29 keeps every admittable value reachable).
+
+**Parameters:**
+- `$windows` *(int)* — Trailing windows (default 3, from `ai_adaptive.anomaly_persistence_windows`).
+
+---
+
+### `wppo_ai_anomaly_p75_min_samples`
+Filters the minimum RUM samples before field data may corroborate a trend anomaly (enforced per metric arm). @since NEXT. Values are clamped to 1–30.
+
+**Parameters:**
+- `$min` *(int)* — Minimum RUM samples (default 10, from `ai_adaptive.anomaly_p75_min_samples`).
+
+---
+
 ### `wppo_speculation_list_urls`
 Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls` + RUM top URLs, same-site validated, cart/checkout/account/query-string/fragment excluded, capped at 10). @since 2.0.0.
 

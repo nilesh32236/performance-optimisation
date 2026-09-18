@@ -34,7 +34,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Multisite-safe via per-site options; deleted on uninstall and on
 		 * {@see clear_cron_jobs()}. Fail-open: malformed values reset to idle.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const PRELOAD_QUEUE_OPTION = 'wppo_preload_queue';
@@ -42,7 +42,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Read the resumable sitemap preload queue.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{queued:string[],done:int,failed:string[],total:int,status:string,updated_at:int}
 		 */
 		public static function get_preload_queue(): array {
@@ -81,7 +81,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Persist the preload queue (fail-open, never fatal).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $queue Queue payload.
 		 * @return void
 		 */
@@ -104,7 +104,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * mid-run kill resumes instead of restarting. When the merged queue
 		 * is empty the status resets to idle.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string[] $urls Freshly scheduled sitemap URLs.
 		 * @return void
 		 */
@@ -133,7 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Only counts URLs that were actually queued, so non-queue warmups
 		 * never inflate the progress counters.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Preloaded URL.
 		 * @return void
 		 */
@@ -163,7 +163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Failed URLs are capped at 500 entries (oldest dropped first) so
 		 * the option stays bounded.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Failed URL.
 		 * @return void
 		 */
@@ -195,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Honest preload progress counters for the SPA.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[]}
 		 */
 		public static function get_preload_status(): array {
@@ -220,7 +220,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * (wp-cron option bloat). Fail-open: scheduler failures simply leave
 		 * the queue untouched.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Number of URLs re-scheduled.
 		 */
 		public static function resume_preload_queue(): int {
@@ -269,7 +269,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * rows. Non-string entries are skipped; per-URL done/failed
 		 * bookkeeping stays inside process_url().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $urls Chunk of URLs to preload.
 		 * @return void
 		 */
@@ -300,7 +300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Keeps a 500-URL resume to ~10 cron rows instead of ~500 single-URL
 		 * events (wp-cron option bloat).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const PRELOAD_RESUME_CHUNK_SIZE = 50;
@@ -1049,7 +1049,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * preview URLs are never warmed (issue #1097). Fail-open: detection
 		 * failure skips the URL (never preload dynamic content).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Absolute URL.
 		 * @return bool True when the URL must not be preloaded.
 		 */
@@ -1650,7 +1650,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				$conversion_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
 
-				$batch_size = $options['image_optimisation']['batch'] ?? 50;
+				// Clamp: shares the raw-read pattern with the CLI convert path —
+				// bound synchronous conversions per cron run (audit #1469).
+				$batch_size = max( 1, min( 100, (int) ( $options['image_optimisation']['batch'] ?? 50 ) ) );
 
 				$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 
@@ -1674,6 +1676,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					$img_info = Img_Converter::get_img_info();
 				}
 
+				// Shared across formats so the 1-100 clamp applies per cron run,
+				// not per format (conversionFormat 'both' would otherwise allow 2x batch).
+				$total_counter = 0;
 				foreach ( $formats_to_process as $format ) {
 					$images = $img_info['pending'][ $format ] ?? array();
 
@@ -1681,13 +1686,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						continue;
 					}
 
-					$counter = 0;
 					foreach ( $images as $img ) {
-						if ( $counter >= $batch_size ) {
-							break;
+						if ( $total_counter >= $batch_size ) {
+							break 2;
 						}
 
-						++$counter;
+						++$total_counter;
 
 						$source_path = wp_normalize_path( ABSPATH . $img );
 						$resolved    = realpath( $source_path );

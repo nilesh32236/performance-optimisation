@@ -71,16 +71,19 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		// Dismissed suggestions (issue #1036): additive key, empty by default.
 		// Anomaly detection (issue #1040): additive keys, 7-day cooldown + 10 min samples.
 		// RUM anomaly digest tolerance band (issue #1445): 5% relative + 0.01 absolute.
+		// p75 anomaly hardening (issue #1384): additive keys, 3-window persistence + 10 RUM samples.
 		$this->assertSame(
 			array(
-				'enabled'               => false,
-				'use_wp_ai_client'      => false,
-				'field_lcp_min_samples' => 20,
-				'dismissed_suggestions' => array(),
-				'anomaly_cooldown_days' => 7,
-				'anomaly_min_samples'   => 10,
-				'anomaly_tolerance_pct' => 5.0,
-				'anomaly_tolerance_abs' => 0.01,
+				'enabled'                     => false,
+				'use_wp_ai_client'            => false,
+				'field_lcp_min_samples'       => 20,
+				'dismissed_suggestions'       => array(),
+				'anomaly_cooldown_days'       => 7,
+				'anomaly_min_samples'         => 10,
+				'anomaly_tolerance_pct'       => 5.0,
+				'anomaly_tolerance_abs'       => 0.01,
+				'anomaly_persistence_windows' => 3,
+				'anomaly_p75_min_samples'     => 10,
 			),
 			$defaults['ai_adaptive']
 		);

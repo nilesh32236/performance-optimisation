@@ -20,7 +20,7 @@ use Brain\Monkey\Functions;
  * Minify traversal hardening tests.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 class MinifyTraversalTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
