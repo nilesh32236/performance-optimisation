@@ -72,6 +72,8 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		// Anomaly detection (issue #1040): additive keys, 7-day cooldown + 10 min samples.
 		// RUM-segmented speculation auto-tune (issue #1425): additive keys,
 		// opt-in off + min 20 samples + max 5 URLs by default.
+		// RUM anomaly digest tolerance band (issue #1445): 5% relative + 0.01 absolute.
+		// p75 anomaly hardening (issue #1384): additive keys, 3-window persistence + 10 RUM samples.
 		$this->assertSame(
 			array(
 				'enabled'                      => false,
@@ -83,6 +85,10 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 				'speculation_autotune_enabled' => false,
 				'speculation_min_samples'      => 20,
 				'speculation_max_urls'         => 5,
+				'anomaly_tolerance_pct'        => 5.0,
+				'anomaly_tolerance_abs'        => 0.01,
+				'anomaly_persistence_windows'  => 3,
+				'anomaly_p75_min_samples'      => 10,
 			),
 			$defaults['ai_adaptive']
 		);

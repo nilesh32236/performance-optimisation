@@ -29,10 +29,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Audit #1362: declared beside its consumer (was below get_model).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array|null
 		 */
 		private static ?array $model_memo = null;
+
+		/**
+		 * Per-request memo of the RUM anomaly digest result.
+		 *
+		 * Live-path fallback in get_suggestions() calls
+		 * get_rum_anomaly_digest() with null args; without a memo every
+		 * admin render pays a full paths x dates scan. Null means not
+		 * computed yet for the current blog; any array (including empty)
+		 * is a valid memoized result. Only the live path (null $rum, null
+		 * $now) is memoized — injected args (tests) always compute fresh.
+		 * Reset via reset_rum_anomaly_digest_memo() (tests).
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $rum_digest_memo = null;
+
+		/**
+		 * Whether the digest memo holds a computed value.
+		 *
+		 * Distinguishes "not computed yet" (false) from a computed empty
+		 * digest (memo is array(), still a valid cached result).
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $rum_digest_memo_computed = false;
+
+		/**
+		 * Blog ID the digest memo was computed for (multisite safety).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private static int $rum_digest_memo_blog = 0;
 
 		/**
 		 * Option storing the learned model (autoload=no).
@@ -80,7 +115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @return array
 		 * @since 2.0.0
-		 * @since NEXT Memoize per request.
+		 * @since 2.2.0 Memoize per request.
 		 */
 		public static function get_model(): array {
 			if ( null !== self::$model_memo ) {
@@ -97,11 +132,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Reset the per-request model memo (for testing).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_model_memo(): void {
 			self::$model_memo = null;
+		}
+
+		/**
+		 * Reset the per-request RUM anomaly digest memo (for testing).
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function reset_rum_anomaly_digest_memo(): void {
+			self::$rum_digest_memo          = null;
+			self::$rum_digest_memo_computed = false;
+			self::$rum_digest_memo_blog     = 0;
+		}
+
+		/**
+		 * Resolve the blog ID for digest memo scoping (multisite safety).
+		 *
+		 * Fail-open to 0 when the multisite API is unavailable (unit tests).
+		 *
+		 * @return int Current blog ID or 0 when unavailable.
+		 * @since NEXT
+		 */
+		private static function rum_digest_memo_blog_id(): int {
+			try {
+				if ( function_exists( 'get_current_blog_id' ) ) {
+					return (int) get_current_blog_id();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 0;
 		}
 
 		/**
@@ -217,7 +283,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 
 			// Active cart session on any page (read-only heuristic, no nonce needed).
-			if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+			// Audit #1434: sanitized like sibling ESI/integration cookie reads.
+			$items_in_cart = isset( $_COOKIE['woocommerce_items_in_cart'] ) && is_string( $_COOKIE['woocommerce_items_in_cart'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_items_in_cart'] ) ) : '';
+			$cart_hash     = isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_cart_hash'] ) ) : '';
+			if ( '' !== $items_in_cart || '' !== $cart_hash ) {
 				return true;
 			}
 
@@ -639,7 +708,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * unavailable. No option or transient writes; never throws.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Rows carry the `connection` segment dimension.
+		 * @since 2.2.0 Rows carry the `connection` segment dimension.
 		 * @param int $min_samples Minimum samples per segment (1 = observe all).
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
@@ -664,7 +733,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * No option or transient writes; never throws.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Rows carry the `connection` segment dimension.
+		 * @since 2.2.0 Rows carry the `connection` segment dimension.
 		 * @param int $min_samples Minimum samples per segment (1 = observe all).
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
@@ -688,7 +757,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * carry no `connection` key and read back as `unknown`, keeping
 		 * segment-routed copy backward compatible.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $row Segment row.
 		 * @return string Allowlisted connection type or 'unknown'.
 		 */
@@ -710,7 +779,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * copy stays segment-routed even for models persisted before the
 		 * connection dimension shipped.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $row Segment row.
 		 * @return array{path:string,device:string,template:string,connection:string} Segment descriptor.
 		 */
@@ -734,7 +803,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * comparator. Fail-open: non-array entries are ignored, empty input
 		 * returns null.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array[] $rows Qualified segment rows.
 		 * @return array|null Slowest row or null when empty.
 		 */
@@ -755,6 +824,214 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			);
 			return $rows[0];
+		}
+
+		/**
+		 * RUM-driven slow-top-path state for heuristic auto-tune (read-only, fail-open).
+		 *
+		 * Consumes RUM::get_field_lcp_p75_by_segment() via the fail-open
+		 * segmented_field_lcp() wrapper: filters rows to n >=
+		 * field_lcp_min_samples(), picks the slowest-p75 segment with
+		 * slowest_segment_row(), and flags slow when p75 exceeds
+		 * LCP_P75_DELAY_THRESHOLD_MS (2500ms). When slow, resolves exactly
+		 * one preload hero URL via RUM::get_lcp_preload_candidate() for the
+		 * slow path (field data wins, PageSpeed fallback inside RUM); when
+		 * no candidate resolves the caller keeps static defaults with the
+		 * manual metabox hero URL winning. Below the sample threshold (or
+		 * on any error) slow is false so callers emit no override and keep
+		 * static defaults with no speculation change. No option/transient
+		 * writes, zero external HTTP; multisite-safe via the per-site RUM
+		 * aggregate. Commerce/auth contexts are capped downstream via
+		 * maybe_cap_eagerness() when the downgrade target is computed.
+		 *
+		 * @since NEXT
+		 * @return array{slow:bool,path:string,segment:array|null,p75:float,samples:int,min_samples:int,preload_url:string} Slow-path state.
+		 */
+		public static function get_slow_top_path_state(): array {
+			$fallback = array(
+				'slow'        => false,
+				'path'        => '',
+				'segment'     => null,
+				'p75'         => 0.0,
+				'samples'     => 0,
+				'min_samples' => 20,
+				'preload_url' => '',
+			);
+			try {
+				$min                     = self::field_lcp_min_samples();
+				$fallback['min_samples'] = $min;
+				$observed                = self::segmented_field_lcp( 1 );
+				$max_n                   = 0;
+				foreach ( $observed as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) ) {
+						$max_n = max( $max_n, (int) $row['n'] );
+					}
+				}
+				$fallback['samples'] = $max_n;
+				$qualified           = array();
+				foreach ( $observed as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $min ) {
+						$qualified[] = $row;
+					}
+				}
+				if ( empty( $qualified ) ) {
+					return $fallback;
+				}
+				$slowest = self::slowest_segment_row( $qualified );
+				if ( ! is_array( $slowest ) ) {
+					return $fallback;
+				}
+				$p75   = isset( $slowest['p75'] ) ? (float) $slowest['p75'] : 0.0;
+				$n     = isset( $slowest['n'] ) ? (int) $slowest['n'] : 0;
+				$path  = isset( $slowest['path'] ) && is_string( $slowest['path'] ) ? $slowest['path'] : '';
+				$slow  = $p75 > self::LCP_P75_DELAY_THRESHOLD_MS;
+				$state = array(
+					'slow'        => $slow,
+					'path'        => $path,
+					'segment'     => self::segment_descriptor( $slowest ),
+					'p75'         => $p75,
+					'samples'     => $n,
+					'min_samples' => $min,
+					'preload_url' => '',
+				);
+				if ( $slow && '' !== $path && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_lcp_preload_candidate' ) ) {
+					try {
+						$candidate = \PerformanceOptimise\Inc\RUM::get_lcp_preload_candidate( $path );
+						if ( is_array( $candidate ) && isset( $candidate['url'] ) && is_string( $candidate['url'] ) && '' !== trim( $candidate['url'] ) ) {
+							$state['preload_url'] = substr( trim( $candidate['url'] ), 0, 2048 );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $state;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
+		}
+
+		/**
+		 * Downgrade target for a slow top path (one eagerness step down, floored).
+		 *
+		 * Explainable policy: eager becomes moderate, moderate becomes
+		 * conservative, conservative stays conservative. The result is
+		 * allowlisted and capped at moderate in commerce/auth contexts via
+		 * normalize_eagerness() so transactional pages never loosen.
+		 *
+		 * @since NEXT
+		 * @param string $eagerness Current learned eagerness.
+		 * @return string Downgraded eagerness.
+		 */
+		public static function get_slow_path_downgrade_target( string $eagerness ): string {
+			$current = self::normalize_eagerness( $eagerness );
+			$target  = self::eagerness_from_level( self::eagerness_level( $current ) - 1 );
+			return self::normalize_eagerness( $target );
+		}
+
+		/**
+		 * Numeric level for an allowlisted eagerness value (ladder helper).
+		 *
+		 * Centralizes the conservative(0) < moderate(1) < eager(2) ladder so
+		 * the downgrade target and the stale-model clamp in get_suggestions()
+		 * cannot drift apart when the ladder changes. Unknown values floor
+		 * to conservative (0).
+		 *
+		 * @since NEXT
+		 * @param string $eagerness Allowlisted eagerness value.
+		 * @return int Numeric ladder level (0-2).
+		 */
+		private static function eagerness_level( string $eagerness ): int {
+			$ladder = array(
+				'conservative' => 0,
+				'moderate'     => 1,
+				'eager'        => 2,
+			);
+			return $ladder[ $eagerness ] ?? 0;
+		}
+
+		/**
+		 * Eagerness value for a numeric ladder level (ladder helper).
+		 *
+		 * Inverse of eagerness_level(): levels are clamped to 0-2 so a
+		 * one-step downgrade from conservative floors at conservative.
+		 *
+		 * @since NEXT
+		 * @param int $level Numeric ladder level.
+		 * @return string Allowlisted eagerness value.
+		 */
+		private static function eagerness_from_level( int $level ): string {
+			$reverse = array(
+				0 => 'conservative',
+				1 => 'moderate',
+				2 => 'eager',
+			);
+			return $reverse[ max( 0, min( 2, $level ) ) ] ?? 'conservative';
+		}
+
+		/**
+		 * Device/template/connection labels for a slow-path segment.
+		 *
+		 * Centralizes the segment triple extraction shared by the slow-path
+		 * preload and downgrade cards so copy stays consistent.
+		 *
+		 * @since NEXT
+		 * @param mixed $segment Segment descriptor (or null).
+		 * @return array{0:string,1:string,2:string} Device, template, connection labels.
+		 */
+		private static function slow_segment_labels( $segment ): array {
+			$segment = is_array( $segment ) ? $segment : array();
+			return array(
+				isset( $segment['device'] ) ? (string) $segment['device'] : 'unknown',
+				isset( $segment['template'] ) ? (string) $segment['template'] : 'unknown',
+				self::segment_connection( $segment ),
+			);
+		}
+
+		/**
+		 * Sanitize a persisted/live slow-path preload URL for suggestion copy.
+		 *
+		 * Trims + truncates to 2048 chars, drops empty esc_url_raw() output,
+		 * and re-checks same-origin (strict variant when available) so a
+		 * stale or tampered model value (off-origin, javascript:) can never
+		 * be rendered into suggestion copy. Fail-open to '' on any error.
+		 *
+		 * @since NEXT
+		 * @param mixed $url Raw URL value.
+		 * @return string Sanitized URL or '' when invalid.
+		 */
+		private static function sanitize_slow_preload_url( $url ): string {
+			try {
+				if ( ! is_string( $url ) ) {
+					return '';
+				}
+				$url = substr( trim( $url ), 0, 2048 );
+				if ( '' === $url ) {
+					return '';
+				}
+				if ( function_exists( 'esc_url_raw' ) ) {
+					$clean = esc_url_raw( $url );
+					if ( ! is_string( $clean ) || '' === trim( $clean ) ) {
+						return '';
+					}
+					$url = trim( $clean );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
+						if ( ! \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( $url ) ) {
+							return '';
+						}
+					} elseif ( method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
+						if ( ! \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url ) ) {
+							return '';
+						}
+					}
+				}
+				return $url;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
 		}
 
 		/**
@@ -1055,7 +1332,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $trends Optional pre-loaded trends aggregate.
 		 * @return array
 		 * @since 2.0.0
-		 * @since NEXT Global-average eagerness upgrades are gated on total LCP
+		 * @since 2.2.0 Global-average eagerness upgrades are gated on total LCP
 		 *             samples reaching field_lcp_min_samples (suggest-only below).
 		 */
 		private static function heuristic_learn( ?array $rum = null, ?array $trends = null ): array {
@@ -1197,7 +1474,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$exclude_css = self::get_disabled_assets( '_wppo_disabled_styles' );
 
 			// Eagerness heuristic: conservative by default, moderate if avg LCP > 2500 or high TTFB.
-			// Suggest-only gating (issue #1200, @since NEXT): the global-average
+			// Suggest-only gating (issue #1200, @since 2.2.0): the global-average
 			// ladder below only upgrades when total LCP samples reach the shared
 			// field-LCP minimum (ai_adaptive.field_lcp_min_samples, default 20).
 			// Undersampled RUM stays conservative on the global path so no
@@ -1383,6 +1660,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$slow_candidates     = array();
 			}
 
+			// RUM-driven slow-top-path auto-tune (issue #1463): consume the
+			// segmented field-LCP read path; when the top-path p75 exceeds
+			// 2500ms resolve exactly one preload hero plus a downgrade
+			// target (suggest-only — get_suggestions() renders them, never
+			// auto-applied). Below the sample threshold slow is false so
+			// callers keep static defaults with the manual metabox hero
+			// winning and no speculation change. Read-only, fail-open, zero
+			// external HTTP, no option/transient writes here.
+			$slow_path = array(
+				'slow'        => false,
+				'path'        => '',
+				'segment'     => null,
+				'p75'         => 0.0,
+				'samples'     => 0,
+				'min_samples' => $field_lcp_min,
+				'preload_url' => '',
+			);
+			try {
+				$live_slow = self::get_slow_top_path_state();
+				if ( is_array( $live_slow ) && ! empty( $live_slow ) ) {
+					$slow_path = array_merge( $slow_path, $live_slow );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$slow_downgrade = 'conservative';
+			try {
+				$slow_downgrade = self::get_slow_path_downgrade_target( $eagerness );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			return array(
 				'version'               => 1,
 				'prefetch_urls'         => array_values( array_filter( $prefetch_urls ) ),
@@ -1396,6 +1705,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				'field_lcp_min_samples' => $field_lcp_min,
 				'attributed_lcp'        => $attributed_selector,
 				'slow_resources'        => $slow_candidates,
+				'slow_path_slow'        => ! empty( $slow_path['slow'] ),
+				'slow_path_path'        => isset( $slow_path['path'] ) && is_string( $slow_path['path'] ) ? $slow_path['path'] : '',
+				'slow_path_segment'     => isset( $slow_path['segment'] ) && is_array( $slow_path['segment'] ) ? $slow_path['segment'] : null,
+				'slow_path_p75'         => isset( $slow_path['p75'] ) ? (float) $slow_path['p75'] : 0.0,
+				'slow_path_samples'     => isset( $slow_path['samples'] ) ? (int) $slow_path['samples'] : 0,
+				'slow_path_min_samples' => isset( $slow_path['min_samples'] ) ? (int) $slow_path['min_samples'] : $field_lcp_min,
+				'slow_path_preload_url' => isset( $slow_path['preload_url'] ) && is_string( $slow_path['preload_url'] ) ? $slow_path['preload_url'] : '',
+				'slow_path_downgrade'   => $slow_downgrade,
 				'delay_js_level'        => isset( $delay_state['level'] ) ? (string) $delay_state['level'] : 'conservative',
 				'delay_inp_p75'         => isset( $delay_state['inp_p75'] ) ? (float) $delay_state['inp_p75'] : 0.0,
 				'delay_lcp_p75'         => isset( $delay_state['lcp_p75'] ) ? (float) $delay_state['lcp_p75'] : 0.0,
@@ -1448,6 +1765,90 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @var float
 		 */
 		private const LCP_RELATIVE_MULTIPLIER = 1.3;
+
+		/**
+		 * INP regression arm threshold as a relative multiplier (+30%).
+		 *
+		 * INP is a timing metric like LCP, so the RUM digest reuses the
+		 * relative-multiplier arm (lab trends carry no INP snapshots, hence
+		 * INP regressions surface only via the field-data digest).
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const INP_RELATIVE_MULTIPLIER = 1.3;
+
+		/**
+		 * Relative tolerance band (percent) above a relative arm threshold.
+		 *
+		 * A recent-window median must clear `baseline * multiplier *
+		 * (1 + tolerance_pct/100)` before the LCP/INP digest arm fires, so
+		 * borderline wobble inside the band stays silent.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const ANOMALY_TOLERANCE_PCT = 5.0;
+
+		/**
+		 * Absolute tolerance band added to the CLS absolute-delta threshold.
+		 *
+		 * A recent-window median must clear `baseline + delta + tolerance`
+		 * before the CLS digest arm fires, so borderline wobble inside the
+		 * band stays silent.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const ANOMALY_TOLERANCE_ABS = 0.01;
+
+		/**
+		 * Default number of trailing windows that must each breach the
+		 * ratio/delta gate before an anomaly may page (issue #1384).
+		 *
+		 * A single noisy PageSpeed window can never page on its own; the
+		 * last N windows must all persist above baseline.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_PERSISTENCE_WINDOWS = 3;
+
+		/**
+		 * Default minimum RUM samples before field data may corroborate
+		 * a trend anomaly (issue #1384).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_P75_MIN_SAMPLES = 10;
+
+		/**
+		 * Upper clamp for the p75 sample-floor resolver (issue #1384).
+		 *
+		 * Guards the p75 sample-floor resolver so a misbehaving
+		 * `wppo_ai_anomaly_p75_min_samples` filter (or stored setting)
+		 * cannot silently disable paging forever with an enormous value.
+		 * The persistence-window resolver uses ANOMALY_PERSISTENCE_MAX.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_GATE_MAX = 30;
+
+		/**
+		 * Upper clamp for the persistence-window resolver (issue #1384).
+		 *
+		 * Trend history is capped at 30 snapshots per URL+strategy
+		 * (Pagespeed::TREND_LIMIT) while detection requires
+		 * count >= persistence+1 for a non-empty baseline prior, so
+		 * persistence=30 (admittable under ANOMALY_GATE_MAX) could never
+		 * fire. Clamping to 29 keeps every admittable value reachable.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_PERSISTENCE_MAX = 29;
 
 		/**
 		 * Resolve the anomaly minimum-sample threshold.
@@ -1516,6 +1917,257 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return self::ANOMALY_COOLDOWN_DAYS;
+			}
+		}
+
+		/**
+		 * Resolve the relative tolerance band in percent.
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_tolerance_pct` setting,
+		 * falling back to ANOMALY_TOLERANCE_PCT. Filterable via
+		 * `wppo_ai_anomaly_tolerance_pct`. Fail-open to 5.0. Clamped to
+		 * 0–50 so a rogue value cannot silence every regression.
+		 *
+		 * @return float Tolerance percent (>=0).
+		 * @since NEXT
+		 */
+		private static function anomaly_tolerance_pct(): float {
+			try {
+				$tol = self::ANOMALY_TOLERANCE_PCT;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_tolerance_pct'] ) && is_numeric( $settings['ai_adaptive']['anomaly_tolerance_pct'] ) ) {
+						$tol = (float) $settings['ai_adaptive']['anomaly_tolerance_pct'];
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_tolerance_pct', $tol );
+					if ( is_numeric( $filtered ) ) {
+						$tol = (float) $filtered;
+					}
+				}
+				if ( ! is_finite( $tol ) || $tol < 0 ) {
+					return self::ANOMALY_TOLERANCE_PCT;
+				}
+				return min( 50.0, $tol );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_TOLERANCE_PCT;
+			}
+		}
+
+		/**
+		 * Resolve the anomaly persistence-window count.
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_persistence_windows`
+		 * setting, falling back to ANOMALY_PERSISTENCE_WINDOWS. Filterable
+		 * via `wppo_ai_anomaly_persistence_windows`. Fail-open to 3.
+		 * Clamped to ANOMALY_PERSISTENCE_MAX (29 = trend cap 30 minus 1
+		 * for the baseline prior) so every admittable value remains
+		 * reachable and a misbehaving filter cannot silently disable
+		 * paging forever.
+		 *
+		 * @return int Trailing windows that must each breach (>=1, <=29).
+		 * @since NEXT
+		 */
+		private static function anomaly_persistence_windows(): int {
+			try {
+				$windows = self::ANOMALY_PERSISTENCE_WINDOWS;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_persistence_windows'] ) ) {
+						$candidate = (int) $settings['ai_adaptive']['anomaly_persistence_windows'];
+						if ( $candidate >= 1 ) {
+							$windows = min( $candidate, self::ANOMALY_PERSISTENCE_MAX );
+						}
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_persistence_windows', $windows );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
+						$windows = min( (int) $filtered, self::ANOMALY_PERSISTENCE_MAX );
+					}
+				}
+				if ( $windows < 1 ) {
+					return self::ANOMALY_PERSISTENCE_WINDOWS;
+				}
+				return min( $windows, self::ANOMALY_PERSISTENCE_MAX );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_PERSISTENCE_WINDOWS;
+			}
+		}
+
+		/**
+		 * Resolve the absolute tolerance band for the CLS arm.
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_tolerance_abs` setting,
+		 * falling back to ANOMALY_TOLERANCE_ABS. Filterable via
+		 * `wppo_ai_anomaly_tolerance_abs`. Fail-open to 0.01. Clamped to
+		 * 0–1 so a rogue value cannot silence every regression.
+		 *
+		 * @return float Absolute tolerance (>=0).
+		 * @since NEXT
+		 */
+		private static function anomaly_tolerance_abs(): float {
+			try {
+				$tol = self::ANOMALY_TOLERANCE_ABS;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_tolerance_abs'] ) && is_numeric( $settings['ai_adaptive']['anomaly_tolerance_abs'] ) ) {
+						$tol = (float) $settings['ai_adaptive']['anomaly_tolerance_abs'];
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_tolerance_abs', $tol );
+					if ( is_numeric( $filtered ) ) {
+						$tol = (float) $filtered;
+					}
+				}
+				if ( ! is_finite( $tol ) || $tol < 0 ) {
+					return self::ANOMALY_TOLERANCE_ABS;
+				}
+				return min( 1.0, $tol );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_TOLERANCE_ABS;
+			}
+		}
+
+		/**
+		 * Resolve the RUM corroboration sample floor.
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_p75_min_samples`
+		 * setting, falling back to ANOMALY_P75_MIN_SAMPLES. Filterable via
+		 * `wppo_ai_anomaly_p75_min_samples`. Fail-open to 10. Clamped to
+		 * ANOMALY_GATE_MAX so a misbehaving filter cannot silently
+		 * disable paging forever.
+		 *
+		 * @return int Minimum RUM samples (>=1, <=30).
+		 * @since NEXT
+		 */
+		private static function anomaly_p75_min_samples(): int {
+			try {
+				$min = self::ANOMALY_P75_MIN_SAMPLES;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_p75_min_samples'] ) ) {
+						$candidate = (int) $settings['ai_adaptive']['anomaly_p75_min_samples'];
+						if ( $candidate >= 1 ) {
+							$min = min( $candidate, self::ANOMALY_GATE_MAX );
+						}
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_p75_min_samples', $min );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
+						$min = min( (int) $filtered, self::ANOMALY_GATE_MAX );
+					}
+				}
+				if ( $min < 1 ) {
+					return self::ANOMALY_P75_MIN_SAMPLES;
+				}
+				return min( $min, self::ANOMALY_GATE_MAX );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_P75_MIN_SAMPLES;
+			}
+		}
+
+		/**
+		 * Whether RUM collection is enabled (read-only probe).
+		 *
+		 * Wraps RUM::is_enabled() with class/method guards so the anomaly
+		 * detector degrades gracefully when the RUM class is unavailable.
+		 * Fail-open to false (no corroboration without field collection).
+		 *
+		 * @return bool True when RUM collection is enabled.
+		 * @since NEXT
+		 */
+		private static function is_rum_collection_enabled(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'is_enabled' ) ) {
+					return false;
+				}
+				return (bool) RUM::is_enabled();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Compute the p75 of a numeric sample list (nearest-rank).
+		 *
+		 * Prefers RUM::compute_p75() when available (WP 6.2+/PHP 8.2+
+		 * floor holds; legacy fallback is the local nearest-rank
+		 * implementation below so behaviour never depends on callee
+		 * availability). Fail-open: empty input returns 0.0.
+		 *
+		 * @param float[] $samples Numeric samples.
+		 * @return float p75 value or 0.0 when empty.
+		 * @since NEXT
+		 */
+		private static function anomaly_p75( array $samples ): float {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'compute_p75' ) ) {
+					return (float) RUM::compute_p75( $samples );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$values = array_values( array_filter( $samples, 'is_numeric' ) );
+			$count  = count( $values );
+			if ( 0 === $count ) {
+				return 0.0;
+			}
+			$values = array_map( 'floatval', $values );
+			sort( $values, SORT_NUMERIC );
+			$rank = (int) ceil( 0.75 * $count ) - 1;
+			$rank = max( 0, min( $count - 1, $rank ) );
+			return (float) $values[ $rank ];
+		}
+
+		/**
+		 * Read the RUM aggregate for anomaly corroboration (read-only).
+		 *
+		 * Prefers the side-effect-free RUM::get_aggregate_readonly() path
+		 * (no queue flush, no transient writes — one request, one query).
+		 * Legacy fallback is RUM::get_data() when the read-only method is
+		 * unavailable (older drop-in) or when the WP core version is below
+		 * the 6.2 floor. Fail-open: any failure returns an empty array.
+		 *
+		 * @return array Aggregate data (empty array when missing/invalid).
+		 * @since NEXT
+		 */
+		private static function read_rum_aggregate_for_anomaly(): array {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+					return array();
+				}
+				$use_readonly = method_exists( 'PerformanceOptimise\Inc\RUM', 'get_aggregate_readonly' );
+				if ( $use_readonly && function_exists( 'get_bloginfo' ) && function_exists( 'version_compare' ) ) {
+					try {
+						$wp_version = get_bloginfo( 'version' );
+						if ( is_string( $wp_version ) && '' !== $wp_version && version_compare( $wp_version, '6.2', '<' ) ) {
+							$use_readonly = false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( $use_readonly ) {
+					$rum = RUM::get_aggregate_readonly();
+					return is_array( $rum ) ? $rum : array();
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\RUM', 'get_data' ) ) {
+					$rum = RUM::get_data();
+					return is_array( $rum ) ? $rum : array();
+				}
+				return array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
 			}
 		}
 
@@ -1608,33 +2260,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Sums `n`/`sum` across dates/paths for the matching metric in the
 		 * RUM aggregate (`date => path => metric => [n,sum]`). Requires
-		 * total `n >= anomaly_min_samples()` (undersampled returns false).
-		 * Corroboration passes when the global RUM average is degraded vs
-		 * the trend baseline (LCP: rum_avg >= baseline; CLS: rum_avg >=
-		 * baseline). Fail-open: any failure returns false (no alarm).
+		 * total `n >= anomaly_p75_min_samples()` (undersampled returns
+		 * false — thin data never pages). Corroboration passes when the
+		 * global RUM average is degraded vs the trend baseline (LCP/INP:
+		 * rum_avg >= baseline; CLS: rum_avg - baseline >=
+		 * CLS_ABSOLUTE_DELTA, mirroring the trend arm — a bare
+		 * rum_avg >= baseline check is vacuous for near-zero CLS
+		 * baselines since any non-negative field average would pass).
+		 * Fail-open: any failure returns false (no alarm).
 		 *
-		 * @param string     $metric Metric name ('lcp'|'cls').
-		 * @param array|null $rum Optional RUM aggregate (null = live read via RUM::get_data()).
+		 * RUM-disabled short-circuit: when no aggregate is injected (live
+		 * read path) and RUM collection is disabled, returns false
+		 * immediately — zero notices with RUM disabled. An explicitly
+		 * injected aggregate bypasses the enabled probe so tests and
+		 * staging can exercise corroboration deterministically.
+		 *
+		 * Live reads use the side-effect-free
+		 * RUM::get_aggregate_readonly() path with a legacy
+		 * RUM::get_data() fallback (see read_rum_aggregate_for_anomaly()).
+		 *
+		 * @param string     $metric Metric name ('lcp'|'inp'|'cls').
+		 * @param array|null $rum Optional RUM aggregate (null = live read-only read).
 		 * @param float      $baseline Trend baseline for the firing arm.
+		 * @param int|null   $p75_min_samples Optional pre-resolved sample floor (null = resolve once via anomaly_p75_min_samples()).
 		 * @return bool True when real-user data agrees with the trend arm.
 		 * @since 2.0.0
+		 * @since NEXT Supports the 'inp' metric (behaves like 'lcp').
+		 * @since NEXT RUM-disabled short-circuit; read-only aggregate path; p75 sample floor.
 		 */
-		private static function is_rum_corroborated( string $metric, ?array $rum, float $baseline ): bool {
+		private static function is_rum_corroborated( string $metric, ?array $rum, float $baseline, ?int $p75_min_samples = null ): bool {
 			try {
-				if ( ! in_array( $metric, array( 'lcp', 'cls' ), true ) ) {
+				if ( ! in_array( $metric, array( 'lcp', 'inp', 'cls' ), true ) ) {
 					return false;
 				}
-				if ( $baseline <= 0 && 'lcp' === $metric ) {
+				if ( $baseline <= 0 && ( 'lcp' === $metric || 'inp' === $metric ) ) {
 					return false;
 				}
 				if ( null === $rum ) {
-					if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_data' ) ) {
+					// Zero notices with RUM disabled (live path only).
+					if ( ! self::is_rum_collection_enabled() ) {
 						return false;
 					}
-					$rum = RUM::get_data();
+					$rum = self::read_rum_aggregate_for_anomaly();
 				}
 				if ( ! is_array( $rum ) || empty( $rum ) ) {
 					return false;
+				}
+				$floor = $p75_min_samples;
+				if ( null === $floor ) {
+					$floor = self::anomaly_p75_min_samples();
+				}
+				if ( $floor < 1 ) {
+					$floor = self::ANOMALY_P75_MIN_SAMPLES;
 				}
 				$total_n   = 0;
 				$total_sum = 0.0;
@@ -1655,16 +2332,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						$total_sum += $sum;
 					}
 				}
-				if ( $total_n < self::anomaly_min_samples() ) {
+				if ( $total_n < $floor ) {
 					return false;
 				}
 				$rum_avg = $total_sum / $total_n;
-				if ( 'lcp' === $metric ) {
+				if ( 'lcp' === $metric || 'inp' === $metric ) {
 					return $rum_avg >= $baseline;
 				}
-				// CLS arm: absolute-scale metric; corroborate when field
-				// average is at/above the lab baseline.
-				return $rum_avg >= $baseline;
+				// CLS arm: absolute-scale metric; corroborate only when the
+				// field average confirms the same absolute shift the trend
+				// gate requires. A bare rum_avg >= baseline check would be
+				// vacuous for near-zero baselines (any non-negative field
+				// average passes), leaving the trend delta gate to do all
+				// the work.
+				return ( $rum_avg - $baseline ) >= self::CLS_ABSOLUTE_DELTA;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -1705,35 +2386,364 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Compute the median of a numeric sample list.
+		 *
+		 * Sorts ascending and picks the middle value (averaging the two
+		 * middle values for even counts). Non-numeric and non-finite
+		 * entries are ignored. Fail-open: empty input returns 0.0.
+		 *
+		 * @param array $samples Numeric samples.
+		 * @return float Median value or 0.0 when empty.
+		 * @since NEXT
+		 */
+		private static function rum_median( array $samples ): float {
+			try {
+				$values = array();
+				foreach ( $samples as $value ) {
+					if ( ! is_numeric( $value ) ) {
+						continue;
+					}
+					$value = (float) $value;
+					if ( function_exists( 'is_finite' ) && ! is_finite( $value ) ) {
+						continue;
+					}
+					$values[] = $value;
+				}
+				$count = count( $values );
+				if ( 0 === $count ) {
+					return 0.0;
+				}
+				sort( $values, SORT_NUMERIC );
+				$mid = (int) floor( $count / 2 );
+				if ( 0 === $count % 2 ) {
+					return (float) ( ( $values[ $mid - 1 ] + $values[ $mid ] ) / 2.0 );
+				}
+				return (float) $values[ $mid ];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0.0;
+			}
+		}
+
+		/**
+		 * Local RUM anomaly digest for LCP/INP/CLS regressions (read-only).
+		 *
+		 * Compares the recent-day mean against baseline medians per path
+		 * from the stored RUM aggregate (`date => path => metric =>
+		 * [n,sum]`): the latest date bucket is the recent window, all prior
+		 * buckets are the baseline. Daily averages (`sum/n`) form the median
+		 * inputs, so no raw-sample reservoir is needed and CLS (which has
+		 * no segment reservoir) is covered alongside LCP and INP.
+		 *
+		 * A path+metric flags when both windows hold at least
+		 * `anomaly_min_samples()` samples AND the recent-day mean clears the
+		 * arm threshold plus the tolerance band:
+		 * - LCP/INP: recent >= baseline * 1.3 * (1 + tolerance_pct/100).
+		 * - CLS: recent >= baseline + 0.05 + tolerance_abs.
+		 *
+		 * Samples below the minimum threshold or movement inside the
+		 * tolerance band suppress the alert (empty return); heuristic
+		 * suggestions are untouched. At most one anomaly is returned
+		 * (worst-first excess over its arm threshold) with the same
+		 * 7-day single-banner cooldown as detect_anomalies(), persisted in
+		 * the per-site `wppo_ai_anomaly_last_alarm` option
+		 * (multisite-safe). The entry links the affected path and window
+		 * (`path`, `window`) and never auto-changes any setting.
+		 *
+		 * Local computation only: reads the memoized
+		 * RUM::get_aggregate_readonly() (one option read shared per
+		 * request, never flushes the beacon queue, never touches
+		 * transients), no remote calls, no API keys, no PII. Fail-open:
+		 * fewer than 2 date buckets, undersampled windows, an active
+		 * cooldown, or any failure returns an empty array — never fatal.
+		 *
+		 * @param array|null $rum Optional RUM aggregate for testability. When null, reads RUM::get_aggregate_readonly().
+		 * @param int|null   $now Optional current timestamp for testability. When null, uses time().
+		 * @return array[] At most one digest anomaly: array(array('key'=>string,'metric'=>string,'path'=>string,'baseline'=>float,'current'=>float,'recent'=>float,'window'=>string,'samples'=>int,'source'=>string,'change_pct'=>float|'change_abs'=>float)).
+		 * @since NEXT
+		 */
+		public static function get_rum_anomaly_digest( ?array $rum = null, ?int $now = null ): array {
+			// Per-request memo (live path only): repeated
+			// get_suggestions() calls in one request share one scan.
+			$is_live = ( null === $rum && null === $now );
+			if ( $is_live ) {
+				try {
+					$blog_id = self::rum_digest_memo_blog_id();
+					if ( self::$rum_digest_memo_computed && $blog_id === self::$rum_digest_memo_blog ) {
+						return is_array( self::$rum_digest_memo ) ? self::$rum_digest_memo : array();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			try {
+				$result = self::compute_rum_anomaly_digest( $rum, $now );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$result = array();
+			}
+			if ( $is_live ) {
+				try {
+					self::$rum_digest_memo          = is_array( $result ) ? $result : array();
+					self::$rum_digest_memo_computed = true;
+					self::$rum_digest_memo_blog     = self::rum_digest_memo_blog_id();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return is_array( $result ) ? $result : array();
+		}
+
+		/**
+		 * Compute the RUM anomaly digest (unmemoized worker).
+		 *
+		 * See get_rum_anomaly_digest() for the contract; this worker
+		 * always scans fresh so injected args (tests) never hit the memo.
+		 *
+		 * @param array|null $rum Optional RUM aggregate for testability.
+		 * @param int|null   $now Optional current timestamp for testability.
+		 * @return array[] At most one digest anomaly.
+		 * @since NEXT
+		 */
+		private static function compute_rum_anomaly_digest( ?array $rum = null, ?int $now = null ): array {
+			try {
+				if ( null === $rum ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_aggregate_readonly' ) ) {
+						return array();
+					}
+					$rum = RUM::get_aggregate_readonly();
+				}
+				if ( ! is_array( $rum ) || empty( $rum ) ) {
+					return array();
+				}
+				$dates = array();
+				foreach ( $rum as $date => $paths ) {
+					if ( ! is_string( $date ) || '' === $date || ! is_array( $paths ) || empty( $paths ) ) {
+						continue;
+					}
+					$dates[] = $date;
+				}
+				sort( $dates, SORT_STRING );
+				if ( count( $dates ) < 2 ) {
+					return array();
+				}
+				$resolved_now = self::anomaly_now( $now );
+				// Single-banner cap shared with detect_anomalies().
+				if ( ! self::is_anomaly_cooled_down( $resolved_now ) ) {
+					return array();
+				}
+				$min_samples = self::anomaly_min_samples();
+				if ( $min_samples < 1 ) {
+					$min_samples = self::ANOMALY_MIN_SAMPLES;
+				}
+				$tol_pct = self::anomaly_tolerance_pct();
+				$tol_abs = self::anomaly_tolerance_abs();
+
+				$recent_date    = (string) end( $dates );
+				$baseline_dates = array_slice( $dates, 0, -1 );
+				$first_baseline = (string) $baseline_dates[0];
+				$last_baseline  = (string) end( $baseline_dates );
+				$window         = 1 === count( $baseline_dates )
+					/* translators: 1: recent date, 2: baseline date. */
+					? sprintf( __( 'recent %1$s vs baseline %2$s', 'performance-optimisation' ), $recent_date, $first_baseline )
+					/* translators: 1: recent date, 2: first baseline date, 3: last baseline date. */
+					: sprintf( __( 'recent %1$s vs baseline %2$s to %3$s', 'performance-optimisation' ), $recent_date, $first_baseline, $last_baseline );
+
+				$paths_union = array();
+				foreach ( array_merge( $baseline_dates, array( $recent_date ) ) as $date ) {
+					if ( ! isset( $rum[ $date ] ) || ! is_array( $rum[ $date ] ) ) {
+						continue;
+					}
+					foreach ( $rum[ $date ] as $path => $metrics ) {
+						if ( ! is_string( $path ) || '' === $path || ! is_array( $metrics ) ) {
+							continue;
+						}
+						$paths_union[ $path ] = true;
+					}
+				}
+
+				$candidates = array();
+				foreach ( array_keys( $paths_union ) as $path ) {
+					foreach ( array( 'lcp', 'inp', 'cls' ) as $metric ) {
+						$baseline_avgs = array();
+						$baseline_n    = 0;
+						foreach ( $baseline_dates as $date ) {
+							$bucket = isset( $rum[ $date ][ $path ][ $metric ] ) && is_array( $rum[ $date ][ $path ][ $metric ] ) ? $rum[ $date ][ $path ][ $metric ] : null;
+							if ( ! is_array( $bucket ) ) {
+								continue;
+							}
+							$n   = isset( $bucket['n'] ) ? (int) $bucket['n'] : 0;
+							$sum = isset( $bucket['sum'] ) ? (float) $bucket['sum'] : 0.0;
+							if ( $n <= 0 ) {
+								continue;
+							}
+							$baseline_n     += $n;
+							$baseline_avgs[] = $sum / $n;
+						}
+						$recent_bucket = isset( $rum[ $recent_date ][ $path ][ $metric ] ) && is_array( $rum[ $recent_date ][ $path ][ $metric ] ) ? $rum[ $recent_date ][ $path ][ $metric ] : null;
+						if ( ! is_array( $recent_bucket ) ) {
+							continue;
+						}
+						$recent_n = isset( $recent_bucket['n'] ) ? (int) $recent_bucket['n'] : 0;
+						if ( $recent_n < $min_samples || $baseline_n < $min_samples || empty( $baseline_avgs ) ) {
+							continue;
+						}
+						$recent_sum = isset( $recent_bucket['sum'] ) ? (float) $recent_bucket['sum'] : 0.0;
+						$baseline   = self::rum_median( $baseline_avgs );
+						$recent     = $recent_sum / $recent_n;
+						if ( function_exists( 'is_finite' ) && ( ! is_finite( $baseline ) || ! is_finite( $recent ) ) ) {
+							continue;
+						}
+						$clean_path = function_exists( 'mb_substr' ) ? mb_substr( $path, 0, 128, 'UTF-8' ) : substr( $path, 0, 128 );
+						if ( 'cls' === $metric ) {
+							$threshold = $baseline + self::CLS_ABSOLUTE_DELTA + $tol_abs;
+							if ( $recent < $threshold ) {
+								continue;
+							}
+							$excess       = self::CLS_ABSOLUTE_DELTA > 0 ? ( ( $recent - $baseline ) - self::CLS_ABSOLUTE_DELTA ) / self::CLS_ABSOLUTE_DELTA : 0.0;
+							$candidates[] = array(
+								'key'        => 'rum:' . $clean_path,
+								'metric'     => 'cls',
+								'path'       => $clean_path,
+								'baseline'   => (float) $baseline,
+								'current'    => (float) $recent,
+								'recent'     => (float) $recent,
+								'window'     => $window,
+								'samples'    => $recent_n,
+								'source'     => 'rum-digest',
+								'change_abs' => (float) ( $recent - $baseline ),
+								'severity'   => (float) $excess,
+							);
+							continue;
+						}
+						if ( $baseline <= 0 ) {
+							continue;
+						}
+						$multiplier = 'inp' === $metric ? self::INP_RELATIVE_MULTIPLIER : self::LCP_RELATIVE_MULTIPLIER;
+						$threshold  = $baseline * $multiplier * ( 1.0 + $tol_pct / 100.0 );
+						if ( $recent < $threshold ) {
+							continue;
+						}
+						$excess       = $multiplier > 0 ? ( ( $recent / $baseline ) - $multiplier ) / $multiplier : 0.0;
+						$candidates[] = array(
+							'key'        => 'rum:' . $clean_path,
+							'metric'     => $metric,
+							'path'       => $clean_path,
+							'baseline'   => (float) $baseline,
+							'current'    => (float) $recent,
+							'recent'     => (float) $recent,
+							'window'     => $window,
+							'samples'    => $recent_n,
+							'source'     => 'rum-digest',
+							'change_pct' => (float) ( ( $recent - $baseline ) / $baseline * 100.0 ),
+							'severity'   => (float) $excess,
+						);
+					}
+				}
+				if ( empty( $candidates ) ) {
+					return array();
+				}
+				usort(
+					$candidates,
+					static function ( $a, $b ) {
+						$sa = isset( $a['severity'] ) ? (float) $a['severity'] : 0.0;
+						$sb = isset( $b['severity'] ) ? (float) $b['severity'] : 0.0;
+						if ( $sa === $sb ) {
+							return 0;
+						}
+						return $sa > $sb ? -1 : 1;
+					}
+				);
+				$winner = $candidates[0];
+				unset( $winner['severity'] );
+				// Record the alarm before filtering so a repeated regression
+				// re-alarms only after the cooldown elapses.
+				self::set_last_anomaly_alarm( $resolved_now );
+				/**
+				 * Filters the detected performance anomalies.
+				 *
+				 * Digest entries carry the trend shape (`key`, `metric`,
+				 * `baseline`, `current`, `change_pct`/`change_abs`) plus
+				 * `path`, `recent`, `window`, `samples`, and
+				 * `source: rum-digest` so the alert can link the affected
+				 * path and window.
+				 *
+				 * @since NEXT Digest entries flow through this filter.
+				 * @param array[] $anomalies At most one anomaly array.
+				 */
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered_anomalies = apply_filters( 'wppo_ai_anomaly_detected', array( $winner ) );
+					if ( is_array( $filtered_anomalies ) && ! empty( $filtered_anomalies ) ) {
+						$first = $filtered_anomalies[0];
+						if ( is_array( $first ) ) {
+							$winner = $first;
+						}
+					} elseif ( is_array( $filtered_anomalies ) && empty( $filtered_anomalies ) ) {
+						return array();
+					}
+					// Backward compatibility: LCP consumers keep the
+					// legacy filter name.
+					if ( 'lcp' === ( $winner['metric'] ?? 'lcp' ) ) {
+						$legacy = apply_filters( 'wppo_ai_lcp_regression', array( $winner ) );
+						if ( ! is_array( $legacy ) ) {
+							return array( $winner );
+						}
+						return array_slice( array_values( $legacy ), 0, 1 );
+					}
+				}
+				return array( $winner );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
 		 * Detect LCP/CLS regressions from stored Web Vitals trend history.
 		 *
-		 * Multi-metric rolling-baseline comparison per URL+strategy key: the
-		 * latest sample ("current", last value) is compared against the mean
-		 * of all prior numeric samples. A key regresses when:
-		 * - LCP: current >= baseline * 1.3 (+30%, relative), or
-		 * - CLS: current - baseline >= 0.05 (absolute delta, NOT percent).
+		 * Multi-metric rolling-baseline comparison per URL+strategy key with
+		 * ratio persistence: the baseline is the mean of all numeric samples
+		 * before the last N trailing windows (N =
+		 * `anomaly_persistence_windows()`, default 3), and a key regresses
+		 * only when EVERY trailing window breaches the gate:
+		 * - LCP: each trailing sample >= baseline * 1.3 (+30%, relative), or
+		 * - CLS: each trailing sample - baseline >= 0.05 (absolute delta, NOT percent).
 		 *
-		 * Quiet-reliability gates: each firing arm must be corroborated by
-		 * RUM field data (`is_rum_corroborated()`, total n >=
-		 * `anomaly_min_samples()`, default 10) before alarming, and at most
-		 * one anomaly overall is returned with a 7-day cooldown
+		 * A single noisy window can therefore never page on its own.
+		 *
+		 * Quiet-reliability gates: below the configured trend sample floor
+		 * (`anomaly_min_samples()`, default 10) no notice fires; each firing
+		 * arm must be corroborated by RUM field data
+		 * (`is_rum_corroborated()`, total n >= `anomaly_p75_min_samples()`,
+		 * default 10, read via the side-effect-free
+		 * RUM::get_aggregate_readonly() path) before alarming; with RUM
+		 * collection disabled zero notices fire; and at most one anomaly
+		 * overall is returned with a 7-day cooldown
 		 * (`anomaly_cooldown_days`, default 7) persisted in the per-site
 		 * `wppo_ai_anomaly_last_alarm` option (multisite-safe).
 		 *
+		 * Every returned notice carries route plus p75 plus baseline plus
+		 * delta plus samples (`route`, `p75`, `baseline`, `delta`,
+		 * `samples`) alongside the legacy `key`/`current`/`change_pct`/
+		 * `change_abs` keys. Thin or absent data emits no page — use
+		 * get_anomaly_provisional_state() to surface the provisional
+		 * collecting-data state instead.
+		 *
 		 * Local computation only: no remote calls, no API keys, no email.
 		 * Fail-open: undersampled history (<min_samples numeric samples),
-		 * short history (<2 usable windows), non-positive LCP baseline,
-		 * uncorroborated arms, active cooldown, or any failure returns an
-		 * empty array — never fatal.
+		 * short history (<persistence+1 usable windows), non-positive LCP
+		 * baseline, uncorroborated arms, active cooldown, RUM disabled, or
+		 * any failure returns an empty array — never fatal.
 		 *
 		 * Trend source is Pagespeed::get_trends() (capped 30/URL+strategy);
-		 * RUM source is RUM::get_data() unless an aggregate is injected.
+		 * RUM source is the read-only aggregate unless an aggregate is injected.
 		 *
 		 * @param array|null $trends Optional trends map for testability. When null, reads Pagespeed::get_trends().
-		 * @param array|null $rum Optional RUM aggregate for testability. When null, reads RUM::get_data().
+		 * @param array|null $rum Optional RUM aggregate for testability. When null, reads the read-only RUM aggregate (zero notices when RUM disabled).
 		 * @param int|null   $now Optional current timestamp for testability. When null, uses time().
-		 * @return array[] At most one anomaly: array(array('key'=>string,'metric'=>string,'baseline'=>float,'current'=>float,'change_pct'=>float|'change_abs'=>float)).
+		 * @return array[] At most one anomaly: array(array('key'=>string,'route'=>string,'metric'=>string,'baseline'=>float,'current'=>float,'p75'=>float,'delta'=>float,'samples'=>int,'change_pct'=>float|'change_abs'=>float)).
 		 * @since 2.0.0
+		 * @since NEXT Three-window ratio persistence; RUM-disabled short-circuit; enriched route/p75/baseline/delta/samples payload.
 		 */
 		public static function detect_anomalies( ?array $trends = null, ?array $rum = null, ?int $now = null ): array {
 			try {
@@ -1749,6 +2759,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( ! is_array( $trends ) || empty( $trends ) ) {
 					return array();
 				}
+				// Zero notices with RUM disabled (live read path only; an
+				// injected aggregate is an explicit test/staging override).
+				if ( null === $rum && ! self::is_rum_collection_enabled() ) {
+					return array();
+				}
 				$resolved_now = self::anomaly_now( $now );
 				// Single-banner cap: an active cooldown suppresses all arms.
 				if ( ! self::is_anomaly_cooled_down( $resolved_now ) ) {
@@ -1758,50 +2773,93 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( $min_samples < 1 ) {
 					$min_samples = self::ANOMALY_MIN_SAMPLES;
 				}
+				$persistence = self::anomaly_persistence_windows();
+				if ( $persistence < 1 ) {
+					$persistence = self::ANOMALY_PERSISTENCE_WINDOWS;
+				}
+				// Resolve the RUM sample floor once; is_rum_corroborated()
+				// receives it per arm so multi-key maps do not repeat
+				// option reads + filter applications.
+				$rum_floor = self::anomaly_p75_min_samples();
+				if ( $rum_floor < 1 ) {
+					$rum_floor = self::ANOMALY_P75_MIN_SAMPLES;
+				}
 				foreach ( $trends as $trend_key => $snapshots ) {
 					if ( ! is_array( $snapshots ) ) {
 						continue;
 					}
 					$candidates = array();
-					// LCP arm (relative +30%).
+					// LCP arm (relative +30% with ratio persistence).
 					$lcps = self::collect_trend_samples( $snapshots, 'lcp', true );
-					if ( count( $lcps ) >= $min_samples && count( $lcps ) >= 2 ) {
-						$current  = (float) end( $lcps );
-						$prior    = array_slice( $lcps, 0, -1 );
-						$baseline = array_sum( $prior ) / count( $prior );
-						if ( $baseline > 0 && $current >= $baseline * self::LCP_RELATIVE_MULTIPLIER ) {
+					if ( count( $lcps ) >= $min_samples && count( $lcps ) >= ( $persistence + 1 ) ) {
+						$tail      = array_slice( $lcps, -$persistence );
+						$prior     = array_slice( $lcps, 0, count( $lcps ) - $persistence );
+						$baseline  = array_sum( $prior ) / count( $prior );
+						$persisted = true;
+						foreach ( $tail as $window ) {
+							if ( (float) $window < $baseline * self::LCP_RELATIVE_MULTIPLIER ) {
+								$persisted = false;
+								break;
+							}
+						}
+						if ( $baseline > 0 && $persisted ) {
+							$current      = (float) end( $lcps );
+							$p75          = self::anomaly_p75( $lcps );
 							$candidates[] = array(
 								'key'        => (string) $trend_key,
+								'route'      => (string) $trend_key,
 								'metric'     => 'lcp',
 								'baseline'   => (float) $baseline,
 								'current'    => (float) $current,
+								'p75'        => (float) $p75,
+								'delta'      => (float) ( $current - $baseline ),
+								'samples'    => count( $lcps ),
 								'change_pct' => (float) ( ( $current - $baseline ) / $baseline * 100.0 ),
 							);
 						}
 					}
-					// CLS arm (absolute delta, NOT percent).
+					// CLS arm (absolute delta, NOT percent, with persistence).
 					$clss = self::collect_trend_samples( $snapshots, 'cls', false );
-					if ( count( $clss ) >= $min_samples && count( $clss ) >= 2 ) {
-						$current  = (float) end( $clss );
-						$prior    = array_slice( $clss, 0, -1 );
+					if ( count( $clss ) >= $min_samples && count( $clss ) >= ( $persistence + 1 ) ) {
+						$tail     = array_slice( $clss, -$persistence );
+						$prior    = array_slice( $clss, 0, count( $clss ) - $persistence );
 						$baseline = array_sum( $prior ) / count( $prior );
 						$finite   = true;
 						if ( function_exists( 'is_finite' ) ) {
-							$finite = is_finite( $baseline ) && is_finite( $current );
+							$finite = is_finite( $baseline );
+							foreach ( $tail as $window ) {
+								if ( ! is_finite( (float) $window ) ) {
+									$finite = false;
+									break;
+								}
+							}
 						}
-						if ( $finite && ( $current - $baseline ) >= self::CLS_ABSOLUTE_DELTA ) {
+						$persisted = true;
+						foreach ( $tail as $window ) {
+							if ( ( (float) $window - $baseline ) < self::CLS_ABSOLUTE_DELTA ) {
+								$persisted = false;
+								break;
+							}
+						}
+						if ( $finite && $persisted ) {
+							$current      = (float) end( $clss );
+							$p75          = self::anomaly_p75( $clss );
 							$candidates[] = array(
 								'key'        => (string) $trend_key,
+								'route'      => (string) $trend_key,
 								'metric'     => 'cls',
 								'baseline'   => (float) $baseline,
 								'current'    => (float) $current,
+								'p75'        => (float) $p75,
+								'delta'      => (float) ( $current - $baseline ),
+								'samples'    => count( $clss ),
 								'change_abs' => (float) ( $current - $baseline ),
 							);
 						}
 					}
 					foreach ( $candidates as $anomaly ) {
 						// RUM corroboration gate: trends + real-user data must agree.
-						if ( ! self::is_rum_corroborated( $anomaly['metric'], $rum, (float) $anomaly['baseline'] ) ) {
+						if ( ! self::is_rum_corroborated( $anomaly['metric'], $rum, (float) $anomaly['baseline'], $rum_floor ) ) {
 							continue;
 						}
 						// Record the alarm before filtering so a repeated
@@ -1844,6 +2902,126 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				return array();
 			}
 			return array();
+		}
+
+		/**
+		 * Describe the provisional (collecting-data) anomaly state.
+		 *
+		 * Thin or absent data never pages — this read-only helper reports
+		 * WHY detect_anomalies() is quiet so staging and the SPA can render
+		 * a provisional "collecting data" state instead of silence. Never
+		 * pages, never writes, never fatal.
+		 *
+		 * Reasons: `rum_disabled` (RUM collection off), `rum_thin`
+		 * (best-sampled RUM metric below `anomaly_p75_min_samples()` or
+		 * aggregate empty), `trends_thin` (no key reaches both
+		 * `anomaly_min_samples()` and the persistence+1 history floor),
+		 * `cooling_down` (a page already fired inside the cooldown),
+		 * `ready` (history + RUM floors satisfied — detection may page).
+		 *
+		 * With RUM disabled the state is always provisional (zero notices
+		 * by design); otherwise the RUM floor is evaluated against the
+		 * injected aggregate or the read-only live aggregate.
+		 *
+		 * @param array|null $trends Optional trends map (null = live Pagespeed::get_trends()).
+		 * @param array|null $rum Optional RUM aggregate (null = live read-only aggregate).
+		 * @param int|null   $now Optional current timestamp for testability.
+		 * @return array{provisional:bool,reason:string,samples:int,min_samples:int,rum_samples:int,rum_min_samples:int} Provisional state.
+		 * @since NEXT
+		 */
+		public static function get_anomaly_provisional_state( ?array $trends = null, ?array $rum = null, ?int $now = null ): array {
+			$fallback = array(
+				'provisional'     => true,
+				'reason'          => 'trends_thin',
+				'samples'         => 0,
+				'min_samples'     => self::ANOMALY_MIN_SAMPLES,
+				'rum_samples'     => 0,
+				'rum_min_samples' => self::ANOMALY_P75_MIN_SAMPLES,
+			);
+			try {
+				$min_samples                 = self::anomaly_min_samples();
+				$rum_min_samples             = self::anomaly_p75_min_samples();
+				$fallback['min_samples']     = $min_samples;
+				$fallback['rum_min_samples'] = $rum_min_samples;
+				if ( null === $trends ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) || ! method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+						return $fallback;
+					}
+					$trends = Pagespeed::get_trends();
+				}
+				if ( ! is_array( $trends ) || empty( $trends ) ) {
+					return $fallback;
+				}
+				// Count the best-sampled key across both arms. The ready gate
+				// also requires the persistence+1 short-history floor from
+				// detect_anomalies() so provisional never claims ready
+				// while detection always returns empty.
+				$best = 0;
+				foreach ( $trends as $snapshots ) {
+					if ( ! is_array( $snapshots ) ) {
+						continue;
+					}
+					$best = max( $best, count( self::collect_trend_samples( $snapshots, 'lcp', true ) ), count( self::collect_trend_samples( $snapshots, 'cls', false ) ) );
+				}
+				$fallback['samples'] = $best;
+				$persistence         = self::anomaly_persistence_windows();
+				if ( $persistence < 1 ) {
+					$persistence = self::ANOMALY_PERSISTENCE_WINDOWS;
+				}
+				$required_history = max( $min_samples, $persistence + 1 );
+				if ( $best < $required_history ) {
+					$fallback['reason'] = 'trends_thin';
+					return $fallback;
+				}
+				// RUM-disabled short-circuit: provisional by design.
+				$rum_injected = null !== $rum;
+				if ( ! $rum_injected && ! self::is_rum_collection_enabled() ) {
+					$fallback['reason'] = 'rum_disabled';
+					return $fallback;
+				}
+				$aggregate = $rum_injected ? $rum : self::read_rum_aggregate_for_anomaly();
+				// Match the corroboration gate semantics: the p75 floor is
+				// enforced per arm (per metric), so report the best-sampled
+				// metric total instead of summing both arms (which would
+				// double-count the same visits).
+				$total_lcp = 0;
+				$total_cls = 0;
+				if ( is_array( $aggregate ) ) {
+					foreach ( $aggregate as $paths ) {
+						if ( ! is_array( $paths ) ) {
+							continue;
+						}
+						foreach ( $paths as $metrics ) {
+							if ( ! is_array( $metrics ) ) {
+								continue;
+							}
+							if ( isset( $metrics['lcp'] ) && is_array( $metrics['lcp'] ) && isset( $metrics['lcp']['n'] ) ) {
+								$total_lcp += (int) $metrics['lcp']['n'];
+							}
+							if ( isset( $metrics['cls'] ) && is_array( $metrics['cls'] ) && isset( $metrics['cls']['n'] ) ) {
+								$total_cls += (int) $metrics['cls']['n'];
+							}
+						}
+					}
+				}
+				$total_n                 = max( $total_lcp, $total_cls );
+				$fallback['rum_samples'] = $total_n;
+				if ( $total_n < $rum_min_samples ) {
+					$fallback['reason'] = 'rum_thin';
+					return $fallback;
+				}
+				if ( ! self::is_anomaly_cooled_down( self::anomaly_now( $now ) ) ) {
+					$fallback['provisional'] = true;
+					$fallback['reason']      = 'cooling_down';
+					return $fallback;
+				}
+				$fallback['provisional'] = false;
+				$fallback['reason']      = 'ready';
+				return $fallback;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
 		}
 
 		/**
@@ -2290,11 +3468,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				unset( $e );
 			}
 
+			// RUM-driven slow-top-path tune (issue #1463): consume the
+			// segmented field-LCP read path; when the top-path p75 exceeds
+			// 2500ms collapse to exactly one preload candidate plus an
+			// eagerness downgrade (both suggest-only, never auto-applied).
+			// Below the sample threshold keep static defaults with the
+			// manual metabox hero URL winning and no speculation change.
+			// Fail-open: any failure emits nothing new. Zero external HTTP.
+			$slow_is_slow     = false;
+			$slow_path        = '';
+			$slow_segment     = null;
+			$slow_p75         = 0.0;
+			$slow_samples     = 0;
+			$slow_min         = self::field_lcp_min_samples();
+			$slow_preload_url = '';
+			$slow_downgrade   = 'conservative';
+			try {
+				if ( array_key_exists( 'slow_path_slow', $model ) ) {
+					$slow_is_slow     = ! empty( $model['slow_path_slow'] );
+					$slow_path        = isset( $model['slow_path_path'] ) && is_string( $model['slow_path_path'] ) ? $model['slow_path_path'] : '';
+					$slow_segment     = isset( $model['slow_path_segment'] ) && is_array( $model['slow_path_segment'] ) ? self::segment_descriptor( $model['slow_path_segment'] ) : null;
+					$slow_p75         = isset( $model['slow_path_p75'] ) ? (float) $model['slow_path_p75'] : 0.0;
+					$slow_samples     = isset( $model['slow_path_samples'] ) ? (int) $model['slow_path_samples'] : 0;
+					$slow_min         = isset( $model['slow_path_min_samples'] ) ? (int) $model['slow_path_min_samples'] : $slow_min;
+					$slow_preload_url = isset( $model['slow_path_preload_url'] ) ? self::sanitize_slow_preload_url( $model['slow_path_preload_url'] ) : '';
+				} else {
+					$live_slow = self::get_slow_top_path_state();
+					if ( is_array( $live_slow ) ) {
+						$slow_is_slow     = ! empty( $live_slow['slow'] );
+						$slow_path        = isset( $live_slow['path'] ) && is_string( $live_slow['path'] ) ? $live_slow['path'] : '';
+						$slow_segment     = isset( $live_slow['segment'] ) && is_array( $live_slow['segment'] ) ? self::segment_descriptor( $live_slow['segment'] ) : null;
+						$slow_p75         = isset( $live_slow['p75'] ) ? (float) $live_slow['p75'] : 0.0;
+						$slow_samples     = isset( $live_slow['samples'] ) ? (int) $live_slow['samples'] : 0;
+						$slow_min         = isset( $live_slow['min_samples'] ) ? (int) $live_slow['min_samples'] : $slow_min;
+						$slow_preload_url = isset( $live_slow['preload_url'] ) ? self::sanitize_slow_preload_url( $live_slow['preload_url'] ) : '';
+					}
+				}
+				// Re-derive the downgrade from the live eagerness when the
+				// persisted value is missing/invalid so stale models cannot
+				// propose an upgrade as a "downgrade".
+				$slow_downgrade = self::get_slow_path_downgrade_target( $eagerness );
+				if ( isset( $model['slow_path_downgrade'] ) && is_string( $model['slow_path_downgrade'] ) && in_array( $model['slow_path_downgrade'], array( 'conservative', 'moderate', 'eager' ), true ) ) {
+					$candidate_downgrade = self::normalize_eagerness( $model['slow_path_downgrade'] );
+					// Never let a stale persisted value loosen above the
+					// freshly derived one-step-down target.
+					if ( self::eagerness_level( $candidate_downgrade ) <= self::eagerness_level( $slow_downgrade ) ) {
+						$slow_downgrade = $candidate_downgrade;
+					}
+				}
+				if ( $slow_min < 1 ) {
+					$slow_min = self::field_lcp_min_samples();
+				}
+				// Gate: below the sample threshold (or uncrossed p75) there
+				// is no override — static defaults stay with the manual
+				// metabox hero winning and no speculation change.
+				if ( $slow_samples < $slow_min || $slow_p75 <= self::LCP_P75_DELAY_THRESHOLD_MS ) {
+					$slow_is_slow = false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$slow_is_slow = false;
+			}
+
 			$prefetch = $model['prefetch_urls'] ?? array();
 			if ( is_array( $prefetch ) && ! empty( $prefetch ) ) {
-				$suggestions[] = array(
+				// Slow top path: fewer speculative fetches — collapse the
+				// prefetch list to the single top URL.
+				$prefetch_limit = $slow_is_slow ? 1 : 2;
+				$suggestions[]  = array(
 					'metric'      => 'ai_prefetch_urls',
-					'value'       => implode( ', ', array_slice( $prefetch, 0, 2 ) ),
+					'value'       => implode( ', ', array_slice( $prefetch, 0, $prefetch_limit ) ),
 					'unit'        => 'list',
 					'status'      => 'needs_improvement',
 					'description' => __( 'AI: Prefetch predicted next URLs', 'performance-optimisation' ),
@@ -2311,45 +3554,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// element and the slowest sub-resources. Fail-open: missing keys
 			// (models persisted before attribution shipped) or lookup errors
 			// emit nothing. Suggestions only — never auto-applied.
+			// Slow-top-path tune (issue #1463): when the segmented top-path
+			// p75 is slow these collapse to exactly one consolidated preload
+			// suggestion (ai_slow_path_preload) emitted below, so the legacy
+			// dual candidates are suppressed to avoid double preloads.
 			try {
-				$attributed = $model['attributed_lcp'] ?? null;
-				// Models persisted before attribution shipped simply emit no
-				// suggestions for missing keys (fail open).
-				if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] ) {
-					$attr_path     = isset( $attributed['path'] ) && is_string( $attributed['path'] ) ? $attributed['path'] : '';
-					$attr_selector = $attributed['selector'];
-					/* translators: %1$s LCP selector, %2$s page path. */
-					$attr_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
-					/* translators: %1$s LCP selector, %2$s page path. */
-					$attr_description = sprintf( __( 'AI: Preload hero element %1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
-					$suggestions[]    = array(
-						'metric'      => 'ai_lcp_preload',
-						'value'       => $attr_value,
-						'unit'        => 'string',
-						'status'      => 'needs_improvement',
-						'description' => $attr_description,
-						'fix_action'  => 'open_preload_tab',
-						'ai_payload'  => array(
-							'tab'      => 'preload_settings',
-							'settings' => array(),
-						),
-					);
-				}
-				$slow_list = $model['slow_resources'] ?? array();
-				if ( is_array( $slow_list ) && ! empty( $slow_list ) ) {
-					$slow_first = $slow_list[0];
-					if ( is_array( $slow_first ) && isset( $slow_first['url'] ) && is_string( $slow_first['url'] ) && '' !== $slow_first['url'] ) {
-						$slow_type = isset( $slow_first['type'] ) && is_string( $slow_first['type'] ) ? $slow_first['type'] : 'resource';
-						/* translators: %1$s resource type, %2$s resource URL. */
-						$slow_value = sprintf( __( '%1$s · %2$s', 'performance-optimisation' ), $slow_type, $slow_first['url'] );
-						/* translators: %1$s resource type, %2$s resource URL. */
-						$slow_description = sprintf( __( 'AI: Preload slow resource %1$s (%2$s)', 'performance-optimisation' ), $slow_first['url'], $slow_type );
+				if ( ! $slow_is_slow ) {
+					$attributed = $model['attributed_lcp'] ?? null;
+					// Models persisted before attribution shipped simply emit no
+					// suggestions for missing keys (fail open).
+					if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] ) {
+						$attr_path     = isset( $attributed['path'] ) && is_string( $attributed['path'] ) ? $attributed['path'] : '';
+						$attr_selector = $attributed['selector'];
+						/* translators: %1$s LCP selector, %2$s page path. */
+						$attr_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
+						/* translators: %1$s LCP selector, %2$s page path. */
+						$attr_description = sprintf( __( 'AI: Preload hero element %1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
 						$suggestions[]    = array(
-							'metric'      => 'ai_slow_resource_preload',
-							'value'       => $slow_value,
+							'metric'      => 'ai_lcp_preload',
+							'value'       => $attr_value,
 							'unit'        => 'string',
 							'status'      => 'needs_improvement',
-							'description' => $slow_description,
+							'description' => $attr_description,
 							'fix_action'  => 'open_preload_tab',
 							'ai_payload'  => array(
 								'tab'      => 'preload_settings',
@@ -2357,9 +3583,108 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							),
 						);
 					}
+					$slow_list = $model['slow_resources'] ?? array();
+					if ( is_array( $slow_list ) && ! empty( $slow_list ) ) {
+						$slow_first = $slow_list[0];
+						if ( is_array( $slow_first ) && isset( $slow_first['url'] ) && is_string( $slow_first['url'] ) && '' !== $slow_first['url'] ) {
+							$slow_type = isset( $slow_first['type'] ) && is_string( $slow_first['type'] ) ? $slow_first['type'] : 'resource';
+							/* translators: %1$s resource type, %2$s resource URL. */
+							$slow_value = sprintf( __( '%1$s · %2$s', 'performance-optimisation' ), $slow_type, $slow_first['url'] );
+							/* translators: %1$s resource type, %2$s resource URL. */
+							$slow_description = sprintf( __( 'AI: Preload slow resource %1$s (%2$s)', 'performance-optimisation' ), $slow_first['url'], $slow_type );
+							$suggestions[]    = array(
+								'metric'      => 'ai_slow_resource_preload',
+								'value'       => $slow_value,
+								'unit'        => 'string',
+								'status'      => 'needs_improvement',
+								'description' => $slow_description,
+								'fix_action'  => 'open_preload_tab',
+								'ai_payload'  => array(
+									'tab'      => 'preload_settings',
+									'settings' => array(),
+								),
+							);
+						}
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+
+			// Slow-top-path tune suggestions (issue #1463): exactly one
+			// preload candidate plus an eagerness downgrade, suggest-only
+			// (never auto-applied — the user applies them from the preload
+			// tab). Field truth picks the hero: the RUM-measured preload URL
+			// wins when qualified; otherwise the copy names the manual
+			// metabox hero as winning with static defaults kept. Commerce /
+			// auth contexts stay capped at moderate via the downgrade
+			// target. Zero external HTTP. Dismissible via the standard
+			// dismissed-suggestions filter below.
+			try {
+				if ( $slow_is_slow && ! self::is_suggestion_dismissed( 'ai_slow_path_preload' ) ) {
+					list( $slow_device, $slow_template, $slow_connection ) = self::slow_segment_labels( $slow_segment );
+					if ( '' !== $slow_preload_url ) {
+						/* translators: %1$s preload URL, %2$s page path. */
+						$slow_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $slow_preload_url, '' !== $slow_path ? $slow_path : __( 'top page', 'performance-optimisation' ) );
+						/* translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count. */
+						$slow_description = sprintf( __( 'AI: Preload hero for slow path %1$s/%2$s/%3$s (field LCP p75 %4$s, %5$d samples) — suggest-only', 'performance-optimisation' ), $slow_device, $slow_template, $slow_connection, self::format_p75_seconds( $slow_p75 ), $slow_samples );
+					} else {
+						/* translators: %1$d observed samples, %2$d required samples. */
+						$slow_value = sprintf( __( 'manual hero wins (%1$d/%2$d samples) — set via metabox', 'performance-optimisation' ), $slow_samples, $slow_min );
+						/* translators: %1$s page path, %2$s p75 seconds. */
+						$slow_description = sprintf( __( 'AI: Slow path %1$s (field LCP p75 %2$s) — no qualified hero yet, manual metabox image wins; static defaults kept', 'performance-optimisation' ), '' !== $slow_path ? $slow_path : __( 'top page', 'performance-optimisation' ), self::format_p75_seconds( $slow_p75 ) );
+					}
+					$suggestions[] = array(
+						'metric'      => 'ai_slow_path_preload',
+						'value'       => $slow_value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => $slow_description,
+						'fix_action'  => 'open_preload_tab',
+						'ai_payload'  => array(
+							'tab'      => 'preload_settings',
+							'settings' => array(),
+						),
+					);
+				}
+				if ( $slow_is_slow && ! self::is_suggestion_dismissed( 'ai_speculation_downgrade' ) ) {
+					list( $slow_device, $slow_template, $slow_connection ) = self::slow_segment_labels( $slow_segment );
+					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds. */
+					$downgrade_value = sprintf( __( '%1$s · %2$s · %3$s · %4$s · p75 %5$s', 'performance-optimisation' ), $slow_downgrade, $slow_device, $slow_template, $slow_connection, self::format_p75_seconds( $slow_p75 ) );
+					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds, %6$d sample count. */
+					$downgrade_description = sprintf( __( 'AI: Downgrade speculation to %1$s for slow path %2$s/%3$s/%4$s (field LCP p75 %5$s, %6$d samples) — suggest-only', 'performance-optimisation' ), $slow_downgrade, $slow_device, $slow_template, $slow_connection, self::format_p75_seconds( $slow_p75 ), $slow_samples );
+					$suggestions[]         = array(
+						'metric'      => 'ai_speculation_downgrade',
+						'value'       => $downgrade_value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => $downgrade_description,
+						'fix_action'  => 'open_preload_tab',
+						'ai_payload'  => array(
+							'tab'      => 'preload_settings',
+							'settings' => array( 'speculationEagerness' => $slow_downgrade ),
+						),
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			// Slow path wins the speculation-eagerness advice (issue #1463):
+			// the base ai_speculation_eagerness card (emitted above with the
+			// current eagerness) contradicts the ai_speculation_downgrade
+			// card (one step down) for the same speculationEagerness setting.
+			// Suppress the base card post-hoc when slow so only one
+			// speculation-eagerness payload is offered.
+			if ( $slow_is_slow ) {
+				$suggestions = array_values(
+					array_filter(
+						$suggestions,
+						static function ( $s ) {
+							return ! ( is_array( $s ) && ( $s['metric'] ?? '' ) === 'ai_speculation_eagerness' );
+						}
+					)
+				);
 			}
 
 			// Guardrail (#908): in commerce/auth contexts suggest excluding
@@ -2415,9 +3740,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 
 			// Self-watching performance: surface a single read-only suggestion on
 			// LCP (+30% relative, RUM-corroborated) or CLS (+0.05 absolute
-			// delta, RUM-corroborated) regression with a 7-day cooldown.
+			// delta, RUM-corroborated) trend regression, falling back to the
+			// local RUM anomaly digest (LCP/INP/CLS recent-window medians vs
+			// baseline with min-sample gate + tolerance band, linking the
+			// affected path and window) — all with a 7-day cooldown.
 			// Fail-open: detector errors contribute zero suggestions (never
-			// fatal, never white-screen). No auto-tune, no speculation
+			// fatal, never white-screen). Read-only: nothing here
+			// auto-applies settings. No auto-tune, no speculation
 			// override here — that stays gated by is_enabled() in
 			// filter_speculation_rules(). No email without opt-in.
 			try {
@@ -2426,38 +3755,102 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				unset( $e );
 				$anomalies = array();
 			}
+			if ( ! is_array( $anomalies ) || empty( $anomalies ) ) {
+				try {
+					$anomalies = self::get_rum_anomaly_digest();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$anomalies = array();
+				}
+			}
 			if ( is_array( $anomalies ) && ! empty( $anomalies ) ) {
-				$anomaly = $anomalies[0];
+				$anomaly        = $anomalies[0];
+				$anomaly_path   = isset( $anomaly['path'] ) && is_string( $anomaly['path'] ) && '' !== $anomaly['path'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['path'], 0, 128, 'UTF-8' ) : substr( $anomaly['path'], 0, 128 ) ) : '';
+				$anomaly_window = isset( $anomaly['window'] ) && is_string( $anomaly['window'] ) && '' !== $anomaly['window'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['window'], 0, 128, 'UTF-8' ) : substr( $anomaly['window'], 0, 128 ) ) : '';
+				// Enriched anomaly context (issue #1384): every rendered
+				// notice carries route plus p75 plus baseline plus delta
+				// plus samples alongside the legacy change keys.
+				$anomaly_context = array(
+					'route'    => isset( $anomaly['route'] ) ? (string) $anomaly['route'] : ( isset( $anomaly['key'] ) ? (string) $anomaly['key'] : '' ),
+					'metric'   => isset( $anomaly['metric'] ) ? (string) $anomaly['metric'] : 'lcp',
+					'p75'      => isset( $anomaly['p75'] ) ? (float) $anomaly['p75'] : 0.0,
+					'baseline' => isset( $anomaly['baseline'] ) ? (float) $anomaly['baseline'] : 0.0,
+					'delta'    => isset( $anomaly['delta'] ) ? (float) $anomaly['delta'] : 0.0,
+					'samples'  => isset( $anomaly['samples'] ) ? (int) $anomaly['samples'] : 0,
+				);
 				if ( 'cls' === ( $anomaly['metric'] ?? 'lcp' ) ) {
 					$change_abs = isset( $anomaly['change_abs'] ) ? (float) $anomaly['change_abs'] : 0.0;
-					/* translators: %s is the CLS absolute increase vs baseline. */
-					$cls_value     = sprintf( __( 'CLS +%s vs baseline', 'performance-optimisation' ), number_format( $change_abs, 2 ) );
+					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
+						/* translators: 1: CLS absolute increase vs baseline, 2: affected path, 3: compared window. */
+						$cls_value = sprintf( __( 'CLS +%1$s on %2$s (%3$s)', 'performance-optimisation' ), number_format( $change_abs, 2 ), $anomaly_path, $anomaly_window );
+						/* translators: %s is the affected path. */
+						$cls_description = sprintf( __( 'AI: CLS regression detected on %s', 'performance-optimisation' ), $anomaly_path );
+					} else {
+						/* translators: %s is the CLS absolute increase vs baseline. */
+						$cls_value       = sprintf( __( 'CLS +%s vs baseline', 'performance-optimisation' ), number_format( $change_abs, 2 ) );
+						$cls_description = __( 'AI: CLS regression detected', 'performance-optimisation' );
+					}
 					$suggestions[] = array(
 						'metric'      => 'ai_cls_regression',
 						'value'       => $cls_value,
 						'unit'        => 'string',
 						'status'      => 'needs_improvement',
-						'description' => __( 'AI: CLS regression detected', 'performance-optimisation' ),
+						'description' => $cls_description,
 						'fix_action'  => 'open_image_optimization_tab',
 						'ai_payload'  => array(
 							'tab'      => 'image_optimisation',
 							'settings' => array(),
+							'anomaly'  => $anomaly_context,
+						),
+					);
+				} elseif ( 'inp' === ( $anomaly['metric'] ?? '' ) ) {
+					$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
+					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
+						/* translators: 1: INP percentage increase vs baseline, 2: affected path, 3: compared window. */
+						$value = sprintf( __( 'INP +%1$d%% on %2$s (%3$s)', 'performance-optimisation' ), (int) round( $change_pct ), $anomaly_path, $anomaly_window );
+						/* translators: %s is the affected path. */
+						$description = sprintf( __( 'AI: INP regression detected on %s', 'performance-optimisation' ), $anomaly_path );
+					} else {
+						/* translators: %d is the INP percentage increase vs baseline. */
+						$value       = sprintf( __( 'INP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
+						$description = __( 'AI: INP regression detected', 'performance-optimisation' );
+					}
+					$suggestions[] = array(
+						'metric'      => 'ai_inp_regression',
+						'value'       => $value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => $description,
+						'fix_action'  => 'open_file_optimization_tab',
+						'ai_payload'  => array(
+							'tab'      => 'file_optimisation',
+							'settings' => array(),
+							'anomaly'  => $anomaly_context,
 						),
 					);
 				} else {
 					$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
-					/* translators: %d is the LCP percentage increase vs baseline. */
-					$value         = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
+					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
+						/* translators: 1: LCP percentage increase vs baseline, 2: affected path, 3: compared window. */
+						$value = sprintf( __( 'LCP +%1$d%% on %2$s (%3$s)', 'performance-optimisation' ), (int) round( $change_pct ), $anomaly_path, $anomaly_window );
+						/* translators: %s is the affected path. */
+						$description = sprintf( __( 'AI: LCP regression detected on %s', 'performance-optimisation' ), $anomaly_path );
+					} else {
+						/* translators: %d is the LCP percentage increase vs baseline. */
+						$value       = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
+						$description = __( 'AI: LCP regression detected', 'performance-optimisation' );
+					}
 					$suggestions[] = array(
 						'metric'      => 'ai_lcp_regression',
 						'value'       => $value,
 						'unit'        => 'string',
 						'status'      => 'needs_improvement',
-						'description' => __( 'AI: LCP regression detected', 'performance-optimisation' ),
+						'description' => $description,
 						'fix_action'  => 'open_image_optimization_tab',
 						'ai_payload'  => array(
 							'tab'      => 'image_optimisation',
 							'settings' => array(),
+							'anomaly'  => $anomaly_context,
 						),
 					);
 				}

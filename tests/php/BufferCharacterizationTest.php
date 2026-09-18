@@ -1,14 +1,14 @@
 <?php
 /**
- * Buffer orchestration characterization tests (issue #905).
+ * Buffer orchestration characterization tests (issue #905, single-buffer routing issue #1386).
  *
- * Pins CURRENT behaviour of the triple-path dual-era buffer orchestration
- * (Main::setup_hooks cache/used-css/LCP registration + Cache::start_output_buffer
- * self-gate): HTML vs non-HTML, JSON/AJAX/REST bypass, WP 6.9 dual path vs
- * legacy fallback, LiteSpeed interplay, cache-write ordering, DONOTCACHEPAGE.
+ * Pins the single-path buffer orchestration (Main::setup_hooks cache/used-css/LCP
+ * registration + Cache::start_output_buffer retirement gates): HTML vs non-HTML,
+ * JSON/AJAX/REST bypass, WP 6.9 core-only path vs pre-6.9 legacy fallback,
+ * LiteSpeed interplay, cache-write ordering, DONOTCACHEPAGE.
  *
- * These are characterization tests — they document what the code does today,
- * not what it should do. No behaviour change in this step.
+ * On WP 6.9+ exactly one core buffer path is registered per consumer (no private
+ * ob_start capture); pre-6.9 keeps the legacy template_redirect captures.
  *
  * @package PerformanceOptimise\Tests
  */
@@ -518,9 +518,13 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * WP 6.9+ with cache enabled registers BOTH the enhancement filter and the legacy fallback.
+	 * WP 6.9+ with cache enabled registers ONLY the core enhancement path
+	 * (issue #1386 retirement): the filter processes, the finalized action
+	 * persists, and no legacy template_redirect capture is registered — even
+	 * when the runtime core predicate reports inactive (opt-out degrades to
+	 * uncached streaming output, never a private buffer).
 	 */
-	public function test_setup_hooks_registers_dual_path_on_wp69(): void {
+	public function test_setup_hooks_registers_single_path_on_wp69(): void {
 		$captured = $this->capture_setup_hooks(
 			array(
 				'cache_settings'    => array( 'enableCache' => true ),
@@ -530,7 +534,8 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 			false
 		);
 		$this->assertNotNull( $this->find_hook( $captured['filters'], 'wp_template_enhancement_output_buffer', 'process_buffer_for_cache' ) );
-		$this->assertNotNull( $this->find_hook( $captured['actions'], 'template_redirect', 'start_output_buffer' ) );
+		$this->assertNotNull( $this->find_hook( $captured['actions'], 'wp_finalized_template_enhancement_output_buffer', 'stash_cache' ) );
+		$this->assertNull( $this->find_hook( $captured['actions'], 'template_redirect', 'start_output_buffer' ) );
 	}
 
 	/**
@@ -550,7 +555,7 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Standalone used-CSS registers its dual path only when page cache is off.
+	 * Standalone used-CSS registers its single core path only when page cache is off.
 	 */
 	public function test_setup_hooks_registers_used_css_standalone(): void {
 		$captured = $this->capture_setup_hooks(
@@ -562,7 +567,7 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 			false
 		);
 		$this->assertNotNull( $this->find_hook( $captured['filters'], 'wp_template_enhancement_output_buffer', 'process_used_css_only' ) );
-		$this->assertNotNull( $this->find_hook( $captured['actions'], 'template_redirect', 'start_used_css_buffer' ) );
+		$this->assertNull( $this->find_hook( $captured['actions'], 'template_redirect', 'start_used_css_buffer' ) );
 
 		// With page cache on, the standalone used-CSS path stays unregistered.
 		$captured = $this->capture_setup_hooks(
@@ -577,9 +582,9 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * LCP path registers the enhancement filter (30) plus legacy fallback (20).
+	 * LCP path registers ONLY the enhancement filter (30) on 6.9+ (issue #1386).
 	 */
-	public function test_setup_hooks_registers_lcp_dual_path(): void {
+	public function test_setup_hooks_registers_lcp_single_path(): void {
 		$captured = $this->capture_setup_hooks(
 			array(
 				'cache_settings'     => array(),
@@ -592,9 +597,8 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		$filter   = $this->find_hook( $captured['filters'], 'wp_template_enhancement_output_buffer', 'prioritize_lcp_in_buffer' );
 		$action   = $this->find_hook( $captured['actions'], 'template_redirect', 'start_lcp_priority_buffer' );
 		$this->assertNotNull( $filter );
-		$this->assertNotNull( $action );
+		$this->assertNull( $action );
 		$this->assertSame( 30, $filter[2] );
-		$this->assertSame( 20, $action[2] );
 	}
 
 	/**
@@ -815,5 +819,118 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		$method = new \ReflectionMethod( $cache, 'maybe_store_cache' );
 		$this->assertFalse( $method->invoke( $cache ) );
 		\Brain\Monkey\tearDown();
+	}
+
+	/**
+	 * Canonical core-buffer predicate (issue #1386): 6.9+ with the API
+	 * routes through core; older cores (or a missing API) stay legacy.
+	 */
+	public function test_should_use_core_template_buffer_predicate(): void {
+		$GLOBALS['wp_version'] = '6.9';
+		Functions\when( 'wp_should_output_buffer_template_for_enhancement' )->justReturn( false );
+		$this->assertTrue( Main::should_use_core_template_buffer() );
+
+		$GLOBALS['wp_version'] = '6.8.2';
+		$this->assertFalse( Main::should_use_core_template_buffer() );
+
+		unset( $GLOBALS['wp_version'] );
+		// get_bloginfo() falls back to '6.8' via the common stubs.
+		$this->assertFalse( Main::should_use_core_template_buffer() );
+	}
+
+	/**
+	 * Private captures stay retired on 6.9+ even when core reports the
+	 * buffer inactive for this request (issue #1386): opt-out degrades to
+	 * uncached streaming output, never a private ob_start capture.
+	 */
+	public function test_private_buffers_retired_on_wp69_opt_out(): void {
+		$GLOBALS['wp_version'] = '6.9';
+		Functions\when( 'wp_should_output_buffer_template_for_enhancement' )->justReturn( false );
+		$level_before = ob_get_level();
+
+		( $this->make_cache() )->start_output_buffer();
+		$this->assertSame( $level_before, ob_get_level() );
+
+		$main = $this->make_main( array( 'cache_settings' => array() ) );
+		$main->start_used_css_buffer();
+		$main->start_lcp_priority_buffer();
+		$this->assertSame( $level_before, ob_get_level() );
+		unset( $GLOBALS['wp_version'] );
+	}
+
+	/**
+	 * Mid-template buffer cancel is non-fatal (issue #1386): every core-path
+	 * callback degrades a non-string (false/null from a cancelled buffer)
+	 * to a string or a skipped write instead of throwing.
+	 */
+	public function test_buffer_callbacks_survive_mid_template_cancel(): void {
+		$cache = $this->make_cache();
+		$this->assertSame( '', $cache->process_buffer_for_cache( false, false ) );
+		$this->assertSame( '', $cache->process_buffer_for_cache( null, null ) );
+		$cache->stash_cache( false );
+		$cache->stash_cache( null );
+
+		$main = $this->make_main( array( 'cache_settings' => array() ) );
+		$this->assertSame( '', $main->process_used_css_only( false, false ) );
+		$this->assertSame( '', $main->process_used_css_capture( false ) );
+
+		$prop = new \ReflectionProperty( Main::class, 'image_optimisation' );
+		$lcp  = $prop->getValue( $main );
+		$this->assertSame( '', $lcp->prioritize_lcp_in_buffer( false ) );
+		$this->addToAssertionCount( 1 );
+	}
+
+	/**
+	 * Late-enqueued block styles hoist after the block library with the
+	 * cascade intact (issue #1386): body-printed per-block links move to
+	 * directly after block-library in their original relative order.
+	 */
+	public function test_hoist_late_block_styles_preserves_cascade(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$html  = '<html><head>';
+		$html .= '<link rel="stylesheet" id="wp-block-library-css" href="http://example.com/wp-includes/css/dist/block-library/style.css" media="all" />'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+		$html .= '</head><body><p>hi</p>';
+		$html .= '<link rel="stylesheet" id="wp-block-cover-css" href="http://example.com/wp-includes/css/dist/blocks/cover/style.css" media="all" />'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+		$html .= '<link rel="stylesheet" id="wp-block-gallery-css" href="http://example.com/wp-includes/blocks/gallery/style.css" media="all" />'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+		$html .= '</body></html>';
+
+		$hoisted = $this->invoke_private( $this->make_cache(), 'hoist_late_block_styles', array( $html ) );
+
+		$lib_pos     = strpos( $hoisted, 'block-library/style.css' );
+		$cover_pos   = strpos( $hoisted, 'blocks/cover/style.css' );
+		$gallery_pos = strpos( $hoisted, 'blocks/gallery/style.css' );
+		$head_close  = stripos( $hoisted, '</head>' );
+		$this->assertNotFalse( $lib_pos );
+		$this->assertNotFalse( $cover_pos );
+		$this->assertNotFalse( $gallery_pos );
+		$this->assertNotFalse( $head_close );
+		// Library first, then per-block links in original order, all in head.
+		$this->assertLessThan( $cover_pos, $lib_pos );
+		$this->assertLessThan( $gallery_pos, $cover_pos );
+		$this->assertLessThan( $head_close, $gallery_pos );
+		// No stylesheet link remains in the body.
+		$body = substr( $hoisted, $head_close );
+		$this->assertFalse( stripos( $body, '<link' ) );
+
+		// Idempotent: a second pass is a no-op.
+		$this->assertSame( $hoisted, $this->invoke_private( $this->make_cache(), 'hoist_late_block_styles', array( $hoisted ) ) );
+	}
+
+	/**
+	 * New core-parity callbacks use the HTML API only (issue #1386): the
+	 * hoist plus the canonical predicate contain no regex calls.
+	 */
+	public function test_new_buffer_callbacks_use_no_regex(): void {
+		foreach ( array(
+			array( Cache::class, 'hoist_late_block_styles' ),
+			array( Main::class, 'should_use_core_template_buffer' ),
+		) as $ref ) {
+			$method = new \ReflectionMethod( $ref[0], $ref[1] );
+			$lines  = file( (string) $method->getFileName() );
+			$this->assertNotFalse( $lines );
+			$source = implode( '', array_slice( $lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1 ) );
+			$this->assertStringNotContainsString( 'preg_', $source, $ref[1] . ' must not use regex' );
+			$this->assertStringNotContainsString( 'mb_ereg', $source, $ref[1] . ' must not use regex' );
+		}
 	}
 }

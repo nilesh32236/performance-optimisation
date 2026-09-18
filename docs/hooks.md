@@ -1146,12 +1146,12 @@ Filters the RUM-ranked top URLs for the gated speculation list rule (issue #1061
 ---
 
 ### `wppo_ai_anomaly_detected`
-Filters the detected performance anomalies (LCP +30% relative or CLS +0.05 absolute delta, RUM-corroborated, 7-day cooldown). @since 2.0.0.
+Filters the detected performance anomalies (LCP +30% relative or CLS +0.05 absolute delta, RUM-corroborated, 7-day cooldown; plus the local RUM anomaly digest covering LCP/INP +30% relative and CLS +0.05 absolute delta as recent-window medians vs baseline with min-sample gate + tolerance band, @since NEXT). @since 2.0.0.
 
-At most one anomaly is passed; return an empty array to suppress the banner. The legacy `wppo_ai_lcp_regression` filter still runs for LCP anomalies.
+At most one anomaly is passed; return an empty array to suppress the banner. The legacy `wppo_ai_lcp_regression` filter still runs for LCP anomalies. Digest entries (source `rum-digest`, @since NEXT) carry the trend shape plus `path`, `recent`, `window` (e.g. `recent 2026-09-10 vs baseline 2026-09-01 to 2026-09-09`), `samples`, and `source` so the alert can link the affected path and window; the `metric` may be `lcp`, `inp` (digest only — lab trends carry no INP snapshots), or `cls`.
 
 **Parameters:**
-- `$anomalies` *(array[])* — At most one anomaly array (`key`, `metric` (`lcp`|`cls`), `baseline`, `current`, plus `change_pct` for LCP or `change_abs` for CLS).
+- `$anomalies` *(array[])* — At most one anomaly array (`key`, `metric` (`lcp`|`cls`, plus `inp` for digest entries), `baseline`, `current`, plus `change_pct` for LCP/INP or `change_abs` for CLS; digest entries add `path`, `recent`, `window`, `samples`, `source`).
 
 ---
 
@@ -1172,10 +1172,42 @@ Filters the anomaly cooldown window in days (single banner max). @since 2.0.0.
 ---
 
 ### `wppo_ai_anomaly_min_samples`
-Filters the minimum numeric samples before an anomaly arm may fire (trend arm and RUM corroboration gate). @since 2.0.0.
+Filters the minimum numeric samples before an anomaly arm may fire (trend arm and RUM corroboration gate, plus both digest windows). @since 2.0.0.
 
 **Parameters:**
 - `$min` *(int)* — Minimum samples (default 10, from `ai_adaptive.anomaly_min_samples`).
+
+---
+
+### `wppo_ai_anomaly_tolerance_pct`
+Filters the relative tolerance band (percent) above a relative digest arm threshold (issue #1445). The LCP/INP digest arm fires only when the recent-window median clears `baseline * 1.3 * (1 + tolerance/100)`, so borderline wobble inside the band stays silent. @since NEXT.
+
+**Parameters:**
+- `$tolerance` *(float)* — Tolerance percent (default 5.0, from `ai_adaptive.anomaly_tolerance_pct`, clamped 0–50).
+
+---
+
+### `wppo_ai_anomaly_tolerance_abs`
+Filters the absolute tolerance band added to the CLS digest threshold (issue #1445). The CLS digest arm fires only when the recent-window median clears `baseline + 0.05 + tolerance`, so borderline wobble inside the band stays silent. @since NEXT.
+
+**Parameters:**
+- `$tolerance` *(float)* — Absolute tolerance (default 0.01, from `ai_adaptive.anomaly_tolerance_abs`, clamped 0–1).
+
+---
+
+### `wppo_ai_anomaly_persistence_windows`
+Filters the number of trailing windows that must each breach the ratio/delta gate before an anomaly may page (single noisy windows never page). @since NEXT. Values are clamped to 1–29 (trend history holds 30 snapshots and detection needs persistence+1 samples for a non-empty baseline, so 29 keeps every admittable value reachable).
+
+**Parameters:**
+- `$windows` *(int)* — Trailing windows (default 3, from `ai_adaptive.anomaly_persistence_windows`).
+
+---
+
+### `wppo_ai_anomaly_p75_min_samples`
+Filters the minimum RUM samples before field data may corroborate a trend anomaly (enforced per metric arm). @since NEXT. Values are clamped to 1–30.
+
+**Parameters:**
+- `$min` *(int)* — Minimum RUM samples (default 10, from `ai_adaptive.anomaly_p75_min_samples`).
 
 ---
 

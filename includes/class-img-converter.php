@@ -336,7 +336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Imagick fallback when GD `imageavif()` is missing (Imagick-only
 		 * AVIF hosts). Fail-open: any probe failure means false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when Imagick reports an AVIF delegate.
 		 */
@@ -389,7 +389,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Fail-open: returns false on any failure; callers fall back to
 		 * WebP, else the original.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @param string $dest_path    Filesystem path for the `.avif` output.
@@ -508,7 +508,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			$threshold = (int) $threshold;
-			if ( $threshold < 0 ) {
+			if ( 0 > $threshold ) { // Audit #1434: Yoda.
 				$threshold = 0;
 			}
 
@@ -809,7 +809,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * polyglot accepted by a lenient parser can never reach a delegate-based
 		 * decoder (PostScript/SVG/MVG RCE class). Fail-closed: unknown mimes skip.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $mime Detected MIME (e.g. from getimagesize()).
 		 * @return bool True when the MIME is a decodable bitmap type.
 		 */
@@ -835,7 +835,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return bool True when the image exceeds the budget and must be skipped.
 		 */
 		public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
-			if ( $width <= 0 || $height <= 0 ) {
+			if ( 0 >= $width || 0 >= $height ) { // Audit #1434: Yoda.
 				// Corrupt headers (non-positive dimensions) are not an
 				// oversize skip: return false so the caller falls through
 				// to the normal `failed` path instead of `skipped`.
@@ -962,7 +962,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * step fails. Only ever shrinks — never enlarges. Multisite-safe:
 		 * pure compute, no options/DB writes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param resource|\GdImage $image  Decoded GD image resource.
 		 * @param int               $width  Source width in pixels.
@@ -1044,7 +1044,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * original file is never modified. Multisite-safe: pure compute, no
 		 * options/DB writes, no cross-site unlink.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int $width    Source width in pixels.
 		 * @param int $height   Source height in pixels.
@@ -1128,7 +1128,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				/**
 				 * Filter the memory-safe longest edge in pixels.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param int $safe     Computed safe longest edge in pixels.
 				 * @param int $width    Source width in pixels.
 				 * @param int $height   Source height in pixels.
@@ -1162,7 +1162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * below still runs inside the caller's try/catch. Multisite-safe:
 		 * pure compute, no options/DB writes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param \Imagick $imagick Imagick instance to guard.
 		 * @return void
@@ -1204,7 +1204,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * "cannot decode safely" and skip, not fall back to a full-size
 		 * `imagecreatefrom*()`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source    Absolute filesystem path to the source image.
 		 * @param int    $safe_edge Memory-safe longest edge in pixels.
@@ -1333,7 +1333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * gates local LQIP placeholder emission (issue #1158). Fail-open:
 		 * any probe failure returns true so conversion behaviour is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when oversized siblings should be discarded.
 		 */
@@ -1343,7 +1343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				/**
 				 * Filter the size-compare smart-compress + local LQIP pipeline.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param bool $enabled Whether the pipeline is enabled.
 				 */
 				$enabled = apply_filters( 'wppo_smart_pipeline_enabled', (bool) $enabled );
@@ -1360,7 +1360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Fail-open (returns false) when the pipeline is disabled, when
 		 * either file is missing/unreadable, or when sizes cannot be measured.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source_path  Filesystem path to the source image.
 		 * @param string $sibling_path Filesystem path to the converted sibling.
@@ -1390,7 +1390,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			/**
 			 * Filter whether an oversized converted sibling is discarded.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param bool   $discard      Whether to discard the sibling.
 			 * @param string $source_path  Filesystem path to the source image.
 			 * @param string $sibling_path Filesystem path to the converted sibling.
@@ -1410,7 +1410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * traversal path can never delete outside it. Fail-open keeps the
 		 * file intact on any failure.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source_path  Filesystem path to the source image.
 		 * @param string $sibling_path Filesystem path to the converted sibling.
@@ -1454,7 +1454,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * the discarded one as `skipped`); only the aggregate return value
 		 * reflects the both-must-win contract.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @param string $sibling_path Filesystem path to the converted sibling.

@@ -26,7 +26,7 @@
  * serves translations with OPCache acceleration.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

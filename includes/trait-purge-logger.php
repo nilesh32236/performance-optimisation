@@ -7,7 +7,7 @@
  * purger reaches the others.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -20,7 +20,7 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 	/**
 	 * Shared throttled purge-failure logging.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	trait Purge_Logger {
 
@@ -32,7 +32,7 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 		 * so a prolonged outage cannot spam `wppo_activity_logs`. Fail-open:
 		 * logging never breaks the purge path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $service        Service tag (e.g. 'cloudflare', 'cloudflare-edge', 'bunny-edge').
 		 * @param string $detail         Endpoint / reason (truncated to 200 chars in the activity log).
 		 * @param string $log_prefix     Debug-log prefix (default 'Edge purge failed').
@@ -52,9 +52,9 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 					$throttle_key = Util::transient_key( $throttle_group . '_' . $service_slug );
 					if ( false === get_transient( $throttle_key ) ) {
 						set_transient( $throttle_key, 1, $throttle_ttl > 0 ? $throttle_ttl : 60 );
-						// Audit #1362: byte-truncation can split multibyte text.
-						$excerpt = function_exists( 'mb_substr' ) ? mb_substr( $detail, 0, 200, 'UTF-8' ) : substr( $detail, 0, 200 );
-						Log::add( $log_prefix . ' [' . $service . ']: ' . $excerpt );
+						// Audit #1434: no pre-truncation — Log::add() owns the
+						// UTF-8 boundary-safe 255-char cut in one place.
+						Log::add( $log_prefix . ' [' . $service . ']: ' . $detail );
 					}
 				}
 			} catch ( \Throwable $e ) {
