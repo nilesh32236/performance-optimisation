@@ -100,7 +100,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @since 2.0.0
 		 * @var string|null
 		 */
-		// Audit #1434: clearable via reset_cache().
+		/**
+		 * Parsed preload-exclude URL list memo (audit #1434: clearable via reset_cache()).
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
 		private static ?array $exclude_urls_memo = null;
 
 		private static ?string $cached_effective_mode = null;

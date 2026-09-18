@@ -69,7 +69,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
-		public function __construct( string $file_path, string $cache_dir ) { // Audit #1434: typed like Minify\CSS.
+		public function __construct( string $file_path, string $cache_dir ) {
+			// Audit #1434: typed like Minify\CSS.
 			// Traversal-safe by construction (issue #1179): the shared
 			// Util::validate_minify_path() gate rejects ../, NUL bytes,
 			// stream wrappers, and .php targets, resolves symlinks via

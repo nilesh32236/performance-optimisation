@@ -336,8 +336,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$http_code = (int) wp_remote_retrieve_response_code( $response );
 
 			if ( 200 !== $http_code ) {
-				// Translators: %1$d is the HTTP status code, %2$s is the URL.
 				// Audit #1434: raw for storage (esc_url display-encoding pollutes stored data).
+				/* translators: %1$d: HTTP status code, %2$s: URL. */
 				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url_raw( $url ) );
 				Log::add( $msg );
 				self::store_failure( $url, $strategy, $msg );

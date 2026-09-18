@@ -680,7 +680,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			// job could neither be queued nor confirmed pending, so the
 			// timestamp must not advance — otherwise the rescan is marked
 			// completed without scans actually being scheduled.
-			if ( $all_queued && 0 < $newly_queued ) { // Audit #1434: Yoda. {
+			if ( $all_queued && 0 < $newly_queued ) { // Audit #1434: Yoda.
 				update_option( 'wppo_web_vitals_last_rescan', time(), false );
 			}
 		}
