@@ -344,6 +344,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$greatest_parent_id = 0;
 			$has_more           = true;
 
+			// Audit #1469: wall-clock deadline like clean_unattached_media() —
+			// huge backlogs break out; the next scheduled run picks up rest.
+			$rev_budget = (int) apply_filters( 'wppo_revisions_time_budget', 20 );
+			if ( $rev_budget < 1 ) {
+				$rev_budget = 20;
+			}
+			$rev_deadline = microtime( true ) + $rev_budget;
+
 			do {
 				$wpdb->last_error = '';
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -365,6 +373,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 				$greatest_parent_id = (int) end( $parent_ids );
 				$has_more           = ( count( $parent_ids ) === 200 );
+			if ( $has_more && microtime( true ) >= $rev_deadline ) {
+				$has_more = false;
+			}
 
 				foreach ( $parent_ids as $parent_id ) {
 					$last_date      = null;
@@ -2393,6 +2404,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$affected_tables = array();
 
 			list( $rev_max_age, $rev_keep ) = self::get_revision_defaults();
+			// Audit #1469: defer per-type invalidation; single invalidate below.
+			self::$defer_counts_invalidation = true;
 			foreach ( $methods as $key => $method ) {
 				if ( 'revisions' === $key ) {
 					$res = self::invoke_cleanup_method( $method, $rev_max_age, $rev_keep );
@@ -2430,6 +2443,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			do_action( 'wppo_database_cleanup_completed', 'all', $total_deleted, $results );
 
 			self::maybe_optimize_tables( $affected_tables, true );
+
+			self::$defer_counts_invalidation = false;
+			self::invalidate_counts_cache();
 
 			return $results;
 		}
@@ -2482,6 +2498,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$failures        = array();
 			$affected_tables = array();
 
+			// Audit #1469: defer per-type invalidation; single invalidate below.
+			self::$defer_counts_invalidation = true;
 			foreach ( $methods as $method ) {
 				if ( 'clean_revisions_advanced' === $method ) {
 					$result = self::invoke_cleanup_method( $method, $max_age, $keep );
@@ -2522,6 +2540,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 			$optimize_enabled = ! empty( $settings['dbOptimize'] );
 			self::maybe_optimize_tables( $affected_tables, $optimize_enabled );
+
+			self::$defer_counts_invalidation = false;
+			self::invalidate_counts_cache();
 
 			return $failures;
 		}
@@ -2778,7 +2799,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( false === $res ) {
 				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
-			self::invalidate_counts_cache();
+			if ( ! self::$defer_counts_invalidation ) {
+				self::invalidate_counts_cache();
+			}
 			return $res;
 		}
 
@@ -2788,6 +2811,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @since 2.0.0
 		 * @return void
 		 */
+		// Audit #1469: batch deferral flag — clean_all()/auto_clean() set
+		// this around their loops so per-type calls skip invalidation and
+		// the wrapper invalidates once.
+		private static $defer_counts_invalidation = false;
+
 		public static function invalidate_counts_cache(): void {
 			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				// Monotonic increment: same-second mutations must produce

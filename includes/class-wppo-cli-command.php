@@ -438,7 +438,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$img_converter     = new Img_Converter( $options );
 				$img_info          = Img_Converter::get_img_info();
 				$conversion_format = $format ? $format : ( $options['image_optimisation']['conversionFormat'] ?? 'webp' );
-				$batch_size        = $options['image_optimisation']['batch'] ?? 50;
+				// Audit #1469: clamp — an unbounded setting would convert
+				// synchronously in-process without limit.
+				$batch_size        = max( 1, min( 200, (int) ( $options['image_optimisation']['batch'] ?? 50 ) ) );
 
 				$formats_to_process = array();
 				if ( 'both' === $conversion_format ) {
@@ -2183,12 +2185,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					);
 					// phpcs:enable
 					$as_hooks = array();
-					if ( is_array( $actions ) ) {
-						foreach ( $actions as $action_id ) {
-							if ( function_exists( 'as_get_scheduled_action' ) ) {
-								$action = as_get_scheduled_action( $action_id );
-								if ( is_object( $action ) && method_exists( $action, 'get_hook' ) ) {
-									$as_hooks[] = (string) $action->get_hook();
+					if ( is_array( $actions ) && ! empty( $actions ) ) {
+						// Audit #1469: single bulk hook lookup instead of N+1 per-ID
+						// object hydrations (one store read per action ID).
+						global $wpdb;
+						$id_list = implode( ',', array_map( 'absint', $actions ) );
+						if ( '' !== $id_list && isset( $wpdb ) ) {
+							// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk read-only mapping for CLI verify; IDs are absint-cast.
+							$hook_rows = $wpdb->get_col( "SELECT DISTINCT hook FROM {$wpdb->prefix}actionscheduler_actions WHERE action_id IN ( $id_list )" );
+							if ( is_array( $hook_rows ) ) {
+								foreach ( $hook_rows as $hook_name ) {
+									if ( is_string( $hook_name ) && '' !== $hook_name ) {
+										$as_hooks[] = $hook_name;
+									}
 								}
 							}
 						}
