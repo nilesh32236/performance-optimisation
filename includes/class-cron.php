@@ -1696,8 +1696,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						}
 						// Uploads containment: crafted queue entries pointing
 						// at config/drop-in files are skipped with the file
-						// intact; convert_image() re-asserts the same gate.
-						if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_protected_config_path' ) && Img_Converter::is_protected_config_path( $source_path ) ) {
+						// intact. Both the lexical queue path and the
+						// realpath-resolved target are checked so a symlink
+						// inside uploads pointing at wp-config.php is refused
+						// here; convert_image() remains the authoritative
+						// resolved gate and re-asserts the same refusal.
+						if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_protected_config_path' ) && ( Img_Converter::is_protected_config_path( $source_path ) || Img_Converter::is_protected_config_path( wp_normalize_path( $resolved ) ) ) ) {
 							continue;
 						}
 

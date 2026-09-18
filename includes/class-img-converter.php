@@ -730,10 +730,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 			$normalized = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $path ) : str_replace( '\\', '/', $path );
 			$lower      = strtolower( $normalized );
-			$basename   = strtolower( (string) substr( $lower, (int) strrpos( $lower, '/' ) + 1 ) );
+			$pos        = strrpos( $lower, '/' );
+			$basename   = false === $pos ? $lower : substr( $lower, $pos + 1 );
 			if ( in_array( $basename, array( 'wp-config.php', 'advanced-cache.php', 'object-cache.php' ), true ) ) {
 				return true;
 			}
+			// The basename gate above intentionally shadows the exact-path list
+			// below (any wp-config.php/advanced-cache.php/object-cache.php is
+			// already refused, including a benign upload literally carrying one
+			// of those names — fail-safe direction). The exact ABSPATH /
+			// WP_CONTENT_DIR / parent-dir list is kept as defense-in-depth and
+			// for documentation/grep.
 			if ( ! defined( 'ABSPATH' ) || ! defined( 'WP_CONTENT_DIR' ) ) {
 				return false;
 			}
@@ -880,27 +887,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						return false;
 					}
 					$resolved_norm = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $resolved_target ) : str_replace( '\\', '/', $resolved_target );
-					// Canonicalize the containment roots too so symlinked
-					// docroots keep resolving consistently.
-					$roots = array( $wppo );
-					if ( '' !== $uploads_base ) {
-						$roots[] = $uploads_base;
-					}
-					foreach ( array( $wppo, $uploads_base ) as $root ) {
-						if ( '' === $root ) {
-							continue;
+					// Lexical containment first via the shared helper so the
+					// live logic cannot drift from it.
+					$contained = self::is_resolved_uploads_contained( $resolved_norm, $uploads_base, $wppo );
+					if ( ! $contained ) {
+						// Canonicalize the containment roots too so symlinked
+						// docroots keep resolving consistently. Resolved roots
+						// are cached per uploads/wppo pair to avoid fresh
+						// realpath() stats on every delete/write gate.
+						static $resolved_roots_cache = array();
+						$roots_cache_key             = $wppo . '|' . $uploads_base;
+						if ( ! isset( $resolved_roots_cache[ $roots_cache_key ] ) ) {
+							$extra_roots = array();
+							foreach ( array( $wppo, $uploads_base ) as $root ) {
+								if ( '' === $root ) {
+									continue;
+								}
+								$real_root = realpath( rtrim( $root, '/' ) );
+								if ( false !== $real_root && is_string( $real_root ) && '' !== $real_root ) {
+									$norm_root     = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $real_root ) : str_replace( '\\', '/', $real_root );
+									$extra_roots[] = rtrim( $norm_root, '/' ) . '/';
+								}
+							}
+							$resolved_roots_cache[ $roots_cache_key ] = $extra_roots;
 						}
-						$real_root = realpath( rtrim( $root, '/' ) );
-						if ( false !== $real_root && is_string( $real_root ) && '' !== $real_root ) {
-							$norm_root = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $real_root ) : str_replace( '\\', '/', $real_root );
-							$roots[]   = rtrim( $norm_root, '/' ) . '/';
-						}
-					}
-					$contained = false;
-					foreach ( $roots as $root ) {
-						if ( '' !== $root && 0 === strpos( rtrim( $resolved_norm, '/' ) . '/', $root ) ) {
-							$contained = true;
-							break;
+						$candidate_resolved = rtrim( $resolved_norm, '/' ) . '/';
+						foreach ( $resolved_roots_cache[ $roots_cache_key ] as $root ) {
+							if ( '' !== $root && 0 === strpos( $candidate_resolved, $root ) ) {
+								$contained = true;
+								break;
+							}
 						}
 					}
 					if ( ! $contained ) {
@@ -3189,12 +3205,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		private function store_placeholder_data_for_upload( array $metadata, int $attachment_id ): void {
 			$file = get_attached_file( $attachment_id );
 
-			if ( ! $file || ! file_exists( $file ) || ! is_readable( $file ) ) {
+			// Uploads containment: never touch config/drop-in files even
+			// when attachment meta is crafted. Protected-path check comes
+			// first (before any file_exists/is_readable/filesize stat) for
+			// least-privilege ordering. Fail-safe skip.
+			if ( ! is_string( $file ) || '' === $file || self::is_protected_config_path( $file ) ) {
 				return;
 			}
-			// Uploads containment: never decode config/drop-in files even
-			// when attachment meta is crafted. Fail-safe skip.
-			if ( ! is_string( $file ) || self::is_protected_config_path( $file ) ) {
+			if ( ! file_exists( $file ) || ! is_readable( $file ) ) {
 				return;
 			}
 			// Gate only the fallback string-decode path on imagecreatefromstring; direct GD loaders (imagecreatefromjpeg/png/webp/gif/avif) are independent and may exist even when the string helper is absent.
@@ -3759,13 +3777,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
-			$normalized = wp_normalize_path( $img_path );
+			$normalize  = function_exists( 'wp_normalize_path' ) ? 'wp_normalize_path' : null;
+			$normalized = null !== $normalize ? wp_normalize_path( $img_path ) : str_replace( '\\', '/', (string) $img_path );
 			// Ensure trailing slash so strpos can't match a same-prefix sibling directory.
+			// Mirrors is_safe_delete_path(): fail-safe skip when WP APIs are
+			// only partially loaded (early init / unit contexts) instead of
+			// fataling on an unguarded call.
 			static $upload_dir = array();
-			$blog_id           = get_current_blog_id();
+			$blog_id           = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 
 			if ( ! isset( $upload_dir[ $blog_id ] ) ) {
-				$upload_dir[ $blog_id ] = rtrim( wp_normalize_path( wp_upload_dir()['basedir'] ), '/' ) . '/';
+				if ( ! function_exists( 'wp_upload_dir' ) ) {
+					return false;
+				}
+				$dir  = wp_upload_dir();
+				$base = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
+				if ( '' === $base ) {
+					return false;
+				}
+				$base                   = null !== $normalize ? wp_normalize_path( $base ) : str_replace( '\\', '/', $base );
+				$upload_dir[ $blog_id ] = rtrim( $base, '/' ) . '/';
 			}
 
 			// Only queue images that live inside wp-content/uploads.
@@ -3781,7 +3812,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// passes the lexical check, so re-assert the resolved path.
 			$real_queued = function_exists( 'realpath' ) ? realpath( (string) $img_path ) : false;
 			if ( false !== $real_queued && is_string( $real_queued ) && '' !== $real_queued ) {
-				$resolved_queued = wp_normalize_path( $real_queued );
+				$resolved_queued = null !== $normalize ? wp_normalize_path( $real_queued ) : str_replace( '\\', '/', $real_queued );
 				if ( self::is_protected_config_path( $resolved_queued ) || 0 !== strpos( rtrim( $resolved_queued, '/' ) . '/', $upload_dir[ $blog_id ] ) ) {
 					return false;
 				}
@@ -3790,7 +3821,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			static $abspath = array();
 
 			if ( ! isset( $abspath[ $blog_id ] ) ) {
-				$abspath[ $blog_id ] = wp_normalize_path( ABSPATH );
+				if ( ! defined( 'ABSPATH' ) ) {
+					return false;
+				}
+				$abspath[ $blog_id ] = null !== $normalize ? wp_normalize_path( ABSPATH ) : str_replace( '\\', '/', ABSPATH );
 			}
 
 			$img_path_rel = str_replace( $abspath[ $blog_id ], '', $normalized );
