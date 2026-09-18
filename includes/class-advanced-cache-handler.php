@@ -251,6 +251,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		}
 
 		/**
+		 * Sanitize a raw host value for drop-in cache-key decisions.
+		 *
+		 * Additive alias of {@see normalize_dropin_host()} using the issue's
+		 * canonical API name (`Advanced_Cache_Handler::sanitize_host`).
+		 * Pure PHP primitives only (no `Util`, `sanitize_*`, `wp_*`, or
+		 * filter calls) so it stays safe to call pre-boot when WordPress
+		 * is never loaded.
+		 *
+		 * @param string $raw_host Raw host value (e.g. `$_SERVER['HTTP_HOST']`).
+		 * @return string Normalized lowercase host, or '' when invalid.
+		 * @since NEXT
+		 */
+		public static function sanitize_host( string $raw_host ): string {
+			return self::normalize_dropin_host( $raw_host );
+		}
+
+		/**
 		 * Atomically write the drop-in via tmp-plus-rename with backup and verification.
 		 *
 		 * Writes the generated code to a uniquely named temp sibling, verifies the
