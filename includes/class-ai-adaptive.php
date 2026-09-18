@@ -2538,7 +2538,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						if ( function_exists( 'is_finite' ) && ( ! is_finite( $baseline ) || ! is_finite( $recent ) ) ) {
 							continue;
 						}
-						$clean_path = substr( $path, 0, 128 );
+						$clean_path = function_exists( 'mb_substr' ) ? mb_substr( $path, 0, 128, 'UTF-8' ) : substr( $path, 0, 128 );
 						if ( 'cls' === $metric ) {
 							$threshold = $baseline + self::CLS_ABSOLUTE_DELTA + $tol_abs;
 							if ( $recent < $threshold ) {
@@ -3709,8 +3709,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 			if ( is_array( $anomalies ) && ! empty( $anomalies ) ) {
 				$anomaly        = $anomalies[0];
-				$anomaly_path   = isset( $anomaly['path'] ) && is_string( $anomaly['path'] ) && '' !== $anomaly['path'] ? substr( $anomaly['path'], 0, 128 ) : '';
-				$anomaly_window = isset( $anomaly['window'] ) && is_string( $anomaly['window'] ) && '' !== $anomaly['window'] ? substr( $anomaly['window'], 0, 128 ) : '';
+				$anomaly_path   = isset( $anomaly['path'] ) && is_string( $anomaly['path'] ) && '' !== $anomaly['path'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['path'], 0, 128, 'UTF-8' ) : substr( $anomaly['path'], 0, 128 ) ) : '';
+				$anomaly_window = isset( $anomaly['window'] ) && is_string( $anomaly['window'] ) && '' !== $anomaly['window'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['window'], 0, 128, 'UTF-8' ) : substr( $anomaly['window'], 0, 128 ) ) : '';
 				// Enriched anomaly context (issue #1384): every rendered
 				// notice carries route plus p75 plus baseline plus delta
 				// plus samples alongside the legacy change keys.
