@@ -1111,6 +1111,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( ! is_string( $u ) || '' === trim( $u ) ) {
 						continue;
 					}
+					// Parity with OD_Bridge::get_occluded_image_urls(): reject
+					// non-http(s) schemes before normalization resolves them
+					// against the home URL into a host+path key that could
+					// coincidentally match a real <img>.
+					$trimmed = trim( $u );
+					$scheme  = function_exists( 'wp_parse_url' ) ? wp_parse_url( $trimmed, PHP_URL_SCHEME ) : parse_url( $trimmed, PHP_URL_SCHEME ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+					if ( is_string( $scheme ) && '' !== $scheme && ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
+						continue;
+					}
 					$norm = $this->normalize_image_url( $u );
 					if ( '' !== $norm ) {
 						$occluded_set[ $norm ] = true;
@@ -1174,10 +1183,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 							if ( 1 === preg_match_all( '#\ssrcset\s*=\s*["\']([^"\']+)["\']#i', $tag, $sm ) && isset( $sm[1] ) && is_array( $sm[1] ) ) {
 								foreach ( $sm[1] as $srcset ) {
-									foreach ( preg_split( '/\s*,\s*/', trim( (string) $srcset ) ) as $part ) {
-										$bits = preg_split( '/\s+/', trim( (string) $part ), 2 );
-										if ( is_array( $bits ) && isset( $bits[0] ) && '' !== $bits[0] ) {
-											$candidates[] = (string) $bits[0];
+									foreach ( $this->split_srcset_candidates( (string) $srcset ) as $part ) {
+										$url = $this->split_srcset_item( $part )[0];
+										if ( '' !== $url ) {
+											$candidates[] = $url;
 										}
 									}
 								}
@@ -1213,10 +1222,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 					$srcset = $tags->get_attribute( 'srcset' );
 					if ( is_string( $srcset ) && '' !== $srcset ) {
-						foreach ( preg_split( '/\s*,\s*/', trim( $srcset ) ) as $part ) {
-							$bits = preg_split( '/\s+/', trim( (string) $part ), 2 );
-							if ( is_array( $bits ) && isset( $bits[0] ) && '' !== $bits[0] ) {
-								$candidates[] = (string) $bits[0];
+						foreach ( $this->split_srcset_candidates( $srcset ) as $part ) {
+							$url = $this->split_srcset_item( $part )[0];
+							if ( '' !== $url ) {
+								$candidates[] = $url;
 							}
 						}
 					}
