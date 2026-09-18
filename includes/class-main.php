@@ -3493,17 +3493,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							return;
 						}
 					} else {
-						// Mixed-version fallback: inline the safe-mode-gated
-						// dynamic-path plus unconditional Store API guards.
+						// Mixed-version fallback: mirror the Cron batch
+						// fallback — unconditional Store API / wc-ajax /
+						// faceted / generic-query guards plus safe-mode-gated
+						// dynamic-path, so a stale Util can never warm
+						// faceted or wc-ajax URLs.
 						try {
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
-								if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) {
+							$warm_path = (string) wp_parse_url( $url, PHP_URL_PATH );
+							$warm_qs   = (string) wp_parse_url( $url, PHP_URL_QUERY );
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( $warm_path, $warm_qs, '' ) ) {
+								return;
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
+								if ( Util::is_woo_ajax_request( $warm_path, $warm_qs ) ) {
 									return;
 								}
-							}
-							$warm_qs = (string) wp_parse_url( $url, PHP_URL_QUERY );
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( (string) wp_parse_url( $url, PHP_URL_PATH ), $warm_qs, '' ) ) {
+							} elseif ( (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . ltrim( (string) rawurldecode( $warm_path ), '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', $warm_qs ) ) ) {
 								return;
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
+								if ( '' !== $warm_qs && Util::is_woo_faceted_query( $warm_qs ) ) {
+									return;
+								}
+							} elseif ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])(?:filter_[^=&]*|query_type_[^=&]*|min_price|max_price|rating_filter|orderby|product_cat|pa_[^=&]*|attribute_[^=&]*|gpf_[^=&]*)(?:=|&|;|$)/i', $warm_qs ) ) {
+								return;
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) ) {
+								if ( '' !== $warm_qs && Util::has_uncacheable_query( $warm_qs ) ) {
+									return;
+								}
+							} elseif ( '' !== $warm_qs ) {
+								return;
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+								if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( $warm_path ) ) {
+									return;
+								}
 							}
 						} catch ( \Throwable $e ) {
 							unset( $e );

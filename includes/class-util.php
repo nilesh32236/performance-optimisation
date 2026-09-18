@@ -1660,7 +1660,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 								$skipped = true;
 							} elseif ( method_exists( self::class, 'is_woo_ajax_request' ) && self::is_woo_ajax_request( $probe_path, $probe_query ) ) {
 								$skipped = true;
-							} elseif ( '' !== $probe_query && method_exists( self::class, 'is_woo_add_to_cart_request' ) && self::is_woo_add_to_cart_request( $probe_query ) ) {
+							} elseif ( $safe_mode && '' !== $probe_query && method_exists( self::class, 'is_woo_add_to_cart_request' ) && self::is_woo_add_to_cart_request( $probe_query ) ) {
+								// Safe-mode gated for parity with the canonical
+								// is_woo_excluded_url(): safe-mode-off still
+								// skips via the unconditional generic guard below.
 								$skipped = true;
 							} elseif ( '' !== $probe_query && self::is_woo_faceted_query( $probe_query ) ) {
 								$skipped = true;
