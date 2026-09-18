@@ -4905,6 +4905,126 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether a queued handle is eligible for a deferred loading strategy.
+		 *
+		 * Mirrors core's WP_Scripts::get_eligible_loading_strategy() gate
+		 * (changeset 56033, issue #1466) so the native strategy write never
+		 * fights core output: core renders a handle blocking when it carries
+		 * an inline `after` script, when a blocking queued dependent relies
+		 * on it, or when it is a module/import-map script. When the registry
+		 * exposes a publicly-invocable get_eligible_loading_strategy(), that
+		 * verdict is authoritative. Otherwise a manual fallback inspects the
+		 * registered extras/dependencies. Fail-open: true on any unreadable
+		 * state so output degrades to the current behaviour, never fatal or
+		 * white-screen. Note: the unit-test WP_Scripts stand-in declares the
+		 * core method private, so is_callable() is false there and tests
+		 * exercise the manual fallback path by design.
+		 *
+		 * @since NEXT
+		 *
+		 * @param object $wp_scripts WP_Scripts registry.
+		 * @param string $handle     Script handle.
+		 * @return bool True when the handle may receive strategy defer.
+		 */
+		private function is_defer_eligible_for_handle( object $wp_scripts, string $handle ): bool {
+			if ( '' === $handle ) {
+				return true;
+			}
+			try {
+				if ( is_callable( array( $wp_scripts, 'get_eligible_loading_strategy' ) ) ) {
+					return 'defer' === $wp_scripts->get_eligible_loading_strategy( $handle );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+
+			try {
+				if ( ! isset( $wp_scripts->registered ) || ! is_array( $wp_scripts->registered ) ) {
+					return true;
+				}
+				if ( ! isset( $wp_scripts->registered[ $handle ] ) ) {
+					return true;
+				}
+				$registered = $wp_scripts->registered[ $handle ];
+				$extra      = null;
+				if ( is_object( $registered ) && isset( $registered->extra ) ) {
+					$extra = $registered->extra;
+				} elseif ( is_array( $registered ) && isset( $registered['extra'] ) ) {
+					$extra = $registered['extra'];
+				}
+				if ( is_array( $extra ) ) {
+					if ( ! empty( $extra['after'] ) ) {
+						return false;
+					}
+					if ( isset( $extra['type'] ) && 'module' === strtolower( trim( (string) $extra['type'] ) ) ) {
+						return false;
+					}
+				}
+
+				if ( ! isset( $wp_scripts->queue ) || ! is_array( $wp_scripts->queue ) ) {
+					return true;
+				}
+				$has_get_data = is_callable( array( $wp_scripts, 'get_data' ) );
+				foreach ( $wp_scripts->queue as $queued ) {
+					$queued = (string) $queued;
+					if ( '' === $queued || $queued === $handle ) {
+						continue;
+					}
+					if ( ! isset( $wp_scripts->registered[ $queued ] ) ) {
+						continue;
+					}
+					$dependent = $wp_scripts->registered[ $queued ];
+					$deps      = null;
+					if ( is_object( $dependent ) ) {
+						if ( isset( $dependent->deps ) ) {
+							$deps = $dependent->deps;
+						} elseif ( isset( $dependent->dependencies ) ) {
+							$deps = $dependent->dependencies;
+						}
+					} elseif ( is_array( $dependent ) ) {
+						if ( isset( $dependent['deps'] ) ) {
+							$deps = $dependent['deps'];
+						} elseif ( isset( $dependent['dependencies'] ) ) {
+							$deps = $dependent['dependencies'];
+						}
+					}
+					if ( ! is_array( $deps ) || ! in_array( $handle, $deps, true ) ) {
+						continue;
+					}
+					$strategy = false;
+					if ( $has_get_data ) {
+						try {
+							$strategy = $wp_scripts->get_data( $queued, 'strategy' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$strategy = false;
+						}
+					}
+					if ( false === $strategy || null === $strategy ) {
+						$dependent_extra = null;
+						if ( is_object( $dependent ) && isset( $dependent->extra ) ) {
+							$dependent_extra = $dependent->extra;
+						} elseif ( is_array( $dependent ) && isset( $dependent['extra'] ) ) {
+							$dependent_extra = $dependent['extra'];
+						}
+						if ( is_array( $dependent_extra ) && isset( $dependent_extra['strategy'] ) && is_string( $dependent_extra['strategy'] ) ) {
+							$strategy = $dependent_extra['strategy'];
+						}
+					}
+					$is_deferred_dependent = is_string( $strategy ) && in_array( strtolower( trim( $strategy ) ), array( 'async', 'defer' ), true );
+					if ( ! $is_deferred_dependent ) {
+						return false;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+			return true;
+		}
+
+		/**
 		 * Resolve the filtered fetchpriority for a deferred handle.
 		 *
 		 * Shared by the native classic path (add_defer_strategy()), the
@@ -5070,6 +5190,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				//
 				// @since NEXT.
 				if ( in_array( (string) $handle, array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' ), true ) ) {
+					continue;
+				}
+				// Eligibility gate (issue #1466): consult core's eligible
+				// strategy before stamping defer so blocking dependents,
+				// inline-after scripts, and module scripts render blocking.
+				// Fail-open inside the helper; ineligible handles stay
+				// undeferred (no strategy, no deferred mark, no
+				// fetchpriority/group) with queue order untouched.
+				//
+				// @since NEXT.
+				if ( ! $this->is_defer_eligible_for_handle( $wp_scripts, (string) $handle ) ) {
 					continue;
 				}
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
