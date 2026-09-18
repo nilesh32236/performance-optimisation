@@ -1273,7 +1273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( null === $total ) {
 				$total = self::get_autoload_total_bytes();
 			}
-			if ( null === $threshold ) {
+			if ( null === $threshold || $threshold <= 0 ) {
 				$threshold = self::get_autoload_critical_threshold();
 			}
 			return $total >= $threshold;

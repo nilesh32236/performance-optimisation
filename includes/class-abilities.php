@@ -1022,10 +1022,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				return $result;
 			}
 			try {
-				$autoloaded    = Database_Cleanup::get_autoload_count();
-				$autoload_size = Database_Cleanup::get_autoload_total_bytes();
-				$options       = Database_Cleanup::get_autoloaded_options( 20 );
-				$threshold     = Database_Cleanup::get_autoload_critical_threshold();
+				$audit         = Database_Cleanup::get_autoload_audit( 20 );
+				$autoloaded    = $audit['count'];
+				$autoload_size = $audit['total_autoload_bytes'];
+				$options       = $audit['options'];
+				$threshold     = $audit['critical_threshold'];
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				// Same shape as the success paths so consumers never branch

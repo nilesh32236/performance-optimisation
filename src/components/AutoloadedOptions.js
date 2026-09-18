@@ -26,6 +26,17 @@ import StatusBadge from './common/StatusBadge';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 /**
+ * Fallback critical autoload threshold in bytes (800 KB per the WordPress 6.6
+ * guidance). Used when the REST audit payload lacks the server-resolved
+ * critical_threshold (old cached payloads). Mirrors
+ * Database_Cleanup::AUTOLOAD_CRITICAL_BYTES.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+const CRITICAL_THRESHOLD_FALLBACK = 819200;
+
+/**
  * Validate an option name client-side before it reaches the privileged
  * autoload_remediate endpoint. Mirrors the wp_options.option_name column
  * (varchar(191)): non-empty string, max 191 chars, conservative charset.
@@ -92,7 +103,9 @@ const AutoloadedOptions = () => {
 					setAudit( {
 						total: response.data.total_autoload_bytes ?? null,
 						count: response.data.count ?? null,
-						threshold: response.data.critical_threshold ?? 819200,
+						threshold:
+							response.data.critical_threshold ??
+							CRITICAL_THRESHOLD_FALLBACK,
 						isCritical: response.data.is_critical ?? false,
 					} );
 					// Total vs Site Health threshold (fail-open: absent/non-numeric
@@ -563,7 +576,9 @@ const AutoloadedOptions = () => {
 							'performance-optimisation'
 						),
 						formatBytes( audit.total || 0 ),
-						formatBytes( audit.threshold || 819200 )
+						formatBytes(
+							audit.threshold || CRITICAL_THRESHOLD_FALLBACK
+						)
 					) }
 				</p>
 			) }
