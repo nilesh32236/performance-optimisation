@@ -8,7 +8,12 @@ import {
 import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons';
-import { apiCall, patchSettingsCache } from '../lib/apiRequest';
+import {
+	apiCall,
+	patchSettingsCache,
+	getErrorLogMessage,
+} from '../lib/apiRequest';
+import { useIsMounted } from '../lib/useAbortableFetch';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
@@ -80,6 +85,8 @@ const EdgeCachePanel = () => {
 		setBunnyZone( s.bunnyPullZoneId || '' );
 	}, [ edgeCacheKey, saving ] );
 
+	// Audit #1420: mounted guard so unmount mid-save cannot setState.
+	const isMountedRef = useIsMounted();
 	const handleSave = useCallback( async () => {
 		setSaving( true );
 		dismiss();
@@ -112,15 +119,17 @@ const EdgeCachePanel = () => {
 					cloudflareZoneId: cfZone,
 					bunnyPullZoneId: bunnyZone,
 				} );
-				notify( {
-					type: 'success',
-					message: __(
-						'Edge cache settings saved.',
-						'performance-optimisation'
-					),
-					durationMs: 3000,
-				} );
-			} else {
+				if ( isMountedRef.current ) {
+					notify( {
+						type: 'success',
+						message: __(
+							'Edge cache settings saved.',
+							'performance-optimisation'
+						),
+						durationMs: 3000,
+					} );
+				}
+			} else if ( isMountedRef.current ) {
 				notify( {
 					type: 'error',
 					message:
@@ -131,18 +140,36 @@ const EdgeCachePanel = () => {
 						),
 				} );
 			}
-		} catch {
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to save edge cache settings.',
-					'performance-optimisation'
-				),
-			} );
+		} catch ( saveError ) {
+			console.error(
+				'Save edge cache failed:',
+				getErrorLogMessage( saveError )
+			);
+			if ( isMountedRef.current ) {
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to save edge cache settings.',
+						'performance-optimisation'
+					),
+				} );
+			}
 		} finally {
-			setSaving( false );
+			if ( isMountedRef.current ) {
+				setSaving( false );
+			}
 		}
-	}, [ enabled, provider, ttl, swr, cfZone, bunnyZone, notify, dismiss ] );
+	}, [
+		enabled,
+		provider,
+		ttl,
+		swr,
+		cfZone,
+		bunnyZone,
+		notify,
+		dismiss,
+		isMountedRef,
+	] );
 
 	return (
 		<FeatureCard

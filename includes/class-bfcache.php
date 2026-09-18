@@ -65,7 +65,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * the footer printer below is a named, remove_action()-able,
 		 * inspectable, and unit-testable method.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		private static string $invalidation_script = '';
@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * Class property (instead of a function-static) so long-lived PHP
 		 * workers and unit tests can reset it via reset_state_for_tests().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static bool $script_staged = false;
@@ -425,7 +425,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * staged script is cleared after printing so a double wp_footer
 		 * cannot emit duplicate scripts (double pageshow listeners).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function print_invalidation_script(): void {
@@ -442,7 +442,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * Clears both the staged script and the already-staged flag so an
 		 * in-process second page starts clean.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_state_for_tests(): void {

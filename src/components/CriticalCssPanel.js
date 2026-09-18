@@ -1,5 +1,5 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { memo, useMemo, useRef, useState } from '@wordpress/element';
+import { memo, useMemo, useState } from '@wordpress/element';
 import {
 	faCheckCircle,
 	faExclamationTriangle,
@@ -132,18 +132,14 @@ const CriticalCssPanel = ( {
 	onRegenerateSingle,
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
-	// Audit #1354 review: per-render config cache so entries.map does
-	// not rebuild 8 objects + __() lookups per row.
-	const configCacheRef = useRef( new Map() );
-	configCacheRef.current.clear();
+	// Audit #1420: plain per-render Map (no ref mutation during render)
+	// so entries.map does not rebuild 8 objects + __() lookups per row.
+	const configCache = new Map();
 	const configFor = ( statusKey ) => {
-		if ( ! configCacheRef.current.has( statusKey ) ) {
-			configCacheRef.current.set(
-				statusKey,
-				statusConfigFor( statusKey )
-			);
+		if ( ! configCache.has( statusKey ) ) {
+			configCache.set( statusKey, statusConfigFor( statusKey ) );
 		}
-		return configCacheRef.current.get( statusKey );
+		return configCache.get( statusKey );
 	};
 	const [ singleBusy, setSingleBusy ] = useState( null );
 	// No local useNotice/NoticeBanner here (issue #1274 review): the
@@ -255,7 +251,10 @@ const CriticalCssPanel = ( {
 								<span
 									className={ `wppo-badge ${ config.className }` }
 								>
-									<FontAwesomeIcon icon={ config.icon } />
+									<FontAwesomeIcon
+										icon={ config.icon }
+										aria-hidden="true"
+									/>
 									{ config.label }
 								</span>
 								{ onRegenerateSingle && (

@@ -281,7 +281,7 @@ describe( 'PluginSetting', () => {
 			} )
 		);
 		expect(
-			screen.getByText( /Skipped 2 invalid URL\(s\)/ )
+			screen.getByText( /Skipped 2 invalid URLs/ ) // Audit #1420: _n plural.
 		).toBeInTheDocument();
 	} );
 

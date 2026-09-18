@@ -150,9 +150,14 @@ describe( 'DatabaseCleanup Component', () => {
 		} );
 		fireEvent.click( saveButton );
 
+		// Audit #1420: raw backend text stays in console; UI shows the
+		// translated generic string.
 		await waitFor( () => {
-			expect( screen.getByText( 'Save Error' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Error saving settings.' )
+			).toBeInTheDocument();
 		} );
+		expect( screen.queryByText( 'Save Error' ) ).not.toBeInTheDocument();
 	} );
 
 	it( 'shows error notification with custom message on cleanup failure with success true', async () => {

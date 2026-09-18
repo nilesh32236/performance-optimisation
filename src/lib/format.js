@@ -106,6 +106,15 @@ export const formatPercent = ( value, options = {} ) => {
  * @param {*} value Numeric value.
  * @return {string} Formatted value or '—' fallback.
  */
+/**
+ * Byte formatter for non-UI contexts (audit #1420): units stay untranslated
+ * by design (background payloads/logs). UI call sites must use the
+ * translated formatBytes() in lib/util.js instead of rendering this directly.
+ *
+ * @since NEXT
+ * @param {number} value Bytes.
+ * @return {string} e.g. '1.5 MB'.
+ */
 export const formatBytesShared = ( value ) => {
 	if ( isMissingMetric( value ) ) {
 		return '—';
