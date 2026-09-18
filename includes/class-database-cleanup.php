@@ -135,14 +135,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		private static $health_memo_time = 0.0;
 
 		/**
-		 * When true, invoke_cleanup_method() skips its per-call
-		 * invalidate_counts_cache() so batch callers (clean_all()/auto_clean())
-		 * can invalidate once after the loop (audit #1469).
+		 * Nesting depth for deferred counts-cache invalidation.
+		 *
+		 * The per-call invalidate_counts_cache() inside
+		 * invoke_cleanup_method() is skipped while this is > 0 so batch callers
+		 * (clean_all()/auto_clean()) can invalidate once after the loop
+		 * (audit #1469). An int counter (not a bool) keeps nested batch
+		 * runs re-entrant: if clean_all()/auto_clean() re-enter via a
+		 * wppo_database_cleanup_completed hook callback, the inner run's
+		 * finally only decrements and the outer run still defers until
+		 * the outermost scope exits.
 		 *
 		 * @since NEXT
-		 * @var bool
+		 * @var int
 		 */
-		private static $defer_counts_invalidation = false;
+		private static $defer_counts_invalidation = 0;
 
 		/**
 		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
@@ -359,8 +366,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			/**
 			 * Filters the wall-clock budget for one advanced-revision-cleanup pass.
 			 *
+			 * The budget has no disable value by design: values < 1 fall back
+			 * to the 20s default and the minimum effective budget is 1s, so a
+			 * huge revision backlog can never run unbounded in a cron/REST
+			 * invocation. (Unlike the wppo_minify_max_bytes filter, where 0
+			 * explicitly disables the size check, 0 here means "use default".)
+			 * Remaining parents resume on the next scheduled run.
+			 *
 			 * @since NEXT
-			 * @param int $seconds Budget in seconds. Default 20.
+			 * @param int $seconds Budget in seconds. Default 20. Values < 1 fall back to 20.
 			 */
 			$budget = (int) apply_filters( 'wppo_revisions_advanced_time_budget', 20 );
 			if ( $budget < 1 ) {
@@ -470,6 +484,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 						$revision_count = count( $revisions );
 					} while ( $revision_count === $batch_size );
 
+					// Soft time-box (mirrors clean_unattached_media()): the flush
+					// below intentionally runs once more after a deadline break
+					// so already-collected IDs are not lost; the outer loops
+					// exit on their next deadline check, bounding the overrun
+					// to one flush (audit #1469 review).
 					if ( ! empty( $pending_delete ) ) {
 						$flush_result = self::flush_revision_deletes( $pending_delete, $deleted );
 						if ( false === $flush_result ) {
@@ -2431,7 +2450,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			list( $rev_max_age, $rev_keep ) = self::get_revision_defaults();
 			// Defer per-type counts invalidation; a single invalidate below
 			// covers the whole run (audit #1469: was up to 9 salt-bumps).
-			self::$defer_counts_invalidation = true;
+			// Depth counter keeps nested runs re-entrant (see property docblock).
+			++self::$defer_counts_invalidation;
 			try {
 				foreach ( $methods as $key => $method ) {
 					if ( 'revisions' === $key ) {
@@ -2458,9 +2478,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					}
 				}
 			} finally {
-				self::$defer_counts_invalidation = false;
+				self::$defer_counts_invalidation = max( 0, self::$defer_counts_invalidation - 1 );
 			}
-			self::invalidate_counts_cache();
+			// Only the outermost batch scope invalidates; a nested run
+			// leaves the count > 0 so the outer run still defers.
+			if ( 0 === self::$defer_counts_invalidation ) {
+				self::invalidate_counts_cache();
+			}
 
 			// Standalone Action Scheduler branch (own method, not in CLEANUP_METHOD_MAP).
 			// clean_action_scheduler() returns int only (fail-open 0), so no
@@ -2527,8 +2551,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$affected_tables = array();
 
 			// Defer per-type counts invalidation; a single invalidate below
-			// covers the whole run (audit #1469).
-			self::$defer_counts_invalidation = true;
+			// covers the whole run (audit #1469). Depth counter keeps
+			// nested runs re-entrant (see property docblock).
+			++self::$defer_counts_invalidation;
 			try {
 				foreach ( $methods as $method ) {
 					if ( 'clean_revisions_advanced' === $method ) {
@@ -2561,9 +2586,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					}
 				}
 			} finally {
-				self::$defer_counts_invalidation = false;
+				self::$defer_counts_invalidation = max( 0, self::$defer_counts_invalidation - 1 );
 			}
-			self::invalidate_counts_cache();
+			// Only the outermost batch scope invalidates; a nested run
+			// leaves the count > 0 so the outer run still defers.
+			if ( 0 === self::$defer_counts_invalidation ) {
+				self::invalidate_counts_cache();
+			}
 
 			// Thin AS delegation so WP-Cron starvation does not leave the queue
 			// to grow unbounded (issue #1106). Fail-open: a 0 return is not a
@@ -2832,8 +2861,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			}
 			// Batch callers set self::$defer_counts_invalidation around their
 			// loop and invalidate once afterwards, so a full run performs one
-			// salt-bump instead of up to 9 (audit #1469).
-			if ( ! self::$defer_counts_invalidation ) {
+			// salt-bump instead of up to 9 (audit #1469). Depth > 0 means
+			// defer (re-entrant for nested batch runs).
+			if ( 0 === self::$defer_counts_invalidation ) {
 				self::invalidate_counts_cache();
 			}
 			return $res;
