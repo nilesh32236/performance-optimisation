@@ -491,16 +491,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enabled' => false,
 				),
 				'ai_adaptive'           => array(
-					'enabled'                     => false,
-					'use_wp_ai_client'            => false,
-					'field_lcp_min_samples'       => 20,
-					'dismissed_suggestions'       => array(),
-					'anomaly_cooldown_days'       => 7,
-					'anomaly_min_samples'         => 10,
-					'anomaly_tolerance_pct'       => 5.0,
-					'anomaly_tolerance_abs'       => 0.01,
-					'anomaly_persistence_windows' => 3,
-					'anomaly_p75_min_samples'     => 10,
+					'enabled'                      => false,
+					'use_wp_ai_client'             => false,
+					'field_lcp_min_samples'        => 20,
+					'dismissed_suggestions'        => array(),
+					'anomaly_cooldown_days'        => 7,
+					'anomaly_min_samples'          => 10,
+					'speculation_autotune_enabled' => false,
+					'speculation_min_samples'      => 20,
+					'speculation_max_urls'         => 5,
+					'anomaly_tolerance_pct'        => 5.0,
+					'anomaly_tolerance_abs'        => 0.01,
+					'anomaly_persistence_windows'  => 3,
+					'anomaly_p75_min_samples'      => 10,
 				),
 				'edge_cache'            => array(
 					'enabled' => false,
@@ -6080,7 +6083,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// (all four features default off). Pinned before the generic
 				// stripos 'list' branch so speculationPrerenderList never
 				// falls through to sanitize_textarea_field.
-				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList', 'purgeFailedActions' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList', 'purgeFailedActions', 'speculation_autotune_enabled' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {
@@ -6273,7 +6276,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// `image_optimisation.fieldLcpMinSamples` key so an extreme
 				// admin value cannot permanently pin auto-tune to provisional.
 				// Unrecognized values fail open to the 20 default.
-				if ( in_array( $safe_key, array( 'field_lcp_min_samples', 'fieldLcpMinSamples' ), true ) ) {
+				// Also covers the additive RUM-segmented speculation auto-tune
+				// threshold (issue #1425,
+				// `ai_adaptive.speculation_min_samples`) so a rogue value
+				// cannot pin the auto-tune to always-undersampled or
+				// always-qualified.
+				if ( in_array( $safe_key, array( 'field_lcp_min_samples', 'fieldLcpMinSamples', 'speculation_min_samples' ), true ) ) {
 					if ( is_array( $value ) ) {
 						$sanitized[ $safe_key ] = 20;
 						continue;
@@ -6283,6 +6291,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// RUM-segmented speculation auto-tune URL cap (issue #1425,
+				// `ai_adaptive.speculation_max_urls`) — int clamped to 1-5 so
+				// the speculation JSON delta stays under ~1KB. Unrecognized
+				// values fail open to the 5 default.
+				if ( 'speculation_max_urls' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 5;
+						continue;
+					}
+					$max                    = is_numeric( $value ) ? (int) $value : 5;
+					$sanitized[ $safe_key ] = min( 5, max( 1, $max ) );
+					continue;
+				}
 				// RUM anomaly digest tolerance band (issue #1445) — floats so
 				// the CLS absolute band (0.01) survives the generic
 				// is_numeric-to-int cast below. Clamped to 0–50 (percent)
