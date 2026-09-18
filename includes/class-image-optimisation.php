@@ -1602,6 +1602,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether a dimension-lookup URL may touch the local filesystem.
+		 *
+		 * The regex/processor dimension tiers resolve `data-src ?? src` via
+		 * `Util::get_local_path()`, which maps any http(s) path onto ABSPATH
+		 * without checking the host. An external image whose path collides
+		 * with a local file would inherit the wrong dimensions, and every
+		 * dimension-less external image costs a wasted `file_exists` stat.
+		 * Relative URLs (empty host) are local by construction; absolute
+		 * URLs must be same-origin (home host) or a configured CDN host.
+		 * Fail-open to true when the verdict is unverifiable so markup is
+		 * never worse than the pre-guard behaviour.
+		 *
+		 * @since NEXT
+		 * @param string $url The candidate image URL.
+		 * @return bool True when the filesystem lookup may run.
+		 */
+		private function is_dimension_lookup_allowed( string $url ): bool {
+			try {
+				$url = trim( $url );
+				if ( '' === $url ) {
+					return false;
+				}
+				$lower = strtolower( ltrim( $url ) );
+				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+					return false;
+				}
+				if ( ! function_exists( 'wp_parse_url' ) ) {
+					return true;
+				}
+				$host = wp_parse_url( $url, PHP_URL_HOST );
+				if ( ! is_string( $host ) || '' === trim( $host ) ) {
+					return true;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_same_site_host' ) ) {
+					try {
+						if ( Util::is_same_site_host( $url ) ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( $this->is_same_origin_preload_url( $url ) ) {
+					return true;
+				}
+				if ( $this->is_cdn_preload_url( $url ) ) {
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Post-processes the serialized buffer to add missing width/height attributes to lazy-loaded images.
 		 *
 		 * Eager heroes excluded from lazy keep `src` (never `data-src`), so
@@ -1646,6 +1702,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$has_height = (bool) preg_match( '/\bheight=["\']\d+["\']/i', $img_tag );
 
 					if ( ! $has_width || ! $has_height ) {
+						if ( ! $this->is_dimension_lookup_allowed( $src_url ) ) {
+							return $img_tag;
+						}
 						try {
 							$local_path = Util::get_local_path( $src_url );
 						} catch ( \Throwable $e ) {
@@ -1659,7 +1718,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								unset( $e );
 								return $img_tag;
 							}
-							if ( is_array( $size ) ) {
+							if ( is_array( $size ) && isset( $size[0], $size[1] ) && (int) $size[0] > 0 && (int) $size[1] > 0 ) {
 								if ( ! $has_width ) {
 									$img_tag = preg_replace( '/<img\b/i', '<img width="' . (int) $size[0] . '"', $img_tag, 1 );
 								}
@@ -1711,6 +1770,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$has_width  = null !== $processor->get_attribute( 'width' );
 						$has_height = null !== $processor->get_attribute( 'height' );
 						if ( ! $has_width || ! $has_height ) {
+							if ( ! $this->is_dimension_lookup_allowed( (string) $data_src ) ) {
+								$out .= $processor->serialize_token();
+								continue;
+							}
 							try {
 								$local_path = Util::get_local_path( (string) $data_src );
 							} catch ( \Throwable $e ) {
@@ -1726,7 +1789,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									$out .= $processor->serialize_token();
 									continue;
 								}
-								if ( is_array( $size ) ) {
+								if ( is_array( $size ) && isset( $size[0], $size[1] ) && (int) $size[0] > 0 && (int) $size[1] > 0 ) {
 									if ( ! $has_width ) {
 										$processor->set_attribute( 'width', (string) (int) $size[0] );
 									}
@@ -1759,7 +1822,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * existence + LRU size lookup). Fail-open: returns null so the caller
 		 * falls through to the regex fallback.
 		 *
-		 * @since NEXT
 		 * @since NEXT Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
@@ -1786,6 +1848,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( $has_width && $has_height ) {
 						continue;
 					}
+					if ( ! $this->is_dimension_lookup_allowed( (string) $data_src ) ) {
+						continue;
+					}
 					try {
 						$local_path = Util::get_local_path( (string) $data_src );
 					} catch ( \Throwable $e ) {
@@ -1801,7 +1866,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						unset( $e );
 						continue;
 					}
-					if ( ! is_array( $size ) ) {
+					if ( ! is_array( $size ) || ! isset( $size[0], $size[1] ) || (int) $size[0] <= 0 || (int) $size[1] <= 0 ) {
 						continue;
 					}
 					if ( ! $has_width ) {
@@ -7902,23 +7967,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						// Stable dimensions for the eager hero (issue #1467):
 						// a dimension-less hero causes CLS, so backfill any
 						// missing width/height from the local file when the
-						// tag carries no numeric value. Fail-open: unknown
-						// paths leave the tag untouched.
+						// tag carries no numeric value. Resolve from the
+						// matched tag's own src (the file actually rendered)
+						// first — the LCP URL may be a size-variant alias
+						// (size suffix stripped by tag_matches_lcp_url()), so
+						// stamping alias dimensions onto a crop distorts it.
+						// Fail-open: unknown paths leave the tag untouched.
 						try {
 							$has_w = is_numeric( $tags->get_attribute( 'width' ) );
 							$has_h = is_numeric( $tags->get_attribute( 'height' ) );
 							if ( ! $has_w || ! $has_h ) {
-								$hero_path = Util::get_local_path( $lcp_url );
-								if ( '' !== $hero_path && $this->cached_file_exists( $hero_path ) && is_readable( $hero_path ) && is_file( $hero_path ) ) {
-									$hero_size = $this->get_cached_image_size( $hero_path );
-									if ( is_array( $hero_size ) ) {
-										if ( ! $has_w ) {
-											$tags->set_attribute( 'width', (string) (int) $hero_size[0] );
-											$changed = true;
-										}
-										if ( ! $has_h ) {
-											$tags->set_attribute( 'height', (string) (int) $hero_size[1] );
-											$changed = true;
+								$tag_src = $tags->get_attribute( 'src' );
+								if ( ! is_string( $tag_src ) || '' === trim( $tag_src ) ) {
+									$tag_src = $tags->get_attribute( 'data-src' );
+								}
+								if ( ! is_string( $tag_src ) || '' === trim( $tag_src ) ) {
+									$tag_src = $lcp_url;
+								}
+								$hero_src = (string) $tag_src;
+								if ( '' !== trim( $hero_src ) && $this->is_dimension_lookup_allowed( $hero_src ) ) {
+									$hero_path = Util::get_local_path( $hero_src );
+									if ( '' !== $hero_path && $this->cached_file_exists( $hero_path ) && is_readable( $hero_path ) && is_file( $hero_path ) ) {
+										$hero_size = $this->get_cached_image_size( $hero_path );
+										if ( is_array( $hero_size ) && isset( $hero_size[0], $hero_size[1] ) && (int) $hero_size[0] > 0 && (int) $hero_size[1] > 0 ) {
+											if ( ! $has_w ) {
+												$tags->set_attribute( 'width', (string) (int) $hero_size[0] );
+												$changed = true;
+											}
+											if ( ! $has_h ) {
+												$tags->set_attribute( 'height', (string) (int) $hero_size[1] );
+												$changed = true;
+											}
 										}
 									}
 								}
