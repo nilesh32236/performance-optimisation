@@ -3014,7 +3014,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// logic in this change (see docs/hooks.md, wppo_should_cache_request).
 
 			// ESI punch-holing: when hole active, treat as not cacheable via DONOTCACHEPAGE.
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+			// No-autoload probe (issue #1443): on non-LiteSpeed requests the ESI
+			// class is never loaded, and should_punch_hole() is fail-closed
+			// anyway, so skipping here preserves behaviour without parsing ESI.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', false ) ) {
 				$needs_hole = false;
 				try {
 					if ( LiteSpeed_ESI::should_punch_hole( 'cart' ) || LiteSpeed_ESI::should_punch_hole( 'checkout' ) || LiteSpeed_ESI::should_punch_hole( 'account' ) || LiteSpeed_ESI::should_punch_hole( 'adminbar' ) ) {
@@ -3332,8 +3335,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function maybe_store_cache() {
-			// ESI punch-holing: skip store when hole-punched.
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+			// ESI punch-holing: skip store when hole-punched. No-autoload
+			// probe (issue #1443) — see is_not_cacheable() above.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', false ) ) {
 				try {
 					if ( LiteSpeed_ESI::should_punch_hole( 'cart' ) || LiteSpeed_ESI::should_punch_hole( 'checkout' ) || LiteSpeed_ESI::should_punch_hole( 'account' ) || LiteSpeed_ESI::should_punch_hole( 'adminbar' ) || LiteSpeed_ESI::should_punch_hole( 'nonce' ) ) {
 						if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
