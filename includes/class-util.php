@@ -1064,13 +1064,99 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether path/query values indicate a WooCommerce AJAX endpoint.
+		 *
+		 * Pure string check (no Woo symbols, no I/O): matches the
+		 * pretty-permalink `/wc-ajax/...` path segment (decoded,
+		 * case-insensitive, exact segment so `/my-wc-ajax-guide/` does not
+		 * match) and the `?wc-ajax=...` query parameter (parsed name match
+		 * plus a raw query-string fallback, `&`/`;` separated,
+		 * case-insensitive). Mirrors `Cache::is_wc_ajax_request()` and the
+		 * pre-boot drop-in guard. Unconditional on safe mode: wc-ajax XHRs
+		 * are dynamic JSON and must never be cached or preloaded.
+		 * Fail-open: detection failure returns true (treated as dynamic).
+		 *
+		 * @since NEXT
+		 * @param string $path         Request path (leading slash optional).
+		 * @param string $query_string Raw query string (without leading `?`).
+		 * @return bool True when the values indicate a wc-ajax request.
+		 */
+		public static function is_woo_ajax_request( string $path = '', string $query_string = '' ): bool {
+			try {
+				$normalized = strtolower( trim( (string) rawurldecode( $path ), '/' ) );
+				if ( '' !== $normalized && (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . $normalized ) ) {
+					return true;
+				}
+				if ( '' === trim( (string) $query_string ) ) {
+					return false;
+				}
+				$parsed = array();
+				try {
+					parse_str( (string) $query_string, $parsed );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$parsed = array();
+				}
+				foreach ( $parsed as $name => $value ) {
+					if ( 'wc-ajax' === strtolower( trim( (string) $name ) ) ) {
+						return true;
+					}
+				}
+				return (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', (string) $query_string );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a query string carries a WooCommerce add-to-cart action.
+		 *
+		 * Pure string check (no Woo symbols, no I/O): matches the
+		 * `?add-to-cart=...` query parameter (parsed name match plus a raw
+		 * query-string fallback, `&`/`;` separated, case-insensitive).
+		 * Mirrors `Cache::is_woo_excluded()` and the pre-boot drop-in bake.
+		 * Safe-mode gated by the caller: guest add-to-cart flows mutate the
+		 * cart session and must bypass the static cache while safe mode is
+		 * on. Fail-open: detection failure returns true (treated as dynamic).
+		 *
+		 * @since NEXT
+		 * @param string $query_string Raw query string (without leading `?`).
+		 * @return bool True when the query carries an add-to-cart action.
+		 */
+		public static function is_woo_add_to_cart_request( string $query_string = '' ): bool {
+			try {
+				if ( '' === trim( (string) $query_string ) ) {
+					return false;
+				}
+				$parsed = array();
+				try {
+					parse_str( (string) $query_string, $parsed );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$parsed = array();
+				}
+				foreach ( $parsed as $name => $value ) {
+					if ( 'add-to-cart' === strtolower( trim( (string) $name ) ) ) {
+						return true;
+					}
+				}
+				return (bool) preg_match( '/(?:^|[&;])add-to-cart(?:=|&|;|$)/i', (string) $query_string );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Whether an absolute URL targets a WooCommerce dynamic route.
 		 *
 		 * Single source for the serve path (Cache), the warm path (Cron) and
-		 * ad-hoc callers: combines the unconditional Store-API / faceted /
-		 * uncacheable-query guards with the safe-mode-gated dynamic-path
-		 * check so preload can never warm a URL the serve path blocks.
-		 * Fail-open: detection failure returns true (treated as dynamic).
+		 * ad-hoc callers: combines the unconditional Store-API / wc-ajax /
+		 * faceted / uncacheable-query guards with the safe-mode-gated
+		 * add-to-cart + dynamic-path checks so preload can never warm a URL
+		 * the serve path blocks. Fail-open: detection failure returns true
+		 * (treated as dynamic).
 		 *
 		 * @since NEXT
 		 * @param string $url        Absolute URL.
@@ -1108,6 +1194,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Unconditional: Store API JSON is never cacheable.
 				if ( self::is_woo_store_api_request( $path, $query, $rest_route ) ) {
 					return true;
+				}
+				// Unconditional: wc-ajax endpoints are dynamic JSON (explicit
+				// audit of the generic query guard below so intent is
+				// greppable and safe-mode independent, mirroring
+				// Cache::is_wc_ajax_request() and the pre-boot drop-in).
+				if ( method_exists( self::class, 'is_woo_ajax_request' ) && self::is_woo_ajax_request( $path, $query ) ) {
+					return true;
+				}
+				// Gated: add-to-cart flows mutate the cart session (explicit
+				// audit; safe-mode gated like Cache::is_woo_excluded() and
+				// the drop-in bake). Falls through to the unconditional
+				// generic query guard below so preload still skips the URL
+				// even with safe mode off (query-poisoning safety).
+				if ( '' !== $query && method_exists( self::class, 'is_woo_add_to_cart_request' ) && self::is_woo_add_to_cart_request( $query ) ) {
+					if ( self::is_woo_safe_mode_enabled() ) {
+						return true;
+					}
 				}
 				// Unconditional: faceted layered-nav queries are dynamic.
 				if ( '' !== $query && method_exists( self::class, 'is_woo_faceted_query' ) && self::is_woo_faceted_query( $query ) ) {
@@ -1405,8 +1508,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// (pre-#922 guards survive safe-mode-off); add-to-cart is
 				// safe-mode gated (drop-in bake + Cache::is_woo_excluded());
 				// the plain-permalink Store API form is unconditional via
-				// is_woo_store_api_request(). Pure query/string checks so
-				// the self-test stays read-only.
+				// is_woo_store_api_request(). Canonical string helpers
+				// (is_woo_ajax_request / is_woo_add_to_cart_request) prove
+				// the same predicates the serve path enforces, so the
+				// self-test stays read-only and cannot drift.
 				$fragment_probes = array(
 					'/?wc-ajax=get_refreshed_fragments' => 'wc-ajax',
 					'/?add-to-cart=123'                 => 'add-to-cart',
@@ -1420,8 +1525,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						if ( 'store-api' === $kind ) {
 							$is_dynamic  = self::is_woo_store_api_request( '/', 'rest_route=/wc/store/v1/cart', '/wc/store/v1/cart' );
 							$uncacheable = $is_dynamic;
+						} elseif ( 'wc-ajax' === $kind ) {
+							$is_dynamic  = method_exists( self::class, 'is_woo_ajax_request' ) ? self::is_woo_ajax_request( '/', 'wc-ajax=get_refreshed_fragments' ) : true;
+							$uncacheable = $is_dynamic;
 						} elseif ( 'add-to-cart' === $kind ) {
-							$uncacheable = $safe_mode;
+							$is_dynamic = method_exists( self::class, 'is_woo_add_to_cart_request' ) ? self::is_woo_add_to_cart_request( 'add-to-cart=123' ) : true;
+							// Woo-layer intent: safe-mode gated (serve-time
+							// poisoning guard still bypasses independently).
+							$uncacheable = $is_dynamic && $safe_mode;
 						}
 						$cacheable = ! $uncacheable;
 						$pass      = $is_dynamic && ! $cacheable;
@@ -1501,10 +1612,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// Preload-skip probes (additive, issue #1256): faceted
 				// layered-nav URLs plus dynamic paths and Store API routes must
-				// never enter the preload queue. Mirrors
-				// Cron::is_woo_excluded_url() semantics (faceted/Store API skips
-				// unconditional on safe mode, dynamic paths safe-mode gated) as
-				// pure string checks so the self-test stays read-only.
+				// never enter the preload queue. Proved via the canonical
+				// is_woo_excluded_url() (faceted/Store API/wc-ajax skips
+				// unconditional on safe mode, dynamic paths safe-mode gated)
+				// so serve-path and warm-path verdicts cannot drift. The
+				// manual chain below is the mixed-version fallback only.
 				$preload_probes = array(
 					'/shop/?filter_color=blue'         => true,
 					'/shop/?min_price=10&max_price=50' => true,
@@ -1517,22 +1629,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$preload_checks = array();
 				foreach ( $preload_probes as $probe_url => $expected_skip ) {
 					try {
-						$probe_path  = (string) wp_parse_url( (string) $probe_url, PHP_URL_PATH );
-						$probe_query = (string) wp_parse_url( (string) $probe_url, PHP_URL_QUERY );
-						if ( '' === $probe_path ) {
-							$probe_path = '/';
+						$probe_full_probe = $probe_url;
+						try {
+							$candidate = self::cached_home_url( (string) $probe_url );
+							if ( is_string( $candidate ) && '' !== $candidate ) {
+								$probe_full_probe = $candidate;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
 						}
-						$skipped = false;
-						if ( self::is_woo_store_api_request( $probe_path, $probe_query, '' ) ) {
-							$skipped = true;
-						} elseif ( '' !== $probe_query && self::is_woo_faceted_query( $probe_query ) ) {
-							$skipped = true;
-						} elseif ( '' !== $probe_query && self::has_uncacheable_query( $probe_query ) ) {
-							$skipped = true;
-						} elseif ( $safe_mode && self::is_woo_dynamic_path( $probe_path ) ) {
-							$skipped = true;
-						} elseif ( self::is_woo_store_api_path( $probe_path ) ) {
-							$skipped = true;
+						$skipped        = false;
+						$used_canonical = false;
+						try {
+							if ( method_exists( self::class, 'is_woo_excluded_url' ) ) {
+								$skipped        = self::is_woo_excluded_url( (string) $probe_full_probe );
+								$used_canonical = true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$used_canonical = false;
+						}
+						if ( ! $used_canonical ) {
+							$probe_path  = (string) wp_parse_url( (string) $probe_url, PHP_URL_PATH );
+							$probe_query = (string) wp_parse_url( (string) $probe_url, PHP_URL_QUERY );
+							if ( '' === $probe_path ) {
+								$probe_path = '/';
+							}
+							$skipped = false;
+							if ( self::is_woo_store_api_request( $probe_path, $probe_query, '' ) ) {
+								$skipped = true;
+							} elseif ( method_exists( self::class, 'is_woo_ajax_request' ) && self::is_woo_ajax_request( $probe_path, $probe_query ) ) {
+								$skipped = true;
+							} elseif ( '' !== $probe_query && method_exists( self::class, 'is_woo_add_to_cart_request' ) && self::is_woo_add_to_cart_request( $probe_query ) ) {
+								$skipped = true;
+							} elseif ( '' !== $probe_query && self::is_woo_faceted_query( $probe_query ) ) {
+								$skipped = true;
+							} elseif ( '' !== $probe_query && self::has_uncacheable_query( $probe_query ) ) {
+								$skipped = true;
+							} elseif ( $safe_mode && self::is_woo_dynamic_path( $probe_path ) ) {
+								$skipped = true;
+							} elseif ( self::is_woo_store_api_path( $probe_path ) ) {
+								$skipped = true;
+							}
 						}
 						$pass = ( $skipped === $expected_skip );
 						try {
