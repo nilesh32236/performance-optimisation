@@ -1792,7 +1792,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * preserves explicit 'auto', see
 	 * test_add_defer_strategy_preserves_explicit_auto_fetchpriority).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_apply_module_loading_strategies_upgrades_auto_to_low(): void {
 		$main = $this->make_main(
@@ -2040,7 +2040,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * WP_Script_Modules::set_fetchpriority() is absent (backport/polyfill
 	 * with a spoofed version string).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_supports_native_script_fetchpriority_false_when_method_absent(): void {
 		$GLOBALS['wp_version'] = '6.9';

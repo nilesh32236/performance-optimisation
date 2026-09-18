@@ -473,7 +473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			// independently of the preload-URLs textarea above so a request
 			// omitting one field still persists/deletes the other.
 			//
-			// @since NEXT.
+			// @since 2.2.0.
 			if ( isset( $_POST['wppo_lcp_preload_url'] ) ) {
 				$raw_lcp = $this->get_raw_post_string( 'wppo_lcp_preload_url' );
 				$raw_lcp = trim( $raw_lcp );
@@ -496,7 +496,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			// the signal-driven hero preload + lazy exclusion. Checkbox-only;
 			// absent (unchecked) deletes the meta so the default stays enabled.
 			//
-			// @since NEXT.
+			// @since 2.2.0.
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_preload_image_nonce.
 			$disable_auto_lcp = isset( $_POST['wppo_disable_auto_lcp'] ) && ! empty( $_POST['wppo_disable_auto_lcp'] );
 			if ( $disable_auto_lcp ) {

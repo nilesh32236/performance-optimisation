@@ -121,7 +121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Exposed so the standalone uninstall context can remove the orphan
 		 * block without hard-coding the string.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const CONFIG_HTACCESS_MARKER = 'WPPO Redis Config';
@@ -135,7 +135,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * protect_config_file(); Nginx ignores those files and needs a
 		 * server-level deny (see is_nginx_config_exposed()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const CONFIG_FILENAME = 'wppo-redis-config.php';
@@ -150,7 +150,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * kept only as a legacy read/migration path for pre-fix installs
 		 * (see is_nginx_config_exposed()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const NGINX_PROBE_TRANSIENT = 'wppo_nginx_config_probe';
@@ -164,7 +164,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * switch_to_blog() mid-request. The `'server'` key holds the
 		 * deterministic non-Nginx false. Reset by clear_nginx_probe_cache().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string,bool>
 		 */
 		private static $nginx_probe_memo = array();
@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * reset_circuit_memo_for_tests() and invalidated in
 		 * auto_disable_circuit()/clear_circuit_state().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array|null Null when not yet read this request.
 		 */
 		private static $circuit_state_memo = null;
@@ -187,7 +187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Whether the circuit-state memo has been populated this request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static $circuit_state_memo_set = false;
@@ -201,7 +201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * a half-written live file that would fatal the object-cache drop-in
 		 * (which does a bare `include` of the config) on the next request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const CONFIG_TMP_SUFFIX = '.tmp';
@@ -223,7 +223,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Only the canonical WP_CONTENT_DIR/object-cache.php.wppo-disabled
 		 * path is returned.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[] Absolute paths (empty when WP_CONTENT_DIR is undefined).
 		 */
 		public static function get_uninstall_sidecar_paths(): array {
@@ -324,7 +324,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * - `last_failure`: latest recorded failure payload ({ code, message, time }) or null.
 		 *
 		 * @since 1.4.0
-		 * @since NEXT Added `bypassed`, circuit, `serializers` and `last_failure` keys; fail-open outage short-circuit (at most one reconnect attempt per request per site).
+		 * @since 2.2.0 Added `bypassed`, circuit, `serializers` and `last_failure` keys; fail-open outage short-circuit (at most one reconnect attempt per request per site).
 		 * @return array The status array described above.
 		 */
 		public function get_status() {
@@ -452,7 +452,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Reset the per-request circuit-state memo (unit-test helper).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_circuit_memo_for_tests(): void {
@@ -887,7 +887,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * for site A must never short-circuit site B's different Redis
 		 * config — the scope check resets the flag when the blog changes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static $outage_bypassed = false;
@@ -895,7 +895,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Blog ID the in-request bypass was armed for (see $outage_bypassed).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private static $outage_blog_id = 0;
@@ -907,7 +907,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * generic one, keeping admin/REST diagnostics stable across the
 		 * bypassed request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var \WP_Error|null
 		 */
 		private static $outage_error = null;
@@ -915,7 +915,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Resolve the current blog ID for outage-bypass scoping (never fatals).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Current blog ID, or 0 when unavailable.
 		 */
 		private static function current_outage_blog_id(): int {
@@ -937,7 +937,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * while the static is process-global; without this a site-A outage
 		 * would short-circuit site B's healthy Redis after switch_to_blog().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private static function sync_outage_scope(): void {
@@ -957,7 +957,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Arm the in-request bypass for the current blog.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_Error $error Original failure to replay to repeat callers.
 		 * @return void
 		 */
@@ -977,7 +977,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * permanent misconfiguration as a transient outage. The in-request
 		 * bypass still short-circuits those (single attempt per request).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $code Failure code.
 		 * @param string $message Failure message (scanned for auth signals).
 		 * @return bool True when the failure may heal without config changes.
@@ -1014,7 +1014,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * paths; strip those plus tags and truncate, mirroring
 		 * redis_error_payload() hygiene.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $message Raw message.
 		 * @return string Scrubbed message (max 200 chars).
 		 */
@@ -1050,7 +1050,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * bypass before connecting so recovery is always detectable.
 		 *
 		 * @since 1.4.0
-		 * @since NEXT Blog-scoped bypass short-circuit (no cross-site leakage after switch_to_blog()).
+		 * @since 2.2.0 Blog-scoped bypass short-circuit (no cross-site leakage after switch_to_blog()).
 		 * @param array $config Configuration array.
 		 * @return \Redis|\RedisCluster|\WP_Error
 		 */
@@ -1087,7 +1087,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * ping() already apply `wppo_object_cache_config`); this helper never
 		 * re-applies the filter, so non-idempotent filters run exactly once.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $config Connection configuration (pre-filtered).
 		 * @return \Redis|\RedisCluster|\WP_Error Connected client, or WP_Error (including `redis_bypassed` while bypassed).
 		 */
@@ -1156,7 +1156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Whether the in-request outage bypass is armed (current site).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when subsequent cache calls short-circuit to uncached in this request.
 		 */
 		public static function is_outage_bypassed(): bool {
@@ -1170,7 +1170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Never touches the persistent status flag — use clear_outage_flag()
 		 * (via ping/enable) for that.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_outage_bypass(): void {
@@ -1187,7 +1187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * the bypass path). Fail-open: returns false when settings are
 		 * unavailable or malformed.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when Redis was recorded as bypassed until recovery.
 		 */
 		public function is_outage_flagged(): bool {
@@ -1230,7 +1230,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * wp_next_scheduled) so an armed flag cannot stay stale when no
 		 * further fallback/ping callers run.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True on the unarmed → armed transition (callers log only then); false when already armed or unavailable.
 		 */
 		private function arm_outage_flag(): bool {
@@ -1279,7 +1279,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * arm_outage_flag(). No-op when already clear (no extra DB write),
 		 * so the hot success path stays query-free.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function clear_outage_flag(): void {
@@ -1336,7 +1336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * an unreadable/absent helper file returns false instead of
 		 * fataling on a bare require_once.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $helper_function Helper function name that must exist after loading.
 		 * @return bool True when the helper function is available.
 		 */
@@ -1355,7 +1355,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Race-tolerant filesize(): clears the stat cache and suppresses the
 		 * TOCTOU warning when the file vanishes between checks.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $path File path.
 		 * @return int|false Size in bytes or false.
 		 */
@@ -1524,7 +1524,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * ABSPATH guard inside the config makes include-based verification
 		 * fragile outside a booted WordPress request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $contents Candidate config source.
 		 * @return bool True when the source has the expected config shape.
 		 */
@@ -1564,7 +1564,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Multisite-safe by construction: the config path is
 		 * installation-wide, no per-site options are read or written here.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $content       Rendered config PHP source.
 		 * @param mixed  $wp_filesystem Filesystem object from `Util::init_filesystem()`.
 		 * @return bool|\WP_Error True on verified publish, WP_Error on any failure.
@@ -1741,7 +1741,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Best-effort delete of a staging tmp path; never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed  $wp_filesystem Filesystem object.
 		 * @param string $path          Tmp path to remove.
 		 * @return void
@@ -1767,7 +1767,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * that writer's verification (fail-closed), never corrupts the live
 		 * config.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $wp_filesystem Filesystem object.
 		 * @return void
 		 */
@@ -2031,7 +2031,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Until that rule exists, is_nginx_config_exposed() reports the
 		 * file as fetchable and Admin_Notices surfaces a warning.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private static function protect_config_file(): void {
@@ -2234,7 +2234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * stale verdict can never bypass the foreign-drop-in refusal or
 		 * wrongly refuse after enable().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool|null Null when not yet computed.
 		 */
 		private $own_dropin_memo = null;
@@ -2339,7 +2339,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Absolute path of the Redis config file ('' when undeterminable).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string
 		 */
 		public static function get_config_path(): string {
@@ -2385,7 +2385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * blocked loopback (WP_Error) stays "unknown" and re-probes next
 		 * request instead of pinning a stale safe verdict.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the config file looks directly fetchable.
 		 */
 		public static function is_nginx_config_exposed(): bool {
@@ -2477,7 +2477,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * multisite fan-out below (audit #1338 review) instead of calling
 		 * Util directly.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $suffix Key suffix after the base transient name.
 		 * @return string Prefixed key, or the raw key when Util is unavailable.
 		 */
@@ -2504,7 +2504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * path: one admin's dismiss must not force a re-probe for everyone
 		 * else.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function clear_nginx_probe_cache(): void {
@@ -2535,7 +2535,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 							/**
 							 * Filters how many sites the nginx probe-clear fans out to.
 							 *
-							 * @since NEXT
+							 * @since 2.2.0
 							 * @param int $limit Maximum site IDs to sweep. Default 500.
 							 */
 							$clear_limit = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_nginx_probe_clear_sites', 500 ) : 500;
@@ -2614,7 +2614,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 *
 		 * On failure sets last_flush_error (see get_last_flush_error()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the scoped flush succeeded, false otherwise.
 		 */
 		public function flush_scoped(): bool {

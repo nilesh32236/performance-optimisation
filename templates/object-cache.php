@@ -278,7 +278,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * prefer it over the primary), logs once per outage window, and
 		 * counts toward the file-based circuit breaker. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $error_code Machine-readable failure code.
 		 * @param string $reason     Human-readable failure description.
 		 * @return void
@@ -1035,7 +1035,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * degrades to uncached (false) rather than fatal.
 		 *
 		 * @since 2.0.0 Post-flush verification sample added; returns false when stale keys remain.
-		 * @since NEXT Multisite scoping note for the object_cache_allow_flush_all filter added.
+		 * @since 2.2.0 Multisite scoping note for the object_cache_allow_flush_all filter added.
 		 * @return bool True when the prefix verifies clean, false otherwise.
 		 */
 		public function flush() {

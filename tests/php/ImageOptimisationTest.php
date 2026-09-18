@@ -2428,7 +2428,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * real section, so it must not shift the window map: the second
 	 * real section carrying an LCP marker still stays eager.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_lazy_render_lcp_window_ignores_div_in_script_and_comment(): void {
 		$this->stub_lazy_render_functions();
@@ -2451,7 +2451,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * real payload afterwards. A sentinel-looking string in a text node
 	 * must survive untouched (quoted-attribute anchoring).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_placeholders_with_tag_processor_sentinel_round_trip(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2485,7 +2485,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * (including an empty string) must equal 'image', while an absent as
 	 * still dedups. Both the direct tier and the combined scan agree.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_buffer_has_image_preload_with_tag_processor_empty_as_parity(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2528,7 +2528,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * A non-numeric width="auto" (empty/boolean alike) counts as missing, so
 	 * the looked-up size is injected, while numeric dimensions are kept.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_img_dimensions_with_tag_processor_numeric_gate(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2587,7 +2587,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * (or an auto-prefixed value); dimension-less images, pre-stamped auto
 	 * values, and <source> nodes are left untouched.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_auto_sizes_with_tag_processor_cls_gate(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2623,7 +2623,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * releases the slot so the sibling emitter may still emit exactly one
 	 * preload instead of being suppressed into zero.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_hero_slot_claim_release_cycle(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2649,7 +2649,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * A wp_head manual emission with a media variant claims the hero, so the
 	 * buffer companions (empty media) must skip the same URL.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_manual_preload_claim_wins_over_auto(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2672,7 +2672,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * (pre-6.2): any element carrying fetchpriority high must never keep
 	 * loading lazy, while lower-priority nodes are untouched.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_sweep_lazy_high_conflicts_covers_img_and_iframe(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2714,7 +2714,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * A `<style>`-block stylesheet hero emits exactly one preload link.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_style_block_hero_emits_exactly_one_preload(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2750,7 +2750,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * context matches the LCP target: exactly one preload emits and the
 	 * side-effecting filter ran a single time.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_computed_css_hero_filter_fires_once_and_honored(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2798,7 +2798,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * A cross-origin computed-URL value is rejected (no preload emitted).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_computed_css_hero_rejected_by_origin(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2841,7 +2841,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Inline `style=""` heroes are found without the HTML API (pre-6.2 regex fallback).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_inline_style_hero_detected_without_html_api(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';

@@ -32,7 +32,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * long-lived PHP workers can reset it via reset_asset_cache_for_tests()
 		 * — a first missing-artifact false must not stick forever in-process.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var mixed
 		 */
 		private static $asset_cache = null;
@@ -43,7 +43,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * Null is a legitimate "not yet loaded" state distinct from a loaded
 		 * false, hence the separate flag.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static bool $asset_cache_set = false;
@@ -51,7 +51,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		/**
 		 * Reset the memoized asset lookup (tests / long-lived workers).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_asset_cache_for_tests(): void {
@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * written) the wildcard. Keyed by transient key. Reset by
 		 * reset_asset_cache_for_tests().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string,bool>
 		 */
 		private static $nonce_wildcard_memo = array();
@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * bridge can run on admin-ajax/early hooks where the emitter file
 		 * may not be loaded yet, so header emission must fail closed.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when Header_Emitter can be called safely.
 		 */
 		private static function has_header_emitter(): bool {
@@ -182,7 +182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * applies. REMOTE_ADDR only (never X-Forwarded-For): the header is
 		 * client-controlled and must not mint fresh buckets.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $block  Block name scoping the bucket ('' for legacy callers).
 		 * @param int    $limit  Max hits per window.
 		 * @param int    $window Window in seconds.
@@ -241,7 +241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * `wp_verify_nonce()` can no longer distinguish it from garbage. Used
 		 * to tier the `nonce`-block refresh budget, not to authorize.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $nonce The presented nonce value (may be empty).
 		 * @return bool True when the value is structurally a WP nonce.
 		 */
@@ -257,7 +257,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * cart/checkout/adminbar response publicly cacheable, so fall back
 		 * to direct PHP header() emission instead of skipping.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private static function emit_private_fail_closed(): void {
@@ -278,7 +278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * Same fail-closed contract as emit_private_fail_closed() for the
 		 * admin / no-cache path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private static function emit_nocache_fail_closed(): void {
@@ -302,7 +302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * persistence is available either, returns an empty string and
 		 * callers must treat the nonce as invalid (fail closed).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $context Nonce context (block name).
 		 * @return string MD5 seed for the fallback nonce, or '' when no secret exists.
 		 */
@@ -350,7 +350,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * home for this gate (also used by RUM::supports_script_strategy())
 		 * so floor bumps cannot drift between copies.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool
 		 */
 		private static function supports_script_strategy(): bool {
@@ -1241,7 +1241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * actually carries a `data-wppo-nonce` placeholder is rewritten.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Untyped parameter and non-string passthrough, now that this
+		 * @since 2.2.0 Untyped parameter and non-string passthrough, now that this
 		 * runs as a live fragment filter.
 		 * @param mixed $content Content to inject.
 		 * @return mixed The rewritten content, or the input unchanged.
@@ -1492,7 +1492,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * Registered in both the enabled and the OLS-fallback branch, because
 		 * the fragment endpoint serves the hydration client either way.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private static function register_nonce_injector(): void {
@@ -1511,7 +1511,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * (strip ASCII controls incl. CR/LF/NUL, cap at 1024 chars),
 		 * failing closed to an empty tag on regex failure.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $action Raw ESI action name.
 		 * @return string Sanitized tag value (max 1024 chars).
 		 */

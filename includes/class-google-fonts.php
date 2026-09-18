@@ -107,7 +107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Fail-open: unknown values fall back to `swap`, any throwable
 		 * returns `swap` so fonts never block rendering.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string font-display value, or '' when injection is disabled.
 		 */
 		public static function get_font_display(): string {
@@ -145,7 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * woff-only block is untouched and metric-fallback + preload
 		 * behavior is unchanged (no FOUT regression).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $css Stylesheet CSS.
 		 * @return string CSS with woff2-first src ordering.
 		 */
@@ -197,7 +197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * (comma-separated, default `latin`) are dropped. Fail-open: disabled
 		 * by default, and any parse failure returns the CSS unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $css Stylesheet CSS.
 		 * @return string Possibly subset-filtered CSS.
 		 */

@@ -29,7 +29,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Audit #1362: declared beside its consumer (was below get_model).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array|null
 		 */
 		private static ?array $model_memo = null;
@@ -80,7 +80,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @return array
 		 * @since 2.0.0
-		 * @since NEXT Memoize per request.
+		 * @since 2.2.0 Memoize per request.
 		 */
 		public static function get_model(): array {
 			if ( null !== self::$model_memo ) {
@@ -97,7 +97,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Reset the per-request model memo (for testing).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_model_memo(): void {
@@ -642,7 +642,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * unavailable. No option or transient writes; never throws.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Rows carry the `connection` segment dimension.
+		 * @since 2.2.0 Rows carry the `connection` segment dimension.
 		 * @param int $min_samples Minimum samples per segment (1 = observe all).
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
@@ -667,7 +667,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * No option or transient writes; never throws.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Rows carry the `connection` segment dimension.
+		 * @since 2.2.0 Rows carry the `connection` segment dimension.
 		 * @param int $min_samples Minimum samples per segment (1 = observe all).
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
@@ -691,7 +691,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * carry no `connection` key and read back as `unknown`, keeping
 		 * segment-routed copy backward compatible.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $row Segment row.
 		 * @return string Allowlisted connection type or 'unknown'.
 		 */
@@ -713,7 +713,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * copy stays segment-routed even for models persisted before the
 		 * connection dimension shipped.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $row Segment row.
 		 * @return array{path:string,device:string,template:string,connection:string} Segment descriptor.
 		 */
@@ -737,7 +737,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * comparator. Fail-open: non-array entries are ignored, empty input
 		 * returns null.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array[] $rows Qualified segment rows.
 		 * @return array|null Slowest row or null when empty.
 		 */
@@ -1058,7 +1058,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $trends Optional pre-loaded trends aggregate.
 		 * @return array
 		 * @since 2.0.0
-		 * @since NEXT Global-average eagerness upgrades are gated on total LCP
+		 * @since 2.2.0 Global-average eagerness upgrades are gated on total LCP
 		 *             samples reaching field_lcp_min_samples (suggest-only below).
 		 */
 		private static function heuristic_learn( ?array $rum = null, ?array $trends = null ): array {
@@ -1144,7 +1144,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$exclude_css = self::get_disabled_assets( '_wppo_disabled_styles' );
 
 			// Eagerness heuristic: conservative by default, moderate if avg LCP > 2500 or high TTFB.
-			// Suggest-only gating (issue #1200, @since NEXT): the global-average
+			// Suggest-only gating (issue #1200, @since 2.2.0): the global-average
 			// ladder below only upgrades when total LCP samples reach the shared
 			// field-LCP minimum (ai_adaptive.field_lcp_min_samples, default 20).
 			// Undersampled RUM stays conservative on the global path so no

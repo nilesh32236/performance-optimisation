@@ -495,7 +495,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * Fail-open: queue/cache failures return idle/ok payloads, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 */
@@ -561,7 +561,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_lcp_preload_candidate( \WP_REST_Request $request ): \WP_REST_Response {
 			$params  = $request->get_params();
@@ -678,7 +678,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Resume the sitemap preload queue (re-schedule queued + failed URLs).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 */
@@ -725,7 +725,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * extension, or (for extensionless image-CDN URLs) carry image-ish
 		 * query params. Fail-open: any failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded as an image.
 		 */
@@ -781,7 +781,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * an unverifiable verdict maps to false. Fail-closed: any failure
 		 * returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may surface as a candidate.
 		 */
@@ -882,7 +882,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * within a single request lifecycle. Request-scoped by design —
 		 * cross-request throttling still needs transients.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $endpoint Endpoint slug.
 		 * @param int    $limit    Max hits per window.
 		 * @param int    $window   Window in seconds.
@@ -905,7 +905,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Per-endpoint transient throttle for heavy admin endpoints.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $endpoint Endpoint slug.
 		 * @param int    $limit    Max hits per window.
 		 * @param int    $window   Window in seconds.
@@ -987,7 +987,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * 429 sooner rather than letting throttling be bypassed); sites
 		 * with a trusted proxy should enforce limits at the edge instead.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Anon throttle suffix.
 		 */
 		private static function throttle_client_suffix(): string {
@@ -998,7 +998,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Same-site URL gate shared by readers and writers.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url URL to check.
 		 * @return bool
 		 */
@@ -1932,7 +1932,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_settings_snapshot( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
 			$snapshot = Util::get_settings_snapshot();
@@ -1963,7 +1963,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function restore_settings( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
 			if ( $this->is_endpoint_throttled( 'restore_settings', 5, 60 ) ) {
@@ -2229,7 +2229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.4.0
-		 * @since NEXT Flush action uses Object_Cache::flush_scoped() for multisite scoping.
+		 * @since 2.2.0 Flush action uses Object_Cache::flush_scoped() for multisite scoping.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function handle_object_cache( \WP_REST_Request $request ) {
@@ -2533,7 +2533,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * run_performance_scan(); verbose detail stays available under
 		 * WP_DEBUG via get_status().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_Error $error Failing result.
 		 * @return \WP_Error Sanitized clone (same code, scrubbed message and data).
 		 */
@@ -2560,7 +2560,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Objects and resources are dropped (replaced with null) since a
 		 * verbose backend could hide paths or topology inside them.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $data Raw error data.
 		 * @return mixed Scrubbed error data.
 		 */
@@ -3003,7 +3003,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
 		 * @since 2.0.0
-		 * @since NEXT Added preload_checks, cart_checks and force_exclude to the result (issue #1256).
+		 * @since 2.2.0 Added preload_checks, cart_checks and force_exclude to the result (issue #1256).
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_woo_cache_self_test( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -3217,7 +3217,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * cost. Throttled like regenerate_ccss; fail-open messaging.
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function purge_derived_caches( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -3281,7 +3281,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * proof after an upgrade.
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_upgrade_purge_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -3504,7 +3504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_used_css_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$status = class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_staleness_info' )
@@ -3572,7 +3572,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$staged      = class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ? Sandbox_Preview::get_staged_settings() : array();
@@ -3598,7 +3598,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function save_sandbox_preview( \WP_REST_Request $request ): \WP_REST_Response {
 			if ( $this->is_endpoint_throttled( 'sandbox_save', 5, 60 ) ) {
@@ -3623,7 +3623,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function promote_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			if ( $this->is_endpoint_throttled( 'sandbox_promote', 5, 60 ) ) {
@@ -3651,7 +3651,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function discard_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			if ( $this->is_endpoint_throttled( 'sandbox_discard', 5, 60 ) ) {

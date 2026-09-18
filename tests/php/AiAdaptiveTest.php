@@ -1208,7 +1208,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * heuristic path exercises connection-aware copy.
 	 *
 	 * @since 2.0.0
-	 * @since NEXT Segment fixture carries the `connection` dimension.
+	 * @since 2.2.0 Segment fixture carries the `connection` dimension.
 	 *
 	 * @param int $segment_n Segment sample count.
 	 * @return void
@@ -1290,7 +1290,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * default 20-sample gate) When the heuristic runs Then eagerness stays
 	 * conservative with no override — suggest-only below threshold.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -1333,7 +1333,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * REST/UI copy never pairs an eager suggestion with provisional (0/20)
 	 * copy. Provisional stays true: no qualified segment was observed.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -1361,7 +1361,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * same data learns `eager`. Pins the additive setting on the heuristic
 	 * path (the preload path is pinned in RumTest).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -1404,7 +1404,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * baseline, the slowest segment drives `eager` and the suggestion copy
 	 * carries its device, template, and connection.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -1938,7 +1938,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * cannot misfire as global advice. Commerce contexts still cap the
 	 * applied eagerness payload at moderate.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -2012,7 +2012,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test commerce contexts cap the connection-routed eagerness payload.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 *
 	 * @return void
 	 */
@@ -2060,7 +2060,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * `ai_lcp_preload` / `ai_slow_resource_preload` suggestions targeting
 	 * the preload tab with empty settings payloads (never auto-applied).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_get_suggestions_emits_attribution_preload_candidates(): void {
@@ -2123,7 +2123,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Missing `attributed_lcp` / `slow_resources` keys fail open: no fatal,
 	 * no attribution suggestions, pre-existing suggestions unaffected.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_get_suggestions_omits_attribution_without_model_keys(): void {

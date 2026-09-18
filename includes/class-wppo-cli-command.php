@@ -523,7 +523,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * INF/NAN, recursion) — a bare (string) cast would log an empty
 		 * string with no error signal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $data Data to encode and log.
 		 * @return void
 		 */
@@ -1780,7 +1780,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * `fail` is reserved for directories that are genuinely unwritable by
 		 * everyone (no write bits at all) or that cannot be stat'd.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int|null    $euid Effective UID of the current process (null when posix is unavailable).
 		 * @param array|false $stat stat() result for the directory (false when stat failed).
 		 * @param string      $root Absolute cache root path, used in the detail message.

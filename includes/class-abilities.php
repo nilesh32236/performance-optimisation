@@ -793,7 +793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Single home for the esc_url_raw + fallback wiring previously
 		 * repeated in all four scan/suggestion wrappers.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $input Ability input.
 		 * @return string Resolved URL, or '' when a provided URL is off-site.
 		 */
@@ -811,7 +811,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Thin BC wrapper over Util::same_site_url_or_home() (audit #1357
 		 * review) so comparator rules cannot drift between call sites.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url      Caller URL (already esc_url_raw'd by caller).
 		 * @param string $fallback Fallback (home URL, or '' to fail closed).
 		 * @return string Same-site URL or the fallback.
@@ -1049,8 +1049,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Execute callback: Flush Object Cache (operational).
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Uses Object_Cache::flush_scoped() for multisite scoping.
-		 * @since NEXT Returns error_code/error_message on failure so Ability/MCP
+		 * @since 2.2.0 Uses Object_Cache::flush_scoped() for multisite scoping.
+		 * @since 2.2.0 Returns error_code/error_message on failure so Ability/MCP
 		 *        consumers can distinguish a multisite foreign-drop-in refusal
 		 *        (error_code `flush_foreign_dropin`) from a generic failure
 		 *        instead of retrying blindly. Both are null on success.

@@ -12,7 +12,7 @@
  * No hard dependency on OD — pure class_exists / function_exists guards.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * PHPUnit bootstrap reset covers it). In-memory only,
 		 * multisite-safe by construction.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string, mixed>
 		 */
 		private static array $request_memo = array();
@@ -72,7 +72,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * Called between pages in long-lived processes and in tests (via
 		 * `Image_Optimisation::clear_runtime_caches()`).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function clear_request_memo(): void {
@@ -84,7 +84,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 *
 		 * Fail-open to the bare prefix when the URL is unresolvable.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $prefix Memo namespace prefix.
 		 * @return string Memo key.
 		 */
@@ -104,7 +104,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		/**
 		 * Store a memo value, bounding the map.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $key   Memo key.
 		 * @param mixed  $value Memo value.
 		 * @return void
@@ -289,7 +289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * viewport groups disagree (no stable winner). Fail-open: any
 		 * failure returns ''.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Stable LCP image URL or empty string.
 		 */
 		public static function get_stable_lcp_url(): string {

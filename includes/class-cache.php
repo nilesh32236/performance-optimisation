@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * snapshot to a temp dir outside the wipe tree so a fatal between
 		 * delete and restore cannot destroy both copies.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const PURGE_FALLBACK_MAX_FILES = 25;
 		private const PURGE_FALLBACK_MAX_DEPTH = 6;
@@ -488,7 +488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * blog-aware, so each site keys its own canonical tree.
 		 *
 		 * @return string `{canonical-host}/{path}` (homepage: `{host}/`), or '' when refused.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function cache_key(): string {
 			if ( '' === $this->domain || $this->path_rejected ) {
@@ -636,7 +636,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * options structure returns false (legacy separate-assets path).
 		 *
 		 * @return bool True when the combined monolith is forced.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_combined_core_block_monolith_forced(): bool {
 			try {
@@ -661,7 +661,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * scattered skip site can disagree about block-asset ownership.
 		 *
 		 * @return bool True when core owns on-demand block styles on this request.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function get_effective_separate_block_assets(): bool {
 			if ( $this->is_combined_core_block_monolith_forced() ) {
@@ -690,7 +690,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * combine behavior unchanged).
 		 *
 		 * @return bool True when classic on-demand block assets are active.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function classic_block_assets_on_demand_active(): bool {
 			try {
@@ -723,7 +723,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle The registered style handle.
 		 * @return bool True when the handle must stay out of the combined file.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_classic_on_demand_block_asset( $handle ): bool {
 			try {
@@ -749,7 +749,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle Queued style handle e.g. 'wp-block-cover'.
 		 * @return bool True when the handle is verifiably a core per-block asset.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_core_per_block_style_handle( $handle ): bool {
 			try {
@@ -787,7 +787,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle The registered style handle.
 		 * @return bool True when the handle is hidden and must not be combined.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_hidden_block_asset_for_combine( $handle ): bool {
 			try {
@@ -916,7 +916,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * request; the memo collapses the duplicate slice resolution
 		 * (is_preview_request + get_settings).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string,array>
 		 */
 		private array $sandbox_effective_file_opt_memo = array();
@@ -931,7 +931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * by the production slice. Fail-open to the production slice on any
 		 * failure.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $file_opt Production `file_optimisation` slice.
 		 * @return array Effective slice (staged values merged in preview).
@@ -968,7 +968,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * perf only; combining through a failure risks broken Elementor
 		 * layout/FOUC).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array     $file_opt  Sandbox-effective `file_optimisation` slice.
 		 * @param bool|null $looks_like Pre-computed Main::looks_like_elementor_request()
@@ -1222,7 +1222,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exclusion / core-block / inline-budget branches of
 		 * {@see combine_css()} read as a staged pipeline with isolated tests.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $styles     Queued handles.
 		 * @param array $exclusions Excluded handles/patterns.
 		 * @return array Eligible handles.
@@ -1237,7 +1237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Extracted from {@see combine_css()} so fetch/minify regressions can
 		 * be tested without driving the full enqueue/write pipeline.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $eligible_handles Eligible handles.
 		 * @return array{css:string,handles:array,error:string} Combined CSS + successful handles + error stage ('' on success).
 		 */
@@ -1315,7 +1315,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Extracted from {@see combine_css()} so filesystem failures can be
 		 * tested without driving fetch/minify.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $combined_css Combined CSS.
 		 * @param string $css_variant  Cache variant suffix.
 		 * @return array{path:string,error:string} File path ('' on failure) + error stage.
@@ -1347,7 +1347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Named extraction over {@see set_combine_css_preload()} keeping the
 		 * audit-requested pipeline vocabulary in one place.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string     $css_url       URL of the combined stylesheet.
 		 * @param int|string $version       Cache-busting version suffix.
 		 * @param string     $css_file_path Absolute path to the combined CSS file.
@@ -2102,7 +2102,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle The registered style handle.
 		 * @return int|false Byte size, 0 when the handle contributes nothing, false when unmeasurable.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function measure_style_byte_size( $handle ) {
 			global $wp_styles;
@@ -2801,7 +2801,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * any detection failure returns true (refuse the store, dynamic),
 		 * never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when a Set-Cookie response header is present.
 		 */
 		private function has_set_cookie_response_header(): bool {
@@ -2832,7 +2832,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * editor output must never be written to or served from the static
 		 * cache. Fail-open: any detection failure bypasses the cache.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the request must bypass the cache.
 		 */
 		private function is_editor_preview_excluded(): bool {
@@ -4058,7 +4058,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * helper so every file-writing surface normalizes identically.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added the optional $allowed_host foreign-host refusal.
+		 * @since 2.2.0 Added the optional $allowed_host foreign-host refusal.
 		 * @param string|null $url_path Raw URL path or URL.
 		 * @param string|null $allowed_host Optional canonical host; threaded to the shared helper so
 		 *                                  absolute-form callers refuse foreign hosts.
@@ -4081,7 +4081,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * callers skip the write and serve dynamically uncached.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added realpath symlink containment.
+		 * @since 2.2.0 Added realpath symlink containment.
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
@@ -4225,7 +4225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * throttle can never suppress the log it guards (fail-open toward
 		 * logging).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $throttle_key Throttle transient key.
 		 * @param int    $ttl          TTL in seconds when recording a fresh hit.
 		 * @return bool True when a previous hit is still recorded.
@@ -4348,7 +4348,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $file_path Absolute derived-asset path.
 		 * @return string Sibling fallback path, or '' when not applicable.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_purge_fallback_path( string $file_path ): string {
 			try {
@@ -4374,7 +4374,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $file_path The derived file about to be deleted.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function retain_purge_fallback( string $file_path ): void {
 			try {
@@ -4413,7 +4413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $requested_path Absolute requested derived-asset path.
 		 * @return array{served: bool, status: int, fallback_path: string, location: string} Resolution.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_purge_fallback_response( string $requested_path ): array {
 			$miss = array(
@@ -4515,7 +4515,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * {@see PURGE_FALLBACK_REDIRECT_STATUS}); invalid values fall back
 		 * to the constant. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Redirect status code.
 		 */
 		public static function purge_fallback_redirect_status(): int {
@@ -4525,7 +4525,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					/**
 					 * Filters the redirect status used when serving a purge fallback.
 					 *
-					 * @since NEXT
+					 * @since 2.2.0
 					 * @param int $status Redirect status code.
 					 */
 					$filtered = apply_filters( 'wppo_purge_fallback_redirect_status', $status );
@@ -4548,7 +4548,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * redirecting to `fallback.css` after the base regenerates — a
 		 * stale-serve window regeneration cannot clear client-side.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $location Absolute fallback URL.
 		 * @param int    $status   Redirect status code.
 		 * @return array{location: string, status: int, headers: string[]} Headers to send.
@@ -4580,7 +4580,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array{served: bool, status: int, fallback_path: string, location: string} $response Resolver output.
 		 * @return bool True when the fallback was served (or would be, under the test seam).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function serve_purge_fallback_response( array $response ): bool {
 			try {
@@ -4634,7 +4634,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_serve_purge_fallback(): void {
 			try {
@@ -4690,7 +4690,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function log_purge_fallback(): void {
 			try {
@@ -4951,7 +4951,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Recursively delete files under an allowlisted swap dir via PHP API.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $swap_dir Allowlisted directory.
 		 * @return void
 		 */
@@ -5072,7 +5072,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * realpath must stay under the resolved base (a symlinked min dir
 		 * pointing outside fails closed). Fail closed on any anomaly.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $dir Absolute directory candidate.
 		 * @return bool True when the recursive delete may proceed.
 		 */
@@ -5115,7 +5115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * it; this routes min-tree misses through {@see is_min_dir_allowed()}
 		 * on the parent dir instead. Fail-closed. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $path Absolute file candidate.
 		 * @return bool True when the path is min-tree-contained.
 		 */
@@ -5144,7 +5144,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * (`max_files × max_bytes` is otherwise buffered in memory). Result
 		 * is memoized per request. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int, max_total_bytes: int} Limits.
 		 */
 		private static function purge_fallback_limits(): array {
@@ -5180,7 +5180,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				 * in-memory snapshot budget (max_total_bytes) kept on a
 				 * full-cache wipe. Values are clamped to sane ceilings.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int, max_total_bytes: int} $defaults Snapshot bounds.
 				 */
 				$filtered = apply_filters( 'wppo_purge_fallback_limits', $defaults );
@@ -5212,7 +5212,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * would silently lose fallbacks. Reuses the per-day transient
 		 * throttle so a wipe storm writes a single row. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function log_snapshot_cap(): void {
@@ -5243,7 +5243,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $dir Absolute domain directory about to be deleted.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function snapshot_domain_purge_fallbacks( string $dir ): array {
 			return $this->snapshot_purge_fallbacks_worker(
@@ -5262,7 +5262,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $dir Absolute min directory about to be deleted.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function snapshot_min_purge_fallbacks( string $dir ): array {
 			return $this->snapshot_purge_fallbacks_worker(
@@ -5280,7 +5280,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function snapshot_purge_fallbacks_worker( string $dir, callable $is_allowed ): array {
 			$snapshot = array();
@@ -5400,7 +5400,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param bool   $min_tree Whether $dir lives under the min tree.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function snapshot_purge_fallbacks( string $dir, bool $min_tree = false ): array {
 			if ( $min_tree ) {
@@ -5424,7 +5424,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function retain_live_bases_for_wipe( string $dir, callable $is_allowed ): void {
 			try {
@@ -5493,7 +5493,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array<string, string> $snapshot Path => contents from {@see snapshot_purge_fallbacks()}.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function restore_purge_fallbacks( array $snapshot ): void {
 			$this->restore_snapshot(
@@ -5510,7 +5510,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array<string, string> $snapshot Path => contents from {@see snapshot_purge_fallbacks()}.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function restore_min_fallbacks( array $snapshot ): void {
 			$this->restore_snapshot(
@@ -5533,7 +5533,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param callable              $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function restore_snapshot( array $snapshot, callable $is_allowed ): void {
 			if ( empty( $snapshot ) ) {
@@ -5599,7 +5599,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array<string, string> $snapshot Path => contents.
 		 * @return array<string, string> Original path => staged temp path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function stage_snapshot_to_temp( array $snapshot ): array {
 			$staged = array();
@@ -5662,7 +5662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param callable              $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function restore_staged_snapshot( array $staged, callable $is_allowed ): void {
 			if ( empty( $staged ) ) {
@@ -6056,7 +6056,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * {@see collect_cache_entries_by_age()} so cap accounting and
 		 * oldest-entry eviction can never drift apart.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $directory Directory path.
 		 * @return array|null Dirlist entries, or null when unavailable.
 		 */
@@ -6179,7 +6179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * values fall back to defaults; enforcement never blocks the
 		 * frontend — the cap only warns first, then evicts oldest entries.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{max_mb:int,warn_ratio:float,enforce:bool}
 		 */
 		public static function get_cache_cap_settings(): array {
@@ -6225,7 +6225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * unavailable. Uses the single-walk {@see calculate_directory_stats()}
 		 * helper so size accounting matches the dashboard stats.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Bytes used, or 0 on failure.
 		 */
 		public static function get_cache_size_bytes(): int {
@@ -6256,7 +6256,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * but under cap, or over cap with enforcement off), `over` (over cap
 		 * with enforcement on). Never fatal; all failures report `ok`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{bytes:int,cap_bytes:int,warn_bytes:int,state:string,enforce:bool,max_mb:int}
 		 */
 		public static function get_cache_cap_status(): array {
@@ -6309,7 +6309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * entries are evicted until back under the cap. Never blocks the
 		 * frontend: every failure path returns silently.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function maybe_enforce_cache_cap(): void {
@@ -6361,7 +6361,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * stall on a massive cache. Fail-open: filesystem failures stop the
 		 * walk silently.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $bytes_to_free Minimum bytes to reclaim.
 		 * @return int Bytes actually freed (best effort).
 		 */
@@ -6408,7 +6408,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Recursive `$fs->dirlist()` walk capped at depth 20 and 5000
 		 * entries so eviction stays bounded on huge caches.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $directory Directory to scan.
 		 * @param int    $depth     Recursion depth guard.
 		 * @param array  $out       Accumulator (passed by reference).
