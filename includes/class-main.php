@@ -1078,7 +1078,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_rum_sample_rate' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_elementor_safe_mode' ) );
-			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_object_cache_outage_flag' ) );
@@ -1778,8 +1777,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Only installs that never configured the toggle (key absent) are defaulted to `true`
 		 * so they inherit core's new default; any stored explicit value (true or false) is
 		 * preserved verbatim, and fresh installs with no stored option are skipped because the
-		 * constructor defaults already match. The one-time marker keeps later explicit user
-		 * choices intact.
+		 * constructor defaults already match. The check is idempotent (key presence is the
+		 * marker), so no extra option row is ever allocated — fresh installs create zero
+		 * migration rows and steady-state requests perform zero migration writes.
 		 *
 		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
 		 *                                                        (core loads separate core
@@ -1791,18 +1791,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( get_option( 'wppo_block_assets_migrated' ) ) {
-				return;
-			}
-
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
 			$stored = get_option( 'wppo_settings' );
 			if ( ! is_array( $stored ) ) {
 				// Fresh install (or no stored settings): constructor defaults already match
-				// WP 6.9+ behavior, so there is nothing to migrate.
-				update_option( 'wppo_block_assets_migrated', 1 );
+				// WP 6.9+ behavior, so there is nothing to migrate and nothing to record.
 				return;
 			}
 
@@ -1819,8 +1814,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 				Log::add( __( 'Enabled on-demand block asset loading to match the WordPress 6.9 default.', 'performance-optimisation' ) );
 			}
-
-			update_option( 'wppo_block_assets_migrated', 1 );
 		}
 
 		/**
@@ -2612,33 +2605,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				unset( $e );
 				return self::elementor_safe_fallback( $file_optimisation );
 			}
-		}
-
-		/**
-		 * Backfill the additive sandboxStaged key (issue #1163).
-		 *
-		 * Runs on admin_init; in-memory default is applied in __construct so
-		 * front-end requests never pay for a DB write.
-		 *
-		 * @return void
-		 * @since NEXT
-		 */
-		public function maybe_migrate_sandbox_preview(): void {
-			// allowlist(settings-read-guard): deliberate direct read.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-			if ( array_key_exists( 'sandboxStaged', $file ) ) {
-				return;
-			}
-			$stored['file_optimisation'] = $file + array( 'sandboxStaged' => array() );
-			Util::save_settings( $stored );
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			$this->options['file_optimisation']['sandboxStaged'] = array();
 		}
 
 		/**
@@ -4106,6 +4072,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$this->add_available_post_types_to_options();
 
+			// Dashboard stats (issue #1464): the cache size is read from the
+			// canonical unified stats payload (Cache::get_cache_stats(), keyed
+			// via Util::transient_key() so multisite stays isolated) instead of
+			// the retired split `wppo_cache_size` transient mirror, which is no
+			// longer written or promoted anywhere.
+			$cache_stats = Cache::get_cache_stats();
+			$cache_size  = isset( $cache_stats['size'] ) ? (string) $cache_stats['size'] : __( 'N/A', 'performance-optimisation' );
+
 			// Salted object-cache reads (WP 6.9+, issue #882): the salt is the
 			// current `wppo_cache_last_cleared` option VALUE (bumped by
 			// Cache::bump_stats_cache()), not the option key — passing the key
@@ -4113,20 +4087,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// key isolation via Util::transient_key().
 			// One salt read for both dashboard stats (issue #882 review).
 			$cache_salt = Util::cache_salt( 'wppo_cache_last_cleared' );
-			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
-				$cache_size = wp_cache_get_salted( 'wppo_cache_size', 'wppo', $cache_salt );
-				if ( false === $cache_size ) {
-					$cache_size = Cache::get_cache_size();
-					wp_cache_set_salted( 'wppo_cache_size', $cache_size, 'wppo', $cache_salt, 15 * MINUTE_IN_SECONDS );
-				}
-			} else {
-				$cache_size = get_transient( Util::transient_key( 'wppo_cache_size' ) );
-				if ( false === $cache_size ) {
-					$cache_size = Cache::get_cache_size();
-					set_transient( Util::transient_key( 'wppo_cache_size' ), $cache_size, 15 * MINUTE_IN_SECONDS );
-				}
-			}
-
 			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$total_js_css = wp_cache_get_salted( 'wppo_total_js_css', 'wppo', $cache_salt );
 				if ( false === $total_js_css ) {

@@ -62,24 +62,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private const PURGE_FALLBACK_REDIRECT_STATUS = 302;
 
 		/**
-		 * Invalidate the cached cache-size/page-count stats transients.
+		 * Invalidate the cached dashboard stats.
 		 *
-		 * The dashboard stats (wppo_cache_stats + legacy
-		 * wppo_cache_size/wppo_cache_count/wppo_total_js_css) carry a 15-minute
+		 * The unified dashboard stats payload (`wppo_cache_stats`, plus the
+		 * standalone `wppo_total_js_css` dashboard cache) carries a 15-minute
 		 * TTL; per-page mutations (smart purge via
 		 * invalidate_dynamic_static_html(), fresh combine_css generation)
 		 * previously left the stats frozen until the TTL ran out (audit #874
 		 * finding 6). Mutators call this so the next stats read recomputes.
 		 * Deliberately NOT called from save_cache_files(): frontend cache
 		 * misses are the normal write path and would defeat the TTL entirely.
+		 * The retired split mirrors (`wppo_cache_size` / `wppo_cache_count`)
+		 * are no longer written anywhere, so there is nothing to invalidate
+		 * for them (issue #1464).
 		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function bump_stats_cache(): void {
 			delete_transient( Util::transient_key( 'wppo_cache_stats' ) );
-			delete_transient( Util::transient_key( 'wppo_cache_size' ) );
-			delete_transient( Util::transient_key( 'wppo_cache_count' ) );
 			delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 			// Stampede stale copy (issue #1101): the stats walk writes a 24h
 			// `<key>_stale` transient that must not survive an explicit purge.
@@ -88,8 +89,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// The salted object-cache layer (WP 6.9+ drop-in) derives entry
 			// validity from `wppo_cache_last_cleared`; bump it wherever the
-			// stats are bumped so the salted wppo_cache_size /
-			// wppo_total_js_css entries stay consistent outside clear_cache()
+			// stats are bumped so the salted `wppo_cache_stats` /
+			// `wppo_total_js_css` entries stay consistent outside clear_cache()
 			// (smart purge, combine_css) too.
 			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
@@ -5917,22 +5918,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $stats;
 			}
 
-			// Fallback: check legacy split transients (pre-unified) for BC during upgrade.
-			$legacy_size  = get_transient( Util::transient_key( 'wppo_cache_size' ) );
-			$legacy_count = get_transient( Util::transient_key( 'wppo_cache_count' ) );
-			if ( false !== $legacy_size && false !== $legacy_count ) {
-				$stats['size']         = (string) $legacy_size;
-				$stats['cached_pages'] = (int) $legacy_count;
-				// Promote to unified key atomically.
-				$unified = array(
-					'size'  => $stats['size'],
-					'count' => $stats['cached_pages'],
-				);
-				self::store_cache_stats( $unified, $stats_key );
-				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
-				return $stats;
-			}
-
 			// Cache miss: compute size and page count in a single recursive
 			// walk so large caches pay one filesystem enumeration, not two.
 			// Stampede guard (issue #1101): concurrent misses collapse toward one
@@ -6012,9 +5997,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				);
 				self::store_cache_stats( $unified, $stats_key );
 				$write_stale_stats( $unified );
-				// Also prime legacy keys for any external consumers still reading them.
-				set_transient( Util::transient_key( 'wppo_cache_size' ), $stats['size'], 15 * MINUTE_IN_SECONDS );
-				set_transient( Util::transient_key( 'wppo_cache_count' ), $stats['cached_pages'], 15 * MINUTE_IN_SECONDS );
 
 				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 

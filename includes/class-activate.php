@@ -142,9 +142,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			self::maybe_seed_settings();
 			self::create_activity_log_table();
-			Img_Converter::migrate_img_info_autoload();
-			RUM::migrate_rum_autoload();
-			Pagespeed::migrate_trends_autoload();
+			// One-time autoload backfills only for pre-existing installs: a fresh
+			// activation owns no legacy aggregate rows, so skip the writes
+			// entirely (zero migrated rows on fresh installs).
+			if ( $has_activation_time ) {
+				Img_Converter::migrate_img_info_autoload();
+				RUM::migrate_rum_autoload();
+				Pagespeed::migrate_trends_autoload();
+			}
 			self::maybe_run_upgrades( ! $has_activation_time );
 		}
 
@@ -178,13 +183,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		/**
 		 * Runs one-time upgrade routines when the plugin version changes.
 		 *
-		 * Compares the stored plugin version option against a fixed version floor
-		 * and executes version-specific migrations once. On fresh activation the
-		 * activation hook fires and $is_fresh_install is true, so the version is
-		 * recorded without evicting a shared object cache that can hold no legacy
-		 * keys. On routine plugin updates the activation hook does not fire, so
-		 * Main hooks this into admin_init and a background cron event. The stored
-		 * version is only rolled forward once a migration completes successfully.
+		 * Compares the stored plugin version option against the current plugin
+		 * version and a fixed legacy floor, and executes version-specific
+		 * migrations once. On fresh activation the activation hook fires and
+		 * $is_fresh_install is true, so the version is recorded without
+		 * allocating any migration rows. On routine plugin updates the
+		 * activation hook does not fire, so Main hooks this into admin_init
+		 * and a background cron event. The one-shot routines are version-gated
+		 * (never marker-gated), so fresh installs create zero `*_migrated`
+		 * rows and steady-state requests perform zero migration writes. The
+		 * stored version is only rolled forward once a migration completes
+		 * successfully.
+		 *
+		 * Fail-open: when the stored version is missing or unparseable on a
+		 * non-fresh path, the shim is skipped (treated as already-migrated)
+		 * while still rolling the version forward, rather than re-running
+		 * writes. Uses per-site get_option() so multisite sites migrate
+		 * independently with no cross-site leakage.
 		 *
 		 * @param bool $is_fresh_install True when running from a brand-new
 		 *                               activation (no prior install on this site).
@@ -201,15 +216,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return;
 			}
 
-			// One-time backfill: large aggregate options created by older
-			// releases defaulted to autoload=yes. Flip them to autoload=false
-			// once so they stop loading via alloptions on every request.
-			self::maybe_migrate_option_autoload();
+			// Fail-open: without a plausible stored version there is nothing to
+			// compare against — skip the one-shot writes instead of re-running
+			// them, but still roll the version forward. Never fatal.
+			if ( ! is_string( $stored_version ) || '' === $stored_version || ! self::is_plausible_version( $stored_version ) ) {
+				update_option( self::VERSION_OPTION, WPPO_VERSION, false );
+				return;
+			}
+
+			// Steady state (fresh installs land here on every admin_init/cron
+			// retry after activation recorded the current version): no
+			// migration work remains, so return with zero reads beyond the
+			// version check and zero writes.
+			if ( ! defined( 'WPPO_VERSION' ) || version_compare( $stored_version, WPPO_VERSION, '>=' ) ) {
+				return;
+			}
+
+			// Genuine upgrade path only: one-time backfill for the large
+			// aggregate options created by older releases with autoload=yes.
+			// The helpers are idempotent and the version roll-forward below
+			// keeps them one-shot, so no marker option is allocated.
+			Img_Converter::migrate_img_info_autoload();
+			RUM::migrate_rum_autoload();
+			Pagespeed::migrate_trends_autoload();
 
 			// One-time eviction: legacy unsalted keys can only exist once, on
 			// installs that predate the release shipping this fix. Gate on a fixed
 			// version floor so future version bumps never re-flush the shared cache.
 			if ( version_compare( $stored_version, self::LEGACY_FLUSH_FLOOR, '>=' ) ) {
+				update_option( self::VERSION_OPTION, WPPO_VERSION, false );
 				return;
 			}
 
@@ -226,23 +261,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		}
 
 		/**
-		 * One-time backfill flipping large aggregate options to autoload=false.
+		 * Whether a stored version string is plausible enough to gate on.
 		 *
-		 * Rows created by older releases defaulted to autoload=yes and keep
-		 * loading via alloptions on every request. Guarded by a flag option
-		 * so the DB writes run once, not on every admin_init.
+		 * Guards the one-shot version gate against empty/garbage rows (e.g. a
+		 * manually deleted or corrupted `wppo_version` option) so version
+		 * detection failure fails open (skip the shim) instead of re-running
+		 * migration writes on every request.
 		 *
-		 * @since 2.0.0
-		 * @return void
+		 * @param string $stored_version Raw stored version value.
+		 * @return bool True when the value looks like a dotted version number.
+		 * @since NEXT
 		 */
-		public static function maybe_migrate_option_autoload(): void {
-			if ( get_option( 'wppo_autoload_migrated', false ) ) {
-				return;
-			}
-			Img_Converter::migrate_img_info_autoload();
-			RUM::migrate_rum_autoload();
-			Pagespeed::migrate_trends_autoload();
-			update_option( 'wppo_autoload_migrated', 1, false );
+		private static function is_plausible_version( string $stored_version ): bool {
+			return (bool) preg_match( '/^\d[\d.]*(?:[-+][0-9A-Za-z.]+)?$/', $stored_version );
 		}
 
 		/**
@@ -257,6 +288,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @since 1.8.1
 		 */
 		public static function schedule_upgrade_routine( int $delay = MINUTE_IN_SECONDS ): void {
+			if ( ! function_exists( 'wp_next_scheduled' ) || ! function_exists( 'wp_schedule_single_event' ) ) {
+				return;
+			}
 			if ( ! wp_next_scheduled( 'wppo_run_upgrades' ) ) {
 				wp_schedule_single_event( time() + $delay, 'wppo_run_upgrades' );
 			}
