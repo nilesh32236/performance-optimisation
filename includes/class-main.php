@@ -936,11 +936,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php';
 			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php';
+			// Modularity (issue #1443): the LiteSpeed-only crawler + ESI stack
+			// is parsed only when it can act. Non-LiteSpeed frontend requests
+			// never pay the parse + memory cost. Fail-open: when detection is
+			// unavailable the stack still loads (today's behaviour). Method-level
+			// fail-closed checks (is_litespeed(), is_esi_available()) stay as
+			// defence in depth. Server-agnostic classes (AI_Adaptive,
+			// Edge_Cache, Edge_Purger, CDN, ...) are always loaded below.
+			if ( self::should_load_litespeed_stack() ) {
+				if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php' ) ) {
+					require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php';
+				}
+				if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php' ) ) {
+					require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php';
+				}
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-llms.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-llms.php';
@@ -979,10 +988,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// the hot path — a file is required only on an actual missing-class
 			// failure. Classes already required unconditionally above
 			// (Server_Rules, Header_Emitter, LiteSpeed_Integration,
-			// LiteSpeed_Crawler, LiteSpeed_ESI, Llms, OD_Bridge, Bfcache,
+			// Llms, OD_Bridge, Bfcache,
 			// AI_Adaptive, Edge_Cache, Edge_Purger, CDN, Builder_Purge_Watcher,
 			// Perf_Translations) are intentionally omitted here to avoid
-			// duplicate probes.
+			// duplicate probes. LiteSpeed_Crawler + LiteSpeed_ESI are included
+			// below so late callers (cron, abilities, integration info) still
+			// resolve them via autoload when includes() skipped the eager load
+			// on non-LiteSpeed requests.
 			$fallback_map = array(
 				'Abilities'              => 'class-abilities.php',
 				'Activate'               => 'class-activate.php',
@@ -1002,6 +1014,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Htaccess_Handler'       => 'class-htaccess-handler.php',
 				'Image_Optimisation'     => 'class-image-optimisation.php',
 				'Img_Converter'          => 'class-img-converter.php',
+				'LiteSpeed_Crawler'      => 'class-litespeed-crawler.php',
+				'LiteSpeed_ESI'          => 'class-litespeed-esi.php',
 				'Log'                    => 'class-log.php',
 				'Metabox'                => 'class-metabox.php',
 				'Object_Cache'           => 'class-object-cache.php',
@@ -1044,6 +1058,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command', false ) ) {
 					\WP_CLI::add_command( 'wppo', 'PerformanceOptimise\Inc\WPPO_CLI_Command' );
 				}
+			}
+		}
+
+		/**
+		 * Whether the LiteSpeed-only crawler + ESI stack should be loaded.
+		 *
+		 * Pay-only-for-what-you-use gate for server-specific code: frontend
+		 * requests on Apache/Nginx skip parsing the crawler + ESI classes.
+		 * Management contexts (WP-CLI, cron, admin, REST) always load so
+		 * late callers (cron batches, abilities, integration info) keep
+		 * working. Fail-open: any detection error returns true (today's
+		 * always-load behaviour) — never fatal. Multisite-safe: pure server
+		 * detection, no options or transients touched. Server detection honours
+		 * the documented `wppo_litespeed_is_litespeed` filter via
+		 * LiteSpeed_Integration::is_litespeed().
+		 *
+		 * @since NEXT
+		 * @return bool True when the LiteSpeed stack should be required.
+		 */
+		private static function should_load_litespeed_stack(): bool {
+			try {
+				if ( defined( 'WP_CLI' ) && WP_CLI ) {
+					return true;
+				}
+				if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) {
+					return true;
+				}
+				if ( function_exists( 'is_admin' ) && is_admin() ) {
+					return true;
+				}
+				if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+					return true;
+				}
+				// Prefer the filtered detector so the documented
+				// `wppo_litespeed_is_litespeed` filter keeps working (e.g. proxy-header
+				// overrides): LiteSpeed_Integration::is_litespeed() delegates to
+				// Server_Rules plus the filter, so default behaviour is unchanged.
+				// LiteSpeed_Integration is always required just above.
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_litespeed' ) ) {
+					return LiteSpeed_Integration::is_litespeed();
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'is_litespeed' ) ) {
+					return Server_Rules::is_litespeed();
+				}
+				// Fallback when Server_Rules is unavailable: raw
+				// SERVER_SOFTWARE substring check (mirrors
+				// LiteSpeed_Integration::is_litespeed() fallback).
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Sanitized below via wp_unslash()/sanitize_text_field() with function_exists() fallbacks.
+				$raw = isset( $_SERVER['SERVER_SOFTWARE'] ) ? (string) $_SERVER['SERVER_SOFTWARE'] : '';
+				if ( '' !== $raw && function_exists( 'wp_unslash' ) ) {
+					$raw = (string) wp_unslash( $raw );
+				}
+				if ( '' !== $raw && function_exists( 'sanitize_text_field' ) ) {
+					$raw = (string) sanitize_text_field( $raw );
+				}
+				$s = strtolower( $raw );
+				// Note: 'openlitespeed' contains 'litespeed', so a single strpos
+				// covers both variants.
+				return false !== strpos( $s, 'litespeed' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
 			}
 		}
 
@@ -1708,8 +1784,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'init' ) ) {
 				LiteSpeed_Integration::init();
 			}
-			// P5 ESI bridge (Enterprise only — OLS has no ESI).
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'init' ) ) {
+			// P5 ESI bridge (Enterprise only — OLS has no ESI). Gated on the
+			// LiteSpeed stack check with a no-autoload class probe so a
+			// non-LiteSpeed frontend never lazy-loads ESI via the autoloader
+			// (issue #1443). LiteSpeed_Integration::init() above stays
+			// unconditional: it is always loaded and self-gates internally.
+			if ( self::should_load_litespeed_stack() && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', false ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'init' ) ) {
 				LiteSpeed_ESI::init();
 			}
 		}
