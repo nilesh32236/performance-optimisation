@@ -1713,6 +1713,33 @@ Filters the byte threshold at or under which source images skip conversion (tiny
 
 ---
 
+### `wppo_smart_quality`
+Filters whether smart quality mapping is applied to image conversion. Return falsy to use the flat quality rule without AVIF/WebP mapping or size/role offsets. @since 2.0.0.
+
+**Parameters:**
+- `$smart` *(bool)* — Default from the `image_optimisation.smartQuality` setting (`true`).
+
+---
+
+### `wppo_smart_quality_value`
+Filters the resolved smart quality value before size/role offsets are applied. Return an int (or numeric string) in 1-100 to override the heuristic outright; booleans and out-of-range values fail open to the base quality. @since NEXT.
+
+**Parameters:**
+- `$quality` *(int)* — Base quality before size/role offsets.
+- `$mime` *(string)* — Output MIME type (e.g. `image/webp`).
+- `$effective_size` *(array)* — Effective source dimensions (`width`/`height`), derived from the `-WxH` filename suffix when `$size` is empty.
+- `$source_image` *(string)* — Source filesystem path (may be empty).
+
+**Example:**
+
+```php
+add_filter( 'wppo_smart_quality_value', function ( $quality, $mime, $size, $source ) {
+    return 70;
+}, 10, 4 );
+```
+
+---
+
 ### `wppo_smart_pipeline_enabled`
 Kill-switch filter for the size-compare smart-compress + local LQIP placeholder pipeline. Return falsy to disable both features: oversized converted siblings are kept (legacy behaviour) and native-lazy images receive no placeholder attributes. Server-side only — zero external HTTP either way. @since NEXT.
 

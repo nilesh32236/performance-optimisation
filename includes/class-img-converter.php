@@ -375,7 +375,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return 5;
 			}
 			$base = strtolower( (string) basename( $source_image ) );
-			if ( false !== strpos( $base, 'thumb' ) ) {
+			$stem = strtolower( (string) pathinfo( $base, PATHINFO_FILENAME ) );
+			if ( 1 === preg_match( '/(^|[._-])thumb([._-]|$)/', $stem ) ) {
 				return -5;
 			}
 			if ( 1 === preg_match( '/-(\d+)x(\d+)(?:\.[a-z0-9]+)?$/i', $base, $matches ) ) {
@@ -1500,6 +1501,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$smart = apply_filters( 'wppo_smart_quality', (bool) $smart );
 			}
 
+			// The effective size (derived from the `-WxH` suffix when `$size`
+			// is empty) feeds both the base resolution and the offsets so
+			// direct callers with a suffixed `$source_image` get consistent
+			// inputs.
+			$effective_size = $size;
+			if ( empty( $effective_size ) && '' !== $source_image ) {
+				$effective_size = $this->get_source_image_dimensions( $source_image );
+			}
 			if ( $smart && 'image/avif' === $mime ) {
 				// Explicit encoder chain (issue #1258): GD `imageavif()`
 				// (PHP >= 8.2), then Imagick AVIF delegate, then WebP.
@@ -1509,13 +1518,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				// is_avif_encoder_available() / is_imagick_avif_available()).
 				$gd_avif_available = function_exists( 'imageavif' ) && version_compare( PHP_VERSION, '8.2', '>=' );
 				if ( $gd_avif_available || self::is_imagick_avif_available() ) {
-					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
+					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $effective_size );
 					$base         = min( 100, max( 1, $webp_quality - 20 ) );
 				} else {
-					$base = $this->resolve_encode_quality( 'image/webp', 82, $size );
+					$base = $this->resolve_encode_quality( 'image/webp', 82, $effective_size );
 				}
 			} else {
-				$base = $this->resolve_encode_quality( $mime, 82, $size );
+				$base = $this->resolve_encode_quality( $mime, 82, $effective_size );
 			}
 
 			$base = min( 100, max( 1, (int) $base ) );
@@ -1524,13 +1533,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			// Explicit numeric override wins over the heuristic when valid.
-			// The effective size (derived from the `-WxH` suffix when `$size`
-			// is empty) and the source path are passed so consumers can make
-			// role-aware decisions.
-			$effective_size = $size;
-			if ( empty( $effective_size ) && '' !== $source_image ) {
-				$effective_size = $this->get_source_image_dimensions( $source_image );
-			}
+			// Only int and numeric-string returns are honoured; booleans
+			// (notably `__return_true`/`__return_false`), floats, and other
+			// types fail open to the flat base instead of coercing (e.g.
+			// `true` must not become quality 1).
 			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_smart_quality_value' ) ) {
 				/**
 				 * Filter the resolved smart quality value.
@@ -1542,7 +1548,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				 * @param string $source_image Source filesystem path (may be empty).
 				 */
 				$override = apply_filters( 'wppo_smart_quality_value', $base, $mime, $effective_size, $source_image );
-				if ( is_scalar( $override ) ) {
+				if ( is_int( $override ) || ( is_string( $override ) && is_numeric( $override ) ) ) {
 					$override = (int) $override;
 					if ( 1 <= $override && 100 >= $override ) {
 						return $override;
@@ -1559,9 +1565,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// so this path is a documented no-op for offsets; a WP_DEBUG
 			// notice is logged to keep the suppression visible.
 			if ( function_exists( 'has_filter' ) && ( has_filter( 'jpeg_quality' ) || has_filter( 'wp_editor_set_quality' ) ) ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( 'error_log' ) ) {
-					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only notice documenting the documented offset suppression.
-					error_log( 'WPPO: smart quality offsets suppressed by jpeg_quality/wp_editor_set_quality filter; using filtered base quality.' );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					static $logged = false;
+					if ( ! $logged ) {
+						$logged = true;
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only notice documenting the documented offset suppression.
+						error_log( 'WPPO: smart quality offsets suppressed by jpeg_quality/wp_editor_set_quality filter; using filtered base quality.' );
+					}
 				}
 				return $base;
 			}
