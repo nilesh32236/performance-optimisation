@@ -452,16 +452,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 				$converted          = 0;
 				$total_pending      = 0;
+				// Shared across formats so the 1-100 clamp applies per invocation,
+				// not per format (conversionFormat 'both' would otherwise allow 2x batch).
+				$total_counter = 0;
 
 				foreach ( $formats_to_process as $fmt ) {
 					$images         = $img_info['pending'][ $fmt ] ?? array();
 					$total_pending += count( $images );
-					$counter        = 0;
 					foreach ( $images as $img ) {
-						if ( $counter >= $batch_size ) {
-							break;
+						if ( $total_counter >= $batch_size ) {
+							break 2;
 						}
-						++$counter;
+						++$total_counter;
 						$source_path = wp_normalize_path( ABSPATH . $img );
 						$resolved    = realpath( $source_path );
 						if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {

@@ -1676,6 +1676,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					$img_info = Img_Converter::get_img_info();
 				}
 
+				// Shared across formats so the 1-100 clamp applies per cron run,
+				// not per format (conversionFormat 'both' would otherwise allow 2x batch).
+				$total_counter = 0;
 				foreach ( $formats_to_process as $format ) {
 					$images = $img_info['pending'][ $format ] ?? array();
 
@@ -1683,13 +1686,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						continue;
 					}
 
-					$counter = 0;
 					foreach ( $images as $img ) {
-						if ( $counter >= $batch_size ) {
-							break;
+						if ( $total_counter >= $batch_size ) {
+							break 2;
 						}
 
-						++$counter;
+						++$total_counter;
 
 						$source_path = wp_normalize_path( ABSPATH . $img );
 						$resolved    = realpath( $source_path );
