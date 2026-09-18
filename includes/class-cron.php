@@ -757,6 +757,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						}
 					}
 					delete_option( 'wppo_preload_cron_offset' );
+				} elseif ( 0 !== $old_offset ) {
+					// Stale offset orphan: the cursor already advanced (e.g.
+					// downgrade/re-upgrade or mid-cycle update), so no mapping is
+					// needed — just delete the legacy row so it never leaks.
+					delete_option( 'wppo_preload_cron_offset' );
 				}
 
 				$post_types = get_post_types( array( 'public' => true ), 'names' );

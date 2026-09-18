@@ -134,6 +134,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				update_option( 'wppo_activation_time', time() );
 			}
 
+			// Capture the stored version before rolling it forward below, so the
+			// reactivation backfills can honor the same AUTOLOAD_BACKFILL_FLOOR
+			// gate as maybe_run_upgrades() instead of running unconditionally.
+			$stored_version_before_upgrade = get_option( self::VERSION_OPTION, '' );
+
 			// Record the current version so fresh installs skip the one-time
 			// version-upgrade routine (drop-in regeneration + full cache clear).
 			update_option( 'wppo_version', WPPO_VERSION, false );
@@ -156,10 +161,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			self::maybe_seed_settings();
 			self::create_activity_log_table();
-			// One-time autoload backfills only for pre-existing installs: a fresh
-			// activation owns no legacy aggregate rows, so skip the writes
-			// entirely (zero migrated rows on fresh installs).
-			if ( $has_activation_time ) {
+			// One-time autoload backfills only for pre-existing installs that need
+			// them: a fresh activation owns no legacy aggregate rows, so skip the
+			// writes entirely (zero migrated rows on fresh installs). Gated on
+			// the same AUTOLOAD_BACKFILL_FLOOR as maybe_run_upgrades() so
+			// reactivation of a site already at/above the floor pays zero
+			// backfill writes (and never re-wipes the field-LCP cache); a
+			// missing/garbage stored version fails open and runs the cheap
+			// idempotent backfills once, mirroring maybe_run_upgrades().
+			$needs_autoload_backfill = (
+			! is_string( $stored_version_before_upgrade )
+			|| '' === $stored_version_before_upgrade
+			|| ! self::is_plausible_version( $stored_version_before_upgrade )
+			|| version_compare( $stored_version_before_upgrade, self::AUTOLOAD_BACKFILL_FLOOR, '<' )
+			);
+			if ( $has_activation_time && $needs_autoload_backfill ) {
 				Img_Converter::migrate_img_info_autoload();
 				RUM::migrate_rum_autoload();
 				Pagespeed::migrate_trends_autoload();
