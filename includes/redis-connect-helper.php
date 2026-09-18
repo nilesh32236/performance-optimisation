@@ -552,7 +552,7 @@ if ( ! function_exists( 'wppo_validate_tls_ca_file' ) ) {
 	 * system CA store.
 	 *
 	 * @param string $path Raw CA file path from config.
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return string Resolved path or '' when invalid.
 	 */
 	function wppo_validate_tls_ca_file( $path ) {

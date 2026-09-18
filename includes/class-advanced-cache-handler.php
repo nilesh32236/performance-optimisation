@@ -178,7 +178,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 *
 		 * @param string $raw_host Raw host value (e.g. `$_SERVER['HTTP_HOST']`).
 		 * @return string Normalized lowercase host, or '' when invalid.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function normalize_dropin_host( string $raw_host ): string {
 			$domain = trim( $raw_host );
@@ -236,7 +236,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 * @param string $request_host   Raw request host (e.g. `$_SERVER['HTTP_HOST']`).
 		 * @param string $canonical_host Baked canonical host.
 		 * @return bool True when the request may read the canonical cache tree.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_host_allowed( string $request_host, string $canonical_host ): bool {
 			$canonical = self::normalize_dropin_host( $canonical_host );
@@ -248,6 +248,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				return false;
 			}
 			return $request === $canonical;
+		}
+
+		/**
+		 * Sanitize a raw host value for drop-in cache-key decisions.
+		 *
+		 * Additive alias of {@see normalize_dropin_host()} using the issue's
+		 * canonical API name (`Advanced_Cache_Handler::sanitize_host`).
+		 * Pure PHP primitives only (no `Util`, `sanitize_*`, `wp_*`, or
+		 * filter calls) so it stays safe to call pre-boot when WordPress
+		 * is never loaded.
+		 *
+		 * @param string $raw_host Raw host value (e.g. `$_SERVER['HTTP_HOST']`).
+		 * @return string Normalized lowercase host, or '' when invalid.
+		 * @since NEXT
+		 */
+		public static function sanitize_host( string $raw_host ): string {
+			return self::normalize_dropin_host( $raw_host );
 		}
 
 		/**
@@ -445,7 +462,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// uncached (falls through to WordPress) and can never create or
 			// serve a poisoned file. Empty canonical fails open to uncached.
 			// The inlined rule mirrors is_host_allowed()/normalize_dropin_host()
-			// (@since NEXT) — the drop-in file itself must stay Util-free, so
+			// (@since 2.2.0) — the drop-in file itself must stay Util-free, so
 			// the rule is duplicated inline rather than called.
 			//
 			// Known tradeoff: a single canonical host is baked at create() time
@@ -524,9 +541,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$request_host  = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $request_base ) );' . PHP_EOL .
 			'$request_uri   = isset( $_SERVER[\'REQUEST_URI\'] ) ? (string) parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH ) : \'\';' . PHP_EOL .
 			'$request_uri   = rawurldecode( $request_uri );' . PHP_EOL .
-			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
+			'// Pre-boot: wp_normalize_path() does not exist when this drop-in serves (before WP boots), so use pure str_replace only — no wp_* calls on the serve path.' . PHP_EOL .
+			'$request_uri   = str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
 			'$cache_life    = ' . $cache_life . ';' . PHP_EOL . PHP_EOL .
 
+			'// Belt-and-braces: backslashes were already stripped above via str_replace,' . PHP_EOL .
+			'// so the strpos( $request_uri, \'\\\\\' ) check below is defense-in-depth only.' . PHP_EOL .
 			'if ( \'\' === $site_domain || \'\' === $canonical_host || \'\' === $request_host || $request_host !== $canonical_host || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false || strpos( $request_uri, "\0" ) !== false || strpos( $site_domain, "\0" ) !== false || false !== strpos( $request_uri, \'\\\\\' ) || (bool) preg_match( \'#^[a-zA-Z]:#\', ltrim( $request_uri ) ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .

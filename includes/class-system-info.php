@@ -288,7 +288,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * Exposes detection + coexistence mode + drop-in arbitration for the SPA.
 		 * Null-safe and cached per request via LiteSpeed_Integration statics.
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @return array{
 		 *     detected: bool,
 		 *     server_type: string,
@@ -552,7 +552,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * zero and multisite transients cannot leak across sites.
 		 *
 		 * @since  1.8.0
-		 * @since  NEXT `opcache_enabled`, `opcache_enable_cli`, `jit_enabled`
+		 * @since  2.2.0 `opcache_enabled`, `opcache_enable_cli`, `jit_enabled`
 		 *               and `jit_mode` rows plus brief per-site transient cache
 		 *               with fail-open `try/catch` probing.
 		 * @return array {
@@ -617,7 +617,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * for that row; callers wrap this in `try/catch` so a throw still
 		 * yields a renderable array.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array OPcache info rows (see get_opcache()).
 		 */
 		private static function build_opcache_info(): array {
@@ -705,7 +705,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * unreadable. Guarded with `function_exists( 'ini_get' )` and
 		 * fail-open `try/catch` so a probe failure never blocks the screen.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $key Ini key, e.g. `opcache.enable`.
 		 * @return string Display label.
 		 */
@@ -749,7 +749,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * JIT cannot engage even when `opcache.jit` names a mode. Absent
 		 * entries render as `Not available` (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{enabled:string,mode:string} Display labels.
 		 */
 		private static function get_jit_info(): array {
@@ -808,7 +808,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * fail-open label (issue #1309 acceptance: readable state shows the
 		 * status, otherwise `Not available`).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Display label.
 		 */
 		private static function not_available_label(): string {
@@ -921,7 +921,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * "-log") so exact server versions cannot be fingerprinted from the
 		 * system info endpoint. Unparseable values are reported as null.
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @param  string|null $version Raw version string.
 		 * @return string|null Major.minor version series, or null when unavailable or unparseable.
 		 */
@@ -943,7 +943,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * The raw banner embeds exact version numbers (e.g. "Apache/2.4.41"),
 		 * which is fingerprintable; only the product family is exposed.
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @param  string|null $software Raw SERVER_SOFTWARE value.
 		 * @return string|null Normalized family name, 'Unknown' for unrecognized
 		 *                     servers, or null when unavailable.

@@ -4,7 +4,7 @@ Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
-Stable tag: 2.1.0
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -99,6 +99,18 @@ After activation, you can manage the following from the settings tabs:
 - **Tools** — Import/export settings for quick deployment across multiple sites.
 
 == Changelog ==
+
+= 2.2.0 (2026-09-18) =
+* New: Auto-delay known third parties when idle — opt-in Delay-JS mode that defers curated vendor scripts until the browser is idle, with load-when-idle parity, per-attribute allowlist matching, and a `wppo_delay_js_third_party_auto_patterns` filter. Payment gateways and consent banners stay eager by default.
+* New: four opt-in Delay-JS compatibility presets — Consent, Analytics, Gallery and jQuery legacy — each with its own exclusions filter. All default off.
+* New: WooCommerce cache self-test with plain-language remediation and safe-mode call to action.
+* New: RUM LCP-element attribution and slow-resource audit powering preload suggestions.
+* Improvement: LCP auto-preload and fetchpriority hardening, including CSS background-image heroes (`wppo_computed_css_hero_url` filter).
+* Improvement: System Info OPcache/JIT rows with PHP 8.5-safe probes.
+* Improvement: Action Scheduler 4.x unique-args adoption, failed-action purge (opt-in filter), admin console secret redaction.
+* Security: capability-first dismiss gate, wp_rest nonce on Abilities, per-endpoint throttles (5/60s), ESI nonce-refresh budget tiering, LLM endpoint trust boundary.
+* Improvement: settings autoload hardening (autoload=false writes + one-time repair), activity-log memo, bounded scheduler snapshots, crawler deadline.
+* Improvement: accessibility — stable aria ids, labeled dismiss links, contrast-safe cues, strict-CSP downgrade for critical CSS.
 
 = 2.1.0 (2026-09-17) =
 * Security: hardened ESI bridge (nonce-gated cart/nonce punch-holes with per-IP throttle, kses denylist, fail-closed), REST rate limits on cache/image/import/autoload endpoints, strict type guards, SameSite=Lax vary cookie, and an nginx-exposure probe with admin notice.

@@ -7,7 +7,7 @@
  * keeps every existing call site working with zero behaviour change.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -165,7 +165,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * fallback paths can reuse the canonical sanitizer instead of
 		 * hand-mirroring it (see LiteSpeed_ESI::sanitize_esi_tag_value()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $tag Raw tag value.
 		 * @return string Sanitized tag value.
 		 */
