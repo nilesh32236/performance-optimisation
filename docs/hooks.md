@@ -1230,7 +1230,7 @@ Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since NE
 ---
 
 ### `wppo_ai_css_refresh_queued`
-Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since NEXT. Lets the critical-CSS layer hook a template refresh without coupling the bridge to template mapping.
+Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since NEXT. In-repo consumer `Main::on_ai_css_refresh_queued()` regenerates the matching critical-CSS template (`home`/`page`/`single`); third parties may hook additional template refreshes without coupling the bridge to template mapping.
 
 **Parameters:**
 - `$url` *(string)* — Regressed URL.

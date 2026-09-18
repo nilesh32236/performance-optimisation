@@ -2990,9 +2990,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
 					$settings = Util::get_settings();
 					if ( isset( $settings['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
-						$candidate = (int) $settings['ai_adaptive']['css_refresh_cooldown_days'];
-						if ( $candidate >= 0 ) {
-							$days = $candidate;
+						$raw = $settings['ai_adaptive']['css_refresh_cooldown_days'];
+						if ( is_numeric( $raw ) && (int) $raw >= 0 ) {
+							$days = (int) $raw;
 						}
 					}
 				}
@@ -3342,24 +3342,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return $fallback;
 				}
 				$job_args = array( 'post_id' => $post_id );
-				if ( function_exists( 'as_has_scheduled_action' ) ) {
-					try {
-						if ( as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
+				// Atomic-first on AS 4.x (issue #1407 review, same pattern as
+				// the #1408 used_css_regenerate fix): the `$unique` insert
+				// dedupes hook+args+group in the store, closing the
+				// check-then-act race where two concurrent suggestion renders
+				// both passed as_has_scheduled_action() and double-queued. A 0
+				// return is ambiguous (deduped vs failure), so re-probe the
+				// guard once to report "already queued" honestly.
+				$job_id = 0;
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
+						$job_id = (int) Util::enqueue_unique_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+					} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
+						$already_pending = false;
+						if ( function_exists( 'as_has_scheduled_action' ) ) {
+							try {
+								$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$already_pending = false;
+							}
+						}
+						if ( $already_pending ) {
 							$fallback['reason'] = 'already-queued';
 							return $fallback;
 						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+						$job_id = (int) as_enqueue_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
 					}
-				}
-				$job_id = 0;
-				try {
-					$job_id = (int) as_enqueue_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$job_id = 0;
 				}
 				if ( $job_id <= 0 ) {
+					$already_pending = false;
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$already_pending = false;
+						}
+					}
+					if ( $already_pending ) {
+						$fallback['reason'] = 'already-queued';
+						return $fallback;
+					}
 					$fallback['reason'] = 'enqueue-failed';
 					return $fallback;
 				}
@@ -3383,7 +3410,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					 * Fires after an LCP regression queues a used-CSS refresh.
 					 *
 					 * Lets the critical-CSS layer hook a template refresh in
-					 * without coupling the bridge to template mapping.
+					 * without coupling the bridge to template mapping. In-repo
+					 * consumer: Main::on_ai_css_refresh_queued() regenerates the
+					 * matching critical-CSS template (`home`/`page`/`single`).
 					 *
 					 * @since NEXT
 					 * @param string $url regressed URL.
