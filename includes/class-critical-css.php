@@ -785,8 +785,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					try {
 						$cart_id     = (int) get_option( 'woocommerce_cart_page_id', 0 );
 						$checkout_id = (int) get_option( 'woocommerce_checkout_page_id', 0 );
-						if ( ( $cart_id > 0 || $checkout_id > 0 ) && function_exists( 'get_the_ID' ) ) {
-							$current = (int) get_the_ID();
+						if ( ( $cart_id > 0 || $checkout_id > 0 ) ) {
+							$current = 0;
+							if ( function_exists( 'get_queried_object_id' ) ) {
+								try {
+									$current = (int) get_queried_object_id();
+								} catch ( \Throwable $e ) {
+									unset( $e );
+									$current = 0;
+								}
+							}
+							if ( 0 === $current && function_exists( 'get_the_ID' ) ) {
+								try {
+									$current = (int) get_the_ID();
+								} catch ( \Throwable $e ) {
+									unset( $e );
+									$current = 0;
+								}
+							}
 							if ( $current > 0 && ( $current === $cart_id || $current === $checkout_id ) ) {
 								$result = true;
 							}
@@ -5829,10 +5845,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// this request (issue #1255 review): the page carries zero
 			// critical CSS, so deferral would open a FOUC window the
 			// render-blocking stylesheets avoid.
-			if ( isset( self::$ccss_defer_blocked[ self::get_template_hash() ] ) ) {
+			$template_hash = self::get_template_hash();
+			if ( isset( self::$ccss_defer_blocked[ $template_hash ] ) ) {
 				return $tag;
 			}
-			if ( ! self::ccss_exists( self::get_template_hash() ) ) {
+			if ( ! self::ccss_exists( $template_hash ) ) {
 				return $tag;
 			}
 
