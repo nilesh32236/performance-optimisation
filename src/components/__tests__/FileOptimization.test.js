@@ -18,6 +18,8 @@ import FileOptimization, {
 	AGGRESSIVE_PRESET_BUNDLE,
 	isAggressiveDelay,
 	isSafePresetActive,
+	getServerPresetBundle,
+	resolvePresetBundle,
 } from '../FileOptimization';
 
 // Mock the API request (sandbox perf test goes through the validated
@@ -1201,6 +1203,8 @@ describe( 'FileOptimization Component', () => {
 					delayJS: true,
 					delayJSCommercePreset: true,
 					delayJSBuilderPreset: true,
+					delayJSInteractionPreset: true,
+					delayJSJqueryPreset: true,
 				} }
 				serverRules={ {} }
 			/>
@@ -1767,6 +1771,7 @@ describe( 'FileOptimization Component', () => {
 					delayJSBuilderPreset: true,
 					delayJSCommercePreset: true,
 					delayJSInteractionPreset: true,
+					delayJSJqueryPreset: true,
 				} )
 			).toBe( false );
 			expect(
@@ -1775,6 +1780,19 @@ describe( 'FileOptimization Component', () => {
 					delayJSBuilderPreset: false,
 					delayJSCommercePreset: true,
 					delayJSInteractionPreset: true,
+					delayJSJqueryPreset: true,
+				} )
+			).toBe( true );
+		} );
+
+		it( 'isAggressiveDelay covers a jquery-only-off state', () => {
+			expect(
+				isAggressiveDelay( {
+					delayJS: true,
+					delayJSBuilderPreset: true,
+					delayJSCommercePreset: true,
+					delayJSInteractionPreset: true,
+					delayJSJqueryPreset: false,
 				} )
 			).toBe( true );
 		} );
@@ -1790,6 +1808,8 @@ describe( 'FileOptimization Component', () => {
 					delayJSCommercePreset: true,
 					delayJSInteractionPreset: true,
 					delayJSJqueryPreset: true,
+					delayJSSafeMode: true,
+					elementorSafeMode: true,
 				} )
 			).toBe( true );
 			expect(
@@ -1802,9 +1822,61 @@ describe( 'FileOptimization Component', () => {
 					delayJSCommercePreset: true,
 					delayJSInteractionPreset: true,
 					delayJSJqueryPreset: false,
+					delayJSSafeMode: true,
+					elementorSafeMode: true,
+				} )
+			).toBe( false );
+			expect(
+				isSafePresetActive( {
+					minifyJS: true,
+					minifyCSS: true,
+					deferJS: true,
+					delayJS: true,
+					delayJSBuilderPreset: true,
+					delayJSCommercePreset: true,
+					delayJSInteractionPreset: true,
+					delayJSJqueryPreset: true,
+					delayJSSafeMode: false,
+					elementorSafeMode: true,
+				} )
+			).toBe( false );
+			expect(
+				isSafePresetActive( {
+					minifyJS: true,
+					minifyCSS: true,
+					deferJS: true,
+					delayJS: true,
+					delayJSBuilderPreset: true,
+					delayJSCommercePreset: true,
+					delayJSInteractionPreset: true,
+					delayJSJqueryPreset: true,
+					delayJSSafeMode: true,
+					elementorSafeMode: false,
 				} )
 			).toBe( false );
 			expect( isSafePresetActive( {} ) ).toBe( false );
+		} );
+
+		it( 'resolvePresetBundle prefers the server-localised copy with local fallback', () => {
+			expect( getServerPresetBundle( 'safe' ) ).toBeNull();
+			expect( resolvePresetBundle( 'safe' ) ).toBe( SAFE_PRESET_BUNDLE );
+			expect( resolvePresetBundle( 'aggressive' ) ).toBe(
+				AGGRESSIVE_PRESET_BUNDLE
+			);
+
+			global.wppoSettings.presetBundles = {
+				safe: { ...SAFE_PRESET_BUNDLE, minifyJS: false },
+				aggressive: { ...AGGRESSIVE_PRESET_BUNDLE },
+			};
+			expect( getServerPresetBundle( 'safe' ) ).toEqual(
+				expect.objectContaining( { minifyJS: false } )
+			);
+			expect( resolvePresetBundle( 'safe' ) ).toEqual(
+				expect.objectContaining( { minifyJS: false } )
+			);
+			expect( resolvePresetBundle( 'aggressive' ) ).toEqual(
+				expect.objectContaining( { combineCSS: true } )
+			);
 		} );
 
 		it( 'renders the preset panel on the assets tab', () => {
@@ -1950,6 +2022,49 @@ describe( 'FileOptimization Component', () => {
 			} );
 		} );
 
+		it( 'aggressive preset asks for confirmation before applying', async () => {
+			apiCall.mockImplementation( () =>
+				Promise.resolve( { success: true, data: {} } )
+			);
+			render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', {
+						name: /Enable Aggressive Mode/i,
+					} )
+				);
+			} );
+
+			// Confirming applies the bundle; cancelling must not call the API.
+			expect(
+				screen.getByText( /Enable Aggressive Mode\?/i )
+			).toBeInTheDocument();
+			expect( apiCall ).not.toHaveBeenCalledWith(
+				'update_settings',
+				expect.anything()
+			);
+
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: /Enable Anyway/i } )
+				);
+			} );
+
+			await waitFor( () => {
+				expect( apiCall ).toHaveBeenCalledWith(
+					'update_settings',
+					expect.objectContaining( {
+						tab: 'file_optimisation',
+						settings: expect.objectContaining( {
+							combineCSS: true,
+							delayJSBuilderPreset: false,
+						} ),
+					} )
+				);
+			} );
+		} );
+
 		it( 'aggressive preset shows the explicit warning banner', async () => {
 			apiCall.mockImplementation( () =>
 				Promise.resolve( { success: true, data: {} } )
@@ -1961,6 +2076,7 @@ describe( 'FileOptimization Component', () => {
 						delayJSBuilderPreset: true,
 						delayJSCommercePreset: true,
 						delayJSInteractionPreset: true,
+						delayJSJqueryPreset: true,
 					} }
 					serverRules={ {} }
 				/>
@@ -1978,11 +2094,55 @@ describe( 'FileOptimization Component', () => {
 				);
 			} );
 
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: /Enable Anyway/i } )
+				);
+			} );
+
 			await waitFor( () => {
 				expect(
 					screen.getByText( /Aggressive mode is on/i )
 				).toBeInTheDocument();
 			} );
+		} );
+
+		it( 'revert with a missing file slice reports an error and leaves settings untouched', async () => {
+			apiCall.mockImplementation( ( endpoint ) => {
+				if ( 'restore_settings' === endpoint ) {
+					return Promise.resolve( {
+						success: true,
+						message: 'Settings restored successfully.',
+						data: {
+							cache_settings: { enableCache: true },
+						},
+					} );
+				}
+				return Promise.resolve( { success: true, data: {} } );
+			} );
+			render(
+				<FileOptimization
+					options={ { minifyJS: true } }
+					serverRules={ {} }
+				/>
+			);
+
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', {
+						name: /Revert to Previous/i,
+					} )
+				);
+			} );
+
+			await waitFor( () => {
+				expect(
+					screen.getByText( /No file optimisation settings found/i )
+				).toBeInTheDocument();
+			} );
+			expect(
+				screen.queryByText( /Settings restored to the previous/i )
+			).not.toBeInTheDocument();
 		} );
 	} );
 } );

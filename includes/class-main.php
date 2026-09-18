@@ -4217,6 +4217,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Allowlisted top-level settings keys — single source is Util::ALLOWED_SETTINGS_KEYS
 					// (exposed here so JS `ALLOWED_IMPORT_KEYS` can stay in sync without codegen).
 					'allowedSettingsKeys'                  => Util::ALLOWED_SETTINGS_KEYS,
+					// Authoritative one-click preset bundles (issue #1442 review):
+					// the SPA prefers these server-localised copies via
+					// resolvePresetBundle() and only falls back to its local
+					// SAFE_/AGGRESSIVE_PRESET_BUNDLE mirrors when the global
+					// is absent, so the two can never drift. Fail-open getters
+					// (empty array worst case) so localisation never breaks.
+					'presetBundles'                        => array(
+						'safe'       => self::get_safe_preset_bundle(),
+						'aggressive' => self::get_aggressive_preset_bundle(),
+					),
 					// Upgrade auto-purge status (issue #1276): SPA-visible
 					// last-purge reason + safe-mode preview link bypassing
 					// minify (?wppo_nocache=1). Class/method-exists guarded +
@@ -6776,7 +6786,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Whether file-optimisation settings match the Safe preset (issue #1442).
 		 *
 		 * True when the minify/defer/delay pipelines are on together with all
-		 * four safe exclusion presets. Fail-open: any failure returns false.
+		 * four safe exclusion presets plus the two safe-mode guards
+		 * (`delayJSSafeMode`, `elementorSafeMode`) the bundle applies, so
+		 * disabling any of them clears the confirmation instead of
+		 * overstating safety. Fail-open: any failure returns false.
 		 *
 		 * @since NEXT
 		 * @param array<string, mixed> $file_opt file_optimisation settings slice.
@@ -6789,7 +6802,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						return false;
 					}
 				}
-				foreach ( array( 'delayJSBuilderPreset', 'delayJSCommercePreset', 'delayJSInteractionPreset', 'delayJSJqueryPreset' ) as $key ) {
+				$required_safe = array(
+					'delayJSBuilderPreset',
+					'delayJSCommercePreset',
+					'delayJSInteractionPreset',
+					'delayJSJqueryPreset',
+					'delayJSSafeMode',
+					'elementorSafeMode',
+				);
+				foreach ( $required_safe as $key ) {
 					if ( empty( $file_opt[ $key ] ) ) {
 						return false;
 					}
