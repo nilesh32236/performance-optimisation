@@ -1219,29 +1219,45 @@ const FileOptimization = ( {
 		) {
 			return;
 		}
-		const names = detectorSuggestions
+		const deferNames = detectorSuggestions
 			.map( ( item ) =>
-				item && typeof item.handle === 'string' ? item.handle : ''
+				item &&
+				typeof item.handle === 'string' &&
+				( ! Array.isArray( item.fields ) ||
+					item.fields.includes( 'excludeDeferJS' ) )
+					? item.handle
+					: ''
 			)
 			.filter( ( name ) => '' !== name );
+		const delayNames = detectorSuggestions
+			.map( ( item ) =>
+				item &&
+				typeof item.handle === 'string' &&
+				( ! Array.isArray( item.fields ) ||
+					item.fields.includes( 'excludeDelayJS' ) )
+					? item.handle
+					: ''
+			)
+			.filter( ( name ) => '' !== name );
+		const names = Array.from( new Set( [ ...deferNames, ...delayNames ] ) );
 		if ( names.length === 0 ) {
 			return;
 		}
 		setSettings( ( prev ) => {
-			const mergeLines = ( current ) => {
+			const mergeLines = ( current, additions ) => {
 				const existing = toTextLines( current )
 					.split( '\n' )
 					.map( ( line ) => line.trim() )
 					.filter( ( line ) => '' !== line );
 				const merged = Array.from(
-					new Set( [ ...existing, ...names ] )
+					new Set( [ ...existing, ...additions ] )
 				);
 				return merged.join( '\n' );
 			};
 			return {
 				...prev,
-				excludeDeferJS: mergeLines( prev.excludeDeferJS ),
-				excludeDelayJS: mergeLines( prev.excludeDelayJS ),
+				excludeDeferJS: mergeLines( prev.excludeDeferJS, deferNames ),
+				excludeDelayJS: mergeLines( prev.excludeDelayJS, delayNames ),
 			};
 		} );
 		notifySafeMode( {

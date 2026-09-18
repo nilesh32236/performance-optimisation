@@ -7219,7 +7219,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! is_array( $raw ) ) {
 				return $map;
 			}
-			return $map;
+			$sanitized = array();
+			foreach ( $raw as $fragment => $meta ) {
+				if ( ! is_string( $fragment ) && ! is_numeric( $fragment ) ) {
+					continue;
+				}
+				$fragment = (string) $fragment;
+				if ( '' === trim( $fragment ) || ! is_array( $meta ) ) {
+					continue;
+				}
+				$fields = array();
+				if ( isset( $meta['fields'] ) && is_array( $meta['fields'] ) ) {
+					foreach ( $meta['fields'] as $field ) {
+						if ( is_string( $field ) || is_numeric( $field ) ) {
+							$field = trim( (string) $field );
+							if ( '' !== $field ) {
+								$fields[] = $field;
+							}
+						}
+					}
+					$fields = array_values( array_unique( $fields ) );
+				}
+				if ( empty( $fields ) ) {
+					$fields = array( 'excludeDeferJS', 'excludeDelayJS' );
+				}
+				$reason                 = isset( $meta['reason'] ) && is_string( $meta['reason'] ) ? $meta['reason'] : '';
+				$sanitized[ $fragment ] = array(
+					'fields' => $fields,
+					'reason' => $reason,
+				);
+			}
+			return ! empty( $sanitized ) ? $sanitized : $map;
 		}
 
 		/**
@@ -7257,7 +7287,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						if ( '' === $frag ) {
 							continue;
 						}
-						if ( false !== strpos( $lower, $frag ) || false !== strpos( $frag, $lower ) ) {
+						if ( false !== strpos( $lower, $frag ) ) {
 							$fields                        = isset( $meta['fields'] ) && is_array( $meta['fields'] ) ? array_values( $meta['fields'] ) : array( 'excludeDeferJS', 'excludeDelayJS' );
 							$reason                        = isset( $meta['reason'] ) && is_string( $meta['reason'] ) ? $meta['reason'] : '';
 							$suggestions[]                 = array(

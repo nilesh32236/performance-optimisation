@@ -3693,11 +3693,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * (multisite-safe). Fail-open: any failure returns an empty
 		 * suggestion list, never fatal.
 		 *
-		 * @param \WP_REST_Request $_request The request object.
+		 * Limitation: inside a REST/admin request the frontend
+		 * `$GLOBALS['wp_scripts']->queue` / `$GLOBALS['wp_styles']->queue`
+		 * is never populated, so the endpoint falls back to plugin-signal
+		 * guesses unless the caller passes the page's real handles via the
+		 * optional `handles` param (array or comma-separated string).
+		 *
+		 * @param \WP_REST_Request $_request The request object. Optional `handles` param for accuracy.
 		 * @return \WP_REST_Response The response object.
 		 * @since NEXT
 		 */
-		public function detect_safe_mode_excludes( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		public function detect_safe_mode_excludes( \WP_REST_Request $_request ): \WP_REST_Response {
 			try {
 				$file_opt = array();
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
@@ -3709,15 +3715,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 				$handles = array();
+				// Explicit handles param wins for accuracy: the REST/admin
+				// queue is empty, so the UI may POST the frontend queue it
+				// collected (array or comma-separated string, sanitized).
 				try {
-					if ( isset( $GLOBALS['wp_scripts'] ) && is_object( $GLOBALS['wp_scripts'] ) && ! empty( $GLOBALS['wp_scripts']->queue ) && is_array( $GLOBALS['wp_scripts']->queue ) ) {
+					$req_params = $_request->get_params();
+					if ( isset( $req_params['handles'] ) ) {
+						$raw_handles = $req_params['handles'];
+						if ( is_string( $raw_handles ) ) {
+							$raw_handles = explode( ',', $raw_handles );
+						}
+						if ( is_array( $raw_handles ) ) {
+							foreach ( $raw_handles as $handle ) {
+								if ( is_string( $handle ) || is_numeric( $handle ) ) {
+									$clean = trim( sanitize_text_field( (string) $handle ) );
+									if ( '' !== $clean ) {
+										$handles[] = $clean;
+									}
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					$has_explicit = ! empty( $handles );
+					if ( ! $has_explicit && isset( $GLOBALS['wp_scripts'] ) && is_object( $GLOBALS['wp_scripts'] ) && ! empty( $GLOBALS['wp_scripts']->queue ) && is_array( $GLOBALS['wp_scripts']->queue ) ) {
 						foreach ( $GLOBALS['wp_scripts']->queue as $handle ) {
 							if ( is_string( $handle ) || is_numeric( $handle ) ) {
 								$handles[] = (string) $handle;
 							}
 						}
 					}
-					if ( isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && ! empty( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
+					if ( ! $has_explicit && isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && ! empty( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
 						foreach ( $GLOBALS['wp_styles']->queue as $handle ) {
 							if ( is_string( $handle ) || is_numeric( $handle ) ) {
 								$handles[] = (string) $handle;
@@ -3837,14 +3868,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
 					$options['file_optimisation'] = array();
 				}
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'take_settings_snapshot' ) ) {
-						Util::take_settings_snapshot( $options );
+				// Snapshot only on enable while safe mode is off: snapshotting
+				// on disable would overwrite the pre-enable undo state with
+				// the safeMode=true state, so a later restore would wrongly
+				// re-enable safe mode instead of the original config.
+				$was_safe = ! empty( $options['file_optimisation']['safeMode'] );
+				if ( 'enable' === $action && ! $was_safe ) {
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'take_settings_snapshot' ) ) {
+							Util::take_settings_snapshot( $options );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
 					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
 				}
-				$options['file_optimisation']['safeMode'] = ( 'enable' === $action );
+				if ( 'enable' === $action ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'build_safe_mode_enable_payload' ) ) {
+						try {
+							$options['file_optimisation'] = Main::build_safe_mode_enable_payload( $options['file_optimisation'] );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$options['file_optimisation']['safeMode'] = true;
+						}
+					} else {
+						$options['file_optimisation']['safeMode'] = true;
+					}
+				} else {
+					$options['file_optimisation']['safeMode'] = false;
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'save_settings' ) ) {
 					Util::save_settings( $options );
 					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
@@ -3863,6 +3914,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
+				}
+				// Purge the static HTML page cache (plus combined-CSS sidecars)
+				// so safe mode takes effect immediately: cached pages are
+				// served via the advanced-cache.php drop-in bypassing
+				// WordPress, and would otherwise keep serving the broken
+				// markup until expiry. Fail-open: purge failure never blocks
+				// the toggle response.
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'clear_cache' ) ) {
+						Cache::clear_cache();
+					} elseif ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'clear_all_cache' ) ) {
+						Main::clear_all_cache();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 				$this->remove_sensitive_settings_from_response( $options );
 				return $this->send_response( $options );
