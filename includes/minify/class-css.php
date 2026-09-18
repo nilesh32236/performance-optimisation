@@ -123,13 +123,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
-										// Audit #1469: filesize probe before buffering — huge sources
+					// Audit #1469: filesize probe before buffering — huge sources
 					// skip minification instead of exhausting memory.
 					$src_size = $this->filesystem->size( $this->file_path );
 					if ( false !== $src_size && $src_size > 1048576 ) {
 						return '';
 					}
-$css_content = $this->filesystem->get_contents( $this->file_path );
+					$css_content = $this->filesystem->get_contents( $this->file_path );
 					if ( false === $css_content ) {
 						return '';
 					}

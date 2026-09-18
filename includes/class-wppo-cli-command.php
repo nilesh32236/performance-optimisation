@@ -440,7 +440,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$conversion_format = $format ? $format : ( $options['image_optimisation']['conversionFormat'] ?? 'webp' );
 				// Audit #1469: clamp — an unbounded setting would convert
 				// synchronously in-process without limit.
-				$batch_size        = max( 1, min( 200, (int) ( $options['image_optimisation']['batch'] ?? 50 ) ) );
+				$batch_size = max( 1, min( 200, (int) ( $options['image_optimisation']['batch'] ?? 50 ) ) );
 
 				$formats_to_process = array();
 				if ( 'both' === $conversion_format ) {
@@ -2189,10 +2189,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 						// Audit #1469: single bulk hook lookup instead of N+1 per-ID
 						// object hydrations (one store read per action ID).
 						global $wpdb;
-						$id_list = implode( ',', array_map( 'absint', $actions ) );
-						if ( '' !== $id_list && isset( $wpdb ) ) {
-							// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk read-only mapping for CLI verify; IDs are absint-cast.
-							$hook_rows = $wpdb->get_col( "SELECT DISTINCT hook FROM {$wpdb->prefix}actionscheduler_actions WHERE action_id IN ( $id_list )" );
+						$action_ids = array_map( 'absint', $actions );
+						if ( ! empty( $action_ids ) && isset( $wpdb ) ) {
+							$placeholders = implode( ',', array_fill( 0, count( $action_ids ), '%d' ) );
+							// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk read-only mapping for CLI verify.
+							$hook_rows = $wpdb->get_col(
+								$wpdb->prepare(
+									"SELECT DISTINCT hook FROM {$wpdb->prefix}actionscheduler_actions WHERE action_id IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+									...$action_ids
+								)
+							);
 							if ( is_array( $hook_rows ) ) {
 								foreach ( $hook_rows as $hook_name ) {
 									if ( is_string( $hook_name ) && '' !== $hook_name ) {

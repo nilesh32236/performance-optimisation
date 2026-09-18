@@ -373,9 +373,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 				$greatest_parent_id = (int) end( $parent_ids );
 				$has_more           = ( count( $parent_ids ) === 200 );
-			if ( $has_more && microtime( true ) >= $rev_deadline ) {
-				$has_more = false;
-			}
+				if ( $has_more && microtime( true ) >= $rev_deadline ) {
+					$has_more = false;
+				}
 
 				foreach ( $parent_ids as $parent_id ) {
 					$last_date      = null;
@@ -2806,16 +2806,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Batch deferral flag — clean_all()/auto_clean() set this around
+		 * their loops so per-type calls skip invalidation and the wrapper
+		 * invalidates once.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static $defer_counts_invalidation = false;
+
+		/**
 		 * Invalidate the DB cleanup counts cache by incrementing the salt or deleting the transient.
 		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
-		// Audit #1469: batch deferral flag — clean_all()/auto_clean() set
-		// this around their loops so per-type calls skip invalidation and
-		// the wrapper invalidates once.
-		private static $defer_counts_invalidation = false;
-
 		public static function invalidate_counts_cache(): void {
 			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				// Monotonic increment: same-second mutations must produce
