@@ -106,6 +106,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_settings_snapshot',
 		// Issue #1162 resumable sitemap preload queue.
 		'wppo_preload_queue',
+		// Issue #1407 RUM-triggered CSS-refresh before/after snapshots.
+		'wppo_ai_css_refresh_snapshots',
 	);
 
 	/**

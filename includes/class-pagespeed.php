@@ -160,7 +160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * pending (issue #1310 review). Fail-open: returns 0 when the lookup
 		 * API is unavailable or finds nothing.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $args Action arguments.
 		 * @return int Pending job ID, or 0 when none is found.
 		 */
@@ -764,7 +764,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * url/snippet/score fields, so unbounded API payloads (headings,
 		 * debugData, full node trees) never bloat the transient.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $details Raw details array from the API.
 		 * @return array Sanitized details.
 		 */
@@ -827,7 +827,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * Allows only <img src> (length-capped) so stored transients stay
 		 * bounded without losing the parse target.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $snippet Raw snippet from the API.
 		 * @return string Sanitized snippet.
 		 */
@@ -949,7 +949,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * so the scanned URL compares equal to the home URL; the previous
 		 * add_query_arg( array(), $url ) normalisation did this implicitly.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Raw URL.
 		 * @return string Sanitised URL without empty query/fragment.
 		 */

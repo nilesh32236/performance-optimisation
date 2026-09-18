@@ -366,7 +366,7 @@ const PreloadSettings = ( { options = {} } ) => {
 						{ cacheCap && 'warn' === cacheCap.state && (
 							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 								{ __(
-									'Cache size is approaching its cap. Oldest entries will be evicted once the cap is reached.',
+									'Cache is approaching its cap (size or file count). Oldest entries will be evicted once the cap is reached.',
 									'performance-optimisation'
 								) }
 							</p>
@@ -374,8 +374,21 @@ const PreloadSettings = ( { options = {} } ) => {
 						{ cacheCap && 'over' === cacheCap.state && (
 							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 								{ __(
-									'Cache size cap reached. Enforcing by evicting oldest entries.',
+									'Cache cap reached (size or file count). Enforcing by evicting oldest entries.',
 									'performance-optimisation'
+								) }
+							</p>
+						) }
+						{ cacheCap && typeof cacheCap.files !== 'undefined' && (
+							<p className="wppo-text-muted wppo-text-small">
+								{ sprintf(
+									/* translators: 1: cached file count, 2: file-count cap. */
+									__(
+										'Cached files: %1$d of %2$d.',
+										'performance-optimisation'
+									),
+									cacheCap.files || 0,
+									cacheCap.cap_files || 0
 								) }
 							</p>
 						) }
@@ -393,8 +406,17 @@ const PreloadSettings = ( { options = {} } ) => {
 										preload.failed || 0
 									) }
 								</p>
+								{ !! preload.stalled && (
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'Preload looks stalled (no progress for 30+ minutes). Resume to retry pending URLs.',
+											'performance-optimisation'
+										) }
+									</p>
+								) }
 								{ ( preload.queued > 0 ||
-									preload.failed > 0 ) && (
+									preload.failed > 0 ||
+									preload.stalled ) && (
 									<LoadingSubmitButton
 										className="wppo-button wppo-button--secondary"
 										isLoading={ isResuming }

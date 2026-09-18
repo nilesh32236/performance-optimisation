@@ -22,6 +22,7 @@ import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import NoticeBanner from './common/NoticeBanner';
 import FeatureCard from './common/FeatureCard';
+import StatusBadge from './common/StatusBadge';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 /**
@@ -46,6 +47,8 @@ export const isValidOptionName = ( optionName ) =>
 const AutoloadedOptions = () => {
 	const [ options, setOptions ] = useState( [] );
 	const [ audit, setAudit ] = useState( null );
+	const [ totalBytes, setTotalBytes ] = useState( null );
+	const [ sizeLimit, setSizeLimit ] = useState( null );
 	const [ loading, setLoading ] = useState( true );
 	const [ report, setReport ] = useState( null );
 	const [ appliedSummary, setAppliedSummary ] = useState( null );
@@ -92,6 +95,16 @@ const AutoloadedOptions = () => {
 						threshold: response.data.critical_threshold ?? 819200,
 						isCritical: response.data.is_critical ?? false,
 					} );
+					// Total vs Site Health threshold (fail-open: absent/non-numeric
+					// leaves the card unchanged at today's list).
+					const total = Number( response.data.total_autoload_bytes );
+					setTotalBytes(
+						Number.isFinite( total ) && total >= 0 ? total : null
+					);
+					const limit = Number( response.data.size_limit );
+					setSizeLimit(
+						Number.isFinite( limit ) && limit > 0 ? limit : null
+					);
 				} else {
 					if ( ! isMounted.current ) {
 						return;
@@ -512,6 +525,24 @@ const AutoloadedOptions = () => {
 					'performance-optimisation'
 				) }
 			</p>
+			{ Number.isFinite( totalBytes ) &&
+				Number.isFinite( sizeLimit ) &&
+				sizeLimit > 0 && (
+					<p className="wppo-text-small">
+						{ sprintf(
+							/* translators: 1: total autoloaded size, 2: Site Health size limit. */
+							__(
+								'Autoloaded data: %1$s / %2$s (Site Health limit).',
+								'performance-optimisation'
+							),
+							formatBytes( totalBytes ),
+							formatBytes( sizeLimit )
+						) }{ ' ' }
+						<StatusBadge
+							status={ totalBytes < sizeLimit ? 'good' : 'poor' }
+						/>
+					</p>
+				) }
 			{ notice && (
 				<NoticeBanner
 					type={ notice.type }

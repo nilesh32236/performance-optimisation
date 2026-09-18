@@ -7,7 +7,7 @@
  * purger reaches the others.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -20,7 +20,7 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 	/**
 	 * Shared throttled purge-failure logging.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	trait Purge_Logger {
 
@@ -32,7 +32,7 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 		 * so a prolonged outage cannot spam `wppo_activity_logs`. Fail-open:
 		 * logging never breaks the purge path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $service        Service tag (e.g. 'cloudflare', 'cloudflare-edge', 'bunny-edge').
 		 * @param string $detail         Endpoint / reason (truncated to 200 chars in the activity log).
 		 * @param string $log_prefix     Debug-log prefix (default 'Edge purge failed').

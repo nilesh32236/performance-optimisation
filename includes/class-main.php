@@ -68,7 +68,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * at call time rather than at bootstrap. Null until first use.
 		 *
 		 * @var   array|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?array $resolved_delay_exclusions = null;
 
@@ -83,7 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * page opt-out. Null when no opt-out applies.
 		 *
 		 * @var   array|null
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private ?array $page_preset_opt_out_remove = null;
 
@@ -123,7 +123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * explicit choice so get_delay_strategy_for_handle() can honor
 		 * per-page-wins precedence before the auto-idle branch.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<int, string>
 		 */
 		private array $delay_js_per_page_interaction = array();
@@ -163,7 +163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * and add_defer_attribute_legacy().
 		 *
 		 * @var   bool
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private bool $defer_disabled_for_page = false;
 
@@ -176,7 +176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see invalidate_aggressive_kill_switch_cache()}.
 		 *
 		 * @var array<string, bool>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static array $defer_disabled_page_cache = array();
 
@@ -189,7 +189,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see reset_font_preload_emitted()} (tests, switch_blog).
 		 *
 		 * @var array<string,bool>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static array $font_preload_emitted = array();
 
@@ -203,7 +203,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see reset_font_preload_emitted()} (tests, switch_blog).
 		 *
 		 * @var array<string,string>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static array $font_stamp_memo = array();
 
@@ -216,14 +216,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Reset via {@see reset_font_preload_emitted()}.
 		 *
 		 * @var array<string,string[]>
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static array $auto_fonts_memo = array();
 
 		/**
 		 * Maximum auto-discovered font preloads per page (manual wins).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const MAX_AUTO_FONT_PRELOADS = 2;
 
@@ -282,7 +282,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * single request. Bounded (200 entries) for long-running
 		 * processes. Reset via reset_speculation_url_memo() (tests).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string, bool>
 		 */
 		private static array $speculation_url_validity_memo = array();
@@ -294,7 +294,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * availability so test fixtures defining wc_get_* after a first
 		 * resolution still see the new paths.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]|null
 		 */
 		private static ?array $speculation_commerce_paths_memo = null;
@@ -302,7 +302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Woo-function fingerprint the commerce-path memo was computed for.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		private static string $speculation_commerce_paths_sig = '';
@@ -310,7 +310,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Per-request memo of normalized speculation URLs.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string, string>
 		 */
 		private static array $speculation_normalize_memo = array();
@@ -320,7 +320,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Reset via reset_speculation_url_memo() (tests).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<int, string[]>
 		 */
 		private static array $speculation_rum_top_memo = array();
@@ -333,7 +333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * single production instance stays guarded while test instances
 		 * stay isolated.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private bool $speculation_prerender_object_added = false;
@@ -457,7 +457,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * integrations) can stub the Cache collaborator; defaults to
 		 * `new Cache( $options )` preserving current behavior.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $options Plugin options passed to Cache.
 		 * @return mixed Cache instance (or filtered stub).
 		 */
@@ -466,7 +466,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filter the Cache collaborator instance.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param mixed $cache   Cache instance.
 			 * @param array $options Plugin options.
 			 */
@@ -497,6 +497,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$defaults      = Util::get_default_settings();
 			$stored        = Util::get_settings();
 			$this->options = ! empty( $stored ) ? $stored : $defaults;
+
+			// WooCommerce safe mode (issue #1383): defensive in-memory parity
+			// with Util::get_default_settings() (wooSafeMode defaults to on).
+			// No behavioral effect on its own — all safe-mode reads go through
+			// Util::is_woo_safe_mode_enabled() (absent=ON, fresh get_settings())
+			// and Cache keeps its own options copy; this only keeps direct
+			// $this->options['cache_settings'] reads consistent. In-memory only
+			// here (no front-end DB write); persisted via update_settings/REST.
+			// Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['cache_settings'] ) || ! is_array( $this->options['cache_settings'] ) ) {
+				$this->options['cache_settings'] = array();
+			}
+			if ( ! isset( $this->options['cache_settings']['wooSafeMode'] ) ) {
+				$this->options['cache_settings']['wooSafeMode'] = true;
+			}
 
 			// WP 6.9+ loads core block assets on demand in classic themes by default. Existing
 			// installs whose stored settings predate the `blockAssetsOnDemand` key inherit that
@@ -565,6 +580,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// write); persisted via maybe_migrate_comment_image_hardening().
 			if ( ! isset( $this->options['image_optimisation']['hardenCommentImages'] ) ) {
 				$this->options['image_optimisation']['hardenCommentImages'] = true;
+			}
+			// Occlusion-aware fetchpriority=low (issue #1426): additive key,
+			// defaults to off so existing installs keep current behaviour.
+			// In-memory only here (no front-end DB write); persisted via
+			// update_settings/REST. Multisite-safe: per-site wppo_settings.
+			if ( ! isset( $this->options['image_optimisation']['occlusionFetchpriorityLow'] ) ) {
+				$this->options['image_optimisation']['occlusionFetchpriorityLow'] = false;
 			}
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
@@ -728,6 +750,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['ai_adaptive']['anomaly_min_samples'] ) ) {
 				$this->options['ai_adaptive']['anomaly_min_samples'] = 10;
 			}
+			if ( ! isset( $this->options['ai_adaptive']['css_refresh_on_lcp_regression'] ) ) {
+				$this->options['ai_adaptive']['css_refresh_on_lcp_regression'] = false;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
+				$this->options['ai_adaptive']['css_refresh_cooldown_days'] = 7;
+			}
+			// Existing installs whose stored settings predate the RUM-segmented
+			// speculation auto-tune keys (issue #1425) inherit the opt-in-off
+			// defaults in-memory here (no database write on front-end requests);
+			// the persisted values are backfilled once by
+			// maybe_migrate_ai_speculation_autotune() on admin_init. Defaults
+			// keep current behaviour verbatim (auto-tune off, legacy
+			// conservative emission) until explicitly opted in.
+			if ( ! isset( $this->options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
+				$this->options['ai_adaptive']['speculation_autotune_enabled'] = false;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['speculation_min_samples'] ) ) {
+				$this->options['ai_adaptive']['speculation_min_samples'] = 20;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['speculation_max_urls'] ) ) {
+				$this->options['ai_adaptive']['speculation_max_urls'] = 5;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_tolerance_pct'] ) ) {
+				$this->options['ai_adaptive']['anomaly_tolerance_pct'] = 5.0;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_tolerance_abs'] ) ) {
+				$this->options['ai_adaptive']['anomaly_tolerance_abs'] = 0.01;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_persistence_windows'] ) ) {
+				$this->options['ai_adaptive']['anomaly_persistence_windows'] = 3;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_p75_min_samples'] ) ) {
+				$this->options['ai_adaptive']['anomaly_p75_min_samples'] = 10;
+			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
 				$this->options['edge_cache'] = array();
@@ -771,6 +827,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// maybe_migrate_css_queue_defaults() on admin_init.
 			if ( ! isset( $this->options['file_optimisation']['ccssGenTimeout'] ) ) {
 				$this->options['file_optimisation']['ccssGenTimeout'] = 25;
+			}
+			// Existing installs whose stored settings predate the 14 KB
+			// gzipped inline-budget guard, the cart/checkout inline
+			// exclusion, and the checksum-triggered regen keys (issue #1388)
+			// inherit the defaults in-memory here (no database write on
+			// front-end requests); the persisted values are backfilled once
+			// by maybe_migrate_css_queue_defaults() on admin_init.
+			if ( ! isset( $this->options['file_optimisation']['ccssInlineBudgetKb'] ) ) {
+				$this->options['file_optimisation']['ccssInlineBudgetKb'] = 14;
+			}
+			if ( ! isset( $this->options['file_optimisation']['ccssCommerceExclude'] ) ) {
+				$this->options['file_optimisation']['ccssCommerceExclude'] = true;
+			}
+			if ( ! isset( $this->options['file_optimisation']['ccssChecksumRegen'] ) ) {
+				$this->options['file_optimisation']['ccssChecksumRegen'] = true;
 			}
 			if ( ! isset( $this->options['file_optimisation']['usedCssQueueCap'] ) ) {
 				$this->options['file_optimisation']['usedCssQueueCap'] = 50;
@@ -936,11 +1007,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php';
 			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php';
+			// Modularity (issue #1443): the LiteSpeed-only crawler + ESI stack
+			// is parsed only when it can act. Non-LiteSpeed frontend requests
+			// never pay the parse + memory cost. Fail-open: when detection is
+			// unavailable the stack still loads (today's behaviour). Method-level
+			// fail-closed checks (is_litespeed(), is_esi_available()) stay as
+			// defence in depth. Server-agnostic classes (AI_Adaptive,
+			// Edge_Cache, Edge_Purger, CDN, ...) are always loaded below.
+			if ( self::should_load_litespeed_stack() ) {
+				if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php' ) ) {
+					require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php';
+				}
+				if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php' ) ) {
+					require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php';
+				}
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-llms.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-llms.php';
@@ -979,10 +1059,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// the hot path — a file is required only on an actual missing-class
 			// failure. Classes already required unconditionally above
 			// (Server_Rules, Header_Emitter, LiteSpeed_Integration,
-			// LiteSpeed_Crawler, LiteSpeed_ESI, Llms, OD_Bridge, Bfcache,
+			// Llms, OD_Bridge, Bfcache,
 			// AI_Adaptive, Edge_Cache, Edge_Purger, CDN, Builder_Purge_Watcher,
 			// Perf_Translations) are intentionally omitted here to avoid
-			// duplicate probes.
+			// duplicate probes. LiteSpeed_Crawler + LiteSpeed_ESI are included
+			// below so late callers (cron, abilities, integration info) still
+			// resolve them via autoload when includes() skipped the eager load
+			// on non-LiteSpeed requests.
 			$fallback_map = array(
 				'Abilities'              => 'class-abilities.php',
 				'Activate'               => 'class-activate.php',
@@ -1002,6 +1085,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Htaccess_Handler'       => 'class-htaccess-handler.php',
 				'Image_Optimisation'     => 'class-image-optimisation.php',
 				'Img_Converter'          => 'class-img-converter.php',
+				'LiteSpeed_Crawler'      => 'class-litespeed-crawler.php',
+				'LiteSpeed_ESI'          => 'class-litespeed-esi.php',
 				'Log'                    => 'class-log.php',
 				'Metabox'                => 'class-metabox.php',
 				'Object_Cache'           => 'class-object-cache.php',
@@ -1048,6 +1133,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether the LiteSpeed-only crawler + ESI stack should be loaded.
+		 *
+		 * Pay-only-for-what-you-use gate for server-specific code: frontend
+		 * requests on Apache/Nginx skip parsing the crawler + ESI classes.
+		 * Management contexts (WP-CLI, cron, admin, REST) always load so
+		 * late callers (cron batches, abilities, integration info) keep
+		 * working. Fail-open: any detection error returns true (today's
+		 * always-load behaviour) — never fatal. Multisite-safe: pure server
+		 * detection, no options or transients touched. Server detection honours
+		 * the documented `wppo_litespeed_is_litespeed` filter via
+		 * LiteSpeed_Integration::is_litespeed().
+		 *
+		 * @since NEXT
+		 * @return bool True when the LiteSpeed stack should be required.
+		 */
+		private static function should_load_litespeed_stack(): bool {
+			try {
+				if ( defined( 'WP_CLI' ) && WP_CLI ) {
+					return true;
+				}
+				if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) {
+					return true;
+				}
+				if ( function_exists( 'is_admin' ) && is_admin() ) {
+					return true;
+				}
+				if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+					return true;
+				}
+				// Prefer the filtered detector so the documented
+				// `wppo_litespeed_is_litespeed` filter keeps working (e.g. proxy-header
+				// overrides): LiteSpeed_Integration::is_litespeed() delegates to
+				// Server_Rules plus the filter, so default behaviour is unchanged.
+				// LiteSpeed_Integration is always required just above.
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_litespeed' ) ) {
+					return LiteSpeed_Integration::is_litespeed();
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'is_litespeed' ) ) {
+					return Server_Rules::is_litespeed();
+				}
+				// Fallback when Server_Rules is unavailable: raw
+				// SERVER_SOFTWARE substring check (mirrors
+				// LiteSpeed_Integration::is_litespeed() fallback).
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Sanitized below via wp_unslash()/sanitize_text_field() with function_exists() fallbacks.
+				$raw = isset( $_SERVER['SERVER_SOFTWARE'] ) ? (string) $_SERVER['SERVER_SOFTWARE'] : '';
+				if ( '' !== $raw && function_exists( 'wp_unslash' ) ) {
+					$raw = (string) wp_unslash( $raw );
+				}
+				if ( '' !== $raw && function_exists( 'sanitize_text_field' ) ) {
+					$raw = (string) sanitize_text_field( $raw );
+				}
+				$s = strtolower( $raw );
+				// Note: 'openlitespeed' contains 'litespeed', so a single strpos
+				// covers both variants.
+				return false !== strpos( $s, 'litespeed' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Setup WordPress hooks.
 		 *
 		 * Registers actions and filters used by the plugin.
@@ -1078,10 +1225,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_rum_sample_rate' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_elementor_safe_mode' ) );
-			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_object_cache_outage_flag' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_ai_speculation_autotune' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_comment_image_hardening' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_builder_watcher' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_third_party_auto' ) );
@@ -1150,15 +1297,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Native script fetchpriority capability (issue #1218): version +
 			// API probe via supports_native_script_fetchpriority() so a
 			// filtered version string cannot enable native fetchpriority
-			// writes where the API is absent. $is_wp69_plus below stays a
-			// bare version gate for the template-enhancement buffer paths,
-			// which carry their own function_exists probes.
+			// writes where the API is absent. Template-enhancement buffer
+			// routing below uses the canonical
+			// should_use_core_template_buffer() predicate (version + API
+			// probe, issue #1386) — never a bare version_compare.
 			$supports_fetchpriority = self::supports_native_script_fetchpriority();
 			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
 			// of 6.9 which already ship the template-enhancement buffer functions.
+			// Single-buffer routing (issue #1386): on 6.9+ post-processing rides
+			// the core template-enhancement buffer only (no private ob_start
+			// capture); pre-6.9 keeps the legacy template_redirect captures.
+			// A runtime opt-out (filter returning false / no consumers) degrades
+			// to uncached streaming output — never a private buffer. This is an
+			// intentional availability tradeoff: re-arming a private capture on
+			// opt-out would stack a second buffer on top of core's and
+			// re-process HTML, so caching stays off until core opts back in.
 			// TODO(#553, #829): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
-			// Blocked until `Requires at least: 6.9` — keep the dual path (modern filter + legacy fallback).
-			$is_wp69_plus = version_compare( $wp_version, '6.9-alpha', '>=' );
+			// Blocked until `Requires at least: 6.9`.
+			$use_core_buffer = self::should_use_core_template_buffer();
 
 			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
 			// on every supported version, so it is always registered when delay JS is on.
@@ -1201,19 +1357,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
 					$this->cache->set_google_fonts( $this->google_fonts );
 				}
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
-					// WP 6.9+ template enhancement output buffer.
+				if ( $use_core_buffer ) {
+					// WP 6.9+ core template-enhancement buffer (issue #1386):
+					// single-buffer routing — filter processes, finalized action
+					// persists. No private ob_start capture is registered, so
+					// exactly one core buffer is active when consumers exist and
+					// zero when none; a runtime opt-out (filter false) degrades
+					// to uncached streaming output. Intentional (see above):
+					// caching resumes automatically when core opts back in.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
 					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
+				} else {
+					// Legacy buffer path (pre-6.9 only): the only cache path on
+					// older cores. Retired on 6.9+ (issue #1386) — never
+					// registered alongside the core buffer.
+					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				}
-				// Legacy buffer path, dual-purpose on WP 6.9+ (issue #881): on
-				// older cores it is the only cache path; on 6.9+
-				// Cache::start_output_buffer() self-gates on
-				// wp_should_output_buffer_template_for_enhancement() and only
-				// engages when the site opted out of core's enhancement buffer
-				// (which would otherwise silently stop cache generation), and
-				// never stacks on top of an active core buffer.
-				add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				// Post-purge last-good fallback (issue #1275): Nginx falls
 				// through to index.php?wppo_purge_fallback=$uri on a miss
 				// under the cache path; this 302s to the retained sibling
@@ -1272,35 +1431,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Standalone used-CSS output buffer when page cache is disabled.
 			if ( empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) && $safe_mode_off ) {
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
-					// WP 6.9+ template enhancement output buffer.
+				if ( $use_core_buffer ) {
+					// WP 6.9+ core template-enhancement buffer (issue #1386):
+					// single-buffer routing, no private capture.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
+				} else {
+					// Legacy fallback buffer (pre-6.9 only, issue #881).
+					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
 				}
-				// Dual-purpose legacy/fallback buffer (issue #881): on older cores
-				// it is the only used-CSS path; on 6.9+ start_used_css_buffer()
-				// self-gates on wp_should_output_buffer_template_for_enhancement()
-				// so it never stacks on top of an active core buffer.
-				add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
 			}
 
 			// Optional LCP image prioritization on the finalized HTML (default off).
-			// The CSS background hero preload (issue #935) shares this buffer, so
-			// the hook is registered when either toggle is enabled.
-			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) || ! empty( $this->options['image_optimisation']['cssHeroPreload'] ) ) {
+			// The CSS background hero preload (issue #935) and the OD
+			// occlusion-aware fetchpriority=low demotion (issue #1426) share
+			// this buffer, so the hook is registered when any toggle is enabled.
+			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) || ! empty( $this->options['image_optimisation']['cssHeroPreload'] ) || ! empty( $this->options['image_optimisation']['occlusionFetchpriorityLow'] ) ) {
 				// Core-parity by delegation (issue #1182): this buffer-level LCP
 				// prioritization stamps fetchpriority=high + loading=eager on the
 				// hero node only; all loading/fetchpriority/decoding gap-fills
 				// defer to core's wp_get_loading_optimization_attributes() output
 				// via Image_Optimisation::merge_core_loading_attributes(), and
 				// loading="lazy" + fetchpriority="high" pairs are never emitted.
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
-					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
+				if ( $use_core_buffer ) {
+					// WP 6.9+ core template-enhancement buffer (issue #1386).
+					// Runs after cache (10) and used-CSS (20). No private
+					// capture is registered on 6.9+.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
+				} else {
+					// Legacy fallback buffer (pre-6.9 only, issue #881).
+					add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 				}
-				// Dual-purpose legacy/fallback buffer (issue #881): start_lcp_priority_buffer()
-				// self-gates on wp_should_output_buffer_template_for_enhancement() so it
-				// never stacks on top of an active core buffer.
-				add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 			}
 
 			// Invalidate DB cleanup counts when posts are added or removed (for public post types).
@@ -1615,7 +1775,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Extracted from {@see setup_hooks()} so hook-group changes stay
 		 * local to one collaborator-concern method.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function register_head_hint_hooks(): void {
@@ -1630,7 +1790,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Extracted from {@see setup_hooks()}; keeps Main as a thin
 		 * bootstrapper over collaborator registration.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function register_collaborators(): void {
@@ -1645,7 +1805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Extracted from {@see setup_hooks()}.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function register_background_hooks(): void {
@@ -1657,6 +1817,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Register Action Scheduler callback for background used-CSS generation.
 			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 1 );
+
+			// Self-healing CSS (issue #1407): refresh the matching
+			// critical-CSS template when an LCP regression queues a
+			// used-CSS regen, so critical-CSS-driven regressions self-heal
+			// too. Fail-open inside the handler, never fatal.
+			add_action( 'wppo_ai_css_refresh_queued', array( $this, 'on_ai_css_refresh_queued' ), 10, 3 );
 
 			// Register out-of-band Google Fonts download (keeps the frontend output-buffer hot path non-blocking).
 			add_action( 'wppo_google_fonts_download', array( 'PerformanceOptimise\Inc\Google_Fonts', 'handle_queued_download_action' ), 10, 1 );
@@ -1670,7 +1836,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Extracted from {@see setup_hooks()}.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function register_invalidation_hooks(): void {
@@ -1700,7 +1866,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Extracted from {@see setup_hooks()}.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function register_integration_hooks(): void {
@@ -1708,8 +1874,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'init' ) ) {
 				LiteSpeed_Integration::init();
 			}
-			// P5 ESI bridge (Enterprise only — OLS has no ESI).
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'init' ) ) {
+			// P5 ESI bridge (Enterprise only — OLS has no ESI). Gated on the
+			// LiteSpeed stack check with a no-autoload class probe so a
+			// non-LiteSpeed frontend never lazy-loads ESI via the autoloader
+			// (issue #1443). LiteSpeed_Integration::init() above stays
+			// unconditional: it is always loaded and self-gates internally.
+			if ( self::should_load_litespeed_stack() && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', false ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'init' ) ) {
 				LiteSpeed_ESI::init();
 			}
 		}
@@ -1778,8 +1948,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Only installs that never configured the toggle (key absent) are defaulted to `true`
 		 * so they inherit core's new default; any stored explicit value (true or false) is
 		 * preserved verbatim, and fresh installs with no stored option are skipped because the
-		 * constructor defaults already match. The one-time marker keeps later explicit user
-		 * choices intact.
+		 * constructor defaults already match. The check is idempotent (key presence is the
+		 * marker), so no extra option row is ever allocated — fresh installs create zero
+		 * migration rows and steady-state requests perform zero migration writes.
 		 *
 		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
 		 *                                                        (core loads separate core
@@ -1791,18 +1962,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( get_option( 'wppo_block_assets_migrated' ) ) {
-				return;
-			}
-
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
 			$stored = get_option( 'wppo_settings' );
 			if ( ! is_array( $stored ) ) {
 				// Fresh install (or no stored settings): constructor defaults already match
-				// WP 6.9+ behavior, so there is nothing to migrate.
-				update_option( 'wppo_block_assets_migrated', 1 );
+				// WP 6.9+ behavior, so there is nothing to migrate and nothing to record.
 				return;
 			}
 
@@ -1819,8 +1985,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 				Log::add( __( 'Enabled on-demand block asset loading to match the WordPress 6.9 default.', 'performance-optimisation' ) );
 			}
-
-			update_option( 'wppo_block_assets_migrated', 1 );
 		}
 
 		/**
@@ -1925,7 +2089,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT Also backfills the 25s `ccssGenTimeout` generation budget.
+		 * @since 2.2.0 Also backfills the 25s `ccssGenTimeout` generation budget.
+		 * @since NEXT Also backfills the #1388 keys (`ccssInlineBudgetKb`,
+		 *        `ccssCommerceExclude`, `ccssChecksumRegen`).
 		 */
 		public function maybe_migrate_css_queue_defaults(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -1944,6 +2110,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'ccssViewportVariants' => false,
 				'usedCSSDeliveryMode'  => 'file',
 				'ccssGenTimeout'       => 25,
+				'ccssInlineBudgetKb'   => 14,
+				'ccssCommerceExclude'  => true,
+				'ccssChecksumRegen'    => true,
 			);
 			$changed  = false;
 			foreach ( $defaults as $key => $default ) {
@@ -1968,7 +2137,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			Log::add( __( 'Added default RUM-weighted CSS queue settings and CCSS generation timeout (25s, single-variant behaviour kept).', 'performance-optimisation' ) );
+			Log::add( __( 'Added default RUM-weighted CSS queue settings, CCSS generation timeout (25s, single-variant behaviour kept), 14 KB inline budget, commerce exclusion, and checksum regen.', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -1986,7 +2155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * multisite sites migrate independently with no cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_speculation_top_urls(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -2032,7 +2201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * multisite sites migrate independently with no cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_speculation_prerender_list(): void {
 			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
@@ -2082,7 +2251,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_rum_sample_rate(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -2186,7 +2355,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_safe_mode(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -2222,7 +2391,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * ('post:{id}') or by queried object ('queried:{id}') when no
 		 * explicit post ID was passed.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string,bool>
 		 */
 		private static array $elementor_built_memo = array();
@@ -2230,7 +2399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Reset the Elementor-built memo (for tests).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_elementor_memo(): void {
@@ -2258,7 +2427,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * that, combine is skipped while safe mode is on (perf-only cost
 		 * instead of risking broken Elementor layout/FOUC).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when Elementor looks present on this request.
 		 */
 		public static function looks_like_elementor_request(): bool {
@@ -2285,7 +2454,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * get_option() so sites migrate independently.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_elementor_safe_mode(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -2315,7 +2484,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Every builder call is guarded; non-Elementor sites carry zero
 		 * weight beyond two cheap array lookups.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $file_optimisation Optional `file_optimisation` settings slice.
 		 * @return bool True when Elementor-safe mode is on.
@@ -2378,7 +2547,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Elementor layout/FOUC. With safe mode off, failure returns false
 		 * (optimisations run).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int|null $post_id Optional post ID (defaults to queried object;
 		 *                          falls back to get_the_ID() only on singular
@@ -2435,7 +2604,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * one Elementor post and memoize under a loop-position-dependent key.
 		 * Fail-open to null when no ID resolves.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int|null $post_id Explicit post ID (or null to resolve).
 		 * @return int|null Resolved post ID, or null when unknown.
@@ -2477,7 +2646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * detection failure risks broken Elementor layout/FOUC. With safe
 		 * mode off, failure returns false (optimisations run).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $file_opt Optional `file_optimisation` settings slice.
 		 * @return bool Safe-mode-active verdict (true on unreadable settings).
@@ -2521,7 +2690,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Fail direction: unexpected failure degrades to skip (true) while
 		 * safe mode is on (perf-only cost over broken-layout risk).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int|null $resolved Resolved post ID (or null when unknown).
 		 * @param array    $file_opt Optional `file_optimisation` settings slice,
@@ -2596,7 +2765,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * an explicit $post_id for archive/loop/Theme Builder contexts where
 		 * the queried object is not the Elementor-built post.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array    $file_optimisation Optional `file_optimisation` settings slice.
 		 * @param int|null $post_id           Optional post ID forwarded to is_elementor_built_page().
@@ -2615,33 +2784,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Backfill the additive sandboxStaged key (issue #1163).
-		 *
-		 * Runs on admin_init; in-memory default is applied in __construct so
-		 * front-end requests never pay for a DB write.
-		 *
-		 * @return void
-		 * @since NEXT
-		 */
-		public function maybe_migrate_sandbox_preview(): void {
-			// allowlist(settings-read-guard): deliberate direct read.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-			if ( array_key_exists( 'sandboxStaged', $file ) ) {
-				return;
-			}
-			$stored['file_optimisation'] = $file + array( 'sandboxStaged' => array() );
-			Util::save_settings( $stored );
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			$this->options['file_optimisation']['sandboxStaged'] = array();
-		}
-
-		/**
 		 * One-time backfill for automatic LCP hero preload + font discovery (issue #1216).
 		 *
 		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
@@ -2655,7 +2797,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * sites migrate independently with no cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_preload_auto_defaults(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -2705,7 +2847,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * with no cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_object_cache_outage_flag(): void {
 			try {
@@ -2748,6 +2890,89 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * One-time backfill for RUM-segmented speculation auto-tune (issue #1425).
+		 *
+		 * Adds the additive `ai_adaptive.speculation_autotune_enabled`,
+		 * `ai_adaptive.speculation_min_samples`, and
+		 * `ai_adaptive.speculation_max_urls` keys to stored settings that
+		 * predate them. Runs on `admin_init` (not the constructor) so a
+		 * cacheable front-end request never triggers a settings write. Only
+		 * installs missing a key are backfilled (opt-in off, min 20, max 5);
+		 * any stored explicit value is preserved verbatim, and fresh installs
+		 * with no stored option are skipped because the constructor defaults
+		 * already match. Idempotent (key presence is the marker). Uses
+		 * per-site `get_option()` so multisite sites migrate independently
+		 * with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_ai_speculation_autotune(): void {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return;
+				}
+				// Cheap early-return through the already-loaded memo: after
+				// migration completes this avoids one extra option read per
+				// admin page.
+				if ( isset( $this->options['ai_adaptive'] ) && is_array( $this->options['ai_adaptive'] )
+					&& array_key_exists( 'speculation_autotune_enabled', $this->options['ai_adaptive'] )
+					&& array_key_exists( 'speculation_min_samples', $this->options['ai_adaptive'] )
+					&& array_key_exists( 'speculation_max_urls', $this->options['ai_adaptive'] ) ) {
+					return;
+				}
+				// allowlist(settings-read-guard): deliberate direct read — must distinguish
+				// "no stored row" (false) from "stored array", which Util::get_settings()
+				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				$stored = get_option( 'wppo_settings' );
+				if ( ! is_array( $stored ) ) {
+					return;
+				}
+
+				$ai = isset( $stored['ai_adaptive'] ) && is_array( $stored['ai_adaptive'] ) ? $stored['ai_adaptive'] : array();
+
+				$changed = false;
+				if ( ! array_key_exists( 'speculation_autotune_enabled', $ai ) ) {
+					$ai['speculation_autotune_enabled'] = false;
+					$changed                            = true;
+				}
+				if ( ! array_key_exists( 'speculation_min_samples', $ai ) ) {
+					$ai['speculation_min_samples'] = 20;
+					$changed                       = true;
+				}
+				if ( ! array_key_exists( 'speculation_max_urls', $ai ) ) {
+					$ai['speculation_max_urls'] = 5;
+					$changed                    = true;
+				}
+				if ( ! $changed ) {
+					return;
+				}
+
+				$stored['ai_adaptive'] = $ai;
+				Util::save_settings( $stored );
+
+				if ( ! isset( $this->options['ai_adaptive'] ) || ! is_array( $this->options['ai_adaptive'] ) ) {
+					$this->options['ai_adaptive'] = array();
+				}
+				foreach ( array(
+					'speculation_autotune_enabled' => false,
+					'speculation_min_samples'      => 20,
+					'speculation_max_urls'         => 5,
+				) as $key => $default ) {
+					if ( ! array_key_exists( $key, $this->options['ai_adaptive'] ) ) {
+						$this->options['ai_adaptive'][ $key ] = $default;
+					}
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+					Util::set_settings_cache( $stored );
+				}
+				Log::add( __( 'Added default RUM-segmented speculation auto-tune settings (off; manual speculation settings untouched).', 'performance-optimisation' ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * One-time backfill for comment-image hardening (issue #1271).
 		 *
 		 * Adds `image_optimisation.hardenCommentImages = true` to stored
@@ -2762,7 +2987,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_comment_image_hardening(): void {
 			try {
@@ -2850,7 +3075,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_builder_watcher(): void {
 			try {
@@ -2914,7 +3139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * get_option() so sites migrate independently. Fail-open: never fatals.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_migrate_third_party_auto(): void {
 			try {
@@ -3277,7 +3502,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Fail-open: purge failure degrades to the current manual-clear
 		 * behavior and is never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $upgrader   Upgrader instance (unused).
 		 * @param mixed $hook_extra Update context (action/type/plugin/plugins/theme/themes).
 		 * @return void
@@ -3329,7 +3554,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param mixed  $new_theme New theme object (unused).
 		 * @param mixed  $old_theme Old theme object (unused).
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function on_theme_switch_used_css( $new_name = '', $new_theme = null, $old_theme = null ): void {
 			unset( $new_name, $new_theme, $old_theme );
@@ -3476,39 +3701,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $options['preload_settings']['preloadSitemap'] ) && function_exists( 'as_enqueue_async_action' ) && function_exists( 'as_has_scheduled_action' ) ) {
 				$url = get_permalink( $post_id );
 				if ( is_string( $url ) && '' !== $url ) {
-					// Never schedule preload work for Woo dynamic pages.
-					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+					// Never schedule preload work for Woo dynamic routes.
+					// Single source: Util::is_woo_excluded_url() covers cart /
+					// checkout / account + custom slugs (safe-mode gated) plus
+					// Store API / wc-ajax / add-to-cart / faceted /
+					// functional-query URLs (unconditional), so warm-path and
+					// serve-path verdicts cannot drift. Fail-closed: any
+					// detection failure skips scheduling (never warm dynamic).
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_excluded_url' ) ) {
 						try {
-							// Safe mode off falls through to crawler-warm scheduling below.
-							if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) {
+							if ( Util::is_woo_excluded_url( $url ) ) {
 								return;
 							}
 						} catch ( \Throwable $e ) {
 							unset( $e );
 							return;
 						}
-					}
-					// Faceted / Store API / functional-query URLs (issue #1256) are
-					// never warmed — unconditional on safe mode. Permalinks rarely
-					// carry a query, but filtered variants must not enter the queue.
-					try {
-						$warm_qs = (string) wp_parse_url( $url, PHP_URL_QUERY );
-						if ( '' !== $warm_qs ) {
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( (string) wp_parse_url( $url, PHP_URL_PATH ), $warm_qs, '' ) ) {
+					} else {
+						// Mixed-version fallback: mirror the Cron batch
+						// fallback — unconditional Store API / wc-ajax /
+						// faceted / generic-query guards plus safe-mode-gated
+						// dynamic-path, so a stale Util can never warm
+						// faceted or wc-ajax URLs.
+						try {
+							$warm_path       = (string) wp_parse_url( $url, PHP_URL_PATH );
+							$warm_qs         = (string) wp_parse_url( $url, PHP_URL_QUERY );
+							$warm_rest_route = '';
+							if ( '' !== $warm_qs ) {
+								$warm_params = array();
+								parse_str( $warm_qs, $warm_params );
+								if ( isset( $warm_params['rest_route'] ) && is_string( $warm_params['rest_route'] ) ) {
+									$warm_rest_route = $warm_params['rest_route'];
+								}
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
+								if ( Util::is_woo_store_api_request( $warm_path, $warm_qs, '' ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_request( $warm_path, '', $warm_rest_route ) ) ) {
+									return;
+								}
+							} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && ( Util::is_woo_store_api_path( $warm_path ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_path( $warm_rest_route ) ) ) ) {
+								return;
+							} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $warm_path, '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $warm_qs ) ) ) ) {
 								return;
 							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) && Util::is_woo_faceted_query( $warm_qs ) ) {
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
+								if ( Util::is_woo_ajax_request( $warm_path, $warm_qs ) ) {
+									return;
+								}
+							} elseif ( (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . ltrim( (string) rawurldecode( $warm_path ), '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', $warm_qs ) ) ) {
 								return;
 							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query( $warm_qs ) ) {
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
+								if ( '' !== $warm_qs && Util::is_woo_faceted_query( $warm_qs ) ) {
+									return;
+								}
+							} elseif ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])(?:filter_[^=&]*|query_type_[^=&]*|min_price|max_price|rating_filter|orderby|product_cat|pa_[^=&]*|attribute_[^=&]*|gpf_[^=&]*)(?:=|&|;|$)/i', $warm_qs ) ) {
 								return;
 							}
-						} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( (string) wp_parse_url( $url, PHP_URL_PATH ), '', '' ) ) {
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) ) {
+								if ( '' !== $warm_qs && Util::has_uncacheable_query( $warm_qs ) ) {
+									return;
+								}
+							} elseif ( '' !== $warm_qs ) {
+								return;
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+								if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( $warm_path ) ) {
+									return;
+								}
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
 							return;
 						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return;
 					}
 					$url = esc_url_raw( $url );
 					// Atomic unique enqueue (issue #1310) closes the
@@ -3614,6 +3878,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
+			// Checksum-triggered CCSS regen (issue #1388): fires only when
+			// the locally-available source CSS changed since generation; a
+			// plain post save with unchanged CSS queues nothing. Runs
+			// independently of the removeUnusedCSS gate below. Guarded with
+			// class/method_exists plus legacy fallback (no-op when the CCSS
+			// pipeline is unavailable). Fail-open inside, never fatal.
+			if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'maybe_regen_on_save' ) ) {
+				try {
+					\PerformanceOptimise\Inc\Critical_CSS::maybe_regen_on_save( $post_id, $post );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
 			$options = Util::get_settings();
 			if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 				return;
@@ -3634,6 +3912,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Refresh the matching critical-CSS template after an LCP-triggered used-CSS refresh.
+		 *
+		 * In-repo consumer for the `wppo_ai_css_refresh_queued` action fired by
+		 * AI_Adaptive::maybe_queue_css_refresh() (issue #1407): maps the queued
+		 * post to its coarse template (`home` for the front page, `page` for
+		 * pages, `single` otherwise) and regenerates that single template via
+		 * Critical_CSS::regenerate_single(). Fail-open: any failure (unknown
+		 * template, missing scheduler, throwable) is swallowed so the used-CSS
+		 * job that already queued is never affected.
+		 *
+		 * @param string $url regressed URL.
+		 * @param int    $post_id Queued post ID.
+		 * @param array  $anomaly The firing LCP anomaly.
+		 * @return void
+		 * @since NEXT
+		 */
+		public function on_ai_css_refresh_queued( $url, $post_id, $anomaly ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			try {
+				$post_id = (int) $post_id;
+				if ( $post_id <= 0 ) {
+					return;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) || ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'regenerate_single' ) ) {
+					return;
+				}
+				$template = 'single';
+				if ( is_string( $url ) && '' !== $url && class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'is_homepage_url' ) ) {
+					try {
+						if ( AI_Adaptive::is_homepage_url( $url ) ) {
+							$template = 'home';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( 'home' !== $template && function_exists( 'get_post_type' ) ) {
+					try {
+						if ( 'page' === get_post_type( $post_id ) ) {
+							$template = 'page';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				try {
+					\PerformanceOptimise\Inc\Critical_CSS::regenerate_single( $template );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Process used-CSS when cache is disabled.
 		 *
 		 * @param string $filtered_output The filtered output from previous callbacks.
@@ -3642,28 +3975,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function process_used_css_only( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
-				return $filtered_output;
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string into the filter. Fail open —
+			// never fatal, never white-screen. Prefer the raw $output when
+			// it carries page HTML so a cancelled $filtered_output can never
+			// collapse the chain to a blank page.
+			if ( ! is_string( $filtered_output ) ) {
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
 			}
-			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
-			// to the full stylesheet, settings preserved.
-			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
-				return $filtered_output;
-			}
+			try {
+				if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
+					return $filtered_output;
+				}
+				// Safe-mode kill switch + nocache bypass (issue #1098): fail open
+				// to the full stylesheet, settings preserved.
+				if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+					return $filtered_output;
+				}
 
-			// Nesting balance (issue #881): run the used-CSS pipeline at most
-			// once per request (see Main::$used_css_buffer_enhanced).
-			if ( $this->used_css_buffer_enhanced ) {
-				return $filtered_output;
-			}
-			$this->used_css_buffer_enhanced = true;
+				// Nesting balance (issue #881): run the used-CSS pipeline at most
+				// once per request (see Main::$used_css_buffer_enhanced).
+				if ( $this->used_css_buffer_enhanced ) {
+					return $filtered_output;
+				}
+				$this->used_css_buffer_enhanced = true;
 
-			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
-				$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
-			}
+				if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
+					$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
+				}
 
-			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
-			return $used_css->process_buffer( $filtered_output );
+				$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
+				$result   = $used_css->process_buffer( $filtered_output );
+				return is_string( $result ) ? $result : $filtered_output;
+			} catch ( \Throwable $e ) {
+				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed.', array( 'exception' => $e ) );
+				if ( is_string( $filtered_output ) && '' !== $filtered_output ) {
+					return $filtered_output;
+				}
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
+			}
 		}
 
 		/**
@@ -3684,7 +4040,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see Main::emit_server_timing_header()}.
 		 *
 		 * @since  1.9.0
-		 * @since  NEXT Streaming tradeoff note and cross-reference.
+		 * @since  2.2.0 Streaming tradeoff note and cross-reference.
 		 * @return bool True when Server-Timing telemetry is active.
 		 */
 		public function server_timing_enabled(): bool {
@@ -3865,13 +4221,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function start_used_css_buffer() {
-			// Nesting balance (issue #881): when core's template-enhancement
-			// buffer is active, the 6.9+ filter path (process_used_css_only)
-			// handles used-CSS; a legacy buffer would double-process. When the
-			// site opted out of core's buffer, this legacy path is the only
-			// used-CSS path and proceeds.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
-				return;
+			// Single-buffer routing (issue #1386): when the core
+			// template-enhancement buffer is available (WP 6.9+), core owns
+			// output capture and the 6.9+ filter path
+			// (process_used_css_only) is responsible. Never open a private
+			// buffer on 6.9+ — a runtime opt-out degrades to uncached
+			// streaming output.
+			try {
+				if ( self::should_use_core_template_buffer() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Nesting guard (issue #881, pre-6.9 defense in depth): when
+			// the core buffer is already active for this request, the
+			// filter path owns used-CSS and a private buffer must not
+			// stack on top.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				try {
+					if ( wp_should_output_buffer_template_for_enhancement() ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return;
@@ -3899,12 +4273,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function start_lcp_priority_buffer() {
-			// Nesting balance (issue #881): when core's template-enhancement
-			// buffer is active, the 6.9+ filter path (prioritize_lcp_in_buffer
-			// on wp_template_enhancement_output_buffer) handles LCP
-			// prioritization; never stack a legacy buffer on top of it.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
-				return;
+			// Single-buffer routing (issue #1386): when the core
+			// template-enhancement buffer is available (WP 6.9+), the 6.9+
+			// filter path (prioritize_lcp_in_buffer on
+			// wp_template_enhancement_output_buffer) is responsible.
+			// Never open a private buffer on 6.9+ — a runtime opt-out
+			// degrades to uncached streaming output.
+			try {
+				if ( self::should_use_core_template_buffer() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Nesting guard (issue #881, pre-6.9 defense in depth): when
+			// the core buffer is already active for this request, the
+			// filter path owns LCP prioritization and a private buffer
+			// must not stack on top.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				try {
+					if ( wp_should_output_buffer_template_for_enhancement() ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return;
@@ -3929,7 +4322,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function process_used_css_capture( $buffer ) {
-			if ( empty( $buffer ) ) {
+			// Mid-template cancel safety (issue #1386): an output-buffer
+			// callback must always return a string — a non-string input
+			// (false/null from a cancelled buffer) fails open to ''.
+			if ( ! is_string( $buffer ) ) {
+				return '';
+			}
+			if ( '' === $buffer ) {
 				return $buffer;
 			}
 
@@ -3948,12 +4347,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
-				return $used_css->process_buffer( $buffer );
+				$result   = $used_css->process_buffer( $buffer );
+				return is_string( $result ) ? $result : $original;
 			} catch ( \Throwable $e ) {
 				// Fail open: return the unprocessed buffer rather than dropping
 				// the page content. Mirrors the wppo_debug_log convention used by
 				// the HTML minifier and Cloudflare purger.
-				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed.', array( 'exception' => $e ) );
 				return $original;
 			}
 		}
@@ -4106,6 +4506,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$this->add_available_post_types_to_options();
 
+			// Dashboard stats (issue #1464): the cache size is read from the
+			// canonical unified stats payload (Cache::get_cache_stats(), keyed
+			// via Util::transient_key() so multisite stays isolated) instead of
+			// the retired split `wppo_cache_size` transient mirror, which is no
+			// longer written or promoted anywhere.
+			$cache_stats = Cache::get_cache_stats();
+			$cache_size  = isset( $cache_stats['size'] ) ? (string) $cache_stats['size'] : __( 'N/A', 'performance-optimisation' );
+
 			// Salted object-cache reads (WP 6.9+, issue #882): the salt is the
 			// current `wppo_cache_last_cleared` option VALUE (bumped by
 			// Cache::bump_stats_cache()), not the option key — passing the key
@@ -4113,20 +4521,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// key isolation via Util::transient_key().
 			// One salt read for both dashboard stats (issue #882 review).
 			$cache_salt = Util::cache_salt( 'wppo_cache_last_cleared' );
-			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
-				$cache_size = wp_cache_get_salted( 'wppo_cache_size', 'wppo', $cache_salt );
-				if ( false === $cache_size ) {
-					$cache_size = Cache::get_cache_size();
-					wp_cache_set_salted( 'wppo_cache_size', $cache_size, 'wppo', $cache_salt, 15 * MINUTE_IN_SECONDS );
-				}
-			} else {
-				$cache_size = get_transient( Util::transient_key( 'wppo_cache_size' ) );
-				if ( false === $cache_size ) {
-					$cache_size = Cache::get_cache_size();
-					set_transient( Util::transient_key( 'wppo_cache_size' ), $cache_size, 15 * MINUTE_IN_SECONDS );
-				}
-			}
-
 			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$total_js_css = wp_cache_get_salted( 'wppo_total_js_css', 'wppo', $cache_salt );
 				if ( false === $total_js_css ) {
@@ -4139,6 +4533,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$total_js_css = Util::get_js_css_minified_file();
 					set_transient( Util::transient_key( 'wppo_total_js_css' ), $total_js_css, 15 * MINUTE_IN_SECONDS );
 				}
+			}
+
+			// Disk-safe slice (issue #1428): cached-page file count for the
+			// dashboard size/count surface. Fail-open to 0; multisite-safe
+			// via Util::transient_key().
+			$cache_count = 0;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_stats' ) ) {
+					if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+						$cached_stats = wp_cache_get_salted( 'wppo_cache_stats', 'wppo', $cache_salt );
+						if ( is_array( $cached_stats ) && isset( $cached_stats['count'] ) ) {
+							$cache_count = (int) $cached_stats['count'];
+						} else {
+							$stats       = Cache::get_cache_stats();
+							$cache_count = (int) ( $stats['cached_pages'] ?? 0 );
+						}
+					} else {
+						$cached_count = get_transient( Util::transient_key( 'wppo_cache_count' ) );
+						if ( false !== $cached_count && is_numeric( $cached_count ) ) {
+							$cache_count = (int) $cached_count;
+						} else {
+							$stats       = Cache::get_cache_stats();
+							$cache_count = (int) ( $stats['cached_pages'] ?? 0 );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$cache_count = 0;
 			}
 
 			// Clone options and redact sensitive keys before exposing to the client.
@@ -4170,6 +4593,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'show_welcome'                         => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
 					'image_info'                           => $image_info,
 					'cache_size'                           => $cache_size,
+					'cache_count'                          => $cache_count,
 					'total_js_css'                         => $total_js_css,
 					// Read-only WP 7.1+ client-side media processing state. Evaluated
 					// here (after Image_Optimisation has registered the opt-out filter)
@@ -4380,7 +4804,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// falls back to classic until 6.9 where the args are natively rendered
 					// (Trac #61734, #63486). Documented narrowing for backward compat.
 					//
-					// @since NEXT.
+					// @since 2.2.0.
 					$use_mod_api   = self::supports_native_script_fetchpriority();
 					$lazy_mod_args = array(
 						'in_footer'     => true,
@@ -4503,7 +4927,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// both the classic and module paths. Fail-open append, multisite-safe,
 			// no option change.
 			//
-			// @since NEXT.
+			// @since 2.2.0.
 			$excluded = array_unique( array_merge( $excluded, self::get_defer_js_preset_exclusions() ) );
 			if ( ! in_array( 'wppo-lazyload', $excluded, true ) ) {
 				$excluded[] = 'wppo-lazyload';
@@ -4564,7 +4988,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// return keeps the module in the head (e.g. document.write
 				// dependencies). Guarded + fail-open via the shared helper.
 				//
-				// @since NEXT.
+				// @since 2.2.0.
 				if ( method_exists( $modules, 'set_in_footer' ) ) {
 					if ( $this->should_move_deferred_to_footer( (string) $id ) ) {
 						$modules->set_in_footer( (string) $id, true );
@@ -4591,7 +5015,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// #1294) is honored so an LCP-critical module can stay
 					// 'high' and a handle can suppress via falsy; '' skips.
 					//
-					// @since NEXT.
+					// @since 2.2.0.
 					$existing = $this->get_module_fetchpriority( $modules, (string) $id, $registered_store, $all_store, $fallback_ready );
 					if ( is_string( $existing ) && '' !== trim( $existing ) && 'auto' !== strtolower( trim( $existing ) ) ) {
 						continue;
@@ -4844,7 +5268,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * any unreadable version or missing API, in which case callers fall
 		 * back to the pre-6.3 script_loader_tag regex.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when the native defer strategy path is allowed.
 		 */
@@ -4883,7 +5307,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Fail-open: false on any unreadable version or missing API, in which
 		 * case callers fall back to the pre-6.9 script_loader_tag regex.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when the native fetchpriority path is allowed.
 		 */
@@ -4905,6 +5329,188 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether a queued handle is eligible for a deferred loading strategy.
+		 *
+		 * Mirrors core's WP_Scripts::get_eligible_loading_strategy() gate
+		 * (changeset 56033, issue #1466) so the native strategy write never
+		 * fights core output: core renders a handle blocking when it carries
+		 * an inline `after` script, when a blocking queued dependent relies
+		 * on it, or when it is a module/import-map script. Core keeps
+		 * get_eligible_loading_strategy() private with pre-stamp semantics
+		 * ('' when no intended strategy is set), so it can neither be called
+		 * nor reused here; eligibility is decided by the manual fallback
+		 * below, which is the only path that can run against real core. The
+		 * existing supports_native_defer_strategy() method_exists probe
+		 * already covers capability detection. Fail-open: true on any
+		 * unreadable state so output degrades to the current behaviour, never
+		 * fatal or white-screen.
+		 *
+		 * Dependents are judged against the run's intended set plus live
+		 * state (issue #1466 review): a queued dependent carrying no explicit
+		 * strategy counts as deferred when this run intends to defer it, so
+		 * the verdict never depends on queue order. Transitive poisoning is
+		 * handled by recursing into each deferred dependent with a visited
+		 * set (mirroring core's $checked param): a dependent that is itself
+		 * blocked by a third handle poisons its own dependencies.
+		 *
+		 * @since NEXT
+		 *
+		 * @param object   $wp_scripts WP_Scripts registry.
+		 * @param string   $handle     Script handle.
+		 * @param string[] $intended   Handles this run intends to defer (pass
+		 *                             the interactivity guard and exclusion
+		 *                             list). Defaults to empty for direct calls.
+		 * @param bool[]   $checked    Visited handles for the recursion guard
+		 *                             (mirrors core's $checked). Callers leave
+		 *                             this at its default; a fresh map is used
+		 *                             per top-level evaluation.
+		 * @return bool True when the handle may receive strategy defer.
+		 */
+		private function is_defer_eligible_for_handle( object $wp_scripts, string $handle, array $intended = array(), array &$checked = array() ): bool {
+			if ( '' === $handle ) {
+				return true;
+			}
+			if ( isset( $checked[ $handle ] ) ) {
+				return true;
+			}
+			$checked[ $handle ] = true;
+
+			try {
+				if ( ! isset( $wp_scripts->registered ) || ! is_array( $wp_scripts->registered ) ) {
+					return true;
+				}
+				if ( ! isset( $wp_scripts->registered[ $handle ] ) ) {
+					return true;
+				}
+				$registered = $wp_scripts->registered[ $handle ];
+				$extra      = null;
+				if ( is_object( $registered ) && isset( $registered->extra ) ) {
+					$extra = $registered->extra;
+				} elseif ( is_array( $registered ) && isset( $registered['extra'] ) ) {
+					$extra = $registered['extra'];
+				}
+				if ( is_array( $extra ) ) {
+					if ( ! empty( $extra['after'] ) ) {
+						return false;
+					}
+					if ( isset( $extra['type'] ) && 'module' === strtolower( trim( (string) $extra['type'] ) ) ) {
+						return false;
+					}
+				}
+
+				if ( ! isset( $wp_scripts->queue ) || ! is_array( $wp_scripts->queue ) ) {
+					return true;
+				}
+				$has_get_data = is_callable( array( $wp_scripts, 'get_data' ) );
+				foreach ( $wp_scripts->queue as $queued ) {
+					$queued = (string) $queued;
+					if ( '' === $queued || $queued === $handle ) {
+						continue;
+					}
+					if ( ! isset( $wp_scripts->registered[ $queued ] ) ) {
+						continue;
+					}
+					$dependent = $wp_scripts->registered[ $queued ];
+					$deps      = null;
+					if ( is_object( $dependent ) ) {
+						if ( isset( $dependent->deps ) ) {
+							$deps = $dependent->deps;
+						} elseif ( isset( $dependent->dependencies ) ) {
+							$deps = $dependent->dependencies;
+						}
+					} elseif ( is_array( $dependent ) ) {
+						if ( isset( $dependent['deps'] ) ) {
+							$deps = $dependent['deps'];
+						} elseif ( isset( $dependent['dependencies'] ) ) {
+							$deps = $dependent['dependencies'];
+						}
+					}
+					if ( ! is_array( $deps ) || ! in_array( $handle, $deps, true ) ) {
+						continue;
+					}
+					$strategy = false;
+					if ( $has_get_data ) {
+						try {
+							$strategy = $wp_scripts->get_data( $queued, 'strategy' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$strategy = false;
+						}
+					}
+					if ( false === $strategy || null === $strategy ) {
+						$dependent_extra = null;
+						if ( is_object( $dependent ) && isset( $dependent->extra ) ) {
+							$dependent_extra = $dependent->extra;
+						} elseif ( is_array( $dependent ) && isset( $dependent['extra'] ) ) {
+							$dependent_extra = $dependent['extra'];
+						}
+						if ( is_array( $dependent_extra ) && isset( $dependent_extra['strategy'] ) && is_string( $dependent_extra['strategy'] ) ) {
+							$strategy = $dependent_extra['strategy'];
+						}
+					}
+					$is_deferred_dependent = is_string( $strategy ) && in_array( strtolower( trim( $strategy ) ), array( 'async', 'defer' ), true );
+					if ( ! $is_deferred_dependent && ! in_array( $queued, $intended, true ) ) {
+						return false;
+					}
+					// Transitive gate (issue #1466 review): a deferred (or
+					// about-to-defer) dependent that is itself ineligible
+					// poisons this handle, mirroring core's
+					// filter_eligible_strategies() recursion.
+					if ( ! $this->is_defer_eligible_for_handle( $wp_scripts, $queued, $intended, $checked ) ) {
+						return false;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+			return true;
+		}
+
+		/**
+		 * Whether the WP 6.9+ core template-enhancement buffer should carry plugin post-processing.
+		 *
+		 * Canonical predicate for the single-buffer routing (issue #1386):
+		 * version >= 6.9-alpha plus the genuinely-6.9
+		 * `wp_should_output_buffer_template_for_enhancement()` API. This is an
+		 * availability probe only: it never calls the predicate itself, so
+		 * registration-time routing cannot confuse a mid-request opt-out
+		 * (filter returning false) with a missing core. When true,
+		 * setup_hooks() registers ONLY the `wp_template_enhancement_output_buffer`
+		 * filter / `wp_finalized_template_enhancement_output_buffer` action
+		 * callbacks and no private `ob_start()` capture; when false (pre-6.9)
+		 * only the legacy `template_redirect` captures are registered.
+		 * Honoring a runtime `false` (opt-out / no consumers) means degrading
+		 * to uncached streaming output, never opening a private buffer —
+		 * intentional, since a private capture would stack on core's buffer
+		 * and re-process HTML; caching resumes when core opts back in.
+		 * Fail-open: false on any unreadable version or missing API, in which
+		 * case callers fall back to the pre-6.9 legacy path.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the core template-enhancement buffer path is allowed.
+		 */
+		public static function should_use_core_template_buffer(): bool {
+			try {
+				if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+					$wp_version = $GLOBALS['wp_version'];
+				} elseif ( function_exists( 'get_bloginfo' ) ) {
+					$wp_version = (string) get_bloginfo( 'version' );
+				} else {
+					return false;
+				}
+				if ( '' === $wp_version || version_compare( $wp_version, '6.9-alpha', '<' ) ) {
+					return false;
+				}
+				return function_exists( 'wp_should_output_buffer_template_for_enhancement' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Resolve the filtered fetchpriority for a deferred handle.
 		 *
 		 * Shared by the native classic path (add_defer_strategy()), the
@@ -4915,7 +5521,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extra dispatch; fail-open to 'low' on any throwable and to ''
 		 * (suppress) when the filter returns a non-listed value.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $handle Script handle or module id.
 		 * @return string Validated 'high'|'low'|'auto', or '' to suppress.
@@ -4960,7 +5566,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * same filter contract. Guarded by function_exists + has_filter;
 		 * fail-open to true (move) when the filter is absent or throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $handle Script handle or module id.
 		 * @return bool True when the handle should be footer-bound.
@@ -5063,64 +5669,105 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// are covered.
 			$supports_fetchpriority = self::supports_native_script_fetchpriority();
 
+			$interactivity_handles = array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' );
+
+			// Intended set, first pass (issue #1466 review): snapshot the handles
+			// this run intends to defer — interactivity guard plus the cheap
+			// exclusion filter — so eligibility below judges each dependent
+			// against intended-plus-stamped strategies instead of mid-loop write
+			// order (queue-order independence). Excluded handles stay out, so
+			// their dependencies correctly observe them as blocking.
+			//
+			// @since NEXT.
+			$intended_defer_handles = array();
+			foreach ( $wp_scripts->queue as $queued_handle ) {
+				$queued_handle = (string) $queued_handle;
+				if ( '' === $queued_handle ) {
+					continue;
+				}
+				if ( in_array( $queued_handle, $interactivity_handles, true ) ) {
+					continue;
+				}
+				if ( in_array( $queued_handle, $this->exclude_defer_js, true ) ) {
+					continue;
+				}
+				$intended_defer_handles[] = $queued_handle;
+			}
+
 			foreach ( $wp_scripts->queue as $handle ) {
 				// Interactivity runtime guard (issue #1201): never deprioritize or
 				// move the block-interactivity runtime, even if a site filters the
 				// preset away. Mirrors apply_module_loading_strategies(). Fail-open.
 				//
-				// @since NEXT.
-				if ( in_array( (string) $handle, array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' ), true ) ) {
+				// @since 2.2.0.
+				if ( in_array( (string) $handle, $interactivity_handles, true ) ) {
 					continue;
 				}
-				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
-					// Fill-gaps-only for the strategy itself (issue #1184): never
-					// overwrite an explicit async/defer strategy stamped by core,
-					// a theme, or another plugin — rewriting async to defer would
-					// change execution semantics. Core stores the strategy via
-					// wp_script_add_data( $handle, 'strategy', ... ), so read it
-					// back via WP_Scripts::get_data() (guarded; fail-open writes
-					// when the store is unreadable). Fetchpriority/in_footer below
-					// still apply to the already-deferred handle.
-					//
-					// @since NEXT.
-					$existing_strategy = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'strategy' ) : false;
-					$has_strategy      = is_string( $existing_strategy ) && in_array( strtolower( trim( $existing_strategy ) ), array( 'async', 'defer' ), true );
-					if ( ! $has_strategy ) {
-						wp_script_add_data( $handle, 'strategy', 'defer' );
-					}
-					$this->deferred_handles[ $handle ] = true;
-					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
-					// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
-					// Fill-gaps-only (issue #1218): never overwrite an explicit
-					// fetchpriority value — 'high', 'low', and explicit 'auto'
-					// are all preserved; only a missing/empty value counts as a
-					// gap. Explicit 'auto' IS distinguishable here (classic
-					// scripts carry no core default — get_data() returns false
-					// when unset), unlike the module path where core defaults
-					// every registration to 'auto'.
-					if ( $supports_fetchpriority && function_exists( 'wp_script_add_data' ) ) {
-						$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
-						$is_gap                 = ! is_string( $existing_fetchpriority ) || '' === trim( $existing_fetchpriority );
-						if ( $is_gap ) {
-							$fetchpriority = $this->get_filtered_deferred_fetchpriority( (string) $handle );
-							if ( '' !== $fetchpriority ) {
-								wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
-							}
+				// Cheap exclusion filter first (issue #1466 review): explicitly
+				// excluded handles skip the O(queue) eligibility scan entirely.
+				//
+				// @since NEXT.
+				if ( in_array( $handle, $this->exclude_defer_js, true ) ) {
+					continue;
+				}
+				// Eligibility gate (issue #1466): consult core's eligible
+				// strategy before stamping defer so blocking dependents,
+				// inline-after scripts, and module scripts render blocking.
+				// Fail-open inside the helper; ineligible handles stay
+				// undeferred (no strategy, no deferred mark, no
+				// fetchpriority/group) with queue order untouched.
+				//
+				// @since NEXT.
+				if ( ! $this->is_defer_eligible_for_handle( $wp_scripts, (string) $handle, $intended_defer_handles ) ) {
+					continue;
+				}
+				// Fill-gaps-only for the strategy itself (issue #1184): never
+				// overwrite an explicit async/defer strategy stamped by core,
+				// a theme, or another plugin — rewriting async to defer would
+				// change execution semantics. Core stores the strategy via
+				// wp_script_add_data( $handle, 'strategy', ... ), so read it
+				// back via WP_Scripts::get_data() (guarded; fail-open writes
+				// when the store is unreadable). Fetchpriority/in_footer below
+				// still apply to the already-deferred handle.
+				//
+				// @since 2.2.0.
+				$existing_strategy = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'strategy' ) : false;
+				$has_strategy      = is_string( $existing_strategy ) && in_array( strtolower( trim( $existing_strategy ) ), array( 'async', 'defer' ), true );
+				if ( ! $has_strategy ) {
+					wp_script_add_data( $handle, 'strategy', 'defer' );
+				}
+				$this->deferred_handles[ $handle ] = true;
+				// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
+				// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
+				// Fill-gaps-only (issue #1218): never overwrite an explicit
+				// fetchpriority value — 'high', 'low', and explicit 'auto'
+				// are all preserved; only a missing/empty value counts as a
+				// gap. Explicit 'auto' IS distinguishable here (classic
+				// scripts carry no core default — get_data() returns false
+				// when unset), unlike the module path where core defaults
+				// every registration to 'auto'.
+				if ( $supports_fetchpriority && function_exists( 'wp_script_add_data' ) ) {
+					$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
+					$is_gap                 = ! is_string( $existing_fetchpriority ) || '' === trim( $existing_fetchpriority );
+					if ( $is_gap ) {
+						$fetchpriority = $this->get_filtered_deferred_fetchpriority( (string) $handle );
+						if ( '' !== $fetchpriority ) {
+							wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
 						}
 					}
-					if ( $supports_fetchpriority ) {
-						// Native in_footer for deferred classic scripts on WP 6.9+
-						// (Trac #63486). Core reads the 'group' data key for footer
-						// placement — wp_enqueue_script()'s args handler
-						// (_wp_scripts_add_args_data()) maps in_footer to group=1,
-						// and 'in_footer' itself is never read for classic scripts,
-						// so set 'group' directly (issue #879 review). Skipped when
-						// the handle is already footer-bound and opt-out per handle.
-						$in_footer = $this->should_move_deferred_to_footer( (string) $handle );
-						$group     = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'group' ) : false;
-						if ( $in_footer && 1 !== (int) $group ) {
-							wp_script_add_data( $handle, 'group', 1 );
-						}
+				}
+				if ( $supports_fetchpriority ) {
+					// Native in_footer for deferred classic scripts on WP 6.9+
+					// (Trac #63486). Core reads the 'group' data key for footer
+					// placement — wp_enqueue_script()'s args handler
+					// (_wp_scripts_add_args_data()) maps in_footer to group=1,
+					// and 'in_footer' itself is never read for classic scripts,
+					// so set 'group' directly (issue #879 review). Skipped when
+					// the handle is already footer-bound and opt-out per handle.
+					$in_footer = $this->should_move_deferred_to_footer( (string) $handle );
+					$group     = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'group' ) : false;
+					if ( $in_footer && 1 !== (int) $group ) {
+						wp_script_add_data( $handle, 'group', 1 );
 					}
 				}
 			}
@@ -5139,7 +5786,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * The leading `\s` in the pattern is what keeps `wppo-type="…"` from
 		 * matching: the character before `type` there is `-`, not whitespace.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $tag The script tag markup.
 		 * @return bool True when the tag may be delay-rewritten.
@@ -5277,7 +5924,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// (fail-open). Delay-JS marker attributes below are
 					// preserved untouched.
 					//
-					// @since NEXT.
+					// @since 2.2.0.
 					if ( ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
 						$is_native_deferred = self::supports_native_script_fetchpriority() && isset( $this->deferred_handles[ $handle ] );
 						if ( ! $is_native_deferred ) {
@@ -5651,7 +6298,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * result is memoized, so the filter still runs at most once per
 		 * request on this path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return array<int, string>
 		 */
@@ -6425,7 +7072,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Guarded by function_exists/has_filter so behaviour is identical with
 		 * and without the filter API (WP 6.2+ always provides it).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string   $filter Filter hook name.
 		 * @param string[] $preset Curated preset exclusions.
@@ -6476,7 +7123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Filterable via wppo_delay_js_consent_exclusions. Fail-open: any
 		 * filter error degrades to the curated list (un-delayed output).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_consent_exclusions(): array {
@@ -6514,7 +7161,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Filterable via wppo_delay_js_analytics_exclusions. Fail-open to
 		 * the curated list on any filter error.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_analytics_exclusions(): array {
@@ -6551,7 +7198,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * (default off); additive merge only. Filterable via
 		 * wppo_delay_js_gallery_exclusions. Fail-open to the curated list.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_gallery_exclusions(): array {
@@ -6585,7 +7232,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Filterable via wppo_delay_js_jquery_exclusions. Fail-open to the
 		 * curated list on any filter error.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_jquery_exclusions(): array {
@@ -6611,7 +7258,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Single source of truth for the four opt-in presets: settings key
 		 * => preset slug used in per-page opt-out meta.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array<string, string>
 		 */
 		public static function get_delay_js_compat_preset_map(): array {
@@ -6629,7 +7276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Lazy-boots only the requested matcher so sites without delay pay
 		 * zero cost. Fail-open: unknown slugs return an empty list.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $slug Preset slug (consent|analytics|gallery|jquery).
 		 * @return string[]
@@ -6663,7 +7310,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * no cross-site leakage. Fail-open: any detection failure returns
 		 * an empty list (no opt-out applied).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int $post_id Optional post ID. Defaults to the current post.
 		 * @return string[]
@@ -6908,7 +7555,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * off. Filterable via `wppo_safe_mode_enabled` (has_filter-guarded,
 		 * fail-open to the stored setting). Multisite-safe: per-site settings.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when aggressive optimisations must be skipped.
 		 */
@@ -6922,7 +7569,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Delegates to Sandbox_Preview::is_preview_request() (admin-only query
 		 * param + nonce). Fail-open to false when the controller is missing.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when experimental preview output may render.
 		 */
@@ -6945,7 +7592,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * production overlaid with staged sandbox values. Fail-open to
 		 * production on any error.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $file_optimisation Production slice.
 		 * @return array Effective slice.
@@ -6970,7 +7617,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * have no Main instance can gate identically. Any failure fails open
 		 * to disabled (optimisations run) except an explicit stored `true`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $file_optimisation Optional `file_optimisation` settings slice.
 		 * @return bool True when safe mode is on.
@@ -7015,7 +7662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Any detection failure fails open to bypassed (unoptimised output,
 		 * never fatal). Multisite-safe: request-local only.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when optimisations must be skipped for this request.
 		 */
@@ -7055,7 +7702,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * to the built-in preset). Merged with user `excludeDeferJS` via
 		 * array_unique by callers. Per-site settings only; multisite-safe.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return string[]
 		 */
@@ -7082,7 +7729,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// handle plus the 6.5+ module ids, mirroring
 				// apply_module_loading_strategies(). Fail-open append.
 				//
-				// @since NEXT.
+				// @since 2.2.0.
 				'wp-interactivity',
 				'@wordpress/interactivity',
 				'@wordpress/interactivity-router',
@@ -7090,7 +7737,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filters defer-JS preset exclusions.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param string[] $preset Defer preset exclusions.
 			 */
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_defer_js_preset_exclusions' ) ) {
@@ -7130,7 +7777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * request cache so delay/defer states never cross-contaminate.
 		 * Fail-open: any detection failure returns false (defer stays enabled).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int $post_id Optional post ID. Defaults to the current post.
 		 * @return bool True when defer must be skipped for this page.
@@ -7207,7 +7854,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * full-cache wipe. Multisite-safe: per-site post/meta, domain-based
 		 * cache paths, no cross-site leakage. Fail-open: swallowed.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $post_id Post ID whose kill-switch changed.
 		 * @return void
 		 */
@@ -7258,7 +7905,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `_wppo_used_css_disabled` keys; everything else is ignored. Fail-open:
 		 * detection or purge failures never fatal the meta write.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed  $meta_id  Meta row ID for added/updated hooks, or an array of IDs for deleted_post_meta (unused, required by hook signature).
 		 * @param int    $post_id  Post ID the meta belongs to.
 		 * @param string $meta_key Meta key that was written.
@@ -7320,7 +7967,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * keywords with a generic cross-origin rule; auto mode matches known
 		 * vendors only), so adding a vendor may need an edit in both places.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_third_party_denylist(): array {
@@ -7418,7 +8065,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * raw value when no filter is registered; bypassed when a filter is
 		 * present so dynamic callbacks always run.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $file_opt Effective file_optimisation slice.
 		 * @return string[]
 		 */
@@ -7542,7 +8189,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Delegates to get_delay_js_third_party_allowlist_for_slice().
 		 * Fail-open: any failure returns an empty list.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public function get_delay_js_third_party_allowlist(): array {
@@ -7571,7 +8218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Matching semantics: handles use word-boundary matching (consistent
 		 * with the rest of delay matching); src/URL matching is substring.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $tag    Script tag markup.
 		 * @param string $handle Script handle.
 		 * @return bool True when the script should be delayed in third-party mode.
@@ -7671,7 +8318,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `shop.example.com` vs `cdn.example.com`) are conservatively treated
 		 * as third-party; add the CDN host to the allowlist in that setup.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $a First host.
 		 * @param string $b Second host.
 		 * @return bool True when both hosts belong to the same site.
@@ -7706,7 +8353,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * delay is enabled, so requests without Delay-JS never pay for the
 		 * list build. Reset alongside the delay-context memo in tests.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]|null
 		 */
 		private static ?array $delay_js_third_party_auto_cache = null;
@@ -7718,7 +8365,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * filtered patterns on site-B: the memo is only reused when the
 		 * current blog id matches.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private static int $delay_js_third_party_auto_cache_blog = 0;
@@ -7730,7 +8377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * tags on the script_loader_tag hot path. Reset alongside the
 		 * auto-pattern memo in reset_delay_third_party_auto_cache().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private static array $delay_js_third_party_auto_handle_segments = array();
@@ -7738,7 +8385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Compiled alternation for the memoized handle segments above.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		private static string $delay_js_third_party_auto_handle_re = '';
@@ -7748,7 +8395,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Null = not built yet.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string|null
 		 */
 		private static ?string $delay_js_third_party_auto_handle_key = null;
@@ -7756,7 +8403,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Reset the auto third-party pattern memo (for tests).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_delay_third_party_auto_cache(): void {
@@ -7783,7 +8430,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * patterns; bypassed when a filter is present so dynamic callbacks
 		 * always run.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_third_party_auto_patterns(): array {
@@ -7886,7 +8533,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Fail-open to false on any error. The pattern list lazy-boots here,
 		 * so callers must gate on the auto toggle first.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $handle Script handle (may be empty on buffered paths).
 		 * @param string $tag    Script tag markup or src URL.
 		 * @return bool True on match.
@@ -8003,7 +8650,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * patterns merge additively and never replace them. Any detection
 		 * failure fails open to false (leave un-delayed).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $tag    Script tag markup.
 		 * @param string $handle Script handle.
 		 * @return bool True when the script should be delayed in auto mode.
@@ -8066,7 +8713,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * markup. Falls back to the original tag when no script open tag is
 		 * found or the rewrite fails.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $tag    Script tag markup.
 		 * @param string $insert Attribute string including trailing space, e.g. 'fetchpriority="low" '.
 		 * @return string Tag with the attributes injected.
@@ -8090,7 +8737,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * get_delay_js_protected_exclusions() so the per-page opt-out
 		 * protection set cannot drift from the merged preset.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_base_preset_exclusions(): array {
@@ -8137,7 +8784,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Fail-open: any detection failure returns an empty list (no
 		 * protection), degrading to the previous subtract behavior.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $file_opt file_optimisation settings slice.
 		 * @return string[]
@@ -8384,7 +9031,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
 				return $tag;
 			}
-			// @since NEXT: filtered value with has_filter guards; fail-open.
+			// @since 2.2.0: filtered value with has_filter guards; fail-open.
 			$fetchpriority = $this->get_filtered_deferred_fetchpriority( (string) $handle );
 			if ( '' === $fetchpriority ) {
 				return $tag;
@@ -8400,7 +9047,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cannot leak across sites in `switch_to_blog()` requests; also
 		 * called directly in tests.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_font_preload_emitted(): void {
@@ -8419,7 +9066,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * hook passes ($new_blog_id, $prev_blog_id) without warnings.
 		 * Also called directly in tests.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $new_blog_id New blog ID (unused).
 		 * @param int $prev_blog_id Previous blog ID (unused).
 		 * @return void
@@ -8447,7 +9094,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * outrank the primary family's woff under the cap-2 slice).
 		 * Never fatals: any failure returns an empty list.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $css CSS text to scan.
 		 * @return string[] Ordered unique font URLs.
 		 */
@@ -8518,7 +9165,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Map a font URL to its preload `type` attribute.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $font_url Font URL.
 		 * @return string MIME type (possibly empty).
 		 */
@@ -8550,7 +9197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * home-host comparison; root-relative and bare relative paths are
 		 * same-origin by construction. Any failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Candidate URL.
 		 * @return bool True when the URL may be preloaded.
 		 */
@@ -8602,7 +9249,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * pages with one instance) must call {@see reset_font_preload_emitted()}
 		 * between pages or the per-request emitted guard skips page-2 repeats.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Font URL.
 		 * @return string Dedup key.
 		 */
@@ -8642,7 +9289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * resolution keeps the manual-wins normalized-URL dedup comparing
 		 * like with like instead of missing across bases.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $preload_settings Preload settings tab.
 		 * @return string[] Absolute manual font URLs.
 		 */
@@ -8682,7 +9329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * file_exists/filesize/file_get_contents probe. Returns '' when
 		 * unresolvable or outside containment. Never fatals.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $abs_src Absolute same-origin stylesheet URL.
 		 * @return string Canonical local path, or ''.
 		 */
@@ -8724,7 +9371,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * refs resolve against the enclosing stylesheet. Fail-open: any
 		 * failure returns the chunks collected so far.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array[] Chunks shaped as array{css: string, base: string}.
 		 */
 		private function collect_enqueued_font_css_chunks(): array {
@@ -8742,7 +9389,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * and the chunk loop previously duplicated stripos/implode/md5 work
 		 * on the hot path, including on cache hits.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array Shaped as array{chunks: array[], inline_hashes: string[]}.
 		 */
 		private function collect_font_css_chunks_and_hashes(): array {
@@ -8876,7 +9523,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * guard to judge. Never fatals: any failure returns the trimmed
 		 * input unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $font_url Font URL as written in CSS.
 		 * @param string $base_src Absolute stylesheet URL (or empty for inline CSS).
 		 * @return string Resolved absolute-or-relative URL.
@@ -8925,7 +9572,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * canonicalization step. Never fatals: any failure returns the
 		 * input unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $href Absolute or protocol-relative href.
 		 * @return string Canonicalized href.
 		 */
@@ -8962,7 +9609,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Resolve dot-segments in a URL path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $path URL path starting with `/`.
 		 * @return string Normalized path.
 		 */
@@ -9005,7 +9652,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * to src|ver). Memoized per request so re-entrant `wp_head`
 		 * emissions do not repeat stat syscalls. Never fatals.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $src Stylesheet src as registered.
 		 * @return string Stamp shaped as "mtime:size" or ''.
 		 */
@@ -9056,7 +9703,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * request and the chunk scan runs once per call (chunks + inline key
 		 * hashes collected in a single pass).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string[] $manual_urls Manual font URLs (win on conflict).
 		 * @return string[] Auto font URLs (zero to two items).
 		 */
@@ -9179,7 +9826,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * (normalized), dedups, and caps at MAX_AUTO_FONT_PRELOADS.
 		 * Never fatals: any failure returns [].
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed[] $urls Candidate URLs (e.g. from the transient).
 		 * @param array   $manual_keys Normalized manual-URL keys winning on conflict.
 		 * @return string[] Clean auto font URLs (zero to two items).
@@ -9513,6 +10160,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'/account/*',
 				);
 
+				// Canonical Woo exclusion list (issue #1383): inherit
+				// Util::get_woo_excluded_paths() so custom/nested/translated
+				// slugs resolved via wc_get_page_id() (e.g. shop/basket) stay
+				// out of speculation rules. Fail-open: resolution failure keeps
+				// the hardcoded seed above (never fatal, 0 queries when Woo is
+				// absent). Multisite-safe: per-site page resolution only.
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_woo_excluded_paths' ) ) {
+					try {
+						foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
+							$candidate = strtolower( trim( (string) $woo_path, '/' ) );
+							if ( '' === $candidate ) {
+								continue;
+							}
+							$pattern = '/' . $candidate . '/*';
+							if ( ! in_array( $pattern, $excludes, true ) ) {
+								$excludes[] = $pattern;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
 				$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
 					? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
 					: array();
@@ -9617,7 +10287,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * degrading to conservative prefetch (unoptimised, never fatal).
 		 * Multisite-safe: per-site options and per-site RUM aggregates only.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when prerender may be emitted.
 		 */
@@ -9776,7 +10446,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * clamped to 1-5 as the footprint guard). Fail-open: any missing or
 		 * malformed value returns 2, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return int Capped limit between 1 and 5.
 		 */
@@ -9805,7 +10475,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * highest-risk prerender mode; the outer list builder stays fail-open
 		 * (returns empty) for prefetch paths.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when eager speculation must be suppressed.
 		 */
@@ -9867,7 +10537,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * function_exists-guarded so unit tests and minimal installs default
 		 * to frontend (true). Fail-open: any throwable means frontend.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when the request looks like a frontend visit.
 		 */
@@ -9925,7 +10595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `conservative`. Manual user settings are never persisted — the cap
 		 * applies to the emitted rule only.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $eagerness Raw eagerness value.
 		 * @return string Capped eagerness value.
@@ -9960,7 +10630,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * never fatal). Multisite-safe: per-site model via per-site options,
 		 * same-site host check prevents cross-site leakage.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int $limit Maximum URLs to return.
 		 * @return string[] Validated absolute model URLs (possibly empty).
@@ -10027,7 +10697,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * nothing".
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Merge RUM-weighted model top URLs within the speculationTopUrlsLimit fill cap.
+		 * @since 2.2.0 Merge RUM-weighted model top URLs within the speculationTopUrlsLimit fill cap.
 		 *
 		 * @return string[] Validated absolute URLs (possibly empty).
 		 */
@@ -10165,8 +10835,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * empty array — never fatal, never white-screen.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Accept a fill-budget limit for the RUM-weighted portion.
-		 * @since NEXT Read via get_aggregate_readonly() with per-request memo.
+		 * @since 2.2.0 Accept a fill-budget limit for the RUM-weighted portion.
+		 * @since 2.2.0 Read via get_aggregate_readonly() with per-request memo.
 		 *
 		 * @param int $limit Maximum URLs to return.
 		 * @return string[] Validated absolute RUM winner URLs (possibly empty).
@@ -10192,7 +10862,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Uncached RUM top-URL computation for {@see get_rum_top_urls()}.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int $limit Maximum URLs to return.
 		 * @return string[] Validated absolute RUM winner URLs (possibly empty).
@@ -10350,7 +11020,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * failure) — fail-open to "emit nothing", never fatal.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Cap eager to moderate in commerce/auth contexts.
+		 * @since 2.2.0 Cap eager to moderate in commerce/auth contexts.
 		 *
 		 * @return array<string,mixed>|null The singular rule, or null.
 		 */
@@ -10491,7 +11161,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cost one Woo lookup set per distinct URL.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Memoize per-request results.
+		 * @since 2.2.0 Memoize per-request results.
 		 *
 		 * @param string $url Candidate absolute URL.
 		 * @return bool True when the URL may be prefetched.
@@ -10520,7 +11190,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Reset the speculation URL validity + commerce-path memos (for tests).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_speculation_url_memo(): void {
@@ -10538,7 +11208,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * fingerprint keeps the cached verdicts keyed on that boundary so a
 		 * stale "no Woo" verdict is never reused once Woo helpers appear.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return string '1'/'0' flags for wc_get_checkout_url, wc_get_cart_url, wc_get_page_permalink.
 		 */
@@ -10555,7 +11225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * paths (checkout/cart/myaccount permalinks). Resolved once per
 		 * request instead of once per candidate URL.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return string[] Lowercase path prefixes.
 		 */
@@ -10619,7 +11289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Query/fragment are preserved as-is: validated URLs never carry
 		 * them, and distinct raw inputs must not collapse silently.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $url Candidate URL.
 		 * @return string Normalized URL (input unchanged when unparseable).
@@ -10677,7 +11347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Called once per distinct URL via the
 		 * {@see is_speculation_list_url_valid()} memo.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string               $url   Candidate absolute URL.
 		 * @param array<string, mixed> $parts Parsed URL parts.
@@ -10808,7 +11478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cart session via `woocommerce_items_in_cart` / `woocommerce_cart_hash`
 		 * cookies. Fail-closed: any throwable means "suppressed".
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when the prerender list must not be emitted for this request.
 		 */
@@ -10874,7 +11544,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * behavior), never fatal. Multisite-safe: per-site settings and
 		 * model, no cross-site leakage.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string[]|null $candidates     Optional pre-validated candidates (defaults to get_speculation_list_urls()).
 		 * @param array         $existing_rules Existing speculation rules used for list-URL dedupe.
@@ -10963,7 +11633,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see get_speculation_top_urls_limit()} so a filter returning 20
 		 * URLs cannot defeat the ~0.5 KB footprint guard.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $urls           Post-filter candidate URLs.
 		 * @param array $existing_rules Existing speculation rules for dedupe.
@@ -10993,7 +11663,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * to the top-URL limit. Returns null when the rule must be dropped
 		 * (wrong source or no valid URLs left).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed $rule          Post-filter rule candidate.
 		 * @param array $existing_rules Existing speculation rules for dedupe.
@@ -11033,7 +11703,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * pre-filter rules, and non-array entries are dropped. Shape
 		 * validation beyond that stays with the rule builders above.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed $filtered  Post-filter rules candidate.
 		 * @param array $fallback  Pre-filter rules.
@@ -11088,7 +11758,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * document-rule-only behavior), never fatal. Multisite-safe:
 		 * per-site settings and model, no cross-site leakage.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed         $rules          Speculation rules (WP_Speculation_Rules object or legacy rules array).
 		 * @param string[]|null $candidate_urls Optional candidate URLs (defaults to the high-value list selection).
@@ -11134,7 +11804,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						/**
 						 * Filters the high-value prerender list URLs before the rule is registered.
 						 *
-						 * @since NEXT
+						 * @since 2.2.0
 						 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
 						 */
 						$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
@@ -11160,7 +11830,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						/**
 						 * Filters the high-value prerender list rule before it is registered.
 						 *
-						 * @since NEXT
+						 * @since 2.2.0
 						 * @param array $rule_args The prerender list rule arguments.
 						 */
 						$filtered_rule = apply_filters( 'wppo_speculation_prerender_list_rule', $rule_args );
@@ -11194,7 +11864,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					/**
 					 * Filters the high-value prerender list URLs before the rule is appended.
 					 *
-					 * @since NEXT
+					 * @since 2.2.0
 					 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
 					 */
 					$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
@@ -11216,7 +11886,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					/**
 					 * Filters the high-value prerender list rule before it is appended.
 					 *
-					 * @since NEXT
+					 * @since 2.2.0
 					 * @param array $rule The prerender list rule.
 					 */
 					$filtered_rule = apply_filters( 'wppo_speculation_prerender_list_rule', $rule );
@@ -11238,7 +11908,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					 * pre-filter rules and non-array entries are dropped
 					 * ({@see validate_speculation_rules_output()}).
 					 *
-					 * @since NEXT
+					 * @since 2.2.0
 					 * @param array    $rules Updated rules.
 					 * @param string[] $urls  Prerender list URLs that were appended.
 					 */
@@ -11274,7 +11944,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * URL is speculated twice.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Carve out the opt-in guarded prerender list via wppo_register_speculation_rules().
+		 * @since 2.2.0 Carve out the opt-in guarded prerender list via wppo_register_speculation_rules().
 		 *
 		 * @param mixed $rules Speculation rules array from core.
 		 * @return mixed Updated rules, or the input unchanged.
@@ -11525,7 +12195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * without one count as the same URL.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Normalize before comparing.
+		 * @since 2.2.0 Normalize before comparing.
 		 *
 		 * @param string[] $urls  Candidate list URLs.
 		 * @param array    $rules Existing speculation rules.
@@ -11544,7 +12214,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * variants compare equal everywhere. Output preserves the original
 		 * (non-normalized) URL strings and order.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $urls     Candidate URLs (non-strings dropped).
 		 * @param array $excluded URLs to remove.
@@ -11847,7 +12517,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * operators who opted out keep the legacy monolith. Fail-open: any
 		 * throwable, missing API, or absent evidence returns false (legacy path).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when classic on-demand block assets are active.
 		 */
@@ -11884,7 +12554,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see is_core_block_hoisting_active()} so the 6.9-alpha floor +
 		 * API-exists + fail-open check cannot drift between the two call sites.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when core loads separate core block assets on demand.
 		 */
@@ -11913,7 +12583,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Users who explicitly disabled on-demand assets keep the legacy
 		 * monolith untouched.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when hidden block assets may be omitted.
 		 */
@@ -11932,7 +12602,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * template-enhancement buffer exists). Fail-open: any throwable or
 		 * missing API returns false (legacy path unchanged).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return bool True when core owns on-demand block-asset hoisting.
 		 */
@@ -11954,7 +12624,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * unregistered handle or an unverifiable `src` returns false (keep the
 		 * asset — degrade to unoptimized, never unstyled).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $handle Queued style handle e.g. 'wp-block-cover'.
 		 * @return bool True when the handle is verifiably a core per-block asset.
@@ -11994,7 +12664,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * unused. Fail-open: any throwable (or a detected marker) reports
 		 * unresolvable (the caller bails and keeps every asset).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $content Singular post content to check.
 		 * @return bool True when the content references out-of-content block sources.
@@ -12062,7 +12732,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * throws, the type is treated as known so the legacy omission path is
 		 * unchanged; only a positive "not registered" answer keeps the asset.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $block_name Block name e.g. 'core/cover'.
 		 * @return bool True when the type is (or may be) registered.
@@ -12103,7 +12773,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * never unstyled). On core below 6.9 returns false (no keep-signal)
 		 * so the caller falls through to legacy behavior byte-for-byte.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $block_name Block name e.g. 'core/cover'.
 		 * @return bool True when core wants the asset kept.
@@ -12153,7 +12823,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see Util::content_has_block()} runs at most once per block type per
 		 * pass instead of once per queued handle.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string $block_name Block name e.g. 'core/cover'.
 		 * @param string $handle     Queued style handle e.g. 'wp-block-cover'.
@@ -12234,7 +12904,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * ({@see is_hidden_block_asset_omission_enabled()}). Otherwise the
 		 * legacy omission path runs unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @return void
 		 */
@@ -12602,6 +13272,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
+			// Disk-safe guard (issue #1428): randomized per-request query
+			// values (?ver=<timestamp|uniqid|rand>) are excluded from the
+			// minify pipeline so they cannot churn minified output against
+			// the file-count cap. Guarded by cacheRandomizedQueryGuard
+			// (default on), filterable via wppo_exclude_randomized_from_combine.
+			try {
+				$guard_on = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_cap_settings' ) ) {
+					$cap      = Cache::get_cache_cap_settings();
+					$guard_on = ! empty( $cap['randomized_guard'] );
+				}
+				if ( $guard_on && class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'is_randomized_query_asset' ) && Cache::is_randomized_query_asset( (string) $src ) ) {
+					$excluded = function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_exclude_randomized_from_combine', true, $handle, $src ) : true;
+					if ( $excluded ) {
+						return $tag;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			$local_path = Util::get_local_path( $src );
 			if ( empty( $local_path ) ) {
 				return $tag;
@@ -12809,7 +13500,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * upgrade_purge_status endpoint after cache-clearing actions; the
 		 * cost is a single non-autoloaded option read on admin pages.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{last_purge:array{reason:string,time:int},safe_preview_url:string}
 		 */
 		private function get_upgrade_purge_for_client(): array {

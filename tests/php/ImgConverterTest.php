@@ -1480,7 +1480,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * Memory-safe edge math: an over-budget source yields a shrunk longest
 	 * edge while a fitting source yields 0 (legacy path unchanged) (#1236).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	#[RunInSeparateProcess]
 	#[PreserveGlobalState( false )]
@@ -1512,7 +1512,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * The memory-safe edge filter clamps to the 256px floor and honours
 	 * disable-via-zero, matching the computed-path clamp (#1236).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	#[RunInSeparateProcess]
 	#[PreserveGlobalState( false )]
@@ -1557,7 +1557,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * Explicit-edge downscale shrinks oversized resources, keeps fitting
 	 * ones, and fails open on invalid edges (#1236).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_maybe_downscale_gd_image_to_edge(): void {
 		if ( ! function_exists( 'imagecreatetruecolor' ) ) {
@@ -1590,7 +1590,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * legacy skip instead of attempting a full-size GD decode that would
 	 * risk an allowed-memory fatal (#1236).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_convert_image_overbudget_without_imagick_skips(): void {
 		if ( extension_loaded( 'imagick' ) ) {

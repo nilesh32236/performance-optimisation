@@ -9,7 +9,7 @@
  * pinned boolean sanitizer for speculationPrerenderList.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 
 use PerformanceOptimise\Inc\AI_Adaptive;
@@ -22,7 +22,7 @@ use Brain\Monkey\Functions;
  * Tests the guarded high-value prerender list rule.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;

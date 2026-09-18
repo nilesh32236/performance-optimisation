@@ -12,7 +12,7 @@
  * with zero behaviour change.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -160,7 +160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		/**
 		 * Maximum edge-template file size read from disk (audit #1338).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const TEMPLATE_MAX_BYTES = 1048576;
@@ -174,7 +174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 * swapped mid-read cannot bypass the cap (TOCTOU). Returns '' when
 		 * missing/unreadable/oversized so callers fall back to inline.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $filename Template file name under templates/.
 		 * @return string File contents, or '' when unusable.
 		 */
