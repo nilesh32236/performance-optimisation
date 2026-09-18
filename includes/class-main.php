@@ -1316,7 +1316,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_font_preload_emitted' ) );
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_image_lcp_memos' ), 10, 2 );
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
-			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] );
+			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] ) && $safe_mode_off;
+			// Unified safe-mode kill switch (issue #1465): safe mode also
+			// disables combineCSS registration so a single action restores an
+			// unbroken render. Staged combine widens registration for the
+			// preview admin only (per-tag guards enforce preview-only output).
 			if ( ! $combine_for_registration && ! empty( $staged_for_registration['combineCSS'] ) ) {
 				$combine_for_registration = true;
 			}
@@ -7120,6 +7124,233 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					)
 				)
 			);
+		}
+
+		/**
+		 * Fragile-handle map for the auto-exclude detector (issue #1465).
+		 *
+		 * Ordered jQuery first, then cart fragments, then builders so the
+		 * detector names the most breakage-prone handle first. Each entry
+		 * maps a lowercase handle fragment to its exclude field(s) and a
+		 * short human-readable reason. Filterable via
+		 * `wppo_fragile_handle_map` (has_filter-guarded, fail-open to the
+		 * built-in map). Multisite-safe: static data only.
+		 *
+		 * @since NEXT
+		 *
+		 * @return array<string,array{fields:string[],reason:string}> Fragment => meta.
+		 */
+		public static function get_fragile_handle_map(): array {
+			$map = array(
+				'jquery-core'            => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'jQuery core — deferring or delaying breaks dependent scripts.',
+				),
+				'jquery-migrate'         => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'jQuery Migrate — deferring or delaying breaks dependent scripts.',
+				),
+				'jquery'                 => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'jQuery — deferring or delaying breaks dependent scripts.',
+				),
+				'wc-cart-fragments'      => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'WooCommerce cart fragments — delaying breaks the mini-cart AJAX refresh.',
+				),
+				'cart-fragments'         => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'WooCommerce cart fragments — delaying breaks the mini-cart AJAX refresh.',
+				),
+				'wc-checkout'            => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'WooCommerce checkout — deferring breaks payment and validation scripts.',
+				),
+				'wc-add-to-cart'         => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'WooCommerce add-to-cart — delaying breaks shop interactions.',
+				),
+				'wc-blocks'              => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'WooCommerce Blocks — deferring breaks Store API interactivity.',
+				),
+				'wc-store'               => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'WooCommerce Store API — deferring breaks cart and checkout blocks.',
+				),
+				'woocommerce'            => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'WooCommerce — deferring breaks cart and checkout flows.',
+				),
+				'elementor-frontend'     => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'Elementor frontend runtime — delaying breaks builder layout and widgets.',
+				),
+				'elementor-pro-frontend' => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'Elementor Pro runtime — delaying breaks builder widgets.',
+				),
+				'et-core-api'            => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'Divi builder runtime — delaying breaks builder layout.',
+				),
+				'divi-custom-script'     => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'Divi custom script — delaying breaks builder layout.',
+				),
+				'kadence'                => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'Kadence runtime — delaying breaks blocks and layout.',
+				),
+				'wp-interactivity'       => array(
+					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
+					'reason' => 'Block interactivity runtime — deferring breaks interactive blocks.',
+				),
+			);
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_fragile_handle_map' ) ) {
+				return $map;
+			}
+			try {
+				$raw = apply_filters( 'wppo_fragile_handle_map', $map );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $map;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $map;
+			}
+			return $map;
+		}
+
+		/**
+		 * Map enqueued handles to fragile-handle exclude suggestions (issue #1465).
+		 *
+		 * Case-insensitive substring match against {@see get_fragile_handle_map()},
+		 * jQuery/cart/builders first via map order. Returns at most 20
+		 * suggestions, deduped by handle. Fail-open: any failure returns an
+		 * empty array (unoptimised guidance only, never fatal).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $handles Enqueued script/style handles.
+		 * @return array<int,array{handle:string,fields:string[],reason:string}> Suggestions.
+		 */
+		public static function detect_fragile_handles( array $handles ): array {
+			try {
+				$map = self::get_fragile_handle_map();
+				if ( empty( $map ) || empty( $handles ) ) {
+					return array();
+				}
+				$suggestions = array();
+				$seen        = array();
+				foreach ( $handles as $handle ) {
+					if ( ! is_string( $handle ) && ! is_numeric( $handle ) ) {
+						continue;
+					}
+					$handle = (string) $handle;
+					if ( '' === $handle || isset( $seen[ strtolower( $handle ) ] ) ) {
+						continue;
+					}
+					$lower = strtolower( $handle );
+					foreach ( $map as $fragment => $meta ) {
+						$frag = strtolower( (string) $fragment );
+						if ( '' === $frag ) {
+							continue;
+						}
+						if ( false !== strpos( $lower, $frag ) || false !== strpos( $frag, $lower ) ) {
+							$fields                        = isset( $meta['fields'] ) && is_array( $meta['fields'] ) ? array_values( $meta['fields'] ) : array( 'excludeDeferJS', 'excludeDelayJS' );
+							$reason                        = isset( $meta['reason'] ) && is_string( $meta['reason'] ) ? $meta['reason'] : '';
+							$suggestions[]                 = array(
+								'handle' => $handle,
+								'fields' => $fields,
+								'reason' => $reason,
+							);
+							$seen[ strtolower( $handle ) ] = true;
+							break;
+						}
+					}
+					if ( count( $suggestions ) >= 20 ) {
+						break;
+					}
+				}
+				return $suggestions;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Current minify/combine/defer stack state for safe mode (issue #1465).
+		 *
+		 * Single choke point for the detector REST endpoint and the
+		 * one-click UI so the stack definition cannot drift between
+		 * call sites. Fail-open to all-off on any failure.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_optimisation Optional `file_optimisation` slice.
+		 * @return array{safe_mode:bool,delay_js:bool,defer_js:bool,combine_css:bool,remove_unused_css:bool,stack_enabled:bool} Stack flags.
+		 */
+		public static function get_safe_mode_stack_state( array $file_optimisation = array() ): array {
+			try {
+				if ( empty( $file_optimisation ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					try {
+						$settings          = (array) Util::get_settings();
+						$file_optimisation = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$safe_mode   = self::is_safe_mode_active( $file_optimisation );
+				$delay_js    = ! empty( $file_optimisation['delayJS'] );
+				$defer_js    = ! empty( $file_optimisation['deferJS'] );
+				$combine_css = ! empty( $file_optimisation['combineCSS'] );
+				$remove_css  = ! empty( $file_optimisation['removeUnusedCSS'] );
+				return array(
+					'safe_mode'         => $safe_mode,
+					'delay_js'          => $delay_js,
+					'defer_js'          => $defer_js,
+					'combine_css'       => $combine_css,
+					'remove_unused_css' => $remove_css,
+					'stack_enabled'     => ( $delay_js || $defer_js || $combine_css ) && ! $safe_mode,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'safe_mode'         => false,
+					'delay_js'          => false,
+					'defer_js'          => false,
+					'combine_css'       => false,
+					'remove_unused_css' => false,
+					'stack_enabled'     => false,
+				);
+			}
+		}
+
+		/**
+		 * Build the one-click safe-mode enable payload (issue #1465).
+		 *
+		 * Returns the production `file_optimisation` slice with `safeMode`
+		 * forced on while every other setting is preserved untouched, so
+		 * disabling safe mode later restores the previous configuration
+		 * without re-entering settings. Pure function for testability;
+		 * persistence lives in the REST handler (per-site wppo_settings).
+		 * Fail-open: any failure returns the input unchanged with safeMode on.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_optimisation Production slice.
+		 * @return array Slice with safeMode enabled.
+		 */
+		public static function build_safe_mode_enable_payload( array $file_optimisation = array() ): array {
+			try {
+				$file_optimisation['safeMode'] = true;
+				return $file_optimisation;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array( 'safeMode' => true );
+			}
 		}
 
 		/**

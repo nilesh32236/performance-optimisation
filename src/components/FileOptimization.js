@@ -1135,6 +1135,164 @@ const FileOptimization = ( {
 		}
 	};
 	const { setIsDirty } = useContext( UnsavedChangesContext );
+	// One-click safe mode + auto-exclude detector (issue #1465): the
+	// detector names the exact fragile handle (jQuery, cart fragments,
+	// builders first) and safe mode disables the delay/defer/combine
+	// stack in a single action without losing settings. Sandbox preview
+	// above stages the stack first; this is the guided recovery path.
+	const {
+		notice: safeModeNotice,
+		notify: notifySafeMode,
+		dismiss: dismissSafeMode,
+	} = useNotice();
+	const [ detectorBusy, setDetectorBusy ] = useState( false );
+	const [ safeModeBusy, setSafeModeBusy ] = useState( false );
+	const [ detectorSuggestions, setDetectorSuggestions ] = useState( [] );
+	const detectorMountedRef = useRef( true );
+	useEffect( () => {
+		return () => {
+			detectorMountedRef.current = false;
+		};
+	}, [] );
+	const handleDetectFragile = async () => {
+		setDetectorBusy( true );
+		dismissSafeMode();
+		try {
+			const res = await apiCall( 'safe_mode_detect', {}, 'GET' );
+			if ( res && res.success && res.data ) {
+				const list = Array.isArray( res.data.suggestions )
+					? res.data.suggestions
+					: [];
+				if ( detectorMountedRef.current ) {
+					setDetectorSuggestions( list );
+				}
+				if ( list.length === 0 ) {
+					notifySafeMode( {
+						type: 'success',
+						message: __(
+							'No fragile handles detected — the stack applies cleanly.',
+							'performance-optimisation'
+						),
+					} );
+				} else {
+					const first =
+						list[ 0 ] && list[ 0 ].handle ? list[ 0 ].handle : '';
+					notifySafeMode( {
+						type: 'warning',
+						message: sprintf(
+							// translators: %s: fragile handle name.
+							__(
+								'Fragile handle detected: exclude "%s" before enabling the stack.',
+								'performance-optimisation'
+							),
+							first
+						),
+					} );
+				}
+			} else {
+				notifySafeMode( {
+					type: 'error',
+					message: __(
+						'Could not run the exclude detector.',
+						'performance-optimisation'
+					),
+				} );
+			}
+		} catch {
+			notifySafeMode( {
+				type: 'error',
+				message: __(
+					'Could not run the exclude detector.',
+					'performance-optimisation'
+				),
+			} );
+		} finally {
+			if ( detectorMountedRef.current ) {
+				setDetectorBusy( false );
+			}
+		}
+	};
+	const handleApplySuggestions = () => {
+		if (
+			! Array.isArray( detectorSuggestions ) ||
+			detectorSuggestions.length === 0
+		) {
+			return;
+		}
+		const names = detectorSuggestions
+			.map( ( item ) =>
+				item && typeof item.handle === 'string' ? item.handle : ''
+			)
+			.filter( ( name ) => '' !== name );
+		if ( names.length === 0 ) {
+			return;
+		}
+		setSettings( ( prev ) => {
+			const mergeLines = ( current ) => {
+				const existing = toTextLines( current )
+					.split( '\n' )
+					.map( ( line ) => line.trim() )
+					.filter( ( line ) => '' !== line );
+				const merged = Array.from(
+					new Set( [ ...existing, ...names ] )
+				);
+				return merged.join( '\n' );
+			};
+			return {
+				...prev,
+				excludeDeferJS: mergeLines( prev.excludeDeferJS ),
+				excludeDelayJS: mergeLines( prev.excludeDelayJS ),
+			};
+		} );
+		notifySafeMode( {
+			type: 'success',
+			message: __(
+				'Suggested handles added to the exclude lists. Save settings to apply.',
+				'performance-optimisation'
+			),
+		} );
+	};
+	const handleOneClickSafeMode = async () => {
+		setSafeModeBusy( true );
+		try {
+			const res = await apiCall( 'safe_mode', { action: 'enable' } );
+			if ( res && res.success ) {
+				setSettings( ( prev ) => ( { ...prev, safeMode: true } ) );
+				setBaseline( ( prev ) => ( { ...prev, safeMode: true } ) );
+				notifySafeMode( {
+					type: 'success',
+					message: __(
+						'Safe mode enabled — Delay, Defer, Combine and Used CSS are paused. Your settings are preserved.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySafeMode( {
+					type: 'error',
+					message:
+						( res &&
+							typeof res.message === 'string' &&
+							res.message ) ||
+						__(
+							'Could not enable safe mode.',
+							'performance-optimisation'
+						),
+				} );
+			}
+		} catch {
+			notifySafeMode( {
+				type: 'error',
+				message: __(
+					'Could not enable safe mode.',
+					'performance-optimisation'
+				),
+			} );
+		} finally {
+			if ( detectorMountedRef.current ) {
+				setSafeModeBusy( false );
+			}
+		}
+	};
 	// Client-only CDN row ids never enter the baseline: the server payload
 	// is id-less, so comparing id-bearing state against an id-bearing
 	// baseline would report a permanent dirty state.
@@ -2755,7 +2913,7 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 									description={ __(
-										'Instantly disable Delay JS, Defer JS and Remove Unused CSS without losing their settings. Turn off to restore your previous configuration. Per-page disables and ?nocache also bypass these optimisations.',
+										'Instantly disable Delay JS, Defer JS, Combine CSS and Remove Unused CSS without losing their settings. Turn off to restore your previous configuration. Per-page disables and ?nocache also bypass these optimisations.',
 										'performance-optimisation'
 									) }
 									name="safeMode"
@@ -2767,11 +2925,97 @@ const FileOptimization = ( {
 									<NoticeBanner
 										type="warning"
 										message={ __(
-											'Safe mode is on — Delay, Defer and Used CSS are paused. Your settings are preserved.',
+											'Safe mode is on — Delay, Defer, Combine and Used CSS are paused. Your settings are preserved.',
 											'performance-optimisation'
 										) }
 									/>
 								) }
+								<div className="wppo-field wppo-safe-mode-detector">
+									<p className="wppo-field-label">
+										{ __(
+											'Auto-exclude detector — Delay / Defer / Combine',
+											'performance-optimisation'
+										) }
+									</p>
+									<p className="wppo-field-description">
+										{ __(
+											'Enable the stack on a fragile fixture with zero console errors: the detector names the exact handle to exclude (jQuery, cart fragments and builders first). Stage the stack via Sandbox preview, then restore an unbroken render in one click when needed.',
+											'performance-optimisation'
+										) }
+									</p>
+									{ safeModeNotice && (
+										<NoticeBanner
+											type={ safeModeNotice.type }
+											message={ safeModeNotice.message }
+											onDismiss={ dismissSafeMode }
+										/>
+									) }
+									{ Array.isArray( detectorSuggestions ) &&
+										detectorSuggestions.length > 0 && (
+											<ul className="wppo-detector-list">
+												{ detectorSuggestions.map(
+													( item ) => (
+														<li key={ item.handle }>
+															<code>
+																{ item.handle }
+															</code>
+															{ item.reason
+																? ` — ${ item.reason }`
+																: '' }
+														</li>
+													)
+												) }
+											</ul>
+										) }
+									<div className="wppo-sandbox-actions">
+										<button
+											type="button"
+											className="wppo-button wppo-button--secondary"
+											onClick={ handleDetectFragile }
+											disabled={
+												detectorBusy ||
+												optimizerDisabled
+											}
+										>
+											{ __(
+												'Detect fragile handles',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											type="button"
+											className="wppo-button wppo-button--secondary"
+											onClick={ handleApplySuggestions }
+											disabled={
+												detectorBusy ||
+												optimizerDisabled ||
+												! Array.isArray(
+													detectorSuggestions
+												) ||
+												detectorSuggestions.length === 0
+											}
+										>
+											{ __(
+												'Apply suggested excludes',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											type="button"
+											className="wppo-button wppo-button--primary"
+											onClick={ handleOneClickSafeMode }
+											disabled={
+												safeModeBusy ||
+												optimizerDisabled
+											}
+										>
+											{ __(
+												'Enable safe mode (one-click restore)',
+												'performance-optimisation'
+											) }
+										</button>
+									</div>
+								</div>
 								<div className="wppo-field wppo-upgrade-purge">
 									<h4
 										className="wppo-field-label"

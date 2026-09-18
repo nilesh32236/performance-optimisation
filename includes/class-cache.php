@@ -1076,6 +1076,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->should_bypass_combine_for_elementor( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
 				return;
 			}
+			// Unified safe-mode kill switch (issue #1465): safe mode disables
+			// combine in one click. Preview admins still render staged output
+			// (per-tag widening above); visitors and normal requests bail out
+			// here. Fail-open: predicate failure means combine proceeds.
+			if ( ! $is_preview ) {
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_safe_mode_active' ) ) {
+						if ( Main::is_safe_mode_active( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
+							return;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
 			// On WP 6.9+ with separate (on-demand) core block assets active, never
 			// fold any core block-asset stylesheet into the combined file — doing so
@@ -1892,6 +1907,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$file_opt = $this->get_sandbox_effective_file_opt( $file_opt );
 					if ( $this->should_bypass_combine_for_elementor( $file_opt, $looks_like ) ) {
 						return false;
+					}
+				}
+				// Unified safe-mode kill switch (issue #1465): never inline
+				// the combined file while safe mode is on (defense-in-depth
+				// for combine_css()). Preview admins are exempt so staged
+				// output can still be verified. Fail-open on any error.
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_safe_mode_active' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_sandbox_preview_active' ) ) {
+					if ( ! Main::is_sandbox_preview_active() ) {
+						$file_opt_safe = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+						if ( Main::is_safe_mode_active( $file_opt_safe ) ) {
+							return false;
+						}
 					}
 				}
 			} catch ( \Throwable $e ) {

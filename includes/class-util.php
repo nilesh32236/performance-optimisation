@@ -6110,6 +6110,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
 					continue;
 				}
+				// Unified safe-mode + combineCSS (issue #1465): normalize
+				// malformed import shapes to bool so a string 'false' cannot
+				// silently enable the stack. Both fail safe to false so an
+				// upgrade or malformed import never auto-enables combine or
+				// safe mode (combine stays off unless explicitly enabled).
+				if ( in_array( $safe_key, array( 'safeMode', 'combineCSS' ), true ) && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
+					}
+					continue;
+				}
 				// CCSS bounded-retry cap (issue #1274) — int clamped to
 				// 0..5 (0 = fail fast, no retries). Unrecognized values
 				// fail open to 5 so generation keeps its retry budget.
