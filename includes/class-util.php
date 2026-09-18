@@ -443,6 +443,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'lazyRenderBelowFold'        => false,
 					'lazyRenderExcludeBuilders'  => true,
 					'hardenCommentImages'        => true,
+					'occlusionFetchpriorityLow'  => false,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
@@ -6083,7 +6084,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// (all four features default off). Pinned before the generic
 				// stripos 'list' branch so speculationPrerenderList never
 				// falls through to sanitize_textarea_field.
-				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList', 'purgeFailedActions', 'speculation_autotune_enabled' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList', 'purgeFailedActions', 'occlusionFetchpriorityLow', 'speculation_autotune_enabled' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {

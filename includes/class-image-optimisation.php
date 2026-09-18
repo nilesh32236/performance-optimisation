@@ -1012,6 +1012,247 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether occlusion-aware fetchpriority=low demotion is enabled.
+		 *
+		 * Additive `image_optimisation.occlusionFetchpriorityLow` flag,
+		 * default off (backward compatible). Guarded with
+		 * `function_exists()`/`has_filter()` so behaviour is unchanged
+		 * when no callback is registered. Fail-open to false.
+		 *
+		 * @since NEXT
+		 * @return bool True when occluded nodes should be demoted to low.
+		 */
+		private function is_occlusion_fetchpriority_low_enabled(): bool {
+			try {
+				$image_optimisation = $this->options['image_optimisation'] ?? array();
+				$enabled            = ! empty( $image_optimisation['occlusionFetchpriorityLow'] );
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_occlusion_fetchpriority_low_enabled' ) ) {
+					/**
+					 * Filters whether OD-occluded images are demoted to fetchpriority low.
+					 *
+					 * @since NEXT
+					 * @param bool $enabled Whether occlusion demotion is enabled.
+					 */
+					$enabled = (bool) apply_filters( 'wppo_occlusion_fetchpriority_low_enabled', $enabled );
+				}
+				return $enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Resolve OD-occluded image URLs for the current request.
+		 *
+		 * Guarded with `class_exists()`/`method_exists()` plus the OD
+		 * availability check inside the bridge; legacy fallback (OD absent
+		 * or any failure) is an empty list meaning no attribute change.
+		 * Multisite-safe: per-URL metrics only, no cross-site leakage.
+		 *
+		 * @since NEXT
+		 * @return string[] Occluded image URLs (may be empty).
+		 */
+		private function get_occluded_image_urls_for_request(): array {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) || ! method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_occluded_image_urls' ) ) {
+					return array();
+				}
+				$urls = \PerformanceOptimise\Inc\OD_Bridge::get_occluded_image_urls();
+				return is_array( $urls ) ? $urls : array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Demote OD-occluded in-viewport images to fetchpriority=low.
+		 *
+		 * Core-parity with the WordPress Performance Team direction
+		 * (OD-driven priority): hidden carousels/hidden heroes must not
+		 * steal bandwidth from the real LCP. For each `<img>` whose
+		 * normalized src/srcset matches an occluded URL, sets
+		 * `fetchpriority="low"` only when the attribute is absent (never
+		 * overwrites an explicit value, never touches the true-LCP node
+		 * matched by `$lcp_url`). Never adds or changes `loading`:
+		 * occluded nodes must not gain `loading="lazy"`, and the
+		 * pre-existing `sweep_lazy_high_conflicts()` keeps the lazy+high
+		 * invariant intact. Uses `WP_HTML_Tag_Processor` when
+		 * `is_html_api_available()` (WordPress 6.2+) else the regex
+		 * fallback. Fail-open: any failure returns `$buffer` unchanged.
+		 *
+		 * @since NEXT
+		 * @param string      $buffer        The HTML buffer.
+		 * @param string[]    $occluded_urls Raw occluded image URLs.
+		 * @param string|null $lcp_url       Optional true-LCP URL to protect.
+		 * @return string The buffer with occluded nodes demoted to low.
+		 */
+		private function apply_occlusion_fetchpriority_low( string $buffer, array $occluded_urls, ?string $lcp_url = null ): string {
+			try {
+				if ( '' === $buffer || empty( $occluded_urls ) || false === stripos( $buffer, '<img' ) ) {
+					return $buffer;
+				}
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_occlusion_fetchpriority_low_urls' ) ) {
+					/**
+					 * Filters the occluded image URL list before fetchpriority demotion.
+					 *
+					 * @since NEXT
+					 * @param string[] $occluded_urls Occluded image URLs.
+					 * @param string   $buffer        The HTML buffer being processed.
+					 */
+					$filtered = apply_filters( 'wppo_occlusion_fetchpriority_low_urls', $occluded_urls, $buffer );
+					if ( is_array( $filtered ) ) {
+						$occluded_urls = $filtered;
+					}
+				}
+				$occluded_set = array();
+				foreach ( $occluded_urls as $u ) {
+					if ( ! is_string( $u ) || '' === trim( $u ) ) {
+						continue;
+					}
+					// Parity with OD_Bridge::get_occluded_image_urls(): reject
+					// non-http(s) schemes before normalization resolves them
+					// against the home URL into a host+path key that could
+					// coincidentally match a real <img>.
+					$trimmed = trim( $u );
+					$scheme  = function_exists( 'wp_parse_url' ) ? wp_parse_url( $trimmed, PHP_URL_SCHEME ) : parse_url( $trimmed, PHP_URL_SCHEME ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+					if ( is_string( $scheme ) && '' !== $scheme && ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
+						continue;
+					}
+					$norm = $this->normalize_image_url( $u );
+					if ( '' !== $norm ) {
+						$occluded_set[ $norm ] = true;
+					}
+				}
+				if ( empty( $occluded_set ) ) {
+					return $buffer;
+				}
+				$normalized_lcp = '';
+				if ( is_string( $lcp_url ) && '' !== $lcp_url ) {
+					$normalized_lcp = $this->normalize_image_url( $lcp_url );
+				}
+				// Per-buffer memo of normalized candidate URLs: the closures
+				// below run once per <img> tag, so identical src/srcset values
+				// across image-heavy pages normalize once instead of N times.
+				$norm_cache           = array();
+				$tag_is_protected_lcp = function ( array $candidates ) use ( $normalized_lcp, &$norm_cache ): bool {
+					if ( '' === $normalized_lcp ) {
+						return false;
+					}
+					foreach ( $candidates as $candidate ) {
+						if ( '' === $candidate ) {
+							continue;
+						}
+						if ( ! array_key_exists( $candidate, $norm_cache ) ) {
+							$norm_cache[ $candidate ] = $this->normalize_image_url( $candidate );
+						}
+						if ( $norm_cache[ $candidate ] === $normalized_lcp ) {
+							return true;
+						}
+					}
+					return false;
+				};
+				$tag_is_occluded      = function ( array $candidates ) use ( $occluded_set, &$norm_cache ): bool {
+					foreach ( $candidates as $candidate ) {
+						if ( '' === $candidate ) {
+							continue;
+						}
+						if ( ! array_key_exists( $candidate, $norm_cache ) ) {
+							$norm_cache[ $candidate ] = $this->normalize_image_url( $candidate );
+						}
+						if ( isset( $occluded_set[ $norm_cache[ $candidate ] ] ) ) {
+							return true;
+						}
+					}
+					return false;
+				};
+				if ( ! $this->is_html_api_available() ) {
+					$result = preg_replace_callback(
+						'#<img\b[^>]*>#i',
+						function ( $matches ) use ( $tag_is_protected_lcp, $tag_is_occluded ) {
+							$tag = $matches[0];
+							if ( 1 === preg_match( '#\sfetchpriority\s*=#i', $tag ) ) {
+								return $tag;
+							}
+							$candidates = array();
+							if ( 1 === preg_match_all( '#\s(?:src|data-src)\s*=\s*["\']?([^"\'\s>]+)#i', $tag, $m ) && isset( $m[1] ) && is_array( $m[1] ) ) {
+								foreach ( $m[1] as $v ) {
+									$candidates[] = (string) $v;
+								}
+							}
+							if ( 1 === preg_match_all( '#\ssrcset\s*=\s*["\']([^"\']+)["\']#i', $tag, $sm ) && isset( $sm[1] ) && is_array( $sm[1] ) ) {
+								foreach ( $sm[1] as $srcset ) {
+									foreach ( $this->split_srcset_candidates( (string) $srcset ) as $part ) {
+										$url = $this->split_srcset_item( $part )[0];
+										if ( '' !== $url ) {
+											$candidates[] = $url;
+										}
+									}
+								}
+							}
+							if ( empty( $candidates ) ) {
+								return $tag;
+							}
+							if ( $tag_is_protected_lcp( $candidates ) ) {
+								return $tag;
+							}
+							if ( ! $tag_is_occluded( $candidates ) ) {
+								return $tag;
+							}
+							return (string) preg_replace( '#<img\b#i', '<img fetchpriority="low"', $tag, 1 );
+						},
+						$buffer
+					);
+					return is_string( $result ) ? $result : $buffer;
+				}
+				$tags    = new \WP_HTML_Tag_Processor( $buffer );
+				$changed = false;
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					$existing = $tags->get_attribute( 'fetchpriority' );
+					if ( null !== $existing ) {
+						continue;
+					}
+					$candidates = array();
+					foreach ( array( 'src', 'data-src' ) as $attribute ) {
+						$value = $tags->get_attribute( $attribute );
+						if ( is_string( $value ) && '' !== $value ) {
+							$candidates[] = $value;
+						}
+					}
+					$srcset = $tags->get_attribute( 'srcset' );
+					if ( is_string( $srcset ) && '' !== $srcset ) {
+						foreach ( $this->split_srcset_candidates( $srcset ) as $part ) {
+							$url = $this->split_srcset_item( $part )[0];
+							if ( '' !== $url ) {
+								$candidates[] = $url;
+							}
+						}
+					}
+					if ( empty( $candidates ) ) {
+						continue;
+					}
+					if ( $tag_is_protected_lcp( $candidates ) ) {
+						continue;
+					}
+					if ( ! $tag_is_occluded( $candidates ) ) {
+						continue;
+					}
+					$tags->set_attribute( 'fetchpriority', 'low' );
+					$changed = true;
+				}
+				if ( ! $changed ) {
+					return $buffer;
+				}
+				$updated = $tags->get_updated_html();
+				return is_string( $updated ) ? $updated : $buffer;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $buffer;
+			}
+		}
+
+		/**
 		 * Reset the per-instance LCP memos ($current_lcp_url, $lazy_lcp_exclusion_url).
 		 *
 		 * The static {@see clear_runtime_caches()} cannot reach instance state,
@@ -7375,6 +7616,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * 3. When the `cssHeroPreload` toggle is enabled and the LCP target is
 		 *    a CSS background hero (no matching <img>), injects exactly one
 		 *    `<link rel="preload" as="image">` tag before `</head>`.
+		 * 4. When the `occlusionFetchpriorityLow` toggle is enabled (issue
+		 *    #1426), OD-measured occluded in-viewport nodes get
+		 *    `fetchpriority="low"` with no `loading` change, skipping the
+		 *    true-LCP node so the single-high invariant holds.
 		 *
 		 * Uses `WP_HTML_Processor::serialize_token()` (public since WP 6.9) when
 		 * available, falling back to `WP_HTML_Tag_Processor` on older versions.
@@ -7413,7 +7658,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_optimisation  = $this->options['image_optimisation'] ?? array();
 			$prioritize_enabled  = ! empty( $image_optimisation['prioritizeLCPImages'] );
 			$css_preload_enabled = ! empty( $image_optimisation['cssHeroPreload'] );
-			if ( ! $prioritize_enabled && ! $css_preload_enabled ) {
+			$occlusion_enabled   = $this->is_occlusion_fetchpriority_low_enabled();
+			if ( ! $prioritize_enabled && ! $css_preload_enabled && ! $occlusion_enabled ) {
 				return $filtered_output;
 			}
 			if ( is_admin() || empty( $filtered_output ) || ! is_string( $filtered_output ) ) {
@@ -7426,8 +7672,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			// CSS-hero pages may contain no <img> tags at all; let those through
 			// to Pass C when the CSS hero preload is enabled.
-			$css_hero_eligible = $css_preload_enabled && false !== stripos( $filtered_output, 'background' );
-			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) || ( false === stripos( $filtered_output, '<img' ) && ! $css_hero_eligible ) ) {
+			$css_hero_eligible    = $css_preload_enabled && false !== stripos( $filtered_output, 'background' );
+			$has_img              = false !== stripos( $filtered_output, '<img' );
+			$tag_processor_exists = class_exists( 'WP_HTML_Tag_Processor' );
+			if ( ! $tag_processor_exists ) {
+				// Occlusion demotion (Pass B2) and the final lazy/high sweep
+				// both ship regex fallbacks, so occlusion-only mode can
+				// still run on pre-6.2 cores without the HTML API.
+				if ( ! $occlusion_enabled || ! $has_img ) {
+					return $filtered_output;
+				}
+			} elseif ( ! $has_img && ! $css_hero_eligible ) {
 				return $filtered_output;
 			}
 
@@ -7444,11 +7699,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// chain (OD → stored PageSpeed → DOM-first heuristic) so a
 				// detectable hero still preloads when stored data is absent.
 				// Fail-open: detection failure leaves $lcp_url empty and the
-				// markup unmodified, never fatal.
+				// markup unmodified, never fatal. When only the occlusion
+				// flag is on, the occluded list is fetched first and LCP
+				// resolution is skipped when it is empty (no markup change
+				// possible, so the OD/RUM/DOM scan cost is avoided).
 				//
 				// @since 2.2.0 Unified resolution via resolve_auto_lcp_url().
-				$lcp_url = '';
-				if ( $prioritize_enabled ) {
+				$lcp_url             = '';
+				$occluded_urls_early = null;
+				if ( $occlusion_enabled && ! $prioritize_enabled ) {
+					try {
+						$occluded_urls_early = $this->get_occluded_image_urls_for_request();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$occluded_urls_early = array();
+					}
+					if ( ! is_array( $occluded_urls_early ) ) {
+						$occluded_urls_early = array();
+					}
+				}
+				if ( $prioritize_enabled || ( is_array( $occluded_urls_early ) && ! empty( $occluded_urls_early ) ) ) {
 					try {
 						if ( method_exists( $this, 'resolve_auto_lcp_url' ) ) {
 							$lcp_url = $this->resolve_auto_lcp_url( $filtered_output );
@@ -7486,6 +7756,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// hero keeps exactly one preload with eager plus high
 				// (issue #1312); manual lists already claimed the slot first.
 				$buffer = $this->maybe_preload_hero_image( $buffer, $image_optimisation, ( $prioritize_enabled ? $lcp_url : null ) );
+
+				// Pass B2: occlusion-aware demotion (issue #1426) — OD-measured
+				// occluded (CSS-hidden but in-viewport) nodes get
+				// fetchpriority="low" without any loading change, skipping
+				// the true-LCP node so the single-high invariant holds.
+				if ( $occlusion_enabled ) {
+					try {
+						$occluded_urls = is_array( $occluded_urls_early ) ? $occluded_urls_early : $this->get_occluded_image_urls_for_request();
+						if ( ! empty( $occluded_urls ) ) {
+							$buffer = $this->apply_occlusion_fetchpriority_low( $buffer, $occluded_urls, $lcp_url );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 
 				// Pass D: final lazy/high invariant sweep (issue #1312) — any
 				// element marked fetchpriority high is forced eager so lazy

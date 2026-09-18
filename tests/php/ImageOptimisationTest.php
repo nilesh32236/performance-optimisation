@@ -2839,6 +2839,78 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * OD-occluded in-viewport node gets fetchpriority low with no loading lazy added (issue #1426).
+	 *
+	 * @since NEXT
+	 */
+	public function test_occlusion_fetchpriority_low_demotes_occluded_without_lazy(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$apply     = new \ReflectionMethod( Image_Optimisation::class, 'apply_occlusion_fetchpriority_low' );
+
+		$buffer = '<html><body><img src="https://example.com/hero.jpg" alt="hero"/><img src="https://example.com/carousel-hidden.jpg" alt="hidden"/></body></html>';
+		$result = $apply->invoke( $image_opt, $buffer, array( 'https://example.com/carousel-hidden.jpg' ), 'https://example.com/hero.jpg' );
+
+		$this->assertStringContainsString( 'fetchpriority="low"', $result );
+		$this->assertStringContainsString( '<img src="https://example.com/hero.jpg" alt="hero"/>', $result );
+		$this->assertStringNotContainsString( 'loading=', $result );
+		$this->assertSame( 1, substr_count( $result, 'fetchpriority' ) );
+	}
+
+	/**
+	 * True LCP keeps the single fetchpriority high; occluded demotion never touches it (issue #1426).
+	 *
+	 * @since NEXT
+	 */
+	public function test_occlusion_fetchpriority_low_preserves_true_lcp_high(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$apply     = new \ReflectionMethod( Image_Optimisation::class, 'apply_occlusion_fetchpriority_low' );
+
+		$buffer = '<html><body><img src="https://example.com/hero.jpg" fetchpriority="high" loading="eager" alt="hero"/><img src="https://example.com/carousel-hidden.jpg" alt="hidden"/></body></html>';
+		$result = $apply->invoke( $image_opt, $buffer, array( 'https://example.com/hero.jpg', 'https://example.com/carousel-hidden.jpg' ), 'https://example.com/hero.jpg' );
+
+		$this->assertSame( 1, substr_count( $result, 'fetchpriority="high"' ) );
+		$this->assertSame( 1, substr_count( $result, 'fetchpriority="low"' ) );
+		$this->assertStringNotContainsString( 'loading="lazy"', $result );
+		// No lazy+high pair is ever emitted.
+		$this->assertDoesNotMatchRegularExpression( '#<img[^>]*loading="lazy"[^>]*fetchpriority="high"#i', $result );
+		$this->assertDoesNotMatchRegularExpression( '#<img[^>]*fetchpriority="high"[^>]*loading="lazy"#i', $result );
+	}
+
+	/**
+	 * No occluded URLs means no attribute change (issue #1426 fail-open).
+	 *
+	 * @since NEXT
+	 */
+	public function test_occlusion_fetchpriority_low_no_metrics_no_change(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$apply     = new \ReflectionMethod( Image_Optimisation::class, 'apply_occlusion_fetchpriority_low' );
+
+		$buffer = '<html><body><img src="https://example.com/hero.jpg" alt="hero"/></body></html>';
+		$this->assertSame( $buffer, $apply->invoke( $image_opt, $buffer, array(), 'https://example.com/hero.jpg' ) );
+	}
+
+	/**
 	 * Inline `style=""` heroes are found without the HTML API (pre-6.2 regex fallback).
 	 *
 	 * @since 2.2.0

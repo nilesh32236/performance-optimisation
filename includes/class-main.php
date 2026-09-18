@@ -566,6 +566,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['hardenCommentImages'] ) ) {
 				$this->options['image_optimisation']['hardenCommentImages'] = true;
 			}
+			// Occlusion-aware fetchpriority=low (issue #1426): additive key,
+			// defaults to off so existing installs keep current behaviour.
+			// In-memory only here (no front-end DB write); persisted via
+			// update_settings/REST. Multisite-safe: per-site wppo_settings.
+			if ( ! isset( $this->options['image_optimisation']['occlusionFetchpriorityLow'] ) ) {
+				$this->options['image_optimisation']['occlusionFetchpriorityLow'] = false;
+			}
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
 			}
@@ -1400,9 +1407,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Optional LCP image prioritization on the finalized HTML (default off).
-			// The CSS background hero preload (issue #935) shares this buffer, so
-			// the hook is registered when either toggle is enabled.
-			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) || ! empty( $this->options['image_optimisation']['cssHeroPreload'] ) ) {
+			// The CSS background hero preload (issue #935) and the OD
+			// occlusion-aware fetchpriority=low demotion (issue #1426) share
+			// this buffer, so the hook is registered when any toggle is enabled.
+			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) || ! empty( $this->options['image_optimisation']['cssHeroPreload'] ) || ! empty( $this->options['image_optimisation']['occlusionFetchpriorityLow'] ) ) {
 				// Core-parity by delegation (issue #1182): this buffer-level LCP
 				// prioritization stamps fetchpriority=high + loading=eager on the
 				// hero node only; all loading/fetchpriority/decoding gap-fills
