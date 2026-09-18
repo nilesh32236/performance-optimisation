@@ -1204,6 +1204,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Site Health autoloaded-options size limit (bytes).
+		 *
+		 * Mirrors `WP_Site_Health::get_test_autoloaded_options()` (WP 6.6+,
+		 * default 800000 bytes). Read via the core
+		 * `site_status_autoloaded_options_size_limit` filter when available
+		 * so installs that tune the threshold stay in parity.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_SIZE_LIMIT_DEFAULT = 800000;
+
+		/**
+		 * Get the Site Health autoloaded-options size limit in bytes.
+		 *
+		 * Fail-open: returns the default when the filter API is unavailable,
+		 * when the filter throws, or when the filtered value is not positive.
+		 * Per-site options only (`$wpdb->options` is site-scoped on multisite).
+		 *
+		 * @since NEXT
+		 * @return int Size limit in bytes.
+		 */
+		public static function get_autoload_size_limit(): int {
+			if ( ! function_exists( 'apply_filters' ) ) {
+				return self::AUTOLOAD_SIZE_LIMIT_DEFAULT;
+			}
+			try {
+				$limit = (int) apply_filters( 'site_status_autoloaded_options_size_limit', self::AUTOLOAD_SIZE_LIMIT_DEFAULT );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::AUTOLOAD_SIZE_LIMIT_DEFAULT;
+			}
+			return $limit > 0 ? $limit : self::AUTOLOAD_SIZE_LIMIT_DEFAULT;
+		}
+
+		/**
 		 * List non-core autoloaded options at or above the size threshold.
 		 *
 		 * Excludes core options, transients/timeouts (handled by the
