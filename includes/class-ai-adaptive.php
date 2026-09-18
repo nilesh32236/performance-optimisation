@@ -2372,7 +2372,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Local RUM anomaly digest for LCP/INP/CLS regressions (read-only).
 		 *
-		 * Compares recent-window medians against baseline medians per path
+		 * Compares the recent-day mean against baseline medians per path
 		 * from the stored RUM aggregate (`date => path => metric =>
 		 * [n,sum]`): the latest date bucket is the recent window, all prior
 		 * buckets are the baseline. Daily averages (`sum/n`) form the median
@@ -2380,7 +2380,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * no segment reservoir) is covered alongside LCP and INP.
 		 *
 		 * A path+metric flags when both windows hold at least
-		 * `anomaly_min_samples()` samples AND the recent median clears the
+		 * `anomaly_min_samples()` samples AND the recent-day mean clears the
 		 * arm threshold plus the tolerance band:
 		 * - LCP/INP: recent >= baseline * 1.3 * (1 + tolerance_pct/100).
 		 * - CLS: recent >= baseline + 0.05 + tolerance_abs.
