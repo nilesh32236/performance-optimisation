@@ -35,6 +35,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private static ?array $model_memo = null;
 
 		/**
+		 * Per-request memo of the RUM anomaly digest result.
+		 *
+		 * Live-path fallback in get_suggestions() calls
+		 * get_rum_anomaly_digest() with null args; without a memo every
+		 * admin render pays a full paths x dates scan. Null means not
+		 * computed yet for the current blog; any array (including empty)
+		 * is a valid memoized result. Only the live path (null $rum, null
+		 * $now) is memoized — injected args (tests) always compute fresh.
+		 * Reset via reset_rum_anomaly_digest_memo() (tests).
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $rum_digest_memo = null;
+
+		/**
+		 * Whether the digest memo holds a computed value.
+		 *
+		 * Distinguishes "not computed yet" (false) from a computed empty
+		 * digest (memo is array(), still a valid cached result).
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $rum_digest_memo_computed = false;
+
+		/**
+		 * Blog ID the digest memo was computed for (multisite safety).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private static int $rum_digest_memo_blog = 0;
+
+		/**
 		 * Option storing the learned model (autoload=no).
 		 *
 		 * @var string
@@ -102,6 +137,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 */
 		public static function reset_model_memo(): void {
 			self::$model_memo = null;
+		}
+
+		/**
+		 * Reset the per-request RUM anomaly digest memo (for testing).
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function reset_rum_anomaly_digest_memo(): void {
+			self::$rum_digest_memo          = null;
+			self::$rum_digest_memo_computed = false;
+			self::$rum_digest_memo_blog     = 0;
+		}
+
+		/**
+		 * Resolve the blog ID for digest memo scoping (multisite safety).
+		 *
+		 * Fail-open to 0 when the multisite API is unavailable (unit tests).
+		 *
+		 * @return int Current blog ID or 0 when unavailable.
+		 * @since NEXT
+		 */
+		private static function rum_digest_memo_blog_id(): int {
+			try {
+				if ( function_exists( 'get_current_blog_id' ) ) {
+					return (int) get_current_blog_id();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 0;
 		}
 
 		/**
@@ -1645,6 +1711,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private const LCP_RELATIVE_MULTIPLIER = 1.3;
 
 		/**
+		 * INP regression arm threshold as a relative multiplier (+30%).
+		 *
+		 * INP is a timing metric like LCP, so the RUM digest reuses the
+		 * relative-multiplier arm (lab trends carry no INP snapshots, hence
+		 * INP regressions surface only via the field-data digest).
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const INP_RELATIVE_MULTIPLIER = 1.3;
+
+		/**
+		 * Relative tolerance band (percent) above a relative arm threshold.
+		 *
+		 * A recent-window median must clear `baseline * multiplier *
+		 * (1 + tolerance_pct/100)` before the LCP/INP digest arm fires, so
+		 * borderline wobble inside the band stays silent.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const ANOMALY_TOLERANCE_PCT = 5.0;
+
+		/**
+		 * Absolute tolerance band added to the CLS absolute-delta threshold.
+		 *
+		 * A recent-window median must clear `baseline + delta + tolerance`
+		 * before the CLS digest arm fires, so borderline wobble inside the
+		 * band stays silent.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const ANOMALY_TOLERANCE_ABS = 0.01;
+
+		/**
 		 * Default number of trailing windows that must each breach the
 		 * ratio/delta gate before an anomaly may page (issue #1384).
 		 *
@@ -1763,6 +1865,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Resolve the relative tolerance band in percent.
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_tolerance_pct` setting,
+		 * falling back to ANOMALY_TOLERANCE_PCT. Filterable via
+		 * `wppo_ai_anomaly_tolerance_pct`. Fail-open to 5.0. Clamped to
+		 * 0–50 so a rogue value cannot silence every regression.
+		 *
+		 * @return float Tolerance percent (>=0).
+		 * @since NEXT
+		 */
+		private static function anomaly_tolerance_pct(): float {
+			try {
+				$tol = self::ANOMALY_TOLERANCE_PCT;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_tolerance_pct'] ) && is_numeric( $settings['ai_adaptive']['anomaly_tolerance_pct'] ) ) {
+						$tol = (float) $settings['ai_adaptive']['anomaly_tolerance_pct'];
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_tolerance_pct', $tol );
+					if ( is_numeric( $filtered ) ) {
+						$tol = (float) $filtered;
+					}
+				}
+				if ( ! is_finite( $tol ) || $tol < 0 ) {
+					return self::ANOMALY_TOLERANCE_PCT;
+				}
+				return min( 50.0, $tol );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_TOLERANCE_PCT;
+			}
+		}
+
+		/**
 		 * Resolve the anomaly persistence-window count.
 		 *
 		 * Reads the additive `ai_adaptive.anomaly_persistence_windows`
@@ -1801,6 +1939,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return self::ANOMALY_PERSISTENCE_WINDOWS;
+			}
+		}
+
+		/**
+		 * Resolve the absolute tolerance band for the CLS arm.
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_tolerance_abs` setting,
+		 * falling back to ANOMALY_TOLERANCE_ABS. Filterable via
+		 * `wppo_ai_anomaly_tolerance_abs`. Fail-open to 0.01. Clamped to
+		 * 0–1 so a rogue value cannot silence every regression.
+		 *
+		 * @return float Absolute tolerance (>=0).
+		 * @since NEXT
+		 */
+		private static function anomaly_tolerance_abs(): float {
+			try {
+				$tol = self::ANOMALY_TOLERANCE_ABS;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_tolerance_abs'] ) && is_numeric( $settings['ai_adaptive']['anomaly_tolerance_abs'] ) ) {
+						$tol = (float) $settings['ai_adaptive']['anomaly_tolerance_abs'];
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_tolerance_abs', $tol );
+					if ( is_numeric( $filtered ) ) {
+						$tol = (float) $filtered;
+					}
+				}
+				if ( ! is_finite( $tol ) || $tol < 0 ) {
+					return self::ANOMALY_TOLERANCE_ABS;
+				}
+				return min( 1.0, $tol );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_TOLERANCE_ABS;
 			}
 		}
 
@@ -2032,7 +2206,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * RUM aggregate (`date => path => metric => [n,sum]`). Requires
 		 * total `n >= anomaly_p75_min_samples()` (undersampled returns
 		 * false — thin data never pages). Corroboration passes when the
-		 * global RUM average is degraded vs the trend baseline (LCP:
+		 * global RUM average is degraded vs the trend baseline (LCP/INP:
 		 * rum_avg >= baseline; CLS: rum_avg - baseline >=
 		 * CLS_ABSOLUTE_DELTA, mirroring the trend arm — a bare
 		 * rum_avg >= baseline check is vacuous for near-zero CLS
@@ -2049,20 +2223,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * RUM::get_aggregate_readonly() path with a legacy
 		 * RUM::get_data() fallback (see read_rum_aggregate_for_anomaly()).
 		 *
-		 * @param string     $metric Metric name ('lcp'|'cls').
+		 * @param string     $metric Metric name ('lcp'|'inp'|'cls').
 		 * @param array|null $rum Optional RUM aggregate (null = live read-only read).
 		 * @param float      $baseline Trend baseline for the firing arm.
 		 * @param int|null   $p75_min_samples Optional pre-resolved sample floor (null = resolve once via anomaly_p75_min_samples()).
 		 * @return bool True when real-user data agrees with the trend arm.
 		 * @since 2.0.0
+		 * @since NEXT Supports the 'inp' metric (behaves like 'lcp').
 		 * @since NEXT RUM-disabled short-circuit; read-only aggregate path; p75 sample floor.
 		 */
 		private static function is_rum_corroborated( string $metric, ?array $rum, float $baseline, ?int $p75_min_samples = null ): bool {
 			try {
-				if ( ! in_array( $metric, array( 'lcp', 'cls' ), true ) ) {
+				if ( ! in_array( $metric, array( 'lcp', 'inp', 'cls' ), true ) ) {
 					return false;
 				}
-				if ( $baseline <= 0 && 'lcp' === $metric ) {
+				if ( $baseline <= 0 && ( 'lcp' === $metric || 'inp' === $metric ) ) {
 					return false;
 				}
 				if ( null === $rum ) {
@@ -2105,7 +2280,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return false;
 				}
 				$rum_avg = $total_sum / $total_n;
-				if ( 'lcp' === $metric ) {
+				if ( 'lcp' === $metric || 'inp' === $metric ) {
 					return $rum_avg >= $baseline;
 				}
 				// CLS arm: absolute-scale metric; corroborate only when the
@@ -2152,6 +2327,319 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$values[] = $value;
 			}
 			return $values;
+		}
+
+		/**
+		 * Compute the median of a numeric sample list.
+		 *
+		 * Sorts ascending and picks the middle value (averaging the two
+		 * middle values for even counts). Non-numeric and non-finite
+		 * entries are ignored. Fail-open: empty input returns 0.0.
+		 *
+		 * @param array $samples Numeric samples.
+		 * @return float Median value or 0.0 when empty.
+		 * @since NEXT
+		 */
+		private static function rum_median( array $samples ): float {
+			try {
+				$values = array();
+				foreach ( $samples as $value ) {
+					if ( ! is_numeric( $value ) ) {
+						continue;
+					}
+					$value = (float) $value;
+					if ( function_exists( 'is_finite' ) && ! is_finite( $value ) ) {
+						continue;
+					}
+					$values[] = $value;
+				}
+				$count = count( $values );
+				if ( 0 === $count ) {
+					return 0.0;
+				}
+				sort( $values, SORT_NUMERIC );
+				$mid = (int) floor( $count / 2 );
+				if ( 0 === $count % 2 ) {
+					return (float) ( ( $values[ $mid - 1 ] + $values[ $mid ] ) / 2.0 );
+				}
+				return (float) $values[ $mid ];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0.0;
+			}
+		}
+
+		/**
+		 * Local RUM anomaly digest for LCP/INP/CLS regressions (read-only).
+		 *
+		 * Compares the recent-day mean against baseline medians per path
+		 * from the stored RUM aggregate (`date => path => metric =>
+		 * [n,sum]`): the latest date bucket is the recent window, all prior
+		 * buckets are the baseline. Daily averages (`sum/n`) form the median
+		 * inputs, so no raw-sample reservoir is needed and CLS (which has
+		 * no segment reservoir) is covered alongside LCP and INP.
+		 *
+		 * A path+metric flags when both windows hold at least
+		 * `anomaly_min_samples()` samples AND the recent-day mean clears the
+		 * arm threshold plus the tolerance band:
+		 * - LCP/INP: recent >= baseline * 1.3 * (1 + tolerance_pct/100).
+		 * - CLS: recent >= baseline + 0.05 + tolerance_abs.
+		 *
+		 * Samples below the minimum threshold or movement inside the
+		 * tolerance band suppress the alert (empty return); heuristic
+		 * suggestions are untouched. At most one anomaly is returned
+		 * (worst-first excess over its arm threshold) with the same
+		 * 7-day single-banner cooldown as detect_anomalies(), persisted in
+		 * the per-site `wppo_ai_anomaly_last_alarm` option
+		 * (multisite-safe). The entry links the affected path and window
+		 * (`path`, `window`) and never auto-changes any setting.
+		 *
+		 * Local computation only: reads the memoized
+		 * RUM::get_aggregate_readonly() (one option read shared per
+		 * request, never flushes the beacon queue, never touches
+		 * transients), no remote calls, no API keys, no PII. Fail-open:
+		 * fewer than 2 date buckets, undersampled windows, an active
+		 * cooldown, or any failure returns an empty array — never fatal.
+		 *
+		 * @param array|null $rum Optional RUM aggregate for testability. When null, reads RUM::get_aggregate_readonly().
+		 * @param int|null   $now Optional current timestamp for testability. When null, uses time().
+		 * @return array[] At most one digest anomaly: array(array('key'=>string,'metric'=>string,'path'=>string,'baseline'=>float,'current'=>float,'recent'=>float,'window'=>string,'samples'=>int,'source'=>string,'change_pct'=>float|'change_abs'=>float)).
+		 * @since NEXT
+		 */
+		public static function get_rum_anomaly_digest( ?array $rum = null, ?int $now = null ): array {
+			// Per-request memo (live path only): repeated
+			// get_suggestions() calls in one request share one scan.
+			$is_live = ( null === $rum && null === $now );
+			if ( $is_live ) {
+				try {
+					$blog_id = self::rum_digest_memo_blog_id();
+					if ( self::$rum_digest_memo_computed && $blog_id === self::$rum_digest_memo_blog ) {
+						return is_array( self::$rum_digest_memo ) ? self::$rum_digest_memo : array();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			try {
+				$result = self::compute_rum_anomaly_digest( $rum, $now );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$result = array();
+			}
+			if ( $is_live ) {
+				try {
+					self::$rum_digest_memo          = is_array( $result ) ? $result : array();
+					self::$rum_digest_memo_computed = true;
+					self::$rum_digest_memo_blog     = self::rum_digest_memo_blog_id();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return is_array( $result ) ? $result : array();
+		}
+
+		/**
+		 * Compute the RUM anomaly digest (unmemoized worker).
+		 *
+		 * See get_rum_anomaly_digest() for the contract; this worker
+		 * always scans fresh so injected args (tests) never hit the memo.
+		 *
+		 * @param array|null $rum Optional RUM aggregate for testability.
+		 * @param int|null   $now Optional current timestamp for testability.
+		 * @return array[] At most one digest anomaly.
+		 * @since NEXT
+		 */
+		private static function compute_rum_anomaly_digest( ?array $rum = null, ?int $now = null ): array {
+			try {
+				if ( null === $rum ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_aggregate_readonly' ) ) {
+						return array();
+					}
+					$rum = RUM::get_aggregate_readonly();
+				}
+				if ( ! is_array( $rum ) || empty( $rum ) ) {
+					return array();
+				}
+				$dates = array();
+				foreach ( $rum as $date => $paths ) {
+					if ( ! is_string( $date ) || '' === $date || ! is_array( $paths ) || empty( $paths ) ) {
+						continue;
+					}
+					$dates[] = $date;
+				}
+				sort( $dates, SORT_STRING );
+				if ( count( $dates ) < 2 ) {
+					return array();
+				}
+				$resolved_now = self::anomaly_now( $now );
+				// Single-banner cap shared with detect_anomalies().
+				if ( ! self::is_anomaly_cooled_down( $resolved_now ) ) {
+					return array();
+				}
+				$min_samples = self::anomaly_min_samples();
+				if ( $min_samples < 1 ) {
+					$min_samples = self::ANOMALY_MIN_SAMPLES;
+				}
+				$tol_pct = self::anomaly_tolerance_pct();
+				$tol_abs = self::anomaly_tolerance_abs();
+
+				$recent_date    = (string) end( $dates );
+				$baseline_dates = array_slice( $dates, 0, -1 );
+				$first_baseline = (string) $baseline_dates[0];
+				$last_baseline  = (string) end( $baseline_dates );
+				$window         = 1 === count( $baseline_dates )
+					/* translators: 1: recent date, 2: baseline date. */
+					? sprintf( __( 'recent %1$s vs baseline %2$s', 'performance-optimisation' ), $recent_date, $first_baseline )
+					/* translators: 1: recent date, 2: first baseline date, 3: last baseline date. */
+					: sprintf( __( 'recent %1$s vs baseline %2$s to %3$s', 'performance-optimisation' ), $recent_date, $first_baseline, $last_baseline );
+
+				$paths_union = array();
+				foreach ( array_merge( $baseline_dates, array( $recent_date ) ) as $date ) {
+					if ( ! isset( $rum[ $date ] ) || ! is_array( $rum[ $date ] ) ) {
+						continue;
+					}
+					foreach ( $rum[ $date ] as $path => $metrics ) {
+						if ( ! is_string( $path ) || '' === $path || ! is_array( $metrics ) ) {
+							continue;
+						}
+						$paths_union[ $path ] = true;
+					}
+				}
+
+				$candidates = array();
+				foreach ( array_keys( $paths_union ) as $path ) {
+					foreach ( array( 'lcp', 'inp', 'cls' ) as $metric ) {
+						$baseline_avgs = array();
+						$baseline_n    = 0;
+						foreach ( $baseline_dates as $date ) {
+							$bucket = isset( $rum[ $date ][ $path ][ $metric ] ) && is_array( $rum[ $date ][ $path ][ $metric ] ) ? $rum[ $date ][ $path ][ $metric ] : null;
+							if ( ! is_array( $bucket ) ) {
+								continue;
+							}
+							$n   = isset( $bucket['n'] ) ? (int) $bucket['n'] : 0;
+							$sum = isset( $bucket['sum'] ) ? (float) $bucket['sum'] : 0.0;
+							if ( $n <= 0 ) {
+								continue;
+							}
+							$baseline_n     += $n;
+							$baseline_avgs[] = $sum / $n;
+						}
+						$recent_bucket = isset( $rum[ $recent_date ][ $path ][ $metric ] ) && is_array( $rum[ $recent_date ][ $path ][ $metric ] ) ? $rum[ $recent_date ][ $path ][ $metric ] : null;
+						if ( ! is_array( $recent_bucket ) ) {
+							continue;
+						}
+						$recent_n = isset( $recent_bucket['n'] ) ? (int) $recent_bucket['n'] : 0;
+						if ( $recent_n < $min_samples || $baseline_n < $min_samples || empty( $baseline_avgs ) ) {
+							continue;
+						}
+						$recent_sum = isset( $recent_bucket['sum'] ) ? (float) $recent_bucket['sum'] : 0.0;
+						$baseline   = self::rum_median( $baseline_avgs );
+						$recent     = $recent_sum / $recent_n;
+						if ( function_exists( 'is_finite' ) && ( ! is_finite( $baseline ) || ! is_finite( $recent ) ) ) {
+							continue;
+						}
+						$clean_path = function_exists( 'mb_substr' ) ? mb_substr( $path, 0, 128, 'UTF-8' ) : substr( $path, 0, 128 );
+						if ( 'cls' === $metric ) {
+							$threshold = $baseline + self::CLS_ABSOLUTE_DELTA + $tol_abs;
+							if ( $recent < $threshold ) {
+								continue;
+							}
+							$excess       = self::CLS_ABSOLUTE_DELTA > 0 ? ( ( $recent - $baseline ) - self::CLS_ABSOLUTE_DELTA ) / self::CLS_ABSOLUTE_DELTA : 0.0;
+							$candidates[] = array(
+								'key'        => 'rum:' . $clean_path,
+								'metric'     => 'cls',
+								'path'       => $clean_path,
+								'baseline'   => (float) $baseline,
+								'current'    => (float) $recent,
+								'recent'     => (float) $recent,
+								'window'     => $window,
+								'samples'    => $recent_n,
+								'source'     => 'rum-digest',
+								'change_abs' => (float) ( $recent - $baseline ),
+								'severity'   => (float) $excess,
+							);
+							continue;
+						}
+						if ( $baseline <= 0 ) {
+							continue;
+						}
+						$multiplier = 'inp' === $metric ? self::INP_RELATIVE_MULTIPLIER : self::LCP_RELATIVE_MULTIPLIER;
+						$threshold  = $baseline * $multiplier * ( 1.0 + $tol_pct / 100.0 );
+						if ( $recent < $threshold ) {
+							continue;
+						}
+						$excess       = $multiplier > 0 ? ( ( $recent / $baseline ) - $multiplier ) / $multiplier : 0.0;
+						$candidates[] = array(
+							'key'        => 'rum:' . $clean_path,
+							'metric'     => $metric,
+							'path'       => $clean_path,
+							'baseline'   => (float) $baseline,
+							'current'    => (float) $recent,
+							'recent'     => (float) $recent,
+							'window'     => $window,
+							'samples'    => $recent_n,
+							'source'     => 'rum-digest',
+							'change_pct' => (float) ( ( $recent - $baseline ) / $baseline * 100.0 ),
+							'severity'   => (float) $excess,
+						);
+					}
+				}
+				if ( empty( $candidates ) ) {
+					return array();
+				}
+				usort(
+					$candidates,
+					static function ( $a, $b ) {
+						$sa = isset( $a['severity'] ) ? (float) $a['severity'] : 0.0;
+						$sb = isset( $b['severity'] ) ? (float) $b['severity'] : 0.0;
+						if ( $sa === $sb ) {
+							return 0;
+						}
+						return $sa > $sb ? -1 : 1;
+					}
+				);
+				$winner = $candidates[0];
+				unset( $winner['severity'] );
+				// Record the alarm before filtering so a repeated regression
+				// re-alarms only after the cooldown elapses.
+				self::set_last_anomaly_alarm( $resolved_now );
+				/**
+				 * Filters the detected performance anomalies.
+				 *
+				 * Digest entries carry the trend shape (`key`, `metric`,
+				 * `baseline`, `current`, `change_pct`/`change_abs`) plus
+				 * `path`, `recent`, `window`, `samples`, and
+				 * `source: rum-digest` so the alert can link the affected
+				 * path and window.
+				 *
+				 * @since NEXT Digest entries flow through this filter.
+				 * @param array[] $anomalies At most one anomaly array.
+				 */
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered_anomalies = apply_filters( 'wppo_ai_anomaly_detected', array( $winner ) );
+					if ( is_array( $filtered_anomalies ) && ! empty( $filtered_anomalies ) ) {
+						$first = $filtered_anomalies[0];
+						if ( is_array( $first ) ) {
+							$winner = $first;
+						}
+					} elseif ( is_array( $filtered_anomalies ) && empty( $filtered_anomalies ) ) {
+						return array();
+					}
+					// Backward compatibility: LCP consumers keep the
+					// legacy filter name.
+					if ( 'lcp' === ( $winner['metric'] ?? 'lcp' ) ) {
+						$legacy = apply_filters( 'wppo_ai_lcp_regression', array( $winner ) );
+						if ( ! is_array( $legacy ) ) {
+							return array( $winner );
+						}
+						return array_slice( array_values( $legacy ), 0, 1 );
+					}
+				}
+				return array( $winner );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
 		}
 
 		/**
@@ -3196,9 +3684,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 
 			// Self-watching performance: surface a single read-only suggestion on
 			// LCP (+30% relative, RUM-corroborated) or CLS (+0.05 absolute
-			// delta, RUM-corroborated) regression with a 7-day cooldown.
+			// delta, RUM-corroborated) trend regression, falling back to the
+			// local RUM anomaly digest (LCP/INP/CLS recent-window medians vs
+			// baseline with min-sample gate + tolerance band, linking the
+			// affected path and window) — all with a 7-day cooldown.
 			// Fail-open: detector errors contribute zero suggestions (never
-			// fatal, never white-screen). No auto-tune, no speculation
+			// fatal, never white-screen). Read-only: nothing here
+			// auto-applies settings. No auto-tune, no speculation
 			// override here — that stays gated by is_enabled() in
 			// filter_speculation_rules(). No email without opt-in.
 			try {
@@ -3207,8 +3699,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				unset( $e );
 				$anomalies = array();
 			}
+			if ( ! is_array( $anomalies ) || empty( $anomalies ) ) {
+				try {
+					$anomalies = self::get_rum_anomaly_digest();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$anomalies = array();
+				}
+			}
 			if ( is_array( $anomalies ) && ! empty( $anomalies ) ) {
-				$anomaly = $anomalies[0];
+				$anomaly        = $anomalies[0];
+				$anomaly_path   = isset( $anomaly['path'] ) && is_string( $anomaly['path'] ) && '' !== $anomaly['path'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['path'], 0, 128, 'UTF-8' ) : substr( $anomaly['path'], 0, 128 ) ) : '';
+				$anomaly_window = isset( $anomaly['window'] ) && is_string( $anomaly['window'] ) && '' !== $anomaly['window'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['window'], 0, 128, 'UTF-8' ) : substr( $anomaly['window'], 0, 128 ) ) : '';
 				// Enriched anomaly context (issue #1384): every rendered
 				// notice carries route plus p75 plus baseline plus delta
 				// plus samples alongside the legacy change keys.
@@ -3222,14 +3724,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				);
 				if ( 'cls' === ( $anomaly['metric'] ?? 'lcp' ) ) {
 					$change_abs = isset( $anomaly['change_abs'] ) ? (float) $anomaly['change_abs'] : 0.0;
-					/* translators: %s is the CLS absolute increase vs baseline. */
-					$cls_value     = sprintf( __( 'CLS +%s vs baseline', 'performance-optimisation' ), number_format( $change_abs, 2 ) );
+					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
+						/* translators: 1: CLS absolute increase vs baseline, 2: affected path, 3: compared window. */
+						$cls_value = sprintf( __( 'CLS +%1$s on %2$s (%3$s)', 'performance-optimisation' ), number_format( $change_abs, 2 ), $anomaly_path, $anomaly_window );
+						/* translators: %s is the affected path. */
+						$cls_description = sprintf( __( 'AI: CLS regression detected on %s', 'performance-optimisation' ), $anomaly_path );
+					} else {
+						/* translators: %s is the CLS absolute increase vs baseline. */
+						$cls_value       = sprintf( __( 'CLS +%s vs baseline', 'performance-optimisation' ), number_format( $change_abs, 2 ) );
+						$cls_description = __( 'AI: CLS regression detected', 'performance-optimisation' );
+					}
 					$suggestions[] = array(
 						'metric'      => 'ai_cls_regression',
 						'value'       => $cls_value,
 						'unit'        => 'string',
 						'status'      => 'needs_improvement',
-						'description' => __( 'AI: CLS regression detected', 'performance-optimisation' ),
+						'description' => $cls_description,
 						'fix_action'  => 'open_image_optimization_tab',
 						'ai_payload'  => array(
 							'tab'      => 'image_optimisation',
@@ -3237,16 +3747,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							'anomaly'  => $anomaly_context,
 						),
 					);
+				} elseif ( 'inp' === ( $anomaly['metric'] ?? '' ) ) {
+					$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
+					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
+						/* translators: 1: INP percentage increase vs baseline, 2: affected path, 3: compared window. */
+						$value = sprintf( __( 'INP +%1$d%% on %2$s (%3$s)', 'performance-optimisation' ), (int) round( $change_pct ), $anomaly_path, $anomaly_window );
+						/* translators: %s is the affected path. */
+						$description = sprintf( __( 'AI: INP regression detected on %s', 'performance-optimisation' ), $anomaly_path );
+					} else {
+						/* translators: %d is the INP percentage increase vs baseline. */
+						$value       = sprintf( __( 'INP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
+						$description = __( 'AI: INP regression detected', 'performance-optimisation' );
+					}
+					$suggestions[] = array(
+						'metric'      => 'ai_inp_regression',
+						'value'       => $value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => $description,
+						'fix_action'  => 'open_file_optimization_tab',
+						'ai_payload'  => array(
+							'tab'      => 'file_optimisation',
+							'settings' => array(),
+							'anomaly'  => $anomaly_context,
+						),
+					);
 				} else {
 					$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
-					/* translators: %d is the LCP percentage increase vs baseline. */
-					$value         = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
+					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
+						/* translators: 1: LCP percentage increase vs baseline, 2: affected path, 3: compared window. */
+						$value = sprintf( __( 'LCP +%1$d%% on %2$s (%3$s)', 'performance-optimisation' ), (int) round( $change_pct ), $anomaly_path, $anomaly_window );
+						/* translators: %s is the affected path. */
+						$description = sprintf( __( 'AI: LCP regression detected on %s', 'performance-optimisation' ), $anomaly_path );
+					} else {
+						/* translators: %d is the LCP percentage increase vs baseline. */
+						$value       = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
+						$description = __( 'AI: LCP regression detected', 'performance-optimisation' );
+					}
 					$suggestions[] = array(
 						'metric'      => 'ai_lcp_regression',
 						'value'       => $value,
 						'unit'        => 'string',
 						'status'      => 'needs_improvement',
-						'description' => __( 'AI: LCP regression detected', 'performance-optimisation' ),
+						'description' => $description,
 						'fix_action'  => 'open_image_optimization_tab',
 						'ai_payload'  => array(
 							'tab'      => 'image_optimisation',
