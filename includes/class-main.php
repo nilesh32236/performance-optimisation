@@ -1351,10 +1351,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( ! empty( $this->options['cache_settings']['enableCache'] ) ) {
 				$this->cache = self::create_cache( $this->options );
-				if ( method_exists( $this->cache, 'set_image_optimisation' ) ) {
+				if ( is_object( $this->cache ) && method_exists( $this->cache, 'set_image_optimisation' ) ) {
 					$this->cache->set_image_optimisation( $this->image_optimisation );
 				}
-				if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
+				if ( is_object( $this->cache ) && method_exists( $this->cache, 'set_google_fonts' ) ) {
 					$this->cache->set_google_fonts( $this->google_fonts );
 				}
 				if ( $use_core_buffer ) {
@@ -1486,10 +1486,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// No runtime change.
 				if ( ! $this->cache ) {
 					$this->cache = self::create_cache( $this->options );
-					if ( method_exists( $this->cache, 'set_image_optimisation' ) ) {
+					if ( is_object( $this->cache ) && method_exists( $this->cache, 'set_image_optimisation' ) ) {
 						$this->cache->set_image_optimisation( $this->image_optimisation );
 					}
-					if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
+					if ( is_object( $this->cache ) && method_exists( $this->cache, 'set_google_fonts' ) ) {
 						$this->cache->set_google_fonts( $this->google_fonts );
 					}
 				}
@@ -7883,7 +7883,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							$settings = (array) Util::get_settings();
 						}
 						$cache = self::create_cache( $settings );
-						if ( method_exists( $cache, 'invalidate_single_static_html' ) ) {
+						if ( is_object( $cache ) && method_exists( $cache, 'invalidate_single_static_html' ) ) {
 							$cache->invalidate_single_static_html( $post_id );
 						}
 					} catch ( \Throwable $e ) {
