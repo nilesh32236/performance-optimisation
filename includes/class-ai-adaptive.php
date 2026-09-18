@@ -761,6 +761,214 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * RUM-driven slow-top-path state for heuristic auto-tune (read-only, fail-open).
+		 *
+		 * Consumes RUM::get_field_lcp_p75_by_segment() via the fail-open
+		 * segmented_field_lcp() wrapper: filters rows to n >=
+		 * field_lcp_min_samples(), picks the slowest-p75 segment with
+		 * slowest_segment_row(), and flags slow when p75 exceeds
+		 * LCP_P75_DELAY_THRESHOLD_MS (2500ms). When slow, resolves exactly
+		 * one preload hero URL via RUM::get_lcp_preload_candidate() for the
+		 * slow path (field data wins, PageSpeed fallback inside RUM); when
+		 * no candidate resolves the caller keeps static defaults with the
+		 * manual metabox hero URL winning. Below the sample threshold (or
+		 * on any error) slow is false so callers emit no override and keep
+		 * static defaults with no speculation change. No option/transient
+		 * writes, zero external HTTP; multisite-safe via the per-site RUM
+		 * aggregate. Commerce/auth contexts are capped downstream via
+		 * maybe_cap_eagerness() when the downgrade target is computed.
+		 *
+		 * @since NEXT
+		 * @return array{slow:bool,path:string,segment:array|null,p75:float,samples:int,min_samples:int,preload_url:string} Slow-path state.
+		 */
+		public static function get_slow_top_path_state(): array {
+			$fallback = array(
+				'slow'        => false,
+				'path'        => '',
+				'segment'     => null,
+				'p75'         => 0.0,
+				'samples'     => 0,
+				'min_samples' => 20,
+				'preload_url' => '',
+			);
+			try {
+				$min                     = self::field_lcp_min_samples();
+				$fallback['min_samples'] = $min;
+				$observed                = self::segmented_field_lcp( 1 );
+				$max_n                   = 0;
+				foreach ( $observed as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) ) {
+						$max_n = max( $max_n, (int) $row['n'] );
+					}
+				}
+				$fallback['samples'] = $max_n;
+				$qualified           = array();
+				foreach ( $observed as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $min ) {
+						$qualified[] = $row;
+					}
+				}
+				if ( empty( $qualified ) ) {
+					return $fallback;
+				}
+				$slowest = self::slowest_segment_row( $qualified );
+				if ( ! is_array( $slowest ) ) {
+					return $fallback;
+				}
+				$p75   = isset( $slowest['p75'] ) ? (float) $slowest['p75'] : 0.0;
+				$n     = isset( $slowest['n'] ) ? (int) $slowest['n'] : 0;
+				$path  = isset( $slowest['path'] ) && is_string( $slowest['path'] ) ? $slowest['path'] : '';
+				$slow  = $p75 > self::LCP_P75_DELAY_THRESHOLD_MS;
+				$state = array(
+					'slow'        => $slow,
+					'path'        => $path,
+					'segment'     => self::segment_descriptor( $slowest ),
+					'p75'         => $p75,
+					'samples'     => $n,
+					'min_samples' => $min,
+					'preload_url' => '',
+				);
+				if ( $slow && '' !== $path && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_lcp_preload_candidate' ) ) {
+					try {
+						$candidate = \PerformanceOptimise\Inc\RUM::get_lcp_preload_candidate( $path );
+						if ( is_array( $candidate ) && isset( $candidate['url'] ) && is_string( $candidate['url'] ) && '' !== trim( $candidate['url'] ) ) {
+							$state['preload_url'] = substr( trim( $candidate['url'] ), 0, 2048 );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $state;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
+		}
+
+		/**
+		 * Downgrade target for a slow top path (one eagerness step down, floored).
+		 *
+		 * Explainable policy: eager becomes moderate, moderate becomes
+		 * conservative, conservative stays conservative. The result is
+		 * allowlisted and capped at moderate in commerce/auth contexts via
+		 * normalize_eagerness() so transactional pages never loosen.
+		 *
+		 * @since NEXT
+		 * @param string $eagerness Current learned eagerness.
+		 * @return string Downgraded eagerness.
+		 */
+		public static function get_slow_path_downgrade_target( string $eagerness ): string {
+			$current = self::normalize_eagerness( $eagerness );
+			$target  = self::eagerness_from_level( self::eagerness_level( $current ) - 1 );
+			return self::normalize_eagerness( $target );
+		}
+
+		/**
+		 * Numeric level for an allowlisted eagerness value (ladder helper).
+		 *
+		 * Centralizes the conservative(0) < moderate(1) < eager(2) ladder so
+		 * the downgrade target and the stale-model clamp in get_suggestions()
+		 * cannot drift apart when the ladder changes. Unknown values floor
+		 * to conservative (0).
+		 *
+		 * @since NEXT
+		 * @param string $eagerness Allowlisted eagerness value.
+		 * @return int Numeric ladder level (0-2).
+		 */
+		private static function eagerness_level( string $eagerness ): int {
+			$ladder = array(
+				'conservative' => 0,
+				'moderate'     => 1,
+				'eager'        => 2,
+			);
+			return $ladder[ $eagerness ] ?? 0;
+		}
+
+		/**
+		 * Eagerness value for a numeric ladder level (ladder helper).
+		 *
+		 * Inverse of eagerness_level(): levels are clamped to 0-2 so a
+		 * one-step downgrade from conservative floors at conservative.
+		 *
+		 * @since NEXT
+		 * @param int $level Numeric ladder level.
+		 * @return string Allowlisted eagerness value.
+		 */
+		private static function eagerness_from_level( int $level ): string {
+			$reverse = array(
+				0 => 'conservative',
+				1 => 'moderate',
+				2 => 'eager',
+			);
+			return $reverse[ max( 0, min( 2, $level ) ) ] ?? 'conservative';
+		}
+
+		/**
+		 * Device/template/connection labels for a slow-path segment.
+		 *
+		 * Centralizes the segment triple extraction shared by the slow-path
+		 * preload and downgrade cards so copy stays consistent.
+		 *
+		 * @since NEXT
+		 * @param mixed $segment Segment descriptor (or null).
+		 * @return array{0:string,1:string,2:string} Device, template, connection labels.
+		 */
+		private static function slow_segment_labels( $segment ): array {
+			$segment = is_array( $segment ) ? $segment : array();
+			return array(
+				isset( $segment['device'] ) ? (string) $segment['device'] : 'unknown',
+				isset( $segment['template'] ) ? (string) $segment['template'] : 'unknown',
+				self::segment_connection( $segment ),
+			);
+		}
+
+		/**
+		 * Sanitize a persisted/live slow-path preload URL for suggestion copy.
+		 *
+		 * Trims + truncates to 2048 chars, drops empty esc_url_raw() output,
+		 * and re-checks same-origin (strict variant when available) so a
+		 * stale or tampered model value (off-origin, javascript:) can never
+		 * be rendered into suggestion copy. Fail-open to '' on any error.
+		 *
+		 * @since NEXT
+		 * @param mixed $url Raw URL value.
+		 * @return string Sanitized URL or '' when invalid.
+		 */
+		private static function sanitize_slow_preload_url( $url ): string {
+			try {
+				if ( ! is_string( $url ) ) {
+					return '';
+				}
+				$url = substr( trim( $url ), 0, 2048 );
+				if ( '' === $url ) {
+					return '';
+				}
+				if ( function_exists( 'esc_url_raw' ) ) {
+					$clean = esc_url_raw( $url );
+					if ( ! is_string( $clean ) || '' === trim( $clean ) ) {
+						return '';
+					}
+					$url = trim( $clean );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
+						if ( ! \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( $url ) ) {
+							return '';
+						}
+					} elseif ( method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
+						if ( ! \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url ) ) {
+							return '';
+						}
+					}
+				}
+				return $url;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Dismissed AI suggestion metrics (persisted, per-site).
 		 *
 		 * Stored additively in `wppo_settings[ai_adaptive][dismissed_suggestions]`
@@ -1330,6 +1538,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$slow_candidates     = array();
 			}
 
+			// RUM-driven slow-top-path auto-tune (issue #1463): consume the
+			// segmented field-LCP read path; when the top-path p75 exceeds
+			// 2500ms resolve exactly one preload hero plus a downgrade
+			// target (suggest-only — get_suggestions() renders them, never
+			// auto-applied). Below the sample threshold slow is false so
+			// callers keep static defaults with the manual metabox hero
+			// winning and no speculation change. Read-only, fail-open, zero
+			// external HTTP, no option/transient writes here.
+			$slow_path = array(
+				'slow'        => false,
+				'path'        => '',
+				'segment'     => null,
+				'p75'         => 0.0,
+				'samples'     => 0,
+				'min_samples' => $field_lcp_min,
+				'preload_url' => '',
+			);
+			try {
+				$live_slow = self::get_slow_top_path_state();
+				if ( is_array( $live_slow ) && ! empty( $live_slow ) ) {
+					$slow_path = array_merge( $slow_path, $live_slow );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$slow_downgrade = 'conservative';
+			try {
+				$slow_downgrade = self::get_slow_path_downgrade_target( $eagerness );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			return array(
 				'version'               => 1,
 				'prefetch_urls'         => array_values( array_filter( $prefetch_urls ) ),
@@ -1343,6 +1583,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				'field_lcp_min_samples' => $field_lcp_min,
 				'attributed_lcp'        => $attributed_selector,
 				'slow_resources'        => $slow_candidates,
+				'slow_path_slow'        => ! empty( $slow_path['slow'] ),
+				'slow_path_path'        => isset( $slow_path['path'] ) && is_string( $slow_path['path'] ) ? $slow_path['path'] : '',
+				'slow_path_segment'     => isset( $slow_path['segment'] ) && is_array( $slow_path['segment'] ) ? $slow_path['segment'] : null,
+				'slow_path_p75'         => isset( $slow_path['p75'] ) ? (float) $slow_path['p75'] : 0.0,
+				'slow_path_samples'     => isset( $slow_path['samples'] ) ? (int) $slow_path['samples'] : 0,
+				'slow_path_min_samples' => isset( $slow_path['min_samples'] ) ? (int) $slow_path['min_samples'] : $field_lcp_min,
+				'slow_path_preload_url' => isset( $slow_path['preload_url'] ) && is_string( $slow_path['preload_url'] ) ? $slow_path['preload_url'] : '',
+				'slow_path_downgrade'   => $slow_downgrade,
 				'delay_js_level'        => isset( $delay_state['level'] ) ? (string) $delay_state['level'] : 'conservative',
 				'delay_inp_p75'         => isset( $delay_state['inp_p75'] ) ? (float) $delay_state['inp_p75'] : 0.0,
 				'delay_lcp_p75'         => isset( $delay_state['lcp_p75'] ) ? (float) $delay_state['lcp_p75'] : 0.0,
@@ -2237,11 +2485,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				unset( $e );
 			}
 
+			// RUM-driven slow-top-path tune (issue #1463): consume the
+			// segmented field-LCP read path; when the top-path p75 exceeds
+			// 2500ms collapse to exactly one preload candidate plus an
+			// eagerness downgrade (both suggest-only, never auto-applied).
+			// Below the sample threshold keep static defaults with the
+			// manual metabox hero URL winning and no speculation change.
+			// Fail-open: any failure emits nothing new. Zero external HTTP.
+			$slow_is_slow     = false;
+			$slow_path        = '';
+			$slow_segment     = null;
+			$slow_p75         = 0.0;
+			$slow_samples     = 0;
+			$slow_min         = self::field_lcp_min_samples();
+			$slow_preload_url = '';
+			$slow_downgrade   = 'conservative';
+			try {
+				if ( array_key_exists( 'slow_path_slow', $model ) ) {
+					$slow_is_slow     = ! empty( $model['slow_path_slow'] );
+					$slow_path        = isset( $model['slow_path_path'] ) && is_string( $model['slow_path_path'] ) ? $model['slow_path_path'] : '';
+					$slow_segment     = isset( $model['slow_path_segment'] ) && is_array( $model['slow_path_segment'] ) ? self::segment_descriptor( $model['slow_path_segment'] ) : null;
+					$slow_p75         = isset( $model['slow_path_p75'] ) ? (float) $model['slow_path_p75'] : 0.0;
+					$slow_samples     = isset( $model['slow_path_samples'] ) ? (int) $model['slow_path_samples'] : 0;
+					$slow_min         = isset( $model['slow_path_min_samples'] ) ? (int) $model['slow_path_min_samples'] : $slow_min;
+					$slow_preload_url = isset( $model['slow_path_preload_url'] ) ? self::sanitize_slow_preload_url( $model['slow_path_preload_url'] ) : '';
+				} else {
+					$live_slow = self::get_slow_top_path_state();
+					if ( is_array( $live_slow ) ) {
+						$slow_is_slow     = ! empty( $live_slow['slow'] );
+						$slow_path        = isset( $live_slow['path'] ) && is_string( $live_slow['path'] ) ? $live_slow['path'] : '';
+						$slow_segment     = isset( $live_slow['segment'] ) && is_array( $live_slow['segment'] ) ? self::segment_descriptor( $live_slow['segment'] ) : null;
+						$slow_p75         = isset( $live_slow['p75'] ) ? (float) $live_slow['p75'] : 0.0;
+						$slow_samples     = isset( $live_slow['samples'] ) ? (int) $live_slow['samples'] : 0;
+						$slow_min         = isset( $live_slow['min_samples'] ) ? (int) $live_slow['min_samples'] : $slow_min;
+						$slow_preload_url = isset( $live_slow['preload_url'] ) ? self::sanitize_slow_preload_url( $live_slow['preload_url'] ) : '';
+					}
+				}
+				// Re-derive the downgrade from the live eagerness when the
+				// persisted value is missing/invalid so stale models cannot
+				// propose an upgrade as a "downgrade".
+				$slow_downgrade = self::get_slow_path_downgrade_target( $eagerness );
+				if ( isset( $model['slow_path_downgrade'] ) && is_string( $model['slow_path_downgrade'] ) && in_array( $model['slow_path_downgrade'], array( 'conservative', 'moderate', 'eager' ), true ) ) {
+					$candidate_downgrade = self::normalize_eagerness( $model['slow_path_downgrade'] );
+					// Never let a stale persisted value loosen above the
+					// freshly derived one-step-down target.
+					if ( self::eagerness_level( $candidate_downgrade ) <= self::eagerness_level( $slow_downgrade ) ) {
+						$slow_downgrade = $candidate_downgrade;
+					}
+				}
+				if ( $slow_min < 1 ) {
+					$slow_min = self::field_lcp_min_samples();
+				}
+				// Gate: below the sample threshold (or uncrossed p75) there
+				// is no override — static defaults stay with the manual
+				// metabox hero winning and no speculation change.
+				if ( $slow_samples < $slow_min || $slow_p75 <= self::LCP_P75_DELAY_THRESHOLD_MS ) {
+					$slow_is_slow = false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$slow_is_slow = false;
+			}
+
 			$prefetch = $model['prefetch_urls'] ?? array();
 			if ( is_array( $prefetch ) && ! empty( $prefetch ) ) {
-				$suggestions[] = array(
+				// Slow top path: fewer speculative fetches — collapse the
+				// prefetch list to the single top URL.
+				$prefetch_limit = $slow_is_slow ? 1 : 2;
+				$suggestions[]  = array(
 					'metric'      => 'ai_prefetch_urls',
-					'value'       => implode( ', ', array_slice( $prefetch, 0, 2 ) ),
+					'value'       => implode( ', ', array_slice( $prefetch, 0, $prefetch_limit ) ),
 					'unit'        => 'list',
 					'status'      => 'needs_improvement',
 					'description' => __( 'AI: Prefetch predicted next URLs', 'performance-optimisation' ),
@@ -2258,45 +2571,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// element and the slowest sub-resources. Fail-open: missing keys
 			// (models persisted before attribution shipped) or lookup errors
 			// emit nothing. Suggestions only — never auto-applied.
+			// Slow-top-path tune (issue #1463): when the segmented top-path
+			// p75 is slow these collapse to exactly one consolidated preload
+			// suggestion (ai_slow_path_preload) emitted below, so the legacy
+			// dual candidates are suppressed to avoid double preloads.
 			try {
-				$attributed = $model['attributed_lcp'] ?? null;
-				// Models persisted before attribution shipped simply emit no
-				// suggestions for missing keys (fail open).
-				if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] ) {
-					$attr_path     = isset( $attributed['path'] ) && is_string( $attributed['path'] ) ? $attributed['path'] : '';
-					$attr_selector = $attributed['selector'];
-					/* translators: %1$s LCP selector, %2$s page path. */
-					$attr_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
-					/* translators: %1$s LCP selector, %2$s page path. */
-					$attr_description = sprintf( __( 'AI: Preload hero element %1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
-					$suggestions[]    = array(
-						'metric'      => 'ai_lcp_preload',
-						'value'       => $attr_value,
-						'unit'        => 'string',
-						'status'      => 'needs_improvement',
-						'description' => $attr_description,
-						'fix_action'  => 'open_preload_tab',
-						'ai_payload'  => array(
-							'tab'      => 'preload_settings',
-							'settings' => array(),
-						),
-					);
-				}
-				$slow_list = $model['slow_resources'] ?? array();
-				if ( is_array( $slow_list ) && ! empty( $slow_list ) ) {
-					$slow_first = $slow_list[0];
-					if ( is_array( $slow_first ) && isset( $slow_first['url'] ) && is_string( $slow_first['url'] ) && '' !== $slow_first['url'] ) {
-						$slow_type = isset( $slow_first['type'] ) && is_string( $slow_first['type'] ) ? $slow_first['type'] : 'resource';
-						/* translators: %1$s resource type, %2$s resource URL. */
-						$slow_value = sprintf( __( '%1$s · %2$s', 'performance-optimisation' ), $slow_type, $slow_first['url'] );
-						/* translators: %1$s resource type, %2$s resource URL. */
-						$slow_description = sprintf( __( 'AI: Preload slow resource %1$s (%2$s)', 'performance-optimisation' ), $slow_first['url'], $slow_type );
+				if ( ! $slow_is_slow ) {
+					$attributed = $model['attributed_lcp'] ?? null;
+					// Models persisted before attribution shipped simply emit no
+					// suggestions for missing keys (fail open).
+					if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] ) {
+						$attr_path     = isset( $attributed['path'] ) && is_string( $attributed['path'] ) ? $attributed['path'] : '';
+						$attr_selector = $attributed['selector'];
+						/* translators: %1$s LCP selector, %2$s page path. */
+						$attr_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
+						/* translators: %1$s LCP selector, %2$s page path. */
+						$attr_description = sprintf( __( 'AI: Preload hero element %1$s on %2$s', 'performance-optimisation' ), $attr_selector, '' !== $attr_path ? $attr_path : __( 'top page', 'performance-optimisation' ) );
 						$suggestions[]    = array(
-							'metric'      => 'ai_slow_resource_preload',
-							'value'       => $slow_value,
+							'metric'      => 'ai_lcp_preload',
+							'value'       => $attr_value,
 							'unit'        => 'string',
 							'status'      => 'needs_improvement',
-							'description' => $slow_description,
+							'description' => $attr_description,
 							'fix_action'  => 'open_preload_tab',
 							'ai_payload'  => array(
 								'tab'      => 'preload_settings',
@@ -2304,9 +2600,108 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							),
 						);
 					}
+					$slow_list = $model['slow_resources'] ?? array();
+					if ( is_array( $slow_list ) && ! empty( $slow_list ) ) {
+						$slow_first = $slow_list[0];
+						if ( is_array( $slow_first ) && isset( $slow_first['url'] ) && is_string( $slow_first['url'] ) && '' !== $slow_first['url'] ) {
+							$slow_type = isset( $slow_first['type'] ) && is_string( $slow_first['type'] ) ? $slow_first['type'] : 'resource';
+							/* translators: %1$s resource type, %2$s resource URL. */
+							$slow_value = sprintf( __( '%1$s · %2$s', 'performance-optimisation' ), $slow_type, $slow_first['url'] );
+							/* translators: %1$s resource type, %2$s resource URL. */
+							$slow_description = sprintf( __( 'AI: Preload slow resource %1$s (%2$s)', 'performance-optimisation' ), $slow_first['url'], $slow_type );
+							$suggestions[]    = array(
+								'metric'      => 'ai_slow_resource_preload',
+								'value'       => $slow_value,
+								'unit'        => 'string',
+								'status'      => 'needs_improvement',
+								'description' => $slow_description,
+								'fix_action'  => 'open_preload_tab',
+								'ai_payload'  => array(
+									'tab'      => 'preload_settings',
+									'settings' => array(),
+								),
+							);
+						}
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+
+			// Slow-top-path tune suggestions (issue #1463): exactly one
+			// preload candidate plus an eagerness downgrade, suggest-only
+			// (never auto-applied — the user applies them from the preload
+			// tab). Field truth picks the hero: the RUM-measured preload URL
+			// wins when qualified; otherwise the copy names the manual
+			// metabox hero as winning with static defaults kept. Commerce /
+			// auth contexts stay capped at moderate via the downgrade
+			// target. Zero external HTTP. Dismissible via the standard
+			// dismissed-suggestions filter below.
+			try {
+				if ( $slow_is_slow && ! self::is_suggestion_dismissed( 'ai_slow_path_preload' ) ) {
+					list( $slow_device, $slow_template, $slow_connection ) = self::slow_segment_labels( $slow_segment );
+					if ( '' !== $slow_preload_url ) {
+						/* translators: %1$s preload URL, %2$s page path. */
+						$slow_value = sprintf( __( '%1$s on %2$s', 'performance-optimisation' ), $slow_preload_url, '' !== $slow_path ? $slow_path : __( 'top page', 'performance-optimisation' ) );
+						/* translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count. */
+						$slow_description = sprintf( __( 'AI: Preload hero for slow path %1$s/%2$s/%3$s (field LCP p75 %4$s, %5$d samples) — suggest-only', 'performance-optimisation' ), $slow_device, $slow_template, $slow_connection, self::format_p75_seconds( $slow_p75 ), $slow_samples );
+					} else {
+						/* translators: %1$d observed samples, %2$d required samples. */
+						$slow_value = sprintf( __( 'manual hero wins (%1$d/%2$d samples) — set via metabox', 'performance-optimisation' ), $slow_samples, $slow_min );
+						/* translators: %1$s page path, %2$s p75 seconds. */
+						$slow_description = sprintf( __( 'AI: Slow path %1$s (field LCP p75 %2$s) — no qualified hero yet, manual metabox image wins; static defaults kept', 'performance-optimisation' ), '' !== $slow_path ? $slow_path : __( 'top page', 'performance-optimisation' ), self::format_p75_seconds( $slow_p75 ) );
+					}
+					$suggestions[] = array(
+						'metric'      => 'ai_slow_path_preload',
+						'value'       => $slow_value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => $slow_description,
+						'fix_action'  => 'open_preload_tab',
+						'ai_payload'  => array(
+							'tab'      => 'preload_settings',
+							'settings' => array(),
+						),
+					);
+				}
+				if ( $slow_is_slow && ! self::is_suggestion_dismissed( 'ai_speculation_downgrade' ) ) {
+					list( $slow_device, $slow_template, $slow_connection ) = self::slow_segment_labels( $slow_segment );
+					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds. */
+					$downgrade_value = sprintf( __( '%1$s · %2$s · %3$s · %4$s · p75 %5$s', 'performance-optimisation' ), $slow_downgrade, $slow_device, $slow_template, $slow_connection, self::format_p75_seconds( $slow_p75 ) );
+					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds, %6$d sample count. */
+					$downgrade_description = sprintf( __( 'AI: Downgrade speculation to %1$s for slow path %2$s/%3$s/%4$s (field LCP p75 %5$s, %6$d samples) — suggest-only', 'performance-optimisation' ), $slow_downgrade, $slow_device, $slow_template, $slow_connection, self::format_p75_seconds( $slow_p75 ), $slow_samples );
+					$suggestions[]         = array(
+						'metric'      => 'ai_speculation_downgrade',
+						'value'       => $downgrade_value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => $downgrade_description,
+						'fix_action'  => 'open_preload_tab',
+						'ai_payload'  => array(
+							'tab'      => 'preload_settings',
+							'settings' => array( 'speculationEagerness' => $slow_downgrade ),
+						),
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			// Slow path wins the speculation-eagerness advice (issue #1463):
+			// the base ai_speculation_eagerness card (emitted above with the
+			// current eagerness) contradicts the ai_speculation_downgrade
+			// card (one step down) for the same speculationEagerness setting.
+			// Suppress the base card post-hoc when slow so only one
+			// speculation-eagerness payload is offered.
+			if ( $slow_is_slow ) {
+				$suggestions = array_values(
+					array_filter(
+						$suggestions,
+						static function ( $s ) {
+							return ! ( is_array( $s ) && ( $s['metric'] ?? '' ) === 'ai_speculation_eagerness' );
+						}
+					)
+				);
 			}
 
 			// Guardrail (#908): in commerce/auth contexts suggest excluding

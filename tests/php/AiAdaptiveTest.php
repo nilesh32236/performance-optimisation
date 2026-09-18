@@ -107,6 +107,48 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Install stubs forcing a non-commerce context (issue #1463).
+	 *
+	 * The Woo-presence test in this file eval-declares Woo helpers
+	 * process-wide, which would otherwise cap eagerness site-wide for every
+	 * later test. Forcing the context via the filter keeps slow-path
+	 * downgrade expectations deterministic regardless of test order.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	private function install_non_commerce_stubs(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+	}
+
+	/**
+	 * Install stubs forcing a commerce context (issue #1463).
+	 *
+	 * Explicit counterpart of install_non_commerce_stubs(): pins the
+	 * commerce guardrail on regardless of test order or login stubs.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	private function install_commerce_stubs(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+	}
+
+	/**
 	 * Test is_enabled returns false when disabled.
 	 *
 	 * @return void
@@ -1409,7 +1451,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_learn_slowest_segment_wins_with_connection(): void {
-		$this->install_stubs();
+		$this->install_non_commerce_stubs();
 		$today                                   = gmdate( 'Y-m-d' );
 		$this->options['wppo_web_vitals_rum']    = array(
 			$today => array(
@@ -1461,9 +1503,14 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 4500.0, $model['field_lcp_p75'] );
 
 		$suggestions = AI_Adaptive::get_suggestions();
-		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
-		$this->assertNotNull( $eagerness );
-		$this->assertStringContainsString( 'slow-2g', $eagerness['value'] );
+		// Slow path wins (issue #1463): the qualified slow segment (p75
+		// 4500ms) suppresses the base eagerness card so only the one-step
+		// downgrade payload is offered; the segment labels route onto it.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertStringContainsString( 'slow-2g', $downgrade['value'] );
+		$this->assertSame( 'moderate', $downgrade['ai_payload']['settings']['speculationEagerness'] );
 	}
 
 	/**
@@ -1474,7 +1521,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_learn_at_threshold_routes_segmented_p75(): void {
-		$this->install_stubs();
+		$this->install_non_commerce_stubs();
 		$this->seed_segmented_rum( 20 );
 		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
 		Functions\when( 'is_admin' )->justReturn( false );
@@ -1488,11 +1535,15 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 4000.0, $model['field_lcp_p75'] );
 
 		$suggestions = AI_Adaptive::get_suggestions();
-		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
-		$this->assertNotNull( $eagerness );
-		$this->assertStringContainsString( 'mobile', $eagerness['value'] );
-		$this->assertStringContainsString( 'single', $eagerness['value'] );
-		$this->assertStringContainsString( 'p75', $eagerness['value'] );
+		// Slow path wins (issue #1463): the base eagerness card is
+		// suppressed; the segment-routed copy lives on the downgrade card.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertStringContainsString( 'mobile', $downgrade['value'] );
+		$this->assertStringContainsString( 'single', $downgrade['value'] );
+		$this->assertStringContainsString( 'p75', $downgrade['value'] );
+		$this->assertSame( 'moderate', $downgrade['ai_payload']['settings']['speculationEagerness'] );
 		$field = $this->find_suggestion( $suggestions, 'ai_field_lcp_tune' );
 		$this->assertNotNull( $field );
 		$this->assertStringContainsString( 'mobile', $field['value'] );
@@ -2003,10 +2054,13 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotNull( $field );
 		$this->assertStringContainsString( '4g', $field['value'] );
 		$this->assertStringContainsString( 'mobile', $field['value'] );
-		$eagerness = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
-		$this->assertNotNull( $eagerness );
-		$this->assertStringContainsString( '4g', $eagerness['value'] );
-		$this->assertSame( 'eager', $eagerness['ai_payload']['settings']['speculationEagerness'] );
+		// Slow path wins (issue #1463): the base eagerness card is
+		// suppressed; the connection-routed copy lives on the downgrade card.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertStringContainsString( '4g', $downgrade['value'] );
+		$this->assertSame( 'moderate', $downgrade['ai_payload']['settings']['speculationEagerness'] );
 	}
 
 	/**
@@ -2017,7 +2071,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_connection_routed_eagerness_caps_at_moderate_in_commerce_context(): void {
-		$this->install_stubs();
+		$this->install_commerce_stubs();
 		$today                                   = gmdate( 'Y-m-d' );
 		$this->options['wppo_web_vitals_rum']    = array(
 			$today => array(
@@ -2047,10 +2101,14 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'moderate', $model['eagerness'] );
 
 		$suggestions = AI_Adaptive::get_suggestions();
-		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
-		$this->assertNotNull( $eagerness );
-		$this->assertStringContainsString( 'slow-2g', $eagerness['value'] );
-		$this->assertSame( 'moderate', $eagerness['ai_payload']['settings']['speculationEagerness'] );
+		// Slow path wins (issue #1463): the base eagerness card is
+		// suppressed; the capped downgrade (moderate one step down to
+		// conservative) carries the connection-routed copy.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertStringContainsString( 'slow-2g', $downgrade['value'] );
+		$this->assertSame( 'conservative', $downgrade['ai_payload']['settings']['speculationEagerness'] );
 	}
 
 	/**
@@ -2141,5 +2199,212 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$suggestions = AI_Adaptive::get_suggestions();
 		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_lcp_preload' ) );
 		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' ) );
+	}
+
+	/**
+	 * Seed a slow-top-path model (issue #1463) with legacy dual preload keys.
+	 *
+	 * The legacy `attributed_lcp` / `slow_resources` keys let the test pin
+	 * the slow-path suppression branch; `eagerness=moderate` pins the
+	 * contradictory-card branch (base card emitted, downgrade=conservative).
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $preload_url Preload URL to persist.
+	 * @param string $downgrade   Persisted downgrade value.
+	 * @return void
+	 */
+	private function seed_slow_path_model( string $preload_url = 'http://example.com/hero.jpg', string $downgrade = 'conservative' ): void {
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls'         => array( 'http://example.com/a/', 'http://example.com/b/' ),
+			'exclude_js'            => array(),
+			'exclude_css'           => array(),
+			'eagerness'             => 'moderate',
+			'field_lcp_segment'     => array(
+				'device'     => 'mobile',
+				'template'   => 'single',
+				'connection' => '4g',
+			),
+			'field_lcp_p75'         => 4000.0,
+			'field_lcp_provisional' => false,
+			'field_lcp_samples'     => 25,
+			'field_lcp_min_samples' => 20,
+			'attributed_lcp'        => array(
+				'selector' => 'img#hero-image',
+				'path'     => '/slow/',
+			),
+			'slow_resources'        => array(
+				array(
+					'url'  => 'http://example.com/slow.js',
+					'type' => 'script',
+				),
+			),
+			'slow_path_slow'        => true,
+			'slow_path_path'        => '/slow/',
+			'slow_path_segment'     => array(
+				'device'     => 'mobile',
+				'template'   => 'single',
+				'connection' => '4g',
+			),
+			'slow_path_p75'         => 4000.0,
+			'slow_path_samples'     => 25,
+			'slow_path_min_samples' => 20,
+			'slow_path_preload_url' => $preload_url,
+			'slow_path_downgrade'   => $downgrade,
+		);
+	}
+
+	/**
+	 * Test a slow path emits one preload + downgrade and suppresses contradictions.
+	 *
+	 * Given a qualified slow model (p75 4000ms, 25/20 samples, eagerness
+	 * moderate) When suggestions render Then exactly one consolidated
+	 * `ai_slow_path_preload` plus `ai_speculation_downgrade=conservative`
+	 * appear, the base `ai_speculation_eagerness` card is suppressed (no
+	 * contradictory payloads), the legacy dual preloads are suppressed,
+	 * and prefetch collapses to 1 URL.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_slow_path_emits_consolidated_tune(): void {
+		$this->install_non_commerce_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->seed_slow_path_model();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+
+		$preload = $this->find_suggestion( $suggestions, 'ai_slow_path_preload' );
+		$this->assertNotNull( $preload );
+		$this->assertStringContainsString( 'http://example.com/hero.jpg', $preload['value'] );
+
+		$downgrade = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertSame( 'conservative', $downgrade['ai_payload']['settings']['speculationEagerness'] );
+
+		// Contradictory base card suppressed when slow.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+		// Legacy dual preloads suppressed in favour of the consolidated card.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_lcp_preload' ) );
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' ) );
+
+		// Prefetch collapses to a single URL on slow paths.
+		$prefetch = $this->find_suggestion( $suggestions, 'ai_prefetch_urls' );
+		$this->assertNotNull( $prefetch );
+		$this->assertSame( 'http://example.com/a/', $prefetch['value'] );
+	}
+
+	/**
+	 * Test below-threshold slow models emit nothing new.
+	 *
+	 * Given a slow-flagged model with p75 below 2500ms When suggestions
+	 * render Then no slow-path cards appear and static defaults stay (the
+	 * base eagerness card is kept, no speculation change is forced).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_below_threshold_emits_no_slow_tune(): void {
+		$this->install_non_commerce_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->seed_slow_path_model();
+		$this->options[ AI_Adaptive::OPTION ]['slow_path_p75'] = 1500.0;
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_path_preload' ) );
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' ) );
+		// No suppression below threshold: the base card stays.
+		$this->assertNotNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+	}
+
+	/**
+	 * Test the one-step downgrade ladder floors at conservative.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_slow_path_downgrade_target_ladder(): void {
+		$this->install_non_commerce_stubs();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$this->assertSame( 'moderate', AI_Adaptive::get_slow_path_downgrade_target( 'eager' ) );
+		$this->assertSame( 'conservative', AI_Adaptive::get_slow_path_downgrade_target( 'moderate' ) );
+		$this->assertSame( 'conservative', AI_Adaptive::get_slow_path_downgrade_target( 'conservative' ) );
+	}
+
+	/**
+	 * Test a stale persisted downgrade never loosens above the fresh target.
+	 *
+	 * Given eagerness=eager (fresh target moderate) with a persisted
+	 * `eager` downgrade When suggestions render Then the emitted downgrade
+	 * is clamped to moderate, never loosened back to eager.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_stale_downgrade_never_loosens(): void {
+		$this->install_non_commerce_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->seed_slow_path_model( 'http://example.com/hero.jpg', 'eager' );
+		$this->options[ AI_Adaptive::OPTION ]['eagerness'] = 'eager';
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$downgrade   = $this->find_suggestion( $suggestions, 'ai_speculation_downgrade' );
+		$this->assertNotNull( $downgrade );
+		$this->assertSame( 'moderate', $downgrade['ai_payload']['settings']['speculationEagerness'] );
+	}
+
+	/**
+	 * Test a tampered persisted preload URL falls back to manual-hero copy.
+	 *
+	 * Given a qualified slow model with a `javascript:` preload URL When
+	 * suggestions render Then the URL is dropped and the copy names the
+	 * manual metabox hero as winning instead of rendering the payload.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_tampered_preload_url_falls_back(): void {
+		$this->install_non_commerce_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->seed_slow_path_model( 'javascript:alert(1)', 'conservative' );
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$preload     = $this->find_suggestion( $suggestions, 'ai_slow_path_preload' );
+		$this->assertNotNull( $preload );
+		$this->assertStringNotContainsString( 'javascript:', $preload['value'] );
+		$this->assertStringContainsString( 'manual hero wins', $preload['value'] );
 	}
 }
