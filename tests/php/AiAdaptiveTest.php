@@ -1690,6 +1690,194 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Build a multi-date RUM aggregate for digest tests.
+	 *
+	 * Each window is array( date, path, n, avg ).
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $metric Metric key ('lcp'|'inp'|'cls').
+	 * @param array  $windows Window rows.
+	 * @return array RUM aggregate.
+	 */
+	private function make_digest_rum( string $metric, array $windows ): array {
+		$rum = array();
+		foreach ( $windows as $w ) {
+			list( $date, $path, $n, $avg ) = $w;
+			if ( ! isset( $rum[ $date ] ) ) {
+				$rum[ $date ] = array();
+			}
+			if ( ! isset( $rum[ $date ][ $path ] ) ) {
+				$rum[ $date ][ $path ] = array();
+			}
+			$rum[ $date ][ $path ][ $metric ] = array(
+				'n'   => $n,
+				'sum' => (float) $n * $avg,
+			);
+		}
+		return $rum;
+	}
+
+	/**
+	 * Test undersampled digest windows never alert.
+	 *
+	 * Given a window below 10 samples When evaluated Then no digest —
+	 * and a single date bucket (no baseline) also stays silent.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_rum_digest_undersampled_returns_empty(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+		$now = 1700000000;
+
+		$thin_recent = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 5, 3000.0 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $thin_recent, $now ) );
+
+		$thin_baseline = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 5, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 3000.0 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $thin_baseline, $now ) );
+
+		$single_date = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-10', '/pricing/', 50, 3000.0 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $single_date, $now ) );
+	}
+
+	/**
+	 * Test movement inside the tolerance band stays silent.
+	 *
+	 * A +32.5% LCP shift clears the +30% arm but not the 5% tolerance
+	 * band (effective bar 2730ms); a +40% shift clears both and alerts.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_rum_digest_tolerance_suppresses_borderline(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+		$now = 1700000000;
+
+		$inside = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 2650.0 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $inside, $now ) );
+
+		$outside = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 2800.0 ),
+			)
+		);
+		$fired   = AI_Adaptive::get_rum_anomaly_digest( $outside, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'lcp', $fired[0]['metric'] );
+		$this->assertEqualsWithDelta( 40.0, $fired[0]['change_pct'], 0.001 );
+	}
+
+	/**
+	 * Test a real regression links path plus window without touching settings.
+	 *
+	 * The alert carries the affected path, the compared window, and a
+	 * read-only source marker; no settings mutation happens (the digest
+	 * only persists the shared cooldown timestamp).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_rum_digest_alert_links_path_and_window(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$now = 1700000000;
+
+		$rum   = $this->make_digest_rum(
+			'inp',
+			array(
+				array( '2026-09-01', '/checkout/', 12, 150.0 ),
+				array( '2026-09-10', '/checkout/', 12, 250.0 ),
+			)
+		);
+		$fired = AI_Adaptive::get_rum_anomaly_digest( $rum, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'inp', $fired[0]['metric'] );
+		$this->assertSame( '/checkout/', $fired[0]['path'] );
+		$this->assertSame( 'rum:/checkout/', $fired[0]['key'] );
+		$this->assertSame( 'rum-digest', $fired[0]['source'] );
+		$this->assertStringContainsString( '2026-09-10', $fired[0]['window'] );
+		$this->assertStringContainsString( '2026-09-01', $fired[0]['window'] );
+		$this->assertEqualsWithDelta( 66.67, $fired[0]['change_pct'], 0.01 );
+		$this->assertSame( 12, $fired[0]['samples'] );
+
+		// Read-only w.r.t. settings: the digest persists only the shared
+		// cooldown timestamp, never touches wppo_settings.
+		$settings = $this->options['wppo_settings'];
+		$this->assertSame( array( 'ai_adaptive' => array( 'enabled' => true ) ), $settings );
+		$this->assertArrayHasKey( 'wppo_ai_anomaly_last_alarm', $this->options );
+	}
+
+	/**
+	 * Test the CLS digest arm uses an absolute delta plus tolerance.
+	 *
+	 * A +0.055 absolute shift stays silent inside the 0.05 + 0.01 band;
+	 * a +0.07 shift alerts.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_rum_digest_cls_absolute_delta_with_tolerance(): void {
+		$this->install_stubs();
+		Util::clear_settings_cache();
+		$now = 1700000000;
+
+		$inside = $this->make_digest_rum(
+			'cls',
+			array(
+				array( '2026-09-01', '/', 12, 0.05 ),
+				array( '2026-09-10', '/', 12, 0.105 ),
+			)
+		);
+		$this->assertSame( array(), AI_Adaptive::get_rum_anomaly_digest( $inside, $now ) );
+
+		$outside = $this->make_digest_rum(
+			'cls',
+			array(
+				array( '2026-09-01', '/', 12, 0.05 ),
+				array( '2026-09-10', '/', 12, 0.12 ),
+			)
+		);
+		$fired   = AI_Adaptive::get_rum_anomaly_digest( $outside, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'cls', $fired[0]['metric'] );
+		$this->assertEqualsWithDelta( 0.07, $fired[0]['change_abs'], 0.0001 );
+	}
+
+	/**
 	 * Test commerce exclude paths derive from WooCommerce URLs when available.
 	 *
 	 * Runs last: covering the Woo-presence branch requires eval-declaring the

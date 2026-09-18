@@ -497,6 +497,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'dismissed_suggestions' => array(),
 					'anomaly_cooldown_days' => 7,
 					'anomaly_min_samples'   => 10,
+					'anomaly_tolerance_pct' => 5.0,
+					'anomaly_tolerance_abs' => 0.01,
 				),
 				'edge_cache'            => array(
 					'enabled' => false,
@@ -6093,6 +6095,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 					$min                    = is_numeric( $value ) ? (int) $value : 20;
 					$sanitized[ $safe_key ] = min( 1000, max( 1, $min ) );
+					continue;
+				}
+
+				// RUM anomaly digest tolerance band (issue #1445) — floats so
+				// the CLS absolute band (0.01) survives the generic
+				// is_numeric-to-int cast below. Clamped to 0–50 (percent)
+				// and 0–1 (absolute); unrecognized values fail open to the
+				// 5.0 / 0.01 defaults.
+				if ( 'anomaly_tolerance_pct' === $safe_key ) {
+					if ( is_array( $value ) || ! is_numeric( $value ) ) {
+						$sanitized[ $safe_key ] = 5.0;
+						continue;
+					}
+					$tol                    = (float) $value;
+					$sanitized[ $safe_key ] = ( is_finite( $tol ) && $tol >= 0 ) ? min( 50.0, $tol ) : 5.0;
+					continue;
+				}
+				if ( 'anomaly_tolerance_abs' === $safe_key ) {
+					if ( is_array( $value ) || ! is_numeric( $value ) ) {
+						$sanitized[ $safe_key ] = 0.01;
+						continue;
+					}
+					$tol                    = (float) $value;
+					$sanitized[ $safe_key ] = ( is_finite( $tol ) && $tol >= 0 ) ? min( 1.0, $tol ) : 0.01;
 					continue;
 				}
 
