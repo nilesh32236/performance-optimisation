@@ -3271,7 +3271,7 @@ const FileOptimization = ( {
 												</div>
 												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 													{ __(
-														'One-click Delay-JS speed: Safe delays least, Aggressive delays most with auto third-party detection. Builder plus commerce exclusions stay on at every level; your manual exclusions are preserved.',
+														'One-click Delay-JS speed: Safe delays least, Aggressive delays most with auto third-party detection. Builder plus commerce exclusions stay on at every level; your manual exclusions are preserved. Replay runs non-captured handlers a second time by design, so analytics/consent beacons must be idempotent. A wppo_delay_js_preset_level_settings filter, when present, remains authoritative at render time.',
 														'performance-optimisation'
 													) }
 												</p>

@@ -9145,9 +9145,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Commerce-handle skip (issue #1385): WooCommerce fragments
 				// plus cart AJAX (wc-cart-fragments, add-to-cart,
 				// cart-fragments) never auto-delay, even outside excluded
-				// contexts, via get_delay_js_commerce_exclusions().
+				// contexts, via get_delay_js_commerce_exclusions(). Per-tag
+				// memo (issue #1385 review): reuse the auto-label commerce
+				// memo when no commerce filter is registered so
+				// script-heavy pages skip the has_filter/apply_filters
+				// machinery per tag; bypassed when the filter is present.
 				try {
-					$commerce_excludes = self::get_delay_js_commerce_exclusions();
+					$candidate_blog_id   = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+					$has_commerce_filter = function_exists( 'has_filter' ) && has_filter( 'wppo_delay_js_commerce_exclusions' );
+					if ( ! $has_commerce_filter && null !== self::$delay_js_auto_label_commerce && $candidate_blog_id === self::$delay_js_auto_label_blog ) {
+						$commerce_excludes = self::$delay_js_auto_label_commerce;
+					} else {
+						$commerce_excludes = self::get_delay_js_commerce_exclusions();
+						if ( ! $has_commerce_filter ) {
+							self::$delay_js_auto_label_commerce = $commerce_excludes;
+							self::$delay_js_auto_label_blog     = $candidate_blog_id;
+						}
+					}
 					$commerce_haystack = strtolower( (string) $handle . "\0" . $src . "\0" . $tag );
 					foreach ( $commerce_excludes as $entry ) {
 						$entry = strtolower( trim( (string) $entry ) );
