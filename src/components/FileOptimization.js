@@ -224,6 +224,30 @@ export const isSafePresetActive = ( values = {} ) => {
 	);
 };
 
+// Known preset-bundle keys (issue #1442 review): the union of the safe and
+// aggressive bundle keys. getServerPresetBundle() filters the localised
+// server copy to this allowlist so a corrupted presetBundles localisation
+// can never flow unknown keys through normalizeFileOpt into the save
+// payload. Exported for direct Jest coverage.
+// @since NEXT
+export const PRESET_BUNDLE_KEYS = Object.freeze( [
+	'minifyJS',
+	'minifyCSS',
+	'minifyHTML',
+	'deferJS',
+	'delayJS',
+	'delayJSBuilderPreset',
+	'delayJSCommercePreset',
+	'delayJSInteractionPreset',
+	'delayJSJqueryPreset',
+	'delayJSSafeMode',
+	'elementorSafeMode',
+	'delayJSConsentPreset',
+	'delayJSAnalyticsPreset',
+	'delayJSGalleryPreset',
+	'combineCSS',
+] );
+
 // Server-provided preset bundle (issue #1442 review): Main localises the
 // authoritative bundles as wppoSettings.presetBundles ({ safe,
 // aggressive }); the exported SAFE_/AGGRESSIVE_PRESET_BUNDLE constants
@@ -241,7 +265,16 @@ export const getServerPresetBundle = ( name ) => {
 	) {
 		return null;
 	}
-	return server;
+	const filtered = {};
+	for ( const key of PRESET_BUNDLE_KEYS ) {
+		if ( typeof server[ key ] === 'boolean' ) {
+			filtered[ key ] = server[ key ];
+		}
+	}
+	if ( 0 === Object.keys( filtered ).length ) {
+		return null;
+	}
+	return filtered;
 };
 
 // Resolve the bundle to apply: server-authoritative when localised,
@@ -2230,12 +2263,14 @@ const FileOptimization = ( {
 								/>
 							) }
 							{ isSafePresetActive( settings ) && (
-								<div className="wppo-notice wppo-notice--success wppo-mt-12">
-									{ __(
+								<NoticeBanner
+									type="success"
+									message={ __(
 										'Safe preset is active: minify + defer + delay with builder, jQuery and WooCommerce exclusions.',
 										'performance-optimisation'
 									) }
-								</div>
+									className="wppo-mt-12"
+								/>
 							) }
 						</FeatureCard>
 						<FeatureCard
