@@ -158,6 +158,15 @@ describe( 'WelcomePanel', () => {
 	} );
 
 	it( 'hides the panel when update_settings and dismiss_welcome both succeed', async () => {
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				runnable: true,
+				all_pass: true,
+				excluded_paths: [ 'cart', 'checkout' ],
+			},
+		} );
 		apiCall.mockImplementation( ( endpoint ) => {
 			if ( endpoint === 'update_settings' ) {
 				return Promise.resolve( { success: true } );
@@ -181,8 +190,169 @@ describe( 'WelcomePanel', () => {
 		expect( apiCall ).toHaveBeenCalledWith( 'dismiss_welcome' );
 	} );
 
+	it( 'sends wooSafeMode:true and auto-runs the self-test on cache enable (PASS dismisses)', async () => {
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				runnable: true,
+				all_pass: true,
+				excluded_paths: [ 'cart', 'checkout' ],
+			},
+		} );
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.resolve( { success: true } );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <WelcomePanel /> );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: 'Enable – Enable Page Caching',
+				} )
+			);
+		} );
+
+		await waitFor( () =>
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+		);
+		expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+			tab: 'cache_settings',
+			settings: { enableCache: true, wooSafeMode: true },
+		} );
+		await waitFor( () => {
+			expect(
+				screen.queryByText( 'Welcome to Performance Optimisation' )
+			).not.toBeInTheDocument();
+		} );
+	} );
+
+	it( 'keeps the panel visible on FAIL all_pass:false after cache enable', async () => {
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				runnable: true,
+				all_pass: false,
+				excluded_paths: [ 'cart' ],
+			},
+		} );
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.resolve( { success: true } );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <WelcomePanel /> );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: 'Enable – Enable Page Caching',
+				} )
+			);
+		} );
+
+		await waitFor( () =>
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+		);
+		await waitFor( () => {
+			expect(
+				screen.getByText(
+					'WooCommerce self-test found a cacheable dynamic route. Re-enable safe mode in Dashboard → Page Cache.'
+				)
+			).toBeInTheDocument();
+		} );
+		expect( apiCall ).not.toHaveBeenCalledWith( 'dismiss_welcome' );
+		expect(
+			screen.getByText( 'Welcome to Performance Optimisation' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'keeps the panel visible on fail-closed force_exclude after cache enable', async () => {
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				runnable: true,
+				all_pass: true,
+				force_exclude: true,
+				excluded_paths: [ 'cart' ],
+			},
+		} );
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.resolve( { success: true } );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <WelcomePanel /> );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: 'Enable – Enable Page Caching',
+				} )
+			);
+		} );
+
+		await waitFor( () =>
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+		);
+		// Canonical predicate treats force_exclude as failure evidence,
+		// so the panel must stay even though all_pass is true.
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Welcome to Performance Optimisation' )
+			).toBeInTheDocument();
+		} );
+		expect( apiCall ).not.toHaveBeenCalledWith( 'dismiss_welcome' );
+	} );
+
+	it( 'dismisses normally when the onboarding self-test rejects (best-effort)', async () => {
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		fetchWooCacheSelfTest.mockRejectedValueOnce(
+			new Error( 'Network Error' )
+		);
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.resolve( { success: true } );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <WelcomePanel /> );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: 'Enable – Enable Page Caching',
+				} )
+			);
+		} );
+
+		await waitFor( () => {
+			expect(
+				screen.queryByText( 'Welcome to Performance Optimisation' )
+			).not.toBeInTheDocument();
+		} );
+		expect( apiCall ).toHaveBeenCalledWith( 'dismiss_welcome' );
+		expect( console.error ).toHaveBeenCalled();
+	} );
+
 	it( 'shows the dismiss error when dismiss_welcome throws after a successful update', async () => {
 		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				runnable: true,
+				all_pass: true,
+				excluded_paths: [ 'cart' ],
+			},
+		} );
 		apiCall.mockImplementation( ( endpoint ) => {
 			if ( endpoint === 'update_settings' ) {
 				return Promise.resolve( { success: true } );
@@ -215,6 +385,15 @@ describe( 'WelcomePanel', () => {
 
 	it( 'keeps the panel visible when dismiss_welcome fails after a successful update', async () => {
 		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				runnable: true,
+				all_pass: true,
+				excluded_paths: [ 'cart' ],
+			},
+		} );
 		apiCall.mockImplementation( ( endpoint ) => {
 			if ( endpoint === 'update_settings' ) {
 				return Promise.resolve( { success: true } );

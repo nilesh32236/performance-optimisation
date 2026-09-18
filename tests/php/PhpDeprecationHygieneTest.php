@@ -200,7 +200,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * The 8.5 branch must release a cURL share handle by dropping the
 	 * reference (no curl_share_close() call, so no deprecation).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_close_curl_share_handle_unsets_on_85(): void {
@@ -218,7 +218,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Below 8.5 the legacy curl_share_close() path must run without error.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_close_curl_share_handle_keeps_legacy_path_below_85(): void {
@@ -243,7 +243,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * The 8.5 branch must release a finfo handle by dropping the reference
 	 * (no finfo_close() call, so no deprecation).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_close_finfo_handle_unsets_on_85(): void {
@@ -261,7 +261,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Below 8.5 the legacy finfo_close() path must run without error.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_close_finfo_handle_keeps_legacy_path_below_85(): void {
@@ -286,7 +286,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * The 8.5 branch must release an XML parser by dropping the reference
 	 * (no xml_parser_free() call, so no deprecation).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_free_xml_parser_unsets_on_85(): void {
@@ -304,7 +304,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Below 8.5 the legacy xml_parser_free() path must run without error.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_free_xml_parser_keeps_legacy_path_below_85(): void {
@@ -334,7 +334,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * (the classes are not Composer-autoloadable in the unit suite) and
 	 * every save_action() signature must use `?DateTime ... = null`.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_action_scheduler_save_action_is_explicit_nullable(): void {
@@ -392,7 +392,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * Exercises Cron::is_woo_excluded_url() and get_rest_route_param()
 	 * through reflection with empty/edge inputs under the zero-notice gate.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_cron_woo_exclusion_paths_are_null_safe(): void {
@@ -442,7 +442,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * core's untyped signatures by design (untyped `$x = null` is legal
 	 * and never flagged here).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_plugin_sources_are_free_of_php84_85_banned_patterns(): void {
@@ -498,7 +498,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * `mysqli_stmt_execute()` / `stream_set_timeout()`, `__serialize()`,
 	 * method-call, and comment/string mentions must stay clean.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	public function test_deprecation_scanner_catches_known_violations(): void {
@@ -603,7 +603,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * `xml_parser_free()` / `imagedestroy()` calls outside the
 	 * version-gated legacy branches of `includes/class-util.php`.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param string   $file       Absolute file path.
 	 * @param string   $root       Plugin root for relative reporting.
 	 * @param string[] $violations Violation accumulator (by reference).
@@ -800,7 +800,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * `free_xml_parser`) so a future raw `curl_close()` / `imagedestroy()`
 	 * added elsewhere in that file still fails the gate.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param array      $tokens Full token stream of the file.
 	 * @param int        $count  Token count.
 	 * @param int        $index  Index of the teardown function-name token.
@@ -843,7 +843,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * reuse the map for every teardown call site instead of re-scanning.
 	 * Anonymous functions/closures carry no name and are skipped.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param array $tokens Full token stream of the file.
 	 * @param int   $count  Token count.
 	 * @return array[] List of `array( 'name' => string, 'start' => int, 'end' => int, 'size' => int )`.
@@ -923,7 +923,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * name containing `$index` (null when top-level). Anonymous
 	 * functions/closures carry no name and never match the legacy list.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param array $tokens Full token stream of the file.
 	 * @param int   $count  Token count.
 	 * @param int   $index  Token index to locate.
@@ -949,7 +949,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * `mixed`). Untyped `$param = null` and `mixed $param = null` are
 	 * legal and never flagged.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param array    $tokens     Full token stream of the file.
 	 * @param int      $count      Token count.
 	 * @param int      $index      Index of the T_FUNCTION/T_FN token.

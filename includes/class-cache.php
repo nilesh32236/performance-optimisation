@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * snapshot to a temp dir outside the wipe tree so a fatal between
 		 * delete and restore cannot destroy both copies.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private const PURGE_FALLBACK_MAX_FILES = 25;
 		private const PURGE_FALLBACK_MAX_DEPTH = 6;
@@ -62,24 +62,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private const PURGE_FALLBACK_REDIRECT_STATUS = 302;
 
 		/**
-		 * Invalidate the cached cache-size/page-count stats transients.
+		 * Invalidate the cached dashboard stats.
 		 *
-		 * The dashboard stats (wppo_cache_stats + legacy
-		 * wppo_cache_size/wppo_cache_count/wppo_total_js_css) carry a 15-minute
+		 * The unified dashboard stats payload (`wppo_cache_stats`, plus the
+		 * standalone `wppo_total_js_css` dashboard cache) carries a 15-minute
 		 * TTL; per-page mutations (smart purge via
 		 * invalidate_dynamic_static_html(), fresh combine_css generation)
 		 * previously left the stats frozen until the TTL ran out (audit #874
 		 * finding 6). Mutators call this so the next stats read recomputes.
 		 * Deliberately NOT called from save_cache_files(): frontend cache
 		 * misses are the normal write path and would defeat the TTL entirely.
+		 * The retired split mirrors (`wppo_cache_size` / `wppo_cache_count`)
+		 * are no longer written anywhere, so there is nothing to invalidate
+		 * for them (issue #1464).
 		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function bump_stats_cache(): void {
 			delete_transient( Util::transient_key( 'wppo_cache_stats' ) );
-			delete_transient( Util::transient_key( 'wppo_cache_size' ) );
-			delete_transient( Util::transient_key( 'wppo_cache_count' ) );
 			delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 			// Stampede stale copy (issue #1101): the stats walk writes a 24h
 			// `<key>_stale` transient that must not survive an explicit purge.
@@ -88,8 +89,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// The salted object-cache layer (WP 6.9+ drop-in) derives entry
 			// validity from `wppo_cache_last_cleared`; bump it wherever the
-			// stats are bumped so the salted wppo_cache_size /
-			// wppo_total_js_css entries stay consistent outside clear_cache()
+			// stats are bumped so the salted `wppo_cache_stats` /
+			// `wppo_total_js_css` entries stay consistent outside clear_cache()
 			// (smart purge, combine_css) too.
 			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
@@ -265,7 +266,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var object|null
 		 * @since 1.0.0
 		 */
-		private $filesystem;
+		private object|false|null $filesystem = null; // Audit #1434: typed (false on init failure).
 
 		/**
 		 * Output-buffer level occupied by the legacy cache buffer (WP < 6.9).
@@ -301,7 +302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var array
 		 * @since 1.0.0
 		 */
-		private $options;
+		private array $options = array(); // Audit #1434: typed per docblock.
 
 		/**
 		 * Image_Optimisation instance for buffer processing.
@@ -309,7 +310,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var Image_Optimisation|null
 		 * @since 2.0.0
 		 */
-		private $image_optimisation;
+		private ?Image_Optimisation $image_optimisation = null; // Audit #1434: typed per docblock.
 
 		/**
 		 * Google_Fonts instance for buffer-level font interception.
@@ -317,7 +318,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var Google_Fonts|null
 		 * @since 2.0.0
 		 */
-		private $google_fonts;
+		private ?Google_Fonts $google_fonts = null; // Audit #1434: typed per docblock.
 
 		/**
 		 * Role hash for the current request, set during buffer processing.
@@ -460,6 +461,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the request Host header mismatched the canonical home host.
+		 *
+		 * Additive alias of {@see is_host_mismatched()} using the issue's
+		 * canonical API name (`Cache::host_mismatch`). Pure delegation, no
+		 * behaviour change: true means serve dynamic uncached and never
+		 * write a cache file.
+		 *
+		 * @return bool True when the request host differs from the canonical host.
+		 * @since NEXT
+		 */
+		public function host_mismatch(): bool {
+			return $this->host_mismatch;
+		}
+
+		/**
 		 * Canonical, query-normalized cache key for the current request.
 		 *
 		 * The key is pinned to the allowlisted canonical host resolved from
@@ -488,7 +504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * blog-aware, so each site keys its own canonical tree.
 		 *
 		 * @return string `{canonical-host}/{path}` (homepage: `{host}/`), or '' when refused.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function cache_key(): string {
 			if ( '' === $this->domain || $this->path_rejected ) {
@@ -636,7 +652,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * options structure returns false (legacy separate-assets path).
 		 *
 		 * @return bool True when the combined monolith is forced.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_combined_core_block_monolith_forced(): bool {
 			try {
@@ -661,7 +677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * scattered skip site can disagree about block-asset ownership.
 		 *
 		 * @return bool True when core owns on-demand block styles on this request.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function get_effective_separate_block_assets(): bool {
 			if ( $this->is_combined_core_block_monolith_forced() ) {
@@ -690,7 +706,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * combine behavior unchanged).
 		 *
 		 * @return bool True when classic on-demand block assets are active.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function classic_block_assets_on_demand_active(): bool {
 			try {
@@ -723,7 +739,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle The registered style handle.
 		 * @return bool True when the handle must stay out of the combined file.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_classic_on_demand_block_asset( $handle ): bool {
 			try {
@@ -749,7 +765,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle Queued style handle e.g. 'wp-block-cover'.
 		 * @return bool True when the handle is verifiably a core per-block asset.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_core_per_block_style_handle( $handle ): bool {
 			try {
@@ -787,7 +803,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle The registered style handle.
 		 * @return bool True when the handle is hidden and must not be combined.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function is_hidden_block_asset_for_combine( $handle ): bool {
 			try {
@@ -916,7 +932,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * request; the memo collapses the duplicate slice resolution
 		 * (is_preview_request + get_settings).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string,array>
 		 */
 		private array $sandbox_effective_file_opt_memo = array();
@@ -931,7 +947,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * by the production slice. Fail-open to the production slice on any
 		 * failure.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array $file_opt Production `file_optimisation` slice.
 		 * @return array Effective slice (staged values merged in preview).
@@ -968,7 +984,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * perf only; combining through a failure risks broken Elementor
 		 * layout/FOUC).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param array     $file_opt  Sandbox-effective `file_optimisation` slice.
 		 * @param bool|null $looks_like Pre-computed Main::looks_like_elementor_request()
@@ -1222,7 +1238,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exclusion / core-block / inline-budget branches of
 		 * {@see combine_css()} read as a staged pipeline with isolated tests.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $styles     Queued handles.
 		 * @param array $exclusions Excluded handles/patterns.
 		 * @return array Eligible handles.
@@ -1237,7 +1253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Extracted from {@see combine_css()} so fetch/minify regressions can
 		 * be tested without driving the full enqueue/write pipeline.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $eligible_handles Eligible handles.
 		 * @return array{css:string,handles:array,error:string} Combined CSS + successful handles + error stage ('' on success).
 		 */
@@ -1315,7 +1331,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Extracted from {@see combine_css()} so filesystem failures can be
 		 * tested without driving fetch/minify.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $combined_css Combined CSS.
 		 * @param string $css_variant  Cache variant suffix.
 		 * @return array{path:string,error:string} File path ('' on failure) + error stage.
@@ -1347,7 +1363,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Named extraction over {@see set_combine_css_preload()} keeping the
 		 * audit-requested pipeline vocabulary in one place.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string     $css_url       URL of the combined stylesheet.
 		 * @param int|string $version       Cache-busting version suffix.
 		 * @param string     $css_file_path Absolute path to the combined CSS file.
@@ -2127,7 +2143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle The registered style handle.
 		 * @return int|false Byte size, 0 when the handle contributes nothing, false when unmeasurable.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function measure_style_byte_size( $handle ) {
 			global $wp_styles;
@@ -2257,17 +2273,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function start_output_buffer(): void {
-			// WP 6.9+ template-enhancement buffer interplay (issue #881): when
-			// core's enhancement output buffer is active for this request, core
-			// owns output capture and the filter path
-			// ({@see process_buffer_for_cache()}) is responsible for processing.
-			// A plugin-level buffer here would stack on top of core's and
-			// re-process (or cache pre-hoisting) HTML, so it must not open.
-			// When the site opts out (the filter returning false) core does not
-			// buffer at all and this legacy path is the only cache-write path,
-			// so it proceeds.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
+			// Single-buffer routing (issue #1386): when the core
+			// template-enhancement buffer is available (WP 6.9+), core owns
+			// output capture and the filter path
+			// ({@see process_buffer_for_cache()}) is responsible for
+			// processing. A private buffer here would stack on top of core's
+			// and re-process (or cache pre-hoisting) HTML, so it must never
+			// open on 6.9+ — a runtime opt-out degrades to uncached streaming
+			// output instead.
+			$use_core = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'should_use_core_template_buffer' ) ) {
+					$use_core = Main::should_use_core_template_buffer();
+				} else {
+					$use_core = function_exists( 'wp_should_output_buffer_template_for_enhancement' );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$use_core = function_exists( 'wp_should_output_buffer_template_for_enhancement' );
+			}
+			if ( $use_core ) {
 				return;
+			}
+			// Nesting guard (issue #881, pre-6.9 defense in depth): when the
+			// core buffer is already active for this request, the filter path
+			// owns processing and a private buffer must not stack on top.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				try {
+					if ( wp_should_output_buffer_template_for_enhancement() ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 			// Note (see #553, #829): legacy fallback kept until minimum supported WP is raised.
@@ -2295,7 +2333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					// Fail open: serve the page unprocessed instead of
 					// throwing out of the buffer callback (which would
 					// discard the response and leave the buffer dangling).
-					do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+					do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed.', array( 'exception' => $e ) );
 					return $buffer;
 				}
 			};
@@ -2336,9 +2374,265 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// One-shot: never attempt to close the same buffer twice.
 			$level                = $this->cache_ob_level;
 			$this->cache_ob_level = null;
-			if ( ob_get_level() === $level ) {
-				ob_end_flush();
+			// Mid-template cancel safety (issue #1386): when a third party (or
+			// core's own cancel path) already closed our buffer, the level no
+			// longer matches and this is a no-op, never fatal. Fail-open on
+			// any throwable so shutdown can never white-screen the response.
+			try {
+				if ( ob_get_level() === $level ) {
+					ob_end_flush();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
+		}
+
+		/**
+		 * Hoist late-enqueued block stylesheets after the block library (WP 6.9 core parity).
+		 *
+		 * Core 6.9 hoists late-enqueued block assets into `<head>` behind the
+		 * template-enhancement buffer (Trac #43258; 6.9 frontend-performance
+		 * field guide). Because this pipeline now runs ON the core buffer
+		 * (issue #1386), hoisted styles are already present: this pass is
+		 * the fail-open net for markup where they are not: per-block
+		 * stylesheet `<link>` tags still sitting after `</head>` (late
+		 * `wp_enqueue_style()` calls printed in body/footer) are moved to
+		 * directly after the `block-library` stylesheet link, preserving
+		 * their relative order so the core cascade (library first, then
+		 * per-block overrides) stays intact.
+		 *
+		 * HTML API only: discovery walks `WP_HTML_Tag_Processor`; the move
+		 * itself uses plain string offsets, never regex. Idempotent (a
+		 * second pass finds nothing after `</head>` and no-ops) and
+		 * fail-open (any unexpected shape returns the input unchanged).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The HTML with late block styles hoisted, or the input unchanged.
+		 */
+		private function hoist_late_block_styles( $buffer ) {
+			try {
+				if ( ! is_string( $buffer ) || '' === $buffer ) {
+					return $buffer;
+				}
+				if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+					return $buffer;
+				}
+				// Cheap pre-gate: skip the processor walk unless the page
+				// has a head close, the block library, and a per-block
+				// marker. Large cache-miss HTML without block styles exits
+				// on substring scans alone.
+				if ( false === stripos( $buffer, '</head' )
+					|| false === stripos( $buffer, 'block-library' )
+					|| ( false === stripos( $buffer, 'wp-block-' ) && false === stripos( $buffer, '/blocks/' ) ) ) {
+					return $buffer;
+				}
+				$head_close = stripos( $buffer, '</head>' );
+				if ( false === $head_close ) {
+					return $buffer;
+				}
+				// Discovery via the HTML API: ordered stylesheet hrefs.
+				$processor = new \WP_HTML_Tag_Processor( $buffer );
+				$hrefs     = array();
+				while ( $processor->next_tag( array( 'tag_name' => 'LINK' ) ) ) {
+					$rel = $processor->get_attribute( 'rel' );
+					if ( ! is_string( $rel ) || false === stripos( $rel, 'stylesheet' ) ) {
+						continue;
+					}
+					$href = $processor->get_attribute( 'href' );
+					if ( ! is_string( $href ) || '' === $href ) {
+						continue;
+					}
+					$hrefs[] = $href;
+				}
+				if ( empty( $hrefs ) ) {
+					return $buffer;
+				}
+				$library_href = null;
+				foreach ( $hrefs as $href ) {
+					if ( false !== stripos( $href, 'block-library' ) ) {
+						$library_href = $href;
+						break;
+					}
+				}
+				if ( null === $library_href ) {
+					return $buffer;
+				}
+				// Candidate late links: per-block stylesheets with no genuine
+				// `<link>` occurrence in head. Head membership is resolved
+				// from tag-verified occurrences (an href substring inside a
+				// script string, preload, or comment before `</head>` must
+				// not suppress the hoist), never from a raw substring search.
+				// An href already present in head still has its late body
+				// duplicates cut (without re-insertion) so head+body copies
+				// cannot linger as duplicates.
+				$candidates  = array();
+				$dedupe_only = array();
+				foreach ( $hrefs as $href ) {
+					if ( $href === $library_href ) {
+						continue;
+					}
+					if ( false !== stripos( $href, 'block-library' ) ) {
+						continue;
+					}
+					if ( false === stripos( $href, 'wp-block-' ) && false === stripos( $href, '/blocks/' ) ) {
+						continue;
+					}
+					if ( isset( $candidates[ $href ] ) || isset( $dedupe_only[ $href ] ) ) {
+						continue;
+					}
+					// Already in head: cut late duplicates only (never re-insert,
+					// avoids duplicating the handle).
+					if ( $this->is_href_in_head_link( $buffer, $href, $head_close ) ) {
+						$dedupe_only[ $href ] = true;
+						continue;
+					}
+					$candidates[ $href ] = true;
+				}
+				if ( empty( $candidates ) && empty( $dedupe_only ) ) {
+					return $buffer;
+				}
+				// Anchor: resolve the block-library href to its actual
+				// `<link>` tag range, so a non-link occurrence (JS string,
+				// data attribute) can never misplace the insert.
+				$library_range = $this->find_link_tag_for_href( $buffer, $library_href, 0 );
+				if ( null === $library_range ) {
+					return $buffer;
+				}
+				// Resolve each candidate href to its late `<link>` tag ranges
+				// with a forward-ordered cursor, so duplicate hrefs resolve
+				// to distinct tags. Every late occurrence is cut; only the
+				// first per href is re-inserted, so a duplicated body tag
+				// cannot clone the handle into head.
+				$ranges    = array();
+				$moved     = array();
+				$inserted  = array();
+				$all_hrefs = array_merge( array_keys( $candidates ), array_keys( $dedupe_only ) );
+				foreach ( $all_hrefs as $href ) {
+					$is_dedupe = isset( $dedupe_only[ $href ] );
+					$offset    = $head_close;
+					$guard     = 0;
+					while ( $guard < 50 ) {
+						++$guard;
+						$range = $this->find_link_tag_for_href( $buffer, $href, $offset );
+						if ( null === $range ) {
+							break;
+						}
+						$ranges[] = $range;
+						if ( ! $is_dedupe && ! isset( $inserted[ $href ] ) ) {
+							$inserted[ $href ] = true;
+							$moved[]           = $range[2];
+						}
+						$offset = $range[1] + 1;
+					}
+					if ( count( $ranges ) > 100 ) {
+						return $buffer;
+					}
+				}
+				if ( empty( $ranges ) ) {
+					return $buffer;
+				}
+				// Single-pass cut + insert: sort ascending, splice once, and
+				// place the moved tags directly after the library link tag.
+				// The anchor must precede every late range: if a theme prints
+				// block-library itself after `</head>`, the splice cursor
+				// would skip late ranges before the anchor while inserting
+				// moved copies (duplication), so bail out unchanged instead.
+				usort(
+					$ranges,
+					static function ( $a, $b ) {
+						if ( $a[0] === $b[0] ) {
+							return 0;
+						}
+						return ( $a[0] < $b[0] ) ? -1 : 1;
+					}
+				);
+				foreach ( $ranges as $range ) {
+					if ( $range[0] <= $library_range[1] ) {
+						return $buffer;
+					}
+				}
+				$result  = substr( $buffer, 0, $library_range[1] + 1 );
+				$result .= implode( '', $moved );
+				$cursor  = $library_range[1] + 1;
+				foreach ( $ranges as $range ) {
+					if ( $range[0] < $cursor ) {
+						continue;
+					}
+					$result .= substr( $buffer, $cursor, $range[0] - $cursor );
+					$cursor  = $range[1] + 1;
+				}
+				$result .= substr( $buffer, $cursor );
+				return $result;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return is_string( $buffer ) ? $buffer : '';
+			}
+		}
+
+		/**
+		 * Locate the next `<link>` tag containing an href, at/after an offset.
+		 *
+		 * String-offset companion to the HTML-API discovery in
+		 * {@see hoist_late_block_styles()}: occurrences of the href that are
+		 * not wrapped in a `<link>` tag (script strings, data attributes,
+		 * comments) are skipped, so callers always resolve to a genuine
+		 * stylesheet tag. Never uses regex.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @param string $href   The stylesheet href to locate.
+		 * @param int    $offset Byte offset to search from.
+		 * @return array|null Array of [start, end, tag text], or null when no `<link>` tag carries the href.
+		 */
+		private function find_link_tag_for_href( $buffer, $href, $offset ) {
+			$pos   = (int) $offset;
+			$guard = 0;
+			while ( $guard < 50 ) {
+				++$guard;
+				$href_pos = strpos( $buffer, $href, $pos );
+				if ( false === $href_pos ) {
+					return null;
+				}
+				// Bounded backward scan: only the last 2KB before the href
+				// can hold the opening `<link`; avoids copying the full
+				// buffer prefix on every probe for large cache-miss HTML.
+				$window_start = ( $href_pos > 2048 ) ? $href_pos - 2048 : 0;
+				$window       = substr( $buffer, $window_start, $href_pos - $window_start );
+				$rel_pos      = ( '' !== $window ) ? strrpos( $window, '<' ) : false;
+				$tag_start    = ( false !== $rel_pos ) ? $window_start + $rel_pos : false;
+				$tag_end      = strpos( $buffer, '>', $href_pos );
+				if ( false === $tag_start || false === $tag_end || $tag_end <= $tag_start ) {
+					return null;
+				}
+				$tag_text = substr( $buffer, $tag_start, $tag_end - $tag_start + 1 );
+				if ( false !== stripos( $tag_text, '<link' ) ) {
+					return array( $tag_start, $tag_end, $tag_text );
+				}
+				$pos = $href_pos + strlen( $href );
+			}
+			return null;
+		}
+
+		/**
+		 * Whether an href is carried by a genuine `<link>` tag before `</head>`.
+		 *
+		 * Tag-verified head membership for {@see hoist_late_block_styles()}:
+		 * a bare href substring (script string, preload, comment) before the
+		 * head close does not count. Never uses regex.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer     The HTML buffer.
+		 * @param string $href       The stylesheet href to test.
+		 * @param int    $head_close Byte offset of `</head>`.
+		 * @return bool True when a `<link>` tag carries the href inside head.
+		 */
+		private function is_href_in_head_link( $buffer, $href, $head_close ) {
+			$range = $this->find_link_tag_for_href( $buffer, $href, 0 );
+			return ( null !== $range && $range[0] < $head_close );
 		}
 
 		/**
@@ -2350,16 +2644,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		private function process_buffer_only( $buffer ) {
-			// Nesting balance (issue #881): the enhancement-buffer filter and the
-			// legacy fallback buffer can both be registered on WP 6.9+ (the
-			// fallback engages only when a site opts out of core's buffer, but a
-			// site filter may flip between template_redirect and
-			// wp_before_include_template). Enhance exactly once per request so a
-			// mid-request flip can never double-minify or double-rewrite.
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string (false/null). This private
+			// helper fails open to an empty string; the public wrappers
+			// (process_buffer_for_cache / process_used_css_only /
+			// prioritize_lcp_in_buffer) own the $output-fallback convention
+			// and restore the best-available HTML, so this path must only be
+			// reached via those wrappers on the public filter chain.
+			if ( ! is_string( $buffer ) ) {
+				return '';
+			}
+			if ( '' === $buffer ) {
+				return $buffer;
+			}
+			// Nesting balance (issue #881): the enhancement-buffer filter ran
+			// alongside a legacy fallback buffer before the single-buffer
+			// routing (issue #1386) retired the fallback on 6.9+. On 6.9+ only
+			// the core filter path is ever registered, so the flag now only
+			// guards legacy pre-6.9 double-entry (exactly-once enhancement).
 			if ( self::$buffer_enhanced ) {
 				return $buffer;
 			}
 			self::$buffer_enhanced = true;
+
+			// Late-enqueued block styles (issue #1386) hoist first so every
+			// downstream pass (minify, used-CSS, CDN) and the cached file see
+			// the post-hoisting HTML with the core cascade intact.
+			$buffer = $this->hoist_late_block_styles( $buffer );
 
 			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
 
@@ -2421,13 +2732,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		public function process_buffer_for_cache( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
-				return $filtered_output;
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string into the filter. Fail open —
+			// never fatal, never white-screen. Prefer the raw $output when
+			// it carries page HTML so a cancelled $filtered_output can never
+			// collapse the chain to a blank page.
+			if ( ! is_string( $filtered_output ) ) {
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
 			}
+			try {
+				if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
+					return $filtered_output;
+				}
 
-			$this->current_role_hash = $this->get_logged_in_role_hash();
+				$this->current_role_hash = $this->get_logged_in_role_hash();
 
-			return $this->process_buffer_only( $filtered_output );
+				return $this->process_buffer_only( $filtered_output );
+			} catch ( \Throwable $e ) {
+				do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed.', array( 'exception' => $e ) );
+				if ( is_string( $filtered_output ) && '' !== $filtered_output ) {
+					return $filtered_output;
+				}
+				if ( is_string( $output ) && '' !== $output ) {
+					return $output;
+				}
+				return '';
+			}
 		}
 
 		/**
@@ -2447,14 +2780,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		public function stash_cache( $output ) {
-			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
+			// Mid-template cancel safety (issue #1386): a cancelled core
+			// buffer can deliver a non-string (false/null) to the finalized
+			// action. Skipping the write degrades to uncached output —
+			// never fatal. Persistence failures are best-effort by design.
+			if ( ! is_string( $output ) || '' === $output ) {
 				return;
 			}
+			try {
+				if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
+					return;
+				}
 
-			$role_hash = ! empty( $this->current_role_hash ) ? $this->current_role_hash : $this->get_logged_in_role_hash();
-			$file_path = $this->get_cache_file_path( 'html', $role_hash );
+				$role_hash = ! empty( $this->current_role_hash ) ? $this->current_role_hash : $this->get_logged_in_role_hash();
+				$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
-			$this->save_processed_buffer( $output, $file_path );
+				$this->save_processed_buffer( $output, $file_path );
+			} catch ( \Throwable $e ) {
+				do_action( 'wppo_debug_log', 'WPPO page cache stash failed.', array( 'exception' => $e ) );
+			}
 		}
 
 		/**
@@ -2826,7 +3170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * any detection failure returns true (refuse the store, dynamic),
 		 * never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when a Set-Cookie response header is present.
 		 */
 		private function has_set_cookie_response_header(): bool {
@@ -2857,7 +3201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * editor output must never be written to or served from the static
 		 * cache. Fail-open: any detection failure bypasses the cache.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the request must bypass the cache.
 		 */
 		private function is_editor_preview_excluded(): bool {
@@ -3039,7 +3383,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// logic in this change (see docs/hooks.md, wppo_should_cache_request).
 
 			// ESI punch-holing: when hole active, treat as not cacheable via DONOTCACHEPAGE.
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+			// No-autoload probe (issue #1443): on non-LiteSpeed requests the ESI
+			// class is never loaded, and should_punch_hole() is fail-closed
+			// anyway, so skipping here preserves behaviour without parsing ESI.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', false ) ) {
 				$needs_hole = false;
 				try {
 					if ( LiteSpeed_ESI::should_punch_hole( 'cart' ) || LiteSpeed_ESI::should_punch_hole( 'checkout' ) || LiteSpeed_ESI::should_punch_hole( 'account' ) || LiteSpeed_ESI::should_punch_hole( 'adminbar' ) ) {
@@ -3357,8 +3704,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function maybe_store_cache() {
-			// ESI punch-holing: skip store when hole-punched.
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+			// ESI punch-holing: skip store when hole-punched. No-autoload
+			// probe (issue #1443) — see is_not_cacheable() above.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', false ) ) {
 				try {
 					if ( LiteSpeed_ESI::should_punch_hole( 'cart' ) || LiteSpeed_ESI::should_punch_hole( 'checkout' ) || LiteSpeed_ESI::should_punch_hole( 'account' ) || LiteSpeed_ESI::should_punch_hole( 'adminbar' ) || LiteSpeed_ESI::should_punch_hole( 'nonce' ) ) {
 						if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
@@ -4083,7 +4431,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * helper so every file-writing surface normalizes identically.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added the optional $allowed_host foreign-host refusal.
+		 * @since 2.2.0 Added the optional $allowed_host foreign-host refusal.
 		 * @param string|null $url_path Raw URL path or URL.
 		 * @param string|null $allowed_host Optional canonical host; threaded to the shared helper so
 		 *                                  absolute-form callers refuse foreign hosts.
@@ -4106,7 +4454,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * callers skip the write and serve dynamically uncached.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added realpath symlink containment.
+		 * @since 2.2.0 Added realpath symlink containment.
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
@@ -4250,7 +4598,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * throttle can never suppress the log it guards (fail-open toward
 		 * logging).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $throttle_key Throttle transient key.
 		 * @param int    $ttl          TTL in seconds when recording a fresh hit.
 		 * @return bool True when a previous hit is still recorded.
@@ -4373,7 +4721,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $file_path Absolute derived-asset path.
 		 * @return string Sibling fallback path, or '' when not applicable.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_purge_fallback_path( string $file_path ): string {
 			try {
@@ -4399,7 +4747,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $file_path The derived file about to be deleted.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function retain_purge_fallback( string $file_path ): void {
 			try {
@@ -4438,7 +4786,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $requested_path Absolute requested derived-asset path.
 		 * @return array{served: bool, status: int, fallback_path: string, location: string} Resolution.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_purge_fallback_response( string $requested_path ): array {
 			$miss = array(
@@ -4540,7 +4888,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * {@see PURGE_FALLBACK_REDIRECT_STATUS}); invalid values fall back
 		 * to the constant. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Redirect status code.
 		 */
 		public static function purge_fallback_redirect_status(): int {
@@ -4550,7 +4898,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					/**
 					 * Filters the redirect status used when serving a purge fallback.
 					 *
-					 * @since NEXT
+					 * @since 2.2.0
 					 * @param int $status Redirect status code.
 					 */
 					$filtered = apply_filters( 'wppo_purge_fallback_redirect_status', $status );
@@ -4573,7 +4921,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * redirecting to `fallback.css` after the base regenerates — a
 		 * stale-serve window regeneration cannot clear client-side.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $location Absolute fallback URL.
 		 * @param int    $status   Redirect status code.
 		 * @return array{location: string, status: int, headers: string[]} Headers to send.
@@ -4605,7 +4953,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array{served: bool, status: int, fallback_path: string, location: string} $response Resolver output.
 		 * @return bool True when the fallback was served (or would be, under the test seam).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function serve_purge_fallback_response( array $response ): bool {
 			try {
@@ -4659,7 +5007,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function maybe_serve_purge_fallback(): void {
 			try {
@@ -4715,7 +5063,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function log_purge_fallback(): void {
 			try {
@@ -4976,7 +5324,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Recursively delete files under an allowlisted swap dir via PHP API.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $swap_dir Allowlisted directory.
 		 * @return void
 		 */
@@ -5097,7 +5445,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * realpath must stay under the resolved base (a symlinked min dir
 		 * pointing outside fails closed). Fail closed on any anomaly.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $dir Absolute directory candidate.
 		 * @return bool True when the recursive delete may proceed.
 		 */
@@ -5140,7 +5488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * it; this routes min-tree misses through {@see is_min_dir_allowed()}
 		 * on the parent dir instead. Fail-closed. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $path Absolute file candidate.
 		 * @return bool True when the path is min-tree-contained.
 		 */
@@ -5169,7 +5517,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * (`max_files × max_bytes` is otherwise buffered in memory). Result
 		 * is memoized per request. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int, max_total_bytes: int} Limits.
 		 */
 		private static function purge_fallback_limits(): array {
@@ -5205,7 +5553,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				 * in-memory snapshot budget (max_total_bytes) kept on a
 				 * full-cache wipe. Values are clamped to sane ceilings.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int, max_total_bytes: int} $defaults Snapshot bounds.
 				 */
 				$filtered = apply_filters( 'wppo_purge_fallback_limits', $defaults );
@@ -5237,7 +5585,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * would silently lose fallbacks. Reuses the per-day transient
 		 * throttle so a wipe storm writes a single row. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function log_snapshot_cap(): void {
@@ -5268,7 +5616,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $dir Absolute domain directory about to be deleted.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function snapshot_domain_purge_fallbacks( string $dir ): array {
 			return $this->snapshot_purge_fallbacks_worker(
@@ -5287,7 +5635,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $dir Absolute min directory about to be deleted.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function snapshot_min_purge_fallbacks( string $dir ): array {
 			return $this->snapshot_purge_fallbacks_worker(
@@ -5305,7 +5653,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function snapshot_purge_fallbacks_worker( string $dir, callable $is_allowed ): array {
 			$snapshot = array();
@@ -5425,7 +5773,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param bool   $min_tree Whether $dir lives under the min tree.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function snapshot_purge_fallbacks( string $dir, bool $min_tree = false ): array {
 			if ( $min_tree ) {
@@ -5449,7 +5797,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function retain_live_bases_for_wipe( string $dir, callable $is_allowed ): void {
 			try {
@@ -5518,7 +5866,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array<string, string> $snapshot Path => contents from {@see snapshot_purge_fallbacks()}.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function restore_purge_fallbacks( array $snapshot ): void {
 			$this->restore_snapshot(
@@ -5535,7 +5883,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array<string, string> $snapshot Path => contents from {@see snapshot_purge_fallbacks()}.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function restore_min_fallbacks( array $snapshot ): void {
 			$this->restore_snapshot(
@@ -5558,7 +5906,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param callable              $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function restore_snapshot( array $snapshot, callable $is_allowed ): void {
 			if ( empty( $snapshot ) ) {
@@ -5624,7 +5972,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array<string, string> $snapshot Path => contents.
 		 * @return array<string, string> Original path => staged temp path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function stage_snapshot_to_temp( array $snapshot ): array {
 			$staged = array();
@@ -5687,7 +6035,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param callable              $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private function restore_staged_snapshot( array $staged, callable $is_allowed ): void {
 			if ( empty( $staged ) ) {
@@ -5942,22 +6290,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $stats;
 			}
 
-			// Fallback: check legacy split transients (pre-unified) for BC during upgrade.
-			$legacy_size  = get_transient( Util::transient_key( 'wppo_cache_size' ) );
-			$legacy_count = get_transient( Util::transient_key( 'wppo_cache_count' ) );
-			if ( false !== $legacy_size && false !== $legacy_count ) {
-				$stats['size']         = (string) $legacy_size;
-				$stats['cached_pages'] = (int) $legacy_count;
-				// Promote to unified key atomically.
-				$unified = array(
-					'size'  => $stats['size'],
-					'count' => $stats['cached_pages'],
-				);
-				self::store_cache_stats( $unified, $stats_key );
-				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
-				return $stats;
-			}
-
 			// Cache miss: compute size and page count in a single recursive
 			// walk so large caches pay one filesystem enumeration, not two.
 			// Stampede guard (issue #1101): concurrent misses collapse toward one
@@ -6037,9 +6369,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				);
 				self::store_cache_stats( $unified, $stats_key );
 				$write_stale_stats( $unified );
-				// Also prime legacy keys for any external consumers still reading them.
-				set_transient( Util::transient_key( 'wppo_cache_size' ), $stats['size'], 15 * MINUTE_IN_SECONDS );
-				set_transient( Util::transient_key( 'wppo_cache_count' ), $stats['cached_pages'], 15 * MINUTE_IN_SECONDS );
 
 				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 
@@ -6081,7 +6410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * {@see collect_cache_entries_by_age()} so cap accounting and
 		 * oldest-entry eviction can never drift apart.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $directory Directory path.
 		 * @return array|null Dirlist entries, or null when unavailable.
 		 */
@@ -6206,7 +6535,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * values fall back to defaults; enforcement never blocks the
 		 * frontend — the cap only warns first, then evicts oldest entries.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
+		 * @since NEXT Disk-safe slice (issue #1428): `max_files`/`randomized_guard` keys.
 		 * @return array{max_mb:int,warn_ratio:float,enforce:bool,max_files:int,randomized_guard:bool}
 		 */
 		public static function get_cache_cap_settings(): array {
@@ -6309,7 +6639,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * unavailable. Uses the single-walk {@see calculate_directory_stats()}
 		 * helper so size accounting matches the dashboard stats.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Bytes used, or 0 on failure.
 		 */
 		public static function get_cache_size_bytes(): int {
@@ -6404,7 +6734,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Both cap dimensions (bytes + file count) feed the state; either
 		 * dimension can push `ok` to `warn`/`over`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
+		 * @since NEXT File-count dimension (issue #1428): `files`/`cap_files`/`warn_files` fields.
 		 * @return array{bytes:int,cap_bytes:int,warn_bytes:int,state:string,enforce:bool,max_mb:int,files:int,cap_files:int,warn_files:int}
 		 */
 		public static function get_cache_cap_status(): array {
@@ -6470,7 +6801,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * until back under both caps. Never blocks the frontend: every
 		 * failure path returns silently.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function maybe_enforce_cache_cap(): void {
@@ -6543,7 +6874,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * stall on a massive cache. Fail-open: filesystem failures stop the
 		 * walk silently.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $bytes_to_free Minimum bytes to reclaim.
 		 * @return int Bytes actually freed (best effort).
 		 */
@@ -6644,7 +6975,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Recursive `$fs->dirlist()` walk capped at depth 20 and 5000
 		 * entries so eviction stays bounded on huge caches.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $directory Directory to scan.
 		 * @param int    $depth     Recursion depth guard.
 		 * @param array  $out       Accumulator (passed by reference).

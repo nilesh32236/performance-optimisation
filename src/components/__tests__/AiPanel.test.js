@@ -37,7 +37,7 @@ describe( 'AiPanel Component', () => {
 		} );
 	} );
 
-	it( 'renders both toggles', () => {
+	it( 'renders all three toggles', () => {
 		render( <AiPanel /> );
 		expect(
 			screen.getByLabelText( /Enable AI Adaptive/i )
@@ -45,13 +45,19 @@ describe( 'AiPanel Component', () => {
 		expect(
 			screen.getByLabelText( /Use WordPress AI client/i )
 		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Auto-refresh CSS on LCP regression/i )
+		).toBeInTheDocument();
 	} );
 
-	it( 'saves enabled + use_wp_ai_client payload', async () => {
+	it( 'saves enabled + use_wp_ai_client + css_refresh payload', async () => {
 		render( <AiPanel /> );
 
 		fireEvent.click( screen.getByLabelText( /Enable AI Adaptive/i ) );
 		fireEvent.click( screen.getByLabelText( /Use WordPress AI client/i ) );
+		fireEvent.click(
+			screen.getByLabelText( /Auto-refresh CSS on LCP regression/i )
+		);
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Save AI Settings/i } )
 		);
@@ -64,6 +70,7 @@ describe( 'AiPanel Component', () => {
 					settings: {
 						enabled: true,
 						use_wp_ai_client: true,
+						css_refresh_on_lcp_regression: true,
 						dismissed_suggestions: [],
 					},
 				} )
@@ -116,6 +123,60 @@ describe( 'AiPanel Component', () => {
 					} ),
 				} )
 			);
+		} );
+	} );
+
+	it( 'shows LCP before/after proof and manual regenerate button', async () => {
+		apiCall.mockImplementation( async ( endpoint ) => {
+			if ( endpoint === 'ai_model' ) {
+				return { success: true, data: null };
+			}
+			if ( endpoint === 'ai_suggestions' ) {
+				return {
+					success: true,
+					data: {
+						suggestions: [
+							{
+								metric: 'ai_lcp_regression',
+								value: 'LCP +50% vs baseline',
+								unit: 'string',
+								status: 'needs_improvement',
+								description: 'AI: LCP regression detected',
+								fix_action: 'open_file_optimization_tab',
+								ai_payload: {
+									tab: 'file_optimisation',
+									settings: {},
+									css_refresh: {
+										queued: false,
+										reason: 'opt-out',
+										url: 'http://example.com/',
+										post_id: 123,
+										before_lcp: 2000,
+										current_lcp: 3000,
+									},
+								},
+							},
+						],
+					},
+				};
+			}
+			return { success: true, data: {} };
+		} );
+		render( <AiPanel /> );
+
+		expect(
+			await screen.findByText( /LCP before: 2000ms, after: 3000ms/i )
+		).toBeInTheDocument();
+
+		const regenerateButton = await screen.findByRole( 'button', {
+			name: /Regenerate used CSS for the regressed URL/i,
+		} );
+		fireEvent.click( regenerateButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'used_css_regenerate', {
+				post_id: 123,
+			} );
 		} );
 	} );
 } );

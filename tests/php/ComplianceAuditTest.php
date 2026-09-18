@@ -120,8 +120,8 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 	public static function debug_log_provider(): array {
 		return array(
 			'redis-connect-helper' => array( 'includes/redis-connect-helper.php', 5 ),
-			'od-bridge'            => array( 'includes/class-od-bridge.php', 1 ),
-			'img-converter'        => array( 'includes/class-img-converter.php', 10 ),
+			'od-bridge'            => array( 'includes/class-od-bridge.php', 0 ), // Audit #1434: debug_log() now routes via Log::add().
+			'img-converter'        => array( 'includes/class-img-converter.php', 11 ),
 		);
 	}
 

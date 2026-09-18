@@ -6,7 +6,7 @@
  * with Util::transient_key lock (60s, blog-prefixed).
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -192,7 +192,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * code lives here.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Delegates to Cloudflare_Purger::purge_files().
+		 * @since 2.2.0 Delegates to Cloudflare_Purger::purge_files().
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @param string $url Absolute URL to purge.
@@ -222,7 +222,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * Cloudflare_Purger::purge() transport. No HTTP code lives here.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Delegates to Cloudflare_Purger::purge().
+		 * @since 2.2.0 Delegates to Cloudflare_Purger::purge().
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @return bool
@@ -303,7 +303,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * activity-log row per lock window so a prolonged edge outage cannot
 		 * spam wppo_activity_logs.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $service Service.
 		 * @param string $detail Detail.
 		 * @return void

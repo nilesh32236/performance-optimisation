@@ -161,11 +161,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$delay_strategies = is_array( $delay_strategies ) ? $delay_strategies : array();
 			$delay_priorities = is_array( $delay_priorities ) ? $delay_priorities : array();
 
-			$assets        = Asset_Manager::get_page_assets( $post->ID );
-			$protected_js  = Asset_Manager::get_protected_scripts();
-			$protected_css = Asset_Manager::get_protected_styles();
+			$assets        = class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ? Asset_Manager::get_page_assets( $post->ID ) : false;
+			$protected_js  = class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ? Asset_Manager::get_protected_scripts() : array();
+			$protected_css = class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ? Asset_Manager::get_protected_styles() : array();
+			$blocked_note  = self::consume_blocked_notice( (int) $post->ID );
+			$suggestions   = array();
+			if ( class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) && method_exists( 'PerformanceOptimise\Inc\Asset_Manager', 'get_asset_suggestions' ) && is_array( $assets ) ) {
+				try {
+					$suggestions = Asset_Manager::get_asset_suggestions( $assets );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$suggestions = array();
+				}
+			}
 			?>
 			<div class="wppo-asset-manager">
+				<?php if ( ! empty( $blocked_note ) ) : ?>
+					<div class="notice notice-warning inline" role="alert" aria-live="assertive" style="margin: 0 0 12px;">
+						<p>
+							<?php
+							printf(
+								/* translators: %s: comma-separated list of protected handles that were blocked. */
+								esc_html__( 'Protected handles were not disabled (they are required for WordPress to work): %s', 'performance-optimisation' ),
+								esc_html( implode( ', ', $blocked_note ) )
+							);
+							?>
+						</p>
+					</div>
+				<?php endif; ?>
+				<?php if ( ! empty( $disabled_scripts ) || ! empty( $disabled_styles ) || ! empty( $delay_strategies ) || ! empty( $delay_priorities ) ) : ?>
+					<p>
+						<label for="wppo_asset_manager_revert">
+							<input
+								type="checkbox"
+								id="wppo_asset_manager_revert"
+								name="wppo_asset_manager_revert"
+								value="1"
+							/>
+							<?php esc_html_e( 'Re-enable all assets on this page (one-click revert)', 'performance-optimisation' ); ?>
+						</label>
+						<br />
+						<span class="description"><?php esc_html_e( 'Checking this and updating clears every per-page disable on this page only. Site-wide settings are never touched.', 'performance-optimisation' ); ?></span>
+					</p>
+				<?php endif; ?>
+				<?php if ( ! empty( $suggestions ) ) : ?>
+					<div class="wppo-asset-suggestions" style="margin-bottom: 12px;">
+						<h4><?php esc_html_e( 'Assistant suggestions (not applied automatically)', 'performance-optimisation' ); ?></h4>
+						<p class="description"><?php esc_html_e( 'These heavy, non-protected assets are candidates worth reviewing. Nothing is disabled until you tick it above and update.', 'performance-optimisation' ); ?></p>
+						<ul style="list-style: disc; margin-left: 20px;">
+							<?php foreach ( $suggestions as $suggestion ) : ?>
+								<li>
+									<code><?php echo esc_html( $suggestion['handle'] ); ?></code>
+									<?php echo esc_html( '(' . $suggestion['type'] . ', ' . self::format_asset_size( $suggestion['size'] ) . ')' ); ?>
+								</li>
+							<?php endforeach; ?>
+						</ul>
+					</div>
+				<?php endif; ?>
 				<h4><?php esc_html_e( 'Delay JS Overrides', 'performance-optimisation' ); ?></h4>
 				<p>
 					<label for="wppo_delay_disabled">
@@ -279,6 +331,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									<th scope="col" style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>
 									<th scope="col"><?php esc_html_e( 'Handle', 'performance-optimisation' ); ?></th>
 									<th scope="col"><?php esc_html_e( 'Source', 'performance-optimisation' ); ?></th>
+									<th scope="col" style="width: 90px;"><?php esc_html_e( 'Size', 'performance-optimisation' ); ?></th>
 									<th scope="col" style="width: 130px;"><?php esc_html_e( 'Delay Strategy', 'performance-optimisation' ); ?></th>
 									<th scope="col" style="width: 90px;"><?php esc_html_e( 'Priority', 'performance-optimisation' ); ?></th>
 								</tr>
@@ -320,6 +373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 										<td>
 											<small><?php echo esc_html( $script['src'] ); ?></small>
 										</td>
+										<td><?php echo esc_html( self::format_asset_size( $script['size'] ?? null ) ); ?></td>
 										<td>
 											<select
 												name="wppo_delay_strategies[<?php echo esc_attr( $script['handle'] ); ?>]"
@@ -377,6 +431,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									<th scope="col" style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>
 									<th scope="col"><?php esc_html_e( 'Handle', 'performance-optimisation' ); ?></th>
 									<th scope="col"><?php esc_html_e( 'Source', 'performance-optimisation' ); ?></th>
+									<th scope="col" style="width: 90px;"><?php esc_html_e( 'Size', 'performance-optimisation' ); ?></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -412,6 +467,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 										<td>
 											<small><?php echo esc_html( $style['src'] ); ?></small>
 										</td>
+										<td><?php echo esc_html( self::format_asset_size( $style['size'] ?? null ) ); ?></td>
 									</tr>
 								<?php endforeach; ?>
 							</tbody>
@@ -473,7 +529,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			// independently of the preload-URLs textarea above so a request
 			// omitting one field still persists/deletes the other.
 			//
-			// @since NEXT.
+			// @since 2.2.0.
 			if ( isset( $_POST['wppo_lcp_preload_url'] ) ) {
 				$raw_lcp = $this->get_raw_post_string( 'wppo_lcp_preload_url' );
 				$raw_lcp = trim( $raw_lcp );
@@ -496,7 +552,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			// the signal-driven hero preload + lazy exclusion. Checkbox-only;
 			// absent (unchecked) deletes the meta so the default stays enabled.
 			//
-			// @since NEXT.
+			// @since 2.2.0.
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_preload_image_nonce.
 			$disable_auto_lcp = isset( $_POST['wppo_disable_auto_lcp'] ) && ! empty( $_POST['wppo_disable_auto_lcp'] );
 			if ( $disable_auto_lcp ) {
@@ -535,10 +591,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				return;
 			}
 
+			// One-click revert: clears every per-page disable on this page only.
+			// Site-wide settings are never touched; other per-page toggles
+			// below still save normally.
+			//
+			// @since NEXT.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			$revert_all = isset( $_POST['wppo_asset_manager_revert'] ) && ! empty( $_POST['wppo_asset_manager_revert'] );
+
 			// Capture assets for whitelisting.
-			$assets        = Asset_Manager::get_page_assets( $post_id );
-			$valid_scripts = array();
-			$valid_styles  = array();
+			$assets = class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ? Asset_Manager::get_page_assets( $post_id ) : false;
+
+			// MB10 guard: with no capture yet there is nothing valid to
+			// whitelist against, so preserve the existing asset-list meta
+			// instead of overwriting it to []. Revert still applies (it
+			// deletes). Kill-switches/presets/notes below always save.
+			$has_capture = is_array( $assets ) && ( ! empty( $assets['scripts'] ) || ! empty( $assets['styles'] ) );
+
+			$valid_scripts     = array();
+			$valid_styles      = array();
+			$protected_scripts = class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ? Asset_Manager::get_protected_scripts() : array();
+			$protected_styles  = class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ? Asset_Manager::get_protected_styles() : array();
 
 			if ( is_array( $assets ) ) {
 				if ( ! empty( $assets['scripts'] ) && is_array( $assets['scripts'] ) ) {
@@ -549,22 +622,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				}
 			}
 
-			// Process and whitelist disabled scripts and styles.
-			$raw_scripts = $this->get_raw_post_array( 'wppo_disabled_scripts' );
-			$raw_styles  = $this->get_raw_post_array( 'wppo_disabled_styles' );
+			if ( $revert_all ) {
+				delete_post_meta( $post_id, '_wppo_disabled_scripts' );
+				delete_post_meta( $post_id, '_wppo_disabled_styles' );
+				delete_post_meta( $post_id, '_wppo_delay_strategies' );
+				delete_post_meta( $post_id, '_wppo_delay_priorities' );
+				self::clear_blocked_notice( (int) $post_id );
+			} elseif ( $has_capture ) {
+				// Process and whitelist disabled scripts and styles. Writes
+				// are per-post meta only, never site-wide. Protected handles
+				// are stripped here (in addition to the dequeue guard) and
+				// surfaced as a notice on the next metabox render.
+				$raw_scripts = $this->get_raw_post_array( 'wppo_disabled_scripts' );
+				$raw_styles  = $this->get_raw_post_array( 'wppo_disabled_styles' );
 
-			update_post_meta( $post_id, '_wppo_disabled_scripts', $this->process_disabled_assets( $raw_scripts, $valid_scripts ) );
-			update_post_meta( $post_id, '_wppo_disabled_styles', $this->process_disabled_assets( $raw_styles, $valid_styles ) );
+				$disabled_scripts = $this->process_disabled_assets( $raw_scripts, $valid_scripts );
+				$disabled_styles  = $this->process_disabled_assets( $raw_styles, $valid_styles );
 
-			// Process per-page delay strategies.
-			$raw_strategies     = $this->get_raw_post_array( 'wppo_delay_strategies' );
-			$allowed_strategies = array( '', 'interaction', 'idle', 'viewport' );
-			update_post_meta( $post_id, '_wppo_delay_strategies', $this->process_delay_setting( $raw_strategies, $valid_scripts, $allowed_strategies ) );
+				$blocked = array();
+				foreach ( $disabled_scripts as $handle ) {
+					if ( in_array( $handle, $protected_scripts, true ) ) {
+						$blocked[] = $handle;
+					}
+				}
+				foreach ( $disabled_styles as $handle ) {
+					if ( in_array( $handle, $protected_styles, true ) ) {
+						$blocked[] = $handle;
+					}
+				}
+				if ( ! empty( $blocked ) ) {
+					$blocked          = array_values( array_unique( $blocked ) );
+					$disabled_scripts = array_values( array_diff( $disabled_scripts, $protected_scripts ) );
+					$disabled_styles  = array_values( array_diff( $disabled_styles, $protected_styles ) );
+					self::set_blocked_notice( (int) $post_id, $blocked );
+				}
 
-			// Process per-page delay priorities.
-			$raw_priorities     = $this->get_raw_post_array( 'wppo_delay_priorities' );
-			$allowed_priorities = array( '', 'high', 'normal', 'low' );
-			update_post_meta( $post_id, '_wppo_delay_priorities', $this->process_delay_setting( $raw_priorities, $valid_scripts, $allowed_priorities ) );
+				update_post_meta( $post_id, '_wppo_disabled_scripts', $disabled_scripts );
+				update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
+			}
+
+			// Process per-page delay strategies/priorities only when not
+			// reverting (a revert deletes them above and must not recreate them
+			// from the submitted selects) and only with a capture to whitelist
+			// against (MB10: no capture preserves existing meta).
+			// Protected handles stripped: crafted POST input must not pin
+			// overrides onto core handles.
+			if ( ! $revert_all && $has_capture ) {
+				$raw_strategies     = $this->get_raw_post_array( 'wppo_delay_strategies' );
+				$allowed_strategies = array( '', 'interaction', 'idle', 'viewport' );
+				$strategies         = $this->process_delay_setting( $raw_strategies, $valid_scripts, $allowed_strategies );
+				foreach ( array_keys( $strategies ) as $handle ) {
+					if ( in_array( $handle, $protected_scripts, true ) ) {
+						unset( $strategies[ $handle ] );
+					}
+				}
+				update_post_meta( $post_id, '_wppo_delay_strategies', $strategies );
+
+				// Process per-page delay priorities (same protected guardrail).
+				$raw_priorities     = $this->get_raw_post_array( 'wppo_delay_priorities' );
+				$allowed_priorities = array( '', 'high', 'normal', 'low' );
+				$priorities         = $this->process_delay_setting( $raw_priorities, $valid_scripts, $allowed_priorities );
+				foreach ( array_keys( $priorities ) as $handle ) {
+					if ( in_array( $handle, $protected_scripts, true ) ) {
+						unset( $priorities[ $handle ] );
+					}
+				}
+				update_post_meta( $post_id, '_wppo_delay_priorities', $priorities );
+			}
 
 			// Per-page Delay JS kill-switch + notes (issue #966). Checkbox-only
 			// (no JS); notes capped at 2000 chars, informational only.
@@ -660,6 +784,126 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				delete_post_meta( $post_id, '_wppo_delay_notes' );
 			} else {
 				update_post_meta( $post_id, '_wppo_delay_notes', $notes );
+			}
+		}
+
+		/**
+		 * Format a captured asset size for the metabox Size column.
+		 *
+		 * @param  mixed $size Size in bytes (int) or null when unknown.
+		 * @since  NEXT
+		 * @return string Human-readable size (e.g. `12.3 KB`) or an em dash when unknown.
+		 */
+		public static function format_asset_size( $size ): string {
+			if ( ! is_int( $size ) || $size < 0 ) {
+				return '—';
+			}
+			if ( $size < 1024 ) {
+				return $size . ' B';
+			}
+			if ( $size < 1048576 ) {
+				return number_format( $size / 1024, 1 ) . ' KB';
+			}
+			return number_format( $size / 1048576, 2 ) . ' MB';
+		}
+
+		/**
+		 * Transient key for the per-page protected-handle blocked notice.
+		 *
+		 * Multisite-safe via {@see Util::transient_key()}; per-post so there
+		 * is no cross-site leakage.
+		 *
+		 * @param  int $post_id The post ID.
+		 * @since  NEXT
+		 * @return string The transient key.
+		 */
+		private static function blocked_notice_key( int $post_id ): string {
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+				return Util::transient_key( 'wppo_asset_manager_blocked_' . $post_id );
+			}
+			return 'wppo_asset_manager_blocked_' . $post_id;
+		}
+
+		/**
+		 * Store the list of protected handles blocked on the last save.
+		 *
+		 * Flash notice, shown once on the next metabox render.
+		 *
+		 * @param  int   $post_id The post ID.
+		 * @param  array $handles Blocked handles.
+		 * @since  NEXT
+		 * @return void
+		 */
+		private static function set_blocked_notice( int $post_id, array $handles ): void {
+			if ( $post_id <= 0 || empty( $handles ) ) {
+				return;
+			}
+			if ( ! function_exists( 'set_transient' ) ) {
+				return;
+			}
+			try {
+				set_transient( self::blocked_notice_key( $post_id ), array_values( array_unique( array_map( 'strval', $handles ) ) ), HOUR_IN_SECONDS );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Consume (read + delete) the blocked-handle flash notice.
+		 *
+		 * @param  int $post_id The post ID.
+		 * @since  NEXT
+		 * @return array Blocked handles, or empty when none pending.
+		 */
+		private static function consume_blocked_notice( int $post_id ): array {
+			if ( $post_id <= 0 ) {
+				return array();
+			}
+			if ( ! function_exists( 'get_transient' ) ) {
+				return array();
+			}
+			try {
+				$key     = self::blocked_notice_key( $post_id );
+				$blocked = get_transient( $key );
+				if ( ! is_array( $blocked ) || isset( $blocked['scripts'] ) || isset( $blocked['styles'] ) ) {
+					return array();
+				}
+				foreach ( $blocked as $handle ) {
+					if ( ! is_string( $handle ) || '' === $handle ) {
+						return array();
+					}
+				}
+				if ( count( $blocked ) > 50 ) {
+					$blocked = array_slice( array_values( $blocked ), 0, 50 );
+				}
+				if ( ! empty( $blocked ) && function_exists( 'delete_transient' ) ) {
+					delete_transient( $key );
+				}
+				return array_values( $blocked );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Clear any pending blocked-handle notice (used by one-click revert).
+		 *
+		 * @param  int $post_id The post ID.
+		 * @since  NEXT
+		 * @return void
+		 */
+		private static function clear_blocked_notice( int $post_id ): void {
+			if ( $post_id <= 0 ) {
+				return;
+			}
+			if ( ! function_exists( 'delete_transient' ) ) {
+				return;
+			}
+			try {
+				delete_transient( self::blocked_notice_key( $post_id ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 

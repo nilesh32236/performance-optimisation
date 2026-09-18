@@ -78,7 +78,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * repeated inline_ccss() invocations emit the hint once. Reset via
 		 * reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string, bool>
 		 */
 		private static array $lcp_preload_emitted = array();
@@ -91,7 +91,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * stylesheets normally instead of deferring them with zero critical
 		 * CSS on the page. Reset via reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string, bool>
 		 */
 		private static array $ccss_defer_blocked = array();
@@ -196,7 +196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * while RUM-worst-first ordering ensures the render-blocking bytes go
 		 * first. Overridable per site via `file_optimisation.ccssQueueCap`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const DEFAULT_CCSS_QUEUE_CAP = 5;
@@ -204,7 +204,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Hard upper bound for the CCSS per-run cap read.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MAX_CCSS_QUEUE_CAP = 100;
@@ -219,7 +219,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * generation (~5–10s). Overridable per site via
 		 * `file_optimisation.ccssGenTimeout`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const DEFAULT_CCSS_GEN_TIMEOUT = 25;
@@ -230,10 +230,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * A rogue setting can never mean unbounded: oversized values clamp
 		 * here, non-numeric/missing values fall back to the default.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MAX_CCSS_GEN_TIMEOUT = 120;
+
+		/**
+		 * Default gzipped inline budget in bytes for critical CSS (14 KB).
+		 *
+		 * Bounds the transfer weight of inlined critical CSS (issue #1388):
+		 * output whose gzipped size exceeds the budget is never inlined —
+		 * the page falls back to the deferred full stylesheet plus used CSS
+		 * only. Overridable per site via
+		 * `file_optimisation.ccssInlineBudgetKb`.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DEFAULT_CCSS_INLINE_BUDGET_BYTES = 14336;
+
+		/**
+		 * Minimum gzipped inline budget in bytes (1 KB, issue #1388).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MIN_CCSS_INLINE_BUDGET_BYTES = 1024;
+
+		/**
+		 * Maximum gzipped inline budget in bytes (100 KB, issue #1388).
+		 *
+		 * A rogue setting can never mean unbounded: oversized values clamp
+		 * here, non-numeric/missing values fall back to the default.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MAX_CCSS_INLINE_BUDGET_BYTES = 102400;
 
 		/**
 		 * Hard cap in bytes for the concatenated source CSS scanned in one
@@ -243,7 +276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * stylesheet cannot OOM the worker before the deadline polls run.
 		 * Per-stylesheet appends stop once the buffer exceeds this size.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MAX_CCSS_SOURCE_BYTES = 2097152;
@@ -256,7 +289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * ~1111 sequential fetches) so fast origins cannot burn hundreds of
 		 * requests inside one budget.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MAX_CCSS_FETCHES = 30;
@@ -264,7 +297,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Per-file cap in bytes applied before regex/recursion (issue #1235).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MAX_CCSS_FILE_BYTES = 524288;
@@ -276,7 +309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Prevents a permanently-slow origin from burning a full
 		 * 25-120s synchronous worker on every cycle forever.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MAX_CCSS_TIMEOUT_ATTEMPTS = 5;
@@ -288,7 +321,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * so fetching them for critical/used CSS only burns queries + CPU
 		 * (issue #1274). Skipped with a `skipped` status, never error-looped.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private const DEFAULT_EXCLUDED_POST_TYPES = array( 'fl-builder-template', 'elementor_library' );
@@ -296,7 +329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Default bounded-retry cap for generic generation failures.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const DEFAULT_CCSS_MAX_RETRIES = 5;
@@ -309,7 +342,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * (MAX_CCSS_TIMEOUT_ATTEMPTS) can never silently change the generic
 		 * retry cap.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MAX_CCSS_MAX_RETRIES = 5;
@@ -322,7 +355,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * starve image/PageSpeed/used-CSS jobs; the 60s stagger in
 		 * regenerate_all() spaces start times on top of the separation.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		private const CCSS_AS_GROUP = 'wppo-ccss';
@@ -333,7 +366,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Single source so get_ccss_file(), is_valid_template_hash() and
 		 * get_ccss_variant_file() can never drift on charset/length.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		private const TEMPLATE_HASH_PATTERN = '/^[A-Za-z0-9_\-]{1,128}$/';
@@ -341,7 +374,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Cached microtime() availability probe for the hot deadline path.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool|null
 		 */
 		private static ?bool $has_microtime = null;
@@ -356,7 +389,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * added mid-request can never serve a stale list. Reset via
 		 * reset_excluded_post_types_memo() (unit tests).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]|null
 		 */
 		private static ?array $excluded_memo = null;
@@ -366,7 +399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * single-template lookups in one request share one theme-directory
 		 * scan (issue #1274 review). Reset via reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string, string>|null
 		 */
 		private static ?array $templates_memo = null;
@@ -380,10 +413,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * keyed by hook+args absorbs repeats within one request; the
 		 * status-cache pending/queued gate already absorbs most repeats.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string, bool>
 		 */
 		private static array $pending_memo = array();
+
+		/**
+		 * Per-request memo of gzipped transfer sizes keyed by md5(css).
+		 *
+		 * Level-9 gzencode() is the most expensive compression level; the
+		 * budget guard may probe the same payload twice in one request
+		 * (inline + budget helpers), so memoize per content hash. Bounded
+		 * (20 entries, FIFO evict) so unbounded CSS cannot grow memory.
+		 * Reset via reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var array<string, int>
+		 */
+		private static array $gzip_size_memo = array();
+
+		/**
+		 * Per-request memo of the commerce-context verdict (issue #1388 review).
+		 *
+		 * The is_commerce_context() check fans out to conditional tags + option reads;
+		 * defer_stylesheets() called it once per stylesheet tag. Null means
+		 * uncomputed. Reset via reset_ccss_memo() (tests reset between cases).
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $commerce_context_memo = null;
+
+		/**
+		 * Per-request memo of the combined commerce-exclusion verdict.
+		 *
+		 * Shared by inline_ccss() and defer_stylesheets() so one request pays
+		 * one settings + context evaluation. Null means uncomputed. Reset via
+		 * reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $commerce_excluded_context_memo = null;
 
 		/**
 		 * Viewport-split variant slugs (issue #1164).
@@ -392,7 +463,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * variant. Missing or stale variant files fall back to the single
 		 * CCSS (or the deferred full stylesheet) — never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		public const VIEWPORT_VARIANTS = array( 'mobile', 'desktop' );
@@ -535,6 +606,296 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Read the configured gzipped inline budget in bytes (issue #1388).
+		 *
+		 * The single source of truth is `Util::get_default_settings()`
+		 * (`file_optimisation.ccssInlineBudgetKb`, default 14 KB). Missing
+		 * or out-of-range values fail open to
+		 * DEFAULT_CCSS_INLINE_BUDGET_BYTES so inline output is always
+		 * bounded. Filterable via `wppo_ccss_inline_budget` when a listener
+		 * is registered; invalid filter output is ignored and oversized
+		 * values clamp, so a rogue filter can never uncap inline weight.
+		 *
+		 * @return int Budget in bytes, clamped to MIN..MAX_CCSS_INLINE_BUDGET_BYTES.
+		 * @since NEXT
+		 * @see Critical_CSS::get_ccss_max_size()
+		 */
+		public static function get_ccss_inline_budget_bytes(): int {
+			try {
+				$options = Util::get_settings();
+				$raw     = $options['file_optimisation']['ccssInlineBudgetKb'] ?? 14;
+				$kb      = function_exists( 'absint' ) ? absint( $raw ) : abs( (int) $raw );
+				if ( $kb < 1 || $kb > 100 ) {
+					$kb = 14;
+				}
+				$budget = $kb * 1024;
+				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_inline_budget' ) ) {
+					$filtered = apply_filters( 'wppo_ccss_inline_budget', $budget );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
+						$budget = (int) $filtered;
+					}
+				}
+				return min( max( $budget, self::MIN_CCSS_INLINE_BUDGET_BYTES ), self::MAX_CCSS_INLINE_BUDGET_BYTES );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::DEFAULT_CCSS_INLINE_BUDGET_BYTES;
+			}
+		}
+
+		/**
+		 * Measure the gzipped transfer size of CSS output (issue #1388).
+		 *
+		 * Uses gzencode() level 9 when available so the budget check tracks
+		 * what the browser actually downloads; falls back to raw strlen()
+		 * when zlib is unavailable (fail-open, never fatal). Results are
+		 * memoized per content hash per request (bounded, 20 entries) so
+		 * repeated budget probes on the frontend hot path pay compression once.
+		 *
+		 * @param string $css CSS content.
+		 * @return int Gzipped size in bytes, or raw size without zlib.
+		 * @since NEXT
+		 */
+		public static function gzipped_size( string $css ): int {
+			if ( '' === $css ) {
+				return 0;
+			}
+			try {
+				$memo_key = md5( $css );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$memo_key = '';
+			}
+			if ( '' !== $memo_key && array_key_exists( $memo_key, self::$gzip_size_memo ) ) {
+				return self::$gzip_size_memo[ $memo_key ];
+			}
+			$size = strlen( $css );
+			try {
+				if ( function_exists( 'gzencode' ) ) {
+					$encoded = gzencode( $css, 9 );
+					if ( is_string( $encoded ) && '' !== $encoded ) {
+						$size = strlen( $encoded );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( '' !== $memo_key ) {
+				if ( count( self::$gzip_size_memo ) >= 20 ) {
+					array_shift( self::$gzip_size_memo );
+				}
+				self::$gzip_size_memo[ $memo_key ] = $size;
+			}
+			return $size;
+		}
+
+		/**
+		 * Whether CSS output exceeds the gzipped inline budget (issue #1388).
+		 *
+		 * Fail-open: any failure reports over-budget (never inline unbounded
+		 * output), except empty input which is never over budget.
+		 *
+		 * @param string $css CSS content.
+		 * @return bool True when the gzipped size exceeds the inline budget.
+		 * @since NEXT
+		 */
+		public static function is_over_inline_budget( string $css ): bool {
+			if ( '' === $css ) {
+				return false;
+			}
+			try {
+				return self::gzipped_size( $css ) > self::get_ccss_inline_budget_bytes();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether cart/checkout inline critical CSS is excluded (issue #1388).
+		 *
+		 * Reads `file_optimisation.ccssCommerceExclude` (default true).
+		 * Fail-open to excluded when the setting cannot be read, so dynamic
+		 * commerce pages never risk stale inlined CSS.
+		 *
+		 * @return bool True when commerce exclusion is active.
+		 * @since NEXT
+		 */
+		public static function is_commerce_excluded(): bool {
+			try {
+				$options = Util::get_settings();
+				if ( ! isset( $options['file_optimisation']['ccssCommerceExclude'] ) ) {
+					return true;
+				}
+				return ! empty( $options['file_optimisation']['ccssCommerceExclude'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether the current request is a cart/checkout context (issue #1388).
+		 *
+		 * Guards every WooCommerce conditional with function_exists() plus a
+		 * legacy fallback (cart/checkout page-ID options) so the exclusion
+		 * holds even when conditional tags are unavailable. A cart-session
+		 * cookie alone deliberately never marks the request as commerce:
+		 * cookies are present on every page (home, blog, product) for any
+		 * shopper with items in the cart, so consulting them would disable
+		 * critical CSS site-wide for exactly the users being optimized. Only
+		 * cart/checkout pages are commerce contexts. Result is memoized per
+		 * request (reset via reset_ccss_memo()). Must only be called after
+		 * the main query is set up (after parse_query): an early call before
+		 * conditional tags resolve would memoize a premature "not commerce"
+		 * verdict for the later inline_ccss()/defer_stylesheets() consumers
+		 * (which run post-query at wp_head/style_loader_tag). Fail-open to false: any
+		 * failure reports "not commerce" and the caller keeps current
+		 * behaviour.
+		 *
+		 * @return bool True on cart/checkout pages.
+		 * @since NEXT
+		 */
+		public static function is_commerce_context(): bool {
+			if ( null !== self::$commerce_context_memo ) {
+				return self::$commerce_context_memo;
+			}
+			$result = false;
+			try {
+				if ( function_exists( 'is_cart' ) ) {
+					try {
+						if ( is_cart() ) {
+							$result = true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! $result && function_exists( 'is_checkout' ) ) {
+					try {
+						if ( is_checkout() ) {
+							$result = true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Legacy fallback: WooCommerce cart/checkout page IDs work
+				// even when conditional tags are not loaded yet.
+				if ( ! $result && function_exists( 'get_option' ) ) {
+					try {
+						$cart_id     = (int) get_option( 'woocommerce_cart_page_id', 0 );
+						$checkout_id = (int) get_option( 'woocommerce_checkout_page_id', 0 );
+						if ( ( $cart_id > 0 || $checkout_id > 0 ) ) {
+							$current = 0;
+							if ( function_exists( 'get_queried_object_id' ) ) {
+								try {
+									$current = (int) get_queried_object_id();
+								} catch ( \Throwable $e ) {
+									unset( $e );
+									$current = 0;
+								}
+							}
+							if ( 0 === $current && function_exists( 'get_the_ID' ) ) {
+								try {
+									$current = (int) get_the_ID();
+								} catch ( \Throwable $e ) {
+									unset( $e );
+									$current = 0;
+								}
+							}
+							if ( $current > 0 && ( $current === $cart_id || $current === $checkout_id ) ) {
+								$result = true;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$result = false;
+			}
+			self::$commerce_context_memo = $result;
+			return $result;
+		}
+
+		/**
+		 * Whether commerce exclusion applies to the current request (issue #1388 review).
+		 *
+		 * Memoized union of is_commerce_excluded() + is_commerce_context()
+		 * shared by inline_ccss() and defer_stylesheets() so one request pays
+		 * one settings + context evaluation instead of one per stylesheet tag.
+		 * Reset via reset_ccss_memo(). Fail-open to false.
+		 *
+		 * @return bool True when inline/deferral must yield to normal stylesheets.
+		 * @since NEXT
+		 */
+		private static function is_commerce_excluded_context(): bool {
+			if ( null !== self::$commerce_excluded_context_memo ) {
+				return self::$commerce_excluded_context_memo;
+			}
+			try {
+				$result = self::is_commerce_excluded() && self::is_commerce_context();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$result = false;
+			}
+			self::$commerce_excluded_context_memo = $result;
+			return $result;
+		}
+
+		/**
+		 * Human-readable label for the configured gzipped inline budget (issue #1388 review).
+		 *
+		 * Derived from get_ccss_inline_budget_bytes() so admin notices and
+		 * activity-log warnings never hardcode "14 KB" while the budget is
+		 * configurable (1–100 KB + wppo_ccss_inline_budget filter).
+		 *
+		 * @return string e.g. "14 KB" or "2.5 KB".
+		 * @since NEXT
+		 */
+		public static function get_ccss_inline_budget_label(): string {
+			try {
+				$bytes = self::get_ccss_inline_budget_bytes();
+				if ( 0 === ( $bytes % 1024 ) ) {
+					return sprintf( '%d KB', (int) ( $bytes / 1024 ) );
+				}
+				$kb = $bytes / 1024;
+				return sprintf( '%.1f KB', $kb );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '14 KB';
+			}
+		}
+
+		/**
+		 * Whether checksum-triggered CCSS regen on save is enabled (issue #1388).
+		 *
+		 * Reads `file_optimisation.ccssChecksumRegen` (default true).
+		 * Fail-open to enabled when the setting cannot be read. Set
+		 * `file_optimisation.ccssChecksumRegen` to false to opt out: the
+		 * frontend stale probe in maybe_check_stale_and_requeue() and the
+		 * save_post requeue in maybe_regen_on_save() both stay inert, and
+		 * empty-safelist sites keep the pre-#1038 behaviour verbatim (no
+		 * per-view checksum file reads for stored variants).
+		 *
+		 * @return bool True when checksum regen is active.
+		 * @since NEXT
+		 */
+		public static function is_checksum_regen_enabled(): bool {
+			try {
+				$options = Util::get_settings();
+				if ( ! isset( $options['file_optimisation']['ccssChecksumRegen'] ) ) {
+					return true;
+				}
+				return ! empty( $options['file_optimisation']['ccssChecksumRegen'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Read the configured per-run CCSS queue cap (issue #1164).
 		 *
 		 * The single source of truth is `Util::get_default_settings()`
@@ -550,7 +911,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * `get_ccss_queue_cap()` alias; both are kept as-is.
 		 *
 		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
-		 * @since NEXT Filterable via `wppo_ccss_queue_cap`.
+		 * @since 2.2.0 Filterable via `wppo_ccss_queue_cap`.
 		 * @see Critical_CSS::get_ccss_gen_timeout()
 		 * @see Critical_CSS::get_ccss_queue_cap()
 		 */
@@ -587,7 +948,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * deprecated alias for backward compatibility.
 		 *
 		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @see Critical_CSS::get_css_queue_cap()
 		 */
 		public static function get_ccss_queue_cap(): int {
@@ -607,7 +968,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * when a listener is registered.
 		 *
 		 * @return int Budget in seconds, clamped to 1..MAX_CCSS_GEN_TIMEOUT.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_ccss_gen_timeout(): int {
 			try {
@@ -647,7 +1008,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string|string[]|mixed $raw Raw slugs.
 		 * @return string[] Validated lowercase slugs.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function parse_excluded_slugs( $raw ): array {
 			$items = array();
@@ -695,7 +1056,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Multisite-safe: per-site option reads only.
 		 *
 		 * @return string[] Excluded post type slugs.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_excluded_post_types(): array {
 			try {
@@ -747,7 +1108,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * between cases so the second case re-parses.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function reset_excluded_post_types_memo(): void {
 			self::$excluded_memo = null;
@@ -763,7 +1124,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string                    $template Template slug or template hash.
 		 * @param array<string,string>|null $templates Optional pre-enumerated template map (reuses the caller's scan).
 		 * @return string Canonical slug, or '' when unknown.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function resolve_template_slug( string $template, ?array $templates = null ): string {
 			try {
@@ -799,7 +1160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string                    $template Template slug or template hash.
 		 * @param array<string,string>|null $templates Optional pre-enumerated template map (reuses the caller's scan).
 		 * @return bool True when the slug or hash resolves to a template.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_known_template( string $template, ?array $templates = null ): bool {
 			return '' !== self::resolve_template_slug( $template, $templates );
@@ -810,7 +1171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $post_type Post type slug.
 		 * @return bool True when excluded.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_post_type_excluded( string $post_type ): bool {
 			try {
@@ -833,7 +1194,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param int $post_id Post ID.
 		 * @return bool True when the post should be skipped.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_excluded_post( int $post_id ): bool {
 			try {
@@ -860,7 +1221,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * `wppo_ccss_max_retries` when a listener is registered.
 		 *
 		 * @return int Retry cap, 0..MAX_CCSS_MAX_RETRIES.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_ccss_max_retries(): int {
 			try {
@@ -889,7 +1250,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return int Consecutive generic failure count.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function get_ccss_generation_attempts( string $template_hash ): int {
 			try {
@@ -911,7 +1272,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function clear_ccss_generation_attempts( string $template_hash ): void {
 			try {
@@ -933,7 +1294,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * generation_deadline()/generation_expired()/request_timeout_for_deadline().
 		 *
 		 * @return float Now.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function generation_now(): float {
 			if ( null === self::$has_microtime ) {
@@ -953,7 +1314,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param int $budget Budget in seconds.
 		 * @return float Unix timestamp (fractions) when the budget expires.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function generation_deadline( int $budget ): float {
 			return self::generation_now() + (float) max( $budget, 1 );
@@ -967,7 +1328,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param float|null $deadline Absolute deadline, or null when uncapped.
 		 * @return bool True when the budget is exhausted.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function generation_expired( ?float $deadline ): bool {
 			if ( null === $deadline ) {
@@ -990,7 +1351,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param float|null $deadline Absolute deadline, or null for the default.
 		 * @param int        $fallback Historical per-request timeout in seconds.
 		 * @return int Timeout in seconds, 0 when exhausted, otherwise 1..$fallback.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function request_timeout_for_deadline( ?float $deadline, int $fallback ): int {
 			if ( null === $deadline ) {
@@ -1012,7 +1373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param mixed $hash Candidate hash.
 		 * @return bool True when the hash is a valid template hash.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function is_valid_template_hash( $hash ): bool {
 			return is_string( $hash ) && '' !== $hash && 1 === preg_match( self::TEMPLATE_HASH_PATTERN, $hash );
@@ -1026,7 +1387,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param float|null $deadline Optional caller-supplied deadline.
 		 * @return array{0:int,1:float|null} Budget and absolute deadline.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function resolve_generation_budget( ?float $deadline = null ): array {
 			$budget = self::DEFAULT_CCSS_GEN_TIMEOUT;
@@ -1079,7 +1440,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param int        $budget        Budget in seconds that was exhausted.
 		 * @param float|null $deadline      Absolute deadline, or null when uncapped.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function record_generation_failure( string $template_hash, int $budget, ?float $deadline ): void {
 			try {
@@ -1173,7 +1534,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string   $template_hash Template hash to retry.
 		 * @param int|null $attempts      Optional pre-read attempt count for the backoff (generic-retry path passes its own counter so generic failures back off exponentially too; null reads the timeout counter).
 		 * @return array{id:int,pending:bool} `id` is the new action ID (>0) when a job was inserted; `pending` tells whether a job is now verifiably pending (new insert, lost unique-race, or WP-Cron fallback).
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function schedule_ccss_retry( string $template_hash, ?int $attempts = null ): array {
 			$none = array(
@@ -1234,7 +1595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Fail-open: any missing API or exception reports no pending job
 		 * rather than fataling the caller.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $hook      Action hook.
 		 * @param array  $hook_args Wrapped action arguments.
 		 * @param int    $timestamp When the job will run.
@@ -1331,7 +1692,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return int Consecutive timeout count.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function get_ccss_timeout_attempts( string $template_hash ): int {
 			try {
@@ -1353,7 +1714,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function clear_ccss_timeout_attempts( string $template_hash ): void {
 			try {
@@ -1375,7 +1736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function clear_ccss_retry_state( string $template_hash ): void {
 			try {
@@ -1404,7 +1765,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $template_hash Template hash that timed out.
 		 * @param int    $budget        Budget in seconds that was exhausted.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function handle_ccss_timeout( string $template_hash, int $budget ): void {
 			if ( ! self::is_valid_template_hash( $template_hash ) ) {
@@ -1533,7 +1894,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string    $template      Template identifier for the sample URL.
 		 * @param bool|null $timed_out     Out-param: true when the run hit the timeout budget.
 		 * @return bool True on success, false on failure or timeout.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function generate_guarded( string $template_hash, string $template, ?bool &$timed_out = null ): bool {
 			$timed_out = false;
@@ -1632,7 +1993,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * behaviour verbatim). Fail-open: any error returns false.
 		 *
 		 * @return bool True when split variants should be emitted/served.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_viewport_variants_enabled(): bool {
 			try {
@@ -1658,7 +2019,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $template_hash Template hash.
 		 * @param string $variant       Variant slug ('mobile'|'desktop').
 		 * @return string Full file path, or '' when refused.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_ccss_variant_file( string $template_hash, string $variant ): string {
 			if ( ! in_array( $variant, self::VIEWPORT_VARIANTS, true ) ) {
@@ -1686,7 +2047,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $template_hash Template hash.
 		 * @param string $variant       Variant slug ('mobile'|'desktop').
 		 * @return string|null Variant or single CCSS content, or null when missing.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_ccss_variant_content( string $template_hash, string $variant ): ?string {
 			try {
@@ -1733,7 +2094,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $template_hash Template hash.
 		 * @param string $variant       Variant slug ('mobile'|'desktop').
 		 * @return bool True when the variant must not be served.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_variant_stale( string $template_hash, string $variant ): bool {
 			try {
@@ -1765,7 +2126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function invalidate_stale_variants( string $template_hash ): void {
 			try {
@@ -1810,7 +2171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $handle Stylesheet handle.
 		 * @param string $href   Stylesheet URL (optional, substring match).
 		 * @return bool True when the handle must load normally.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_block_library_defer_exempt( string $handle, string $href = '' ): bool {
 			foreach ( self::SKIP_DEFER_HANDLES as $skip ) {
@@ -1848,7 +2209,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param int|null $post_id Optional post ID to inspect.
 		 * @return bool True when Elementor handling applies.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_elementor_context( ?int $post_id = null ): bool {
 			try {
@@ -1937,7 +2298,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $html       Page HTML.
 		 * @param string $purged_css Purged/used CSS candidate.
 		 * @return bool True when it is safe to serve the purged CSS.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function passes_elementor_smoke( string $html, string $purged_css ): bool {
 			if ( class_exists( 'PerformanceOptimise\Inc\Css_Safelist' ) ) {
@@ -1986,7 +2347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * no-churn behaviour when no user safelist is configured.
 		 *
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_ccss_safelist_presets(): array {
 			$presets = class_exists( 'PerformanceOptimise\Inc\Css_Safelist' )
@@ -2009,7 +2370,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			 * Filters the built-in Critical CSS safelist presets.
 			 *
 			 * @param string[] $presets Built-in safelisted selectors.
-			 * @since NEXT
+			 * @since 2.2.0
 			 */
 			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_ccss_safelist_presets' ) ) {
 				$filtered = apply_filters( 'wppo_ccss_safelist_presets', $presets );
@@ -2145,7 +2506,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * only — no remote fetch.
 		 *
 		 * @return string[] Merged safelisted selectors.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function get_ccss_effective_safelist(): array {
 			try {
@@ -2437,7 +2798,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *                             (issue #1235 review).
 		 * @return string Concatenated source CSS, or '' when none resolve locally.
 		 * @since 2.0.0
-		 * @since NEXT Optional deadline-aware early break.
+		 * @since 2.2.0 Optional deadline-aware early break.
 		 */
 		private static function build_local_source_css( array $urls, ?float $deadline = null ): string {
 			$combined = '';
@@ -2683,13 +3044,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * immediately without local reads, and the verdict is memoized per
 		 * template per request.
 		 *
-		 * Inert without a user safelist: the checksum auto-regen is part of the
-		 * `ccssSafelistExtra` feature (issue #1038), so an empty safelist keeps
-		 * the pre-feature behaviour verbatim — no new regeneration churn.
+		 * Inert without a user safelist or checksum regen: the checksum
+		 * auto-regen is part of the `ccssSafelistExtra` feature (issue
+		 * #1038), so an empty safelist keeps the pre-feature behaviour
+		 * verbatim — no new regeneration churn — unless the additive
+		 * `ccssChecksumRegen` setting (issue #1388, default true) opts the
+		 * site into checksum-triggered regen.
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return bool True when the stored variant was dropped as stale.
 		 * @since 2.0.0
+		 * @since NEXT Also activates via `ccssChecksumRegen` (issue #1388).
 		 */
 		public static function maybe_check_stale_and_requeue( string $template_hash ): bool {
 			if ( '' === $template_hash ) {
@@ -2719,9 +3084,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 			$result = false;
 			try {
-				// Fail-open gate: no user safelist configured means the feature
-				// is off — preserve the pre-#1038 behaviour (no regeneration).
-				if ( array() !== self::get_ccss_safelist() && function_exists( 'get_transient' ) ) {
+				// Fail-open gate: no user safelist configured and no
+				// checksum-regen opt-in means the feature is off — preserve
+				// the pre-#1038 behaviour (no regeneration).
+				$checksum_regen = self::is_checksum_regen_enabled();
+				if ( ( array() !== self::get_ccss_safelist() || $checksum_regen ) && function_exists( 'get_transient' ) ) {
 					$stored = get_transient( self::get_source_checksum_key( $template_hash ) );
 					if ( is_string( $stored ) && '' !== $stored ) {
 						// Re-hash the exact document-ordered URL list persisted
@@ -2745,6 +3112,103 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 			self::$stale_probe_memo[ $template_hash ] = $result;
 			return $result;
+		}
+
+		/**
+		 * Checksum-gated CCSS regen on post save (issue #1388).
+		 *
+		 * Called from the `save_post` path (see Main::on_save_post_queue_used_css()):
+		 * for every template with a stored variant AND a baselined source
+		 * checksum, the locally-available source CSS (rebuilt from the exact
+		 * document-ordered URL list persisted at generation time) is
+		 * re-hashed. Only a checksum change drops the stale variant and
+		 * queues a regen via regenerate_single(); a plain post save with
+		 * unchanged CSS fires nothing. Local reads only — no remote fetch.
+		 * Revisions and autosaves are skipped. Fail-open: any error returns
+		 * false and stored variants are left in place (never fatal).
+		 * Multisite-safe: checksum keys are blog-aware via
+		 * Util::transient_key().
+		 *
+		 * @param int   $post_id Post ID.
+		 * @param mixed $post    Post object or null.
+		 * @return bool True when at least one stale template was requeued.
+		 * @since NEXT
+		 * @see Critical_CSS::maybe_refresh_from_local_css()
+		 * @see Critical_CSS::regenerate_single()
+		 */
+		public static function maybe_regen_on_save( $post_id, $post = null ): bool {
+			try {
+				if ( function_exists( 'wp_is_post_revision' ) && wp_is_post_revision( $post_id ) ) {
+					return false;
+				}
+				if ( function_exists( 'wp_is_post_autosave' ) && wp_is_post_autosave( $post_id ) ) {
+					return false;
+				}
+				// Skip post types that can never affect frontend CSS (issue #1388
+				// follow-up): media/menu/customizer writes are frequent on busy
+				// sites and running the O(templates x source-files) re-hash for
+				// them is pure waste. Fail-open: unknown types still probe.
+				$post_type = '';
+				if ( is_object( $post ) && isset( $post->post_type ) ) {
+					$post_type = (string) $post->post_type;
+				} elseif ( function_exists( 'get_post_type' ) ) {
+					$post_type = (string) get_post_type( $post_id );
+				}
+				if ( in_array( $post_type, array( 'attachment', 'nav_menu_item', 'customize_changeset' ), true ) ) {
+					return false;
+				}
+				if ( ! self::is_checksum_regen_enabled() ) {
+					return false;
+				}
+				// Suspended while deferJS/delayJS is active: generated
+				// variants could not be used, so skip the work (issue #1090).
+				if ( self::is_deferral_suspended_by_js() ) {
+					return false;
+				}
+				if ( ! function_exists( 'get_transient' ) ) {
+					return false;
+				}
+				$templates = self::get_templates();
+				if ( array() === $templates ) {
+					return false;
+				}
+				$regened = false;
+				foreach ( $templates as $template => $label ) {
+					try {
+						$template = (string) $template;
+						$hash     = self::get_template_hash( $template );
+						if ( ! self::ccss_exists( $hash ) ) {
+							continue;
+						}
+						$stored = get_transient( self::get_source_checksum_key( $hash ) );
+						if ( ! is_string( $stored ) || '' === $stored ) {
+							continue;
+						}
+						// Re-hash the exact document-ordered URL list
+						// persisted at generation time so the save-time
+						// probe cannot diverge from the baseline.
+						$stored_urls = self::get_stored_source_urls( $hash );
+						if ( array() === $stored_urls ) {
+							continue;
+						}
+						$source = self::build_local_source_css( $stored_urls );
+						if ( '' === $source ) {
+							continue;
+						}
+						if ( self::maybe_refresh_from_local_css( $hash, $source ) ) {
+							self::regenerate_single( $template, $templates );
+							$regened = true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
+				}
+				return $regened;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -2789,7 +3253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * this predicate gates emission and generation too (issue #1090).
 		 *
 		 * @return bool True when deferJS or delayJS is enabled.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_deferral_suspended_by_js(): bool {
 			$options = Util::get_settings();
@@ -2806,7 +3270,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * redundant weight (issue #1090).
 		 *
 		 * @return bool True when CCSS emission and deferral should run.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function is_ccss_effective(): bool {
 			return self::is_inline_allowed() && ! self::is_deferral_suspended_by_js();
@@ -2819,7 +3283,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * string that drifted independently. Timer handles clear on
 		 * pagehide/beforeunload (audit #1077 finding 5).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Inline loader script tag.
 		 */
 		private static function loadcss_loader_tag(): string {
@@ -2836,7 +3300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * static page cache — callers downgrade to blocking file delivery
 		 * instead (fail-open, never unstyled).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when inline scripts would be blocked.
 		 */
 		private static function has_strict_csp(): bool {
@@ -2849,7 +3313,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				 * (htaccess/Nginx/hosting headers), which headers_list()
 				 * cannot detect.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param bool $strict_csp Whether a server-level strict CSP is active.
 				 */
 				if ( function_exists( 'apply_filters' ) && (bool) apply_filters( 'wppo_critical_css_strict_csp', false ) ) {
@@ -2942,15 +3406,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return void
 		 */
 		public static function reset_ccss_memo(): void {
-			self::$ccss_exists_cache   = array();
-			self::$ccss_content_cache  = array();
-			self::$sample_url_cache    = array();
-			self::$stale_probe_memo    = array();
-			self::$ccss_presets_memo   = null;
-			self::$lcp_preload_emitted = array();
-			self::$ccss_defer_blocked  = array();
-			self::$templates_memo      = null;
-			self::$pending_memo        = array();
+			self::$ccss_exists_cache              = array();
+			self::$ccss_content_cache             = array();
+			self::$sample_url_cache               = array();
+			self::$stale_probe_memo               = array();
+			self::$ccss_presets_memo              = null;
+			self::$lcp_preload_emitted            = array();
+			self::$ccss_defer_blocked             = array();
+			self::$templates_memo                 = null;
+			self::$pending_memo                   = array();
+			self::$gzip_size_memo                 = array();
+			self::$commerce_context_memo          = null;
+			self::$commerce_excluded_context_memo = null;
 		}
 
 		/**
@@ -3221,7 +3688,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string|null $url Page URL. Null resolves the current request path. Only the path is used.
 		 * @return string Same-origin LCP image URL, or '' when none resolves.
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @see RUM::get_lcp_preload_candidate()
 		 * @see RUM::get_field_lcp_url()
 		 */
@@ -3310,7 +3777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded as an image.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function is_image_preload_url( string $url ): bool {
 			try {
@@ -3360,7 +3827,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * (CCSS path emits normally).
 		 *
 		 * @return bool True when the image pipeline will preload the LCP hero.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		private static function is_image_pipeline_lcp_preload_active(): bool {
 			try {
@@ -3398,7 +3865,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * (default true); any filter failure keeps the default.
 		 *
 		 * @return bool True when the CCSS-path preload may emit.
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @see Critical_CSS::maybe_emit_field_lcp_preload()
 		 */
 		private static function is_ccss_field_lcp_preload_allowed(): bool {
@@ -3437,7 +3904,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * is_ccss_field_lcp_preload_allowed()).
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @see Critical_CSS::get_field_lcp_preload_url()
 		 * @see Critical_CSS::is_ccss_field_lcp_preload_allowed()
 		 */
@@ -3509,6 +3976,168 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Extract inline `<style>` bodies and stylesheet hrefs via the HTML API.
+		 *
+		 * Streaming counterpart of the DOMDocument block inside {@see generate()}:
+		 * walks `WP_HTML_Processor` tokens with a deadline poll every 16
+		 * tokens (plus one up-front check, so an already-expired budget
+		 * aborts without walking) and an HTML5-spec parse of malformed
+		 * markup (missing closers, SVG, nested tables). Returns null on any
+		 * failure so the caller keeps the unchanged DOMDocument path
+		 * (WP 6.2-6.8 parity).
+		 *
+		 * Only document-ordered discovery happens here; stylesheet fetching
+		 * stays in `generate()` so both paths share one fetch budget.
+		 * Per-URL/per-template extraction only; no cross-site state.
+		 *
+		 * Parity notes: `<link>` discovery requires the whole `rel` value
+		 * to equal `stylesheet` case-insensitively (trim + single
+		 * comparison), mirroring the DOM `//link[@rel="stylesheet"]`
+		 * exact-match intent while following the HTML spec (ASCII
+		 * case-insensitive `rel`); multi-token values such as
+		 * `alternate stylesheet` are therefore excluded on both paths.
+		 * The single intentional widening is case-folding: `REL="STYLESHEET"`
+		 * is collected by the stream (spec-correct, browsers match it) but
+		 * missed by the case-sensitive XPath. Inline `<style>` bodies keep
+		 * raw token text on both paths (`<style>` is rawtext: neither the
+		 * stream's `serialize_token()` nor DOM `textContent` decodes
+		 * entities, and comment markers stay literal), so no
+		 * decode/strip step is needed for parity.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string     $html     Page HTML (already byte-capped by the caller).
+		 * @param float|null $deadline Absolute deadline, or null when uncapped.
+		 * @return array{inline_css: string, source_urls: string[]}|null Inline CSS plus
+		 *                                                            document-ordered hrefs, or null to take the DOM path.
+		 */
+		private static function extract_css_sources_with_processor( string $html, ?float $deadline ): ?array {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'should_use_html_processor' ) ) {
+				return null;
+			}
+			if ( ! \PerformanceOptimise\Inc\Util::should_use_html_processor() ) {
+				return null;
+			}
+			if ( ! class_exists( 'WP_HTML_Processor' ) ) {
+				return null;
+			}
+			$required = array( 'next_token', 'get_token_type', 'get_tag', 'is_tag_closer', 'get_attribute', 'serialize_token' );
+			foreach ( $required as $method ) {
+				if ( ! method_exists( 'WP_HTML_Processor', $method ) ) {
+					return null;
+				}
+			}
+			if ( strlen( $html ) > self::MAX_CCSS_SOURCE_BYTES ) {
+				$html = substr( $html, 0, self::MAX_CCSS_SOURCE_BYTES );
+			}
+			try {
+				$processor = \PerformanceOptimise\Inc\Util::create_html_processor( $html );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+			if ( null === $processor || ! ( $processor instanceof \WP_HTML_Processor ) ) {
+				return null;
+			}
+			try {
+				$inline_css    = '';
+				$source_urls   = array();
+				$in_style      = false;
+				$style_buffer  = '';
+				$inline_capped = false;
+				// Fail-open up front: an already-exhausted budget never pays
+				// for even the streaming walk (mirrors the DOM-path re-check).
+				if ( self::generation_expired( $deadline ) ) {
+					return null;
+				}
+				$tokens_seen = 0;
+				while ( $processor->next_token() ) {
+					// Poll every 16 tokens (counter & mask): deadline precision
+					// loss is negligible for a ~120s budget and avoids a
+					// microtime() syscall per token on large pages.
+					++$tokens_seen;
+					if ( 0 === ( $tokens_seen & 15 ) && self::generation_expired( $deadline ) ) {
+						return null;
+					}
+					if ( '#tag' !== $processor->get_token_type() ) {
+						if ( $in_style && ! $inline_capped ) {
+							$style_buffer .= (string) $processor->serialize_token();
+						}
+						continue;
+					}
+					$tag_name  = strtolower( (string) $processor->get_tag() );
+					$is_closer = $processor->is_tag_closer();
+					if ( 'style' === $tag_name ) {
+						if ( ! $is_closer ) {
+							$in_style     = true;
+							$style_buffer = '';
+						} elseif ( $in_style ) {
+							// `<style>` is rawtext on both paths: keep the raw
+							// token text so it matches DOM `textContent`
+							// (neither decodes entities).
+							$in_style     = false;
+							$content      = trim( $style_buffer );
+							$style_buffer = '';
+							if ( '' !== $content && ! $inline_capped ) {
+								$inline_css .= $content . "\n";
+								if ( strlen( $inline_css ) > self::MAX_CCSS_SOURCE_BYTES ) {
+									$inline_css    = substr( $inline_css, 0, self::MAX_CCSS_SOURCE_BYTES );
+									$inline_capped = true;
+								}
+							}
+						}
+						continue;
+					}
+					if ( 'link' !== $tag_name || $is_closer ) {
+						continue;
+					}
+					$rel = $processor->get_attribute( 'rel' );
+					if ( ! is_string( $rel ) || '' === $rel ) {
+						continue;
+					}
+					// Parity with `//link[@rel="stylesheet"]`: the whole rel
+					// value must equal `stylesheet` (case-insensitive trim).
+					// Multi-token values (`alternate stylesheet`,
+					// `stylesheet preload`) are excluded on both paths.
+					$rel_norm = strtolower( trim( (string) $rel ) );
+					if ( 'stylesheet' !== $rel_norm ) {
+						continue;
+					}
+					$href = $processor->get_attribute( 'href' );
+					if ( ! is_string( $href ) || '' === $href ) {
+						continue;
+					}
+					if ( self::is_skipped_source_url( $href ) ) {
+						continue;
+					}
+					$source_urls[] = $href;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+			if ( method_exists( $processor, 'get_last_error' ) && null !== $processor->get_last_error() ) {
+				return null;
+			}
+			// Malformed pages may never close <style>: DOMDocument auto-closes
+			// the element, so flush the trailing buffer for parity.
+			// Raw text like the closed-block path above (rawtext parity).
+			if ( $in_style ) {
+				$content = trim( $style_buffer );
+				if ( '' !== $content && ! $inline_capped ) {
+					$inline_css .= $content . "\n";
+					if ( strlen( $inline_css ) > self::MAX_CCSS_SOURCE_BYTES ) {
+						$inline_css = substr( $inline_css, 0, self::MAX_CCSS_SOURCE_BYTES );
+					}
+				}
+			}
+			return array(
+				'inline_css'  => $inline_css,
+				'source_urls' => $source_urls,
+			);
+		}
+
+		/**
 		 * Generate critical CSS for a given URL.
 		 *
 		 * Fetches the HTML, extracts CSS resources and inline styles, downloads
@@ -3538,7 +4167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *                                  (issue #1235).
 		 * @return string|false The critical CSS content, or false on failure.
 		 * @since 2.0.0
-		 * @since NEXT Time-boxed by the generation budget with fail-open abort.
+		 * @since 2.2.0 Time-boxed by the generation budget with fail-open abort.
 		 */
 		public static function generate( string $url, ?string &$source_css = null, ?array &$resolved_urls = null, ?float $deadline = null ) {
 			// SSRF guard: reuse the stylesheet allowlist (same-site + scheme).
@@ -3624,78 +4253,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			// Suppress libxml noise while parsing, but always restore the
-			// previous global state afterwards (audit #888 finding 1).
-			$prev_libxml = libxml_use_internal_errors( true );
-
-			try {
-				$dom = new \DOMDocument();
-				$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
-			} finally {
-				libxml_clear_errors();
-				libxml_use_internal_errors( $prev_libxml );
-			}
-
-			$xpath = new \DOMXPath( $dom );
-
-			$css_content = '';
-
-			// Extract inline <style> blocks.
-			$style_tags = $xpath->query( '//style' );
-			if ( $style_tags ) {
-				foreach ( $style_tags as $tag ) {
-					// Deadline poll (issue #1235 review): many/large inline
-					// blocks must not overrun before the next fetch poll.
-					if ( self::generation_expired( $deadline ) ) {
-						return false;
-					}
-					// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOMNode property.
-					$content = trim( $tag->textContent );
-					if ( ! empty( $content ) ) {
-						$css_content .= $content . "\n";
-						if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES ) {
-							$css_content = substr( $css_content, 0, self::MAX_CCSS_SOURCE_BYTES );
-							break;
-						}
-					}
-				}
-			}
-
-			// Extract external stylesheet URLs (skip data-* handles, dashicons, admin-bar).
-			$link_tags   = $xpath->query( '//link[@rel="stylesheet"]' );
-			$source_urls = array();
-			// Shared @import dedupe + fetch budget for the whole run (issue #1235).
-			$import_seen    = array();
-			$import_fetches = 0;
-			if ( $link_tags ) {
-				foreach ( $link_tags as $tag ) {
-					$href = $tag->getAttribute( 'href' );
-					if ( empty( $href ) ) {
-						continue;
-					}
-					if ( self::is_skipped_source_url( $href ) ) {
-						continue;
-					}
-
-					// Record the document-ordered stylesheet set used for the
-					// canonical source checksum (issue #1038). Only locally
-					// resolvable stylesheets contribute; inline <style> blocks
-					// and @import expansion are deliberately excluded so the
-					// frontend probe can reproduce this exact domain without a
-					// remote fetch. Handles core path-inlines (via
-					// wp_style_add_data(...,'path',...)) emit no <link> here and
-					// are therefore absent — the probe mirrors that by skipping
-					// them in get_local_source_css(). build_local_source_css()
-					// then collapses the deferred-link + <noscript> duplicate.
-					$source_urls[] = $href;
-
+			// Streaming HTML API path (issue #1430): HTML5-spec token walk
+			// with a deadline poll on every token. Null means unavailable or
+			// failed: fall through to the unchanged DOMDocument path below
+			// (WP 6.2-6.8 parity, byte-identical fallback).
+			$processor_sources = self::extract_css_sources_with_processor( $html, $deadline );
+			if ( null !== $processor_sources ) {
+				$css_content = $processor_sources['inline_css'];
+				$source_urls = $processor_sources['source_urls'];
+				// Shared @import dedupe + fetch budget for the whole run (issue #1235).
+				$import_seen    = array();
+				$import_fetches = 0;
+				foreach ( $source_urls as $href ) {
 					// Budget check per stylesheet (issue #1235): abort the
 					// whole run fail-open instead of starting another fetch
 					// with no time left to parse its result.
 					if ( self::generation_expired( $deadline ) ) {
 						return false;
 					}
-
 					$fetched = self::fetch_stylesheet_with_imports( $href, 0, $deadline, $import_seen, $import_fetches );
 					if ( '' !== $fetched ) {
 						$css_content .= $fetched . "\n";
@@ -3711,7 +4286,99 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						break;
 					}
 				}
-			}
+			} else {
+				if ( self::generation_expired( $deadline ) ) {
+					return false;
+				}
+				// Suppress libxml noise while parsing, but always restore the
+				// previous global state afterwards (audit #888 finding 1).
+				$prev_libxml = libxml_use_internal_errors( true );
+
+				try {
+					$dom = new \DOMDocument();
+					$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
+				} finally {
+					libxml_clear_errors();
+					libxml_use_internal_errors( $prev_libxml );
+				}
+
+				$xpath = new \DOMXPath( $dom );
+
+				$css_content = '';
+
+				// Extract inline <style> blocks.
+				$style_tags = $xpath->query( '//style' );
+				if ( $style_tags ) {
+					foreach ( $style_tags as $tag ) {
+						// Deadline poll (issue #1235 review): many/large inline
+						// blocks must not overrun before the next fetch poll.
+						if ( self::generation_expired( $deadline ) ) {
+							return false;
+						}
+						// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOMNode property.
+						$content = trim( $tag->textContent );
+						if ( ! empty( $content ) ) {
+							$css_content .= $content . "\n";
+							if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES ) {
+								$css_content = substr( $css_content, 0, self::MAX_CCSS_SOURCE_BYTES );
+								break;
+							}
+						}
+					}
+				}
+
+				// Extract external stylesheet URLs (skip data-* handles, dashicons, admin-bar).
+				$link_tags   = $xpath->query( '//link[@rel="stylesheet"]' );
+				$source_urls = array();
+				// Shared @import dedupe + fetch budget for the whole run (issue #1235).
+				$import_seen    = array();
+				$import_fetches = 0;
+				if ( $link_tags ) {
+					foreach ( $link_tags as $tag ) {
+						$href = $tag->getAttribute( 'href' );
+						if ( empty( $href ) ) {
+							continue;
+						}
+						if ( self::is_skipped_source_url( $href ) ) {
+							continue;
+						}
+
+						// Record the document-ordered stylesheet set used for the
+						// canonical source checksum (issue #1038). Only locally
+						// resolvable stylesheets contribute; inline <style> blocks
+						// and @import expansion are deliberately excluded so the
+						// frontend probe can reproduce this exact domain without a
+						// remote fetch. Handles core path-inlines (via
+						// wp_style_add_data(...,'path',...)) emit no <link> here and
+						// are therefore absent — the probe mirrors that by skipping
+						// them in get_local_source_css(). build_local_source_css()
+						// then collapses the deferred-link + <noscript> duplicate.
+						$source_urls[] = $href;
+
+						// Budget check per stylesheet (issue #1235): abort the
+						// whole run fail-open instead of starting another fetch
+						// with no time left to parse its result.
+						if ( self::generation_expired( $deadline ) ) {
+							return false;
+						}
+
+						$fetched = self::fetch_stylesheet_with_imports( $href, 0, $deadline, $import_seen, $import_fetches );
+						if ( '' !== $fetched ) {
+							$css_content .= $fetched . "\n";
+							// Bound the concatenated source (issue #1235 review):
+							// stop appending once the scan buffer exceeds 2MB so
+							// a huge theme cannot OOM the worker before polling.
+							if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES ) {
+								break;
+							}
+						}
+						// Stop before the buffer grows further past the deadline.
+						if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES || self::generation_expired( $deadline ) ) {
+							break;
+						}
+					}
+				}
+			} // End DOMDocument fallback for the streaming path above.
 
 			// Canonical source domain: the locally-resolvable stylesheets the
 			// page emitted, in document order. generate_and_store() baselines
@@ -3786,7 +4453,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *                             whole run, bounded by MAX_CCSS_FETCHES.
 		 * @return string The combined CSS content with @imports inlined, or empty string on failure or expiry.
 		 * @since 2.0.0
-		 * @since NEXT Budget-clamped request timeouts with fail-open abort.
+		 * @since 2.2.0 Budget-clamped request timeouts with fail-open abort.
 		 */
 		private static function fetch_stylesheet_with_imports( string $url, int $depth = 0, ?float $deadline = null, array &$seen = array(), int &$fetches = 0 ): string {
 			if ( $depth > self::MAX_IMPORT_DEPTH ) {
@@ -4207,7 +4874,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *                             scan stops early when it expires (issue #1235).
 		 * @return string Extracted critical CSS.
 		 * @since 2.0.0
-		 * @since NEXT Deadline-aware early stop for the CPU-bound scan.
+		 * @since 2.2.0 Deadline-aware early stop for the CPU-bound scan.
 		 */
 		private static function extract_above_fold_css( string $css, ?float $deadline = null ): string {
 			// CPU-bound parse phase (issue #1235): refuse to start past the
@@ -4306,7 +4973,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *                                scan stops early when it expires (issue #1235).
 		 * @return void
 		 * @since 2.0.0
-		 * @since NEXT Deadline-aware early stop for the CPU-bound scan.
+		 * @since 2.2.0 Deadline-aware early stop for the CPU-bound scan.
 		 */
 		private static function parse_regular_rules( string $css, array &$critical_parts, ?array $safelist = null, ?float $deadline = null ): void {
 			$safelist = $safelist ?? self::get_ccss_safelist();
@@ -4380,7 +5047,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *                                per-rule loop aborts early when expired (issue #1235).
 		 * @return string Filtered media query or empty string.
 		 * @since 2.0.0
-		 * @since NEXT Deadline-aware early stop inside the per-rule loop.
+		 * @since 2.2.0 Deadline-aware early stop inside the per-rule loop.
 		 */
 		private static function filter_media_query_rules( string $media_query, ?array $safelist = null, ?float $deadline = null ): string {
 			$header_end = strpos( $media_query, '{' );
@@ -4542,7 +5209,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * (settings read + filter) are resolved once per request instead of
 		 * once per rule. Reset via reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]|null
 		 */
 		private static ?array $ccss_presets_memo = null;
@@ -4648,7 +5315,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param int|null   $budget        Optional already-resolved budget for logging (avoids a second settings read).
 		 * @return bool True on success, false on failure or timeout.
 		 * @since 2.0.0
-		 * @since NEXT Time-boxed generation with fail-open timeout handling.
+		 * @since 2.2.0 Time-boxed generation with fail-open timeout handling.
 		 */
 		private static function generate_and_store( string $template_hash, string $template, ?float $deadline = null, ?int $budget = null ): bool {
 			if ( ! self::is_valid_template_hash( $template_hash ) ) {
@@ -4850,6 +5517,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *    suspended (media=print deadlock guard) so emitting critical CSS
 		 *    would only add redundant weight (issue #1090). No emission, no
 		 *    generation queueing, no loader stub.
+		 * 1c. Yield entirely on cart/checkout requests when
+		 *    `ccssCommerceExclude` is on (issue #1388) — dynamic commerce
+		 *    markup must not be styled from a cached snapshot. Stylesheets
+		 *    load normally.
 		 * 2. Missing/unreadable variant — fail-open: queue background
 		 *    generation and print the async loader stub (never fatal).
 		 * 3. Content under MIN_INLINE_SIZE — treated as a failed extraction.
@@ -4861,6 +5532,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *    When the file URL is unavailable (missing/unreadable variant),
 		 *    output nothing and defer to the full stylesheet instead of
 		 *    inlining a truncated block (issue #1255).
+		 * 5b. Content over the configured gzipped inline budget (issue #1388) —
+		 *    warn and take the used-CSS fallback: no inline output, the
+		 *    prior good file is kept, and the deferred full stylesheet plus
+		 *    used CSS styles the page. Oversized inline CSS is never
+		 *    emitted.
 		 *
 		 * Whenever CCSS output is served for the current request, the
 		 * field-measured LCP image (issue #1255) is preloaded first via
@@ -4870,8 +5546,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @return void
 		 * @since 2.0.0
-		 * @since NEXT Over-cap output without a file URL defers to the full stylesheet (and blocks deferral for the request).
-		 * @since NEXT Field-measured LCP image is preloaded alongside served CCSS.
+		 * @since 2.2.0 Over-cap output without a file URL defers to the full stylesheet (and blocks deferral for the request).
+		 * @since NEXT Commerce exclusion plus gzipped-budget used-CSS fallback (issue #1388).
+		 * @since 2.2.0 Field-measured LCP image is preloaded alongside served CCSS.
 		 */
 		public static function inline_ccss(): void {
 			if ( is_admin() ) {
@@ -4891,6 +5568,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Suspended while deferJS/delayJS is active: deferral is off, so
 			// emission would be redundant weight — skip everything (issue #1090).
 			if ( ! self::is_ccss_effective() ) {
+				return;
+			}
+
+			// Commerce exclusion (issue #1388): cart/checkout pages never
+			// get inline critical CSS — dynamic commerce markup must not
+			// be styled from a cached above-fold snapshot. Fail-open:
+			// stylesheets load normally via the deferral skip below.
+			// Memoized per request (single settings + context evaluation).
+			if ( self::is_commerce_excluded_context() ) {
 				return;
 			}
 
@@ -4950,6 +5636,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// the template so defer_stylesheets() loads those
 					// stylesheets normally instead of deferring them with zero
 					// critical CSS on the page (review FOUC guard).
+					self::$ccss_defer_blocked[ $template_hash ] = true;
+					return;
+				}
+				// Gzipped inline budget guard (issue #1388): output that fits
+				// the raw cap but exceeds the gzipped inline budget is never
+				// inlined — warn and take the used-CSS fallback instead. The
+				// prior good file is kept in place (never overwritten here),
+				// no oversized inline CSS is ever emitted, and the deferred
+				// full stylesheet plus used CSS styles the page. The warning
+				// is throttled to once per template per 12h (transient flag)
+				// so the frontend hot path never writes a DB row per pageview.
+				// Fail-open by design, never fatal.
+				if ( self::is_over_inline_budget( $content ) ) {
+					try {
+						$warn_key = Util::transient_key( 'wppo_ccss_budget_warn_' . $template_hash );
+						$throttle = function_exists( 'get_transient' ) ? get_transient( $warn_key ) : true;
+						if ( false === $throttle && class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) && function_exists( '__' ) ) {
+							\PerformanceOptimise\Inc\Log::add(
+								sprintf(
+								/* translators: 1: Inline budget label (e.g. "14 KB"), 2: Template hash */
+									__( 'Critical CSS over %1$s gzipped inline budget for template: %2$s. Serving deferred stylesheet plus used CSS only.', 'performance-optimisation' ),
+									self::get_ccss_inline_budget_label(),
+									$template_hash
+								)
+							);
+							if ( function_exists( 'set_transient' ) ) {
+								set_transient( $warn_key, 1, defined( 'HOUR_IN_SECONDS' ) ? 12 * HOUR_IN_SECONDS : 43200 );
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					self::$ccss_defer_blocked[ $template_hash ] = true;
 					return;
 				}
@@ -5090,6 +5808,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return $tag;
 			}
 
+			// Commerce exclusion (issue #1388): cart/checkout pages were
+			// never given inline critical CSS, so deferring the full
+			// stylesheets would leave dynamic commerce markup unstyled
+			// until JS runs — load normally instead (fail-open).
+			// Memoized per request: one settings + context evaluation no
+			// matter how many stylesheet tags render on the page.
+			if ( self::is_commerce_excluded_context() ) {
+				return $tag;
+			}
+
 			foreach ( self::SKIP_DEFER_HANDLES as $skip ) {
 				if ( $handle === $skip || false !== strpos( $href, $skip ) ) {
 					return $tag;
@@ -5117,10 +5845,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// this request (issue #1255 review): the page carries zero
 			// critical CSS, so deferral would open a FOUC window the
 			// render-blocking stylesheets avoid.
-			if ( isset( self::$ccss_defer_blocked[ self::get_template_hash() ] ) ) {
+			$template_hash = self::get_template_hash();
+			if ( isset( self::$ccss_defer_blocked[ $template_hash ] ) ) {
 				return $tag;
 			}
-			if ( ! self::ccss_exists( self::get_template_hash() ) ) {
+			if ( ! self::ccss_exists( $template_hash ) ) {
 				return $tag;
 			}
 
@@ -5154,7 +5883,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param array $args Arguments containing 'template_hash'.
 		 * @return void
 		 * @since 2.0.0
-		 * @since NEXT Routed through the guarded generation wrapper.
+		 * @since 2.2.0 Routed through the guarded generation wrapper.
 		 */
 		public static function background_generate( array $args ): void {
 			// Suspended while deferJS/delayJS is active: generated variants
@@ -5236,13 +5965,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Read-only ordering signal (issue #1059): scores each template's
 		 * sample URL via RUM::score_url_lcp() (RUM path p75 + latest
-		 * PageSpeed trend LCP blend). Worst p75 first so high-traffic slow
-		 * pages get optimized CSS first. Fail-open: missing RUM/trends,
-		 * disabled setting, or any failure returns FIFO template order.
-		 * Cap, safelist, and purge-coupled invalidation semantics unchanged.
-		 * Multisite-safe: per-site option reads only.
+		 * PageSpeed trend LCP blend), blended with the template-segment
+		 * weight from RUM::get_field_lcp_p75_by_segment() (issue #1388) so
+		 * the slowest RUM LCP template dequeues before the fastest even
+		 * when two templates share a path bucket. Worst p75 first so
+		 * high-traffic slow pages get optimized CSS first. Fail-open:
+		 * missing RUM/trends, disabled setting, or any failure returns FIFO
+		 * template order. Cap, safelist, and purge-coupled invalidation
+		 * semantics unchanged. Multisite-safe: per-site option reads only.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Blends the template-segment LCP weight (issue #1388).
 		 * @param array<string, string> $templates Template identifier => Label.
 		 * @return array<string, string> Ordered templates (same entries).
 		 */
@@ -5279,10 +6012,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( empty( $priority ) && empty( $trends ) ) {
 					return $templates;
 				}
+				// Template-segment weights (issue #1388): worst p75 LCP per
+				// template slug from the RUM `template` segment, so two
+				// templates sharing a path bucket are still distinguishable.
+				// Guarded with class/method_exists plus a legacy fallback to
+				// the URL-only score when the segment API is unavailable.
+				$template_weights = array();
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_p75_by_segment' ) ) {
+						$rows = \PerformanceOptimise\Inc\RUM::get_field_lcp_p75_by_segment();
+						if ( is_array( $rows ) ) {
+							foreach ( $rows as $row ) {
+								if ( ! is_array( $row ) || ! isset( $row['template'], $row['p75'] ) ) {
+									continue;
+								}
+								$slug = strtolower( trim( (string) $row['template'] ) );
+								$p75  = (float) $row['p75'];
+								if ( '' === $slug || $p75 <= 0 ) {
+									continue;
+								}
+								if ( ! isset( $template_weights[ $slug ] ) || $p75 > $template_weights[ $slug ] ) {
+									$template_weights[ $slug ] = $p75;
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$template_weights = array();
+				}
 				$scores = array();
 				foreach ( $templates as $template => $label ) {
-					$url                          = self::get_sample_url( (string) $template );
-					$scores[ (string) $template ] = ( is_string( $url ) && '' !== $url ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $url, $priority, $trends ) : 0.0;
+					$url       = self::get_sample_url( (string) $template );
+					$url_score = ( is_string( $url ) && '' !== $url ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $url, $priority, $trends ) : 0.0;
+					// Slowest-LCP-template-first (issue #1388): the template
+					// dequeues on the worst of its URL score and its
+					// template-segment score, never the best.
+					$slug                         = strtolower( trim( (string) $template ) );
+					$segment_score                = $template_weights[ $slug ] ?? 0.0;
+					$scores[ (string) $template ] = max( (float) $url_score, (float) $segment_score );
 				}
 				$has_signal = false;
 				foreach ( $scores as $score ) {
@@ -5339,7 +6107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @return int Number of jobs queued.
 		 * @since 2.0.0
-		 * @since NEXT Capped per-run queue with RUM-worst-first ordering.
+		 * @since 2.2.0 Capped per-run queue with RUM-worst-first ordering.
 		 */
 		public static function regenerate_all(): int {
 			if ( self::is_deferral_suspended_by_js() ) {
@@ -5433,7 +6201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string                    $template Template slug or template hash.
 		 * @param array<string,string>|null $templates Optional pre-enumerated template map (reuses the caller's scan).
 		 * @return int 1 when queued, 0 for legit skip/unknown, -1 when the scheduler is unavailable (infra failure, not a benign skip).
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public static function regenerate_single( string $template, ?array $templates = null ): int {
 			try {
@@ -5612,7 +6380,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * rather than scheduler failure, otherwise the template is marked
 		 * failed with a day TTL while its job runs.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $hook      Action hook.
 		 * @param array  $hook_args Action arguments.
 		 * @return bool True when a matching action is pending or running in either group.
