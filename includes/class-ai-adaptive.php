@@ -4095,6 +4095,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * fallback, once for the guard, and once more in the caller.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT $min_samples_override parameter added so the RUM-segmented
+		 *              auto-tune path (issue #1425) can thread its own
+		 *              speculation_min_samples() gate into row qualification.
 		 * @param bool|null $gating_enabled Pre-resolved gating flag. Null resolves via is_speculation_rum_gating_enabled().
 		 * @param int|null  $min_samples_override Optional minimum-samples override (e.g. speculation_min_samples()). Null uses the shared field_lcp_min_samples() gate.
 		 * @return array{qualified:bool,eagerness:string,lcp_p75:float,inp_p75:float,samples:int,min_samples:int,gated:bool} Gated state.
@@ -4642,7 +4645,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * eager URLs. Every `list`-source rule in the filtered result is
 		 * re-sanitized (esc_url_raw, commerce-prefix guard, same-site
 		 * guard, dedupe, count cap, budget trim, moderate eagerness cap);
-		 * non-list rules pass through untouched. Non-array filter output
+		 * non-list rules keep their shape but have their `eagerness` (when
+		 * present) allowlist-normalized and capped at moderate on the strict
+		 * path, so a filter cannot smuggle an `eager` document/prerender
+		 * rule through the strict auto-tune path. Non-array filter output
 		 * fails open to the pre-filter rules. Empty list rules are dropped
 		 * (an empty list rule prefetches nothing).
 		 *
@@ -4684,6 +4690,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$sanitized = array();
 				foreach ( $filtered as $rule ) {
 					if ( ! is_array( $rule ) || ( $rule['source'] ?? '' ) !== 'list' ) {
+						if ( $strict && is_array( $rule ) && isset( $rule['eagerness'] ) ) {
+							try {
+								$normalized = self::normalize_eagerness( $rule['eagerness'] );
+								if ( 'eager' === $normalized ) {
+									$normalized = 'moderate';
+								}
+								$rule['eagerness'] = $normalized;
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
 						$sanitized[] = $rule;
 						continue;
 					}
