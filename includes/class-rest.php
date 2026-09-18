@@ -890,12 +890,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		private static function static_throttle_hit( string $endpoint, int $limit, int $window ): bool {
 			static $buckets = array();
-			$now = time();
+			$now            = time();
 			if ( ! isset( $buckets[ $endpoint ] ) || $now - $buckets[ $endpoint ]['at'] >= $window ) {
 				$buckets[ $endpoint ] = array(
-				'at'   => $now,
-				'hits' => 1,
-			);
+					'at'   => $now,
+					'hits' => 1,
+				);
 				return false;
 			}
 			++$buckets[ $endpoint ]['hits'];
