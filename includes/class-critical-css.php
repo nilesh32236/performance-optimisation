@@ -3509,6 +3509,168 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Extract inline `<style>` bodies and stylesheet hrefs via the HTML API.
+		 *
+		 * Streaming counterpart of the DOMDocument block inside {@see generate()}:
+		 * walks `WP_HTML_Processor` tokens with a deadline poll every 16
+		 * tokens (plus one up-front check, so an already-expired budget
+		 * aborts without walking) and an HTML5-spec parse of malformed
+		 * markup (missing closers, SVG, nested tables). Returns null on any
+		 * failure so the caller keeps the unchanged DOMDocument path
+		 * (WP 6.2-6.8 parity).
+		 *
+		 * Only document-ordered discovery happens here; stylesheet fetching
+		 * stays in `generate()` so both paths share one fetch budget.
+		 * Per-URL/per-template extraction only; no cross-site state.
+		 *
+		 * Parity notes: `<link>` discovery requires the whole `rel` value
+		 * to equal `stylesheet` case-insensitively (trim + single
+		 * comparison), mirroring the DOM `//link[@rel="stylesheet"]`
+		 * exact-match intent while following the HTML spec (ASCII
+		 * case-insensitive `rel`); multi-token values such as
+		 * `alternate stylesheet` are therefore excluded on both paths.
+		 * The single intentional widening is case-folding: `REL="STYLESHEET"`
+		 * is collected by the stream (spec-correct, browsers match it) but
+		 * missed by the case-sensitive XPath. Inline `<style>` bodies keep
+		 * raw token text on both paths (`<style>` is rawtext: neither the
+		 * stream's `serialize_token()` nor DOM `textContent` decodes
+		 * entities, and comment markers stay literal), so no
+		 * decode/strip step is needed for parity.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string     $html     Page HTML (already byte-capped by the caller).
+		 * @param float|null $deadline Absolute deadline, or null when uncapped.
+		 * @return array{inline_css: string, source_urls: string[]}|null Inline CSS plus
+		 *                                                            document-ordered hrefs, or null to take the DOM path.
+		 */
+		private static function extract_css_sources_with_processor( string $html, ?float $deadline ): ?array {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'should_use_html_processor' ) ) {
+				return null;
+			}
+			if ( ! \PerformanceOptimise\Inc\Util::should_use_html_processor() ) {
+				return null;
+			}
+			if ( ! class_exists( 'WP_HTML_Processor' ) ) {
+				return null;
+			}
+			$required = array( 'next_token', 'get_token_type', 'get_tag', 'is_tag_closer', 'get_attribute', 'serialize_token' );
+			foreach ( $required as $method ) {
+				if ( ! method_exists( 'WP_HTML_Processor', $method ) ) {
+					return null;
+				}
+			}
+			if ( strlen( $html ) > self::MAX_CCSS_SOURCE_BYTES ) {
+				$html = substr( $html, 0, self::MAX_CCSS_SOURCE_BYTES );
+			}
+			try {
+				$processor = \PerformanceOptimise\Inc\Util::create_html_processor( $html );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+			if ( null === $processor || ! ( $processor instanceof \WP_HTML_Processor ) ) {
+				return null;
+			}
+			try {
+				$inline_css    = '';
+				$source_urls   = array();
+				$in_style      = false;
+				$style_buffer  = '';
+				$inline_capped = false;
+				// Fail-open up front: an already-exhausted budget never pays
+				// for even the streaming walk (mirrors the DOM-path re-check).
+				if ( self::generation_expired( $deadline ) ) {
+					return null;
+				}
+				$tokens_seen = 0;
+				while ( $processor->next_token() ) {
+					// Poll every 16 tokens (counter & mask): deadline precision
+					// loss is negligible for a ~120s budget and avoids a
+					// microtime() syscall per token on large pages.
+					++$tokens_seen;
+					if ( 0 === ( $tokens_seen & 15 ) && self::generation_expired( $deadline ) ) {
+						return null;
+					}
+					if ( '#tag' !== $processor->get_token_type() ) {
+						if ( $in_style && ! $inline_capped ) {
+							$style_buffer .= (string) $processor->serialize_token();
+						}
+						continue;
+					}
+					$tag_name  = strtolower( (string) $processor->get_tag() );
+					$is_closer = $processor->is_tag_closer();
+					if ( 'style' === $tag_name ) {
+						if ( ! $is_closer ) {
+							$in_style     = true;
+							$style_buffer = '';
+						} elseif ( $in_style ) {
+							// `<style>` is rawtext on both paths: keep the raw
+							// token text so it matches DOM `textContent`
+							// (neither decodes entities).
+							$in_style     = false;
+							$content      = trim( $style_buffer );
+							$style_buffer = '';
+							if ( '' !== $content && ! $inline_capped ) {
+								$inline_css .= $content . "\n";
+								if ( strlen( $inline_css ) > self::MAX_CCSS_SOURCE_BYTES ) {
+									$inline_css    = substr( $inline_css, 0, self::MAX_CCSS_SOURCE_BYTES );
+									$inline_capped = true;
+								}
+							}
+						}
+						continue;
+					}
+					if ( 'link' !== $tag_name || $is_closer ) {
+						continue;
+					}
+					$rel = $processor->get_attribute( 'rel' );
+					if ( ! is_string( $rel ) || '' === $rel ) {
+						continue;
+					}
+					// Parity with `//link[@rel="stylesheet"]`: the whole rel
+					// value must equal `stylesheet` (case-insensitive trim).
+					// Multi-token values (`alternate stylesheet`,
+					// `stylesheet preload`) are excluded on both paths.
+					$rel_norm = strtolower( trim( (string) $rel ) );
+					if ( 'stylesheet' !== $rel_norm ) {
+						continue;
+					}
+					$href = $processor->get_attribute( 'href' );
+					if ( ! is_string( $href ) || '' === $href ) {
+						continue;
+					}
+					if ( self::is_skipped_source_url( $href ) ) {
+						continue;
+					}
+					$source_urls[] = $href;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+			if ( method_exists( $processor, 'get_last_error' ) && null !== $processor->get_last_error() ) {
+				return null;
+			}
+			// Malformed pages may never close <style>: DOMDocument auto-closes
+			// the element, so flush the trailing buffer for parity.
+			// Raw text like the closed-block path above (rawtext parity).
+			if ( $in_style ) {
+				$content = trim( $style_buffer );
+				if ( '' !== $content && ! $inline_capped ) {
+					$inline_css .= $content . "\n";
+					if ( strlen( $inline_css ) > self::MAX_CCSS_SOURCE_BYTES ) {
+						$inline_css = substr( $inline_css, 0, self::MAX_CCSS_SOURCE_BYTES );
+					}
+				}
+			}
+			return array(
+				'inline_css'  => $inline_css,
+				'source_urls' => $source_urls,
+			);
+		}
+
+		/**
 		 * Generate critical CSS for a given URL.
 		 *
 		 * Fetches the HTML, extracts CSS resources and inline styles, downloads
@@ -3624,78 +3786,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			// Suppress libxml noise while parsing, but always restore the
-			// previous global state afterwards (audit #888 finding 1).
-			$prev_libxml = libxml_use_internal_errors( true );
-
-			try {
-				$dom = new \DOMDocument();
-				$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
-			} finally {
-				libxml_clear_errors();
-				libxml_use_internal_errors( $prev_libxml );
-			}
-
-			$xpath = new \DOMXPath( $dom );
-
-			$css_content = '';
-
-			// Extract inline <style> blocks.
-			$style_tags = $xpath->query( '//style' );
-			if ( $style_tags ) {
-				foreach ( $style_tags as $tag ) {
-					// Deadline poll (issue #1235 review): many/large inline
-					// blocks must not overrun before the next fetch poll.
-					if ( self::generation_expired( $deadline ) ) {
-						return false;
-					}
-					// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOMNode property.
-					$content = trim( $tag->textContent );
-					if ( ! empty( $content ) ) {
-						$css_content .= $content . "\n";
-						if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES ) {
-							$css_content = substr( $css_content, 0, self::MAX_CCSS_SOURCE_BYTES );
-							break;
-						}
-					}
-				}
-			}
-
-			// Extract external stylesheet URLs (skip data-* handles, dashicons, admin-bar).
-			$link_tags   = $xpath->query( '//link[@rel="stylesheet"]' );
-			$source_urls = array();
-			// Shared @import dedupe + fetch budget for the whole run (issue #1235).
-			$import_seen    = array();
-			$import_fetches = 0;
-			if ( $link_tags ) {
-				foreach ( $link_tags as $tag ) {
-					$href = $tag->getAttribute( 'href' );
-					if ( empty( $href ) ) {
-						continue;
-					}
-					if ( self::is_skipped_source_url( $href ) ) {
-						continue;
-					}
-
-					// Record the document-ordered stylesheet set used for the
-					// canonical source checksum (issue #1038). Only locally
-					// resolvable stylesheets contribute; inline <style> blocks
-					// and @import expansion are deliberately excluded so the
-					// frontend probe can reproduce this exact domain without a
-					// remote fetch. Handles core path-inlines (via
-					// wp_style_add_data(...,'path',...)) emit no <link> here and
-					// are therefore absent — the probe mirrors that by skipping
-					// them in get_local_source_css(). build_local_source_css()
-					// then collapses the deferred-link + <noscript> duplicate.
-					$source_urls[] = $href;
-
+			// Streaming HTML API path (issue #1430): HTML5-spec token walk
+			// with a deadline poll on every token. Null means unavailable or
+			// failed: fall through to the unchanged DOMDocument path below
+			// (WP 6.2-6.8 parity, byte-identical fallback).
+			$processor_sources = self::extract_css_sources_with_processor( $html, $deadline );
+			if ( null !== $processor_sources ) {
+				$css_content = $processor_sources['inline_css'];
+				$source_urls = $processor_sources['source_urls'];
+				// Shared @import dedupe + fetch budget for the whole run (issue #1235).
+				$import_seen    = array();
+				$import_fetches = 0;
+				foreach ( $source_urls as $href ) {
 					// Budget check per stylesheet (issue #1235): abort the
 					// whole run fail-open instead of starting another fetch
 					// with no time left to parse its result.
 					if ( self::generation_expired( $deadline ) ) {
 						return false;
 					}
-
 					$fetched = self::fetch_stylesheet_with_imports( $href, 0, $deadline, $import_seen, $import_fetches );
 					if ( '' !== $fetched ) {
 						$css_content .= $fetched . "\n";
@@ -3711,7 +3819,99 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						break;
 					}
 				}
-			}
+			} else {
+				if ( self::generation_expired( $deadline ) ) {
+					return false;
+				}
+				// Suppress libxml noise while parsing, but always restore the
+				// previous global state afterwards (audit #888 finding 1).
+				$prev_libxml = libxml_use_internal_errors( true );
+
+				try {
+					$dom = new \DOMDocument();
+					$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
+				} finally {
+					libxml_clear_errors();
+					libxml_use_internal_errors( $prev_libxml );
+				}
+
+				$xpath = new \DOMXPath( $dom );
+
+				$css_content = '';
+
+				// Extract inline <style> blocks.
+				$style_tags = $xpath->query( '//style' );
+				if ( $style_tags ) {
+					foreach ( $style_tags as $tag ) {
+						// Deadline poll (issue #1235 review): many/large inline
+						// blocks must not overrun before the next fetch poll.
+						if ( self::generation_expired( $deadline ) ) {
+							return false;
+						}
+						// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOMNode property.
+						$content = trim( $tag->textContent );
+						if ( ! empty( $content ) ) {
+							$css_content .= $content . "\n";
+							if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES ) {
+								$css_content = substr( $css_content, 0, self::MAX_CCSS_SOURCE_BYTES );
+								break;
+							}
+						}
+					}
+				}
+
+				// Extract external stylesheet URLs (skip data-* handles, dashicons, admin-bar).
+				$link_tags   = $xpath->query( '//link[@rel="stylesheet"]' );
+				$source_urls = array();
+				// Shared @import dedupe + fetch budget for the whole run (issue #1235).
+				$import_seen    = array();
+				$import_fetches = 0;
+				if ( $link_tags ) {
+					foreach ( $link_tags as $tag ) {
+						$href = $tag->getAttribute( 'href' );
+						if ( empty( $href ) ) {
+							continue;
+						}
+						if ( self::is_skipped_source_url( $href ) ) {
+							continue;
+						}
+
+						// Record the document-ordered stylesheet set used for the
+						// canonical source checksum (issue #1038). Only locally
+						// resolvable stylesheets contribute; inline <style> blocks
+						// and @import expansion are deliberately excluded so the
+						// frontend probe can reproduce this exact domain without a
+						// remote fetch. Handles core path-inlines (via
+						// wp_style_add_data(...,'path',...)) emit no <link> here and
+						// are therefore absent — the probe mirrors that by skipping
+						// them in get_local_source_css(). build_local_source_css()
+						// then collapses the deferred-link + <noscript> duplicate.
+						$source_urls[] = $href;
+
+						// Budget check per stylesheet (issue #1235): abort the
+						// whole run fail-open instead of starting another fetch
+						// with no time left to parse its result.
+						if ( self::generation_expired( $deadline ) ) {
+							return false;
+						}
+
+						$fetched = self::fetch_stylesheet_with_imports( $href, 0, $deadline, $import_seen, $import_fetches );
+						if ( '' !== $fetched ) {
+							$css_content .= $fetched . "\n";
+							// Bound the concatenated source (issue #1235 review):
+							// stop appending once the scan buffer exceeds 2MB so
+							// a huge theme cannot OOM the worker before polling.
+							if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES ) {
+								break;
+							}
+						}
+						// Stop before the buffer grows further past the deadline.
+						if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES || self::generation_expired( $deadline ) ) {
+							break;
+						}
+					}
+				}
+			} // End DOMDocument fallback for the streaming path above.
 
 			// Canonical source domain: the locally-resolvable stylesheets the
 			// page emitted, in document order. generate_and_store() baselines
