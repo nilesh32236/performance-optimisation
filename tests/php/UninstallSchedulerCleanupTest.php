@@ -66,7 +66,7 @@ class UninstallSchedulerCleanupTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The standalone helper must exist and carry a @since NEXT tag.
+	 * The standalone helper must exist and carry a @since 2.2.0 tag.
 	 */
 	public function test_uninstall_defines_clear_scheduled_jobs_helper_with_since_next(): void {
 		$source = $this->uninstall_source();
@@ -75,7 +75,7 @@ class UninstallSchedulerCleanupTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotFalse( $pos );
 		$docblock = substr( $source, 0, (int) $pos );
 		$docblock = substr( $docblock, (int) strrpos( $docblock, '/**' ) );
-		$this->assertStringContainsString( '@since NEXT', (string) $docblock, 'New uninstall helper must carry @since NEXT (never guess a version)' );
+		$this->assertStringContainsString( '@since 2.2.0', (string) $docblock, 'New uninstall helper must carry @since 2.2.0 (never guess a version)' );
 	}
 
 	/**

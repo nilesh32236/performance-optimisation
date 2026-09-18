@@ -79,14 +79,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				if ( ! is_array( $s ) || empty( $s['metric'] ) ) {
 					continue;
 				}
+				// Audit #1434: allowlist status to the documented contract; drop
+				// raw ai_payload (unsanitized nested data must not reach REST).
+				$status = isset( $s['status'] ) ? (string) $s['status'] : 'needs_improvement';
+				if ( ! in_array( $status, array( 'good', 'needs_improvement', 'poor' ), true ) ) {
+					$status = 'needs_improvement';
+				}
 				$validated[] = self::build(
 					(string) $s['metric'],
 					$s['value'] ?? '',
 					(string) ( $s['unit'] ?? 'string' ),
-					(string) ( $s['status'] ?? 'needs_improvement' ),
+					$status,
 					(string) ( $s['description'] ?? $s['metric'] ),
 					(string) ( $s['fix_action'] ?? 'no_action_required' )
-				) + ( isset( $s['ai_payload'] ) ? array( 'ai_payload' => $s['ai_payload'] ) : array() );
+				);
 			}
 			return $validated;
 		}
