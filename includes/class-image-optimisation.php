@@ -428,6 +428,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private static $heuristic_lcp_memo = array();
 
 		/**
+		 * Whether a responsive LCP preload already emitted this response.
+		 *
+		 * Single-high invariant (issue #1429): `emit_responsive_lcp_preload()`
+		 * sets this once a `<link ... fetchpriority="high">` is produced so
+		 * a second call in the same response degrades to '' instead of a
+		 * second high hint. Reset via `clear_runtime_caches()`.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static $responsive_lcp_preload_emitted = false;
+
+		/**
 		 * Deferred alt-map entries buffered for the shutdown commit,
 		 * keyed by blog id so mid-request switch_to_blog() cannot leak
 		 * one site's titles into another site's map (audit #1338 review).
@@ -490,13 +503,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 */
 		public static function clear_runtime_caches(): void {
-			self::$file_exists_cache      = array();
-			self::$img_size_cache         = array();
-			self::$preload_emitted        = array();
-			self::$preload_emitted_urls   = array();
-			self::$placeholder_info_cache = null;
-			self::$placeholder_path_cache = array();
-			self::$heuristic_lcp_memo     = array();
+			self::$file_exists_cache              = array();
+			self::$img_size_cache                 = array();
+			self::$preload_emitted                = array();
+			self::$preload_emitted_urls           = array();
+			self::$placeholder_info_cache         = null;
+			self::$placeholder_path_cache         = array();
+			self::$heuristic_lcp_memo             = array();
+			self::$responsive_lcp_preload_emitted = false;
 			// Commit-then-clear (audit #1338 review): long-lived processes
 			// that clear between pages must not silently drop buffered alts.
 			// Memo resets to array() (never null): get_derived_alt_map()
@@ -4124,6 +4138,402 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Emit a breakpoint-specific responsive LCP preload.
+		 *
+		 * Breakpoint-correct single-preload emitter (issue #1429): resolves
+		 * OD per-viewport LCP elements first
+		 * (`OD_Bridge::get_breakpoint_lcp_elements()`, guarded), RUM
+		 * field-LCP second (`RUM::get_field_lcp_url()`, guarded), and emits
+		 * exactly one `<link rel="preload" as="image" fetchpriority="high">`
+		 * with matching `imagesrcset`+`imagesizes` (escaped via `esc_attr()`
+		 * inside `Util::get_preload_link()`). Picture, CSS-background, and
+		 * video-poster LCP variants are covered per `type`; art-directed
+		 * `picture` entries carrying `media` are skipped fail-open (returns
+		 * '') instead of mispredicting. Without OD/RUM data returns '' so
+		 * the caller falls back to the legacy single-URL hero preload;
+		 * never more than one fetchpriority high per response (per-response
+		 * flag + `claim_hero_preload_slot()` + buffer high-hint scan).
+		 * Guards OD/RUM/WP calls with `function_exists()` /
+		 * `class_exists()` / `has_filter()` / `version_compare()` where
+		 * applicable. Multisite-safe: per-site metrics only (current-URL
+		 * context, `Util::transient_key()` blog-aware keys downstream).
+		 *
+		 * Standalone single-emission entry point for direct buffer/`wp_head`
+		 * callers needing a self-contained responsive preload (public for
+		 * testability, not part of the external plugin API): the existing
+		 * `wp_head` (`get_auto_lcp_preload_data()`) and buffer companions
+		 * (`maybe_preload_hero_image()`, `maybe_inject_css_hero_preload()`)
+		 * share the same resolver via `get_breakpoint_srcset_for_url()` so
+		 * their toggles/gates stay unchanged, while direct callers should
+		 * prefer this emitter instead of reimplementing the OD → RUM →
+		 * single-high flow.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for responsive fallback scans.
+		 * @return string The preload `<link>` tag, or empty string when skipped.
+		 */
+		public function emit_responsive_lcp_preload( ?string $buffer = null ): string {
+			try {
+				if ( self::$responsive_lcp_preload_emitted ) {
+					return '';
+				}
+				try {
+					if ( $this->is_auto_lcp_disabled_for_post() ) {
+						return '';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( $this->response_already_has_high_preload( $buffer ) ) {
+					return '';
+				}
+				$candidate = $this->get_responsive_lcp_candidate( $buffer );
+				if ( array() === $candidate || '' === trim( (string) ( $candidate['url'] ?? '' ) ) ) {
+					return '';
+				}
+				$url = trim( (string) $candidate['url'] );
+				if ( ! $this->is_image_lcp_url( $url ) || ! $this->is_allowed_hero_preload_url( $url ) ) {
+					return '';
+				}
+				if ( ! $this->claim_hero_preload_slot( $url, '', is_string( $buffer ) ? $buffer : null ) ) {
+					return '';
+				}
+				$srcset = is_string( $candidate['srcset'] ?? '' ) ? trim( (string) $candidate['srcset'] ) : '';
+				$sizes  = is_string( $candidate['sizes'] ?? '' ) ? trim( (string) $candidate['sizes'] ) : '';
+				if ( '' === $srcset || '' === $sizes ) {
+					$srcset = '';
+					$sizes  = '';
+				}
+				$link_tag = '';
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_preload_link' ) ) {
+						$link_tag = Util::get_preload_link(
+							$url,
+							'preload',
+							'image',
+							false,
+							Util::get_image_mime_type( $url ),
+							'',
+							'high',
+							$srcset,
+							$sizes
+						);
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$link_tag = '';
+				}
+				if ( ! is_string( $link_tag ) || '' === trim( $link_tag ) ) {
+					self::release_hero_preload_slot( $url, '' );
+					return '';
+				}
+				if ( false === strpos( $link_tag, 'fetchpriority="high"' ) && false === strpos( $link_tag, "fetchpriority='high'" ) ) {
+					self::release_hero_preload_slot( $url, '' );
+					return '';
+				}
+				self::$responsive_lcp_preload_emitted = true;
+				return $link_tag;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Resolve the responsive LCP candidate (OD breakpoints → RUM field).
+		 *
+		 * Shared resolver for `emit_responsive_lcp_preload()` and the
+		 * `wp_head`/buffer wiring: OD breakpoint winner first (with
+		 * attachment + buffer gap-fill when the element carries no srcset),
+		 * RUM field-LCP second. Returns `array()` when nothing resolves or
+		 * when the art-directed case must be skipped. Fail-open: any failure
+		 * returns `array()`.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for fallback scans.
+		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Empty when unresolved.
+		 */
+		private function get_responsive_lcp_candidate( ?string $buffer = null ): array {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_breakpoint_lcp_elements' ) ) {
+					try {
+						$entries = \PerformanceOptimise\Inc\OD_Bridge::get_breakpoint_lcp_elements();
+						if ( is_array( $entries ) && array() !== $entries ) {
+							$winner = $this->pick_breakpoint_winner( $entries, $buffer );
+							if ( array() !== $winner && '' !== trim( (string) ( $winner['url'] ?? '' ) ) ) {
+								return $winner;
+							}
+							// OD measured but unusable (e.g. art-directed):
+							// fall through to the RUM tier rather than the
+							// legacy single URL so a breakpoint-correct hint
+							// still wins when field data agrees.
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$rum = $this->resolve_rum_fallback_candidate( $buffer );
+				if ( array() !== $rum ) {
+					return $rum;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return array();
+		}
+
+		/**
+		 * Pick the breakpoint winner from OD per-viewport entries.
+		 *
+		 * Majority-votes the normalized URL (mobile-first tie-break, mirroring
+		 * `OD_Bridge::get_lcp_url()`); the winner's `srcset`/`sizes` pair is
+		 * kept only when both are non-empty, otherwise gap-filled via the
+		 * attachment lookup then the buffer scan. Picture, background, and
+		 * video-poster `type` values all qualify (background/poster winners
+		 * legitimately carry no srcset and emit a plain href preload).
+		 * Art-directed output — distinct viewport URLs where any entry
+		 * carries a non-empty `media`, or a picture winner with `media` —
+		 * returns `array()` (fail-open skip). Winners failing
+		 * `is_image_lcp_url()` / `is_allowed_hero_preload_url()` are
+		 * skipped entry by entry (next-most-common) so one poisoned entry
+		 * cannot suppress a valid runner-up.
+		 *
+		 * @since NEXT
+		 * @param array       $entries OD breakpoint entries.
+		 * @param string|null $buffer  Optional HTML buffer for gap-fill.
+		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Winner or empty.
+		 */
+		private function pick_breakpoint_winner( array $entries, ?string $buffer = null ): array {
+			try {
+				$usable = array();
+				foreach ( $entries as $entry ) {
+					if ( ! is_array( $entry ) ) {
+						continue;
+					}
+					$url = isset( $entry['url'] ) && is_string( $entry['url'] ) ? trim( $entry['url'] ) : '';
+					if ( '' === $url ) {
+						continue;
+					}
+					$usable[] = array(
+						'url'    => substr( $url, 0, 2048 ),
+						'srcset' => isset( $entry['srcset'] ) && is_string( $entry['srcset'] ) ? trim( substr( $entry['srcset'], 0, 4096 ) ) : '',
+						'sizes'  => isset( $entry['sizes'] ) && is_string( $entry['sizes'] ) ? trim( substr( $entry['sizes'], 0, 1024 ) ) : '',
+						'media'  => isset( $entry['media'] ) && is_string( $entry['media'] ) ? trim( substr( $entry['media'], 0, 1024 ) ) : '',
+						'type'   => isset( $entry['type'] ) && is_string( $entry['type'] ) && '' !== trim( $entry['type'] ) ? strtolower( trim( $entry['type'] ) ) : 'img',
+					);
+				}
+				if ( array() === $usable ) {
+					return array();
+				}
+				// Art-direction skip: distinct viewport URLs with media-gated
+				// sources cannot be represented by one imagesrcset preload.
+				$norms = array();
+				foreach ( $usable as $item ) {
+					try {
+						$norm = $this->normalize_image_url( $item['url'] );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$norm = '';
+					}
+					$norms[] = '' !== $norm ? $norm : $item['url'];
+				}
+				$distinct  = array_values( array_unique( $norms ) );
+				$has_media = false;
+				foreach ( $usable as $item ) {
+					if ( '' !== $item['media'] ) {
+						$has_media = true;
+						break;
+					}
+				}
+				if ( $has_media && count( $distinct ) > 1 ) {
+					return array();
+				}
+				$counts = array_count_values( $norms );
+				if ( empty( $counts ) ) {
+					return array();
+				}
+				arsort( $counts );
+				$ordered_norms = array_keys( $counts );
+				foreach ( $ordered_norms as $norm ) {
+					$winner = null;
+					foreach ( $usable as $idx => $item ) {
+						if ( $norms[ $idx ] === $norm ) {
+							$winner = $item;
+							break;
+						}
+					}
+					if ( null === $winner ) {
+						continue;
+					}
+					// A lone art-directed picture source is still a
+					// mispredict risk: skip instead of emitting.
+					if ( 'picture' === $winner['type'] && '' !== $winner['media'] ) {
+						continue;
+					}
+					if ( ! $this->is_image_lcp_url( $winner['url'] ) || ! $this->is_allowed_hero_preload_url( $winner['url'] ) ) {
+						continue;
+					}
+					$srcset = $winner['srcset'];
+					$sizes  = $winner['sizes'];
+					if ( '' === $srcset || '' === $sizes ) {
+						$srcset = '';
+						$sizes  = '';
+						try {
+							$responsive = self::get_lcp_responsive_data_for_url( $winner['url'] );
+							if ( '' !== trim( (string) ( $responsive['srcset'] ?? '' ) ) && '' !== trim( (string) ( $responsive['sizes'] ?? '' ) ) ) {
+								$srcset = trim( (string) $responsive['srcset'] );
+								$sizes  = trim( (string) $responsive['sizes'] );
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+						if ( ( '' === $srcset || '' === $sizes ) && is_string( $buffer ) && '' !== $buffer ) {
+							try {
+								$buf_srcset = $this->get_lcp_srcset_for_url( $winner['url'], $buffer );
+								$buf_sizes  = '' !== $buf_srcset ? $this->get_lcp_sizes_for_url( $winner['url'], $buffer ) : '';
+								if ( '' !== $buf_srcset && '' !== $buf_sizes ) {
+									$srcset = $buf_srcset;
+									$sizes  = $buf_sizes;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						if ( '' === $srcset || '' === $sizes ) {
+							$srcset = '';
+							$sizes  = '';
+						}
+					}
+					return array(
+						'url'    => $winner['url'],
+						'srcset' => $srcset,
+						'sizes'  => $sizes,
+						'type'   => $winner['type'],
+						'media'  => $winner['media'],
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return array();
+		}
+
+		/**
+		 * Resolve the RUM field-LCP fallback candidate.
+		 *
+		 * Second tier behind OD breakpoints (issue #1429): reads
+		 * `RUM::get_field_lcp_url()` (guarded) for the current path and
+		 * gap-fills srcset/sizes via the attachment lookup then the buffer
+		 * scan. Returns `array()` when RUM is unavailable, has no data, or
+		 * the candidate fails validation. Fail-open: any failure returns
+		 * `array()`.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for gap-fill.
+		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Candidate or empty.
+		 */
+		private function resolve_rum_fallback_candidate( ?string $buffer = null ): array {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
+					return array();
+				}
+				$path = '/';
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_current_url' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_rum_path' ) ) {
+						$current     = Util::get_current_url();
+						$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current, PHP_URL_PATH ) : '/';
+						$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
+						$path        = Util::normalize_rum_path( $raw_path );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					$field = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return array();
+				}
+				if ( ! is_array( $field ) || empty( $field['url'] ) || ! is_string( $field['url'] ) ) {
+					return array();
+				}
+				$url = trim( $field['url'] );
+				if ( '' === $url || ! $this->is_image_lcp_url( $url ) || ! $this->is_allowed_hero_preload_url( $url ) ) {
+					return array();
+				}
+				$srcset = '';
+				$sizes  = '';
+				try {
+					$responsive = self::get_lcp_responsive_data_for_url( $url );
+					if ( '' !== trim( (string) ( $responsive['srcset'] ?? '' ) ) && '' !== trim( (string) ( $responsive['sizes'] ?? '' ) ) ) {
+						$srcset = trim( (string) $responsive['srcset'] );
+						$sizes  = trim( (string) $responsive['sizes'] );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( ( '' === $srcset || '' === $sizes ) && is_string( $buffer ) && '' !== $buffer ) {
+					try {
+						$buf_srcset = $this->get_lcp_srcset_for_url( $url, $buffer );
+						$buf_sizes  = '' !== $buf_srcset ? $this->get_lcp_sizes_for_url( $url, $buffer ) : '';
+						if ( '' !== $buf_srcset && '' !== $buf_sizes ) {
+							$srcset = $buf_srcset;
+							$sizes  = $buf_sizes;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( '' === $srcset || '' === $sizes ) {
+					$srcset = '';
+					$sizes  = '';
+				}
+				return array(
+					'url'    => $url,
+					'srcset' => $srcset,
+					'sizes'  => $sizes,
+					'type'   => 'img',
+					'media'  => '',
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Whether the response already carries a fetchpriority-high hint.
+		 *
+		 * Single-high guard (issue #1429): true when the responsive
+		 * per-response flag is set or when the buffer already contains an
+		 * exact `fetchpriority="high"` hint. Slot-claim enforcement
+		 * (exact + any-media `has_emitted_preload()` /
+		 * `is_hero_preload_claimed()` checks plus buffer URL matching)
+		 * lives in `claim_hero_preload_slot()`, not here. Fail-open to
+		 * false.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer to inspect.
+		 * @return bool True when a high hint already exists.
+		 */
+		private function response_already_has_high_preload( ?string $buffer = null ): bool {
+			try {
+				if ( self::$responsive_lcp_preload_emitted ) {
+					return true;
+				}
+				if ( is_string( $buffer ) && '' !== $buffer && false !== stripos( $buffer, 'fetchpriority' ) ) {
+					if ( 1 === preg_match( '/fetchpriority\s*=\s*["\']?high(?=["\'\s>\/]|$)/i', $buffer ) ) {
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			return false;
+		}
+
+		/**
 		 * Retrieves the manual per-post LCP image preload item.
 		 *
 		 * Emits the `_wppo_lcp_preload_url` picker value via
@@ -4205,7 +4615,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( '' === $lcp_url ) {
 					return array();
 				}
-				$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
+				$responsive = $this->get_breakpoint_srcset_for_url( $lcp_url, null );
+				if ( '' === $responsive['srcset'] || '' === $responsive['sizes'] ) {
+					$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
+				}
 				return array( $this->prepare_preload_item( $lcp_url, $responsive['srcset'], $responsive['sizes'] ) );
 			}
 
@@ -4214,8 +4627,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return array();
 			}
 
-			$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
+			$responsive = $this->get_breakpoint_srcset_for_url( $lcp_url, null );
+			if ( '' === $responsive['srcset'] || '' === $responsive['sizes'] ) {
+				$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
+			}
 			return array( $this->prepare_preload_item( $lcp_url, $responsive['srcset'], $responsive['sizes'] ) );
+		}
+
+		/**
+		 * Look up breakpoint srcset/sizes for a resolved LCP URL.
+		 *
+		 * Thin wrapper over `get_responsive_lcp_candidate()` (issue #1429)
+		 * for the `wp_head` emission path: when OD breakpoints (or RUM
+		 * field data) resolve the same normalized URL, the breakpoint pair
+		 * wins over the attachment lookup; otherwise returns an empty pair
+		 * so callers fall back to the legacy single-href data. Fail-open to
+		 * an empty pair on any failure.
+		 *
+		 * @since NEXT
+		 * @param string      $lcp_url The resolved LCP image URL.
+		 * @param string|null $buffer  Optional HTML buffer for gap-fill.
+		 * @return array{srcset: string, sizes: string} Responsive pair.
+		 */
+		private function get_breakpoint_srcset_for_url( string $lcp_url, ?string $buffer = null ): array {
+			$empty = array(
+				'srcset' => '',
+				'sizes'  => '',
+			);
+			try {
+				if ( '' === trim( $lcp_url ) ) {
+					return $empty;
+				}
+				$candidate = $this->get_responsive_lcp_candidate( $buffer );
+				if ( array() === $candidate || '' === trim( (string) ( $candidate['url'] ?? '' ) ) ) {
+					return $empty;
+				}
+				try {
+					$needle = $this->normalize_image_url( $lcp_url );
+					$got    = $this->normalize_image_url( (string) $candidate['url'] );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $empty;
+				}
+				if ( '' === $needle || $needle !== $got ) {
+					return $empty;
+				}
+				$srcset = is_string( $candidate['srcset'] ?? '' ) ? trim( (string) $candidate['srcset'] ) : '';
+				$sizes  = is_string( $candidate['sizes'] ?? '' ) ? trim( (string) $candidate['sizes'] ) : '';
+				if ( '' === $srcset || '' === $sizes ) {
+					return $empty;
+				}
+				return array(
+					'srcset' => $srcset,
+					'sizes'  => $sizes,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $empty;
+			}
 		}
 
 		/**
@@ -7882,8 +8351,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! $this->claim_hero_preload_slot( $lcp_url, '', $buffer ) ) {
 					return $buffer;
 				}
-				$imagesrcset = $this->get_lcp_srcset_for_url( $lcp_url, $buffer );
-				$imagesizes  = '' !== $imagesrcset ? $this->get_lcp_sizes_for_url( $lcp_url, $buffer ) : '';
+				// Breakpoint-first srcset (issue #1429): OD per-viewport
+				// elements (or RUM field data) for the same hero win over
+				// the buffer scan so mobile/desktop fetch the right
+				// candidate; the buffer scan stays as the legacy fallback.
+				$breakpoint  = $this->get_breakpoint_srcset_for_url( $lcp_url, $buffer );
+				$imagesrcset = '' !== $breakpoint['srcset'] ? $breakpoint['srcset'] : $this->get_lcp_srcset_for_url( $lcp_url, $buffer );
+				$imagesizes  = '' !== $breakpoint['sizes'] ? $breakpoint['sizes'] : ( '' !== $imagesrcset ? $this->get_lcp_sizes_for_url( $lcp_url, $buffer ) : '' );
 				$link_tag    = Util::get_preload_link(
 					$lcp_url,
 					'preload',
@@ -8565,7 +9039,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( ! $this->claim_hero_preload_slot( $lcp_url, '', $buffer ) ) {
 				return $buffer;
 			}
-			$link_tag = Util::get_preload_link( $lcp_url, 'preload', 'image', false, Util::get_image_mime_type( $lcp_url ), '', 'high' );
+			// Breakpoint-first srcset (issue #1429): CSS-background heroes
+			// share the OD/RUM responsive candidate so the preload carries
+			// matching imagesrcset+imagesizes when the measured element
+			// provides them; otherwise a plain href preload emits.
+			$breakpoint_css = $this->get_breakpoint_srcset_for_url( $lcp_url, $buffer );
+			$link_tag       = Util::get_preload_link( $lcp_url, 'preload', 'image', false, Util::get_image_mime_type( $lcp_url ), '', 'high', $breakpoint_css['srcset'], $breakpoint_css['sizes'] );
 			if ( '' === $link_tag ) {
 				// Link generation failed after the slot claim: release the claim
 				// so the sibling emitter may still emit (issue #1312 review).
