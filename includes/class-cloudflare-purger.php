@@ -103,8 +103,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 * @return bool True on 2xx, false on WP_Error or non-2xx or empty args.
 		 */
 		public static function purge_files( string $zone, string $token, array $urls, string $log_tag = 'cloudflare', string $fail_prefix = 'CDN purge failed' ): bool {
-			if ( '' === $zone || '' === $token || empty( $urls ) ) {
+			if ( '' === $zone || '' === $token ) {
 				self::log_skip( $log_tag, 'not configured', $fail_prefix );
+				return false;
+			}
+			if ( empty( $urls ) ) {
+				self::log_skip( $log_tag, 'no valid URLs', $fail_prefix );
 				return false;
 			}
 
@@ -117,7 +121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 				)
 			);
 			if ( empty( $files ) ) {
-				self::log_skip( $log_tag, 'not configured', $fail_prefix );
+				self::log_skip( $log_tag, 'no valid URLs', $fail_prefix );
 				return false;
 			}
 

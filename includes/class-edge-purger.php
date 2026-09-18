@@ -107,7 +107,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 			} else {
 				return true;
 			}
-			if ( ! Edge_Cache::is_enabled() ) {
+			// Load settings once and reuse for the enabled/configured guards
+			// and the provider slices below (Util::get_settings() is memoized,
+			// but a single read keeps the entry point obvious and lock-free).
+			$settings = Util::get_settings();
+			if ( ! Edge_Cache::is_enabled( $settings ) ) {
 				return true;
 			}
 			if ( self::has_purge_lock() ) {
@@ -118,12 +122,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 			// unconfigured 'all' purge must not take the lock, perform HTTP,
 			// or silently no-op — it returns true with a logged skip
 			// (fail-open, ~50ms + outbound calls saved per save).
-			if ( class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) && ! Edge_Cache::is_configured() ) {
+			if ( class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) && ! Edge_Cache::is_configured( $settings ) ) {
 				self::log_skip( 'edge', 'not configured' );
 				return true;
 			}
 
-			$settings       = Util::get_settings();
 			$edge           = isset( $settings['edge_cache'] ) && is_array( $settings['edge_cache'] ) ? $settings['edge_cache'] : array();
 			$cache_settings = isset( $settings['cache_settings'] ) && is_array( $settings['cache_settings'] ) ? $settings['cache_settings'] : array();
 

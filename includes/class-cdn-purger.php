@@ -76,8 +76,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 				return true;
 			}
 
-			if ( ! self::is_configured() ) {
-				self::log_skip( $service, 'not configured' );
+			if ( ! self::is_configured( $cache ) ) {
+				// Default 'none'/empty service means nothing was ever configured:
+				// stay silent instead of emitting a skip line on every clear.
+				if ( 'none' !== $service && '' !== $service ) {
+					self::log_skip( $service, 'not configured' );
+				}
 				return true;
 			}
 
@@ -222,11 +226,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		/**
 		 * Whether the configured purge service has everything it needs.
 		 *
+		 * Accepts an already-loaded cache_settings slice to avoid re-reading
+		 * settings when the caller (purge_all) already has it; falls back to
+		 * Util::get_settings() when omitted so existing callers keep working.
+		 *
+		 * @since 2.0.0
+		 * @since NEXT Added optional $cache_settings parameter.
+		 * @param array|null $cache_settings Optional cache_settings slice.
 		 * @return bool
 		 */
-		public static function is_configured(): bool {
-			$options = Util::get_settings();
-			$cache   = isset( $options['cache_settings'] ) && is_array( $options['cache_settings'] ) ? $options['cache_settings'] : array();
+		public static function is_configured( ?array $cache_settings = null ): bool {
+			if ( null === $cache_settings ) {
+				$options        = Util::get_settings();
+				$cache_settings = isset( $options['cache_settings'] ) && is_array( $options['cache_settings'] ) ? $options['cache_settings'] : array();
+			}
+			$cache   = $cache_settings;
 			$service = isset( $cache['cdnPurgeService'] ) ? sanitize_text_field( (string) $cache['cdnPurgeService'] ) : 'none';
 
 			if ( 'cloudflare' === $service ) {
@@ -243,6 +257,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 
 		/**
 		 * Purge everything on Cloudflare for the configured zone.
+		 *
+		 * Unreachable-by-construction safeguard: purge_all() already gates the
+		 * 'all' path on is_configured(), so the empty zone/token early return
+		 * below only fires for direct calls. Retained as defense-in-depth.
 		 *
 		 * @param array $cache cache_settings values.
 		 * @return bool
@@ -266,6 +284,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 
 		/**
 		 * Send PURGE requests to the configured Varnish endpoints.
+		 *
+		 * Unreachable-by-construction safeguard: purge_all() already gates the
+		 * 'all' path on is_configured(), so the empty-URL early return below
+		 * only fires for direct calls. Retained as defense-in-depth.
 		 *
 		 * The number of endpoints is capped (default 20, filterable) and the
 		 * per-request timeout is short so an unreachable node cannot stall the

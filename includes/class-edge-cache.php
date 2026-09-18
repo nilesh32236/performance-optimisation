@@ -68,11 +68,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 * applies the wppo_edge_cache_enabled filter.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added optional $settings parameter to reuse already-loaded settings.
+		 * @param array|null $settings Optional already-loaded settings array.
 		 * @return bool True when edge cache is enabled.
 		 */
-		public static function is_enabled(): bool {
-			$settings = Util::get_settings();
-			$enabled  = false;
+		public static function is_enabled( ?array $settings = null ): bool {
+			if ( null === $settings ) {
+				$settings = Util::get_settings();
+			}
+			$enabled = false;
 			if ( isset( $settings['edge_cache'] ) && is_array( $settings['edge_cache'] ) && isset( $settings['edge_cache']['enabled'] ) ) {
 				$enabled = (bool) $settings['edge_cache']['enabled'];
 			}
@@ -93,14 +97,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 * purge is still safe as no-op when unconfigured.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added optional $settings parameter to reuse already-loaded settings.
+		 * @param array|null $settings Optional already-loaded settings array.
 		 * @return bool
 		 */
-		public static function is_configured(): bool {
-			if ( ! self::is_enabled() ) {
+		public static function is_configured( ?array $settings = null ): bool {
+			if ( null === $settings ) {
+				$settings = Util::get_settings();
+			}
+			if ( ! self::is_enabled( $settings ) ) {
 				return false;
 			}
-			$settings = Util::get_settings();
-			$cache    = isset( $settings['edge_cache'] ) && is_array( $settings['edge_cache'] ) ? $settings['edge_cache'] : array();
+			$cache = isset( $settings['edge_cache'] ) && is_array( $settings['edge_cache'] ) ? $settings['edge_cache'] : array();
 
 			// Cloudflare via existing CDN_Purger config is also valid.
 			$has_cf    = ! empty( $cache['cloudflareZoneId'] ) && defined( 'WPPO_CLOUDFLARE_API_TOKEN' ) && '' !== (string) constant( 'WPPO_CLOUDFLARE_API_TOKEN' );
