@@ -130,10 +130,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 					 * Filters the maximum source size minified in one pass.
 					 *
 					 * @since NEXT
-					 * @param int $bytes Maximum bytes. Default 1048576 (1MB).
+					 * @param int $bytes Maximum bytes. Default 1048576 (1MB). 0 or negative disables the check.
 					 */
 					$max_bytes = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_minify_max_bytes', 1048576 ) : 1048576;
+					$max_bytes = $max_bytes < 0 ? 0 : $max_bytes;
 					if ( $max_bytes > 0 ) {
+						clearstatcache( true, $this->file_path );
 						$source_size = filesize( $this->file_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- size probe before WP_Filesystem buffers the file.
 						if ( false !== $source_size && $source_size > $max_bytes ) {
 							return '';
