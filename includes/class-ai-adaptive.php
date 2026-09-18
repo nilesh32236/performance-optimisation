@@ -1453,11 +1453,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 								if ( ! is_array( $metrics ) ) {
 									continue;
 								}
-								foreach ( array( 'lcp', 'ttfb' ) as $metric_key ) {
-									if ( isset( $metrics[ $metric_key ]['n'] ) ) {
-										$peak = max( $peak, (int) $metrics[ $metric_key ]['n'] );
-									}
-								}
+								// Shared counter with get_rum_top_speculation_urls():
+								// peak across ALL RUM metrics so the floor and the
+								// volume ranking agree on the same sample counts.
+								$peak = max( $peak, self::peak_rum_metric_samples( $metrics ) );
 							}
 						}
 						if ( $peak < self::speculation_min_samples() ) {
@@ -3969,9 +3968,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					$settings = Util::get_settings();
 					if ( isset( $settings['ai_adaptive']['speculation_min_samples'] ) && is_numeric( $settings['ai_adaptive']['speculation_min_samples'] ) ) {
 						$min = (int) $settings['ai_adaptive']['speculation_min_samples'];
-						if ( $min >= 1 && $min <= 1000 ) {
-							return $min;
-						}
+						return min( 1000, max( 1, $min ) );
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -4020,12 +4017,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * The per-URL cap (speculation_max_urls, 1-5) bounds the common case,
 		 * but very long pretty-permalink URLs could still push the delta past
-		 * 1KB; drop trailing (lowest-ranked) URLs until the encoded `urls`
-		 * array fits or a single URL remains. A single URL is always returned
-		 * unchanged even when it alone exceeds the budget, so the ~1KB
-		 * guarantee is soft for pathological single URLs by design.
-		 * Fail-open: unencodable input returns the input unchanged (callers
-		 * still slice to the max).
+		 * 1KB; drop trailing (lowest-ranked) URLs until the encoded rule fits
+		 * or a single URL remains. Size is measured with a representative
+		 * list-rule wrapper (source + eagerness) so the ~50-80 byte wrapper
+		 * overhead counts toward the budget; only the URL list is returned.
+		 * A single URL is always returned unchanged even when it alone exceeds
+		 * the budget, so the ~1KB guarantee is soft for pathological single
+		 * URLs by design. Fail-open: unencodable input returns the input
+		 * unchanged (callers still slice to the max).
 		 *
 		 * @param string[] $urls Candidate absolute URLs (rank-ordered).
 		 * @param int      $budget_bytes Maximum encoded size in bytes.
@@ -4049,7 +4048,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 				$remaining = count( $urls );
 				while ( $remaining > 1 ) {
-					$encoded = call_user_func( $encode, $urls );
+					$probe   = array(
+						'source'    => 'list',
+						'urls'      => $urls,
+						'eagerness' => 'moderate',
+					);
+					$encoded = call_user_func( $encode, $probe );
 					if ( ! is_string( $encoded ) || strlen( $encoded ) <= $budget_bytes ) {
 						break;
 					}
@@ -4275,6 +4279,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Peak per-bucket sample count across all RUM metrics (issue #1425).
+		 *
+		 * Shared counter between the heuristic_learn() undersample floor and
+		 * get_rum_top_speculation_urls() volume ranking so both gates rank
+		 * the same sample counts. Skips the `lcpUrls` URL list (not a sample
+		 * aggregate) and non-array buckets. Fail-open: unparseable input
+		 * yields 0.
+		 *
+		 * @param array $metrics Single path-bucket metric map.
+		 * @return int Peak `n` (>= 0).
+		 * @since NEXT
+		 */
+		public static function peak_rum_metric_samples( array $metrics ): int {
+			try {
+				$peak = 0;
+				foreach ( $metrics as $metric => $aggregate ) {
+					if ( 'lcpUrls' === $metric || ! is_array( $aggregate ) ) {
+						continue;
+					}
+					if ( isset( $aggregate['n'] ) ) {
+						$peak = max( $peak, (int) $aggregate['n'] );
+					}
+				}
+				return $peak;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
 		 * Top RUM (real-visit) URLs for the RUM-gated speculation list rule.
 		 *
 		 * Volume-ranked from the read-only RUM aggregate (no queue flush, no
@@ -4329,16 +4364,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						if ( false !== strpos( $path, '?' ) || false !== strpos( $path, '#' ) ) {
 							continue;
 						}
-						$count = 0;
-						foreach ( $metrics as $metric => $aggregate ) {
-							if ( 'lcpUrls' === $metric || ! is_array( $aggregate ) ) {
-								continue;
-							}
-							$n = isset( $aggregate['n'] ) ? (int) $aggregate['n'] : 0;
-							if ( $n > $count ) {
-								$count = $n;
-							}
-						}
+						$count = self::peak_rum_metric_samples( $metrics );
 						if ( $count <= 0 ) {
 							continue;
 						}
