@@ -1109,20 +1109,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( is_string( $lcp_url ) && '' !== $lcp_url ) {
 					$normalized_lcp = $this->normalize_image_url( $lcp_url );
 				}
-				$tag_is_protected_lcp = function ( array $candidates ) use ( $normalized_lcp ): bool {
+				// Per-buffer memo of normalized candidate URLs: the closures
+				// below run once per <img> tag, so identical src/srcset values
+				// across image-heavy pages normalize once instead of N times.
+				$norm_cache           = array();
+				$tag_is_protected_lcp = function ( array $candidates ) use ( $normalized_lcp, &$norm_cache ): bool {
 					if ( '' === $normalized_lcp ) {
 						return false;
 					}
 					foreach ( $candidates as $candidate ) {
-						if ( '' !== $candidate && $this->normalize_image_url( $candidate ) === $normalized_lcp ) {
+						if ( '' === $candidate ) {
+							continue;
+						}
+						if ( ! array_key_exists( $candidate, $norm_cache ) ) {
+							$norm_cache[ $candidate ] = $this->normalize_image_url( $candidate );
+						}
+						if ( $norm_cache[ $candidate ] === $normalized_lcp ) {
 							return true;
 						}
 					}
 					return false;
 				};
-				$tag_is_occluded      = function ( array $candidates ) use ( $occluded_set ): bool {
+				$tag_is_occluded      = function ( array $candidates ) use ( $occluded_set, &$norm_cache ): bool {
 					foreach ( $candidates as $candidate ) {
-						if ( '' !== $candidate && isset( $occluded_set[ $this->normalize_image_url( $candidate ) ] ) ) {
+						if ( '' === $candidate ) {
+							continue;
+						}
+						if ( ! array_key_exists( $candidate, $norm_cache ) ) {
+							$norm_cache[ $candidate ] = $this->normalize_image_url( $candidate );
+						}
+						if ( isset( $occluded_set[ $norm_cache[ $candidate ] ] ) ) {
 							return true;
 						}
 					}
@@ -7162,8 +7178,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			// CSS-hero pages may contain no <img> tags at all; let those through
 			// to Pass C when the CSS hero preload is enabled.
-			$css_hero_eligible = $css_preload_enabled && false !== stripos( $filtered_output, 'background' );
-			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) || ( false === stripos( $filtered_output, '<img' ) && ! $css_hero_eligible ) ) {
+			$css_hero_eligible    = $css_preload_enabled && false !== stripos( $filtered_output, 'background' );
+			$has_img              = false !== stripos( $filtered_output, '<img' );
+			$tag_processor_exists = class_exists( 'WP_HTML_Tag_Processor' );
+			if ( ! $tag_processor_exists ) {
+				// Occlusion demotion (Pass B2) and the final lazy/high sweep
+				// both ship regex fallbacks, so occlusion-only mode can
+				// still run on pre-6.2 cores without the HTML API.
+				if ( ! $occlusion_enabled || ! $has_img ) {
+					return $filtered_output;
+				}
+			} elseif ( ! $has_img && ! $css_hero_eligible ) {
 				return $filtered_output;
 			}
 
