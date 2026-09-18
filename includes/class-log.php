@@ -173,7 +173,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		 * @return array Cached or freshly queried results with pagination details.
 		 * @since 1.0.0
 		 */
-		public static function get_recent_activities( array $params ): array { // Audit #1434: typed.
+		public static function get_recent_activities( array $params ): array {
+			// Audit #1434: typed.
 			global $wpdb;
 
 			$page     = max( 1, absint( $params['page'] ?? 1 ) );

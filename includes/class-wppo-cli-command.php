@@ -594,7 +594,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		public function settings( array $args, array $assoc_args ): void {
 			$action = $args[0] ?? 'get';
 			// Audit #1434: sanitize the option key + log/output surface.
-			$tab    = isset( $args[1] ) ? sanitize_key( (string) $args[1] ) : null;
+			$tab = isset( $args[1] ) ? sanitize_key( (string) $args[1] ) : null;
 
 			$options = Util::get_settings();
 			// On fresh installs the option does not exist yet — fall back to

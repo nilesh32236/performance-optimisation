@@ -100,6 +100,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @since 2.0.0
 		 * @var string|null
 		 */
+		private static ?string $cached_effective_mode = null;
+
 		/**
 		 * Parsed preload-exclude URL list memo (audit #1434: clearable via reset_cache()).
 		 *
@@ -107,8 +109,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @var array|null
 		 */
 		private static ?array $exclude_urls_memo = null;
-
-		private static ?string $cached_effective_mode = null;
 
 		/**
 		 * Per-request cached get_mode value.

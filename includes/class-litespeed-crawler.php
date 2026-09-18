@@ -766,7 +766,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					}
 				}
 				curl_multi_add_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_add_handle -- crawler requires curl_multi
-				$handles[]                 = $ch;
+				$handles[]                            = $ch;
 				$index_to_url[ spl_object_id( $ch ) ] = $req['url']; // Audit #1434: spl_object_id() — (int) cast collides on PHP 8 CurlHandle objects.
 			};
 
