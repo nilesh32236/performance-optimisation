@@ -5403,13 +5403,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				echo '<style id="wppo-critical-css">' . "\n";
 				// Sanitized against HTML breakout tokens; see sanitize_inline_css().
-				echo self::sanitize_inline_css( $split['inline'] ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
+				// The ledger records the sanitized bytes actually echoed (not
+				// the pre-sanitization length): escapes such as '<' -> '\3c '
+				// expand output, so only the post-sanitization length keeps a
+				// later emitter within the shared 40KB budget.
+				$sanitized = self::sanitize_inline_css( $split['inline'] );
+				echo $sanitized . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
 				echo '</style>' . "\n";
 				// Record the inlined bytes so later emitters in this request
 				// see the reduced remainder (see estimate_committed_inline_bytes()).
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'add_committed_inline_bytes' ) ) {
 					try {
-						Util::add_committed_inline_bytes( strlen( $split['inline'] ) );
+						Util::add_committed_inline_bytes( strlen( $sanitized ) );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}

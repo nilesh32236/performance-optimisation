@@ -6978,6 +6978,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Unfiltered core inline default for the invalid-limit fallback (issue #1462).
+		 *
+		 * Mirrors the version-dependent default in get_styles_inline_limit()
+		 * without running the `styles_inline_size_limit` filter, so the
+		 * invalid-limit path never invokes the filter twice per call.
+		 *
+		 * @return int The default inline size limit in bytes.
+		 * @since NEXT
+		 */
+		private static function get_styles_inline_default(): int {
+			$default = 40000;
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				$default = 20000;
+			}
+			return $default;
+		}
+
+		/**
 		 * Bytes committed to inline `<style>` output so far on this request (issue #1462).
 		 *
 		 * Request-global ledger so the per-URL used-CSS pipeline and the
@@ -7069,11 +7087,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function get_remaining_inline_budget( int $already_inlined = 0, ?int $limit = null ): int {
 			try {
 				// Resolve the limit once: get_styles_inline_limit() runs the
-				// `styles_inline_size_limit` filter, so a second call on the
-				// invalid-limit path would invoke the filter twice per call.
+				// `styles_inline_size_limit` filter, so the invalid-limit path
+				// falls back to the unfiltered default instead of invoking
+				// the filter a second time per call.
 				$budget = null === $limit ? self::get_styles_inline_limit() : (int) $limit;
 				if ( $budget <= 0 ) {
-					$budget = self::get_styles_inline_limit();
+					$budget = self::get_styles_inline_default();
 				}
 				$remaining = $budget - max( 0, $already_inlined );
 				return $remaining > 0 ? (int) $remaining : 0;
@@ -7112,7 +7131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Resolve the limit once (see get_remaining_inline_budget()).
 				$budget = null === $limit ? self::get_styles_inline_limit() : (int) $limit;
 				if ( $budget <= 0 ) {
-					$budget = self::get_styles_inline_limit();
+					$budget = self::get_styles_inline_default();
 				}
 				if ( strlen( $css ) <= $budget ) {
 					return array(
@@ -7148,6 +7167,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `@media`/`@supports`/`@layer` wrapper unclosed. Returns null when no
 		 * top-level boundary fits (callers defer everything).
 		 *
+		 * Braces inside quoted strings (e.g. content with a brace character)
+		 * and CSS comments are skipped while scanning so they can neither open a
+		 * phantom block nor close a real one; callers stay fail-open (a
+		 * missed cut defers everything, never emits broken CSS).
+		 *
 		 * @param string $css CSS content.
 		 * @param int    $budget Maximum bytes for the inline prefix.
 		 * @return int|null Offset of the cut brace, or null when nothing fits.
@@ -7159,11 +7183,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( '' === $prefix ) {
 					return null;
 				}
-				$depth = 0;
-				$cut   = null;
-				$len   = strlen( $prefix );
+				$depth      = 0;
+				$cut        = null;
+				$len        = strlen( $prefix );
+				$in_single  = false;
+				$in_double  = false;
+				$in_comment = false;
 				for ( $i = 0; $i < $len; $i++ ) {
-					$c = $prefix[ $i ];
+					$c    = $prefix[ $i ];
+					$next = $i + 1 < $len ? $prefix[ $i + 1 ] : '';
+					if ( $in_comment ) {
+						if ( '*' === $c && '/' === $next ) {
+							$in_comment = false;
+							++$i;
+						}
+						continue;
+					}
+					if ( $in_single ) {
+						if ( '\\' === $c ) {
+							++$i;
+							continue;
+						}
+						if ( "'" === $c ) {
+							$in_single = false;
+						}
+						continue;
+					}
+					if ( $in_double ) {
+						if ( '\\' === $c ) {
+							++$i;
+							continue;
+						}
+						if ( '"' === $c ) {
+							$in_double = false;
+						}
+						continue;
+					}
+					if ( '/' === $c && '*' === $next ) {
+						$in_comment = true;
+						++$i;
+						continue;
+					}
+					if ( "'" === $c ) {
+						$in_single = true;
+						continue;
+					}
+					if ( '"' === $c ) {
+						$in_double = true;
+						continue;
+					}
 					if ( '{' === $c ) {
 						++$depth;
 					} elseif ( '}' === $c ) {
