@@ -209,6 +209,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 				return;
 			}
 			$gzip_file_path = $file_path . '.gz';
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_minify_write_path_allowed' ) ) {
+				if ( ! Util::is_minify_write_path_allowed( $gzip_file_path ) ) {
+					$this->filesystem->put_contents( $file_path, $js, FS_CHMOD_FILE );
+					return;
+				}
+			}
 
 			$this->filesystem->put_contents( $file_path, $js, FS_CHMOD_FILE );
 

@@ -2425,8 +2425,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'php3'  => true,
 					'php4'  => true,
 					'php5'  => true,
+					'php6'  => true,
 					'php7'  => true,
 					'php8'  => true,
+					'phps'  => true,
+					'pht'   => true,
+					'phpt'  => true,
 					'phtml' => true,
 					'phar'  => true,
 				);
@@ -4158,6 +4162,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return false;
 			}
 			if ( false !== strpos( $decoded, "\xc0" ) || false !== strpos( $decoded, "\xc1" ) ) {
+				return false;
+			}
+			try {
+				// Stream-wrapper/scheme rejection (mirrors the minify gates):
+				// wrapper targets such as phar:///tmp/x/.htaccess have a
+				// benign basename but must never reach the filesystem layer.
+				$trimmed     = ltrim( $htaccess_file );
+				$dec_trimmed = ltrim( $decoded );
+				foreach ( array( $trimmed, $dec_trimmed ) as $candidate ) {
+					if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $candidate ) ) {
+						return false;
+					}
+					if ( 0 === stripos( $candidate, 'data:' ) || 0 === stripos( $candidate, 'phar:' ) ) {
+						return false;
+					}
+					if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#i', $candidate ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $candidate ) ) {
+						return false;
+					}
+					if ( 0 === strpos( str_replace( '\\', '/', $candidate ), '//' ) ) {
+						return false;
+					}
+				}
+				// Absolute-path contract (mirrors validate_minify_write_path()):
+				// callers document an absolute path; a relative target would
+				// resolve against the process CWD instead of the site root.
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$abs_check = wp_normalize_path( $htaccess_file );
+				} else {
+					$abs_check = str_replace( '\\', '/', $htaccess_file );
+				}
+				if ( 0 !== strpos( $abs_check, '/' ) && ! (bool) preg_match( '#^[a-zA-Z]:/#', $abs_check ) ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return false;
 			}
 			try {
