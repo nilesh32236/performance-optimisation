@@ -723,9 +723,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				// One-time migration: old offset option is OFFSET-based and not convertible to ID cursor.
 				// Convert offset to cursor via a single offset query (one-time cost) instead of restarting at 0
-				// which would re-queue the first 200 IDs. Gated behind a one-time option to avoid duplicate warm-ups.
+				// which would re-queue the first 200 IDs. The offset deletion itself is the one-shot
+				// marker (issue #1464): no `wppo_preload_cron_migrated` row is allocated, so fresh
+				// installs create zero migration rows and steady-state runs skip with a single read.
 				$old_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
-				if ( 0 === $last_id && 0 !== $old_offset && ! get_option( 'wppo_preload_cron_migrated', false ) ) {
+				if ( 0 === $last_id && 0 !== $old_offset ) {
 					// Try to map old OFFSET to an ID cursor to resume without duplicating work.
 					$post_types_for_migration = get_post_types( array( 'public' => true ), 'names' );
 					$post_types_for_migration = array_unique( array_merge( array_values( array_diff( $post_types_for_migration, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
@@ -754,9 +756,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 							error_log( 'WPPO: preload cursor migration reset offset ' . $old_offset . ' to 0 (no mapping found)' );
 						}
 					}
-					update_option( 'wppo_preload_cron_migrated', 1, false );
 					delete_option( 'wppo_preload_cron_offset' );
-				} elseif ( 0 === $last_id && 0 !== $old_offset ) {
+				} elseif ( 0 !== $old_offset ) {
+					// Stale offset orphan: the cursor already advanced (e.g.
+					// downgrade/re-upgrade or mid-cycle update), so no mapping is
+					// needed — just delete the legacy row so it never leaks.
 					delete_option( 'wppo_preload_cron_offset' );
 				}
 

@@ -1117,7 +1117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * Verify live site state (self-verification gate for the autonomous maintenance loop).
 		 *
 		 * Reads LIVE state only — options, filesystem, drop-ins, Redis, cron —
-		 * and never cached transients (`wppo_cache_size`, `wppo_total_js_css`,
+		 * and never cached transients (`wppo_total_js_css`,
 		 * System Info drop-in verdict cache). Read-only: never writes options,
 		 * files, or schedules.
 		 *

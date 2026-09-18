@@ -118,16 +118,22 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * (d) Marker present: the migration short-circuits without touching settings.
+	 * (d) Key present: the migration short-circuits without touching settings.
+	 *
+	 * Key presence is the idempotence marker (issue #1464) — no
+	 * `wppo_block_assets_migrated` row is ever read or written.
 	 */
-	public function test_marker_present_short_circuits(): void {
+	public function test_key_present_short_circuits(): void {
 		$reads  = array();
 		$writes = array();
 
 		Functions\when( 'get_option' )->alias(
 			function ( $key, $default_value = false ) use ( &$reads ) {
 				$reads[] = $key;
-				return 'wppo_block_assets_migrated' === $key ? 1 : $default_value;
+				if ( 'wppo_settings' === $key ) {
+					return array( 'file_optimisation' => array( 'blockAssetsOnDemand' => true ) );
+				}
+				return $default_value;
 			}
 		);
 		Functions\when( 'update_option' )->alias(
@@ -139,12 +145,12 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 
 		$this->migrate( true );
 
-		$this->assertSame( array( 'wppo_block_assets_migrated' ), $reads );
+		$this->assertSame( array( 'wppo_settings' ), $reads );
 		$this->assertSame( array(), $writes );
 	}
 
 	/**
-	 * (b) Explicit stored false is preserved untouched; only the marker is written.
+	 * (b) Explicit stored false is preserved untouched with zero writes.
 	 */
 	public function test_explicit_stored_false_is_preserved(): void {
 		$writes = array();
@@ -169,8 +175,9 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 			array( 'file_optimisation' => array( 'blockAssetsOnDemand' => false ) )
 		);
 
-		// Only the migration marker is written; the explicit false is untouched.
-		$this->assertSame( array( array( 'wppo_block_assets_migrated', 1 ) ), $writes );
+		// Nothing is written: the explicit false is untouched and no
+		// migration-marker row is allocated (issue #1464).
+		$this->assertSame( array(), $writes );
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
 		$options      = $options_prop->getValue( $main );
@@ -178,7 +185,9 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * (c) Missing key on 6.9+ is defaulted to true, persisted, synced, and logged.
+	 * (c) Missing key on 6.9+ is defaulted to true, persisted, and synced.
+	 *
+	 * Only `wppo_settings` is written — no migration-marker row (issue #1464).
 	 */
 	public function test_missing_key_is_defaulted_to_true(): void {
 		$writes = array();
@@ -203,20 +212,16 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 		$main = $this->migrate( true );
 
 		$settings_write = null;
-		$marker_write   = null;
 		foreach ( $writes as $entry ) {
 			if ( 'wppo_settings' === $entry[0] ) {
 				$settings_write = $entry[1];
 			}
-			if ( 'wppo_block_assets_migrated' === $entry[0] ) {
-				$marker_write = $entry[1];
-			}
+			$this->assertNotSame( 'wppo_block_assets_migrated', $entry[0], 'must not allocate a migration-marker row' );
 		}
 
 		$this->assertNotNull( $settings_write, 'wppo_settings should be persisted' );
 		$this->assertTrue( $settings_write['file_optimisation']['blockAssetsOnDemand'] );
 		$this->assertTrue( $settings_write['file_optimisation']['minifyJS'] );
-		$this->assertSame( 1, $marker_write );
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
 		$options      = $options_prop->getValue( $main );
@@ -224,9 +229,10 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * (e) No stored option (fresh install): no partial wppo_settings write, marker written.
+	 * (e) No stored option (fresh install): zero reads beyond the settings
+	 * check, zero writes — no partial wppo_settings write and no marker row.
 	 */
-	public function test_no_stored_option_is_a_noop(): void {
+	public function test_no_stored_option_writes_nothing(): void {
 		$writes = array();
 
 		Functions\when( 'get_option' )->alias(
@@ -243,9 +249,6 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 
 		$this->migrate( true );
 
-		foreach ( $writes as $entry ) {
-			$this->assertNotSame( 'wppo_settings', $entry[0], 'must not write a partial wppo_settings option' );
-		}
-		$this->assertContains( array( 'wppo_block_assets_migrated', 1 ), $writes );
+		$this->assertSame( array(), $writes, 'fresh installs must allocate zero migration rows' );
 	}
 }
