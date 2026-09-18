@@ -77,7 +77,7 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Off-site ability URLs fail closed with an error (audit #1357 review).
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_scan_wrappers_reject_off_site_urls(): void {
 		Functions\when( '__' )->returnArg( 1 );
@@ -103,7 +103,7 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Single-scope clear with an off-site URL reports cleared:false.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_execute_clear_cache_rejects_off_site_url(): void {
 		Functions\when( '__' )->returnArg( 1 );

@@ -9,7 +9,7 @@
  * Any preview failure fails open to production markup, never fatal.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -24,13 +24,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 	 *
 	 * Isolated admin-only preview controller for asset optimization.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	final class Sandbox_Preview {
 		/**
 		 * Preview query var name.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		const QUERY_VAR = 'wppo_preview';
@@ -38,7 +38,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Preview query value enabling the asset sandbox.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		const PREVIEW_VALUE = 'assets';
@@ -46,7 +46,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Nonce action for preview links.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		const NONCE_ACTION = 'wppo_preview_assets';
@@ -54,7 +54,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Nonce query var name.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		const NONCE_VAR = '_wppo_preview_nonce';
@@ -62,7 +62,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Settings key holding staged experimental values.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		const STAGED_KEY = 'sandboxStaged';
@@ -79,7 +79,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 * register on production flags only), so they are deliberately
 		 * excluded until a preview path exists.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		const ALLOWED_STAGED_KEYS = array(
@@ -101,7 +101,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Per-request memo for is_preview_request().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool|null
 		 */
 		private static $preview_memo = null;
@@ -109,7 +109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Reset per-request memo (for tests).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_memo(): void {
@@ -124,7 +124,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 * (no capability / bad nonce) always get false so they never see
 		 * experimental markup. Fail-open to false on any error.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when experimental output may render for this request.
 		 */
 		public static function is_preview_request(): bool {
@@ -188,7 +188,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 * to other visitors. No-op for non-preview requests. Fail-open:
 		 * header failures never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function enforce_no_cache(): void {
@@ -214,7 +214,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Get staged experimental settings.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array Staged file_optimisation slice (possibly empty).
 		 */
 		public static function get_staged_settings(): array {
@@ -235,7 +235,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Whether staged experimental values exist.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when at least one staged key is stored.
 		 */
 		public static function is_staged_available(): bool {
@@ -250,7 +250,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 * the allowlisted asset keys. Fail-open: any error returns
 		 * production unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $production Production file_optimisation slice.
 		 * @return array Effective slice to render with.
 		 */
@@ -278,7 +278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Sanitize a staged payload down to the allowlisted asset keys.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $staged Raw staged payload.
 		 * @return array Sanitized staged payload.
 		 */
@@ -319,7 +319,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Persist staged experimental settings (admin only).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $staged Raw staged payload.
 		 * @return bool True on success.
 		 */
@@ -391,7 +391,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 * undo. Fail-open: returns false without partial writes when
 		 * possible; never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True on success.
 		 */
 		public static function promote_staged(): bool {
@@ -476,7 +476,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Discard staged settings (admin only).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True on success.
 		 */
 		public static function discard_staged(): bool {
@@ -542,7 +542,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 *
 		 * Returns the URL unchanged when a nonce cannot be created (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Frontend URL to preview.
 		 * @return string Preview URL with query var + nonce.
 		 */

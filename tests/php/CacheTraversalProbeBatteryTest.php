@@ -34,7 +34,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * In-memory $wpdb recorder for probe-log assertions.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 class WPPO_ProbeBattery_Wpdb_Recorder {
 
@@ -75,7 +75,7 @@ class WPPO_ProbeBattery_Wpdb_Recorder {
  * Real methods are required because the handlers guard on method_exists().
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 class WPPO_ProbeBattery_Fake_Fs {
 
@@ -192,7 +192,7 @@ class WPPO_ProbeBattery_Fake_Fs {
  * Hostile-probe battery for the single cache-path choke point.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
@@ -309,7 +309,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Reset the once-per-request probe flag.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	private function reset_probe_flag(): void {
@@ -324,7 +324,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Remove the temp fixture tree.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return void
 	 */
 	private function remove_fixture_root(): void {
@@ -356,7 +356,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Swap in the recorder $wpdb.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return WPPO_ProbeBattery_Wpdb_Recorder
 	 */
 	private function use_recorder_wpdb(): WPPO_ProbeBattery_Wpdb_Recorder {
@@ -370,7 +370,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Count probe-log entries in the recorder.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param WPPO_ProbeBattery_Wpdb_Recorder $recorder Recorder.
 	 * @return int
 	 */
@@ -387,7 +387,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Construct a benign Cache instance.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return Cache
 	 */
 	private function make_cache(): Cache {
@@ -400,7 +400,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Invoke the private safe_path_for_url().
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param Cache  $cache    Instance.
 	 * @param string $url_path URL path or URL.
 	 * @param string $filename Leaf filename.
@@ -415,7 +415,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Cache root used across containment assertions.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return string
 	 */
 	private function root(): string {
@@ -425,7 +425,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Double-encoded probes: single-decode keeps them literal on disk.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return array<string,array{0:string}>
 	 */
 	public static function double_encoded_provider(): array {
@@ -443,7 +443,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	 * Single-encoded dot-dot, backslash/drive/UNC, null bytes, absolute-form
 	 * foreign targets, and traversal segments.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return array<string,array{0:string}>
 	 */
 	public static function refused_probe_provider(): array {
@@ -472,7 +472,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Overlong leaf filenames that must be refused.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return array<string,array{0:string}>
 	 */
 	public static function overlong_leaf_provider(): array {
@@ -486,7 +486,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Double-encoded probes stay a contained literal inside the domain tree.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param string $payload Double-encoded probe.
 	 */
 	#[DataProvider( 'double_encoded_provider' )]
@@ -513,7 +513,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Hostile probes are refused with exactly one probe-log entry each.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param string $payload Hostile probe.
 	 */
 	#[DataProvider( 'refused_probe_provider' )]
@@ -532,7 +532,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Overlong leaf filenames are refused with a probe log entry.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param string $leaf Overlong leaf filename.
 	 */
 	#[DataProvider( 'overlong_leaf_provider' )]
@@ -551,7 +551,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * A symlink planted inside the cache tree cannot redirect the choke point outside.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_symlink_escape_refused_through_choke_point(): void {
 		if ( ! function_exists( 'symlink' ) ) {
@@ -602,7 +602,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * The hostile battery creates nothing outside the domain tree.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_hostile_battery_creates_nothing_outside_domain_tree(): void {
 		$recorder = $this->use_recorder_wpdb();
@@ -642,7 +642,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Foreign drop-in is detected as foreign and hostile htaccess targets are refused byte-identical.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	public function test_foreign_dropin_untouched_and_htaccess_byte_identical(): void {
 		$foreign_contents = "<?php\n// Another plugin's drop-in.\n";
@@ -679,7 +679,7 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Call the private htaccess atomic writer via reflection.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @param string $path  Target path.
 	 * @param mixed  $fs    Filesystem mock.
 	 * @param array  $rules Rules lines.

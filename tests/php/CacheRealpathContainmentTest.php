@@ -25,7 +25,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * method_exists().
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 class WPPO_Realpath_Fake_Fs {
 
@@ -142,7 +142,7 @@ class WPPO_Realpath_Fake_Fs {
  * Realpath containment tests.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.2.0
  */
 class CacheRealpathContainmentTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;

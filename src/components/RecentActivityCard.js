@@ -18,29 +18,36 @@ import NoticeBanner from './common/NoticeBanner';
 const RecentActivityCard = ( {
 	activities,
 	activitiesError = false,
-	onNavigate,
+	loading = false,
+	onNavigate = () => {},
 } ) => {
+	// Audit #1420: loading flag (undefined activities during fetch must not
+	// flash the empty state); safe default navigation.
 	const showList = Array.isArray( activities ) && activities.length > 0;
-	const showEmptyState = ! showList && ! activitiesError;
+	const showEmptyState = ! showList && ! activitiesError && ! loading;
 	return (
 		<FeatureCard
 			title={ __(
 				'Recent Optimisation Activity',
 				'performance-optimisation'
 			) }
-			icon={ <FontAwesomeIcon icon={ faHistory } /> }
+			icon={ <FontAwesomeIcon icon={ faHistory } aria-hidden="true" /> }
 			footer={
 				<button
 					type="button"
 					className="wppo-button wppo-button--secondary"
-					onClick={ () => onNavigate( 'tools' ) }
+					onClick={ () => {
+						if ( typeof onNavigate === 'function' ) {
+							onNavigate( 'tools' );
+						}
+					} }
 					aria-label={ __(
 						'View Full Optimisation Activity Log',
 						'performance-optimisation'
 					) }
 				>
 					{ __( 'View Full Log', 'performance-optimisation' ) }
-					<FontAwesomeIcon icon={ faArrowRight } />
+					<FontAwesomeIcon icon={ faArrowRight } aria-hidden="true" />
 				</button>
 			}
 		>
@@ -70,6 +77,30 @@ const RecentActivityCard = ( {
 							</li>
 						) ) }
 					</ul>
+				) }
+				{ loading && ! showList && (
+					<div
+						className="wppo-empty-state"
+						role="status"
+						aria-live="polite"
+					>
+						{ __(
+							'Loading activity…',
+							'performance-optimisation'
+						) }
+					</div>
+				) }
+				{ loading && ! showList && (
+					<div
+						className="wppo-empty-state"
+						role="status"
+						aria-live="polite"
+					>
+						{ __(
+							'Loading activity…',
+							'performance-optimisation'
+						) }
+					</div>
 				) }
 				{ showEmptyState && (
 					<div className="wppo-empty-state">

@@ -10,6 +10,13 @@
  * @since NEXT
  * @type {string[]}
  */
+/**
+ * Reserved status vocabulary (audit #1401): currently no in-repo importer.
+ * Kept (not deleted) as the documented contract for future panels and
+ * external consumers — import this instead of inventing new level strings.
+ *
+ * @since NEXT
+ */
 export const STATUS_LEVELS = Object.freeze( [
 	'good',
 	'warning',
@@ -45,6 +52,33 @@ export const scoreToStatus = ( score ) => {
  * @param {*} value Boolean value.
  * @return {string} good|poor|unknown.
  */
+/**
+ * Map a metric value to a status level with custom thresholds.
+ *
+ * Parameterised sibling of scoreToStatus() for panels whose good/poor
+ * cutoffs differ per metric (audit #1401): single home so threshold
+ * changes cannot silently skip a panel.
+ *
+ * @since NEXT
+ * @param {*}      value The metric value.
+ * @param {number} good  Upper bound for 'good'.
+ * @param {number} poor  Lower bound for 'poor'.
+ * @return {string} good|needs_improvement|poor|unknown.
+ */
+export const numericStatus = ( value, good, poor ) => {
+	const num = Number( value );
+	if ( ! Number.isFinite( num ) ) {
+		return 'unknown';
+	}
+	if ( num <= good ) {
+		return 'good';
+	}
+	if ( num <= poor ) {
+		return 'needs_improvement';
+	}
+	return 'poor';
+};
+
 export const boolToStatus = ( value ) => {
 	if ( value === true ) {
 		return 'good';

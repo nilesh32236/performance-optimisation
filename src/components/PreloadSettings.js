@@ -1,5 +1,12 @@
-import { __, sprintf, _n } from '@wordpress/i18n';
-import { useState, useEffect, useContext, useMemo } from '@wordpress/element';
+import { __, sprintf } from '@wordpress/i18n';
+import {
+	useState,
+	useEffect,
+	useContext,
+	useMemo,
+	useCallback,
+} from '@wordpress/element';
+import { useIsMounted, runAbortable } from '../lib/useAbortableFetch';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -54,8 +61,16 @@ const PreloadSettings = ( { options = {} } ) => {
 	// Keep baseline in sync with incoming options on mount / prop change.
 	// Per-key deps (not object identity) so parent re-renders with an
 	// identical payload do not reset the baseline.
+	// Keep baseline + form in sync with incoming options on mount / prop
+	// change (audit #1401: was two effects with hand-duplicated 20-key
+	// dep arrays — one array now, so a new key cannot update one sync
+	// and miss the other). Per-key deps (not object identity) so parent
+	// re-renders with an identical payload do not reset state.
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
+		if ( options && Object.keys( options ).length > 0 ) {
+			setSettings( ( prev ) => ( { ...prev, ...options } ) );
+		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.enablePreloadCache,
@@ -88,42 +103,51 @@ const PreloadSettings = ( { options = {} } ) => {
 		[ setSettings ]
 	);
 
-	// Audit #1354: signal-guarded fetch so unmount cannot setState.
-	const fetchPreloadStatus = async ( signal ) => {
-		let cancelled = false;
-		if ( signal ) {
-			if ( signal.aborted ) {
-				return;
+	// Audit #1401: shared abortable helper (useAbortableFetch) owns
+	// controller lifecycle + cancellation instead of ad-hoc flags.
+	const isMountedRef = useIsMounted();
+	// Audit #1420: useCallback so the mount effect lists exhaustive deps.
+	const fetchPreloadStatus = useCallback(
+		async ( signal ) => {
+			try {
+				const res = await apiCall(
+					'preload_status',
+					{},
+					'GET',
+					signal
+				);
+				if ( ! isMountedRef.current || ( signal && signal.aborted ) ) {
+					return;
+				}
+				const payload = res && res.data ? res.data : res;
+				if ( payload && payload.preload ) {
+					setPreload( payload.preload );
+				}
+				if ( payload && payload.cache ) {
+					setCacheCap( payload.cache );
+				}
+			} catch ( err ) {
+				console.error(
+					'Failed fetching preload status',
+					getErrorLogMessage( err )
+				);
 			}
-			signal.addEventListener( 'abort', () => {
-				cancelled = true;
-			} );
-		}
-		try {
-			const res = await apiCall( 'preload_status', {}, 'GET', signal );
-			if ( cancelled || ( signal && signal.aborted ) ) {
-				return;
-			}
-			const payload = res && res.data ? res.data : res;
-			if ( payload && payload.preload ) {
-				setPreload( payload.preload );
-			}
-			if ( payload && payload.cache ) {
-				setCacheCap( payload.cache );
-			}
-		} catch ( err ) {
-			console.error(
-				'Failed fetching preload status',
-				getErrorLogMessage( err )
-			);
-		}
-	};
+		},
+		[ isMountedRef ]
+	);
 
 	useEffect( () => {
-		const controller = new AbortController();
-		fetchPreloadStatus( controller.signal );
-		return () => controller.abort();
-	}, [] );
+		const { cancel } = runAbortable( ( signal ) =>
+			fetchPreloadStatus( signal ).catch( ( fetchError ) => {
+				// Audit #1420: log instead of swallowing (inner handler
+				// already fails open; this covers abort rejections).
+				if ( fetchError?.name !== 'AbortError' ) {
+					console.error( 'Preload status fetch failed:', fetchError );
+				}
+			} )
+		);
+		return cancel;
+	}, [ fetchPreloadStatus ] );
 
 	const handleResume = async () => {
 		if ( isResuming ) {
@@ -174,37 +198,6 @@ const PreloadSettings = ( { options = {} } ) => {
 			setIsResuming( false );
 		}
 	};
-
-	useEffect( () => {
-		if ( ! options || Object.keys( options ).length === 0 ) {
-			return;
-		}
-		setSettings( ( prev ) => ( { ...prev, ...options } ) );
-		// Per-key deps (not object identity) so parent re-renders with an
-		// identical payload do not reset the form.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [
-		options.enablePreloadCache,
-		options.excludePreloadCache,
-		options.preloadSitemap,
-		options.preconnect,
-		options.preconnectOrigins,
-		options.prefetchDNS,
-		options.dnsPrefetchOrigins,
-		options.preloadFonts,
-		options.preloadFontsUrls,
-		options.autoDiscoverFonts,
-		options.autoLcpPreload,
-		options.preloadCSS,
-		options.preloadCSSUrls,
-		options.enableSpeculationRules,
-		options.speculationMode,
-		options.speculationEagerness,
-		options.speculationExcludeUrls,
-		options.speculationRumGating,
-		options.speculationTopUrlsLimit,
-		options.speculationPrerenderList,
-	] );
 
 	const speculationRules =
 		typeof wppoSettings !== 'undefined'
@@ -390,11 +383,9 @@ const PreloadSettings = ( { options = {} } ) => {
 							<div className="wppo-field wppo-mt-20">
 								<p className="wppo-text-muted wppo-text-small">
 									{ sprintf(
-										/* translators: %1$d: queued count, %2$d: done count, %3$d: failed count. */
-										_n(
+										/* translators: 1: queued count, 2: done count, 3: failed count. Audit #1420: count-independent string, no _n. */
+										__(
 											'Preload progress — queued: %1$d, done: %2$d, failed: %3$d.',
-											'Preload progress — queued: %1$d, done: %2$d, failed: %3$d.',
-											preload.queued || 0,
 											'performance-optimisation'
 										),
 										preload.queued || 0,
@@ -457,10 +448,8 @@ const PreloadSettings = ( { options = {} } ) => {
 									id="preconnectOrigins"
 									name="preconnectOrigins"
 									rows="2"
-									placeholder={ __(
-										'https://fonts.googleapis.com',
-										'performance-optimisation'
-									) }
+									// Audit #1420: example URLs are not translatable.
+									placeholder="https://fonts.googleapis.com"
 									value={ settings.preconnectOrigins }
 									onChange={ onFieldChange }
 									aria-describedby="preconnectOrigins-desc"
@@ -518,11 +507,14 @@ const PreloadSettings = ( { options = {} } ) => {
 									id="dnsPrefetchOrigins-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									{ __(
-										'One hostname per line, without protocol (e.g.',
-										'performance-optimisation'
-									) }{ ' ' }
-									<code>cdn.example.com</code>).
+									{ sprintf(
+										/* translators: %s: example hostname. */
+										__(
+											'One hostname per line, without protocol (e.g. %s).',
+											'performance-optimisation'
+										),
+										'cdn.example.com'
+									) }
 								</p>
 							</div>
 						) }

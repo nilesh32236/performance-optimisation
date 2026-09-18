@@ -161,8 +161,13 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	const [ isSaving, setIsSaving ] = useState( false );
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
+	// Audit #1420: merge baseline+form sync in one effect (PreloadSettings
+	// pattern) so async options never leave a stale form.
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
+		if ( options && Object.keys( options ).length > 0 ) {
+			setSettings( ( prev ) => ( { ...prev, ...options } ) );
+		}
 		// Per-key deps (not object identity) so parent re-renders with an
 		// identical payload do not reset the baseline.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -239,13 +244,19 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
+		// Audit #1420: re-entrancy guard + dismiss like PreloadSettings.
+		if ( isSaving ) {
+			return;
+		}
 		setIsSaving( true );
+		dismiss();
 		try {
 			const res = await apiCall( 'update_settings', {
 				tab: 'database_cleanup',
 				settings,
 			} );
-			if ( res && res.success !== false ) {
+			// Audit #1420: strict check — missing success must not read as success.
+			if ( res && res.success ) {
 				setBaseline( { ...settings } );
 				setIsDirty( false );
 				notify( {
@@ -275,9 +286,11 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			);
 			notify( {
 				type: 'error',
-				message:
-					err?.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
+				// Audit #1420: translated generic only (raw text stays in console).
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {
@@ -420,7 +433,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				document.body.appendChild( link );
 				link.click();
 				link.remove();
-				URL.revokeObjectURL( url );
+				// Audit #1420: deferred revoke — immediate revoke can win the
+				// race against download start.
+				setTimeout( () => URL.revokeObjectURL( url ), 1000 );
 			};
 			const response = await apiCall(
 				`expired_transients_export?limit=${ EXPORT_LIMIT }`,
@@ -706,14 +721,16 @@ const DatabaseCleanup = ( { options = {} } ) => {
 						<span className="wppo-stat-hero__value">
 							{ loadingCounts
 								? '…'
-								: `${ Number(
-										totalItems
-								  ).toLocaleString() } ${ _n(
-										'item',
-										'items',
-										totalItems,
-										'performance-optimisation'
-								  ) }` }
+								: sprintf(
+										/* translators: %s: localized total with plural form. */
+										_n(
+											'%s item',
+											'%s items',
+											totalItems,
+											'performance-optimisation'
+										),
+										Number( totalItems ).toLocaleString()
+								  ) }
 						</span>
 						<span className="wppo-stat-hero__label">
 							{ __(
@@ -901,7 +918,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					),
 					confirmDialog.type === 'all'
 						? __( 'overhead items', 'performance-optimisation' )
-						: confirmDialog.label.toLowerCase()
+						: confirmDialog.label.toLocaleLowerCase() // Audit #1420: Turkish/Azeri-safe.
 				) }
 				confirmLabel={ __( 'Delete', 'performance-optimisation' ) }
 				variant="danger"

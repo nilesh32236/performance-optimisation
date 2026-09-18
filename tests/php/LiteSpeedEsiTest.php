@@ -268,7 +268,8 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		LiteSpeed_ESI::handle_ajax_fragment();
 		$this->assertIsArray( $captured );
 		$this->assertArrayHasKey( 'html', $captured );
-		$this->assertSame( '<span>cart(3)</span>', $captured['html'] );
+		// Non-Woo fallback: live-shape placeholder (zero merchant config).
+		$this->assertSame( '<span class="wppo-mini-cart" data-wppo-cart="empty">cart(0)</span>', $captured['html'] );
 		// Headers should contain private,no-cache.
 		$found_private = false;
 		$found_vary    = false;

@@ -7,7 +7,7 @@
  * per-request results via static properties.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -101,6 +101,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @var string|null
 		 */
 		private static ?string $cached_effective_mode = null;
+
+		/**
+		 * Parsed preload-exclude URL list memo (audit #1434: clearable via reset_cache()).
+		 *
+		 * @since 2.2.0
+		 * @var array|null
+		 */
+		private static ?array $exclude_urls_memo = null;
 
 		/**
 		 * Per-request cached get_mode value.
@@ -661,7 +669,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * round-trip instead of N (write amplification under DB-backed
 		 * transients).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private static array $tag_buffer = array();
@@ -669,7 +677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Scopes seen in the per-request tag buffer.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private static array $tag_buffer_scopes = array();
@@ -1412,11 +1420,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( $cacheable ) {
 				$options = Util::get_settings();
 				if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
-					static $exclude_urls_memo = null;
-					if ( null === $exclude_urls_memo ) {
-						$exclude_urls_memo = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
+					// Audit #1434: class property (not function-static) so
+					// reset_cache() can clear it for long-lived workers/tests.
+					if ( null === self::$exclude_urls_memo ) {
+						self::$exclude_urls_memo = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
 					}
-					$exclude_urls = $exclude_urls_memo;
+					$exclude_urls = self::$exclude_urls_memo;
 					$request_uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 					$home_path    = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
 					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
@@ -1674,7 +1683,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// Re-validate after the filter: keep only hex up to 12 chars so
 			// a filter returning ;/whitespace/control bytes cannot
 			// split/poison the cookie value. Bail when empty.
-			$filtered_value = function_exists( 'preg_replace' ) ? preg_replace( '/[^a-f0-9]/', '', strtolower( $value ) ) : '';
+			// Audit #1434: preg_replace is PHP core — no guard needed.
+			$filtered_value = preg_replace( '/[^a-f0-9]/', '', strtolower( $value ) );
 			$value          = is_string( $filtered_value ) ? substr( $filtered_value, 0, 12 ) : '';
 			if ( '' === $value ) {
 				return;
@@ -2088,7 +2098,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * the stored overrides map, returns the allowlisted override hours
 		 * or null. Callers resolve $is_singular_ctx via is_singular().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int|null    $post_id         Resolved post ID or null.
 		 * @param string|null $post_type       Resolved post type or null.
 		 * @param bool        $is_singular_ctx Whether the current context is singular.
@@ -2111,7 +2121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * 0 means never-expire (one week); otherwise hours × 3600.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $hours CacheLife hours.
 		 * @return int TTL seconds.
 		 */
@@ -2129,7 +2139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * no WordPress calls, so unit tests can cover the tag taxonomy
 		 * without stubbing conditional tags.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $facts Resolved facts: is_front, is_home, is_paged, is_singular, post_id, post_type, term_ids, author, date_ymd, blog_id, is_feed, is_rest, is_404.
 		 * @return string[] Tag list (deduplicated, WPPO + MIN included).
 		 */
@@ -2556,7 +2566,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Opt-in via enableNextGenRewrite, gated on convertImg. Filterable
 		 * via wppo_litespeed_nextgen_rewrite (and the legacy alias).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True if the htaccess next-gen block should be included.
 		 */
 		public static function is_nextgen_rewrite_enabled_for_apache(): bool {
@@ -2575,7 +2585,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether next-gen rewrite is enabled for Apache.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param bool $enabled Whether next-gen rewrite is enabled.
 			 */
 			$enabled = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $enabled );
@@ -2713,6 +2723,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 */
 		public static function reset_cache(): void {
 			self::$cached_effective_mode    = null;
+			self::$exclude_urls_memo        = null;
 			self::$cached_mode              = null;
 			self::$cached_is_litespeed      = null;
 			self::$cached_is_lscache_active = null;

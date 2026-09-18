@@ -272,7 +272,7 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 
 		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( @$redis->$func( $host, $port, $timeout ) ) {
-			if ( ! empty( $password ) && $redis->auth( $password ) === false ) {
+			if ( ! empty( $password ) && false === $redis->auth( $password ) ) { // Audit #1434: Yoda.
 				$redis->close();
 				return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );
 			}
@@ -552,7 +552,7 @@ if ( ! function_exists( 'wppo_validate_tls_ca_file' ) ) {
 	 * system CA store.
 	 *
 	 * @param string $path Raw CA file path from config.
-	 * @since NEXT
+	 * @since 2.2.0
 	 * @return string Resolved path or '' when invalid.
 	 */
 	function wppo_validate_tls_ca_file( $path ) {
