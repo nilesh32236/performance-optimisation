@@ -6655,6 +6655,153 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * One-click Safe preset bundle (issue #1442).
+		 *
+		 * Curated `file_optimisation` settings that enable minify plus defer
+		 * plus delay together with the builder, commerce, interaction and
+		 * jQuery exclusions pre-applied, so page builders, jQuery widgets and
+		 * WooCommerce never break. Returns only pre-existing settings keys:
+		 * additive, no schema change, safe-by-default. Consent, analytics and
+		 * gallery presets stay off (opt-in), combineCSS stays off (FOUC risk).
+		 * Multisite-safe: per-site `wppo_settings` only.
+		 *
+		 * @since NEXT
+		 * @return array<string, mixed>
+		 */
+		public static function get_safe_preset_bundle(): array {
+			try {
+				return array(
+					'minifyJS'                 => true,
+					'minifyCSS'                => true,
+					'minifyHTML'               => true,
+					'deferJS'                  => true,
+					'delayJS'                  => true,
+					'delayJSBuilderPreset'     => true,
+					'delayJSCommercePreset'    => true,
+					'delayJSInteractionPreset' => true,
+					'delayJSJqueryPreset'      => true,
+					'delayJSSafeMode'          => true,
+					'elementorSafeMode'        => true,
+					'delayJSConsentPreset'     => false,
+					'delayJSAnalyticsPreset'   => false,
+					'delayJSGalleryPreset'     => false,
+					'combineCSS'               => false,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Aggressive preset bundle (issue #1442).
+		 *
+		 * Same pipelines as the Safe preset but with the builder, commerce,
+		 * interaction and jQuery safe presets off plus CSS combining on, for
+		 * users who manage exclusions manually. UI-gated behind an explicit
+		 * warning with one-click revert via the settings snapshot. Returns
+		 * only pre-existing settings keys: additive, no schema change.
+		 *
+		 * @since NEXT
+		 * @return array<string, mixed>
+		 */
+		public static function get_aggressive_preset_bundle(): array {
+			try {
+				return array(
+					'minifyJS'                 => true,
+					'minifyCSS'                => true,
+					'minifyHTML'               => true,
+					'deferJS'                  => true,
+					'delayJS'                  => true,
+					'delayJSBuilderPreset'     => false,
+					'delayJSCommercePreset'    => false,
+					'delayJSInteractionPreset' => false,
+					'delayJSJqueryPreset'      => false,
+					'delayJSSafeMode'          => false,
+					'elementorSafeMode'        => false,
+					'combineCSS'               => true,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Merge a preset bundle additively into file-optimisation settings (issue #1442).
+		 *
+		 * Only allowlisted pre-existing keys from the bundle are applied; any
+		 * unknown key is skipped so a future bundle can never widen the schema
+		 * or persist unexpected values. Fail-open: any failure returns the
+		 * input unchanged.
+		 *
+		 * @since NEXT
+		 * @param array<string, mixed> $current Current file_optimisation settings.
+		 * @param array<string, mixed> $bundle  Preset bundle (e.g. get_safe_preset_bundle()).
+		 * @return array<string, mixed> Merged settings.
+		 */
+		public static function apply_preset_bundle( array $current, array $bundle ): array {
+			try {
+				$allowed = array(
+					'minifyJS',
+					'minifyCSS',
+					'minifyHTML',
+					'deferJS',
+					'delayJS',
+					'delayJSBuilderPreset',
+					'delayJSCommercePreset',
+					'delayJSInteractionPreset',
+					'delayJSJqueryPreset',
+					'delayJSSafeMode',
+					'elementorSafeMode',
+					'delayJSConsentPreset',
+					'delayJSAnalyticsPreset',
+					'delayJSGalleryPreset',
+					'combineCSS',
+				);
+				foreach ( $bundle as $key => $value ) {
+					if ( ! is_string( $key ) || ! in_array( $key, $allowed, true ) ) {
+						continue;
+					}
+					$current[ $key ] = $value;
+				}
+				return $current;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $current;
+			}
+		}
+
+		/**
+		 * Whether file-optimisation settings match the Safe preset (issue #1442).
+		 *
+		 * True when the minify/defer/delay pipelines are on together with all
+		 * four safe exclusion presets. Fail-open: any failure returns false.
+		 *
+		 * @since NEXT
+		 * @param array<string, mixed> $file_opt file_optimisation settings slice.
+		 * @return bool
+		 */
+		public static function is_safe_preset_active( array $file_opt ): bool {
+			try {
+				foreach ( array( 'minifyJS', 'minifyCSS', 'deferJS', 'delayJS' ) as $key ) {
+					if ( empty( $file_opt[ $key ] ) ) {
+						return false;
+					}
+				}
+				foreach ( array( 'delayJSBuilderPreset', 'delayJSCommercePreset', 'delayJSInteractionPreset', 'delayJSJqueryPreset' ) as $key ) {
+					if ( empty( $file_opt[ $key ] ) ) {
+						return false;
+					}
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Per-page disabled compat presets from post meta (issue #1308).
 		 *
 		 * Reads `_wppo_delay_presets_off` (array of slugs). A page can opt
