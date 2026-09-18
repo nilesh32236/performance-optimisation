@@ -6974,8 +6974,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						return ( (int) ( $a['mtime'] ?? 0 ) ) <=> ( (int) ( $b['mtime'] ?? 0 ) );
 					}
 				);
-				$budget = min( count( $entries ), 2000, max( 0, $files_to_free ) );
-				for ( $i = 0; $i < $budget; ++$i ) {
+				$budget = min( count( $entries ), 2000 );
+				for ( $i = 0; $i < $budget && $removed < $files_to_free; ++$i ) {
 					$file = (string) ( $entries[ $i ]['path'] ?? '' );
 					if ( '' === $file || ! $instance->is_path_contained( $file ) ) {
 						continue;
