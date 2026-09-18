@@ -1876,7 +1876,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$first_baseline = (string) $baseline_dates[0];
 				$last_baseline  = (string) end( $baseline_dates );
 				$window         = 1 === count( $baseline_dates )
-					? sprintf( 'recent %s vs baseline %s', $recent_date, $first_baseline )
+					/* translators: 1: recent date, 2: baseline date. */
+					? sprintf( __( 'recent %1$s vs baseline %2$s', 'performance-optimisation' ), $recent_date, $first_baseline )
 					/* translators: 1: recent date, 2: first baseline date, 3: last baseline date. */
 					: sprintf( __( 'recent %1$s vs baseline %2$s to %3$s', 'performance-optimisation' ), $recent_date, $first_baseline, $last_baseline );
 
