@@ -3399,8 +3399,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Allowlist containment for queued jobs: a tampered queue entry
 			// must never reach the converter. Fail-open: skip the job, keep
-			// the file intact.
+			// the file intact. Protected config/drop-in paths are refused
+			// outright so crafted meta can never enter the pipeline.
 			if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && ! Img_Converter::is_path_in_allowlist( $source_path ) ) {
+				return;
+			}
+			if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_protected_config_path' ) && Img_Converter::is_protected_config_path( $source_path ) ) {
 				return;
 			}
 

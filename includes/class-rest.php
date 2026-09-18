@@ -1512,6 +1512,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && ! Img_Converter::is_path_in_allowlist( $source_path ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
+				// Uploads containment: crafted paths pointing at config or
+				// drop-in files are refused before any conversion work.
+				if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_protected_config_path' ) && Img_Converter::is_protected_config_path( $source_path ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
 				if ( ! file_exists( $source_path ) ) {
 					continue;
 				}
@@ -1520,8 +1525,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
 				$resolved_norm = wp_normalize_path( $resolved );
-				$content_base  = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
-				$root_ok       = 0 === strpos( $resolved_norm, $normalized_abspath ) || 0 === strpos( $resolved_norm, $content_base );
+				if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_protected_config_path' ) && Img_Converter::is_protected_config_path( $resolved_norm ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				$content_base = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
+				$root_ok      = 0 === strpos( $resolved_norm, $normalized_abspath ) || 0 === strpos( $resolved_norm, $content_base );
 				if ( ! $root_ok ) {
 					$abspath_real = realpath( ABSPATH );
 					if ( false !== $abspath_real ) {
