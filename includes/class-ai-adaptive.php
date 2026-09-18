@@ -3227,13 +3227,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * fails open to the pre-filter rules. Empty list rules are dropped
 		 * (an empty list rule prefetches nothing).
 		 *
+		 * The legacy (non-autotune) path shares this sanitizer with
+		 * `$strict` set to false so its long-standing contextual contract
+		 * is preserved: commerce URLs and `eager` are only stripped/capped
+		 * in a commerce/auth context (matching get_prefetch_urls_from_model()
+		 * and maybe_cap_eagerness()), while same-site, count, budget, and
+		 * eagerness-allowlist guards always apply.
+		 *
 		 * @param mixed $filtered Filtered rules (untrusted).
 		 * @param array $fallback Pre-filter rules (guarded).
 		 * @param int   $max Maximum URLs per list rule (1-5).
+		 * @param bool  $strict When false, commerce/eager guards are contextual.
 		 * @return array Sanitized rules.
 		 * @since NEXT
 		 */
-		private static function sanitize_speculation_rules_after_filter( $filtered, array $fallback, int $max ): array {
+		private static function sanitize_speculation_rules_after_filter( $filtered, array $fallback, int $max, bool $strict = true ): array {
 			try {
 				if ( ! is_array( $filtered ) ) {
 					return $fallback;
@@ -3244,6 +3252,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$excludes = array( '/cart/*', '/checkout/*', '/my-account/*' );
+				}
+				$strict_commerce = $strict;
+				if ( ! $strict ) {
+					try {
+						$strict_commerce = self::is_commerce_or_auth_context();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$strict_commerce = false;
+					}
 				}
 				$sanitized = array();
 				foreach ( $filtered as $rule ) {
@@ -3264,7 +3281,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						if ( in_array( $clean, $cleaned, true ) ) {
 							continue;
 						}
-						if ( self::is_speculation_commerce_url( $clean, $excludes ) ) {
+						if ( $strict_commerce && self::is_speculation_commerce_url( $clean, $excludes ) ) {
 							continue;
 						}
 						$cleaned[] = $clean;
@@ -3276,7 +3293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						continue;
 					}
 					$rule_eagerness = self::normalize_eagerness( $rule['eagerness'] ?? 'conservative' );
-					if ( 'eager' === $rule_eagerness ) {
+					if ( $strict && 'eager' === $rule_eagerness ) {
 						$rule_eagerness = 'moderate';
 					}
 					$rule['urls']      = $cleaned;
@@ -3449,7 +3466,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			 * @param array $rules Updated rules.
 			 * @param array $urls AI prefetch URLs.
 			 */
-			return apply_filters( 'wppo_ai_adaptive_speculation_rules', $rules, $urls );
+			if ( function_exists( 'apply_filters' ) ) {
+				$filtered = apply_filters( 'wppo_ai_adaptive_speculation_rules', $rules, $urls );
+				return self::sanitize_speculation_rules_after_filter( $filtered, $rules, 5, false );
+			}
+			return $rules;
 		}
 
 		/**
