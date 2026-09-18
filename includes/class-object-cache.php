@@ -2532,15 +2532,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 							// deletes can stall an admin save on huge networks; siblings
 							// self-expire in 1-2h by design so a smaller sweep only delays
 							// freshness, never correctness.
+							// Audit #1469: default to current-site only (0) — the
+							// current site is already cleared inline above and
+							// siblings self-expire via the 1-2h TTL, so the
+							// switch_to_blog() fan-out no longer runs synchronously
+							// inside enable()/disable() admin paths unless opted in.
 							/**
 							 * Filters how many sites the nginx probe-clear fans out to.
 							 *
 							 * @since 2.2.0
-							 * @param int $limit Maximum site IDs to sweep. Default 500.
+							 * @param int $limit Maximum site IDs to sweep. Default 0 (current site only; siblings self-expire via TTL).
 							 */
-							$clear_limit = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_nginx_probe_clear_sites', 500 ) : 500;
+							$clear_limit = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_nginx_probe_clear_sites', 0 ) : 0;
 							if ( $clear_limit < 1 ) {
-								$clear_limit = 1;
+								return;
 							}
 							$sites = get_sites(
 								array(
