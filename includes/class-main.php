@@ -7224,16 +7224,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! is_string( $fragment ) && ! is_numeric( $fragment ) ) {
 					continue;
 				}
-				$fragment = (string) $fragment;
-				if ( '' === trim( $fragment ) || ! is_array( $meta ) ) {
+				$fragment = trim( (string) $fragment );
+				if ( '' === $fragment || ! is_array( $meta ) ) {
 					continue;
 				}
-				$fields = array();
+				$key = strtolower( $fragment );
+				if ( isset( $sanitized[ $key ] ) ) {
+					continue;
+				}
+				$allowed = array( 'excludeDeferJS', 'excludeDelayJS' );
+				$fields  = array();
 				if ( isset( $meta['fields'] ) && is_array( $meta['fields'] ) ) {
 					foreach ( $meta['fields'] as $field ) {
 						if ( is_string( $field ) || is_numeric( $field ) ) {
 							$field = trim( (string) $field );
-							if ( '' !== $field ) {
+							if ( in_array( $field, $allowed, true ) ) {
 								$fields[] = $field;
 							}
 						}
@@ -7243,8 +7248,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( empty( $fields ) ) {
 					$fields = array( 'excludeDeferJS', 'excludeDelayJS' );
 				}
-				$reason                 = isset( $meta['reason'] ) && is_string( $meta['reason'] ) ? $meta['reason'] : '';
-				$sanitized[ $fragment ] = array(
+				$reason            = isset( $meta['reason'] ) && is_string( $meta['reason'] ) ? $meta['reason'] : '';
+				$sanitized[ $key ] = array(
 					'fields' => $fields,
 					'reason' => $reason,
 				);
