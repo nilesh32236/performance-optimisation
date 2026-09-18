@@ -2132,7 +2132,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			Log::add( __( 'Added default RUM-weighted CSS queue settings and CCSS generation timeout (25s, single-variant behaviour kept).', 'performance-optimisation' ) );
+			Log::add( __( 'Added default RUM-weighted CSS queue settings, CCSS generation timeout (25s, single-variant behaviour kept), 14 KB inline budget, commerce exclusion, and checksum regen.', 'performance-optimisation' ) );
 		}
 
 		/**

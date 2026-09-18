@@ -3120,12 +3120,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @see Critical_CSS::maybe_refresh_from_local_css()
 		 * @see Critical_CSS::regenerate_single()
 		 */
-		public static function maybe_regen_on_save( $post_id, $post = null ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature mirrors the save_post hook; $post reserved for future per-post targeting.
+		public static function maybe_regen_on_save( $post_id, $post = null ): bool {
 			try {
 				if ( function_exists( 'wp_is_post_revision' ) && wp_is_post_revision( $post_id ) ) {
 					return false;
 				}
 				if ( function_exists( 'wp_is_post_autosave' ) && wp_is_post_autosave( $post_id ) ) {
+					return false;
+				}
+				// Skip post types that can never affect frontend CSS (issue #1388
+				// follow-up): media/menu/customizer writes are frequent on busy
+				// sites and running the O(templates x source-files) re-hash for
+				// them is pure waste. Fail-open: unknown types still probe.
+				$post_type = '';
+				if ( is_object( $post ) && isset( $post->post_type ) ) {
+					$post_type = (string) $post->post_type;
+				} elseif ( function_exists( 'get_post_type' ) ) {
+					$post_type = (string) get_post_type( $post_id );
+				}
+				if ( in_array( $post_type, array( 'attachment', 'nav_menu_item', 'customize_changeset' ), true ) ) {
 					return false;
 				}
 				if ( ! self::is_checksum_regen_enabled() ) {
