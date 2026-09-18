@@ -196,9 +196,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
+					// Audit #1434: constant access stays inside the class_exists guard.
+					update_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, $tripped_at > 0 ? $tripped_at : time(), false );
+					delete_transient( Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT ) );
 				}
-				update_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, $tripped_at > 0 ? $tripped_at : time(), false );
-				delete_transient( Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT ) );
 			}
 
 			if ( 'nginx_redis_config' === $key ) {
@@ -507,11 +508,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			if ( LiteSpeed_Integration::get_mode() !== LiteSpeed_Integration::MODE_AUTO ) {
+			if ( LiteSpeed_Integration::MODE_AUTO !== LiteSpeed_Integration::get_mode() ) { // Audit #1434: Yoda.
 				return;
 			}
 
-			if ( LiteSpeed_Integration::effective_mode() !== LiteSpeed_Integration::MODE_LITESPEED ) {
+			if ( LiteSpeed_Integration::MODE_LITESPEED !== LiteSpeed_Integration::effective_mode() ) { // Audit #1434: Yoda.
 				return;
 			}
 
@@ -601,8 +602,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
+			// Audit #1434: missing class fatals the gated pageload — fail open.
 			if ( null === self::$dropin_memo ) {
-				self::$dropin_memo = Advanced_Cache_Handler::is_our_dropin();
+				if ( class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) && method_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler', 'is_our_dropin' ) ) {
+					self::$dropin_memo = Advanced_Cache_Handler::is_our_dropin();
+				} else {
+					return;
+				}
 			}
 			if ( ! self::$dropin_memo ) {
 				return;
@@ -687,6 +693,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_review_notice(): void {
+			// Audit #1434: sibling helper guards this; the review path must too.
+			if ( ! function_exists( 'get_current_screen' ) ) {
+				return;
+			}
 			$screen = get_current_screen();
 
 			// Limit the review ask to the plugin's own admin screen so it does

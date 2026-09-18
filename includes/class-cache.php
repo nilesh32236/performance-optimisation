@@ -265,7 +265,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var object|null
 		 * @since 1.0.0
 		 */
-		private $filesystem;
+		private object|false|null $filesystem = null; // Audit #1434: typed (false on init failure).
 
 		/**
 		 * Output-buffer level occupied by the legacy cache buffer (WP < 6.9).
@@ -301,7 +301,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var array
 		 * @since 1.0.0
 		 */
-		private $options;
+		private array $options = array(); // Audit #1434: typed per docblock.
 
 		/**
 		 * Image_Optimisation instance for buffer processing.
@@ -309,7 +309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var Image_Optimisation|null
 		 * @since 2.0.0
 		 */
-		private $image_optimisation;
+		private ?Image_Optimisation $image_optimisation = null; // Audit #1434: typed per docblock.
 
 		/**
 		 * Google_Fonts instance for buffer-level font interception.
@@ -317,7 +317,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var Google_Fonts|null
 		 * @since 2.0.0
 		 */
-		private $google_fonts;
+		private ?Google_Fonts $google_fonts = null; // Audit #1434: typed per docblock.
 
 		/**
 		 * Role hash for the current request, set during buffer processing.

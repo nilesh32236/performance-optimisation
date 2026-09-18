@@ -272,7 +272,7 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 
 		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( @$redis->$func( $host, $port, $timeout ) ) {
-			if ( ! empty( $password ) && $redis->auth( $password ) === false ) {
+			if ( ! empty( $password ) && false === $redis->auth( $password ) ) { // Audit #1434: Yoda.
 				$redis->close();
 				return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );
 			}

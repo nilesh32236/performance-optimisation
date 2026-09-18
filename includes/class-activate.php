@@ -295,7 +295,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 					return null;
 				}
 
-				if ( $replaced > 0 ) {
+				if ( 0 < $replaced ) { // Audit #1434: Yoda.
 					return $new_content;
 				}
 

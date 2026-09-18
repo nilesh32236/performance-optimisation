@@ -35,7 +35,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * @since 2.0.0
 		 * @var string
 		 */
-		const SETTINGS_KEY = 'od_integration';
+		// Audit #1434: explicit visibility.
+		public const SETTINGS_KEY = 'od_integration';
 
 		/**
 		 * Filter to control whether OD optimization should be applied.
@@ -43,7 +44,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * @since 2.0.0
 		 * @var string
 		 */
-		const FILTER_SHOULD_OPTIMIZE = 'wppo_od_should_optimize';
+		// Audit #1434: explicit visibility.
+		public const FILTER_SHOULD_OPTIMIZE = 'wppo_od_should_optimize';
 
 		/**
 		 * Per-request memo for OD lookups keyed by current URL.
@@ -127,8 +129,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 */
 		private static function debug_log( string $message ): void {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only diagnostics, gated above.
-				error_log( $message );
+				// Audit #1434: centralized sink (guarded — Log may not be loaded).
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+					Log::add( $message );
+				}
 			}
 		}
 

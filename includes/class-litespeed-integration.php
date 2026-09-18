@@ -103,6 +103,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private static ?string $cached_effective_mode = null;
 
 		/**
+		 * Parsed preload-exclude URL list memo (audit #1434: clearable via reset_cache()).
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $exclude_urls_memo = null;
+
+		/**
 		 * Per-request cached get_mode value.
 		 *
 		 * @since 2.0.0
@@ -1412,11 +1420,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( $cacheable ) {
 				$options = Util::get_settings();
 				if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
-					static $exclude_urls_memo = null;
-					if ( null === $exclude_urls_memo ) {
-						$exclude_urls_memo = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
+					// Audit #1434: class property (not function-static) so
+					// reset_cache() can clear it for long-lived workers/tests.
+					if ( null === self::$exclude_urls_memo ) {
+						self::$exclude_urls_memo = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
 					}
-					$exclude_urls = $exclude_urls_memo;
+					$exclude_urls = self::$exclude_urls_memo;
 					$request_uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 					$home_path    = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
 					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
@@ -1674,7 +1683,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// Re-validate after the filter: keep only hex up to 12 chars so
 			// a filter returning ;/whitespace/control bytes cannot
 			// split/poison the cookie value. Bail when empty.
-			$filtered_value = function_exists( 'preg_replace' ) ? preg_replace( '/[^a-f0-9]/', '', strtolower( $value ) ) : '';
+			// Audit #1434: preg_replace is PHP core — no guard needed.
+			$filtered_value = preg_replace( '/[^a-f0-9]/', '', strtolower( $value ) );
 			$value          = is_string( $filtered_value ) ? substr( $filtered_value, 0, 12 ) : '';
 			if ( '' === $value ) {
 				return;
@@ -2713,6 +2723,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 */
 		public static function reset_cache(): void {
 			self::$cached_effective_mode    = null;
+			self::$exclude_urls_memo        = null;
 			self::$cached_mode              = null;
 			self::$cached_is_litespeed      = null;
 			self::$cached_is_lscache_active = null;

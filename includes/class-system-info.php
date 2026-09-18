@@ -111,11 +111,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * }
 		 */
 		public static function get_php(): array {
-			$memory_limit        = ini_get( 'memory_limit' );
-			$max_execution_time  = ini_get( 'max_execution_time' );
-			$upload_max_filesize = ini_get( 'upload_max_filesize' );
-			$post_max_size       = ini_get( 'post_max_size' );
-			$display_errors      = ini_get( 'display_errors' );
+			// Audit #1434: hardened hosts can disable ini_get() — fail open.
+			$safe_ini            = static function ( string $key ) {
+				if ( ! function_exists( 'ini_get' ) ) {
+					return false;
+				}
+				return @ini_get( $key ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Hardened hosts may emit.
+			};
+			$memory_limit        = $safe_ini( 'memory_limit' );
+			$max_execution_time  = $safe_ini( 'max_execution_time' );
+			$upload_max_filesize = $safe_ini( 'upload_max_filesize' );
+			$post_max_size       = $safe_ini( 'post_max_size' );
+			$display_errors      = $safe_ini( 'display_errors' );
 
 			return array(
 				// Security: expose only the major.minor series so the exact,
@@ -621,8 +628,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				);
 			}
 
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Warning emitted when opcache.restrict_api blocks access.
-			$opcache = opcache_get_status( false );
+			$opcache = @opcache_get_status( false ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Warning emitted when opcache.restrict_api blocks access.
 
 			if ( false === $opcache || ! is_array( $opcache ) ) {
 				return array(
@@ -660,9 +666,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			if (
-			isset( $opcache['interned_strings_usage']['used_memory'], $opcache['interned_strings_usage']['buffer_size'] )
-			&& ! empty( $opcache['interned_strings_usage']['buffer_size'] )
-			) {
+				isset( $opcache['interned_strings_usage']['used_memory'], $opcache['interned_strings_usage']['buffer_size'] )
+				&& ! empty( $opcache['interned_strings_usage']['buffer_size'] )
+			) { // Audit #1434: WPCS continuation indent.
 				$info['interned_strings'] = sprintf(
 					/* translators: 1: Percentage used, 2: Total memory, 3: Free memory */
 					__( '%1$s%% of %2$s (%3$s free)', 'performance-optimisation' ),
@@ -701,8 +707,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			try {
-				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
-				$value = ini_get( $key );
+				$value = @ini_get( $key ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return self::not_available_label();
@@ -756,10 +761,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			try {
-				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
-				$jit = ini_get( 'opcache.jit' );
-				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
-				$buffer_size = ini_get( 'opcache.jit_buffer_size' );
+				$jit         = @ini_get( 'opcache.jit' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
+				$buffer_size = @ini_get( 'opcache.jit_buffer_size' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return $unavailable;

@@ -1273,7 +1273,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				if ( empty( $permission_callback ) || ! is_callable( $permission_callback ) ) {
 					continue;
 				}
-				if ( null === $result && ! wp_has_ability( $ability['id'] ) && class_exists( 'WP_Abilities_Registry' ) ) {
+				// Audit #1434: forward-compat guard matching wp_register_ability.
+				if ( null === $result && function_exists( 'wp_has_ability' ) && ! wp_has_ability( $ability['id'] ) && class_exists( 'WP_Abilities_Registry' ) ) {
 					$registry = \WP_Abilities_Registry::get_instance();
 					if ( null !== $registry && method_exists( $registry, 'register' ) ) {
 						$registry->register( $ability['id'], $ability['args'] );
@@ -1373,7 +1374,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		public static function execute_crawler( array $input = array() ): array {
 			$urls = array();
 
-			if ( ! empty( $input['url'] ) ) {
+			// Audit #1434: array input fatals esc_url_raw on PHP 8 — skip
+			// non-strings like resolve_input_url() does.
+			if ( ! empty( $input['url'] ) && is_string( $input['url'] ) ) {
 				$urls[] = esc_url_raw( $input['url'] );
 			}
 			if ( ! empty( $input['urls'] ) && is_array( $input['urls'] ) ) {

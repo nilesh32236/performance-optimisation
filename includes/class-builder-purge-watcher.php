@@ -1659,7 +1659,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				$reason = trim( $reason );
+				// Audit #1434: REST/SPA-supplied reason stored to an option surfaced
+				// to the SPA — sanitize before persisting.
+				$reason = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $reason ) : trim( $reason );
 				if ( function_exists( 'mb_substr' ) ) {
 					$reason = mb_substr( $reason, 0, 200 );
 				} else {
