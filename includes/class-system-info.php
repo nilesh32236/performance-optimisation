@@ -425,7 +425,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						// Audit #1453: containment — a filter-relocated path must resolve
 						// under WP_CONTENT_DIR before reading.
 						$resolved_dropin = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) realpath( $path ) ) : '';
-						$content_root   = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
+						$content_root    = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
 						if ( is_int( $dropin_size ) && $dropin_size > 0 && $dropin_size < 1048576 && '' !== $content_root && 0 === strpos( $resolved_dropin, $content_root ) ) {
 							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 							if ( is_string( $contents_raw ) ) {
@@ -465,7 +465,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						// Audit #1453: containment — a filter-relocated path must resolve
 						// under WP_CONTENT_DIR before reading.
 						$resolved_dropin = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) realpath( $path ) ) : '';
-						$content_root   = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
+						$content_root    = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
 						if ( is_int( $dropin_size ) && $dropin_size > 0 && $dropin_size < 1048576 && '' !== $content_root && 0 === strpos( $resolved_dropin, $content_root ) ) {
 							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 							if ( is_string( $contents_raw ) ) {
