@@ -117,7 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			// Also consider CDN_Purger Cloudflare config as fallback.
 			if ( ! $has_cf ) {
 				$cs     = isset( $settings['cache_settings'] ) && is_array( $settings['cache_settings'] ) ? $settings['cache_settings'] : array();
-				$has_cf = ( isset( $cs['cdnPurgeService'] ) && 'cloudflare' === $cs['cdnPurgeService'] ) && ! empty( $cs['cloudflareZoneId'] ) && defined( 'WPPO_CLOUDFLARE_API_TOKEN' );
+				$has_cf = ( isset( $cs['cdnPurgeService'] ) && 'cloudflare' === $cs['cdnPurgeService'] ) && ! empty( $cs['cloudflareZoneId'] ) && defined( 'WPPO_CLOUDFLARE_API_TOKEN' ) && '' !== (string) constant( 'WPPO_CLOUDFLARE_API_TOKEN' );
 			}
 
 			return $has_cf || $has_bunny;

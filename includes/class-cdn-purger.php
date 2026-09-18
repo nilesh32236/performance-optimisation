@@ -111,7 +111,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 */
 		private static function purge_single_page( array $cache, string $service, $url_path ): bool {
 			if ( 'cloudflare' !== $service ) {
-				self::log_skip( $service, 'single-page: no scoped purge for service' );
+				if ( 'none' !== $service && '' !== $service ) {
+					self::log_skip( $service, 'single-page: no scoped purge for service' );
+				}
 				return true;
 			}
 			$page_url = self::resolve_page_url( $url_path );
@@ -261,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 			if ( null !== $to_parse ) {
 				$parts = function_exists( 'wp_parse_url' ) ? wp_parse_url( $to_parse ) : parse_url( $to_parse ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable (unit contexts).
 				if ( ! is_array( $parts ) ) {
-					return '/';
+					return '';
 				}
 				$path = isset( $parts['path'] ) && '' !== $parts['path'] ? $parts['path'] : '/';
 				if ( ! empty( $parts['query'] ) ) {
