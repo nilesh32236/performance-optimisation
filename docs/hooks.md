@@ -2122,6 +2122,8 @@ Filters the ESI placeholder HTML rendered when ESI is unavailable. @since 2.0.0.
 Filters the rendered ESI fragment HTML before output. @since 2.0.0.
 
 Runs before the `wp_kses` sanitization contract (`wppo_esi_allowed_html`), so any markup added here must be permitted by that allowlist. The plugin's own `LiteSpeed_ESI::inject_nonce_replacement()` is attached to this filter: it rewrites `data-wppo-nonce` placeholders (including `__WPPO_ESI_NONCE__` / `__WPPO_NONCE__`) to a freshly minted nonce. A fragment supplied here carrying `data-wppo-nonce=""` therefore receives a real nonce automatically, and `data-*` attributes survive sanitization.
+**WooCommerce fragment-caching guidance (ESI as the correct fragment answer):** catalog pages stay cacheable while per-session commerce state hydrates as fragments — the `cart` block renders live mini-cart count + cart hash via `LiteSpeed_ESI::render_woo_cart_fragment()` (Woo-guarded, zero merchant configuration), punched through the page cache via Enterprise `<esi:include>` where ESI is available and via the OLS AJAX hydration fallback (`src/esi.js` + `wppo_esi_fragment` endpoint with `DONOTCACHEPAGE`) otherwise. The same dynamic routes are never served from static HTML cache in either mode: cart / checkout / my-account (+ custom Woo slugs), `wc-ajax`, `add-to-cart`, Store API (`/wc/store/`), and faceted queries (see `Util::is_woo_excluded_url()`), with cookie vary on `woocommerce_items_in_cart` / `woocommerce_cart_hash` / `wp_woocommerce_session_*` as the second line of defense. Any detection failure degrades to uncached/dynamic — never a stale cross-session mini-cart. Structured guidance lives in `LiteSpeed_ESI::get_woo_fragment_guidance()`.
+
 
 **Parameters:**
 - `$fragment` *(string)* — Fragment markup.

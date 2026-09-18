@@ -1019,6 +1019,91 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * WooCommerce fragment-caching guidance for dynamic commerce.
+		 *
+		 * Static HTML cache must never serve stale cart/checkout/account
+		 * content across sessions: catalog pages stay cacheable while
+		 * mini-cart / cart-hash / cart-count fragments punch through the
+		 * page cache where ESI (or the OLS AJAX hydration fallback) is
+		 * available, and the same dynamic routes stay on the bypass list
+		 * otherwise (cart, checkout, my-account + custom Woo slugs,
+		 * wc-ajax, add-to-cart, Store API `/wc/store/`, faceted queries —
+		 * see `Util::is_woo_excluded_url()`). Cookie vary on the Woo cart
+		 * hash / session cookies is the second line of defense: any
+		 * detection failure degrades to uncached/dynamic, never to a stale
+		 * cross-session cart. Pure guidance helper: no I/O, no Woo calls,
+		 * multisite-safe.
+		 *
+		 * @since NEXT
+		 * @return array{esi_available: string, bypass_routes: string[], fragment_blocks: string[], cookie_vary: string[], fallback: string} Structured ESI guidance.
+		 */
+		public static function get_woo_fragment_guidance(): array {
+			return array(
+				'esi_available'   => 'Enterprise ESI (<esi:include>) or the OLS AJAX hydration fallback (src/esi.js + wppo_esi_fragment endpoint, DONOTCACHEPAGE) punches mini-cart / cart-hash fragments through the cached page.',
+				'bypass_routes'   => array( 'cart', 'checkout', 'my-account (+ custom Woo slugs)', 'wc-ajax', 'add-to-cart', 'Store API (/wc/store/)', 'faceted layered-nav queries' ),
+				'fragment_blocks' => array( 'cart (mini-cart count + cart hash)', 'checkout order-review nonce', 'account greeting', 'adminbar', 'nonce refresh' ),
+				'cookie_vary'     => array( 'woocommerce_items_in_cart', 'woocommerce_cart_hash', 'wp_woocommerce_session_*' ),
+				'fallback'        => 'No ESI: serve dynamic (never a stale static file). Customize via the wppo_esi_fragment_html filter; every fragment passes through wp_kses().',
+			);
+		}
+
+		/**
+		 * Render the WooCommerce cart fragment (mini-cart count + cart hash).
+		 *
+		 * Fragment-level dynamism answer for stale-cart risk: the cached
+		 * page carries only an ESI placeholder while the per-session cart
+		 * state hydrates via this endpoint. Reads Woo cart state only
+		 * behind `class_exists( 'WooCommerce' )` / `function_exists()`
+		 * guards with a `has_filter()`-safe non-Woo fallback, so stores
+		 * without Woo get a harmless placeholder and merchants get live
+		 * counts without any configuration. Fail-open to the placeholder:
+		 * any detection failure returns dynamic-safe markup, never fatal.
+		 *
+		 * @since NEXT
+		 * @return string Kses-safe cart fragment HTML.
+		 */
+		public static function render_woo_cart_fragment(): string {
+			$count = null;
+			$hash  = '';
+			try {
+				if ( class_exists( 'WooCommerce', false ) || function_exists( 'WC' ) ) {
+					if ( function_exists( 'WC' ) ) {
+						$woo = WC();
+						if ( is_object( $woo ) && isset( $woo->cart ) && is_object( $woo->cart ) ) {
+							if ( method_exists( $woo->cart, 'get_cart_contents_count' ) ) {
+								$count = (int) $woo->cart->get_cart_contents_count();
+							}
+							if ( method_exists( $woo->cart, 'get_cart_hash' ) ) {
+								$maybe_hash = $woo->cart->get_cart_hash();
+								if ( is_string( $maybe_hash ) ) {
+									$hash = $maybe_hash;
+								}
+							}
+						}
+					}
+					if ( null === $count && function_exists( 'wp_unslash' ) && function_exists( 'sanitize_text_field' ) ) {
+						$raw = isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_cart_hash'] ) ) : '';
+						if ( '' !== $raw ) {
+							$hash = $raw;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$count = null;
+			}
+			if ( null === $count ) {
+				return '<span class="wppo-mini-cart" data-wppo-cart="empty">cart(0)</span>';
+			}
+			$count = max( 0, $count );
+			$attrs = ' class="wppo-mini-cart" data-wppo-cart="live" data-cart-count="' . (int) $count . '"';
+			if ( '' !== $hash ) {
+				$attrs .= ' data-cart-hash="' . esc_attr( $hash ) . '"';
+			}
+			return '<span' . $attrs . '>cart(' . (int) $count . ')</span>';
+		}
+
+		/**
 		 * Handle AJAX fragment request.
 		 *
 		 * Emits Cache-Control: private,no-cache + X-LiteSpeed-Cache-Control: private,no-vary
@@ -1166,7 +1251,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// Allow per-block fragment generation.
 			switch ( $block ) {
 				case 'cart':
-					$fragment = '<span>cart(3)</span>';
+					$fragment = self::render_woo_cart_fragment();
 					break;
 				case 'adminbar':
 				case 'admin_bar':

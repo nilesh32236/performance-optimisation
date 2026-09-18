@@ -975,6 +975,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $path, '/' ) ) || (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $query ) ) ) {
 					return true;
 				}
+				// WooCommerce AJAX endpoints are dynamic JSON and must never be
+				// preloaded — unconditional on safe mode (explicit audit of
+				// the generic query guard below so intent is greppable,
+				// mirroring Cache::is_wc_ajax_request() and the pre-boot
+				// drop-in). Falls back to the path-segment + query-param
+				// regex on mixed-version deploys.
+				try {
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
+						if ( Util::is_woo_ajax_request( $path, $query ) ) {
+							return true;
+						}
+					} elseif ( (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . ltrim( (string) rawurldecode( $path ), '/' ) ) || ( '' !== $query && (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', $query ) ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
 				// Faceted layered-nav queries (issue #1256) are never preloaded —
 				// unconditional on safe mode: a filtered URL is dynamic by nature
 				// and warming it wastes cron slots plus risks caching filtered
@@ -1019,7 +1037,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					$woo_safe = Util::is_woo_safe_mode_enabled();
 				}
 				if ( ! $woo_safe ) {
-					// Safe mode off: only the unconditional Store API skip applies.
+					// Safe mode off: only the unconditional skips apply
+					// (Store API, wc-ajax, faceted, functional queries).
 					return false;
 				}
 				if ( null !== $woo_paths ) {

@@ -3580,39 +3580,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $options['preload_settings']['preloadSitemap'] ) && function_exists( 'as_enqueue_async_action' ) && function_exists( 'as_has_scheduled_action' ) ) {
 				$url = get_permalink( $post_id );
 				if ( is_string( $url ) && '' !== $url ) {
-					// Never schedule preload work for Woo dynamic pages.
-					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+					// Never schedule preload work for Woo dynamic routes.
+					// Single source: Util::is_woo_excluded_url() covers cart /
+					// checkout / account + custom slugs (safe-mode gated) plus
+					// Store API / wc-ajax / add-to-cart / faceted /
+					// functional-query URLs (unconditional), so warm-path and
+					// serve-path verdicts cannot drift. Fail-closed: any
+					// detection failure skips scheduling (never warm dynamic).
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_excluded_url' ) ) {
 						try {
-							// Safe mode off falls through to crawler-warm scheduling below.
-							if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) {
+							if ( Util::is_woo_excluded_url( $url ) ) {
 								return;
 							}
 						} catch ( \Throwable $e ) {
 							unset( $e );
 							return;
 						}
-					}
-					// Faceted / Store API / functional-query URLs (issue #1256) are
-					// never warmed — unconditional on safe mode. Permalinks rarely
-					// carry a query, but filtered variants must not enter the queue.
-					try {
-						$warm_qs = (string) wp_parse_url( $url, PHP_URL_QUERY );
-						if ( '' !== $warm_qs ) {
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( (string) wp_parse_url( $url, PHP_URL_PATH ), $warm_qs, '' ) ) {
+					} else {
+						// Mixed-version fallback: mirror the Cron batch
+						// fallback — unconditional Store API / wc-ajax /
+						// faceted / generic-query guards plus safe-mode-gated
+						// dynamic-path, so a stale Util can never warm
+						// faceted or wc-ajax URLs.
+						try {
+							$warm_path       = (string) wp_parse_url( $url, PHP_URL_PATH );
+							$warm_qs         = (string) wp_parse_url( $url, PHP_URL_QUERY );
+							$warm_rest_route = '';
+							if ( '' !== $warm_qs ) {
+								$warm_params = array();
+								parse_str( $warm_qs, $warm_params );
+								if ( isset( $warm_params['rest_route'] ) && is_string( $warm_params['rest_route'] ) ) {
+									$warm_rest_route = $warm_params['rest_route'];
+								}
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
+								if ( Util::is_woo_store_api_request( $warm_path, $warm_qs, '' ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_request( $warm_path, '', $warm_rest_route ) ) ) {
+									return;
+								}
+							} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && ( Util::is_woo_store_api_path( $warm_path ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_path( $warm_rest_route ) ) ) ) {
+								return;
+							} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $warm_path, '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $warm_qs ) ) ) ) {
 								return;
 							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) && Util::is_woo_faceted_query( $warm_qs ) ) {
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
+								if ( Util::is_woo_ajax_request( $warm_path, $warm_qs ) ) {
+									return;
+								}
+							} elseif ( (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . ltrim( (string) rawurldecode( $warm_path ), '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', $warm_qs ) ) ) {
 								return;
 							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query( $warm_qs ) ) {
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
+								if ( '' !== $warm_qs && Util::is_woo_faceted_query( $warm_qs ) ) {
+									return;
+								}
+							} elseif ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])(?:filter_[^=&]*|query_type_[^=&]*|min_price|max_price|rating_filter|orderby|product_cat|pa_[^=&]*|attribute_[^=&]*|gpf_[^=&]*)(?:=|&|;|$)/i', $warm_qs ) ) {
 								return;
 							}
-						} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( (string) wp_parse_url( $url, PHP_URL_PATH ), '', '' ) ) {
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) ) {
+								if ( '' !== $warm_qs && Util::has_uncacheable_query( $warm_qs ) ) {
+									return;
+								}
+							} elseif ( '' !== $warm_qs ) {
+								return;
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+								if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( $warm_path ) ) {
+									return;
+								}
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
 							return;
 						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return;
 					}
 					$url = esc_url_raw( $url );
 					// Atomic unique enqueue (issue #1310) closes the
