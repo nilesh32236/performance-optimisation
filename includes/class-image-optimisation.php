@@ -415,6 +415,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private ?string $stable_signal_lcp_url_key = null;
 
 		/**
+		 * Memoized hero-preload view-gate verdict for this instance.
+		 *
+		 * `is_hero_preload_eligible_view()` runs `has_filter()` /
+		 * `apply_filters()` / `version_compare()` work; without a memo it
+		 * would re-run on every hero path (preload data, lazy exclusion,
+		 * hero inject, direct preload) in one request. The verdict is
+		 * request-scoped (queried view never changes mid-request), so it
+		 * resolves at most once. Null until resolved. Reset via
+		 * `clear_instance_lcp_memo()`.
+		 *
+		 * @var bool|null
+		 * @since NEXT
+		 */
+		private ?bool $hero_preload_eligible_view = null;
+
+		/**
 		 * Per-request heuristic LCP memo keyed by buffer hash (issue #1216).
 		 *
 		 * The P2 DOM-first heuristic re-scans full HTML with
@@ -1027,6 +1043,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->auto_lcp_disabled_key      = null;
 			$this->stable_signal_lcp_url      = null;
 			$this->stable_signal_lcp_url_key  = null;
+			$this->hero_preload_eligible_view = null;
 			self::$heuristic_lcp_memo         = array();
 		}
 
@@ -3464,10 +3481,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Whether the current view may emit an automatic LCP hero preload.
 		 *
 		 * Single view gate for the hero pipeline (issue #1441): the hero
-		 * preload plus lazy exclusion run on frontend content views
-		 * (singular posts/pages and the front page, where the LCP hero
-		 * lives) and never on admin, feeds, embeds, previews, or AMP
-		 * endpoints. Every conditional is guarded with `function_exists()`
+		 * preload plus lazy exclusion run on frontend views and never on
+		 * admin, feeds, embeds, previews, or AMP endpoints. Non-content
+		 * views (archives, search, 404) stay eligible for measured/stored
+		 * heroes; only feeds/embeds/previews/AMP/admin above are hard
+		 * skips. Every conditional is guarded with `function_exists()`
 		 * and the WordPress version is checked with `version_compare()`
 		 * against 6.2 with a legacy fallback to eligible (true) when the
 		 * conditionals or version string are unreachable (e.g. unit
@@ -3482,81 +3500,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the hero pipeline may run on this view.
 		 */
 		private function is_hero_preload_eligible_view(): bool {
+			if ( null !== $this->hero_preload_eligible_view ) {
+				return $this->hero_preload_eligible_view;
+			}
 			try {
+				$eligible = true;
 				if ( function_exists( 'is_admin' ) && is_admin() ) {
-					return false;
-				}
-				if ( function_exists( 'is_feed' ) && is_feed() ) {
-					return false;
-				}
-				if ( function_exists( 'is_embed' ) && is_embed() ) {
-					return false;
-				}
-				if ( function_exists( 'is_preview' ) && is_preview() ) {
-					return false;
-				}
-				if ( function_exists( 'amp_is_request' ) && amp_is_request() ) {
-					return false;
-				}
-				if ( function_exists( 'is_amp_endpoint' ) && is_amp_endpoint() ) {
-					return false;
-				}
-				if ( function_exists( 'ampforwp_is_amp_endpoint' ) && ampforwp_is_amp_endpoint() ) {
-					return false;
-				}
-				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'amp_is_canonical' ) ) {
-					try {
-						if ( apply_filters( 'amp_is_canonical', false ) ) {
-							return false;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+					$eligible = false;
+				} elseif ( function_exists( 'is_feed' ) && is_feed() ) {
+					$eligible = false;
+				} elseif ( function_exists( 'is_embed' ) && is_embed() ) {
+					$eligible = false;
+				} elseif ( function_exists( 'is_preview' ) && is_preview() ) {
+					$eligible = false;
+				} elseif ( function_exists( 'amp_is_request' ) && amp_is_request() ) {
+					$eligible = false;
+				} elseif ( function_exists( 'is_amp_endpoint' ) && is_amp_endpoint() ) {
+					$eligible = false;
+				} elseif ( function_exists( 'ampforwp_is_amp_endpoint' ) && ampforwp_is_amp_endpoint() ) {
+					$eligible = false;
+				} elseif ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
 					if ( version_compare( $GLOBALS['wp_version'], '6.2', '<' ) ) {
-						return false;
+						$eligible = false;
 					}
 				} elseif ( function_exists( 'get_bloginfo' ) ) {
 					try {
 						$wp_version = (string) get_bloginfo( 'version' );
 						if ( '' !== $wp_version && version_compare( $wp_version, '6.2', '<' ) ) {
-							return false;
+							$eligible = false;
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
 				}
-				$has_singular   = function_exists( 'is_singular' );
-				$has_front_page = function_exists( 'is_front_page' );
-				if ( $has_singular || $has_front_page ) {
-					$is_singular   = false;
-					$is_front_page = false;
+				if ( $eligible && function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'amp_is_canonical' ) ) {
 					try {
-						$is_singular = $has_singular ? (bool) is_singular() : false;
+						if ( apply_filters( 'amp_is_canonical', false ) ) {
+							$eligible = false;
+						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
-						return true;
-					}
-					try {
-						$is_front_page = $has_front_page ? (bool) is_front_page() : false;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return true;
-					}
-					if ( ! $is_singular && ! $is_front_page ) {
-						// Non-content views (archives, search, 404) keep
-						// current behaviour for measured/stored heroes:
-						// only the heuristic-only auto path is view-gated
-						// by callers, so return eligible here and let the
-						// per-caller buffer/null-buffer distinction decide.
-						// Feeds/AMP/admin already bailed above.
-						return true;
 					}
 				}
-				return true;
+				// Non-content views (archives, search, 404) stay eligible
+				// for measured/stored heroes; only feeds/embeds/previews/
+				// AMP/admin above are hard skips.
+				$this->hero_preload_eligible_view = $eligible;
+				return $eligible;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				$this->hero_preload_eligible_view = true;
 				return true;
 			}
 		}
@@ -3568,7 +3561,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * (RUM / Optimization Detective / PageSpeed / heuristic) so site owners
 		 * can pin the hero before field data exists. Returns an empty string
 		 * when not on a singular view, when the meta is absent, or when the
-		 * value fails the `is_image_lcp_url()` guard. Fail-open: any failure
+		 * value fails the `is_image_lcp_url()` guard. A static front page is
+		 * singular, so its meta resolves via the post ID; the blog posts
+		 * index (`is_front_page()` without a singular post) owns no post
+		 * meta and always resolves to an empty string. Fail-open: any failure
 		 * returns an empty string, never fatal.
 		 *
 		 * @since NEXT
@@ -3586,19 +3582,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					unset( $e );
 					return '';
 				}
-				if ( ! $is_singular ) {
+				$post_id = 0;
+				if ( $is_singular ) {
+					$post_id = (int) get_the_ID();
+				} else {
+					// Non-singular front view: a static front page is already
+					// singular and never reaches here, so this branch only
+					// fires for the blog posts index (is_front_page() without
+					// a singular post), where no single post owns the
+					// `_wppo_lcp_preload_url` meta. Resolve the static
+					// front-page ID via page_on_front (covers a static front
+					// page observed before the main query marks it singular)
+					// and bail on the posts index instead of reading whatever
+					// global $post get_the_ID() happens to reflect.
 					try {
-						if ( function_exists( 'is_front_page' ) && is_front_page() ) {
-							$is_singular = true;
+						if ( function_exists( 'is_front_page' ) && function_exists( 'get_option' ) && is_front_page() ) {
+							$front_id = (int) get_option( 'page_on_front' );
+							if ( $front_id > 0 ) {
+								$post_id = $front_id;
+							} else {
+								return '';
+							}
+						} else {
+							return '';
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
+						return '';
 					}
 				}
-				if ( ! $is_singular ) {
-					return '';
-				}
-				$post_id = (int) get_the_ID();
 				if ( null !== $this->manual_lcp_url && $this->manual_lcp_url_key === $post_id ) {
 					return $this->manual_lcp_url;
 				}
@@ -4302,12 +4314,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items (zero or one item).
 		 */
 		private function get_auto_lcp_preload_data(): array {
-			try {
-				if ( ! $this->is_hero_preload_eligible_view() ) {
-					return array();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			if ( ! $this->is_hero_preload_eligible_view() ) {
+				return array();
 			}
 			try {
 				if ( $this->is_auto_lcp_disabled_for_post() ) {
@@ -4550,7 +4558,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * lookup, no new scans) needs `autoPreloadLCP` or `prioritizeLCP`.
 		 * The manual per-post picker (`_wppo_lcp_preload_url`) is exempt from
 		 * the gate — pinning the hero is explicit opt-in, so the pinned URL
-		 * is always excluded from lazy load with width/height preserved.
+		 * is always excluded from lazy load with width/height preserved,
+		 * even on views where the auto pipeline is ineligible (feeds, AMP,
+		 * admin): exclusion without emission is intentional there, keeping
+		 * the pinned hero never-lazy wherever markup is processed while
+		 * emission stays view-gated.
 		 * Returns an empty string when no branch applies or nothing resolves.
 		 * Fail-open: any failure returns an empty string, never fatal.
 		 *
@@ -4572,7 +4584,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			$resolved_url = '';
 			try {
-				// Manual picker bypasses the toggle gate (explicit opt-in).
+				// Manual picker bypasses the toggle gate (explicit opt-in)
+				// and the view gate below: the pinned hero stays never-lazy
+				// even on ineligible views, while emission stays gated.
 				try {
 					$manual = $this->get_manual_lcp_url();
 				} catch ( \Throwable $e ) {
@@ -4597,16 +4611,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				try {
-					if ( ! $this->is_hero_preload_eligible_view() ) {
-						if ( null === $buffer ) {
-							$this->lazy_lcp_exclusion_url     = '';
-							$this->lazy_lcp_exclusion_url_key = $memo_key;
-						}
-						return '';
+				// The helper is fail-open internally (catches Throwable and
+				// returns bool), so call it directly without an outer guard.
+				if ( ! $this->is_hero_preload_eligible_view() ) {
+					if ( null === $buffer ) {
+						$this->lazy_lcp_exclusion_url     = '';
+						$this->lazy_lcp_exclusion_url_key = $memo_key;
 					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
+					return '';
 				}
 				$auto_lcp_on = ! empty( ( $this->options['preload_settings'] ?? array() )['autoLcpPreload'] ) && $this->is_auto_lcp_rum_satisfied();
 				$gated       = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) || $auto_lcp_on;
@@ -5005,9 +5017,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.0.0
 		 * @since NEXT Resolves the auto hero candidate when empty (manual
-		 * picker over stable signals over stored data, null-buffer chain),
-		 * enforces per-URL dedup + per-post disable + lazy-exclusion
-		 * coupling with `fetchpriority="high"`.
+		 * picker → OD real-visit data → stored PageSpeed → stable signal,
+		 * null-buffer chain), enforces per-URL dedup + per-post disable +
+		 * lazy-exclusion coupling with `fetchpriority="high"`.
 		 *
 		 * @param string $img_url The URL of the image to preload. Empty resolves the auto hero candidate.
 		 * @return void
@@ -5019,20 +5031,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// Empty input resolves the unified auto chain
 					// (manual picker wins, then OD real-visit data, then
 					// stored PageSpeed, then the stable RUM/OD signal tier;
-					// null buffer so no DOM heuristic). The view gate and
+					// null buffer so no DOM heuristic — resolve_auto_lcp_url()
+					// already ends in the stable-signal tier, so no second
+					// lookup is needed). The view gate and
 					// per-post disable suppress only this auto path — an
 					// explicit URL below is explicit opt-in and unaffected.
-					try {
-						if ( ! $this->is_hero_preload_eligible_view() ) {
-							return;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+					if ( ! $this->is_hero_preload_eligible_view() ) {
+						return;
 					}
 					$img_url = $this->resolve_auto_lcp_url();
-					if ( '' === $img_url ) {
-						$img_url = $this->get_stable_signal_lcp_url();
-					}
 				}
 				if ( '' === $img_url ) {
 					return;
@@ -7940,12 +7947,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( isset( $image_optimisation['lcpHeroPreload'] ) && empty( $image_optimisation['lcpHeroPreload'] ) ) {
 					return $buffer;
 				}
-				try {
-					if ( ! $this->is_hero_preload_eligible_view() ) {
-						return $buffer;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
+				// The view gate is fail-open internally, so no outer guard.
+				if ( ! $this->is_hero_preload_eligible_view() ) {
+					return $buffer;
 				}
 				if ( false === strpos( $buffer, '<img' ) ) {
 					return $buffer;
