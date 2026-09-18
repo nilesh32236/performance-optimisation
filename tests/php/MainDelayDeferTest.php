@@ -1595,6 +1595,267 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Build a fake WP_Scripts registry with a custom queue and registrations.
+	 *
+	 * Extends the unit-test WP_Scripts stand-in (public queue/registered)
+	 * with a per-handle data store so get_data() mirrors core reads of
+	 * strategy/fetchpriority/group written via wp_script_add_data().
+	 *
+	 * @param string[] $queue      Queued handles in order.
+	 * @param array    $registered Registered entries (handle => _WP_Dependency-like object).
+	 * @return object
+	 */
+	private function make_fake_wp_scripts_with( array $queue, array $registered ): object {
+		return new class( $queue, $registered ) extends WP_Scripts {
+			/**
+			 * Queued handles (mirrors WP_Scripts::$queue).
+			 *
+			 * @var string[]
+			 */
+			public $queue = array();
+
+			/**
+			 * Recorded data keys per handle (mirrors wp_script_add_data).
+			 *
+			 * @var array<string, array<string, mixed>>
+			 */
+			public $data = array();
+
+			/**
+			 * Seed queue and registrations.
+			 *
+			 * @param string[] $queue      Queued handles in order.
+			 * @param array    $registered Registered entries.
+			 */
+			public function __construct( array $queue, array $registered ) {
+				$this->queue      = $queue;
+				$this->registered = $registered;
+			}
+
+			/**
+			 * Record data keys so get_data() mirrors core.
+			 *
+			 * @param string $handle Script handle.
+			 * @param string $key    Data key.
+			 * @param mixed  $value  Data value.
+			 * @return bool
+			 */
+			public function add_data( $handle, $key, $value ) {
+				$this->data[ $handle ][ $key ] = $value;
+				return true;
+			}
+
+			/**
+			 * Read a recorded data key (mirrors WP_Dependencies::get_data()).
+			 *
+			 * @param string $handle Script handle.
+			 * @param string $key    Data key.
+			 * @return mixed
+			 */
+			public function get_data( $handle, $key ) {
+				return $this->data[ $handle ][ $key ] ?? false;
+			}
+		};
+	}
+
+	/**
+	 * Build a core-shaped registered script entry.
+	 *
+	 * Mirrors _WP_Dependency::$deps/$extra as read by the defer-eligibility
+	 * gate (issue #1466).
+	 *
+	 * @param string[] $deps  Dependency handles.
+	 * @param array    $extra Extra data (after/type/strategy).
+	 * @return object
+	 */
+	private function make_script_dep( array $deps = array(), array $extra = array() ): object {
+		$dep        = new \stdClass();
+		$dep->deps  = $deps;
+		$dep->extra = $extra;
+		return $dep;
+	}
+
+	/**
+	 * Run add_defer_strategy() against a custom queue/registrations set.
+	 *
+	 * Pins the WP 6.9 native path (strategy + fetchpriority + group) with
+	 * deferJS on, installs the recording wp_script_add_data() stub, and
+	 * returns the Main instance, fake registry, and recorded writes.
+	 *
+	 * @param string[] $queue      Queued handles in order.
+	 * @param array    $registered Registered entries (handle => object).
+	 * @param string[] $exclude    Handles on the private exclusion list.
+	 * @return array{0: Main, 1: object, 2: array}
+	 */
+	private function run_defer_pass( array $queue, array $registered, array $exclude = array() ): array {
+		$this->stub_main_construction(
+			array(
+				'deferJS'        => true,
+				'delayJS'        => false,
+				'excludeDeferJS' => '',
+			)
+		);
+		$GLOBALS['wp_version'] = '6.9';
+		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
+
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+
+		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setValue( $main, $exclude );
+
+		$fake_scripts          = $this->make_fake_wp_scripts_with( $queue, $registered );
+		$GLOBALS['wp_scripts'] = $fake_scripts;
+
+		$recorded = array();
+		$this->stub_defer_strategy_env( $recorded );
+
+		$main->add_defer_strategy();
+
+		return array( $main, $fake_scripts, $recorded );
+	}
+
+	/**
+	 * Filter recorded wp_script_add_data() calls to strategy writes for a handle.
+	 *
+	 * @param array  $recorded Recorded (handle, key, value) calls.
+	 * @param string $handle   Script handle.
+	 * @return array
+	 */
+	private function strategy_writes_for( array $recorded, string $handle ): array {
+		return array_filter(
+			$recorded,
+			static function ( array $call ) use ( $handle ): bool {
+				return $handle === $call[0] && 'strategy' === $call[1];
+			}
+		);
+	}
+
+	/**
+	 * Test that a handle carrying an inline `after` script stays blocking
+	 * while an unrelated handle is still deferred (issue #1466).
+	 */
+	public function test_add_defer_strategy_skips_inline_after_handle(): void {
+		list( $main, $fake, $recorded ) = $this->run_defer_pass(
+			array( 'app', 'lib' ),
+			array(
+				'app' => $this->make_script_dep( array(), array( 'after' => array( 'console.log("app");' ) ) ),
+				'lib' => $this->make_script_dep(),
+			)
+		);
+		unset( $main, $fake );
+
+		$this->assertSame( array(), $this->strategy_writes_for( $recorded, 'app' ), 'A handle with an inline after script must stay blocking.' );
+		$this->assertNotEmpty( $this->strategy_writes_for( $recorded, 'lib' ), 'A handle with no dependents must still be deferred.' );
+	}
+
+	/**
+	 * Test that a module-type handle stays blocking (issue #1466).
+	 */
+	public function test_add_defer_strategy_skips_module_type_handle(): void {
+		list( $main, $fake, $recorded ) = $this->run_defer_pass(
+			array( 'mod' ),
+			array(
+				'mod' => $this->make_script_dep( array(), array( 'type' => 'module' ) ),
+			)
+		);
+		unset( $main, $fake );
+
+		$this->assertSame( array(), $this->strategy_writes_for( $recorded, 'mod' ), 'A module-type script must stay blocking.' );
+	}
+
+	/**
+	 * Test that a handle with a blocking queued dependent stays blocking
+	 * (issue #1466).
+	 *
+	 * The dependent is explicitly excluded, so it renders blocking and its
+	 * dependency must render blocking too, matching core output.
+	 */
+	public function test_add_defer_strategy_skips_dependency_of_blocking_dependent(): void {
+		list( $main, $fake, $recorded ) = $this->run_defer_pass(
+			array( 'lib', 'app' ),
+			array(
+				'lib' => $this->make_script_dep(),
+				'app' => $this->make_script_dep( array( 'lib' ) ),
+			),
+			array( 'app' )
+		);
+		unset( $main, $fake );
+
+		$this->assertSame( array(), $this->strategy_writes_for( $recorded, 'app' ), 'An excluded handle must never be stamped.' );
+		$this->assertSame( array(), $this->strategy_writes_for( $recorded, 'lib' ), 'A handle with a blocking queued dependent must stay blocking.' );
+	}
+
+	/**
+	 * Test that a dependency pair defers both handles regardless of queue
+	 * order (issue #1466 review).
+	 *
+	 * Neither handle carries an explicit strategy; the dependent counts as
+	 * deferred via the run's intended set, so the verdict never depends on
+	 * whether the dependency was processed before its dependent.
+	 *
+	 * @param string[] $queue Queued handles in order.
+	 */
+	#[DataProvider( 'provide_defer_queue_orders' )]
+	public function test_add_defer_strategy_defers_dependent_pair_regardless_of_queue_order( array $queue ): void {
+		list( $main, $fake, $recorded ) = $this->run_defer_pass(
+			$queue,
+			array(
+				'lib' => $this->make_script_dep(),
+				'app' => $this->make_script_dep( array( 'lib' ) ),
+			)
+		);
+		unset( $main, $fake );
+
+		$this->assertNotEmpty( $this->strategy_writes_for( $recorded, 'lib' ), 'The dependency must defer in queue order [' . implode( ',', $queue ) . '].' );
+		$this->assertNotEmpty( $this->strategy_writes_for( $recorded, 'app' ), 'The dependent must defer in queue order [' . implode( ',', $queue ) . '].' );
+	}
+
+	/**
+	 * Queue orders for the order-independence test.
+	 *
+	 * @return array<string, array{0: string[]}>
+	 */
+	public static function provide_defer_queue_orders(): array {
+		return array(
+			'dependency first' => array( array( 'lib', 'app' ) ),
+			'dependent first'  => array( array( 'app', 'lib' ) ),
+		);
+	}
+
+	/**
+	 * Test that transitive blocking poisons the whole chain (issue #1466 review).
+	 *
+	 * Chain lib <- mid <- top with top excluded (blocking): mid observes the
+	 * blocking dependent top and stays blocking, and lib observes mid as
+	 * transitively blocked even though mid itself is in the intended set.
+	 * No handle is stamped and no deferred mark is recorded.
+	 */
+	public function test_add_defer_strategy_blocks_transitively_poisoned_dependency(): void {
+		list( $main, $fake, $recorded ) = $this->run_defer_pass(
+			array( 'lib', 'mid', 'top' ),
+			array(
+				'lib' => $this->make_script_dep(),
+				'mid' => $this->make_script_dep( array( 'lib' ) ),
+				'top' => $this->make_script_dep( array( 'mid' ) ),
+			),
+			array( 'top' )
+		);
+		unset( $fake );
+
+		$this->assertSame( array(), $this->strategy_writes_for( $recorded, 'top' ), 'An excluded handle must never be stamped.' );
+		$this->assertSame( array(), $this->strategy_writes_for( $recorded, 'mid' ), 'A handle with a blocking dependent must stay blocking.' );
+		$this->assertSame( array(), $this->strategy_writes_for( $recorded, 'lib' ), 'A handle with a transitively-blocked dependent must stay blocking.' );
+		$this->assertSame( array(), $this->read_private_prop( $main, 'deferred_handles' ), 'Ineligible handles must not be marked deferred.' );
+	}
+
+	/**
 	 * Test that the module pass skips modules with an explicit fetchpriority
 	 * (fill-gaps-only, issue #1019) while still moving them to the footer.
 	 *
