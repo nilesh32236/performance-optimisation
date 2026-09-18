@@ -1070,7 +1070,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * late callers (cron batches, abilities, integration info) keep
 		 * working. Fail-open: any detection error returns true (today's
 		 * always-load behaviour) — never fatal. Multisite-safe: pure server
-		 * detection, no options or transients touched.
+		 * detection, no options or transients touched. Server detection honours
+		 * the documented `wppo_litespeed_is_litespeed` filter via
+		 * LiteSpeed_Integration::is_litespeed().
 		 *
 		 * @since NEXT
 		 * @return bool True when the LiteSpeed stack should be required.
@@ -1089,6 +1091,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
 					return true;
 				}
+				// Prefer the filtered detector so the documented
+				// `wppo_litespeed_is_litespeed` filter keeps working (e.g. proxy-header
+				// overrides): LiteSpeed_Integration::is_litespeed() delegates to
+				// Server_Rules plus the filter, so default behaviour is unchanged.
+				// LiteSpeed_Integration is always required just above.
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_litespeed' ) ) {
+					return LiteSpeed_Integration::is_litespeed();
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'is_litespeed' ) ) {
 					return Server_Rules::is_litespeed();
 				}
@@ -1104,7 +1114,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$raw = (string) sanitize_text_field( $raw );
 				}
 				$s = strtolower( $raw );
-				return false !== strpos( $s, 'litespeed' ) || false !== strpos( $s, 'openlitespeed' );
+				// Note: 'openlitespeed' contains 'litespeed', so a single strpos
+				// covers both variants.
+				return false !== strpos( $s, 'litespeed' );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
