@@ -647,9 +647,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Truncate CSS to the cap without breaking a rule.
 		 *
-		 * Cuts at the last closing brace at or under the cap so output never
-		 * ends mid-rule. Returns an empty string when no complete rule fits —
-		 * callers treat that as over-cap and serve the file variant instead.
+		 * Cuts at the last top-level closing brace at or under the cap so
+		 * output never ends mid-rule or leaves an `@media`/`@supports`/`@layer`
+		 * wrapper unclosed (brace depth is tracked, mirroring
+		 * Util::find_top_level_css_cut(); braces inside quoted strings and
+		 * CSS comments are skipped). Returns an empty string when no complete
+		 * top-level rule fits — callers treat that as over-cap and serve the
+		 * file variant instead.
 		 *
 		 * @param string $css CSS content.
 		 * @param int    $cap Maximum bytes.
@@ -660,8 +664,74 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( strlen( $css ) <= $cap ) {
 				return $css;
 			}
-			$cut = strrpos( substr( $css, 0, $cap ), '}' );
-			if ( false === $cut ) {
+			$prefix = substr( $css, 0, $cap );
+			if ( '' === $prefix ) {
+				return '';
+			}
+			$depth      = 0;
+			$cut        = null;
+			$len        = strlen( $prefix );
+			$in_single  = false;
+			$in_double  = false;
+			$in_comment = false;
+			for ( $i = 0; $i < $len; $i++ ) {
+				$c    = $prefix[ $i ];
+				$next = $i + 1 < $len ? $prefix[ $i + 1 ] : '';
+				if ( $in_comment ) {
+					if ( '*' === $c && '/' === $next ) {
+						$in_comment = false;
+						++$i;
+					}
+					continue;
+				}
+				if ( $in_single ) {
+					if ( '\\' === $c ) {
+						++$i;
+						continue;
+					}
+					if ( "'" === $c ) {
+						$in_single = false;
+					}
+					continue;
+				}
+				if ( $in_double ) {
+					if ( '\\' === $c ) {
+						++$i;
+						continue;
+					}
+					if ( '"' === $c ) {
+						$in_double = false;
+					}
+					continue;
+				}
+				if ( '/' === $c && '*' === $next ) {
+					$in_comment = true;
+					++$i;
+					continue;
+				}
+				if ( "'" === $c ) {
+					$in_single = true;
+					continue;
+				}
+				if ( '"' === $c ) {
+					$in_double = true;
+					continue;
+				}
+				if ( '{' === $c ) {
+					++$depth;
+				} elseif ( '}' === $c ) {
+					if ( $depth > 0 ) {
+						--$depth;
+						if ( 0 === $depth ) {
+							$cut = $i;
+						}
+					} else {
+						// Stray closing brace at depth 0 still ends a rule.
+						$cut = $i;
+					}
+				}
+			}
+			if ( null === $cut ) {
 				return '';
 			}
 			return substr( $css, 0, $cut + 1 );
@@ -946,12 +1016,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Fail-open: any uncertainty returns the inputs unmodified for the
 		 * caller to handle with its file fallback.
 		 *
-		 * @param string $ccss Critical CSS content for the current template.
-		 * @param string $used_css Used-CSS content already committed inline ('' when file-delivered).
+		 * @param string     $ccss Critical CSS content for the current template.
+		 * @param string|int $used_css Used-CSS content already committed inline ('' when file-delivered),
+		 *                             or a byte count to avoid materialising a stub string.
 		 * @return array{inline: string, deferred: string} Budget-aware CCSS split.
 		 * @since NEXT
 		 */
-		public static function coordinate_inline_budgets( string $ccss, string $used_css = '' ): array {
+		public static function coordinate_inline_budgets( string $ccss, string|int $used_css = '' ): array {
 			try {
 				if ( '' === $ccss ) {
 					return array(
@@ -959,7 +1030,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						'deferred' => '',
 					);
 				}
-				$budget = self::get_effective_ccss_budget( strlen( $used_css ) );
+				$used_len = is_int( $used_css ) ? max( 0, $used_css ) : strlen( $used_css );
+				$budget   = self::get_effective_ccss_budget( $used_len );
 				if ( strlen( $ccss ) <= $budget ) {
 					return array(
 						'inline'   => $ccss,
@@ -6056,20 +6128,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// (used CSS already committed + this CCSS block) stays within
 				// core's `styles_inline_size_limit` (40KB on WP 6.9+, 20KB
 				// before) and the configured `ccssMaxSize` cap — the tighter
-				// wins, minus already-committed bytes. The split runs through
-				// the shared coordinate_inline_budgets() helper so the
-				// inline/deferred decision can never drift from its tests; a
-				// stub of exactly $committed bytes stands in for the
-				// already-committed output (used CSS ships file-delivered, so
-				// the stub is normally empty and costs nothing). Over-budget
-				// output is never inlined: serve the per-template file variant
-				// with mtime cache busting instead (repeat-visit cacheable
-				// asset). The plain stylesheet link is render-blocking, so
-				// there is no FOUC; the remaining full stylesheets are still
-				// deferred by defer_stylesheets().
+				// wins, minus already-committed bytes. The committed byte
+				// count is passed straight through to
+				// coordinate_inline_budgets() (no stub string is allocated).
+				// Over-budget output is never inlined: serve the per-template
+				// file variant with mtime cache busting instead (repeat-visit
+				// cacheable asset). The plain stylesheet link is
+				// render-blocking, so there is no FOUC; the remaining full
+				// stylesheets are still deferred by defer_stylesheets().
 				$committed = self::estimate_committed_inline_bytes();
-				$used_stub = $committed > 0 ? str_repeat( ' ', $committed ) : '';
-				$split     = self::coordinate_inline_budgets( $content, $used_stub );
+				$split     = self::coordinate_inline_budgets( $content, $committed );
 				if ( '' !== $split['deferred'] ) {
 					$file_url = self::get_ccss_file_url( $template_hash );
 					if ( '' !== $file_url ) {
