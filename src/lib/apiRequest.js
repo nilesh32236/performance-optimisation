@@ -318,7 +318,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		}
 	}
 
-	const doFetch = ( nonce ) =>
+	const doFetch = ( nonce, fetchSignal = signal ) =>
 		fetch( wppoSettings.apiUrl + action, {
 			method,
 			headers: {
@@ -326,10 +326,20 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				'X-WP-Nonce': nonce || wppoSettings.nonce || '',
 			},
 			...( ! isGet && { body: JSON.stringify( body ) } ),
-			signal,
+			signal: fetchSignal,
 		} );
 
-	const handleResponse = async ( response, isRetrying = false ) => {
+	// Shared GETs deliberately fetch WITHOUT any caller signal: aborting one
+	// waiter must never cancel the underlying request for the other joiners.
+	// Every waiter (including the first) races the shared promise locally
+	// against its own abort promise instead (see below).
+	const doSharedFetch = ( nonce ) => doFetch( nonce, undefined );
+
+	const handleResponse = async (
+		response,
+		isRetrying = false,
+		fetchFn = doFetch
+	) => {
 		let data;
 		try {
 			data = await response.json();
@@ -342,8 +352,8 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				( response.status === 401 || response.status === 403 )
 			) {
 				const freshNonce = await refreshNonce();
-				const retryResponse = await doFetch( freshNonce );
-				return handleResponse( retryResponse, true );
+				const retryResponse = await fetchFn( freshNonce );
+				return handleResponse( retryResponse, true, fetchFn );
 			}
 			throw new Error(
 				`Invalid JSON response from ${ action }: ${ parseError.message }`
@@ -365,8 +375,8 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				);
 			}
 			const freshNonce = await refreshNonce();
-			const retryResponse = await doFetch( freshNonce );
-			return handleResponse( retryResponse, true );
+			const retryResponse = await fetchFn( freshNonce );
+			return handleResponse( retryResponse, true, fetchFn );
 		}
 
 		// Mutates the global wppoSettings.settings so all components reading from it
@@ -387,12 +397,22 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		let pending;
 		if ( isGet ) {
 			pending = ( async () => {
-				const response = await doFetch( null );
-				return await handleResponse( response );
+				const response = await doSharedFetch( null );
+				return await handleResponse( response, false, doSharedFetch );
 			} )();
 			inflightGets.set( action, pending );
 			try {
-				return await pending;
+				if ( ! signal ) {
+					return await pending;
+				}
+				// Race even the first waiter locally so its abort rejects
+				// only itself while the shared fetch continues for others.
+				const abortPromise = onCallerAbort( signal );
+				try {
+					return await Promise.race( [ pending, abortPromise ] );
+				} finally {
+					abortPromise.cleanup?.();
+				}
 			} finally {
 				if ( inflightGets.get( action ) === pending ) {
 					inflightGets.delete( action );
@@ -767,7 +787,7 @@ export const fetchOptimizationPresets = ( preset = '', signal ) => {
 /**
  * Apply a Safe / Balanced / Aggressive preset in one click.
  *
- * The server snapshots a restore point before overwriting; a failed apply
+ * The server snapshots a restore point after a successful overwrite; a failed apply
  * leaves the prior settings intact.
  *
  * @since NEXT

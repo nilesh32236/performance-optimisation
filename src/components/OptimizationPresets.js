@@ -151,7 +151,9 @@ export const exportSettingsJson = ( notify ) => {
 		anchor.click();
 		anchor.remove();
 		if ( URL.revokeObjectURL ) {
-			URL.revokeObjectURL( url );
+			// Defer revocation past the click: revoking synchronously can
+			// cancel the download before it starts in some browsers.
+			setTimeout( () => URL.revokeObjectURL( url ), 1000 );
 		}
 		notify( {
 			type: 'success',
