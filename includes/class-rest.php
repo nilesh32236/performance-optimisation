@@ -347,6 +347,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'safe_mode_detect'          => array(
+					'methods'             => array( 'GET', 'POST' ),
+					'callback'            => array( $this, 'detect_safe_mode_excludes' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'safe_mode'                 => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'handle_safe_mode' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
@@ -3732,6 +3744,271 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 500, __( 'Could not discard sandbox settings.', 'performance-optimisation' ) );
 			}
 			return $this->send_response( array( 'staged' => array() ) );
+		}
+
+		/**
+		 * Auto-exclude detector for the minify/combine/defer stack (issue #1465).
+		 *
+		 * Inspects the currently enqueued script/style handles (when
+		 * available) plus active-plugin signals (WooCommerce, Elementor,
+		 * Kadence — all function_exists/class_exists-guarded for WP 6.2+
+		 * compat) and maps them through
+		 * Main::detect_fragile_handles() so the UI can suggest the exact
+		 * handle to exclude. Read-only, per-site settings only
+		 * (multisite-safe). Fail-open: any failure returns an empty
+		 * suggestion list, never fatal.
+		 *
+		 * Limitation: inside a REST/admin request the frontend
+		 * `$GLOBALS['wp_scripts']->queue` / `$GLOBALS['wp_styles']->queue`
+		 * is never populated, so the endpoint falls back to plugin-signal
+		 * guesses unless the caller passes the page's real handles via the
+		 * optional `handles` param (array or comma-separated string, capped
+		 * at 100 entries of 128 chars). Accepts GET and POST: POST the
+		 * handles in the request body to avoid proxy/WAF URL-length limits.
+		 *
+		 * @param \WP_REST_Request $_request The request object. Optional `handles` param for accuracy.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function detect_safe_mode_excludes( \WP_REST_Request $_request ): \WP_REST_Response {
+			try {
+				$file_opt = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					try {
+						$settings = (array) Util::get_settings();
+						$file_opt = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$handles = array();
+				// Explicit handles param wins for accuracy: the REST/admin
+				// queue is empty, so the UI may POST the frontend queue it
+				// collected (array or comma-separated string, sanitized).
+				try {
+					$req_params = $_request->get_params();
+					if ( isset( $req_params['handles'] ) ) {
+						$raw_handles = $req_params['handles'];
+						if ( is_string( $raw_handles ) ) {
+							$raw_handles = explode( ',', $raw_handles );
+						}
+						if ( is_array( $raw_handles ) ) {
+							// Bound oversized direct REST input before
+							// sanitizing/looping so it is truncated cheaply
+							// (detect_fragile_handles caps suggestions at 20,
+							// but only after this loop runs).
+							$raw_handles = array_slice( $raw_handles, 0, 100 );
+							foreach ( $raw_handles as $handle ) {
+								if ( is_string( $handle ) || is_numeric( $handle ) ) {
+									$clean = trim( sanitize_text_field( (string) $handle ) );
+									$clean = substr( $clean, 0, 128 );
+									if ( '' !== $clean ) {
+										$handles[] = $clean;
+									}
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					$has_explicit = ! empty( $handles );
+					if ( ! $has_explicit && isset( $GLOBALS['wp_scripts'] ) && is_object( $GLOBALS['wp_scripts'] ) && ! empty( $GLOBALS['wp_scripts']->queue ) && is_array( $GLOBALS['wp_scripts']->queue ) ) {
+						foreach ( $GLOBALS['wp_scripts']->queue as $handle ) {
+							if ( is_string( $handle ) || is_numeric( $handle ) ) {
+								$handles[] = (string) $handle;
+							}
+						}
+					}
+					if ( ! $has_explicit && isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && ! empty( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
+						foreach ( $GLOBALS['wp_styles']->queue as $handle ) {
+							if ( is_string( $handle ) || is_numeric( $handle ) ) {
+								$handles[] = (string) $handle;
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Active-plugin signals when the queue is unavailable (e.g.
+				// admin-ajax context): suggest the canonical fragile handles
+				// so the UI still names the exact handle first.
+				try {
+					if ( empty( $handles ) ) {
+						$signals = array();
+						if ( function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || class_exists( 'WooCommerce' ) ) {
+							$signals[] = 'wc-cart-fragments';
+							$signals[] = 'wc-checkout';
+						}
+						if ( function_exists( 'elementor_pro_load_plugin' ) || ( function_exists( 'did_action' ) && did_action( 'elementor/loaded' ) ) || class_exists( 'Elementor\Plugin' ) ) {
+							$signals[] = 'elementor-frontend';
+						}
+						if ( class_exists( 'Kadence_Blocks' ) || ( function_exists( 'wp_get_theme' ) && false !== stripos( (string) ( function_exists( 'get_template' ) ? get_template() : '' ), 'kadence' ) ) ) {
+							$signals[] = 'kadence-blocks';
+						}
+						if ( function_exists( 'et_setup_theme' ) || class_exists( 'ET_Builder_Element' ) ) {
+							$signals[] = 'divi-custom-script';
+						}
+						if ( empty( $signals ) ) {
+							$signals[] = 'jquery-core';
+						}
+						$handles = $signals;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					if ( empty( $handles ) ) {
+						$handles = array( 'jquery-core' );
+					}
+				}
+				$suggestions = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'detect_fragile_handles' ) ) {
+					try {
+						$suggestions = Main::detect_fragile_handles( $handles );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$suggestions = array();
+					}
+				}
+				$stack = array(
+					'safe_mode'         => false,
+					'delay_js'          => ! empty( $file_opt['delayJS'] ),
+					'defer_js'          => ! empty( $file_opt['deferJS'] ),
+					'combine_css'       => ! empty( $file_opt['combineCSS'] ),
+					'remove_unused_css' => ! empty( $file_opt['removeUnusedCSS'] ),
+					'stack_enabled'     => false,
+				);
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'get_safe_mode_stack_state' ) ) {
+					try {
+						$stack = Main::get_safe_mode_stack_state( $file_opt );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $this->send_response(
+					array(
+						'stack'       => $stack,
+						'suggestions' => $suggestions,
+						'handles'     => array_values( array_unique( $handles ) ),
+					)
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $this->send_response(
+					array(
+						'stack'       => array(
+							'safe_mode'         => false,
+							'delay_js'          => false,
+							'defer_js'          => false,
+							'combine_css'       => false,
+							'remove_unused_css' => false,
+							'stack_enabled'     => false,
+						),
+						'suggestions' => array(),
+						'handles'     => array(),
+					)
+				);
+			}
+		}
+
+		/**
+		 * One-click safe mode for the minify/combine/defer stack (issue #1465).
+		 *
+		 * POST param `action` is `enable` (single action restores an unbroken
+		 * render: delay + defer + combine + used-CSS paused, settings
+		 * preserved) or `disable` (restores the previous configuration).
+		 * Persists per-site `file_optimisation.safeMode` with a settings
+		 * snapshot for one-click undo. Throttled, manage_options-gated via
+		 * the route permission callback. Fail-open: never fatal.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function handle_safe_mode( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'safe_mode', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
+			try {
+				$params = $request->get_params();
+				$action = isset( $params['action'] ) ? sanitize_text_field( (string) $params['action'] ) : 'enable';
+				if ( ! in_array( $action, array( 'enable', 'disable' ), true ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid safe-mode action.', 'performance-optimisation' ) );
+				}
+				$options = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ? (array) Util::get_settings() : array();
+				if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
+					$options['file_optimisation'] = array();
+				}
+				// Snapshot only on enable while safe mode is off: snapshotting
+				// on disable would overwrite the pre-enable undo state with
+				// the safeMode=true state, so a later restore would wrongly
+				// re-enable safe mode instead of the original config.
+				$was_safe = ! empty( $options['file_optimisation']['safeMode'] );
+				if ( 'enable' === $action && ! $was_safe ) {
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'take_settings_snapshot' ) ) {
+							Util::take_settings_snapshot( $options );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( 'enable' === $action ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'build_safe_mode_enable_payload' ) ) {
+						try {
+							$options['file_optimisation'] = Main::build_safe_mode_enable_payload( $options['file_optimisation'] );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$options['file_optimisation']['safeMode'] = true;
+						}
+					} else {
+						$options['file_optimisation']['safeMode'] = true;
+					}
+				} else {
+					$options['file_optimisation']['safeMode'] = false;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'save_settings' ) ) {
+					Util::save_settings( $options );
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+						try {
+							Util::set_settings_cache( $options );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				} elseif ( function_exists( 'update_option' ) ) {
+						update_option( 'wppo_settings', $options, false );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) && method_exists( 'PerformanceOptimise\Inc\Telemetry', 'invalidate_audit_cache' ) ) {
+					try {
+						Telemetry::invalidate_audit_cache();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Purge the static HTML page cache (plus combined-CSS sidecars)
+				// so safe mode takes effect immediately: cached pages are
+				// served via the advanced-cache.php drop-in bypassing
+				// WordPress, and would otherwise keep serving the broken
+				// markup until expiry. Fail-open: purge failure never blocks
+				// the toggle response.
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'clear_cache' ) ) {
+						Cache::clear_cache();
+					} elseif ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'clear_all_cache' ) ) {
+						Main::clear_all_cache();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$this->remove_sensitive_settings_from_response( $options );
+				return $this->send_response( $options );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $this->send_response( null, false, 500, __( 'Could not toggle safe mode.', 'performance-optimisation' ) );
+			}
 		}
 
 		/**

@@ -16,6 +16,7 @@ import {
 	getErrorLogMessage,
 	getWppoSettings,
 	isValidScanUrl,
+	patchSettingsCache,
 	runPerformanceScan,
 } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
@@ -1334,6 +1335,301 @@ const FileOptimization = ( {
 		}
 	};
 	const { setIsDirty } = useContext( UnsavedChangesContext );
+	// One-click safe mode + auto-exclude detector (issue #1465): the
+	// detector names the exact fragile handle (jQuery, cart fragments,
+	// builders first) and safe mode disables the delay/defer/combine
+	// stack in a single action without losing settings. Sandbox preview
+	// above stages the stack first; this is the guided recovery path.
+	const {
+		notice: safeModeNotice,
+		notify: notifySafeMode,
+		dismiss: dismissSafeMode,
+	} = useNotice();
+	const [ detectorBusy, setDetectorBusy ] = useState( false );
+	const [ safeModeBusy, setSafeModeBusy ] = useState( false );
+	const [ detectorSuggestions, setDetectorSuggestions ] = useState( [] );
+	const detectorMountedRef = useRef( true );
+	useEffect( () => {
+		return () => {
+			detectorMountedRef.current = false;
+		};
+	}, [] );
+	// Collect frontend script/style tokens for the accurate per-page
+	// detector path (issue #1465 review): WP handle ids (e.g.
+	// "jquery-core-js" -> "jquery-core") plus src/href basenames (which
+	// still substring-match fragile fragments like "jquery-core" in
+	// ".../jquery-core.min.js"). Capped and charset-guarded; returns []
+	// when the DOM is unavailable so callers fall back to backend guesses.
+	const collectFrontendHandles = () => {
+		try {
+			if (
+				typeof document === 'undefined' ||
+				! document.querySelectorAll
+			) {
+				return [];
+			}
+			const found = [];
+			const pushToken = ( token ) => {
+				if ( typeof token !== 'string' ) {
+					return;
+				}
+				const clean = token.trim().slice( 0, 128 );
+				if (
+					'' !== clean &&
+					/^[A-Za-z0-9_.-]+$/.test( clean ) &&
+					! found.includes( clean )
+				) {
+					found.push( clean );
+				}
+			};
+			document
+				.querySelectorAll( 'script[id], link[id]' )
+				.forEach( ( el ) => {
+					const id = el.getAttribute( 'id' ) || '';
+					const base = id
+						.replace( /-(js|css)(-extra)?$/i, '' )
+						.trim();
+					pushToken( base );
+				} );
+			document
+				.querySelectorAll( 'script[src], link[rel="stylesheet"][href]' )
+				.forEach( ( el ) => {
+					const url =
+						el.getAttribute( 'src' ) ||
+						el.getAttribute( 'href' ) ||
+						'';
+					const segment = url
+						.split( '?' )[ 0 ]
+						.split( '#' )[ 0 ]
+						.split( '/' )
+						.pop()
+						.trim();
+					if ( '' !== segment ) {
+						pushToken( segment );
+						pushToken(
+							segment.replace( /\.(min\.)?(js|css)$/i, '' )
+						);
+					}
+				} );
+			return found.slice( 0, 50 );
+		} catch {
+			return [];
+		}
+	};
+	const handleDetectFragile = async () => {
+		setDetectorBusy( true );
+		dismissSafeMode();
+		try {
+			// Prefer the accurate per-page queue path: collect frontend
+			// script/style tokens (WP handle ids + src basenames) and POST
+			// them in the request body. POST (not a GET query string) keeps
+			// up to 50 tokens of 128 chars out of proxy/WAF URL-length
+			// limits. When nothing is collected (e.g. admin screen without
+			// frontend markup) post an empty body to fall back to the
+			// backend plugin-signal guesses.
+			let detectBody = {};
+			try {
+				const collected = collectFrontendHandles();
+				if ( collected.length > 0 ) {
+					detectBody = { handles: collected };
+				}
+			} catch {
+				detectBody = {};
+			}
+			const res = await apiCall( 'safe_mode_detect', detectBody, 'POST' );
+			if ( res && res.success && res.data ) {
+				const list = Array.isArray( res.data.suggestions )
+					? res.data.suggestions
+					: [];
+				if ( detectorMountedRef.current ) {
+					setDetectorSuggestions( list );
+				}
+				if ( list.length === 0 ) {
+					notifySafeMode( {
+						type: 'success',
+						message: __(
+							'No fragile handles detected — the stack applies cleanly.',
+							'performance-optimisation'
+						),
+					} );
+				} else {
+					const first =
+						list[ 0 ] && list[ 0 ].handle ? list[ 0 ].handle : '';
+					notifySafeMode( {
+						type: 'warning',
+						message: sprintf(
+							// translators: %s: fragile handle name.
+							__(
+								'Fragile handle detected: exclude "%s" before enabling the stack.',
+								'performance-optimisation'
+							),
+							first
+						),
+					} );
+				}
+			} else {
+				notifySafeMode( {
+					type: 'error',
+					message: __(
+						'Could not run the exclude detector.',
+						'performance-optimisation'
+					),
+				} );
+			}
+		} catch {
+			notifySafeMode( {
+				type: 'error',
+				message: __(
+					'Could not run the exclude detector.',
+					'performance-optimisation'
+				),
+			} );
+		} finally {
+			if ( detectorMountedRef.current ) {
+				setDetectorBusy( false );
+			}
+		}
+	};
+	const handleApplySuggestions = () => {
+		if (
+			! Array.isArray( detectorSuggestions ) ||
+			detectorSuggestions.length === 0
+		) {
+			return;
+		}
+		const deferNames = detectorSuggestions
+			.map( ( item ) =>
+				item &&
+				typeof item.handle === 'string' &&
+				( ! Array.isArray( item.fields ) ||
+					item.fields.includes( 'excludeDeferJS' ) )
+					? item.handle
+					: ''
+			)
+			.filter( ( name ) => '' !== name );
+		const delayNames = detectorSuggestions
+			.map( ( item ) =>
+				item &&
+				typeof item.handle === 'string' &&
+				( ! Array.isArray( item.fields ) ||
+					item.fields.includes( 'excludeDelayJS' ) )
+					? item.handle
+					: ''
+			)
+			.filter( ( name ) => '' !== name );
+		const names = Array.from( new Set( [ ...deferNames, ...delayNames ] ) );
+		if ( names.length === 0 ) {
+			return;
+		}
+		setSettings( ( prev ) => {
+			const mergeLines = ( current, additions ) => {
+				const existing = toTextLines( current )
+					.split( '\n' )
+					.map( ( line ) => line.trim() )
+					.filter( ( line ) => '' !== line );
+				const merged = Array.from(
+					new Set( [ ...existing, ...additions ] )
+				);
+				return merged.join( '\n' );
+			};
+			return {
+				...prev,
+				excludeDeferJS: mergeLines( prev.excludeDeferJS, deferNames ),
+				excludeDelayJS: mergeLines( prev.excludeDelayJS, delayNames ),
+			};
+		} );
+		notifySafeMode( {
+			type: 'success',
+			message: __(
+				'Suggested handles added to the exclude lists. Save settings to apply.',
+				'performance-optimisation'
+			),
+		} );
+	};
+	const handleOneClickSafeMode = async () => {
+		setSafeModeBusy( true );
+		// One-click undo: toggle based on current state so the button
+		// doubles as the restore path for the server-side snapshot taken
+		// on enable (safe_mode disable restores safeMode=false).
+		const enabling = ! ( settings && settings.safeMode );
+		const nextSafeMode = enabling;
+		try {
+			const res = await apiCall( 'safe_mode', {
+				action: enabling ? 'enable' : 'disable',
+			} );
+			if ( res && res.success ) {
+				setSettings( ( prev ) => ( {
+					...prev,
+					safeMode: nextSafeMode,
+				} ) );
+				setBaseline( ( prev ) => ( {
+					...prev,
+					safeMode: nextSafeMode,
+				} ) );
+				// Sync the shared wppoSettings.settings global so sibling
+				// tabs reading getWppoSettings() see safeMode immediately.
+				// The safe_mode endpoint returns the full settings payload,
+				// so commit when an object is returned, else patch the tab.
+				try {
+					if ( res.data && typeof res.data === 'object' ) {
+						commitSettingsCache( res.data );
+					} else {
+						patchSettingsCache( 'file_optimisation', {
+							safeMode: nextSafeMode,
+						} );
+					}
+				} catch {
+					// Shared-cache sync is best-effort only.
+				}
+				notifySafeMode( {
+					type: 'success',
+					message: enabling
+						? __(
+								'Safe mode enabled — Delay, Defer, Combine and Used CSS are paused. Your settings are preserved.',
+								'performance-optimisation'
+						  )
+						: __(
+								'Safe mode disabled — your previous configuration is restored.',
+								'performance-optimisation'
+						  ),
+				} );
+			} else {
+				notifySafeMode( {
+					type: 'error',
+					message:
+						( res &&
+							typeof res.message === 'string' &&
+							res.message ) ||
+						( enabling
+							? __(
+									'Could not enable safe mode.',
+									'performance-optimisation'
+							  )
+							: __(
+									'Could not disable safe mode.',
+									'performance-optimisation'
+							  ) ),
+				} );
+			}
+		} catch {
+			notifySafeMode( {
+				type: 'error',
+				message: enabling
+					? __(
+							'Could not enable safe mode.',
+							'performance-optimisation'
+					  )
+					: __(
+							'Could not disable safe mode.',
+							'performance-optimisation'
+					  ),
+			} );
+		} finally {
+			if ( detectorMountedRef.current ) {
+				setSafeModeBusy( false );
+			}
+		}
+	};
 	// Client-only CDN row ids never enter the baseline: the server payload
 	// is id-less, so comparing id-bearing state against an id-bearing
 	// baseline would report a permanent dirty state.
@@ -3303,7 +3599,7 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 									description={ __(
-										'Instantly disable Delay JS, Defer JS and Remove Unused CSS without losing their settings. Turn off to restore your previous configuration. Per-page disables and ?nocache also bypass these optimisations.',
+										'Instantly disable Delay JS, Defer JS, Combine CSS and Remove Unused CSS without losing their settings. Turn off to restore your previous configuration. Per-page disables and ?nocache also bypass these optimisations.',
 										'performance-optimisation'
 									) }
 									name="safeMode"
@@ -3315,11 +3611,102 @@ const FileOptimization = ( {
 									<NoticeBanner
 										type="warning"
 										message={ __(
-											'Safe mode is on — Delay, Defer and Used CSS are paused. Your settings are preserved.',
+											'Safe mode is on — Delay, Defer, Combine and Used CSS are paused. Your settings are preserved.',
 											'performance-optimisation'
 										) }
 									/>
 								) }
+								<div className="wppo-field wppo-safe-mode-detector">
+									<p className="wppo-field-label">
+										{ __(
+											'Auto-exclude detector — Delay / Defer / Combine',
+											'performance-optimisation'
+										) }
+									</p>
+									<p className="wppo-field-description">
+										{ __(
+											'Enable the stack on a fragile fixture with zero console errors: the detector names the exact handle to exclude (jQuery, cart fragments and builders first). Stage the stack via Sandbox preview, then restore an unbroken render in one click when needed.',
+											'performance-optimisation'
+										) }
+									</p>
+									{ safeModeNotice && (
+										<NoticeBanner
+											type={ safeModeNotice.type }
+											message={ safeModeNotice.message }
+											onDismiss={ dismissSafeMode }
+										/>
+									) }
+									{ Array.isArray( detectorSuggestions ) &&
+										detectorSuggestions.length > 0 && (
+											<ul className="wppo-detector-list">
+												{ detectorSuggestions.map(
+													( item ) => (
+														<li key={ item.handle }>
+															<code>
+																{ item.handle }
+															</code>
+															{ item.reason
+																? ` — ${ item.reason }`
+																: '' }
+														</li>
+													)
+												) }
+											</ul>
+										) }
+									<div className="wppo-sandbox-actions">
+										<button
+											type="button"
+											className="wppo-button wppo-button--secondary"
+											onClick={ handleDetectFragile }
+											disabled={
+												detectorBusy ||
+												optimizerDisabled
+											}
+										>
+											{ __(
+												'Detect fragile handles',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											type="button"
+											className="wppo-button wppo-button--secondary"
+											onClick={ handleApplySuggestions }
+											disabled={
+												detectorBusy ||
+												optimizerDisabled ||
+												! Array.isArray(
+													detectorSuggestions
+												) ||
+												detectorSuggestions.length === 0
+											}
+										>
+											{ __(
+												'Apply suggested excludes',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											type="button"
+											className="wppo-button wppo-button--primary"
+											onClick={ handleOneClickSafeMode }
+											disabled={
+												safeModeBusy ||
+												optimizerDisabled
+											}
+										>
+											{ settings.safeMode
+												? __(
+														'Disable safe mode (restore previous configuration)',
+														'performance-optimisation'
+												  )
+												: __(
+														'Enable safe mode (one-click restore)',
+														'performance-optimisation'
+												  ) }
+										</button>
+									</div>
+								</div>
 								<div className="wppo-field wppo-upgrade-purge">
 									<h4
 										className="wppo-field-label"

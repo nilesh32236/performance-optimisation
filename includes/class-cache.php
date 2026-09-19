@@ -938,6 +938,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private array $sandbox_effective_file_opt_memo = array();
 
 		/**
+		 * Per-request memo for the sandbox preview flag (issue #1465).
+		 *
+		 * Per-file inline checks resolve
+		 * Main::is_sandbox_preview_active() on every call repeats the
+		 * Sandbox_Preview::is_preview_request() chain per file. Memoized
+		 * here (null = unresolved) so the predicate is evaluated once per
+		 * Cache instance lifetime (one request).
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private $sandbox_preview_memo = null;
+
+		/**
+		 * Per-request memo for the safe-mode inline bypass (issue #1465).
+		 *
+		 * Keyed by the production slice hash so repeated per-file calls
+		 * with the same options reuse the verdict. Fail-open: unresolved
+		 * or failed lookups mean "do not bypass".
+		 *
+		 * @since NEXT
+		 * @var array<string,bool>
+		 */
+		private $safe_mode_inline_memo = array();
+
+		/**
 		 * Sandbox-effective `file_optimisation` slice (issue #1259).
 		 *
 		 * Single choke point for the Elementor-safe-mode slice resolution
@@ -1091,6 +1117,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// will_combine_css_inline() so the two call sites cannot drift.
 			if ( $this->should_bypass_combine_for_elementor( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
 				return;
+			}
+			// Unified safe-mode kill switch (issue #1465): safe mode disables
+			// combine in one click. Preview admins still render staged output
+			// (per-tag widening above); visitors and normal requests bail out
+			// here. Fail-open: predicate failure means combine proceeds.
+			if ( ! $is_preview ) {
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_safe_mode_active' ) ) {
+						if ( Main::is_safe_mode_active( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
+							return;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 			// On WP 6.9+ with separate (on-demand) core block assets active, never
@@ -1901,6 +1942,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the combined CSS inline must be skipped for safe mode (issue #1465).
+		 *
+		 * Hoisted predicate for will_combine_css_inline() (called per CSS
+		 * file): the sandbox-preview flag is memoized per request and the
+		 * verdict is memoized per production slice hash. Preview admins are
+		 * exempt so staged output stays verifiable. Fail-open to false.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_opt Production `file_optimisation` slice.
+		 * @return bool True when inlining must be skipped.
+		 */
+		private function should_bypass_inline_for_safe_mode( array $file_opt ): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'is_safe_mode_active' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'is_sandbox_preview_active' ) ) {
+					return false;
+				}
+				if ( null === $this->sandbox_preview_memo ) {
+					$this->sandbox_preview_memo = (bool) Main::is_sandbox_preview_active();
+				}
+				if ( $this->sandbox_preview_memo ) {
+					return false;
+				}
+				$memo_key = md5( serialize( $file_opt ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+				if ( array_key_exists( $memo_key, $this->safe_mode_inline_memo ) ) {
+					return $this->safe_mode_inline_memo[ $memo_key ];
+				}
+				$bypass                                   = (bool) Main::is_safe_mode_active( $file_opt );
+				$this->safe_mode_inline_memo[ $memo_key ] = $bypass;
+				return $bypass;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Whether the combined CSS file will be inlined by core.
 		 *
 		 * Delegates to {@see core_will_inline()} so the cumulative, smallest-first
@@ -1934,6 +2012,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( $this->should_bypass_combine_for_elementor( $file_opt, $looks_like ) ) {
 						return false;
 					}
+				}
+				// Unified safe-mode kill switch (issue #1465): never inline
+				// the combined file while safe mode is on (defense-in-depth
+				// for combine_css()). Preview admins are exempt so staged
+				// output can still be verified. Fail-open on any error.
+				// Hoisted into a per-request memoized helper so the
+				// preview + safe-mode predicates run once per options slice
+				// instead of once per CSS file.
+				$file_opt_safe = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+				if ( $this->should_bypass_inline_for_safe_mode( $file_opt_safe ) ) {
+					return false;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

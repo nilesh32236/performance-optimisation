@@ -255,16 +255,56 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'sandbox_save',
 			'sandbox_promote',
 			'sandbox_discard',
+			'safe_mode_detect',
+			'safe_mode',
 			'preload_status',
 			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge routes).
-		$this->assertCount( 43, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 safe-mode + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge routes).
+		$this->assertCount( 45, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
 		}
+	}
+
+	/**
+	 * Test that detect_safe_mode_excludes caps an oversized handles param.
+	 *
+	 * A direct REST call can pass an arbitrarily large handles array; the
+	 * endpoint must truncate before sanitizing/looping (issue #1465 review).
+	 */
+	public function test_detect_safe_mode_excludes_caps_oversized_handles(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'get_option' )->justReturn( array() );
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$huge = array();
+		for ( $i = 0; $i < 250; $i++ ) {
+			$huge[] = 'fragile-probe-' . $i;
+		}
+		// A known fragile handle past the cap must be truncated away,
+		// proving the slice happens before the sanitize loop.
+		$huge[] = 'jquery-core';
+
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_params' )->andReturn( array( 'handles' => $huge ) );
+
+		$response = $this->rest->detect_safe_mode_excludes( $request );
+		$data     = $response->get_data();
+
+		$this->assertTrue( $data['success'] );
+		$this->assertLessThanOrEqual( 100, count( $data['data']['handles'] ) );
+		$this->assertNotContains( 'jquery-core', $data['data']['handles'] );
+
+		// The detector accepts POST bodies so the UI stays clear of
+		// proxy/WAF URL-length limits; GET is kept for backward compat.
+		$reflection = new ReflectionMethod( $this->rest, 'get_routes' );
+		$routes     = $reflection->invoke( $this->rest );
+		$methods    = (array) $routes['safe_mode_detect']['methods'];
+		$this->assertContains( 'GET', $methods );
+		$this->assertContains( 'POST', $methods );
 	}
 
 	/**

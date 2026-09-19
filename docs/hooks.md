@@ -541,6 +541,27 @@ add_filter( 'wppo_defer_js_preset_exclusions', function( $preset ) {
 
 ---
 
+### `wppo_fragile_handle_map`
+Filters the fragile-handle map used by the auto-exclude detector (`safe_mode_detect` REST route → `Main::detect_fragile_handles()`). Each key is a lowercase handle fragment; each value carries the exclude `fields` (subset of `excludeDeferJS` / `excludeDelayJS`) and a human-readable `reason`. Guarded by `has_filter()` — returns the built-in map when no listener is present; non-array results fall back to the built-in map and entries are sanitized (empty fragments skipped, empty `fields` default to both exclude lists). @since NEXT.
+
+**Parameters:**
+- `$map` *(array)* — Fragment => `array( 'fields' => string[], 'reason' => string )` map.
+
+**Example:**
+```php
+add_filter( 'wppo_fragile_handle_map', function( $map ) {
+    $map['my-slider'] = array(
+        'fields' => array( 'excludeDeferJS' ),
+        'reason' => 'Slider runtime — deferring breaks layout.',
+    );
+    return $map;
+} );
+```
+
+**REST routes (issue #1465):** `GET performance-optimisation/v1/safe_mode_detect` (optional `handles` param — array or comma-separated string — for accuracy; the frontend queue is empty in REST/admin context so plugin-signal guesses are used otherwise) and `POST performance-optimisation/v1/safe_mode` (`action`: `enable` | `disable`; enabling snapshots settings for one-click undo and purges the page + combined-CSS cache).
+
+---
+
 ### `wppo_cve_guard_handles`
 Filter-only (S scope) list of handle strings to auto-exclude from optimization when a CVE is known. Default empty (no auto-exclude). Merged with `array_unique` into `minify_js`/`minify_css` (`exclude_js`/`exclude_css`) and `exclude_defer_js`/`exclude_delay_js` inside `PerformanceOptimise\Inc\Main::setup_hooks()`; respects the existing `litespeed_can_optm` gate; no `wp_options` persistence and no cron. @since 2.0.0.
 
