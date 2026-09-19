@@ -8,7 +8,7 @@
  * @since 2.14.0
  */
 
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChartLine, faSpinner } from '@fortawesome/free-solid-svg-icons';
@@ -139,6 +139,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 	const [ trends, setTrends ] = useState( null );
 	const [ loading, setLoading ] = useState( true );
 	const { notice, notify, dismiss } = useNotice();
+	const retryControllerRef = useRef( null );
 
 	const loadTrends = useCallback(
 		async ( signal ) => {
@@ -200,7 +201,10 @@ const WebVitalsTrends = ( { url = '' } ) => {
 	useEffect( () => {
 		const controller = new AbortController();
 		loadTrends( controller.signal );
-		return () => controller.abort();
+		return () => {
+			controller.abort();
+			retryControllerRef.current?.abort();
+		};
 	}, [ loadTrends ] );
 
 	return (
@@ -220,14 +224,35 @@ const WebVitalsTrends = ( { url = '' } ) => {
 			) }
 
 			{ ! loading && notice && (
-				<NoticeBanner
-					type={ notice.type }
-					message={ notice.message }
-					onDismiss={ dismiss }
-				/>
+				<>
+					<NoticeBanner
+						type={ notice.type }
+						message={ notice.message }
+						onDismiss={ dismiss }
+					/>
+					<button
+						type="button"
+						className="wppo-button wppo-button--secondary wppo-button--sm wppo-mt-10"
+						onClick={ () => {
+							retryControllerRef.current?.abort();
+							const controller = new AbortController();
+							retryControllerRef.current = controller;
+							loadTrends( controller.signal ).finally( () => {
+								if (
+									retryControllerRef.current === controller
+								) {
+									retryControllerRef.current = null;
+								}
+							} );
+						} }
+						disabled={ loading }
+					>
+						{ __( 'Retry', 'performance-optimisation' ) }
+					</button>
+				</>
 			) }
 
-			{ ! loading && ! notice && ! url && (
+			{ ! loading && ! url && (
 				<p className="wppo-text-muted">
 					{ __(
 						'Enter a URL to view Web Vitals trend history.',
@@ -236,7 +261,16 @@ const WebVitalsTrends = ( { url = '' } ) => {
 				</p>
 			) }
 
-			{ ! loading && ! notice && url && (
+			{ ! loading && ! notice && url && ! trends && (
+				<p className="wppo-text-muted">
+					{ __(
+						'No trend history yet for this URL. Run a PageSpeed scan to start collecting trends.',
+						'performance-optimisation'
+					) }
+				</p>
+			) }
+
+			{ ! loading && url && trends && (
 				<div className="wppo-trend-layout">
 					<div className="wppo-trend-layout__title">
 						<FontAwesomeIcon

@@ -72,7 +72,8 @@ const Tooltip = ( { content, children, label } ) => {
 			}${ visible ? ' wppo-tooltip-container--visible' : '' }` }
 			{ ...( hasChildren
 				? {
-						'aria-expanded': visible,
+						// Wrapped mode carries no widget role, so aria-expanded
+						// is invalid here — expose only the describedby link.
 						...( visible && {
 							'aria-describedby': id,
 						} ),

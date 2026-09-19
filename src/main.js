@@ -139,10 +139,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				} );
 			} )
 			.catch( ( error ) => {
-				console.error(
-					`Error calling ${ endpointPath }: `,
-					getErrorLogMessage( error )
-				);
+				if ( error?.name !== 'AbortError' ) {
+					console.error(
+						`Error calling ${ endpointPath }: `,
+						getErrorLogMessage( error )
+					);
+				}
 				throw error;
 			} );
 	};

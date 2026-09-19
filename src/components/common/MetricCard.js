@@ -11,6 +11,7 @@
  * See AUDIT/AGENTS/agent-A07-css.md D-09 and AUDIT/DEAD-CODE.md X-12.
  */
 
+import { __ } from '@wordpress/i18n';
 import StatusBadge from './StatusBadge';
 
 // Audit #1420: dl/dt/dd association + loading placeholder with aria-busy.
@@ -23,7 +24,16 @@ const MetricCard = ( { label, value, unit = '', status = null } ) => {
 				className="wppo-metric-card__value"
 				aria-busy={ loading || undefined }
 			>
-				{ loading ? '—' : value }
+				{ loading ? (
+					<>
+						<span aria-hidden="true">—</span>
+						<span className="wppo-screen-reader-text">
+							{ __( 'Loading…', 'performance-optimisation' ) }
+						</span>
+					</>
+				) : (
+					value
+				) }
 				{ ! loading &&
 					unit !== null &&
 					unit !== undefined &&
@@ -34,7 +44,11 @@ const MetricCard = ( { label, value, unit = '', status = null } ) => {
 						</span>
 					) }
 			</dd>
-			{ status && <StatusBadge status={ status } /> }
+			{ status && (
+				<dd className="wppo-metric-card__status">
+					<StatusBadge status={ status } />
+				</dd>
+			) }
 		</dl>
 	);
 };

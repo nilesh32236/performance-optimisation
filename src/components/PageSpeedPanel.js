@@ -489,6 +489,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							<FontAwesomeIcon
 								icon={ faSpinner }
 								spin
+								aria-hidden="true"
 								className="wppo-mr-8"
 							/>
 							{ __( 'Scanning…', 'performance-optimisation' ) }
@@ -497,6 +498,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						<>
 							<FontAwesomeIcon
 								icon={ faTachometerAlt }
+								aria-hidden="true"
 								className="wppo-mr-8"
 							/>
 							{ __(
@@ -518,6 +520,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					<FontAwesomeIcon
 						icon={ faSpinner }
 						spin
+						aria-hidden="true"
 						className="wppo-mr-8"
 					/>
 					{ __(

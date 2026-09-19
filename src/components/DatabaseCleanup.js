@@ -719,18 +719,29 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				>
 					<div className="wppo-stat-hero">
 						<span className="wppo-stat-hero__value">
-							{ loadingCounts
-								? '…'
-								: sprintf(
-										/* translators: %s: localized total with plural form. */
-										_n(
-											'%s item',
-											'%s items',
-											totalItems,
-											'performance-optimisation'
-										),
-										Number( totalItems ).toLocaleString()
-								  ) }
+							{ loadingCounts ? (
+								<span
+									role="status"
+									aria-live="polite"
+									aria-label={ __(
+										'Loading counts…',
+										'performance-optimisation'
+									) }
+								>
+									{ '…' }
+								</span>
+							) : (
+								sprintf(
+									/* translators: %s: localized total with plural form. */
+									_n(
+										'%s item',
+										'%s items',
+										totalItems,
+										'performance-optimisation'
+									),
+									Number( totalItems ).toLocaleString()
+								)
+							) }
 						</span>
 						<span className="wppo-stat-hero__label">
 							{ __(

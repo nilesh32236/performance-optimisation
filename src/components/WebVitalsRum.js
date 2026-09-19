@@ -7,7 +7,7 @@
  * @since 2.18.0
  */
 
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf, _n } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUsers, faSpinner } from '@fortawesome/free-solid-svg-icons';
@@ -48,6 +48,7 @@ const WebVitalsRum = () => {
 	const [ data, setData ] = useState( [] );
 	const [ loading, setLoading ] = useState( true );
 	const { notice, notify, dismiss } = useNotice();
+	const retryControllerRef = useRef( null );
 
 	const load = useCallback(
 		async ( signal ) => {
@@ -105,7 +106,10 @@ const WebVitalsRum = () => {
 	useEffect( () => {
 		const controller = new AbortController();
 		load( controller.signal );
-		return () => controller.abort();
+		return () => {
+			controller.abort();
+			retryControllerRef.current?.abort();
+		};
 	}, [ load ] );
 
 	const fmtMs = ( value ) =>
@@ -120,26 +124,8 @@ const WebVitalsRum = () => {
 		return Number.isFinite( num ) ? num.toFixed( 3 ) : '—';
 	};
 
-	let body;
-	if ( notice ) {
-		body = (
-			<NoticeBanner
-				type={ notice.type }
-				message={ notice.message }
-				onDismiss={ dismiss }
-			/>
-		);
-	} else if ( data.length === 0 && ! loading ) {
-		body = (
-			<p className="wppo-text-muted">
-				{ __(
-					'No real-user data yet. Enable "Collect Real-user Web Vitals" in Tools and wait for visitors.',
-					'performance-optimisation'
-				) }
-			</p>
-		);
-	} else {
-		body = (
+	const rumTable =
+		data.length > 0 ? (
 			<table className="wppo-rum-table wppo-table">
 				<thead>
 					<tr>
@@ -176,7 +162,48 @@ const WebVitalsRum = () => {
 					) ) }
 				</tbody>
 			</table>
+		) : null;
+
+	let body;
+	if ( notice ) {
+		body = (
+			<>
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
+				<button
+					type="button"
+					className="wppo-button wppo-button--secondary wppo-button--sm wppo-mt-10"
+					onClick={ () => {
+						retryControllerRef.current?.abort();
+						const controller = new AbortController();
+						retryControllerRef.current = controller;
+						load( controller.signal ).finally( () => {
+							if ( retryControllerRef.current === controller ) {
+								retryControllerRef.current = null;
+							}
+						} );
+					} }
+					disabled={ loading }
+				>
+					{ __( 'Retry', 'performance-optimisation' ) }
+				</button>
+				{ rumTable }
+			</>
 		);
+	} else if ( data.length === 0 && ! loading ) {
+		body = (
+			<p className="wppo-text-muted">
+				{ __(
+					'No real-user data yet. Enable "Collect Real-user Web Vitals" in Tools and wait for visitors.',
+					'performance-optimisation'
+				) }
+			</p>
+		);
+	} else {
+		body = rumTable;
 	}
 
 	return (
@@ -185,14 +212,14 @@ const WebVitalsRum = () => {
 			icon={ <FontAwesomeIcon icon={ faUsers } /> }
 			actions={
 				loading && (
-					<FontAwesomeIcon
-						icon={ faSpinner }
-						spin
-						aria-label={ __(
-							'Loading…',
-							'performance-optimisation'
-						) }
-					/>
+					<span role="status" aria-live="polite">
+						<FontAwesomeIcon
+							icon={ faSpinner }
+							spin
+							aria-hidden="true"
+						/>
+						{ __( 'Loading…', 'performance-optimisation' ) }
+					</span>
 				)
 			}
 		>

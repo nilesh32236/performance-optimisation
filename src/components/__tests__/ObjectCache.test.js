@@ -125,7 +125,11 @@ describe( 'ObjectCache Component', () => {
 			fireEvent.click( enableBtn );
 		} );
 
+		// Audit #1483 follow-up: the translated fallback is shown to
+		// users while the raw transport detail stays in the console log.
 		expect( screen.getByText( 'Action failed.' ) ).toBeInTheDocument();
+		expect( screen.queryByText( 'boom' ) ).not.toBeInTheDocument();
+		expect( errorSpy ).toHaveBeenCalled();
 
 		errorSpy.mockRestore();
 	} );
