@@ -1322,7 +1322,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'error'  => __( 'Critical CSS not available.', 'performance-optimisation' ),
 				);
 			}
-			$queued = Critical_CSS::regenerate_all();
+			$queued = Critical_CSS::regenerate_all( true );
 			return array( 'queued' => (int) $queued );
 		}
 

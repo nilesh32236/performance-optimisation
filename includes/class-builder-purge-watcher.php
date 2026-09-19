@@ -2008,9 +2008,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					if ( function_exists( 'as_enqueue_async_action' ) ) {
-						// Clears now and queues per-template regeneration (see
-						// the audit-entry note above).
-						Critical_CSS::regenerate_all();
+						// Targeted path (issue #1462): requeue at most 20
+						// templates (RUM-worst-first) instead of the full set,
+						// so a burst of builder updates cannot flood the
+						// scheduler; the 18000s full-regen cooldown in
+						// regenerate_all() guards the opt-in full path below.
+						// Operators can restore the legacy forced full requeue
+						// via the wppo_builder_ccss_full_regen filter.
+						$full = false;
+						if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_builder_ccss_full_regen' ) ) {
+							try {
+								/**
+								 * Restore the legacy forced full critical-CSS requeue after a builder purge.
+								 *
+								 * @since NEXT
+								 *
+								 * @param bool $full Whether to force a full requeue. Default false (targeted, max 20).
+								 */
+								$full = (bool) apply_filters( 'wppo_builder_ccss_full_regen', false );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						if ( $full ) {
+							Critical_CSS::regenerate_all( true );
+						} elseif ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'request_targeted_regen' ) ) {
+							Critical_CSS::request_targeted_regen( 'builder-update' );
+						} else {
+							// Clears now and queues per-template regeneration (see
+							// the audit-entry note above).
+							Critical_CSS::regenerate_all();
+						}
 					} else {
 						Critical_CSS::clear_all();
 					}

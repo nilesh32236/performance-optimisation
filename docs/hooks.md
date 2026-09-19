@@ -1991,6 +1991,20 @@ add_filter( 'wppo_ccss_queue_cap', static function() { return 10; } );
 
 ---
 
+### `wppo_ccss_regen_cooldown`
+Filters the full-regeneration cooldown in seconds for Critical CSS (`Critical_CSS::regenerate_all()`). Repeat non-forced callers inside the window return `0` without re-scanning; explicit operator paths bypass it via `$force`. Non-numeric or non-positive filter output is ignored and the `18000` default is kept, so a rogue filter can never disable the cooldown. Default `18000`. @since NEXT.
+
+**Parameters:**
+- `$cooldown` *(int)* — Cooldown in seconds. Default `18000`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_regen_cooldown', static function() { return 3600; } );
+```
+
+---
+
 ### `wppo_ccss_inline_budget`
 Filters the gzipped inline budget in bytes for Critical CSS output (issue #1388). Over-budget output is never inlined: the prior good file is kept, no inline CSS is emitted, and stylesheet deferral is skipped for the request (deferred full stylesheet plus used CSS only). The over-budget warning is throttled to once per template per 12h. Stored values heal to the default `14` KB when missing or out of range; valid filter output clamps to 1–100 KB (`MIN..MAX_CCSS_INLINE_BUDGET_BYTES`); non-numeric filter output is ignored and the stored budget is kept. Default `14 * 1024` (stored `file_optimisation.ccssInlineBudgetKb`). @since NEXT.
 
@@ -2001,6 +2015,48 @@ Filters the gzipped inline budget in bytes for Critical CSS output (issue #1388)
 
 ```php
 add_filter( 'wppo_ccss_inline_budget', static function() { return 20 * 1024; } );
+```
+
+---
+
+### `wppo_ccss_targeted_cooldown`
+Filters the burst-throttle window in seconds for targeted Critical CSS regens (`Critical_CSS::request_targeted_regen()`). Repeat builder/theme saves inside the window queue nothing, so a burst of saves collapses into one bounded pass (max 20 templates); the stamp is written only when at least one job was queued. Return `0` to disable the throttle. Non-numeric or negative filter output is ignored and the `3600` default is kept. Default `3600`. @since NEXT.
+
+**Parameters:**
+- `$cooldown` *(int)* — Cooldown in seconds. Default `3600`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_targeted_cooldown', static function() { return 600; } );
+```
+
+---
+
+### `wppo_committed_inline_bytes`
+Filters the bytes already committed to inline `<style>` output on this request, for the coordinated used-CSS / critical-CSS inline budget (`Critical_CSS::get_effective_ccss_budget()`). The default is the request-global ledger (`Util::get_committed_inline_bytes()`, fed by `inline_ccss()`; normally `0` because used CSS ships as an external file in every delivery mode). The filter wins over the ledger when a listener is registered, so operators can account for bytes committed outside the plugin. Non-numeric or non-positive output is ignored. Default `0`. @since NEXT.
+
+**Parameters:**
+- `$committed` *(int)* — Committed inline bytes. Default `0`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_committed_inline_bytes', static function() { return 4800; } );
+```
+
+---
+
+### `wppo_builder_ccss_full_regen`
+Restores the legacy forced full critical-CSS requeue after a builder purge. Default `false` (targeted regen, max 20 RUM-worst-first templates); return `true` to force the full requeue (bypasses the `18000`s full-regen cooldown via `$force`). @since NEXT.
+
+**Parameters:**
+- `$full` *(bool)* — Whether to force a full requeue. Default `false`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_builder_ccss_full_regen', '__return_true' );
 ```
 
 ---

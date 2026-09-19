@@ -130,6 +130,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 			'wppo_used_css_last_full_regen',           // Used_CSS::LAST_FULL_REGEN_OPTION (issue #1107).
 			'wppo_used_css_last_targeted_regen',       // Used_CSS::TARGETED_REGEN_OPTION (issue #1220).
+			'wppo_ccss_last_full_regen',               // Critical_CSS::LAST_FULL_REGEN_OPTION (issue #1462).
+			'wppo_ccss_last_targeted_regen',           // Critical_CSS::TARGETED_REGEN_OPTION (issue #1462).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 			'wppo_ai_css_refresh_snapshots',           // AI_Adaptive::CSS_REFRESH_SNAPSHOT_OPTION (issue #1407).
@@ -7250,6 +7252,282 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$default = 20000;
 			}
 			return (int) apply_filters( 'styles_inline_size_limit', $default );
+		}
+
+		/**
+		 * Unfiltered core inline default for the invalid-limit fallback (issue #1462).
+		 *
+		 * Mirrors the version-dependent default in get_styles_inline_limit()
+		 * without running the `styles_inline_size_limit` filter, so the
+		 * invalid-limit path never invokes the filter twice per call.
+		 *
+		 * @return int The default inline size limit in bytes.
+		 * @since NEXT
+		 */
+		public static function get_styles_inline_default(): int {
+			$default = 40000;
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				$default = 20000;
+			}
+			return $default;
+		}
+
+		/**
+		 * Bytes committed to inline `<style>` output so far on this request (issue #1462).
+		 *
+		 * Request-global ledger so the per-URL used-CSS pipeline and the
+		 * per-template critical-CSS pipeline share one core
+		 * `styles_inline_size_limit` budget instead of each inlining up to the
+		 * full limit. The used-CSS pipeline ships as an external file in its
+		 * default delivery mode (file/async/delay/remove — never inline), so
+		 * the ledger stays 0 unless a future inline emitter records bytes via
+		 * add_committed_inline_bytes(); Critical_CSS::inline_ccss() records
+		 * every block it inlines. Read via get_committed_inline_bytes() or
+		 * Critical_CSS::estimate_committed_inline_bytes().
+		 *
+		 * Multisite-safe: request memory only, no storage.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private static int $committed_inline_bytes = 0;
+
+		/**
+		 * Record bytes just inlined on this request (issue #1462).
+		 *
+		 * Called by inline emitters after printing a `<style>` block so later
+		 * emitters in the same request see the reduced remainder. Fail-open:
+		 * non-positive values are ignored, never fatal.
+		 *
+		 * Multisite-safe: request memory only.
+		 *
+		 * @param int $bytes Bytes just committed to inline output.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function add_committed_inline_bytes( int $bytes ): void {
+			try {
+				if ( $bytes > 0 ) {
+					self::$committed_inline_bytes += $bytes;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Bytes committed to inline output so far on this request (issue #1462).
+		 *
+		 * Multisite-safe: request memory only.
+		 *
+		 * @return int Committed inline bytes (>= 0).
+		 * @since NEXT
+		 */
+		public static function get_committed_inline_bytes(): int {
+			try {
+				return self::$committed_inline_bytes > 0 ? (int) self::$committed_inline_bytes : 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Reset the request-global committed-bytes ledger (unit tests).
+		 *
+		 * Production requests never need this (one request = one ledger);
+		 * tests that simulate multiple requests in one process must call it
+		 * between cases.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function reset_committed_inline_bytes(): void {
+			self::$committed_inline_bytes = 0;
+		}
+
+		/**
+		 * Remaining inline budget after bytes already committed (issue #1462).
+		 *
+		 * Pure helper so per-URL used CSS and per-template critical CSS can
+		 * share one budget instead of each inlining up to the full core
+		 * `styles_inline_size_limit`. Fail-open: any uncertainty returns the
+		 * full limit minus the committed bytes, never fatal.
+		 *
+		 * Multisite-safe: no storage, per-call arithmetic only.
+		 *
+		 * @param int      $already_inlined Bytes already committed to inline output on this request.
+		 * @param int|null $limit Optional budget override (defaults to get_styles_inline_limit()).
+		 * @return int Remaining bytes available for inline output (>= 0).
+		 * @since NEXT
+		 */
+		public static function get_remaining_inline_budget( int $already_inlined = 0, ?int $limit = null ): int {
+			try {
+				// Resolve the limit once: get_styles_inline_limit() runs the
+				// `styles_inline_size_limit` filter, so the invalid-limit path
+				// falls back to the unfiltered default instead of invoking
+				// the filter a second time per call.
+				$budget = null === $limit ? self::get_styles_inline_limit() : (int) $limit;
+				if ( $budget <= 0 ) {
+					$budget = self::get_styles_inline_default();
+				}
+				$remaining = $budget - max( 0, $already_inlined );
+				return $remaining > 0 ? (int) $remaining : 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Split CSS into an inline prefix and a deferred remainder (issue #1462).
+		 *
+		 * Inlines exactly what fits inside the core `styles_inline_size_limit`
+		 * budget (40KB on WP 6.9+, 20KB before) and leaves the remainder for
+		 * a deferred external stylesheet, so first visits inline without
+		 * render-blocking overflow and repeat visits use the cacheable asset.
+		 * The cut lands on the last top-level closing brace at or under the
+		 * limit (brace depth tracked so an `@media`/`@supports`/`@layer`
+		 * block is never left unclosed) so output never ends mid-rule.
+		 * Fail-open: CSS failures degrade to unoptimised output (full CSS
+		 * deferred), never fatal or white-screen.
+		 *
+		 * @param string   $css CSS content to split.
+		 * @param int|null $limit Optional budget override (defaults to get_styles_inline_limit()).
+		 * @return array{inline: string, deferred: string} Inline prefix and deferred remainder.
+		 * @since NEXT
+		 */
+		public static function split_css_for_inline_budget( string $css, ?int $limit = null ): array {
+			try {
+				if ( '' === $css ) {
+					return array(
+						'inline'   => '',
+						'deferred' => '',
+					);
+				}
+				// Resolve the limit once (see get_remaining_inline_budget()).
+				$budget = null === $limit ? self::get_styles_inline_limit() : (int) $limit;
+				if ( $budget <= 0 ) {
+					$budget = self::get_styles_inline_default();
+				}
+				if ( strlen( $css ) <= $budget ) {
+					return array(
+						'inline'   => $css,
+						'deferred' => '',
+					);
+				}
+				$cut = self::find_top_level_css_cut( $css, $budget );
+				if ( null === $cut ) {
+					return array(
+						'inline'   => '',
+						'deferred' => $css,
+					);
+				}
+				return array(
+					'inline'   => substr( $css, 0, $cut + 1 ),
+					'deferred' => substr( $css, $cut + 1 ),
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'inline'   => '',
+					'deferred' => $css,
+				);
+			}
+		}
+
+		/**
+		 * Offset of the last top-level `}` at or under the budget (issue #1462).
+		 *
+		 * Walks the candidate prefix tracking `{`/`}` depth and keeps the last
+		 * closing brace seen at depth 0, so cutting there can never leave an
+		 * `@media`/`@supports`/`@layer` wrapper unclosed. Returns null when no
+		 * top-level boundary fits (callers defer everything).
+		 *
+		 * Braces inside quoted strings (e.g. content with a brace character)
+		 * and CSS comments are skipped while scanning so they can neither open a
+		 * phantom block nor close a real one; callers stay fail-open (a
+		 * missed cut defers everything, never emits broken CSS).
+		 *
+		 * @param string $css CSS content.
+		 * @param int    $budget Maximum bytes for the inline prefix.
+		 * @return int|null Offset of the cut brace, or null when nothing fits.
+		 * @since NEXT
+		 */
+		private static function find_top_level_css_cut( string $css, int $budget ): ?int {
+			try {
+				$prefix = substr( $css, 0, $budget );
+				if ( '' === $prefix ) {
+					return null;
+				}
+				$depth      = 0;
+				$cut        = null;
+				$len        = strlen( $prefix );
+				$in_single  = false;
+				$in_double  = false;
+				$in_comment = false;
+				for ( $i = 0; $i < $len; $i++ ) {
+					$c    = $prefix[ $i ];
+					$next = $i + 1 < $len ? $prefix[ $i + 1 ] : '';
+					if ( $in_comment ) {
+						if ( '*' === $c && '/' === $next ) {
+							$in_comment = false;
+							++$i;
+						}
+						continue;
+					}
+					if ( $in_single ) {
+						if ( '\\' === $c ) {
+							++$i;
+							continue;
+						}
+						if ( "'" === $c ) {
+							$in_single = false;
+						}
+						continue;
+					}
+					if ( $in_double ) {
+						if ( '\\' === $c ) {
+							++$i;
+							continue;
+						}
+						if ( '"' === $c ) {
+							$in_double = false;
+						}
+						continue;
+					}
+					if ( '/' === $c && '*' === $next ) {
+						$in_comment = true;
+						++$i;
+						continue;
+					}
+					if ( "'" === $c ) {
+						$in_single = true;
+						continue;
+					}
+					if ( '"' === $c ) {
+						$in_double = true;
+						continue;
+					}
+					if ( '{' === $c ) {
+						++$depth;
+					} elseif ( '}' === $c ) {
+						if ( $depth > 0 ) {
+							--$depth;
+							if ( 0 === $depth ) {
+								$cut = $i;
+							}
+						} else {
+							// Stray closing brace at depth 0 still ends a rule.
+							$cut = $i;
+						}
+					}
+				}
+				return $cut;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
 		}
 	}
 }
