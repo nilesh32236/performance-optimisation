@@ -61,6 +61,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		 * enabled (guard: never auto-applies — caller must render Apply UX).
 		 * Returns an empty list when the AI feature is disabled or unavailable.
 		 *
+		 * GET-with-side-effect (issue #1407, intentional): served by the
+		 * `ai_suggestions` GET endpoint, so rendering may enqueue at most
+		 * one used-CSS regen job per regressed URL per cooldown window
+		 * (minimum 1 day) when the css-refresh opt-in is on. See
+		 * AI_Adaptive::get_suggestions() for the full side-effect contract.
+		 *
 		 * @since 2.0.0
 		 * @return array[] Array of suggestion objects.
 		 */

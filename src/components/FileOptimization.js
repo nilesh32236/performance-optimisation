@@ -194,6 +194,7 @@ const FILE_OPT_SYNC_KEYS = [
 	'delayJSExcludeUrls',
 	'usedCSSExcludeUrls',
 	'delayJSDefaultStrategy',
+	'delayJSPreset',
 	'delayJSIdleList',
 	'delayJSViewportList',
 	'delayJSPriority',
@@ -470,6 +471,16 @@ const normalizeFileOpt = ( source = {} ) => {
 	) {
 		next.fontSubsetSubsets = 'latin';
 	}
+	// One-click Delay-JS preset level (#1385): allowlist safe|balanced|
+	// aggressive, fail safe to 'safe'. Guarded by `in` so partial slices
+	// never inject the default over production values.
+	if ( 'delayJSPreset' in next ) {
+		next.delayJSPreset = [ 'safe', 'balanced', 'aggressive' ].includes(
+			next.delayJSPreset
+		)
+			? next.delayJSPreset
+			: 'safe';
+	}
 	return next;
 };
 
@@ -527,6 +538,11 @@ const FileOptimization = ( {
 			excludeDelayJS: '',
 			delayJSDefaultStrategy:
 				options.delayJSDefaultStrategy || 'interaction',
+			delayJSPreset: [ 'safe', 'balanced', 'aggressive' ].includes(
+				options.delayJSPreset
+			)
+				? options.delayJSPreset
+				: 'safe',
 			delayJSINPPreset: options.delayJSINPPreset || false,
 			delayJSExternalOnly:
 				options.delayJSExternalOnly !== undefined
@@ -1231,6 +1247,61 @@ const FileOptimization = ( {
 			}
 			return next;
 		} );
+	};
+
+	// One-click Delay-JS Safe/Balanced/Aggressive presets (#1385): maps to
+	// the existing exclusion-getter toggles only. Builder plus commerce stay
+	// forced ON at every level so carts and builders never break. The manual
+	// exclusion textarea plus filter are preserved untouched.
+	//
+	// Intentionally applies the curated unfiltered preset values: the server
+	// exposes the same maps via the filterable
+	// get_delay_js_preset_level_settings() (wppo_delay_js_preset_level_settings),
+	// so a site filtering that hook may resolve different server-side
+	// exclusions than the one-click patch shown here. The UI keeps the
+	// curated defaults so the buttons stay predictable; the server filter
+	// remains authoritative at render time.
+	const handleDelayJSPresetApply = ( level ) => {
+		const presets = {
+			safe: {
+				delayJSBuilderPreset: true,
+				delayJSCommercePreset: true,
+				delayJSInteractionPreset: true,
+				delayJSConsentPreset: true,
+				delayJSAnalyticsPreset: true,
+				delayJSGalleryPreset: true,
+				delayJSJqueryPreset: true,
+				delayJSThirdPartyAuto: false,
+			},
+			balanced: {
+				delayJSBuilderPreset: true,
+				delayJSCommercePreset: true,
+				delayJSInteractionPreset: true,
+				delayJSConsentPreset: false,
+				delayJSAnalyticsPreset: false,
+				delayJSGalleryPreset: false,
+				delayJSJqueryPreset: false,
+				delayJSThirdPartyAuto: false,
+			},
+			aggressive: {
+				delayJSBuilderPreset: true,
+				delayJSCommercePreset: true,
+				delayJSInteractionPreset: false,
+				delayJSConsentPreset: false,
+				delayJSAnalyticsPreset: false,
+				delayJSGalleryPreset: false,
+				delayJSJqueryPreset: false,
+				delayJSThirdPartyAuto: true,
+			},
+		};
+		const patch = presets[ level ] || presets.safe;
+		const nextLevel = presets[ level ] ? level : 'safe';
+		setSettings( ( prev ) => ( {
+			...prev,
+			delayJSPreset: nextLevel,
+			delayJS: true,
+			...patch,
+		} ) );
 	};
 
 	// LiteSpeed integration (Phase 1 — safe coexistence).
@@ -3134,6 +3205,77 @@ const FileOptimization = ( {
 									) }
 									{ settings.delayJS && (
 										<>
+											<div className="wppo-field">
+												<span className="wppo-field-label">
+													{ __(
+														'Delay-JS preset',
+														'performance-optimisation'
+													) }
+												</span>
+												<div
+													className="wppo-preset-buttons"
+													role="group"
+													aria-label={ __(
+														'Delay-JS preset',
+														'performance-optimisation'
+													) }
+												>
+													{ [
+														'safe',
+														'balanced',
+														'aggressive',
+													].map( ( level ) => (
+														<button
+															key={ level }
+															type="button"
+															className={
+																'wppo-button wppo-button--secondary' +
+																( settings.delayJSPreset ===
+																level
+																	? ' wppo-button--active'
+																	: '' )
+															}
+															aria-pressed={
+																settings.delayJSPreset ===
+																level
+															}
+															onClick={ () =>
+																handleDelayJSPresetApply(
+																	level
+																)
+															}
+															disabled={
+																optimizerDisabled
+															}
+														>
+															{ level ===
+																'safe' &&
+																__(
+																	'Safe',
+																	'performance-optimisation'
+																) }
+															{ level ===
+																'balanced' &&
+																__(
+																	'Balanced',
+																	'performance-optimisation'
+																) }
+															{ level ===
+																'aggressive' &&
+																__(
+																	'Aggressive',
+																	'performance-optimisation'
+																) }
+														</button>
+													) ) }
+												</div>
+												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+													{ __(
+														'One-click Delay-JS speed: Safe delays least, Aggressive delays most with auto third-party detection. Builder plus commerce exclusions stay on at every level; your manual exclusions are preserved. Replay runs non-captured handlers a second time by design, so analytics/consent beacons must be idempotent. A wppo_delay_js_preset_level_settings filter, when present, remains authoritative at render time.',
+														'performance-optimisation'
+													) }
+												</p>
+											</div>
 											<SwitchField
 												label={ __(
 													'INP-first preset: idle + viewport with 60s heartbeat',

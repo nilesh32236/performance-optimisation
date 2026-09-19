@@ -1064,6 +1064,67 @@ describe( 'FileOptimization Component', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'applies the Aggressive one-click preset and persists toggles via update_settings', async () => {
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: {}, has_staged: false, preview_url: '' },
+			} )
+			.mockResolvedValueOnce( {
+				success: true,
+				message: 'Settings updated successfully.',
+			} );
+
+		render(
+			<FileOptimization
+				options={ { delayJS: true, delayJSPreset: 'safe' } }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		const aggressiveButton = screen.getByRole( 'button', {
+			name: 'Aggressive',
+		} );
+		expect( aggressiveButton ).toHaveAttribute( 'aria-pressed', 'false' );
+
+		fireEvent.click( aggressiveButton );
+		expect( aggressiveButton ).toHaveAttribute( 'aria-pressed', 'true' );
+		// Aggressive turns the auto third-party detector on.
+		expect(
+			screen.getByLabelText( /Auto-delay known third parties/i )
+		).toBeChecked();
+		// Builder plus commerce presets stay forced on.
+		expect( screen.getByLabelText( /Builder safe preset/i ) ).toBeChecked();
+		expect(
+			screen.getByLabelText( /Commerce safe preset/i )
+		).toBeChecked();
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						delayJSPreset: 'aggressive',
+						delayJSThirdPartyAuto: true,
+						delayJSBuilderPreset: true,
+						delayJSCommercePreset: true,
+					} ),
+				} )
+			);
+		} );
+	} );
+
 	it( 'toggles Remove HTML Comments switch', () => {
 		render(
 			<FileOptimization

@@ -45,6 +45,490 @@ const getLogMessage = ( err ) => {
 let scriptLoadPromise = null;
 
 /**
+ * Exactly-once lifecycle replay flag (issue #1385).
+ *
+ * Delayed scripts plus any DOMContentLoaded listeners registered before
+ * release must fire exactly once after the delayed queue flushes. The flag
+ * guards the replay so interaction, idle, and viewport flushes can never
+ * double-fire lifecycle events. Fail-open: replay failures never block
+ * script loading and never fatal.
+ *
+ * The flag is mirrored on `window.wppoDelayReplayed` so a double-enqueued
+ * bundle (two evaluations sharing one DOM) replays only once: each copy
+ * initialises from the shared window flag and re-checks it on entry.
+ *
+ * @type {boolean}
+ */
+let wppoDelayReplayed = false;
+try {
+	if ( typeof window !== 'undefined' && window && window.wppoDelayReplayed ) {
+		wppoDelayReplayed = true;
+	}
+} catch {
+	// Window read is best-effort; the module flag still guards.
+}
+
+/**
+ * Captured DOMContentLoaded/load listeners registered while delay is pending.
+ *
+ * Native DOMContentLoaded has typically already fired before the first
+ * user interaction releases the delayed queue, so document/window
+ * `addEventListener('DOMContentLoaded'|'load', …)` callbacks registered
+ * before release would otherwise never run. The capture shim below queues
+ * them; replayDelayedLifecycleEvents() invokes each exactly once and then
+ * dispatches the lifecycle events for non-captured (e.g. jQuery ready,
+ * on* property) consumers.
+ *
+ * @type {{ DOMContentLoaded: Array, load: Array }}
+ */
+const wppoDelayedListeners = { DOMContentLoaded: [], load: [] };
+
+/**
+ * Cached pending-delayed state (issue #1385 review).
+ *
+ * Event registration is a hot path, so the capture shim must not run a DOM
+ * query per `addEventListener('DOMContentLoaded'|'load')` call while delay
+ * is active. The flag is computed once at bundle evaluation (delayed
+ * placeholders are rendered by PHP into the initial HTML) and cleared when
+ * the queue flushes in replayDelayedLifecycleEvents(). When the cached flag
+ * is false, hasPendingDelayedScripts() lazily re-checks the DOM once per
+ * call so scripts injected later (AJAX navigation, late placeholders) flip
+ * the queue back to pending instead of bypassing capture forever.
+ * Fail-open: DOM errors degrade to "not pending" so registration itself can
+ * never break.
+ *
+ * @type {boolean}
+ */
+let wppoDelayQueuePending = false;
+try {
+	if (
+		typeof document !== 'undefined' &&
+		document &&
+		document.querySelector
+	) {
+		wppoDelayQueuePending =
+			document.querySelector(
+				'script[type="wppo/javascript"], script[wppo-src]'
+			) !== null;
+	}
+} catch {
+	wppoDelayQueuePending = false;
+}
+
+/**
+ * Lazily refresh the cached pending-delayed flag (issue #1385 review).
+ *
+ * Called by hasPendingDelayedScripts() when the cached flag is false so
+ * late-injected placeholders (AJAX navigation, late rendering) are picked
+ * up without paying a DOM query on every registration while delay is
+ * active. Never re-arms after the exactly-once replay. Never throws.
+ *
+ * @since NEXT
+ * @return {boolean} Whether delay is (now) pending.
+ */
+const refreshDelayQueuePending = () => {
+	if ( wppoDelayReplayed ) {
+		return false;
+	}
+	try {
+		if (
+			typeof window !== 'undefined' &&
+			window &&
+			window.wppoDelayReplayed
+		) {
+			wppoDelayQueuePending = false;
+			return false;
+		}
+	} catch {
+		// Window read is best-effort; fall through to the DOM check.
+	}
+	try {
+		if (
+			typeof document !== 'undefined' &&
+			document &&
+			document.querySelector &&
+			document.querySelector(
+				'script[type="wppo/javascript"], script[wppo-src]'
+			) !== null
+		) {
+			wppoDelayQueuePending = true;
+			return true;
+		}
+	} catch {
+		// DOM check is best-effort; keep the cached value.
+	}
+	return wppoDelayQueuePending;
+};
+
+/**
+ * Cold-path DOM check for remaining unloaded delayed scripts (issue #1385).
+ *
+ * Used only by the idle/viewport flush gates (once per flush, never per
+ * event registration) so an early idle completion cannot consume the
+ * exactly-once replay guard while interaction-strategy scripts are still
+ * pending. Loaded scripts no longer match the placeholder selector (the
+ * placeholder is replaced by a live node without `type="wppo/javascript"`
+ * / `wppo-src`), so this accurately reflects the unflushed remainder.
+ *
+ * @since NEXT
+ * @return {boolean} Whether any unloaded delayed script remains.
+ */
+const hasRemainingDelayedScripts = () => {
+	try {
+		if (
+			typeof document === 'undefined' ||
+			! document ||
+			! document.querySelectorAll
+		) {
+			return false;
+		}
+		const pending = document.querySelectorAll(
+			'script[type="wppo/javascript"], script[wppo-src]'
+		);
+		return Array.from( pending ).some( ( script ) => {
+			try {
+				return ! script.hasAttribute( 'data-wppo-delay-loaded' );
+			} catch {
+				return true;
+			}
+		} );
+	} catch {
+		return false;
+	}
+};
+
+const hasPendingDelayedScripts = () => {
+	if ( wppoDelayReplayed ) {
+		return false;
+	}
+	try {
+		if (
+			typeof window !== 'undefined' &&
+			window &&
+			window.wppoDelayReplayed
+		) {
+			return false;
+		}
+	} catch {
+		// Window read is best-effort; fall through to the cached flag.
+	}
+	if ( wppoDelayQueuePending ) {
+		return true;
+	}
+	// Cached flag is false: lazily re-check once for late-injected
+	// placeholders (AJAX navigation) and memoize a positive hit so the
+	// next registration stays on the fast path.
+	try {
+		return refreshDelayQueuePending();
+	} catch {
+		return false;
+	}
+};
+
+// Capture shim: queue DOMContentLoaded/load listeners registered while the
+// delayed queue is still pending so they can be replayed exactly once after
+// release. Installed once at bundle evaluation; fail-open on any error so
+// event registration itself can never break when the DOM APIs are stubbed
+// (e.g. jsdom without full EventTarget support).
+try {
+	if (
+		typeof document !== 'undefined' &&
+		document &&
+		typeof window !== 'undefined' &&
+		window
+	) {
+		const captureTargets = [];
+		if ( document.addEventListener ) {
+			captureTargets.push( document );
+		}
+		if ( window.addEventListener && window !== document ) {
+			captureTargets.push( window );
+		}
+		captureTargets.forEach( ( target ) => {
+			if ( target.__wppoDelayCaptureInstalled ) {
+				return;
+			}
+			const nativeAdd = target.addEventListener.bind( target );
+			const nativeRemove = target.removeEventListener
+				? target.removeEventListener.bind( target )
+				: null;
+			const patchedAdd = ( type, listener, options ) => {
+				// While the delayed queue is pending, captured
+				// DOMContentLoaded/load listeners are queued for replay ONLY
+				// and deliberately not natively registered: replay invokes
+				// each queued entry manually plus a synthetic dispatch for
+				// non-captured consumers, so native registration would fire
+				// them twice (#1385 review). Fail-open: queueing is
+				// best-effort; unqueued registrations still proceed.
+				let captured = false;
+				try {
+					if (
+						( type === 'DOMContentLoaded' || type === 'load' ) &&
+						! wppoDelayReplayed &&
+						hasPendingDelayedScripts() &&
+						( typeof listener === 'function' ||
+							( listener &&
+								typeof listener.handleEvent === 'function' ) )
+					) {
+						wppoDelayedListeners[ type ].push( {
+							target,
+							listener,
+							options,
+						} );
+						captured = true;
+					}
+				} catch {
+					// Queueing is best-effort; registration still proceeds.
+					captured = false;
+				}
+				if ( captured ) {
+					return undefined;
+				}
+				return nativeAdd( type, listener, options );
+			};
+			try {
+				target.addEventListener = patchedAdd;
+				target.__wppoDelayCaptureInstalled = true;
+			} catch {
+				// Assignment can throw on frozen test doubles — keep native.
+			}
+			if ( nativeRemove ) {
+				const getCaptureFlag = ( value ) => {
+					try {
+						if ( typeof value === 'boolean' ) {
+							return value;
+						}
+						if ( value && typeof value === 'object' ) {
+							return !! value.capture;
+						}
+					} catch {
+						// Flag reads are best-effort; fall through to false.
+					}
+					return false;
+				};
+				const patchedRemove = ( type, listener, options ) => {
+					try {
+						if (
+							( type === 'DOMContentLoaded' ||
+								type === 'load' ) &&
+							Array.isArray( wppoDelayedListeners[ type ] )
+						) {
+							// Mirror native capture matching: only dequeue
+							// entries whose capture flag equals the removal
+							// capture flag (boolean or options.capture,
+							// defaulting to false), so a listener registered
+							// with both capture values is not dequeued early.
+							const removalCapture = getCaptureFlag( options );
+							wppoDelayedListeners[ type ] = wppoDelayedListeners[
+								type
+							].filter(
+								( entry ) =>
+									entry.listener !== listener ||
+									entry.target !== target ||
+									getCaptureFlag( entry.options ) !==
+										removalCapture
+							);
+						}
+					} catch {
+						// Filtering is best-effort; removal still proceeds.
+					}
+					return nativeRemove( type, listener, options );
+				};
+				try {
+					target.removeEventListener = patchedRemove;
+				} catch {
+					// Keep the native removal on frozen test doubles.
+				}
+			}
+		} );
+	}
+} catch {
+	// Capture is best-effort; delay loading still proceeds.
+}
+
+/**
+ * Replay captured lifecycle listeners plus lifecycle events exactly once.
+ *
+ * Invokes every captured DOMContentLoaded/load callback once (in
+ * registration order, each inside its own try/catch so one throw cannot
+ * starve the rest), then dispatches DOMContentLoaded, load, and pageshow so
+ * non-captured consumers (on* properties, jQuery ready, ScrollTrigger)
+ * observe the release. Captured listeners were never natively registered
+ * while pending, so the manual invoke plus the synthetic dispatch cannot
+ * double-fire them. The wppoDelayReplayed flag (mirrored on window for
+ * double-enqueued bundles) makes the whole replay idempotent across
+ * interaction/idle/viewport flushes. Never throws.
+ *
+ * Idempotency contract: delay postpones scripts, not the parser/load
+ * lifecycle, so the browser still fires the real DOMContentLoaded/load while
+ * non-captured on* handlers remain registered. The synthetic dispatch below
+ * therefore runs those non-captured consumers a second time by design (they
+ * would otherwise miss the delayed-queue release). Lifecycle handlers that
+ * observe the replay — especially analytics/consent beacons — must be
+ * idempotent. The synthetic dispatch is additionally gated on the queue
+ * having actually released something (pending flag or captured listeners),
+ * so a spurious replay with nothing delayed never double-fires beacons.
+ *
+ * @since NEXT
+ * @return {void}
+ */
+const replayDelayedLifecycleEvents = () => {
+	if ( wppoDelayReplayed ) {
+		return;
+	}
+	try {
+		if (
+			typeof window !== 'undefined' &&
+			window &&
+			window.wppoDelayReplayed
+		) {
+			wppoDelayReplayed = true;
+			return;
+		}
+	} catch {
+		// Window read is best-effort; the module flag still guards.
+	}
+	// Gate the synthetic dispatch: only re-dispatch lifecycle events when
+	// the queue actually released something. Captured before the flags are
+	// cleared so a no-op replay (no pending queue, no captured listeners)
+	// still marks replayed but never double-fires non-captured beacons.
+	let hadPendingRelease = false;
+	try {
+		hadPendingRelease =
+			wppoDelayQueuePending ||
+			( Array.isArray( wppoDelayedListeners.DOMContentLoaded ) &&
+				wppoDelayedListeners.DOMContentLoaded.length > 0 ) ||
+			( Array.isArray( wppoDelayedListeners.load ) &&
+				wppoDelayedListeners.load.length > 0 );
+	} catch {
+		hadPendingRelease = wppoDelayQueuePending;
+	}
+	wppoDelayReplayed = true;
+	wppoDelayQueuePending = false;
+	try {
+		if ( typeof window !== 'undefined' && window ) {
+			try {
+				window.wppoDelayReplayed = true;
+			} catch {
+				// Test doubles may freeze window — flag above still guards.
+			}
+		}
+	} catch {
+		// Window exposure is best-effort.
+	}
+	[ 'DOMContentLoaded', 'load' ].forEach( ( type ) => {
+		const queued = Array.isArray( wppoDelayedListeners[ type ] )
+			? wppoDelayedListeners[ type ].splice( 0 )
+			: [];
+		queued.forEach( ( entry ) => {
+			try {
+				const { listener, target, options } = entry;
+				// Honour the platform abort contract: a listener added with
+				// an AbortSignal that was aborted before the flush must not
+				// run via the manual replay invoke.
+				try {
+					if (
+						options &&
+						typeof options === 'object' &&
+						options.signal &&
+						options.signal.aborted
+					) {
+						return;
+					}
+				} catch {
+					// Signal reads are best-effort; fall through to invoke.
+				}
+				if ( typeof listener === 'function' ) {
+					listener.call(
+						target,
+						new Event( type, {
+							bubbles: type === 'DOMContentLoaded',
+							cancelable: false,
+						} )
+					);
+				} else if (
+					listener &&
+					typeof listener.handleEvent === 'function'
+				) {
+					listener.handleEvent(
+						new Event( type, {
+							bubbles: type === 'DOMContentLoaded',
+							cancelable: false,
+						} )
+					);
+				}
+			} catch ( err ) {
+				console.error(
+					'Error in delayed lifecycle listener:',
+					getLogMessage( err )
+				);
+			}
+		} );
+	} );
+	const dispatchOnce = ( target, type, init ) => {
+		try {
+			if ( ! target || ! target.dispatchEvent ) {
+				return;
+			}
+			let event = null;
+			try {
+				event = new Event( type, init );
+			} catch {
+				return;
+			}
+			// Plain Event ignores extra init members, so expose the
+			// PageTransitionEvent `persisted` flag explicitly: replay is a
+			// same-document release, never a bfcache restore.
+			if ( init && 'persisted' in init ) {
+				try {
+					Object.defineProperty( event, 'persisted', {
+						value: init.persisted,
+						configurable: true,
+					} );
+				} catch {
+					// Property exposure is best-effort.
+				}
+			}
+			target.dispatchEvent( event );
+		} catch ( err ) {
+			console.error(
+				'Error replaying delayed lifecycle event:',
+				getLogMessage( err )
+			);
+		}
+	};
+	try {
+		if ( typeof document !== 'undefined' && document ) {
+			if ( hadPendingRelease ) {
+				dispatchOnce( document, 'DOMContentLoaded', {
+					bubbles: true,
+					cancelable: false,
+				} );
+			}
+		}
+	} catch {
+		// Dispatch is best-effort.
+	}
+	try {
+		if ( typeof window !== 'undefined' && window ) {
+			if ( hadPendingRelease ) {
+				dispatchOnce( window, 'load', {
+					bubbles: false,
+					cancelable: false,
+				} );
+				dispatchOnce( window, 'pageshow', {
+					bubbles: false,
+					cancelable: false,
+					persisted: false,
+				} );
+			}
+		}
+	} catch {
+		// Dispatch is best-effort.
+	}
+};
+
+/**
  * Read the runtime config exported by PHP through the WordPress
  * `script_module_data_wppo-lazyload` filter (WP 6.9+). The data is printed as a
  * `<script type="application/json" id="wp-script-module-data-wppo-lazyload">`
@@ -1104,12 +1588,28 @@ async function loadScripts() {
 			console.error( 'Error loading script:', getLogMessage( err ) );
 		}
 
-		if ( document.readyState === 'loading' ) {
-			document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
+		// Lifecycle-event replay (#1385): captured DOMContentLoaded/load
+		// listeners fire exactly once (wppoDelayReplayed guard) plus fresh
+		// DOMContentLoaded/load/pageshow dispatches for non-captured
+		// consumers. Fail-open: replay never throws into the loader.
+		try {
+			replayDelayedLifecycleEvents();
+		} catch ( err ) {
+			console.error(
+				'Error replaying delayed lifecycle events:',
+				getLogMessage( err )
+			);
 		}
 
 		if ( typeof jQuery !== 'undefined' ) {
-			jQuery( document ).triggerHandler( 'ready' );
+			try {
+				jQuery( document ).triggerHandler( 'ready' );
+			} catch ( err ) {
+				console.error(
+					'Error triggering jQuery ready:',
+					getLogMessage( err )
+				);
+			}
 		}
 
 		// Refresh GSAP ScrollTrigger if active
@@ -1150,6 +1650,19 @@ const loadIdleScripts = async () => {
 			await loadScriptsByPriority( idleScripts );
 		} catch ( err ) {
 			console.error( 'Error loading idle script:', getLogMessage( err ) );
+		} finally {
+			// Idle completions release lifecycle listeners only when no
+			// delayed script remains pending: replaying while
+			// interaction-strategy scripts are still queued would consume
+			// the exactly-once guard early and fire listeners before the
+			// full queue is released (#1385 review). Fail-open by design.
+			try {
+				if ( ! hasRemainingDelayedScripts() ) {
+					replayDelayedLifecycleEvents();
+				}
+			} catch {
+				// Replay is best-effort.
+			}
 		}
 	}
 };
@@ -1170,12 +1683,24 @@ const observeViewportScripts = () => {
 	}
 
 	if ( ! ( 'IntersectionObserver' in window ) ) {
-		loadScriptsByPriority( viewportScripts ).catch( ( err ) =>
-			console.error(
-				'Error loading viewport scripts:',
-				getLogMessage( err )
+		loadScriptsByPriority( viewportScripts )
+			.catch( ( err ) =>
+				console.error(
+					'Error loading viewport scripts:',
+					getLogMessage( err )
+				)
 			)
-		);
+			.finally( () => {
+				// Viewport-fallback pages still release lifecycle
+				// listeners exactly once when nothing remains pending.
+				try {
+					if ( ! hasRemainingDelayedScripts() ) {
+						replayDelayedLifecycleEvents();
+					}
+				} catch {
+					// Replay is best-effort.
+				}
+			} );
 		return;
 	}
 
@@ -1203,6 +1728,17 @@ const observeViewportScripts = () => {
 					.finally( () => {
 						if ( pendingViewportCount <= 0 ) {
 							observer.disconnect();
+							// Viewport completions share the exactly-once
+							// lifecycle replay, gated on nothing remaining
+							// pending so interaction/idle scripts still
+							// queued are not released early.
+							try {
+								if ( ! hasRemainingDelayedScripts() ) {
+									replayDelayedLifecycleEvents();
+								}
+							} catch {
+								// Replay is best-effort.
+							}
 						}
 					} );
 			}

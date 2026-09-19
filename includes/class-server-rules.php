@@ -53,7 +53,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		/**
 		 * Check if the current server is LiteSpeed / OpenLiteSpeed.
 		 *
-		 * @since  NEXT
+		 * @since  2.2.0
 		 * @return bool True if LiteSpeed or OpenLiteSpeed is detected.
 		 */
 		public static function is_litespeed(): bool {
@@ -70,7 +70,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		 * the legacy write behavior. Multisite-safe: pure server detection,
 		 * no options or transients touched, so no cross-site leakage.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when an `.htaccess` write is meaningful.
 		 */
 		public static function supports_htaccess(): bool {
@@ -94,7 +94,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		 * surface the Nginx snippet (see get_nginx_rules() / the
 		 * `server_rules` REST endpoint) instead. Never fatal; guarded.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the `.htaccess` write must be skipped.
 		 */
 		public static function should_skip_htaccess_write(): bool {
@@ -293,7 +293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				/**
 				 * Filter nginx purge-fallback rules.
 				 *
-				 * @since NEXT
+				 * @since 2.2.0
 				 * @param string[] $rules Nginx configuration lines.
 				 */
 				$rules = (array) apply_filters( 'wppo_nginx_purge_fallback_rules', $rules );

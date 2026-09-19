@@ -301,6 +301,7 @@ const Dashboard = ( {
 	const [ state, setState ] = useState( {
 		// Audit #1354: localized zero instead of hardcoded '0 B'.
 		totalCacheSize: getWppoSettings( 'cache_size', formatBytes( 0 ) ),
+		cachedPages: getWppoSettings( 'cache_count', 0 ),
 		totalJs: getWppoSettings( 'total_js_css.js', 0 ),
 		totalCss: getWppoSettings( 'total_js_css.css', 0 ),
 		imageInfo: normalizeImageInfo( getWppoSettings( 'image_info', {} ) ),
@@ -462,8 +463,15 @@ const Dashboard = ( {
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
-	const { imageInfo, loading, totalCacheSize, totalJs, totalCss, dbCounts } =
-		state;
+	const {
+		imageInfo,
+		loading,
+		totalCacheSize,
+		cachedPages,
+		totalJs,
+		totalCss,
+		dbCounts,
+	} = state;
 	const { completed = {}, pending = {}, failed = {} } = imageInfo;
 
 	const updateState = useCallback( ( updates ) => {
@@ -666,7 +674,9 @@ const Dashboard = ( {
 
 	const onClearCache = useCallback(
 		( e ) => {
-			e.preventDefault();
+			if ( e && typeof e.preventDefault === 'function' ) {
+				e.preventDefault();
+			}
 			handleLoading( 'clear_cache', true );
 			apiCall( 'clear_cache', { action: 'clear_cache' } )
 				.then( ( data ) => {
@@ -682,6 +692,7 @@ const Dashboard = ( {
 						refreshUpgradePurgeStatus();
 						updateState( {
 							totalCacheSize: formatBytes( 0 ),
+							cachedPages: 0,
 							totalJs: 0,
 							totalCss: 0,
 						} );
@@ -1214,6 +1225,10 @@ const Dashboard = ( {
 	const cacheSizeUnit = isCacheMissing
 		? __( 'Cache missing', 'performance-optimisation' )
 		: '';
+	const rawCachedPages = Number( cachedPages ?? 0 );
+	const cachedPagesCount = Number.isFinite( rawCachedPages )
+		? Math.max( 0, Math.floor( rawCachedPages ) )
+		: 0;
 	const optimizedFilesCount = ( totalJs || 0 ) + ( totalCss || 0 );
 
 	let dbBadgeClass = 'wppo-status-badge--good';
@@ -1456,8 +1471,31 @@ const Dashboard = ( {
 					</span>
 					<span className="wppo-stat-unit">
 						{ renderCacheStatus() }
+						{ ! isCacheMissing && (
+							<>
+								{ ' • ' }
+								{ sprintf(
+									/* translators: %d: cached page file count. */
+									__(
+										'%d pages',
+										'performance-optimisation'
+									),
+									cachedPagesCount
+								) }
+							</>
+						) }
 					</span>
 					<div className="wppo-stat-footer">
+						<LoadingSubmitButton
+							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
+							isLoading={ !! loading.clear_cache }
+							onClick={ onClearCache }
+							type="button"
+							label={ __(
+								'Purge Cache',
+								'performance-optimisation'
+							) }
+						/>
 						<button
 							type="button"
 							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"

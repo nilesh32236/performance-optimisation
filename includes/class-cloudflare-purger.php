@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 * method it replaces. Keeps the same URL shape, Bearer header, JSON body
 		 * shape ({files: [...]}), timeout, is_wp_error branch and 2xx status check.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $zone        Cloudflare zone ID (already sanitized).
 		 * @param string $token       Cloudflare API token (Bearer).
 		 * @param array  $urls        Absolute URLs to purge.
@@ -160,7 +160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 * ('Edge purge failed') so edge filters keep matching.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added $fail_prefix parameter.
+		 * @since 2.2.0 Added $fail_prefix parameter.
 		 * @param string $service     Log tag (e.g. cloudflare, cloudflare-edge).
 		 * @param string $detail      Endpoint / reason.
 		 * @param string $fail_prefix Log message prefix.
