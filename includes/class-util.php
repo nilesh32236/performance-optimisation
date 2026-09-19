@@ -350,6 +350,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'       => false,
 					'delayJSDefaultStrategy'       => 'interaction',
+					'delayJSPreset'                => 'safe',
 					'delayJSINPPreset'             => false,
 					'delayJSExternalOnly'          => false,
 					'delayJSThirdParty'            => false,
@@ -6122,6 +6123,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
 					}
+					continue;
+				}
+
+				// One-click Delay-JS preset level (issue #1385) — safe|balanced|
+				// aggressive only. Unrecognized values fail safe to 'safe'
+				// (maximum exclusions, least delay).
+				if ( 'delayJSPreset' === $safe_key && ! is_array( $value ) ) {
+					$level = strtolower( trim( (string) $value ) );
+					if ( ! in_array( $level, array( 'safe', 'balanced', 'aggressive' ), true ) ) {
+						$level = 'safe';
+					}
+					$sanitized[ $safe_key ] = $level;
 					continue;
 				}
 
