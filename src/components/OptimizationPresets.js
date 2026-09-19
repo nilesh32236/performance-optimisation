@@ -239,6 +239,7 @@ const OptimizationPresets = () => {
 	const previewPreset = useCallback(
 		async ( name ) => {
 			setSelected( name );
+			setDiff( null );
 			setLoadingDiff( true );
 			dismiss();
 			// Abort any previous in-flight preview so only the latest

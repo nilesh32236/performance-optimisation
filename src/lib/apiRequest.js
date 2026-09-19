@@ -252,24 +252,32 @@ export const clearInflightGets = () => {
  * @param {AbortSignal} signal Caller's abort signal.
  * @return {Promise<never>} Rejects with an AbortError on abort.
  */
-const onCallerAbort = ( signal ) =>
-	new Promise( ( _, reject ) => {
+const onCallerAbort = ( signal ) => {
+	let onAbort = null;
+	const promise = new Promise( ( _, reject ) => {
 		if ( signal.aborted ) {
 			const aborted = new Error( 'Aborted' );
 			aborted.name = 'AbortError';
 			reject( aborted );
 			return;
 		}
-		signal.addEventListener(
-			'abort',
-			() => {
-				const aborted = new Error( 'Aborted' );
-				aborted.name = 'AbortError';
-				reject( aborted );
-			},
-			{ once: true }
-		);
+		onAbort = () => {
+			signal.removeEventListener( 'abort', onAbort );
+			const aborted = new Error( 'Aborted' );
+			aborted.name = 'AbortError';
+			reject( aborted );
+		};
+		signal.addEventListener( 'abort', onAbort, { once: true } );
 	} );
+	// Removed once the shared GET settles so waiters do not leak a
+	// listener for the signal lifetime.
+	promise.cleanup = () => {
+		if ( onAbort ) {
+			signal.removeEventListener( 'abort', onAbort );
+		}
+	};
+	return promise;
+};
 
 /**
  * Make a REST API call to the Performance Optimisation plugin.
@@ -301,7 +309,12 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			if ( ! signal ) {
 				return shared;
 			}
-			return Promise.race( [ shared, onCallerAbort( signal ) ] );
+			const abortPromise = onCallerAbort( signal );
+			try {
+				return await Promise.race( [ shared, abortPromise ] );
+			} finally {
+				abortPromise.cleanup?.();
+			}
 		}
 	}
 

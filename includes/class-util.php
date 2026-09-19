@@ -462,9 +462,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 				// Safety guards are forced ON at apply time: surface any
 				// guard that would flip as part of the preview diff.
+				// Skip guard keys already compared in the preset loop above
+				// to avoid duplicate entries and an inflated change count.
 				foreach ( self::get_preset_safety_guards() as $tab => $keys ) {
-					$stored_tab = ( isset( $current[ $tab ] ) && is_array( $current[ $tab ] ) ) ? $current[ $tab ] : array();
+					$stored_tab  = ( isset( $current[ $tab ] ) && is_array( $current[ $tab ] ) ) ? $current[ $tab ] : array();
+					$preset_keys = ( isset( $presets[ $preset ][ $tab ] ) && is_array( $presets[ $preset ][ $tab ] ) ) ? $presets[ $preset ][ $tab ] : array();
 					foreach ( $keys as $key => $to ) {
+						if ( array_key_exists( $key, $preset_keys ) ) {
+							continue; // Already compared in the preset loop above.
+						}
 						$from = $stored_tab[ $key ] ?? null;
 						if ( true === $to && true !== $from ) {
 							$diff[] = array(
@@ -486,7 +492,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Apply a one-click optimization preset on top of the current settings.
 		 *
-		 * Snapshots a restore point before overwriting (single-slot,
+		 * Snapshots a restore point after a successful overwrite (single-slot,
 		 * fail-open) and forces the safety guards ON. Unknown preset names
 		 * or write failures leave the prior settings intact and return null.
 		 *
@@ -526,17 +532,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						'diff'     => array(),
 					);
 				}
-				try {
-					self::take_settings_snapshot( $current );
-				} catch ( \Throwable $snapshot_error ) {
-					unset( $snapshot_error );
-				}
 				$before  = $current;
 				$updated = self::save_settings( $merged );
 				self::set_settings_cache( $merged );
 				if ( ! $updated && $before !== $merged ) {
 					self::set_settings_cache( $before );
-					return null;
+					return null; // Write failed: leave settings and snapshot untouched.
+				}
+				try {
+					self::take_settings_snapshot( $before );
+				} catch ( \Throwable $snapshot_error ) {
+					unset( $snapshot_error );
 				}
 				return array(
 					'preset'   => $preset,
