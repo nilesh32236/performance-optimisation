@@ -647,13 +647,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Truncate CSS to the cap without breaking a rule.
 		 *
-		 * Cuts at the last top-level closing brace at or under the cap so
+		 * Thin wrapper over Util::split_css_for_inline_budget(): the cut
+		 * lands on the last top-level closing brace at or under the cap so
 		 * output never ends mid-rule or leaves an `@media`/`@supports`/`@layer`
-		 * wrapper unclosed (brace depth is tracked, mirroring
-		 * Util::find_top_level_css_cut(); braces inside quoted strings and
-		 * CSS comments are skipped). Returns an empty string when no complete
+		 * wrapper unclosed (brace depth tracked, braces inside quoted strings
+		 * and CSS comments skipped). Returns an empty string when no complete
 		 * top-level rule fits — callers treat that as over-cap and serve the
-		 * file variant instead.
+		 * file variant instead. The single scanner lives in
+		 * Util::find_top_level_css_cut() so the two call sites cannot drift.
 		 *
 		 * @param string $css CSS content.
 		 * @param int    $cap Maximum bytes.
@@ -661,80 +662,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function truncate_to_cap( string $css, int $cap ): string {
+			if ( '' === $css || $cap <= 0 ) {
+				return strlen( $css ) <= $cap ? $css : '';
+			}
 			if ( strlen( $css ) <= $cap ) {
 				return $css;
 			}
-			$prefix = substr( $css, 0, $cap );
-			if ( '' === $prefix ) {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'split_css_for_inline_budget' ) ) {
+					$split = Util::split_css_for_inline_budget( $css, $cap );
+					return isset( $split['inline'] ) ? (string) $split['inline'] : '';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$cut = strrpos( substr( $css, 0, $cap ), '}' );
+			if ( false === $cut ) {
 				return '';
 			}
-			$depth      = 0;
-			$cut        = null;
-			$len        = strlen( $prefix );
-			$in_single  = false;
-			$in_double  = false;
-			$in_comment = false;
-			for ( $i = 0; $i < $len; $i++ ) {
-				$c    = $prefix[ $i ];
-				$next = $i + 1 < $len ? $prefix[ $i + 1 ] : '';
-				if ( $in_comment ) {
-					if ( '*' === $c && '/' === $next ) {
-						$in_comment = false;
-						++$i;
-					}
-					continue;
-				}
-				if ( $in_single ) {
-					if ( '\\' === $c ) {
-						++$i;
-						continue;
-					}
-					if ( "'" === $c ) {
-						$in_single = false;
-					}
-					continue;
-				}
-				if ( $in_double ) {
-					if ( '\\' === $c ) {
-						++$i;
-						continue;
-					}
-					if ( '"' === $c ) {
-						$in_double = false;
-					}
-					continue;
-				}
-				if ( '/' === $c && '*' === $next ) {
-					$in_comment = true;
-					++$i;
-					continue;
-				}
-				if ( "'" === $c ) {
-					$in_single = true;
-					continue;
-				}
-				if ( '"' === $c ) {
-					$in_double = true;
-					continue;
-				}
-				if ( '{' === $c ) {
-					++$depth;
-				} elseif ( '}' === $c ) {
-					if ( $depth > 0 ) {
-						--$depth;
-						if ( 0 === $depth ) {
-							$cut = $i;
-						}
-					} else {
-						// Stray closing brace at depth 0 still ends a rule.
-						$cut = $i;
-					}
-				}
-			}
-			if ( null === $cut ) {
-				return '';
-			}
-			return substr( $css, 0, $cut + 1 );
+			return substr( $css, 0, (int) $cut + 1 );
 		}
 
 		/**
@@ -984,8 +930,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * stays within core's `styles_inline_size_limit` (40KB on WP 6.9+,
 		 * 20KB before) and the configured `ccssMaxSize` cap: the tighter of
 		 * the two wins, minus already-committed bytes, clamped at zero.
-		 * Fail-open: any uncertainty yields 0 (caller serves the file
-		 * variant), never fatal.
+		 * A non-positive core limit (rogue `styles_inline_size_limit` filter)
+		 * heals to the unfiltered default via Util::get_styles_inline_default()
+		 * so this path agrees with split_css_for_inline_budget() and
+		 * get_remaining_inline_budget(). Fail-open: any uncertainty yields 0
+		 * (caller serves the file variant), never fatal.
 		 *
 		 * @param int $already_inlined Bytes already committed to inline output.
 		 * @return int Effective budget in bytes (>= 0).
@@ -993,8 +942,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		public static function get_effective_ccss_budget( int $already_inlined = 0 ): int {
 			try {
-				$cap    = self::get_ccss_max_size();
-				$limit  = self::get_styles_inline_limit();
+				$cap   = self::get_ccss_max_size();
+				$limit = self::get_styles_inline_limit();
+				if ( $limit <= 0 && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_styles_inline_default' ) ) {
+					$limit = Util::get_styles_inline_default();
+				}
+				if ( $limit <= 0 ) {
+					$limit = 40000;
+				}
 				$budget = min( $cap, $limit ) - max( 0, $already_inlined );
 				return $budget > 0 ? (int) $budget : 0;
 			} catch ( \Throwable $e ) {
@@ -1077,7 +1032,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Multisite-safe: per-site options only.
 		 *
 		 * @param string $reason Short reason for logging (e.g. 'builder-update').
-		 * @param int    $cap Maximum templates to requeue in this pass.
+		 * @param int    $cap Maximum templates to requeue in this pass (0 = empty pass, no work; negatives clamp to 0).
 		 * @return int Number of jobs queued.
 		 * @since NEXT
 		 */
@@ -1092,7 +1047,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( self::is_targeted_regen_cooled_down() ) {
 					return 0;
 				}
-				$cap       = $cap > 0 ? min( $cap, 100 ) : self::TARGETED_REGEN_CAP;
+				$cap = max( 0, min( $cap, 100 ) );
+				if ( 0 === $cap ) {
+					return 0;
+				}
 				$templates = self::get_templates();
 				if ( empty( $templates ) ) {
 					return 0;

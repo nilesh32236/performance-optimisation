@@ -7264,7 +7264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return int The default inline size limit in bytes.
 		 * @since NEXT
 		 */
-		private static function get_styles_inline_default(): int {
+		public static function get_styles_inline_default(): int {
 			$default = 40000;
 			if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
 				$default = 20000;
