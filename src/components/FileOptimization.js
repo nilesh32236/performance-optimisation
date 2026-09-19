@@ -33,6 +33,7 @@ import {
 	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
 import Tooltip from './common/Tooltip';
+import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -131,6 +132,183 @@ export const normalizeDeliveryMode = ( value ) => {
 		: 'file';
 };
 
+// One-click Safe preset bundle (issue #1442): fallback mirror of
+// Main::get_safe_preset_bundle() — minify + defer + delay with the builder,
+// commerce, interaction and jQuery exclusion presets pre-applied. Only
+// pre-existing file_optimisation keys; additive, no schema change. The
+// server-localised wppoSettings.presetBundles.safe copy (see
+// resolvePresetBundle()) is authoritative at runtime; this constant is the
+// fail-open fallback. Exported for direct Jest coverage.
+// @since NEXT
+export const SAFE_PRESET_BUNDLE = {
+	minifyJS: true,
+	minifyCSS: true,
+	minifyHTML: true,
+	deferJS: true,
+	delayJS: true,
+	delayJSBuilderPreset: true,
+	delayJSCommercePreset: true,
+	delayJSInteractionPreset: true,
+	delayJSJqueryPreset: true,
+	delayJSSafeMode: true,
+	elementorSafeMode: true,
+	delayJSConsentPreset: false,
+	delayJSAnalyticsPreset: false,
+	delayJSGalleryPreset: false,
+	combineCSS: false,
+};
+
+// Aggressive preset bundle (issue #1442): fallback mirror of
+// Main::get_aggressive_preset_bundle() — same pipelines with the safe
+// presets off plus CSS combining on. UI-gated behind an explicit warning
+// with one-click revert via the settings snapshot. The server-localised
+// wppoSettings.presetBundles.aggressive copy (see resolvePresetBundle())
+// is authoritative at runtime; this constant is the fail-open fallback.
+// Exported for direct Jest coverage.
+// @since NEXT
+export const AGGRESSIVE_PRESET_BUNDLE = {
+	minifyJS: true,
+	minifyCSS: true,
+	minifyHTML: true,
+	deferJS: true,
+	delayJS: true,
+	delayJSBuilderPreset: false,
+	delayJSCommercePreset: false,
+	delayJSInteractionPreset: false,
+	delayJSJqueryPreset: false,
+	delayJSSafeMode: false,
+	elementorSafeMode: false,
+	combineCSS: true,
+};
+
+// Whether delay runs without a safe exclusion preset — i.e. Aggressive
+// mode (issue #1442). Every preset the safe check requires (builder,
+// commerce, interaction, jQuery) is covered here so a jquery-only-off
+// state still raises the warning instead of slipping through silently.
+// Exported for direct Jest coverage.
+// @since NEXT
+export const isAggressiveDelay = ( values = {} ) => {
+	if ( ! values.delayJS ) {
+		return false;
+	}
+	return (
+		! values.delayJSBuilderPreset ||
+		! values.delayJSCommercePreset ||
+		! values.delayJSInteractionPreset ||
+		! values.delayJSJqueryPreset
+	);
+};
+
+// Whether the Safe preset bundle is fully active (issue #1442): the
+// minify/defer/delay pipelines (including minifyHTML, which the bundle pins
+// true) plus all four exclusion presets, the two
+// safe-mode guards (delayJSSafeMode, elementorSafeMode) the bundle applies,
+// and combineCSS off (the bundle pins it false — FOUC risk — while
+// Aggressive pins it true), so enabling CSS combining after applying Safe
+// clears the confirmation instead of overstating safety. Exported for
+// direct Jest coverage.
+// @since NEXT
+export const isSafePresetActive = ( values = {} ) => {
+	if (
+		! values.minifyJS ||
+		! values.minifyCSS ||
+		! values.minifyHTML ||
+		! values.deferJS ||
+		! values.delayJS
+	) {
+		return false;
+	}
+	return !! (
+		values.delayJSBuilderPreset &&
+		values.delayJSCommercePreset &&
+		values.delayJSInteractionPreset &&
+		values.delayJSJqueryPreset &&
+		values.delayJSSafeMode &&
+		values.elementorSafeMode &&
+		! values.combineCSS
+	);
+};
+
+// Known preset-bundle keys (issue #1442 review): the union of the safe and
+// aggressive bundle keys. getServerPresetBundle() filters the localised
+// server copy to this allowlist so a corrupted presetBundles localisation
+// can never flow unknown keys through normalizeFileOpt into the save
+// payload. Exported for direct Jest coverage.
+// @since NEXT
+export const PRESET_BUNDLE_KEYS = Object.freeze( [
+	'minifyJS',
+	'minifyCSS',
+	'minifyHTML',
+	'deferJS',
+	'delayJS',
+	'delayJSBuilderPreset',
+	'delayJSCommercePreset',
+	'delayJSInteractionPreset',
+	'delayJSJqueryPreset',
+	'delayJSSafeMode',
+	'elementorSafeMode',
+	'delayJSConsentPreset',
+	'delayJSAnalyticsPreset',
+	'delayJSGalleryPreset',
+	'combineCSS',
+] );
+
+// Server-provided preset bundle (issue #1442 review): Main localises the
+// authoritative bundles as wppoSettings.presetBundles ({ safe,
+// aggressive }); the exported SAFE_/AGGRESSIVE_PRESET_BUNDLE constants
+// above are fallback mirrors for when the global is absent (tests,
+// cached pages). Prefer the server copy so the two can never drift. A
+// partial server copy (only a subset of keys boolean) is rejected with
+// null so the caller falls back to the full local mirror instead of
+// applying e.g. a 1-key preset while the UI reports a full success.
+// Exported for direct Jest coverage.
+// @since NEXT
+export const getServerPresetBundle = ( name ) => {
+	const server = getWppoSettings( `presetBundles.${ name }`, null );
+	if (
+		! server ||
+		typeof server !== 'object' ||
+		Array.isArray( server ) ||
+		0 === Object.keys( server ).length
+	) {
+		return null;
+	}
+	// Require full key coverage of the expected bundle before trusting the
+	// server copy: the safe mirror carries 15 keys while the aggressive
+	// mirror carries 12, so coverage is checked against the matching
+	// fallback mirror rather than the PRESET_BUNDLE_KEYS union.
+	const expected =
+		'aggressive' === name ? AGGRESSIVE_PRESET_BUNDLE : SAFE_PRESET_BUNDLE;
+	for ( const key of Object.keys( expected ) ) {
+		if ( typeof server[ key ] !== 'boolean' ) {
+			return null;
+		}
+	}
+	const filtered = {};
+	for ( const key of PRESET_BUNDLE_KEYS ) {
+		if ( typeof server[ key ] === 'boolean' ) {
+			filtered[ key ] = server[ key ];
+		}
+	}
+	if ( 0 === Object.keys( filtered ).length ) {
+		return null;
+	}
+	return filtered;
+};
+
+// Resolve the bundle to apply: server-authoritative when localised,
+// otherwise the local fallback mirror (issue #1442 review).
+// Exported for direct Jest coverage.
+// @since NEXT
+export const resolvePresetBundle = ( name ) => {
+	if ( 'aggressive' === name ) {
+		return (
+			getServerPresetBundle( 'aggressive' ) || AGGRESSIVE_PRESET_BUNDLE
+		);
+	}
+	return getServerPresetBundle( 'safe' ) || SAFE_PRESET_BUNDLE;
+};
+
 // Textarea-backed file-optimisation keys: newline-delimited lists the backend
 // may return as arrays (via sanitize/process_urls). Every one normalises
 // through toTextLines() so a backend array can never reach a controlled
@@ -185,6 +363,7 @@ const FILE_OPT_SYNC_KEYS = [
 	'delayJSAnalyticsPreset',
 	'delayJSGalleryPreset',
 	'delayJSJqueryPreset',
+	'delayJSSafeMode',
 	'delayJSINPPreset',
 	'delayJSExternalOnly',
 	'delayJSThirdParty',
@@ -588,6 +767,10 @@ const FileOptimization = ( {
 				options.delayJSJqueryPreset !== undefined
 					? options.delayJSJqueryPreset
 					: false,
+			delayJSSafeMode:
+				options.delayJSSafeMode !== undefined
+					? options.delayJSSafeMode
+					: true,
 			delayJSExcludeUrls:
 				typeof options.delayJSExcludeUrls === 'string'
 					? options.delayJSExcludeUrls
@@ -1249,6 +1432,184 @@ const FileOptimization = ( {
 		} );
 	};
 
+	// One-click Safe / Aggressive presets + revert (issue #1442): a preset
+	// apply builds the bundle locally, saves via update_settings (which
+	// auto-snapshots the prior settings server-side for one-click revert),
+	// and only swaps local state on success — a failed apply leaves settings
+	// untouched with an error notice (fail-open). Revert restores via the
+	// shared restore_settings endpoint and re-syncs the form from the
+	// response; with no snapshot the server reports it and the form is left
+	// untouched (fail-open). Export/import + sandbox preview remain as
+	// additional revert paths (see PluginSetting and the Scripts-tab sandbox
+	// panel). Note: no mount-time snapshot probe here — it would add an
+	// unconditional request to every File Optimization visit; the Revert
+	// button stays enabled and reports a missing snapshot as a notice.
+	const [ isApplyingPreset, setIsApplyingPreset ] = useState( false );
+	const [ isRestoring, setIsRestoring ] = useState( false );
+	const {
+		notice: presetNotice,
+		notify: notifyPreset,
+		dismiss: dismissPreset,
+	} = useNotice();
+	const applyPresetBundle = async ( bundle, successMessage ) => {
+		setIsApplyingPreset( true );
+		dismissPreset();
+		const next = normalizeFileOpt( { ...settings, ...bundle } );
+		try {
+			const res = await apiCall( 'update_settings', {
+				tab: 'file_optimisation',
+				settings: stripCdnRowIds( { ...next } ),
+			} );
+			if ( res && res.success ) {
+				next.cdnMapping = withCdnRowIds( next.cdnMapping );
+				setSettings( next );
+				setBaseline( stripCdnRowIds( { ...next } ) );
+				setIsDirty( false );
+				if ( res.data ) {
+					commitSettingsCache( res.data );
+				}
+				notifyPreset( {
+					type: 'success',
+					message: successMessage,
+					durationMs: 5000,
+				} );
+			} else {
+				notifyPreset( {
+					type: 'error',
+					message:
+						res?.message ||
+						__(
+							'Preset could not be applied — settings left unchanged.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			}
+		} catch ( err ) {
+			console.error(
+				'Failed applying preset.',
+				getErrorLogMessage( err )
+			);
+			notifyPreset( {
+				type: 'error',
+				message: __(
+					'Preset could not be applied — settings left unchanged.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
+		} finally {
+			setIsApplyingPreset( false );
+		}
+	};
+	const handleSafePreset = () =>
+		applyPresetBundle(
+			resolvePresetBundle( 'safe' ),
+			__(
+				'Safe preset applied: minify + defer + delay with builder, jQuery and WooCommerce exclusions.',
+				'performance-optimisation'
+			)
+		);
+	// Aggressive mode drops the safe exclusions and combines CSS, so it is
+	// gated behind an explicit ConfirmDialog (issue #1442 review) — the
+	// same shared component used for other destructive actions. The
+	// pre-apply snapshot (via update_settings) plus one-click revert remain
+	// as the safety net after confirming.
+	const [ showAggressiveConfirm, setShowAggressiveConfirm ] =
+		useState( false );
+	const handleAggressivePreset = () => setShowAggressiveConfirm( true );
+	const confirmAggressivePreset = () => {
+		setShowAggressiveConfirm( false );
+		return applyPresetBundle(
+			resolvePresetBundle( 'aggressive' ),
+			__(
+				'Aggressive mode enabled: safe presets are off — use Revert if anything breaks.',
+				'performance-optimisation'
+			)
+		);
+	};
+	const handleRevertPreset = async () => {
+		setIsRestoring( true );
+		dismissPreset();
+		try {
+			const data = await apiCall( 'restore_settings', {} );
+			if ( data?.success ) {
+				// Only the file_optimisation slice is accepted: restore_settings
+				// responds with the full wppo_settings tab-map, and spreading
+				// that into file-optimisation state would pollute the form,
+				// the baseline and the next save payload (issue #1442 review).
+				// A missing slice is a failed restore — the form stays
+				// untouched (fail-open). Exact-restore semantics: defaults
+				// spread under the snapshot slice so a key absent from an
+				// older snapshot resets to its default instead of surviving
+				// from live (possibly edited) state.
+				const restored = data?.data?.file_optimisation;
+				if (
+					! restored ||
+					typeof restored !== 'object' ||
+					Array.isArray( restored )
+				) {
+					notifyPreset( {
+						type: 'error',
+						message: __(
+							'No file optimisation settings found in the snapshot — settings left unchanged.',
+							'performance-optimisation'
+						),
+						durationMs: 5000,
+					} );
+					return;
+				}
+				const next = normalizeFileOpt( {
+					...defaultSettings,
+					...restored,
+				} );
+				next.cdnMapping = withCdnRowIds( next.cdnMapping );
+				setSettings( next );
+				setBaseline( stripCdnRowIds( { ...next } ) );
+				setIsDirty( false );
+				if ( data?.data ) {
+					commitSettingsCache( data.data );
+				}
+				notifyPreset( {
+					type: 'success',
+					message:
+						data.message ||
+						__(
+							'Settings restored to the previous snapshot.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			} else {
+				notifyPreset( {
+					type: 'error',
+					message:
+						data?.message ||
+						__(
+							'No settings snapshot available to restore.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			}
+		} catch ( err ) {
+			console.error(
+				'Failed restoring settings.',
+				getErrorLogMessage( err )
+			);
+			notifyPreset( {
+				type: 'error',
+				message: __(
+					'Error restoring settings.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
+		} finally {
+			setIsRestoring( false );
+		}
+	};
+
 	// One-click Delay-JS Safe/Balanced/Aggressive presets (#1385): maps to
 	// the existing exclusion-getter toggles only. Builder plus commerce stay
 	// forced ON at every level so carts and builders never break. The manual
@@ -1889,6 +2250,122 @@ const FileOptimization = ( {
 						role="tabpanel"
 						aria-labelledby="tab-assets"
 					>
+						<FeatureCard
+							title={ __(
+								'Optimisation Presets',
+								'performance-optimisation'
+							) }
+							icon={ <FontAwesomeIcon icon={ faRocket } /> }
+						>
+							{ presetNotice && (
+								<NoticeBanner
+									type={ presetNotice.type }
+									message={ presetNotice.message }
+									className="wppo-mb-12"
+									onDismiss={ dismissPreset }
+								/>
+							) }
+							<p className="wppo-text-muted wppo-text-small wppo-mb-12">
+								{ __(
+									'Safe enables minify + defer + delay with page-builder, jQuery and WooCommerce exclusions pre-applied (about 200ms render-block win without breakage). Aggressive drops the safe exclusions and combines CSS — only for sites with manual exclusions. Every apply snapshots your current settings first; Revert restores them in one click. Export/import and the Scripts-tab sandbox preview remain as extra safety nets.',
+									'performance-optimisation'
+								) }
+							</p>
+							<div className="wppo-field-group wppo-flex wppo-gap-12 wppo-flex-wrap">
+								<button
+									type="button"
+									className="wppo-button wppo-button--primary"
+									onClick={ handleSafePreset }
+									disabled={
+										isApplyingPreset ||
+										isSaving ||
+										optimizerDisabled
+									}
+								>
+									{ isApplyingPreset
+										? __(
+												'Applying…',
+												'performance-optimisation'
+										  )
+										: __(
+												'Apply Safe Preset',
+												'performance-optimisation'
+										  ) }
+								</button>
+								<button
+									type="button"
+									className="wppo-button wppo-button--secondary"
+									onClick={ handleAggressivePreset }
+									disabled={
+										isApplyingPreset ||
+										isSaving ||
+										optimizerDisabled
+									}
+								>
+									{ __(
+										'Enable Aggressive Mode',
+										'performance-optimisation'
+									) }
+								</button>
+								<button
+									type="button"
+									className="wppo-button wppo-button--secondary"
+									onClick={ handleRevertPreset }
+									disabled={ isRestoring || isApplyingPreset }
+								>
+									{ isRestoring
+										? __(
+												'Reverting…',
+												'performance-optimisation'
+										  )
+										: __(
+												'Revert to Previous',
+												'performance-optimisation'
+										  ) }
+								</button>
+							</div>
+							<ConfirmDialog
+								isOpen={ showAggressiveConfirm }
+								onConfirm={ confirmAggressivePreset }
+								onCancel={ () =>
+									setShowAggressiveConfirm( false )
+								}
+								title={ __(
+									'Enable Aggressive Mode?',
+									'performance-optimisation'
+								) }
+								message={ __(
+									'Aggressive mode drops the builder, jQuery and WooCommerce exclusions and combines CSS — this can break layouts or checkout. Your current settings are snapshotted first, so you can revert in one click. Proceed?',
+									'performance-optimisation'
+								) }
+								confirmLabel={ __(
+									'Enable Anyway',
+									'performance-optimisation'
+								) }
+								variant="danger"
+								isBusy={ isApplyingPreset }
+							/>
+							{ isAggressiveDelay( settings ) && (
+								<NoticeBanner
+									type="warning"
+									message={ __(
+										'Aggressive mode is on: builder, jQuery or WooCommerce scripts may be delayed. Re-enable the safe presets — or press Revert to Previous to restore your last settings in one click.',
+										'performance-optimisation'
+									) }
+									className="wppo-mt-12"
+								/>
+							) }
+							{ isSafePresetActive( settings ) && (
+								<NoticeBanner
+									type="success"
+									message={ __(
+										'Safe preset is active: minify + defer + delay with builder, jQuery and WooCommerce exclusions.',
+										'performance-optimisation'
+									) }
+									className="wppo-mt-12"
+								/>
+							) }
+						</FeatureCard>
 						<FeatureCard
 							title={ __(
 								'CSS Optimisation',
@@ -3794,18 +4271,15 @@ const FileOptimization = ( {
 													) }
 												</span>
 											</div>
-											{ settings.delayJS &&
-												( ! settings.delayJSCommercePreset ||
-													! settings.delayJSBuilderPreset ||
-													! settings.delayJSInteractionPreset ) && (
-													<NoticeBanner
-														type="warning"
-														message={ __(
-															'Aggressive mode: a safe preset is off — jQuery, cart, builder or slider scripts may be delayed. Re-enable presets unless you manage exclusions manually.',
-															'performance-optimisation'
-														) }
-													/>
-												) }
+											{ isAggressiveDelay( settings ) && (
+												<NoticeBanner
+													type="warning"
+													message={ __(
+														'Aggressive mode: a safe preset is off — jQuery, cart, builder or slider scripts may be delayed. Re-enable presets unless you manage exclusions manually.',
+														'performance-optimisation'
+													) }
+												/>
+											) }
 											<div className="wppo-notice wppo-notice--info wppo-mt-16">
 												<span>
 													{ __(
