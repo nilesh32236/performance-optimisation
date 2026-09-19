@@ -300,11 +300,13 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		const response = await doFetch( null );
 		return await handleResponse( response );
 	} catch ( error ) {
-		console.error(
-			'API call failed:',
-			action,
-			getErrorLogMessage( error )
-		);
+		if ( error?.name !== 'AbortError' ) {
+			console.error(
+				'API call failed:',
+				action,
+				getErrorLogMessage( error )
+			);
+		}
 		throw error;
 	}
 };

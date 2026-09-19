@@ -5,6 +5,50 @@ import { faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import { __ } from '@wordpress/i18n';
 
 /**
+ * Whether a focus-trap candidate is hidden and must be skipped.
+ *
+ * Checks hidden attributes, disabled fieldset ancestry, and inline plus
+ * computed display/visibility — never layout boxes, which are unavailable
+ * in layout-less environments (jsdom) and unreliable for fixed nodes.
+ *
+ * @param {Element} el Candidate element.
+ * @return {boolean} True when the element must not receive trap focus.
+ */
+const isTrapHidden = ( el ) => {
+	if ( ! el || typeof el.closest !== 'function' ) {
+		return true;
+	}
+	if ( el.hidden || el.closest( '[hidden]' ) ) {
+		return true;
+	}
+	if ( el.disabled || el.closest( 'fieldset[disabled]' ) ) {
+		return true;
+	}
+	if ( el.getAttribute && el.getAttribute( 'type' ) === 'hidden' ) {
+		return true;
+	}
+	if ( el.style && el.style.display === 'none' ) {
+		return true;
+	}
+	try {
+		const view = el.ownerDocument?.defaultView;
+		const computed =
+			typeof view?.getComputedStyle === 'function'
+				? view.getComputedStyle( el )
+				: null;
+		if (
+			computed &&
+			( computed.display === 'none' || computed.visibility === 'hidden' )
+		) {
+			return true;
+		}
+	} catch {
+		// Ignore: computed style unavailable — attribute checks stand.
+	}
+	return false;
+};
+
+/**
  * A reusable confirmation dialog component for destructive actions.
  *
  * @param {Object}               props                Component props.
@@ -34,12 +78,13 @@ const ConfirmDialog = ( {
 	const dialogRef = useRef( null );
 	// Audit #1354: unique title id so two mounted dialogs never share one.
 	const titleId = useId();
+	const msgId = useId();
 	const focusableRef = useRef( [] );
 	const previouslyFocusedRef = useRef( null );
 
 	const handleKeyDown = useCallback(
 		( e ) => {
-			if ( e.key === 'Escape' ) {
+			if ( e.key === 'Escape' && ! isBusy ) {
 				onCancel();
 			}
 
@@ -82,18 +127,22 @@ const ConfirmDialog = ( {
 				}
 			}
 		},
-		[ onCancel ]
+		[ onCancel, isBusy ]
 	);
 
 	// Audit #1354: rebuild when children change too — async detail
 	// lists added while open would otherwise leave a stale trap list.
+	// Audit #1483: hidden/disabled-ancestor nodes are filtered without
+	// layout APIs (offsetParent/getClientRects are empty in jsdom and
+	// unreliable for fixed-position nodes) — attribute, inline-style and
+	// computed-style checks instead.
 	const rebuildTrapList = useCallback( () => {
 		if ( isOpen && dialogRef.current ) {
 			focusableRef.current = Array.from(
 				dialogRef.current.querySelectorAll(
 					'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 				)
-			);
+			).filter( ( el ) => ! isTrapHidden( el ) );
 		} else {
 			focusableRef.current = [];
 		}
@@ -159,8 +208,11 @@ const ConfirmDialog = ( {
 	}
 
 	return (
-		/* eslint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions -- overlay click is progressive enhancement; Esc + buttons are the keyboard paths (audit #1354). */
-		<div className="wppo-dialog-overlay" onClick={ onCancel }>
+		/* eslint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- overlay click is progressive enhancement; Esc + buttons are the keyboard paths (audit #1354). */
+		<div
+			className="wppo-dialog-overlay"
+			onClick={ isBusy ? undefined : onCancel }
+		>
 			<div
 				className="wppo-dialog"
 				ref={ dialogRef }
@@ -168,6 +220,7 @@ const ConfirmDialog = ( {
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={ titleId }
+				aria-describedby={ msgId }
 				onClick={ ( e ) => e.stopPropagation() }
 			>
 				<h3 id={ titleId }>
@@ -177,7 +230,7 @@ const ConfirmDialog = ( {
 					/>
 					{ title }
 				</h3>
-				<p>{ message }</p>
+				<p id={ msgId }>{ message }</p>
 				{ children }
 				<div className="wppo-dialog-actions">
 					<button
@@ -207,7 +260,7 @@ const ConfirmDialog = ( {
 			</div>
 		</div>
 	);
-	/* eslint-enable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions */
+	/* eslint-enable jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */
 };
 
 export default ConfirmDialog;

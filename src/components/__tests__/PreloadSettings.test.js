@@ -173,7 +173,9 @@ describe( 'PreloadSettings Component', () => {
 					settings: expect.objectContaining( {
 						preloadSitemap: true,
 					} ),
-				} )
+				} ),
+				'POST',
+				expect.any( AbortSignal )
 			);
 		} );
 	} );
@@ -212,15 +214,20 @@ describe( 'PreloadSettings Component', () => {
 		);
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'preload_settings',
-				settings: expect.objectContaining( {
-					enablePreloadCache: true,
-					excludePreloadCache: 'custom/exclude',
-					preconnect: true,
-					preconnectOrigins: 'https://test.com',
-				} ),
-			} );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'preload_settings',
+					settings: expect.objectContaining( {
+						enablePreloadCache: true,
+						excludePreloadCache: 'custom/exclude',
+						preconnect: true,
+						preconnectOrigins: 'https://test.com',
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			);
 			expect(
 				screen.getByText( 'Settings updated successfully.' )
 			).toBeInTheDocument();
@@ -271,9 +278,9 @@ describe( 'PreloadSettings Component', () => {
 		);
 
 		await waitFor( () => {
-			expect(
-				screen.getByText( 'An unexpected error occurred.' )
-			).toBeInTheDocument();
+			// Audit #1483: the server/transport message is surfaced, not
+			// the generic fallback.
+			expect( screen.getByText( 'Network error' ) ).toBeInTheDocument();
 		} );
 
 		consoleSpy.mockRestore();
@@ -331,15 +338,20 @@ describe( 'PreloadSettings Component', () => {
 		);
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'preload_settings',
-				settings: expect.objectContaining( {
-					enableSpeculationRules: true,
-					speculationMode: 'prefetch',
-					speculationEagerness: 'eager',
-					speculationExcludeUrls: '',
-				} ),
-			} );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'preload_settings',
+					settings: expect.objectContaining( {
+						enableSpeculationRules: true,
+						speculationMode: 'prefetch',
+						speculationEagerness: 'eager',
+						speculationExcludeUrls: '',
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			);
 		} );
 	} );
 
@@ -383,12 +395,17 @@ describe( 'PreloadSettings Component', () => {
 		);
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'preload_settings',
-				settings: expect.objectContaining( {
-					speculationExcludeUrls: '/checkout/*\n/cart/*',
-				} ),
-			} );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'preload_settings',
+					settings: expect.objectContaining( {
+						speculationExcludeUrls: '/checkout/*\n/cart/*',
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			);
 		} );
 	} );
 
@@ -555,7 +572,12 @@ describe( 'PreloadSettings Component', () => {
 		fireEvent.click( resumeButton );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'preload_resume', {} );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'preload_resume',
+				{},
+				'POST',
+				expect.any( AbortSignal )
+			);
 			expect(
 				screen.getByText( /Preload queue resumed/i )
 			).toBeInTheDocument();

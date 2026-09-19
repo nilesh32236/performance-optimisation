@@ -468,6 +468,10 @@ const refreshEsiNonce = ( signal, staleNonce = '' ) => {
 		.catch( ( refreshError ) => {
 			// Audit #1420: log the redacted failure like other hydration
 			// failures; resolve empty so hydration continues.
+			// Pagehide aborts are expected, not warnings.
+			if ( isAbortError( refreshError ) ) {
+				return '';
+			}
 			console.warn(
 				'WPPO ESI fragment hydration failed:',
 				getEsiLogMessage( refreshError )

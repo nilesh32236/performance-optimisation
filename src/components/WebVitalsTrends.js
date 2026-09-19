@@ -220,14 +220,24 @@ const WebVitalsTrends = ( { url = '' } ) => {
 			) }
 
 			{ ! loading && notice && (
-				<NoticeBanner
-					type={ notice.type }
-					message={ notice.message }
-					onDismiss={ dismiss }
-				/>
+				<>
+					<NoticeBanner
+						type={ notice.type }
+						message={ notice.message }
+						onDismiss={ dismiss }
+					/>
+					<button
+						type="button"
+						className="wppo-button wppo-button--secondary wppo-button--sm wppo-mt-10"
+						onClick={ () => loadTrends() }
+						disabled={ loading }
+					>
+						{ __( 'Retry', 'performance-optimisation' ) }
+					</button>
+				</>
 			) }
 
-			{ ! loading && ! notice && ! url && (
+			{ ! loading && ! url && (
 				<p className="wppo-text-muted">
 					{ __(
 						'Enter a URL to view Web Vitals trend history.',
@@ -236,7 +246,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 				</p>
 			) }
 
-			{ ! loading && ! notice && url && (
+			{ ! loading && url && trends && (
 				<div className="wppo-trend-layout">
 					<div className="wppo-trend-layout__title">
 						<FontAwesomeIcon

@@ -205,9 +205,9 @@ describe( 'PageSpeedPanel Component', () => {
 		);
 
 		await waitFor( () => {
-			expect(
-				screen.getByText( 'PageSpeed scan failed.' )
-			).toBeInTheDocument();
+			// Audit #1483: the validation/transport detail is surfaced,
+			// not the generic fallback.
+			expect( screen.getByText( 'Network error' ) ).toBeInTheDocument();
 		} );
 	} );
 

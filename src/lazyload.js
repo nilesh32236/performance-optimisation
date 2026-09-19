@@ -2907,9 +2907,25 @@ const loadImages = () => {
 								applyPlaceholderBeforeLoad( el );
 
 								// Register handler BEFORE setting src to avoid missing cached-image load events.
-								const onImgLoad =
+								const doneImgPlaceholder =
 									makePlaceholderLoadHandler( el );
-								el.addEventListener( 'load', onImgLoad );
+								const onImgLoad = () => {
+									el.removeEventListener(
+										'error',
+										onImgError
+									);
+									doneImgPlaceholder();
+								};
+								const onImgError = () => {
+									el.removeEventListener( 'load', onImgLoad );
+									doneImgPlaceholder();
+								};
+								el.addEventListener( 'load', onImgLoad, {
+									once: true,
+								} );
+								el.addEventListener( 'error', onImgError, {
+									once: true,
+								} );
 
 								// Restore sizes before src/srcset so the hint is active when the browser selects a candidate.
 								restoreSizes( el );
@@ -3278,9 +3294,28 @@ const loadImages = () => {
 							applyPlaceholderBeforeLoad( el );
 
 							// Register handler BEFORE setting src to avoid missing cached-image load events.
-							const onImgLoadFallback =
+							const doneImgPlaceholderFallback =
 								makePlaceholderLoadHandler( el );
-							el.addEventListener( 'load', onImgLoadFallback );
+							const onImgLoadFallback = () => {
+								el.removeEventListener(
+									'error',
+									onImgErrorFallback
+								);
+								doneImgPlaceholderFallback();
+							};
+							const onImgErrorFallback = () => {
+								el.removeEventListener(
+									'load',
+									onImgLoadFallback
+								);
+								doneImgPlaceholderFallback();
+							};
+							el.addEventListener( 'load', onImgLoadFallback, {
+								once: true,
+							} );
+							el.addEventListener( 'error', onImgErrorFallback, {
+								once: true,
+							} );
 
 							// Restore sizes before src/srcset so the hint is active when the browser selects a candidate.
 							restoreSizes( el );
@@ -3536,6 +3571,7 @@ const initVideoPlaceholders = () => {
 			el.appendChild( iframe );
 
 			const onLoad = () => {
+				iframe.removeEventListener( 'load', onLoad );
 				// Audit #1354 review: clear the fallback timer on load so the
 				// el/iframe closure is released immediately.
 				if ( typeof fallbackTimer !== 'undefined' ) {
@@ -3550,7 +3586,7 @@ const initVideoPlaceholders = () => {
 				el.classList.remove( 'wppo-video-loading' );
 			};
 
-			iframe.addEventListener( 'load', onLoad );
+			iframe.addEventListener( 'load', onLoad, { once: true } );
 
 			// Fallback: show iframe even if load event never fires.
 			// Tracked so teardown clears it instead of pinning el/iframe.

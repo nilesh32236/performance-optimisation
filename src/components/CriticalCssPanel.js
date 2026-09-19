@@ -132,9 +132,9 @@ const CriticalCssPanel = ( {
 	onRegenerateSingle,
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
-	// Audit #1420: plain per-render Map (no ref mutation during render)
-	// so entries.map does not rebuild 8 objects + __() lookups per row.
-	const configCache = new Map();
+	// Audit #1420: memoized Map so entries.map does not rebuild 8 objects
+	// + __() lookups per row on every render.
+	const configCache = useMemo( () => new Map(), [] );
 	const configFor = ( statusKey ) => {
 		if ( ! configCache.has( statusKey ) ) {
 			configCache.set( statusKey, statusConfigFor( statusKey ) );

@@ -19,7 +19,7 @@ const STATUS_ALIASES = {
 
 const KNOWN_STATUSES = [ 'good', 'needs_improvement', 'poor' ];
 
-const StatusBadge = ( { status } ) => {
+const StatusBadge = ( { status, live = false } ) => {
 	const normalized = Object.hasOwn( STATUS_ALIASES, status )
 		? STATUS_ALIASES[ status ]
 		: status;
@@ -42,11 +42,13 @@ const StatusBadge = ( { status } ) => {
 	// the accessible name.
 	// Audit #1420: async status changes announced (visible text stays
 	// the accessible name; no redundant aria-label).
+	// Audit #1483: plain span by default — a grid of N badges must not
+	// create N live regions. Opt in with live={ true } or put a single
+	// role="status" on the container instead.
 	return (
 		<span
 			className={ `wppo-status-badge wppo-status-badge--${ safeStatus }` }
-			role="status"
-			aria-live="polite"
+			{ ...( live ? { role: 'status', 'aria-live': 'polite' } : {} ) }
 		>
 			{ label }
 		</span>

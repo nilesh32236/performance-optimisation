@@ -557,11 +557,24 @@ const AutoloadedOptions = () => {
 					</p>
 				) }
 			{ notice && (
-				<NoticeBanner
-					type={ notice.type }
-					message={ notice.message }
-					onDismiss={ dismiss }
-				/>
+				<>
+					<NoticeBanner
+						type={ notice.type }
+						message={ notice.message }
+						onDismiss={ dismiss }
+					/>
+					<button
+						type="button"
+						className="wppo-button wppo-button--secondary wppo-button--sm wppo-mt-10"
+						onClick={ () => {
+							const controller = new AbortController();
+							load( controller.signal );
+						} }
+						disabled={ loading }
+					>
+						{ __( 'Retry', 'performance-optimisation' ) }
+					</button>
+				</>
 			) }
 			{ audit?.isCritical && (
 				<p

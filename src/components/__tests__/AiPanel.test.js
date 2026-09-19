@@ -165,7 +165,7 @@ describe( 'AiPanel Component', () => {
 		render( <AiPanel /> );
 
 		expect(
-			await screen.findByText( /LCP before: 2000ms, after: 3000ms/i )
+			await screen.findByText( /LCP before: 2000 ms, after: 3000 ms/i )
 		).toBeInTheDocument();
 
 		const regenerateButton = await screen.findByRole( 'button', {

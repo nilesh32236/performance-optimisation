@@ -90,18 +90,6 @@ const RecentActivityCard = ( {
 						) }
 					</div>
 				) }
-				{ loading && ! showList && (
-					<div
-						className="wppo-empty-state"
-						role="status"
-						aria-live="polite"
-					>
-						{ __(
-							'Loading activity…',
-							'performance-optimisation'
-						) }
-					</div>
-				) }
 				{ showEmptyState && (
 					<div className="wppo-empty-state">
 						{ __(

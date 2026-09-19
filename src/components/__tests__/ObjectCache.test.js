@@ -125,7 +125,9 @@ describe( 'ObjectCache Component', () => {
 			fireEvent.click( enableBtn );
 		} );
 
-		expect( screen.getByText( 'Action failed.' ) ).toBeInTheDocument();
+		// Audit #1483: the transport message is surfaced, not the
+		// generic fallback.
+		expect( screen.getByText( 'boom' ) ).toBeInTheDocument();
 
 		errorSpy.mockRestore();
 	} );

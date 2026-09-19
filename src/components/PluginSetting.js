@@ -256,6 +256,20 @@ const PluginSetting = ( { options } ) => {
 	const fileInputRef = useRef( null );
 	const cancelledRef = useRef( false );
 	const readerRef = useRef( null );
+	const restoreControllerRef = useRef( null );
+	const saveAuditControllerRef = useRef( null );
+	const settingsMountedRef = useRef( true );
+	useEffect( () => {
+		return () => {
+			settingsMountedRef.current = false;
+			if ( restoreControllerRef.current ) {
+				restoreControllerRef.current.abort();
+			}
+			if ( saveAuditControllerRef.current ) {
+				saveAuditControllerRef.current.abort();
+			}
+		};
+	}, [] );
 
 	useEffect( () => {
 		return () => {
@@ -301,10 +315,23 @@ const PluginSetting = ( { options } ) => {
 	}, [] );
 
 	const restoreSettings = async () => {
+		if ( restoreControllerRef.current ) {
+			restoreControllerRef.current.abort();
+		}
+		restoreControllerRef.current = new AbortController();
+		const signal = restoreControllerRef.current.signal;
 		setIsRestoring( true );
 		dismissUndo();
 		try {
-			const data = await apiCall( 'restore_settings', {} );
+			const data = await apiCall(
+				'restore_settings',
+				{},
+				'POST',
+				signal
+			);
+			if ( signal.aborted || ! settingsMountedRef.current ) {
+				return;
+			}
 			if ( data?.success ) {
 				setUndoAvailable( false );
 				notifyUndo( {
@@ -327,16 +354,31 @@ const PluginSetting = ( { options } ) => {
 						),
 				} );
 			}
-		} catch {
+		} catch ( restoreError ) {
+			if ( signal.aborted || restoreError?.name === 'AbortError' ) {
+				return;
+			}
+			if ( ! settingsMountedRef.current ) {
+				return;
+			}
+			console.error(
+				'Error restoring settings:',
+				getErrorLogMessage( restoreError )
+			);
 			notifyUndo( {
 				type: 'error',
-				message: __(
-					'Error restoring settings.',
-					'performance-optimisation'
-				),
+				message:
+					restoreError?.message ||
+					__(
+						'Error restoring settings.',
+						'performance-optimisation'
+					),
 			} );
 		} finally {
-			setIsRestoring( false );
+			restoreControllerRef.current = null;
+			if ( ! signal.aborted && settingsMountedRef.current ) {
+				setIsRestoring( false );
+			}
 		}
 	};
 
@@ -447,6 +489,11 @@ const PluginSetting = ( { options } ) => {
 			onSuccess,
 		}
 	) => {
+		if ( saveAuditControllerRef.current ) {
+			saveAuditControllerRef.current.abort();
+		}
+		saveAuditControllerRef.current = new AbortController();
+		const signal = saveAuditControllerRef.current.signal;
 		setSaving( true );
 		dismissApiKey();
 		try {
@@ -454,10 +501,18 @@ const PluginSetting = ( { options } ) => {
 				typeof wppoSettings !== 'undefined'
 					? wppoSettings?.settings?.performance_audit ?? {}
 					: {};
-			const response = await apiCall( 'update_settings', {
-				tab: 'performance_audit',
-				settings: { ...currentSettings, ...settingsPatch },
-			} );
+			const response = await apiCall(
+				'update_settings',
+				{
+					tab: 'performance_audit',
+					settings: { ...currentSettings, ...settingsPatch },
+				},
+				'POST',
+				signal
+			);
+			if ( signal.aborted || ! settingsMountedRef.current ) {
+				return;
+			}
 			if ( response.success ) {
 				setUndoAvailable( true );
 				if ( onSuccess ) {
@@ -475,13 +530,22 @@ const PluginSetting = ( { options } ) => {
 				} );
 			}
 		} catch ( err ) {
+			if ( signal.aborted || err?.name === 'AbortError' ) {
+				return;
+			}
+			if ( ! settingsMountedRef.current ) {
+				return;
+			}
 			notifyApiKey( {
 				type: 'error',
-				message: catchNotice || errorNotice,
+				message: err?.message || catchNotice || errorNotice,
 			} );
 			console.error( logLabel, getErrorLogMessage( err ) );
 		} finally {
-			setSaving( false );
+			saveAuditControllerRef.current = null;
+			if ( ! signal.aborted && settingsMountedRef.current ) {
+				setSaving( false );
+			}
 		}
 	};
 
@@ -699,9 +763,25 @@ const PluginSetting = ( { options } ) => {
 		// Security: redact all nested secrets (API keys, passwords, tokens)
 		// before writing the export to disk. Server-side sanitization is
 		// authoritative; this is defense-in-depth for the plaintext file.
-		const safeOptions = redactSecrets(
-			JSON.parse( JSON.stringify( options ) )
-		);
+		let safeOptions;
+		try {
+			safeOptions = redactSecrets(
+				JSON.parse( JSON.stringify( options ) )
+			);
+		} catch ( exportError ) {
+			console.error(
+				'Failed to export settings:',
+				getErrorLogMessage( exportError )
+			);
+			notifyImport( {
+				type: 'error',
+				message: __(
+					'Failed to export settings.',
+					'performance-optimisation'
+				),
+			} );
+			return;
+		}
 
 		const blob = new Blob( [ JSON.stringify( safeOptions, null, 2 ) ], {
 			type: 'application/json',
@@ -902,8 +982,9 @@ const PluginSetting = ( { options } ) => {
 										loadActivityLog( logPage - 1 )
 									}
 								>
+									<span aria-hidden="true">{ '← ' }</span>
 									{ __(
-										'← Previous',
+										'Previous',
 										'performance-optimisation'
 									) }
 								</button>
@@ -928,10 +1009,8 @@ const PluginSetting = ( { options } ) => {
 										loadActivityLog( logPage + 1 )
 									}
 								>
-									{ __(
-										'Next →',
-										'performance-optimisation'
-									) }
+									{ __( 'Next', 'performance-optimisation' ) }
+									<span aria-hidden="true">{ ' →' }</span>
 								</button>
 							</div>
 						) : null
@@ -1243,14 +1322,8 @@ const PluginSetting = ( { options } ) => {
 						value={ highValueUrls }
 						onChange={ ( e ) => setHighValueUrls( e.target.value ) }
 						placeholder={ [
-							__(
-								'http://example.com/about/',
-								'performance-optimisation'
-							),
-							__(
-								'http://example.com/contact/',
-								'performance-optimisation'
-							),
+							'https://example.com/about/',
+							'https://example.com/contact/',
 						].join( '\n' ) }
 						aria-describedby="wppo-high-value-urls-desc"
 					/>
