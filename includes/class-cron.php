@@ -34,7 +34,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Multisite-safe via per-site options; deleted on uninstall and on
 		 * {@see clear_cron_jobs()}. Fail-open: malformed values reset to idle.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const PRELOAD_QUEUE_OPTION = 'wppo_preload_queue';
@@ -42,7 +42,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Read the resumable sitemap preload queue.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{queued:string[],done:int,failed:string[],total:int,status:string,updated_at:int}
 		 */
 		public static function get_preload_queue(): array {
@@ -81,7 +81,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Persist the preload queue (fail-open, never fatal).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $queue Queue payload.
 		 * @return void
 		 */
@@ -104,7 +104,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * mid-run kill resumes instead of restarting. When the merged queue
 		 * is empty the status resets to idle.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string[] $urls Freshly scheduled sitemap URLs.
 		 * @return void
 		 */
@@ -133,7 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Only counts URLs that were actually queued, so non-queue warmups
 		 * never inflate the progress counters.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Preloaded URL.
 		 * @return void
 		 */
@@ -163,7 +163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Failed URLs are capped at 500 entries (oldest dropped first) so
 		 * the option stays bounded.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Failed URL.
 		 * @return void
 		 */
@@ -195,18 +195,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Honest preload progress counters for the SPA.
 		 *
-		 * @since NEXT
-		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[]}
+		 * Bytes-aware (issue #1428): the payload carries `cache_bytes` /
+		 * `cache_files` from the static cache in a single directory walk,
+		 * and the status never reports `complete` on a zero-byte run (queue
+		 * drained but nothing cached — e.g. all URLs skipped/failed to
+		 * write). Such runs are downgraded to `running` only when there is
+		 * resumable work (queued/failed non-empty); a fully drained
+		 * zero-byte run reports `idle` so the dashboard never sticks on a
+		 * state with no recovery path. A `stalled` flag marks a `running`
+		 * queue untouched for 30+ minutes. Fail-open: cache failures leave
+		 * counters untouched.
+		 *
+		 * @since 2.2.0
+		 * @since NEXT Bytes-aware payload (issue #1428): `cache_bytes`/`cache_files`/`stalled` fields plus zero-byte downgrade.
+		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[],cache_bytes:int,cache_files:int,stalled:bool}
 		 */
 		public static function get_preload_status(): array {
-			$queue = self::get_preload_queue();
+			$queue  = self::get_preload_queue();
+			$status = (string) $queue['status'];
+			$queued = count( $queue['queued'] );
+			$done   = (int) $queue['done'];
+			$failed = count( $queue['failed'] );
+			$total  = (int) $queue['total'];
+			$bytes  = 0;
+			$files  = 0;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_bytes_and_files' ) ) {
+					$both  = \PerformanceOptimise\Inc\Cache::get_cache_bytes_and_files();
+					$bytes = (int) ( $both['bytes'] ?? 0 );
+					$files = (int) ( $both['files'] ?? 0 );
+				} else {
+					if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_size_bytes' ) ) {
+						$bytes = \PerformanceOptimise\Inc\Cache::get_cache_size_bytes();
+					}
+					if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_file_count' ) ) {
+						$files = \PerformanceOptimise\Inc\Cache::get_cache_file_count();
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Zero-byte guard: a drained queue with no cached bytes is not
+			// complete — the run produced nothing (skips/off-host/failures).
+			// Downgrade to running only when resumable work remains;
+			// otherwise report idle so the UI stays honest and recoverable.
+			try {
+				if ( 'complete' === $status && $total > 0 && $bytes <= 0 ) {
+					$status = ( $queued > 0 || $failed > 0 ) ? 'running' : 'idle';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Stalled detection: running with pending work but no queue
+			// mutation for 30+ minutes (e.g. killed mid-run).
+			$stalled = false;
+			try {
+				$updated = (int) ( $queue['updated_at'] ?? 0 );
+				$now     = function_exists( 'time' ) ? time() : 0;
+				if ( 'running' === $status && ( $queued > 0 || $failed > 0 ) && $updated > 0 && $now > $updated && ( $now - $updated ) >= 1800 ) {
+					$stalled = true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			return array(
-				'queued'      => count( $queue['queued'] ),
-				'done'        => (int) $queue['done'],
-				'failed'      => count( $queue['failed'] ),
-				'total'       => (int) $queue['total'],
-				'status'      => (string) $queue['status'],
+				'queued'      => $queued,
+				'done'        => $done,
+				'failed'      => $failed,
+				'total'       => $total,
+				'status'      => $status,
 				'failed_urls' => array_values( array_slice( $queue['failed'], 0, 50 ) ),
+				'cache_bytes' => max( 0, (int) $bytes ),
+				'cache_files' => max( 0, (int) $files ),
+				'stalled'     => $stalled,
 			);
 		}
 
@@ -220,7 +281,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * (wp-cron option bloat). Fail-open: scheduler failures simply leave
 		 * the queue untouched.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Number of URLs re-scheduled.
 		 */
 		public static function resume_preload_queue(): int {
@@ -269,7 +330,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * rows. Non-string entries are skipped; per-URL done/failed
 		 * bookkeeping stays inside process_url().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $urls Chunk of URLs to preload.
 		 * @return void
 		 */
@@ -300,7 +361,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Keeps a 500-URL resume to ~10 cron rows instead of ~500 single-URL
 		 * events (wp-cron option bloat).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const PRELOAD_RESUME_CHUNK_SIZE = 50;
@@ -723,9 +784,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				// One-time migration: old offset option is OFFSET-based and not convertible to ID cursor.
 				// Convert offset to cursor via a single offset query (one-time cost) instead of restarting at 0
-				// which would re-queue the first 200 IDs. Gated behind a one-time option to avoid duplicate warm-ups.
+				// which would re-queue the first 200 IDs. The offset deletion itself is the one-shot
+				// marker (issue #1464): no `wppo_preload_cron_migrated` row is allocated, so fresh
+				// installs create zero migration rows and steady-state runs skip with a single read.
 				$old_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
-				if ( 0 === $last_id && 0 !== $old_offset && ! get_option( 'wppo_preload_cron_migrated', false ) ) {
+				if ( 0 === $last_id && 0 !== $old_offset ) {
 					// Try to map old OFFSET to an ID cursor to resume without duplicating work.
 					$post_types_for_migration = get_post_types( array( 'public' => true ), 'names' );
 					$post_types_for_migration = array_unique( array_merge( array_values( array_diff( $post_types_for_migration, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
@@ -754,9 +817,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 							error_log( 'WPPO: preload cursor migration reset offset ' . $old_offset . ' to 0 (no mapping found)' );
 						}
 					}
-					update_option( 'wppo_preload_cron_migrated', 1, false );
 					delete_option( 'wppo_preload_cron_offset' );
-				} elseif ( 0 === $last_id && 0 !== $old_offset ) {
+				} elseif ( 0 !== $old_offset ) {
+					// Stale offset orphan: the cursor already advanced (e.g.
+					// downgrade/re-upgrade or mid-cycle update), so no mapping is
+					// needed — just delete the legacy row so it never leaks.
 					delete_option( 'wppo_preload_cron_offset' );
 				}
 
@@ -975,6 +1040,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $path, '/' ) ) || (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $query ) ) ) {
 					return true;
 				}
+				// WooCommerce AJAX endpoints are dynamic JSON and must never be
+				// preloaded — unconditional on safe mode (explicit audit of
+				// the generic query guard below so intent is greppable,
+				// mirroring Cache::is_wc_ajax_request() and the pre-boot
+				// drop-in). Falls back to the path-segment + query-param
+				// regex on mixed-version deploys.
+				try {
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
+						if ( Util::is_woo_ajax_request( $path, $query ) ) {
+							return true;
+						}
+					} elseif ( (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . ltrim( (string) rawurldecode( $path ), '/' ) ) || ( '' !== $query && (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', $query ) ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
 				// Faceted layered-nav queries (issue #1256) are never preloaded —
 				// unconditional on safe mode: a filtered URL is dynamic by nature
 				// and warming it wastes cron slots plus risks caching filtered
@@ -1019,7 +1102,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					$woo_safe = Util::is_woo_safe_mode_enabled();
 				}
 				if ( ! $woo_safe ) {
-					// Safe mode off: only the unconditional Store API skip applies.
+					// Safe mode off: only the unconditional skips apply
+					// (Store API, wc-ajax, faceted, functional queries).
 					return false;
 				}
 				if ( null !== $woo_paths ) {
@@ -1049,7 +1133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * preview URLs are never warmed (issue #1097). Fail-open: detection
 		 * failure skips the URL (never preload dynamic content).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Absolute URL.
 		 * @return bool True when the URL must not be preloaded.
 		 */
@@ -1650,7 +1734,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				$conversion_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
 
-				$batch_size = $options['image_optimisation']['batch'] ?? 50;
+				// Clamp: shares the raw-read pattern with the CLI convert path —
+				// bound synchronous conversions per cron run (audit #1469).
+				$batch_size = max( 1, min( 100, (int) ( $options['image_optimisation']['batch'] ?? 50 ) ) );
 
 				$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 
@@ -1674,6 +1760,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					$img_info = Img_Converter::get_img_info();
 				}
 
+				// Shared across formats so the 1-100 clamp applies per cron run,
+				// not per format (conversionFormat 'both' would otherwise allow 2x batch).
+				$total_counter = 0;
 				foreach ( $formats_to_process as $format ) {
 					$images = $img_info['pending'][ $format ] ?? array();
 
@@ -1681,13 +1770,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						continue;
 					}
 
-					$counter = 0;
 					foreach ( $images as $img ) {
-						if ( $counter >= $batch_size ) {
-							break;
+						if ( $total_counter >= $batch_size ) {
+							break 2;
 						}
 
-						++$counter;
+						++$total_counter;
 
 						$source_path = wp_normalize_path( ABSPATH . $img );
 						$resolved    = realpath( $source_path );

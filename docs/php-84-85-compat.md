@@ -208,3 +208,47 @@ and root `*.php`; the machine-checkable subset is pinned by
    across sites. Public-site cost is zero (admin-only screen); the admin
    bundle grows negligibly (4 label strings, no extra requests) with one
    per-site transient read per System Info load (5-min TTL).
+
+## 8. Action Scheduler 4.2 unique-args audit (issue #1408)
+- **Lockfile:** `woocommerce/action-scheduler` bumped `4.1.0` → `4.2.0`
+  inside the existing `^4.1` constraint (`composer.json` untouched, PHP
+  floor stays `>=8.2`); verified with `composer dev-setup`
+  (lockfile resolves, suite green). The 4.x `$unique` parameter shape
+  (`as_enqueue_async_action()` / `as_schedule_single_action()`) is
+  unchanged in 4.2, and the bundled `save_action()` surfaces stay
+  explicit-nullable (`?DateTime ... = null`, still pinned by
+  `PhpDeprecationHygieneTest::test_action_scheduler_save_action_is_explicit_nullable()`).
+- **Call-site audit:** every remaining racy check-then-act
+  (`as_has_scheduled_action()` guard + raw 3-arg
+  `as_enqueue_async_action()`) now goes through the atomic
+  `Util::enqueue_unique_async_action()` path, which passes the explicit
+  `$unique` flag on AS 4.x and keeps the legacy guard internally for
+  older schedulers:
+  - `includes/class-rest.php` — bulk webp/avif image loops (per-item
+    `SELECT` removed entirely; a `0` return is never counted as queued)
+    and the single `used_css_regenerate` endpoint (a `0` re-probes the
+    guard once to report "already queued" vs a 500 enqueue failure).
+  - `includes/class-google-fonts.php` — `maybe_queue_download()`.
+  - `includes/class-abilities.php` — `execute_used_css_regenerate()`
+    (same already-queued vs failure disambiguation as the REST endpoint).
+  - `includes/class-builder-purge-watcher.php` —
+    `schedule_deferred_drift_purge()` (a `0` keeps the existing
+    return-false/retryable contract) and
+    `schedule_deferred_upgrade_purge()` (a `0` with a pending job still
+    reports true per the enqueued-or-pending contract, else falls
+    through to WP-Cron).
+  - Intentionally untouched: `class-critical-css.php`
+    `schedule_ccss_job()` legacy fallback branches (only run when
+    `supports_action_scheduler_unique()` is false) and the
+    already-converted `class-used-css.php` / `class-pagespeed.php` /
+    `class-main.php` / `class-cron.php` paths (verified only).
+- **Tests:** `ActionSchedulerUniquePurge1310Test::test_double_schedule_with_unique_flag_queues_single_job()`
+  pins the acceptance criterion — a store-deduping 4.x stub queues a
+  single job across a double enqueue with `$unique=true` on both
+  inserts.
+- **Footprint:** bulk image/used-CSS paths save ~1 scheduler `SELECT`
+  per job (the per-item pre-check), and concurrent double-queues are
+  eliminated at the store level. Scheduler failures stay fail-open
+  (missed, retried runs — never fatal); multisite-safe (per-site cron,
+  blog-aware keys via `Util::transient_key()`).
+

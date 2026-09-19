@@ -44,7 +44,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * state-file reads with filesystem init); the memo keeps one admin
 		 * pageload to a single read. Reset by reset_memo_cache_for_tests().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array|null Null when not yet read this request.
 		 */
 		private static $circuit_state_memo = null;
@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		/**
 		 * Whether the circuit-state memo has been populated this request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static $circuit_state_memo_set = false;
@@ -64,7 +64,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * advanced-cache.php; the memo keeps one pageload to a single
 		 * check. Reset by reset_memo_cache_for_tests().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool|null Null when not yet checked this request.
 		 */
 		private static $dropin_memo = null;
@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * invokes in one process, so tests that change circuit/drop-in
 		 * state between phases reset here instead of seeing stale memos.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_memo_cache_for_tests(): void {
@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * instead of every wp-admin pageload. Unknown screens (no
 		 * get_current_screen yet, e.g. unit tests) fail open to true.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the notice I/O may run.
 		 */
 		private static function is_notice_screen(): bool {
@@ -300,7 +300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * failure re-arms the notice automatically. Fail-open throughout:
 		 * the plugin keeps serving (cached or dynamic) either way.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function maybe_htaccess_failure_notice(): void {
@@ -433,7 +433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * on the plugin, plugins, and update-core screens instead of every
 		 * wp-admin pageload.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function maybe_nginx_redis_config_notice(): void {
@@ -545,7 +545,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * original). Surface a dismissible info notice so the silent
 		 * fallback is visible. Dismissible per user.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private function maybe_avif_webp_only_notice(): void {

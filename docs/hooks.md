@@ -617,6 +617,28 @@ add_filter( 'wppo_exclude_minification', function( $exclude, $file_path, $handle
 
 ---
 
+### `wppo_exclude_randomized_from_combine`
+Filters whether a randomized query-string asset (`?ver=<timestamp|uniqid|rand>`) stays excluded from the combine/minify pipeline (issue #1428). Default `true` when the `cacheRandomizedQueryGuard` setting is on. Return `false` to force-combine a matching asset.
+
+Stable content hashes (`md5` 32 / `sha1` 40 / `sha256` 64 hex chars) are deterministic per file and stay combinable by default — only `uniqid`-length hex churn is excluded. Non-canonical hex lengths that are in fact stable (e.g. a truncated 20-char content hash) can opt back in with this filter.
+
+**Parameters:**
+- `$excluded` *(bool)* — Default `true` for randomized matches.
+- `$handle` *(string)* — Registered script or style handle.
+- `$src` *(string)* — Asset src URL.
+
+**Example:**
+```php
+add_filter( 'wppo_exclude_randomized_from_combine', function( $excluded, $handle, $src ) {
+    if ( 'my-versioned-app' === $handle ) {
+        return false; // Combine despite the randomized ver.
+    }
+    return $excluded;
+}, 10, 3 );
+```
+
+---
+
 ### `wppo_minify_allowed_roots`
 Filters the allow-listed filesystem roots for minify/combine file serving (issue #1179). Every combine source path is canonicalized with `realpath()` and must resolve inside one of these roots (trailing-slash boundary) before any file bytes are read; out-of-root, symlink-escaped, wrapper-based, NUL-bearing, `..`-bearing, and `.php` targets are rejected and the asset degrades to its uncombined form. Guarded by `has_filter()` — the filter only runs when a listener is present; invalid or empty filtered values fall back to the defaults. @since NEXT.
 
@@ -1022,6 +1044,35 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
 
 ---
 
+### `wppo_occlusion_fetchpriority_low_enabled`
+Filters whether OD-measured occluded (CSS-hidden but in-viewport) images are demoted to `fetchpriority=low`. Additive `image_optimisation.occlusionFetchpriorityLow` flag, default off. The true-LCP node is never demoted and `loading` is never touched, so the single-high and never-lazy+high invariants hold. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether occlusion demotion is enabled.
+
+**Example:**
+```php
+add_filter( 'wppo_occlusion_fetchpriority_low_enabled', '__return_true' );
+```
+
+---
+
+### `wppo_occlusion_fetchpriority_low_urls`
+Filters the occluded image URL list before `fetchpriority=low` demotion. @since NEXT.
+
+**Parameters:**
+- `$occluded_urls` *(string[])* — Occluded image URLs.
+- `$buffer` *(string)* — The HTML buffer being processed.
+
+**Example:**
+```php
+add_filter( 'wppo_occlusion_fetchpriority_low_urls', function( $urls, $buffer ) {
+    return array_values( array_filter( $urls ) );
+}, 10, 2 );
+```
+
+---
+
 ### `wppo_computed_css_hero_url`
 Passes a server-side computed CSS-hero background URL (e.g. derived from enqueued stylesheets where no inline `style=""` exists). Validated as an image on an allowed origin (same-origin or configured CDN); anything else is ignored. @since NEXT.
 
@@ -1167,12 +1218,12 @@ Filters the RUM-ranked top URLs for the gated speculation list rule (issue #1061
 ---
 
 ### `wppo_ai_anomaly_detected`
-Filters the detected performance anomalies (LCP +30% relative or CLS +0.05 absolute delta, RUM-corroborated, 7-day cooldown). @since 2.0.0.
+Filters the detected performance anomalies (LCP +30% relative or CLS +0.05 absolute delta, RUM-corroborated, 7-day cooldown; plus the local RUM anomaly digest covering LCP/INP +30% relative and CLS +0.05 absolute delta as recent-window medians vs baseline with min-sample gate + tolerance band, @since NEXT). @since 2.0.0.
 
-At most one anomaly is passed; return an empty array to suppress the banner. The legacy `wppo_ai_lcp_regression` filter still runs for LCP anomalies.
+At most one anomaly is passed; return an empty array to suppress the banner. The legacy `wppo_ai_lcp_regression` filter still runs for LCP anomalies. Digest entries (source `rum-digest`, @since NEXT) carry the trend shape plus `path`, `recent`, `window` (e.g. `recent 2026-09-10 vs baseline 2026-09-01 to 2026-09-09`), `samples`, and `source` so the alert can link the affected path and window; the `metric` may be `lcp`, `inp` (digest only — lab trends carry no INP snapshots), or `cls`.
 
 **Parameters:**
-- `$anomalies` *(array[])* — At most one anomaly array (`key`, `metric` (`lcp`|`cls`), `baseline`, `current`, plus `change_pct` for LCP or `change_abs` for CLS).
+- `$anomalies` *(array[])* — At most one anomaly array (`key`, `metric` (`lcp`|`cls`, plus `inp` for digest entries), `baseline`, `current`, plus `change_pct` for LCP/INP or `change_abs` for CLS; digest entries add `path`, `recent`, `window`, `samples`, `source`).
 
 ---
 
@@ -1193,10 +1244,73 @@ Filters the anomaly cooldown window in days (single banner max). @since 2.0.0.
 ---
 
 ### `wppo_ai_anomaly_min_samples`
-Filters the minimum numeric samples before an anomaly arm may fire (trend arm and RUM corroboration gate). @since 2.0.0.
+Filters the minimum numeric samples before an anomaly arm may fire (trend arm and RUM corroboration gate, plus both digest windows). @since 2.0.0.
 
 **Parameters:**
 - `$min` *(int)* — Minimum samples (default 10, from `ai_adaptive.anomaly_min_samples`).
+
+---
+
+### `wppo_ai_css_refresh_enabled`
+Filters whether RUM-triggered CSS refresh may queue jobs (issue #1407). @since NEXT. Default off/suggest-only via `ai_adaptive.css_refresh_on_lcp_regression`; fail-open to false.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether the CSS-refresh opt-in is on.
+
+**Example:**
+```php
+add_filter( 'wppo_ai_css_refresh_enabled', '__return_true' );
+```
+
+---
+
+### `wppo_ai_css_refresh_cooldown_days`
+Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since NEXT. Non-numeric or negative values fail open to the current setting.
+
+**Parameters:**
+- `$days` *(int)* — Cooldown days (default 7, from `ai_adaptive.css_refresh_cooldown_days`; values below 1 are normalized up to 1).
+
+---
+
+### `wppo_ai_css_refresh_queued`
+Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since NEXT. In-repo consumer `Main::on_ai_css_refresh_queued()` regenerates the matching critical-CSS template (`home`/`page`/`single`); third parties may hook additional template refreshes without coupling the bridge to template mapping.
+
+**Parameters:**
+- `$url` *(string)* — Regressed URL.
+- `$post_id` *(int)* — Queued post ID.
+- `$anomaly` *(array)* — The firing LCP anomaly.
+
+---
+
+### `wppo_ai_anomaly_tolerance_pct`
+Filters the relative tolerance band (percent) above a relative digest arm threshold (issue #1445). The LCP/INP digest arm fires only when the recent-window median clears `baseline * 1.3 * (1 + tolerance/100)`, so borderline wobble inside the band stays silent. @since NEXT.
+
+**Parameters:**
+- `$tolerance` *(float)* — Tolerance percent (default 5.0, from `ai_adaptive.anomaly_tolerance_pct`, clamped 0–50).
+
+---
+
+### `wppo_ai_anomaly_tolerance_abs`
+Filters the absolute tolerance band added to the CLS digest threshold (issue #1445). The CLS digest arm fires only when the recent-window median clears `baseline + 0.05 + tolerance`, so borderline wobble inside the band stays silent. @since NEXT.
+
+**Parameters:**
+- `$tolerance` *(float)* — Absolute tolerance (default 0.01, from `ai_adaptive.anomaly_tolerance_abs`, clamped 0–1).
+
+---
+
+### `wppo_ai_anomaly_persistence_windows`
+Filters the number of trailing windows that must each breach the ratio/delta gate before an anomaly may page (single noisy windows never page). @since NEXT. Values are clamped to 1–29 (trend history holds 30 snapshots and detection needs persistence+1 samples for a non-empty baseline, so 29 keeps every admittable value reachable).
+
+**Parameters:**
+- `$windows` *(int)* — Trailing windows (default 3, from `ai_adaptive.anomaly_persistence_windows`).
+
+---
+
+### `wppo_ai_anomaly_p75_min_samples`
+Filters the minimum RUM samples before field data may corroborate a trend anomaly (enforced per metric arm). @since NEXT. Values are clamped to 1–30.
+
+**Parameters:**
+- `$min` *(int)* — Minimum RUM samples (default 10, from `ai_adaptive.anomaly_p75_min_samples`).
 
 ---
 
@@ -1702,6 +1816,33 @@ Filters the byte threshold at or under which source images skip conversion (tiny
 
 ---
 
+### `wppo_smart_quality`
+Filters whether smart quality mapping is applied to image conversion. Return falsy to use the flat quality rule without AVIF/WebP mapping or size/role offsets. @since 2.0.0.
+
+**Parameters:**
+- `$smart` *(bool)* — Default from the `image_optimisation.smartQuality` setting (`true`).
+
+---
+
+### `wppo_smart_quality_value`
+Filters the resolved smart quality value before size/role offsets are applied. Return an int (or numeric string) in 1-100 to override the heuristic outright; booleans and out-of-range values fail open to the base quality. @since NEXT.
+
+**Parameters:**
+- `$quality` *(int)* — Base quality before size/role offsets.
+- `$mime` *(string)* — Output MIME type (e.g. `image/webp`).
+- `$effective_size` *(array)* — Effective source dimensions (`width`/`height`), derived from the `-WxH` filename suffix when `$size` is empty.
+- `$source_image` *(string)* — Source filesystem path (may be empty).
+
+**Example:**
+
+```php
+add_filter( 'wppo_smart_quality_value', function ( $quality, $mime, $size, $source ) {
+    return 70;
+}, 10, 4 );
+```
+
+---
+
 ### `wppo_smart_pipeline_enabled`
 Kill-switch filter for the size-compare smart-compress + local LQIP placeholder pipeline. Return falsy to disable both features: oversized converted siblings are kept (legacy behaviour) and native-lazy images receive no placeholder attributes. Server-side only — zero external HTTP either way. @since NEXT.
 
@@ -1831,7 +1972,7 @@ Filters the Critical CSS user safelist (selectors always kept in Critical CSS, e
 **Parameters:**
 - `$list` *(string[])* — Safelisted selectors.
 
-> **Note — checksum auto-regen and inline cap:** source-CSS checksums stored at generation time trigger regeneration when stylesheet content changes even if mtime is preserved (see `wppo_ccss_checksum_ttl`); oversize Critical CSS is served from a per-template file instead of inline (20 KB `ccssMaxSize` cap). Unlisted dynamic content stays deferred by design.
+> **Note — checksum auto-regen and inline cap:** source-CSS checksums stored at generation time trigger regeneration when stylesheet content changes even if mtime is preserved (see `wppo_ccss_checksum_ttl`); oversize Critical CSS is served from a per-template file instead of inline (20 KB `ccssMaxSize` cap). Unlisted dynamic content stays deferred by design. Checksum-triggered regen (frontend probe plus `save_post` requeue) is gated by the additive `file_optimisation.ccssChecksumRegen` setting (default true, issue #1388) — set it to `false` to opt out and keep the pre-feature safelist-only behaviour.
 
 ---
 
@@ -1867,6 +2008,76 @@ Filters how many RUM-worst-first Critical CSS templates are queued per regenerat
 
 ```php
 add_filter( 'wppo_ccss_queue_cap', static function() { return 10; } );
+```
+
+---
+
+### `wppo_ccss_regen_cooldown`
+Filters the full-regeneration cooldown in seconds for Critical CSS (`Critical_CSS::regenerate_all()`). Repeat non-forced callers inside the window return `0` without re-scanning; explicit operator paths bypass it via `$force`. Non-numeric or non-positive filter output is ignored and the `18000` default is kept, so a rogue filter can never disable the cooldown. Default `18000`. @since NEXT.
+
+**Parameters:**
+- `$cooldown` *(int)* — Cooldown in seconds. Default `18000`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_regen_cooldown', static function() { return 3600; } );
+```
+
+---
+
+### `wppo_ccss_inline_budget`
+Filters the gzipped inline budget in bytes for Critical CSS output (issue #1388). Over-budget output is never inlined: the prior good file is kept, no inline CSS is emitted, and stylesheet deferral is skipped for the request (deferred full stylesheet plus used CSS only). The over-budget warning is throttled to once per template per 12h. Stored values heal to the default `14` KB when missing or out of range; valid filter output clamps to 1–100 KB (`MIN..MAX_CCSS_INLINE_BUDGET_BYTES`); non-numeric filter output is ignored and the stored budget is kept. Default `14 * 1024` (stored `file_optimisation.ccssInlineBudgetKb`). @since NEXT.
+
+**Parameters:**
+- `$budget` *(int)* — Budget in bytes. Default `14336`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_inline_budget', static function() { return 20 * 1024; } );
+```
+
+---
+
+### `wppo_ccss_targeted_cooldown`
+Filters the burst-throttle window in seconds for targeted Critical CSS regens (`Critical_CSS::request_targeted_regen()`). Repeat builder/theme saves inside the window queue nothing, so a burst of saves collapses into one bounded pass (max 20 templates); the stamp is written only when at least one job was queued. Return `0` to disable the throttle. Non-numeric or negative filter output is ignored and the `3600` default is kept. Default `3600`. @since NEXT.
+
+**Parameters:**
+- `$cooldown` *(int)* — Cooldown in seconds. Default `3600`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_targeted_cooldown', static function() { return 600; } );
+```
+
+---
+
+### `wppo_committed_inline_bytes`
+Filters the bytes already committed to inline `<style>` output on this request, for the coordinated used-CSS / critical-CSS inline budget (`Critical_CSS::get_effective_ccss_budget()`). The default is the request-global ledger (`Util::get_committed_inline_bytes()`, fed by `inline_ccss()`; normally `0` because used CSS ships as an external file in every delivery mode). The filter wins over the ledger when a listener is registered, so operators can account for bytes committed outside the plugin. Non-numeric or non-positive output is ignored. Default `0`. @since NEXT.
+
+**Parameters:**
+- `$committed` *(int)* — Committed inline bytes. Default `0`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_committed_inline_bytes', static function() { return 4800; } );
+```
+
+---
+
+### `wppo_builder_ccss_full_regen`
+Restores the legacy forced full critical-CSS requeue after a builder purge. Default `false` (targeted regen, max 20 RUM-worst-first templates); return `true` to force the full requeue (bypasses the `18000`s full-regen cooldown via `$force`). @since NEXT.
+
+**Parameters:**
+- `$full` *(bool)* — Whether to force a full requeue. Default `false`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_builder_ccss_full_regen', '__return_true' );
 ```
 
 ---
@@ -2111,6 +2322,8 @@ Filters the ESI placeholder HTML rendered when ESI is unavailable. @since 2.0.0.
 Filters the rendered ESI fragment HTML before output. @since 2.0.0.
 
 Runs before the `wp_kses` sanitization contract (`wppo_esi_allowed_html`), so any markup added here must be permitted by that allowlist. The plugin's own `LiteSpeed_ESI::inject_nonce_replacement()` is attached to this filter: it rewrites `data-wppo-nonce` placeholders (including `__WPPO_ESI_NONCE__` / `__WPPO_NONCE__`) to a freshly minted nonce. A fragment supplied here carrying `data-wppo-nonce=""` therefore receives a real nonce automatically, and `data-*` attributes survive sanitization.
+**WooCommerce fragment-caching guidance (ESI as the correct fragment answer):** catalog pages stay cacheable while per-session commerce state hydrates as fragments — the `cart` block renders live mini-cart count + cart hash via `LiteSpeed_ESI::render_woo_cart_fragment()` (Woo-guarded, zero merchant configuration), punched through the page cache via Enterprise `<esi:include>` where ESI is available and via the OLS AJAX hydration fallback (`src/esi.js` + `wppo_esi_fragment` endpoint with `DONOTCACHEPAGE`) otherwise. The same dynamic routes are never served from static HTML cache in either mode: cart / checkout / my-account (+ custom Woo slugs), `wc-ajax`, `add-to-cart`, Store API (`/wc/store/`), and faceted queries (see `Util::is_woo_excluded_url()`), with cookie vary on `woocommerce_items_in_cart` / `woocommerce_cart_hash` / `wp_woocommerce_session_*` as the second line of defense. Any detection failure degrades to uncached/dynamic — never a stale cross-session mini-cart. Structured guidance lives in `LiteSpeed_ESI::get_woo_fragment_guidance()`.
+
 
 **Parameters:**
 - `$fragment` *(string)* — Fragment markup.
@@ -2217,6 +2430,21 @@ jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
 | `image_optimisation.excludeWebPImages` | string (newline-separated URLs/handles), default `''` | `Img_Converter::__construct()` (`includes/class-img-converter.php`) — images matching these URLs/handles are skipped during WebP/AVIF conversion. |
 | `image_optimisation.batch` | int, default `50` | `Cron` image-conversion worker (`includes/class-cron.php`) and `wp wppo image convert` (`includes/class-wppo-cli-command.php`) — number of images processed per batch. |
 | `performance_audit.rum_sample_rate` | int 1–100, default `100` | `RUM::get_sample_rate()` / `RUM::get_effective_sample_rate()` (`includes/class-rum.php`) — percent of page views sending a RUM beacon. No SPA toggle (headless by design); edit via `wp wppo settings` or `import_settings`. The client (`src/rum.js`) and server each roll independently at the effective rate, so stored volume is ~rate²/100; the high-traffic auto-throttle halves each gate (see `wppo_rum_throttle_threshold` / `wppo_rum_effective_sample_rate`). |
+
+---
+
+### `wppo_autoload_critical_threshold`
+Filters the critical autoload payload threshold in bytes (issue #1461). The audit flags `is_critical` when total autoload bytes meet or exceed this value. Default `819200` (800 KB per the WordPress 6.6 guidance). Non-numeric, zero, or negative filter output falls back to the default (fail-open). @since NEXT.
+
+**Parameters:**
+- `$threshold` *(int)* — Threshold in bytes.
+
+**Example:**
+```php
+add_filter( 'wppo_autoload_critical_threshold', function() {
+    return 1048576; // Flag critical at 1 MB instead of 800 KB.
+} );
+```
 
 ---
 

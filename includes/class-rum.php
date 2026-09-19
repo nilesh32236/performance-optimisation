@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Maximum beacons accepted site-wide per minute (distributed-spam backstop).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		const GLOBAL_RATE_LIMIT_PER_MINUTE = 120;
@@ -87,7 +87,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * 100 keeps the pre-sampling behavior verbatim (every beacon sent
 		 * and stored). Stored under `performance_audit.rum_sample_rate`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		const RUM_SAMPLE_RATE_DEFAULT = 100;
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * windowed bucket maintained by is_globally_rate_limited() so the
 		 * throttle adds no new transient writes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		const RUM_THROTTLE_THRESHOLD_DEFAULT = 60;
@@ -199,7 +199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Maximum length (chars) accepted for an LCP element selector.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		public const LCP_SELECTOR_MAX_LENGTH = 256;
@@ -207,7 +207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Maximum slow-resource entries accepted per beacon sample.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		public const SLOW_RESOURCES_MAX_COUNT = 5;
@@ -215,7 +215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Maximum length (chars) accepted for a slow-resource URL.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		public const SLOW_RESOURCE_URL_MAX_LENGTH = 2048;
@@ -223,7 +223,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Maximum duration (ms) accepted for a slow-resource entry.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		public const SLOW_RESOURCE_MAX_DURATION_MS = 60000;
@@ -234,7 +234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Bounds the `lcpSelectors` map added for LCP-element attribution
 		 * (issue #1311) so the aggregate option stays within its byte budget.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		public const MAX_LCP_SELECTORS_PER_PATH = 10;
@@ -245,7 +245,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Bounds the `slowResources` map added for the slow-resource audit
 		 * (issue #1311) so the aggregate option stays within its byte budget.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		public const MAX_SLOW_RESOURCES_PER_PATH = 10;
@@ -256,7 +256,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Mirrors the client-side allowlist (`RUM_ALLOWED_RESOURCE_TYPES`
 		 * in src/rum.js). Anything else is dropped at intake.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		public const ALLOWED_SLOW_RESOURCE_TYPES = array( 'img', 'script', 'css', 'link', 'font', 'fetch', 'xmlhttprequest', 'iframe' );
@@ -268,7 +268,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * src/rum.js). Anything else buckets as `unknown` so stored
 		 * aggregates stay bounded and backward compatible.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		public const ALLOWED_CONNECTIONS = array( 'slow-2g', '2g', '3g', '4g' );
@@ -293,7 +293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * extreme admin value cannot perpetually pin auto-tune to
 		 * provisional (feature DoS) while keeping the fail-open default.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		public const FIELD_LCP_MIN_SAMPLES_MAX = 1000;
@@ -879,7 +879,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * filter_var(); returns '' when unparseable so callers fail closed
 		 * to the site-wide bucket.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $ip Raw IP string.
 		 * @return string Normalized IP or ''.
 		 */
@@ -906,7 +906,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Backstop against distributed spam where per-IP limits do not help.
 		 * Uses a best-effort atomic-ish increment (add() when available).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool
 		 */
 		private static function is_globally_rate_limited(): bool {
@@ -957,7 +957,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * beacon degrades to unmeasured, but a misread must never silence
 		 * collection entirely).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Sample rate in 1-100.
 		 */
 		public static function get_sample_rate(): int {
@@ -1006,7 +1006,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * authoritative (it still throttles when the client rate is stale
 		 * in statically cached HTML — see print_config()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Effective rate in 1-100.
 		 */
 		public static function get_effective_sample_rate(): int {
@@ -1058,7 +1058,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * volume is approximately rate²/100. The re-roll is deliberate
 		 * so forged/legacy beacons cannot bypass sampling.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int|null $rate Sample rate in 1-100. Null resolves via get_effective_sample_rate().
 		 * @param int|null $roll Deterministic roll in 1-100. Null draws fresh randomness.
 		 * @return bool True when the beacon should be sent/stored.
@@ -1210,7 +1210,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * {@see flush_queue()} (drain) so a range fix in one path can never
 		 * desync the other and corrupt stored aggregates.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array<string,array{0:float,1:float}> Metric => [min, max].
 		 */
 		public static function get_metric_ranges(): array {
@@ -1228,7 +1228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 *
 		 * Shared by intake and flush via {@see get_metric_ranges()}.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $metric Metric name.
 		 * @param float  $value  Raw value (must be finite).
 		 * @return float Clamped value.
@@ -1247,7 +1247,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Single helper behind the device/template/connection normalizers so
 		 * length caps and allowlist semantics live in one place.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed         $raw       Raw value.
 		 * @param string[]|null $allowlist Allowed values (null = free-form slug).
 		 * @param int           $maxlen    Max length before normalization.
@@ -1275,7 +1275,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Shared by the three same-origin matchers so host resolution can
 		 * never drift between them. Returns '' when undeterminable.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Home host or ''.
 		 */
 		private static function get_home_host(): string {
@@ -1297,7 +1297,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * {@see is_same_origin_url_strict()} so the dangerous-scheme list
 		 * cannot drift between the fail-open and strict variants.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Candidate URL.
 		 * @return bool True when scheme-like.
 		 */
@@ -1322,7 +1322,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * user-writable, so flush re-normalizes instead of trusting it).
 		 * Anything outside mobile/desktop buckets as `unknown`.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $raw Raw device value.
 		 * @return string Allowlisted device or 'unknown'.
 		 */
@@ -1337,7 +1337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Shared by beacon intake and queue flush (the queue transient is
 		 * user-writable, so flush re-normalizes instead of trusting it).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $raw Raw template value.
 		 * @return string Sanitized template slug (max 64 chars) or 'unknown'.
 		 */
@@ -1353,7 +1353,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * outside the allowlist buckets as `unknown` (backward compatible with
 		 * rows stored before the connection dimension shipped).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $raw Raw connection value from a queued sample.
 		 * @return string Allowlisted connection type or 'unknown'.
 		 */
@@ -1373,7 +1373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * when invalid so callers omit the key and the p75-only path is
 		 * unchanged. Never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $raw Raw selector value.
 		 * @return string Sanitized selector or ''.
 		 */
@@ -1410,7 +1410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Normalize a slow-resource initiator type to the allowlist.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $raw Raw initiator type.
 		 * @return string Allowlisted type or ''.
 		 */
@@ -1440,7 +1440,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Lazily booted: callers only invoke this when the field is present.
 		 * Never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $raw Raw slowResources value.
 		 * @return array Shaped entries (possibly empty).
 		 */
@@ -1505,7 +1505,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * unsafe. Shared by sanitize_sample() and flush_queue() so a
 		 * directly-written queue transient cannot bypass intake.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $lcp_url Candidate LCP URL (already trimmed + length-capped).
 		 * @return bool True when safe to store.
 		 */
@@ -1585,7 +1585,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * WP API), the candidate is accepted to preserve legacy behaviour.
 		 * A provable host mismatch still rejects. Never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Candidate URL.
 		 * @return bool True when same-origin or unverifiable.
 		 */
@@ -1630,7 +1630,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * must never be emitted on an unverifiable verdict. Emission-path
 		 * guards (font/LCP preload) must call this method.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url Candidate URL.
 		 * @return bool True only when same-origin is positively proven.
 		 */
@@ -1677,7 +1677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * backend; without one it is per-request memory and every worker
 		 * would "win". Fail-open: any failure means no external cache.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when wp_using_ext_object_cache() reports a persistent cache.
 		 */
 		private static function has_ext_object_cache(): bool {
@@ -1704,7 +1704,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * is kept verbatim: bounded at QUEUE_MAX with eventual consistency.
 		 * Fail-open: samples are dropped under pressure, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $sample Normalized sample (with `_ts` attached).
 		 * @return array{0:bool,1:int} Tuple of (was_empty before append, count after append).
 		 */
@@ -1789,7 +1789,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * flushes can both observe a miss). Fail-open: any failure returns
 		 * false (flush skipped), never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when this worker owns the lock.
 		 */
 		private static function acquire_flush_lock(): bool {
@@ -1831,7 +1831,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * from the `finally` block of flush_queue(). Fail-open: throwables
 		 * are swallowed, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		private static function release_flush_lock(): void {
@@ -1859,7 +1859,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * {@see flush_queue()} (previously near-clone ~60-line blocks) behind
 		 * one reservoir + lowest-n eviction implementation.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array  $bucket       Bucket to merge into (by ref).
 		 * @param string $map_key      Segment map key ('lcpSeg' or 'inpSeg').
 		 * @param int    $max_segments Max segments per path.
@@ -1923,7 +1923,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * attacker-writable queue transient (path markup gate, range clamp,
 		 * segment re-normalization) exactly like {@see sanitize_sample()}.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $sample Raw queued entry.
 		 * @return array{date:string,path:string,ts:int,sample:array}|null Validated sample or null to skip.
 		 */
@@ -1956,7 +1956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Extracted from {@see flush_queue()}: drops days older than
 		 * retention, enforces the path/byte budgets, and writes the option.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $all Aggregates.
 		 * @return void
 		 */
@@ -2402,7 +2402,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * otherwise so callers fall through to the PageSpeed heuristic.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Sample gate unified via get_field_lcp_min_samples() so
+		 * @since 2.2.0 Sample gate unified via get_field_lcp_min_samples() so
 		 *             `ai_adaptive.field_lcp_min_samples` is honoured.
 		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
 		 * @return array{url:string,n:int,lastSeen:int}|null Top LCP URL entry or null.
@@ -2419,7 +2419,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				// Normalize identically to sanitize_sample()/print_config()
 				// so trailing-slash variants share one bucket (issue #935).
 				$normalized_path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
-				// Sample gate unification (issue #1200, @since NEXT): resolve via
+				// Sample gate unification (issue #1200, @since 2.2.0): resolve via
 				// the canonical get_field_lcp_min_samples() so the additive
 				// `ai_adaptive.field_lcp_min_samples` setting is honoured here
 				// (previously only the legacy `image_optimisation.fieldLcpMinSamples`
@@ -2637,7 +2637,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * callers fall through to the p75-only path. Fail-open: any failure
 		 * returns null, never fatal. No new option or transient names.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
 		 * @param int|null    $min  Minimum samples (defaults to get_field_lcp_min_samples()).
 		 * @return array{selector:string,n:int,lastSeen:int}|null Top selector or null.
@@ -2743,7 +2743,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * URLs only. Fail-open: any failure returns an empty array, never
 		 * fatal. No new option or transient names.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $limit Maximum entries (1–10, defaults to 3).
 		 * @return array<int,array{url:string,type:string,n:int,avgDuration:float,maxDuration:float,lastSeen:int}> Top slow resources.
 		 */
@@ -2861,7 +2861,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Per-request memo of stored LCP URL by path (audit #1338).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string, string>
 		 */
 		private static $stored_lcp_memo = array();
@@ -2872,7 +2872,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Exposed publicly so tests can reset isolation between cases
 		 * (mirrors clear_field_lcp_cache()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function clear_stored_lcp_memo(): void {
@@ -2885,7 +2885,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Bounds per-process growth when admin/CLI code resolves many
 		 * distinct paths (audit #1338 review).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $memo_key Memo bucket key.
 		 * @param string $value    LCP URL (or '' for a negative).
 		 * @return void
@@ -3043,7 +3043,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Pure read path: no option or transient writes.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Return value is clamped to 1–FIELD_LCP_MIN_SAMPLES_MAX.
+		 * @since 2.2.0 Return value is clamped to 1–FIELD_LCP_MIN_SAMPLES_MAX.
 		 * @return int Minimum samples (>=1).
 		 */
 		public static function get_field_lcp_min_samples(): int {
@@ -3095,7 +3095,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * {@see get_field_inp_p75_by_segment()} so the merge/qualify/sort
 		 * pipeline lives in one place instead of two clones.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string   $seg_key     Segment map key ('lcpSeg' or 'inpSeg').
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
@@ -3201,7 +3201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Fail-open: any failure returns array().
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added the `connection` segment dimension.
+		 * @since 2.2.0 Added the `connection` segment dimension.
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
@@ -3337,7 +3337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Util::transient_key().
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Added the `connection` segment dimension.
+		 * @since 2.2.0 Added the `connection` segment dimension.
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples() (shared gate, default 20).
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
