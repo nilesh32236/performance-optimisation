@@ -348,7 +348,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'schema'              => $schemas,
 				),
 				'safe_mode_detect'          => array(
-					'methods'             => 'GET',
+					'methods'             => array( 'GET', 'POST' ),
 					'callback'            => array( $this, 'detect_safe_mode_excludes' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
@@ -3762,7 +3762,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * `$GLOBALS['wp_scripts']->queue` / `$GLOBALS['wp_styles']->queue`
 		 * is never populated, so the endpoint falls back to plugin-signal
 		 * guesses unless the caller passes the page's real handles via the
-		 * optional `handles` param (array or comma-separated string).
+		 * optional `handles` param (array or comma-separated string, capped
+		 * at 100 entries of 128 chars). Accepts GET and POST: POST the
+		 * handles in the request body to avoid proxy/WAF URL-length limits.
 		 *
 		 * @param \WP_REST_Request $_request The request object. Optional `handles` param for accuracy.
 		 * @return \WP_REST_Response The response object.
@@ -3791,9 +3793,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							$raw_handles = explode( ',', $raw_handles );
 						}
 						if ( is_array( $raw_handles ) ) {
+							// Bound oversized direct REST input before
+							// sanitizing/looping so it is truncated cheaply
+							// (detect_fragile_handles caps suggestions at 20,
+							// but only after this loop runs).
+							$raw_handles = array_slice( $raw_handles, 0, 100 );
 							foreach ( $raw_handles as $handle ) {
 								if ( is_string( $handle ) || is_numeric( $handle ) ) {
 									$clean = trim( sanitize_text_field( (string) $handle ) );
+									$clean = substr( $clean, 0, 128 );
 									if ( '' !== $clean ) {
 										$handles[] = $clean;
 									}

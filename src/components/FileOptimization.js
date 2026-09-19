@@ -12,7 +12,6 @@ import { handleChange, toTextLines } from '../lib/util';
 import useUnsavedChanges, { stableStringify } from '../lib/useUnsavedChanges';
 import {
 	apiCall,
-	buildAction,
 	commitSettingsCache,
 	getErrorLogMessage,
 	getWppoSettings,
@@ -1422,22 +1421,22 @@ const FileOptimization = ( {
 		dismissSafeMode();
 		try {
 			// Prefer the accurate per-page queue path: collect frontend
-			// script/style tokens (WP handle ids + src basenames) and pass
-			// them via the handles param. When nothing is collected (e.g.
-			// admin screen without frontend markup) fall back to the
-			// backend plugin-signal guesses by calling without handles.
-			let detectAction = 'safe_mode_detect';
+			// script/style tokens (WP handle ids + src basenames) and POST
+			// them in the request body. POST (not a GET query string) keeps
+			// up to 50 tokens of 128 chars out of proxy/WAF URL-length
+			// limits. When nothing is collected (e.g. admin screen without
+			// frontend markup) post an empty body to fall back to the
+			// backend plugin-signal guesses.
+			let detectBody = {};
 			try {
 				const collected = collectFrontendHandles();
 				if ( collected.length > 0 ) {
-					detectAction = buildAction( 'safe_mode_detect', {
-						handles: collected.join( ',' ),
-					} );
+					detectBody = { handles: collected };
 				}
 			} catch {
-				detectAction = 'safe_mode_detect';
+				detectBody = {};
 			}
-			const res = await apiCall( detectAction, {}, 'GET' );
+			const res = await apiCall( 'safe_mode_detect', detectBody, 'POST' );
 			if ( res && res.success && res.data ) {
 				const list = Array.isArray( res.data.suggestions )
 					? res.data.suggestions
@@ -1549,11 +1548,24 @@ const FileOptimization = ( {
 	};
 	const handleOneClickSafeMode = async () => {
 		setSafeModeBusy( true );
+		// One-click undo: toggle based on current state so the button
+		// doubles as the restore path for the server-side snapshot taken
+		// on enable (safe_mode disable restores safeMode=false).
+		const enabling = ! ( settings && settings.safeMode );
+		const nextSafeMode = enabling;
 		try {
-			const res = await apiCall( 'safe_mode', { action: 'enable' } );
+			const res = await apiCall( 'safe_mode', {
+				action: enabling ? 'enable' : 'disable',
+			} );
 			if ( res && res.success ) {
-				setSettings( ( prev ) => ( { ...prev, safeMode: true } ) );
-				setBaseline( ( prev ) => ( { ...prev, safeMode: true } ) );
+				setSettings( ( prev ) => ( {
+					...prev,
+					safeMode: nextSafeMode,
+				} ) );
+				setBaseline( ( prev ) => ( {
+					...prev,
+					safeMode: nextSafeMode,
+				} ) );
 				// Sync the shared wppoSettings.settings global so sibling
 				// tabs reading getWppoSettings() see safeMode immediately.
 				// The safe_mode endpoint returns the full settings payload,
@@ -1563,7 +1575,7 @@ const FileOptimization = ( {
 						commitSettingsCache( res.data );
 					} else {
 						patchSettingsCache( 'file_optimisation', {
-							safeMode: true,
+							safeMode: nextSafeMode,
 						} );
 					}
 				} catch {
@@ -1571,10 +1583,15 @@ const FileOptimization = ( {
 				}
 				notifySafeMode( {
 					type: 'success',
-					message: __(
-						'Safe mode enabled — Delay, Defer, Combine and Used CSS are paused. Your settings are preserved.',
-						'performance-optimisation'
-					),
+					message: enabling
+						? __(
+								'Safe mode enabled — Delay, Defer, Combine and Used CSS are paused. Your settings are preserved.',
+								'performance-optimisation'
+						  )
+						: __(
+								'Safe mode disabled — your previous configuration is restored.',
+								'performance-optimisation'
+						  ),
 				} );
 			} else {
 				notifySafeMode( {
@@ -1583,19 +1600,29 @@ const FileOptimization = ( {
 						( res &&
 							typeof res.message === 'string' &&
 							res.message ) ||
-						__(
-							'Could not enable safe mode.',
-							'performance-optimisation'
-						),
+						( enabling
+							? __(
+									'Could not enable safe mode.',
+									'performance-optimisation'
+							  )
+							: __(
+									'Could not disable safe mode.',
+									'performance-optimisation'
+							  ) ),
 				} );
 			}
 		} catch {
 			notifySafeMode( {
 				type: 'error',
-				message: __(
-					'Could not enable safe mode.',
-					'performance-optimisation'
-				),
+				message: enabling
+					? __(
+							'Could not enable safe mode.',
+							'performance-optimisation'
+					  )
+					: __(
+							'Could not disable safe mode.',
+							'performance-optimisation'
+					  ),
 			} );
 		} finally {
 			if ( detectorMountedRef.current ) {
@@ -3668,10 +3695,15 @@ const FileOptimization = ( {
 												optimizerDisabled
 											}
 										>
-											{ __(
-												'Enable safe mode (one-click restore)',
-												'performance-optimisation'
-											) }
+											{ settings.safeMode
+												? __(
+														'Disable safe mode (restore previous configuration)',
+														'performance-optimisation'
+												  )
+												: __(
+														'Enable safe mode (one-click restore)',
+														'performance-optimisation'
+												  ) }
 										</button>
 									</div>
 								</div>

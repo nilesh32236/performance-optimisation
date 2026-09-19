@@ -88,7 +88,7 @@ describe( 'SafeModeDetector (issue #1465)', () => {
 			expect( apiCall ).toHaveBeenCalledWith(
 				'safe_mode_detect',
 				{},
-				'GET'
+				'POST'
 			);
 		} );
 		await waitFor( () => {
@@ -124,6 +124,42 @@ describe( 'SafeModeDetector (issue #1465)', () => {
 		await waitFor( () => {
 			expect(
 				screen.getByText( /Safe mode enabled/i )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'disables safe mode in one click when already enabled', async () => {
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: {}, has_staged: false, preview_url: '' },
+			} )
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { file_optimisation: { safeMode: false } },
+			} );
+		render(
+			<FileOptimization
+				options={ { safeMode: true } }
+				serverRules={ {} }
+			/>
+		);
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: /Disable safe mode/i,
+				} )
+			);
+		} );
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'safe_mode', {
+				action: 'disable',
+			} );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( /Safe mode disabled/i )
 			).toBeInTheDocument();
 		} );
 	} );
