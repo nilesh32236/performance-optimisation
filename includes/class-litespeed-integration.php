@@ -7,7 +7,7 @@
  * per-request results via static properties.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -105,7 +105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Parsed preload-exclude URL list memo (audit #1434: clearable via reset_cache()).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array|null
 		 */
 		private static ?array $exclude_urls_memo = null;
@@ -669,7 +669,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * round-trip instead of N (write amplification under DB-backed
 		 * transients).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private static array $tag_buffer = array();
@@ -677,7 +677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Scopes seen in the per-request tag buffer.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string[]
 		 */
 		private static array $tag_buffer_scopes = array();
@@ -2098,7 +2098,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * the stored overrides map, returns the allowlisted override hours
 		 * or null. Callers resolve $is_singular_ctx via is_singular().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int|null    $post_id         Resolved post ID or null.
 		 * @param string|null $post_type       Resolved post type or null.
 		 * @param bool        $is_singular_ctx Whether the current context is singular.
@@ -2121,7 +2121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * 0 means never-expire (one week); otherwise hours × 3600.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $hours CacheLife hours.
 		 * @return int TTL seconds.
 		 */
@@ -2139,7 +2139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * no WordPress calls, so unit tests can cover the tag taxonomy
 		 * without stubbing conditional tags.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $facts Resolved facts: is_front, is_home, is_paged, is_singular, post_id, post_type, term_ids, author, date_ymd, blog_id, is_feed, is_rest, is_404.
 		 * @return string[] Tag list (deduplicated, WPPO + MIN included).
 		 */
@@ -2566,7 +2566,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Opt-in via enableNextGenRewrite, gated on convertImg. Filterable
 		 * via wppo_litespeed_nextgen_rewrite (and the legacy alias).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True if the htaccess next-gen block should be included.
 		 */
 		public static function is_nextgen_rewrite_enabled_for_apache(): bool {
@@ -2585,7 +2585,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether next-gen rewrite is enabled for Apache.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param bool $enabled Whether next-gen rewrite is enabled.
 			 */
 			$enabled = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $enabled );

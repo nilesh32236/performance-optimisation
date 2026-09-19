@@ -58,7 +58,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * defaults cannot drift apart when one of them is bumped (issue
 		 * #1310 review). 31-day months, matching the upstream AS default.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const MONTH_SECONDS = 2678400;
@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * when an operator raises the upstream retention (issue #1310
 		 * review).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const FAILED_PURGE_MAX_LIFESPAN = 3 * self::MONTH_SECONDS;
@@ -86,7 +86,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * wrapper reserve cannot drift when one call site is bumped
 		 * (issue #1310 review).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const FAILED_PURGE_BATCH_MAX = 100;
@@ -94,7 +94,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Maximum store passes per purge invocation.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const FAILED_PURGE_MAX_ITERATIONS = 10;
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Wall-clock budget in seconds shared by the upstream cleaner loop
 		 * and the failed-action purge in one invocation.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var float
 		 */
 		private const FAILED_PURGE_BUDGET_SECONDS = 15.0;
@@ -113,7 +113,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * than this remains so one invocation never stacks two full
 		 * budgets back to back.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var float
 		 */
 		private const FAILED_PURGE_RESERVE_SECONDS = 2.0;
@@ -121,7 +121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Per-request memo for the Action Scheduler health payload plus its timestamp.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array|null
 		 */
 		private static $health_memo = null;
@@ -129,7 +129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Microtime when the health memo was stored.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var float
 		 */
 		private static $health_memo_time = 0.0;
@@ -190,7 +190,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * assume `$wpdb` table/meta deletes, while AS purging must delegate
 		 * to `ActionScheduler_QueueCleaner` (issue #1106).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const ACTION_SCHEDULER_TYPE = 'action_scheduler';
@@ -256,6 +256,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 			do {
 				$wpdb->last_error = '';
+				// Audit #1453: static-SQL-only sink — reject placeholders so a
+				// future caller cannot interpolate dynamic values here.
+				if ( false !== strpos( $select_sql, '%' ) ) {
+					return false;
+				}
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Direct query necessary for batched cleanup helper with dynamic SELECT.
 				$ids = $wpdb->get_col( $select_sql );
 
@@ -339,6 +344,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$greatest_parent_id = 0;
 			$has_more           = true;
 
+			// Audit #1469: wall-clock deadline like clean_unattached_media() —
+			// huge backlogs break out; the next scheduled run picks up rest.
+			$rev_budget = (int) apply_filters( 'wppo_revisions_time_budget', 20 );
+			if ( $rev_budget < 1 ) {
+				$rev_budget = 20;
+			}
+			$rev_deadline = microtime( true ) + $rev_budget;
+
 			do {
 				$wpdb->last_error = '';
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -360,6 +373,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 				$greatest_parent_id = (int) end( $parent_ids );
 				$has_more           = ( count( $parent_ids ) === 200 );
+				if ( $has_more && microtime( true ) >= $rev_deadline ) {
+					$has_more = false;
+				}
 
 				foreach ( $parent_ids as $parent_id ) {
 					$last_date      = null;
@@ -824,7 +840,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Guarded helper for 6.6 Options-API gating: returns false when the
 		 * version cannot be determined so callers fail open to legacy paths.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $version Minimum version (e.g. '6.6').
 		 * @return bool
 		 */
@@ -851,7 +867,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * (see https://developer.wordpress.org/reference/functions/wp_default_autoload_value/).
 		 * Falls back to `'yes'` on older cores without the function.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string
 		 */
 		public static function get_default_autoload_value(): string {
@@ -935,6 +951,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @var int
 		 */
 		public const AUTOLOAD_SIZE_THRESHOLD = 1024;
+
+		/**
+		 * Critical autoload payload size in bytes (800 KB).
+		 *
+		 * WordPress 6.6 performance guidance flags autoload payloads at or
+		 * above 800 KB as critical (see
+		 * https://developer.wordpress.org/advanced-administration/performance/optimization/,
+		 * https://make.wordpress.org/core/2024/06/18/options-api-disabling-autoload-for-large-options/,
+		 * https://core.trac.wordpress.org/ticket/61276). Filterable via
+		 * `wppo_autoload_critical_threshold`.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_CRITICAL_BYTES = 819200;
 
 		/**
 		 * Maximum number of options a single remediation pass will touch.
@@ -1143,15 +1174,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function get_autoload_total_bytes(): int {
 			global $wpdb;
+			if ( ! isset( $wpdb->options ) ) {
+				return 0;
+			}
 			$autoload_values = self::get_autoloadable_values();
 			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
-			$total = $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-					...$autoload_values
-				)
-			);
+			try {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
+				$total = $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+						...$autoload_values
+					)
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
 			return null === $total ? 0 : (int) $total;
 		}
 
@@ -1162,7 +1201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * {@see get_autoload_total_bytes()} and {@see get_autoloaded_options()}
 		 * so all three agree with each other and with Site Health.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Count, or 0 on error.
 		 */
 		public static function get_autoload_count(): int {
@@ -1185,6 +1224,217 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				return 0;
 			}
 			return null === $count ? 0 : (int) $count;
+		}
+
+		/**
+		 * Resolve the critical autoload threshold in bytes.
+		 *
+		 * Defaults to {@see AUTOLOAD_CRITICAL_BYTES} (800 KB per the WP 6.6
+		 * guidance) absent a `wppo_autoload_critical_threshold` filter.
+		 * Non-numeric, zero, or negative filter output falls back to the
+		 * constant (fail-open: audit-only, never fatal). Zero is rejected
+		 * because it would flag every site as critical.
+		 *
+		 * @since NEXT
+		 * @return int Threshold in bytes (> 0).
+		 */
+		public static function get_autoload_critical_threshold(): int {
+			try {
+				if ( ! function_exists( 'apply_filters' ) ) {
+					return self::AUTOLOAD_CRITICAL_BYTES;
+				}
+				/** Filters the critical autoload payload threshold in bytes. @since NEXT @param int $threshold Threshold in bytes. */
+				$filtered = apply_filters( 'wppo_autoload_critical_threshold', self::AUTOLOAD_CRITICAL_BYTES );
+				if ( is_numeric( $filtered ) ) {
+					$value = (int) $filtered;
+					if ( $value > 0 ) {
+						return $value;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return self::AUTOLOAD_CRITICAL_BYTES;
+		}
+
+		/**
+		 * Whether the autoload payload is at or above the critical threshold.
+		 *
+		 * Single definition of the critical verdict: every caller
+		 * ({@see get_autoload_audit()}, Abilities, REST) delegates here so
+		 * the comparison cannot drift.
+		 *
+		 * @since NEXT
+		 * @param int|null $total     Optional total bytes (defaults to {@see get_autoload_total_bytes()}).
+		 * @param int|null $threshold Optional threshold bytes (defaults to {@see get_autoload_critical_threshold()}; pass the already-resolved value to avoid a second filter call).
+		 * @return bool True when $total >= critical threshold.
+		 */
+		public static function is_autoload_critical( ?int $total = null, ?int $threshold = null ): bool {
+			if ( null === $total ) {
+				$total = self::get_autoload_total_bytes();
+			}
+			if ( null === $threshold || $threshold <= 0 ) {
+				$threshold = self::get_autoload_critical_threshold();
+			}
+			return $total >= $threshold;
+		}
+
+		/**
+		 * Single-call autoload audit payload aligned to WP 6.6 semantics.
+		 *
+		 * Reuses the shared {@see get_autoloadable_values()} predicate via
+		 * {@see get_autoload_total_bytes()}, {@see get_autoload_count()} and
+		 * {@see get_autoloaded_options()} so totals, counts and lists agree
+		 * with each other and with Site Health. The SUM/COUNT scalars are
+		 * cached in a 5-minute transient (multisite-safe via
+		 * {@see Util::transient_key()}) so repeated dashboard polling costs
+		 * one top-N SELECT instead of three full wp_options scans; the
+		 * threshold is resolved live (filter, no DB cost) and the critical
+		 * verdict delegates to {@see is_autoload_critical()}.
+		 *
+		 * @since NEXT
+		 * @param int $limit Maximum number of options to return.
+		 * @return array{total_autoload_bytes:int,count:int,critical_threshold:int,is_critical:bool,options:array}
+		 */
+		public static function get_autoload_audit( int $limit = 20 ): array {
+			$limit = max( 1, min( 100, $limit ) );
+			$total = null;
+			$count = null;
+			// Null when the transient API is unavailable (unit stubs): fall
+			// through to live queries below (fail-open).
+			$cache_key = null;
+			try {
+				if ( function_exists( 'get_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$cache_key = Util::transient_key( 'wppo_autoload_audit_scalars' );
+					$cached    = get_transient( $cache_key );
+					if ( is_array( $cached ) && isset( $cached['total'], $cached['count'] ) ) {
+						$total = max( 0, (int) $cached['total'] );
+						$count = max( 0, (int) $cached['count'] );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$total = null;
+				$count = null;
+			}
+			if ( null === $total || null === $count ) {
+				$total = self::get_autoload_total_bytes();
+				$count = self::get_autoload_count();
+				try {
+					if ( null !== $cache_key && function_exists( 'set_transient' ) ) {
+						set_transient(
+							$cache_key,
+							array(
+								'total' => $total,
+								'count' => $count,
+							),
+							300
+						);
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			$threshold = self::get_autoload_critical_threshold();
+			return array(
+				'total_autoload_bytes' => $total,
+				'count'                => $count,
+				'critical_threshold'   => $threshold,
+				'is_critical'          => self::is_autoload_critical( $total, $threshold ),
+				'options'              => self::get_autoloaded_options( $limit ),
+			);
+		}
+
+		/**
+		 * Compare the reported total against wp_load_alloptions() size.
+		 *
+		 * Read-only diagnostic helper, exercised in product via the
+		 * `autoloaded_options` REST route with `?parity=1` (opt-in: the
+		 * `wp_load_alloptions()` + `serialize()` measurement is too heavy
+		 * for every dashboard poll). Fail-open: when
+		 * `wp_load_alloptions()` is unavailable (pre-6.2 floor or unit
+		 * stubs) the comparison is skipped and
+		 * `matches_within_rounding` is true so the audit never blocks.
+		 * Serialization framing differs from SUM(LENGTH()), so exact equality
+		 * is wrong — parity holds within max(1024, 1% of total).
+		 *
+		 * @since NEXT
+		 * @return array{reported:int,alloptions_bytes:int,delta:int,matches_within_rounding:bool}
+		 */
+		public static function get_autoload_parity(): array {
+			$reported = self::get_autoload_total_bytes();
+			if ( ! function_exists( 'wp_load_alloptions' ) ) {
+				return array(
+					'reported'                => $reported,
+					'alloptions_bytes'        => 0,
+					'delta'                   => 0,
+					'matches_within_rounding' => true,
+				);
+			}
+			try {
+				$alloptions = wp_load_alloptions();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'reported'                => $reported,
+					'alloptions_bytes'        => 0,
+					'delta'                   => 0,
+					'matches_within_rounding' => true,
+				);
+			}
+			if ( ! is_array( $alloptions ) ) {
+				return array(
+					'reported'                => $reported,
+					'alloptions_bytes'        => 0,
+					'delta'                   => 0,
+					'matches_within_rounding' => true,
+				);
+			}
+			$bytes     = strlen( serialize( $alloptions ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Size measurement only; serialized payload is never stored or unserialized.
+			$delta     = abs( $reported - $bytes );
+			$tolerance = max( 1024, (int) ( 0.01 * max( $reported, $bytes ) ) );
+			return array(
+				'reported'                => $reported,
+				'alloptions_bytes'        => $bytes,
+				'delta'                   => $delta,
+				'matches_within_rounding' => $delta <= $tolerance,
+			);
+		}
+
+		/**
+		 * Site Health autoloaded-options size limit (bytes).
+		 *
+		 * Mirrors `WP_Site_Health::get_test_autoloaded_options()` (WP 6.6+,
+		 * default 800000 bytes). Read via the core
+		 * `site_status_autoloaded_options_size_limit` filter when available
+		 * so installs that tune the threshold stay in parity.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_SIZE_LIMIT_DEFAULT = 800000;
+
+		/**
+		 * Get the Site Health autoloaded-options size limit in bytes.
+		 *
+		 * Fail-open: returns the default when the filter API is unavailable,
+		 * when the filter throws, or when the filtered value is not positive.
+		 * Per-site options only (`$wpdb->options` is site-scoped on multisite).
+		 *
+		 * @since NEXT
+		 * @return int Size limit in bytes.
+		 */
+		public static function get_autoload_size_limit(): int {
+			if ( ! function_exists( 'apply_filters' ) ) {
+				return self::AUTOLOAD_SIZE_LIMIT_DEFAULT;
+			}
+			try {
+				$limit = (int) apply_filters( 'site_status_autoloaded_options_size_limit', self::AUTOLOAD_SIZE_LIMIT_DEFAULT );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::AUTOLOAD_SIZE_LIMIT_DEFAULT;
+			}
+			return $limit > 0 ? $limit : self::AUTOLOAD_SIZE_LIMIT_DEFAULT;
 		}
 
 		/**
@@ -1755,7 +2005,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * version (newest wins via `ActionScheduler::autoload()`), so every
 		 * AS touchpoint must guard on this first and never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the store + cleaner classes exist.
 		 */
 		public static function is_action_scheduler_available(): bool {
@@ -1774,7 +2024,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * readers/purgers (failed-action purge, queue health) must not
 		 * require the Cleaner class (issue #1310 review).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the store class exists.
 		 */
 		public static function is_action_scheduler_store_available(): bool {
@@ -1794,7 +2044,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * the single source of truth — no plugin setting duplicates it
 		 * (issue #1106).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{lifespan:int,lifespan_failed:int}
 		 */
 		private static function get_action_scheduler_retention(): array {
@@ -1819,7 +2069,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Build a cutoff DateTime N seconds ago via AS when possible.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $seconds Age in seconds.
 		 * @return \DateTime|null Null when no datetime API is available.
 		 */
@@ -1845,7 +2095,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * database (issue #1106). Fail-open: returns zeros with
 		 * `available: false` when AS is absent or any query throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{available:bool,pending:int,failed:int,oldest_pending_age_seconds:int|null,reclaimable:int,reclaimable_bytes:int,total_bytes:int}
 		 */
 		public static function get_action_scheduler_health(): array {
@@ -1936,7 +2186,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					 * toggle so operators who disabled failed-action purging do not
 					 * see those rows advertised as reclaimable.
 					 *
-					 * @since NEXT
+					 * @since 2.2.0
 					 * @param bool $clean_failed Whether failed actions are purged.
 					 */
 					$clean_failed = function_exists( 'apply_filters' ) ? (bool) apply_filters( 'action_scheduler_enable_failed_action_cleanup', true ) : true; // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- upstream AS filter, must stay verbatim.
@@ -2076,7 +2326,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * request; unit tests that swap store stubs between cases must
 		 * reset it (and the transient) to observe the new stub.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_action_scheduler_health_cache(): void {
@@ -2103,7 +2353,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * `action_scheduler_enable_failed_action_cleanup` defaults are never
 		 * altered here.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when failed actions older than 3 months may be purged.
 		 */
 		public static function is_failed_action_purge_enabled(): bool {
@@ -2133,7 +2383,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			 * `database_cleanup.purgeFailedActions` setting value is passed as
 			 * the default so either path enables the purge.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param bool $enabled Whether the failed-action purge is enabled.
 			 */
 			return function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_purge_failed_actions', $opt_in ) : (bool) $opt_in;
@@ -2156,7 +2406,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * missing Cleaner class must not disable the Store-only purge
 		 * (issue #1310 review).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int        $batch_size Maximum rows deleted per iteration. Default 50, clamped to 1-100.
 		 * @param bool       $log        Whether to write the activity-log row and invalidate the counts cache. Pass false when a wrapper (e.g. clean_action_scheduler()) logs the combined total itself, so one purge emits one row and invalidates once (issue #1310 review).
 		 * @param float|null $deadline   Optional shared wall-clock deadline (microtime(true) value) inherited from a wrapper that already spent part of its budget. Null starts a fresh 15s budget for standalone calls.
@@ -2297,7 +2547,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * logged once and the counts cache is invalidated once, in this
 		 * wrapper only.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return int Number of actions deleted (0 when AS absent, disabled, or nothing past retention).
 		 */
 		public static function clean_action_scheduler(): int {
@@ -2311,7 +2561,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			 * no-op (visibility only); site-specific narrowing beyond that
 			 * should use the upstream `action_scheduler_*` filters.
 			 *
-			 * @since NEXT
+			 * @since 2.2.0
 			 * @param bool $enabled Whether AS cleanup delegation is enabled.
 			 */
 			$enabled = function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_action_scheduler_cleanup_enabled', true ) : true;
@@ -2388,6 +2638,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$affected_tables = array();
 
 			list( $rev_max_age, $rev_keep ) = self::get_revision_defaults();
+			// Audit #1469: defer per-type invalidation; single invalidate below.
+			self::$defer_counts_invalidation = true;
 			foreach ( $methods as $key => $method ) {
 				if ( 'revisions' === $key ) {
 					$res = self::invoke_cleanup_method( $method, $rev_max_age, $rev_keep );
@@ -2425,6 +2677,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			do_action( 'wppo_database_cleanup_completed', 'all', $total_deleted, $results );
 
 			self::maybe_optimize_tables( $affected_tables, true );
+
+			self::$defer_counts_invalidation = false;
+			self::invalidate_counts_cache();
 
 			return $results;
 		}
@@ -2477,6 +2732,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$failures        = array();
 			$affected_tables = array();
 
+			// Audit #1469: defer per-type invalidation; single invalidate below.
+			self::$defer_counts_invalidation = true;
 			foreach ( $methods as $method ) {
 				if ( 'clean_revisions_advanced' === $method ) {
 					$result = self::invoke_cleanup_method( $method, $max_age, $keep );
@@ -2518,6 +2775,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$optimize_enabled = ! empty( $settings['dbOptimize'] );
 			self::maybe_optimize_tables( $affected_tables, $optimize_enabled );
 
+			self::$defer_counts_invalidation = false;
+			self::invalidate_counts_cache();
+
 			return $failures;
 		}
 
@@ -2537,7 +2797,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * @since 1.1.0
 		 * @since 2.0.0 Exclude WP 6.9+ Notes from spam/trashed comment counts.
-		 * @since NEXT Add `action_scheduler` reclaimable count.
+		 * @since 2.2.0 Add `action_scheduler` reclaimable count.
 		 * @return array<string,int> Associative array mapping cleanup type to its current count.
 		 */
 		public static function get_counts() {
@@ -2773,9 +3033,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( false === $res ) {
 				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
-			self::invalidate_counts_cache();
+			if ( ! self::$defer_counts_invalidation ) {
+				self::invalidate_counts_cache();
+			}
 			return $res;
 		}
+
+		/**
+		 * Batch deferral flag — clean_all()/auto_clean() set this around
+		 * their loops so per-type calls skip invalidation and the wrapper
+		 * invalidates once.
+		 *
+		 * @since 2.2.0
+		 * @var bool
+		 */
+		private static $defer_counts_invalidation = false;
 
 		/**
 		 * Invalidate the DB cleanup counts cache by incrementing the salt or deleting the transient.
@@ -2801,6 +3073,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					// Remediate/revert change autoload totals: the Abilities
 					// transient (10-min TTL) must not serve stale parity data.
 					delete_transient( Util::transient_key( 'wppo_abilities_autoloaded' ) );
+					// Audit scalars (5-min TTL in get_autoload_audit()) must
+					// not serve stale totals after a remediate/revert.
+					delete_transient( Util::transient_key( 'wppo_autoload_audit_scalars' ) );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2834,7 +3109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * (which itself falls back to `SHOW TABLE STATUS`) when the SUM
 		 * query is unavailable or fails.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param string[] $tables Full table names (including prefix).
 		 * @return int Combined size in bytes, or 0 if unknown.

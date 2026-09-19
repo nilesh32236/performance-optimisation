@@ -7,7 +7,7 @@
  * can never leave the other pipeline stripping builder CSS.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.2.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -20,14 +20,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Safelist' ) ) {
 	/**
 	 * Shared CSS safelist guard.
 	 *
-	 * @since NEXT
+	 * @since 2.2.0
 	 */
 	class Css_Safelist {
 
 		/**
 		 * Shared Elementor/popup preset selectors preserved by both pipelines.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string[]
 		 */
 		public static function get_elementor_presets(): array {
@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Safelist' ) ) {
 		 * Byte-identical logic previously duplicated in Used_CSS and
 		 * Critical_CSS. Fail-open: any uncertainty returns true (keep CSS).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $html       Source HTML.
 		 * @param string $purged_css Purged CSS under test.
 		 * @return bool True when the CSS passes the smoke check.

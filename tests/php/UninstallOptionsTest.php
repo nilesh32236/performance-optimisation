@@ -102,10 +102,16 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_used_css_last_full_regen',
 		// Issue #1220 used-CSS targeted-regen cooldown timestamp.
 		'wppo_used_css_last_targeted_regen',
+		// Issue #1462 critical-CSS full-regen cooldown timestamp.
+		'wppo_ccss_last_full_regen',
+		// Issue #1462 critical-CSS targeted-regen burst-throttle timestamp.
+		'wppo_ccss_last_targeted_regen',
 		// Issue #1144 one-click-undo snapshot (Util::SETTINGS_SNAPSHOT_OPTION).
 		'wppo_settings_snapshot',
 		// Issue #1162 resumable sitemap preload queue.
 		'wppo_preload_queue',
+		// Issue #1407 RUM-triggered CSS-refresh before/after snapshots.
+		'wppo_ai_css_refresh_snapshots',
 	);
 
 	/**

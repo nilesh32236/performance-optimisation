@@ -793,7 +793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Single home for the esc_url_raw + fallback wiring previously
 		 * repeated in all four scan/suggestion wrappers.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param array $input Ability input.
 		 * @return string Resolved URL, or '' when a provided URL is off-site.
 		 */
@@ -811,7 +811,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Thin BC wrapper over Util::same_site_url_or_home() (audit #1357
 		 * review) so comparator rules cannot drift between call sites.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url      Caller URL (already esc_url_raw'd by caller).
 		 * @param string $fallback Fallback (home URL, or '' to fail closed).
 		 * @return string Same-site URL or the fallback.
@@ -1006,18 +1006,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				if ( isset( $cached['options'] ) && is_array( $cached['options'] ) ) {
 					$result['options'] = $cached['options'];
 				}
+				// Backfill the 800KB critical signal for pre-upgrade cache
+				// entries that lack it (fail-open to live computation).
+				try {
+					if ( isset( $cached['is_critical'], $cached['critical_threshold'] ) ) {
+						$result['is_critical']        = (bool) $cached['is_critical'];
+						$result['critical_threshold'] = (int) $cached['critical_threshold'];
+					} else {
+						$result['critical_threshold'] = Database_Cleanup::get_autoload_critical_threshold();
+						$result['is_critical']        = Database_Cleanup::is_autoload_critical( (int) $cached['autoloaded_size'], $result['critical_threshold'] );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 				return $result;
 			}
 			try {
-				$autoloaded    = Database_Cleanup::get_autoload_count();
-				$autoload_size = Database_Cleanup::get_autoload_total_bytes();
-				$options       = Database_Cleanup::get_autoloaded_options( 20 );
+				$audit         = Database_Cleanup::get_autoload_audit( 20 );
+				$autoloaded    = $audit['count'];
+				$autoload_size = $audit['total_autoload_bytes'];
+				$options       = $audit['options'];
+				$threshold     = $audit['critical_threshold'];
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				// Same shape as the success paths so consumers never branch
+				// on a missing key (fail-open: not critical by default).
 				return array(
 					'autoloaded_count'   => 0,
 					'autoloaded_size'    => 0,
 					'autoloaded_size_mb' => 0.0,
+					'critical_threshold' => Database_Cleanup::AUTOLOAD_CRITICAL_BYTES,
+					'is_critical'        => false,
 					'options'            => array(),
 				);
 			}
@@ -1025,6 +1044,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				'autoloaded_count'   => $autoloaded,
 				'autoloaded_size'    => $autoload_size,
 				'autoloaded_size_mb' => round( $autoload_size / ( 1024 * 1024 ), 2 ),
+				'critical_threshold' => $threshold,
+				'is_critical'        => Database_Cleanup::is_autoload_critical( $autoload_size, $threshold ),
 				'options'            => $options,
 			);
 			set_transient( $cache_key, $result, 10 * MINUTE_IN_SECONDS );
@@ -1049,8 +1070,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Execute callback: Flush Object Cache (operational).
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Uses Object_Cache::flush_scoped() for multisite scoping.
-		 * @since NEXT Returns error_code/error_message on failure so Ability/MCP
+		 * @since 2.2.0 Uses Object_Cache::flush_scoped() for multisite scoping.
+		 * @since 2.2.0 Returns error_code/error_message on failure so Ability/MCP
 		 *        consumers can distinguish a multisite foreign-drop-in refusal
 		 *        (error_code `flush_foreign_dropin`) from a generic failure
 		 *        instead of retrying blindly. Both are null on success.
@@ -1301,7 +1322,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'error'  => __( 'Critical CSS not available.', 'performance-optimisation' ),
 				);
 			}
-			$queued = Critical_CSS::regenerate_all();
+			$queued = Critical_CSS::regenerate_all( true );
 			return array( 'queued' => (int) $queued );
 		}
 
@@ -1333,11 +1354,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 						'error'  => __( 'Invalid post ID.', 'performance-optimisation' ),
 					);
 				}
-				if ( ! function_exists( 'as_has_scheduled_action' ) || ! as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
-					as_enqueue_async_action(
-						'wppo_used_css_generate',
-						array( 'post_id' => $post_id ),
-						'performance_optimisation'
+				// Atomic-first on AS 4.x (issue #1408): the `$unique` insert dedupes
+				// hook+args+group in the store, closing the check-then-act race.
+				// A 0 return is ambiguous (deduped vs failure): re-probe the guard
+				// once so a foreign winner still reports queued while a real
+				// scheduler failure reports an error instead of a phantom job.
+				$job_args = array( 'post_id' => $post_id );
+				$job_id   = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+				if ( 0 === $job_id ) {
+					$already_pending = false;
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$already_pending = false;
+						}
+					}
+					if ( $already_pending ) {
+						return array( 'queued' => 1 );
+					}
+					return array(
+						'queued' => 0,
+						'error'  => __( 'Used CSS regeneration could not be queued.', 'performance-optimisation' ),
 					);
 				}
 				return array( 'queued' => 1 );

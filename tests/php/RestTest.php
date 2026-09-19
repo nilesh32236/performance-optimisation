@@ -1226,7 +1226,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 
 		$config = $reflection->invoke( $this->rest, array( 'password' => ' <b>s3cret</b> ' ) );
 
-		$this->assertSame( 's3cret', $config['password'] );
+		// Audit #1453: no tag-stripping on passwords (mangles strong secrets).
+		$this->assertSame( ' <b>s3cret</b> ', $config['password'] );
 	}
 
 	/**
