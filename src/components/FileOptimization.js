@@ -12,10 +12,12 @@ import { handleChange, toTextLines } from '../lib/util';
 import useUnsavedChanges, { stableStringify } from '../lib/useUnsavedChanges';
 import {
 	apiCall,
+	buildAction,
 	commitSettingsCache,
 	getErrorLogMessage,
 	getWppoSettings,
 	isValidScanUrl,
+	patchSettingsCache,
 	runPerformanceScan,
 } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
@@ -1353,11 +1355,89 @@ const FileOptimization = ( {
 			detectorMountedRef.current = false;
 		};
 	}, [] );
+	// Collect frontend script/style tokens for the accurate per-page
+	// detector path (issue #1465 review): WP handle ids (e.g.
+	// "jquery-core-js" -> "jquery-core") plus src/href basenames (which
+	// still substring-match fragile fragments like "jquery-core" in
+	// ".../jquery-core.min.js"). Capped and charset-guarded; returns []
+	// when the DOM is unavailable so callers fall back to backend guesses.
+	const collectFrontendHandles = () => {
+		try {
+			if (
+				typeof document === 'undefined' ||
+				! document.querySelectorAll
+			) {
+				return [];
+			}
+			const found = [];
+			const pushToken = ( token ) => {
+				if ( typeof token !== 'string' ) {
+					return;
+				}
+				const clean = token.trim().slice( 0, 128 );
+				if (
+					'' !== clean &&
+					/^[A-Za-z0-9_.-]+$/.test( clean ) &&
+					! found.includes( clean )
+				) {
+					found.push( clean );
+				}
+			};
+			document
+				.querySelectorAll( 'script[id], link[id]' )
+				.forEach( ( el ) => {
+					const id = el.getAttribute( 'id' ) || '';
+					const base = id
+						.replace( /-(js|css)(-extra)?$/i, '' )
+						.trim();
+					pushToken( base );
+				} );
+			document
+				.querySelectorAll( 'script[src], link[rel="stylesheet"][href]' )
+				.forEach( ( el ) => {
+					const url =
+						el.getAttribute( 'src' ) ||
+						el.getAttribute( 'href' ) ||
+						'';
+					const segment = url
+						.split( '?' )[ 0 ]
+						.split( '#' )[ 0 ]
+						.split( '/' )
+						.pop()
+						.trim();
+					if ( '' !== segment ) {
+						pushToken( segment );
+						pushToken(
+							segment.replace( /\.(min\.)?(js|css)$/i, '' )
+						);
+					}
+				} );
+			return found.slice( 0, 50 );
+		} catch {
+			return [];
+		}
+	};
 	const handleDetectFragile = async () => {
 		setDetectorBusy( true );
 		dismissSafeMode();
 		try {
-			const res = await apiCall( 'safe_mode_detect', {}, 'GET' );
+			// Prefer the accurate per-page queue path: collect frontend
+			// script/style tokens (WP handle ids + src basenames) and pass
+			// them via the handles param. When nothing is collected (e.g.
+			// admin screen without frontend markup) fall back to the
+			// backend plugin-signal guesses by calling without handles.
+			let detectAction = 'safe_mode_detect';
+			try {
+				const collected = collectFrontendHandles();
+				if ( collected.length > 0 ) {
+					detectAction = buildAction( 'safe_mode_detect', {
+						handles: collected.join( ',' ),
+					} );
+				}
+			} catch {
+				detectAction = 'safe_mode_detect';
+			}
+			const res = await apiCall( detectAction, {}, 'GET' );
 			if ( res && res.success && res.data ) {
 				const list = Array.isArray( res.data.suggestions )
 					? res.data.suggestions
@@ -1474,6 +1554,21 @@ const FileOptimization = ( {
 			if ( res && res.success ) {
 				setSettings( ( prev ) => ( { ...prev, safeMode: true } ) );
 				setBaseline( ( prev ) => ( { ...prev, safeMode: true } ) );
+				// Sync the shared wppoSettings.settings global so sibling
+				// tabs reading getWppoSettings() see safeMode immediately.
+				// The safe_mode endpoint returns the full settings payload,
+				// so commit when an object is returned, else patch the tab.
+				try {
+					if ( res.data && typeof res.data === 'object' ) {
+						commitSettingsCache( res.data );
+					} else {
+						patchSettingsCache( 'file_optimisation', {
+							safeMode: true,
+						} );
+					}
+				} catch {
+					// Shared-cache sync is best-effort only.
+				}
 				notifySafeMode( {
 					type: 'success',
 					message: __(
