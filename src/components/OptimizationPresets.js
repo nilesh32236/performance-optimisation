@@ -14,7 +14,7 @@
  * @since NEXT
  */
 
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -86,15 +86,54 @@ export const formatDiffValue = ( value ) => {
 };
 
 /**
+ * Known secret-bearing settings paths stripped before a JSON export.
+ *
+ * Mirrors Rest::remove_sensitive_settings_from_response() so a downloaded
+ * backup can be shared without leaking credentials. The live global is
+ * never mutated — the export works on a deep clone.
+ *
+ * @since NEXT
+ * @type {Array.<[string, string]>} [tab, key] pairs.
+ */
+export const SENSITIVE_EXPORT_PATHS = [
+	[ 'performance_audit', 'pagespeed_api_key' ],
+	[ 'object_cache', 'password' ],
+];
+
+/**
+ * Return a deep-cloned copy of the settings with secret values removed.
+ *
+ * @param {Object} settings Raw settings object.
+ * @return {Object} Cloned settings safe for export.
+ */
+export const stripSensitiveSettings = ( settings ) => {
+	const clone =
+		settings && typeof settings === 'object'
+			? JSON.parse( JSON.stringify( settings ) )
+			: {};
+	for ( const [ tab, key ] of SENSITIVE_EXPORT_PATHS ) {
+		if ( clone[ tab ] && typeof clone[ tab ] === 'object' ) {
+			delete clone[ tab ][ key ];
+		}
+	}
+	return clone;
+};
+
+/**
  * Export the current settings as a JSON download (restore-point backup).
  *
- * Fail-open: any failure is reported through `notify`, never thrown.
+ * Secret values (API keys, passwords) are stripped before serializing so
+ * the file is safe to share; re-importing keeps the stored secrets intact
+ * server-side. Fail-open: any failure is reported through `notify`, never
+ * thrown.
  *
  * @param {Function} notify useNotice notify callback.
  */
 export const exportSettingsJson = ( notify ) => {
 	try {
-		const settings = getWppoSettings( 'settings', {} ) || {};
+		const settings = stripSensitiveSettings(
+			getWppoSettings( 'settings', {} ) || {}
+		);
 		const blob =
 			typeof Blob !== 'undefined'
 				? new Blob( [ JSON.stringify( settings, null, 2 ) ], {
@@ -153,6 +192,11 @@ const OptimizationPresets = () => {
 		takenAt: null,
 	} );
 	const { notice, notify, dismiss } = useNotice();
+	// Preview request sequencing: rapid preset clicks abort the previous
+	// in-flight preview and bump the sequence so a slow earlier response
+	// can never overwrite the diff for the currently selected preset.
+	const previewAbortRef = useRef( null );
+	const previewSeqRef = useRef( 0 );
 
 	const refreshSnapshot = useCallback( async ( signal ) => {
 		try {
@@ -186,13 +230,39 @@ const OptimizationPresets = () => {
 		return () => controller?.abort();
 	}, [ refreshSnapshot ] );
 
+	// Abort any in-flight preview on unmount so a slow response can never
+	// call setState/notify after the component is gone.
+	useEffect( () => {
+		return () => previewAbortRef.current?.abort();
+	}, [] );
+
 	const previewPreset = useCallback(
 		async ( name ) => {
 			setSelected( name );
 			setLoadingDiff( true );
 			dismiss();
+			// Abort any previous in-flight preview so only the latest
+			// click can settle; the sequence guards mocked transports
+			// that ignore AbortSignals.
+			if ( previewAbortRef.current ) {
+				previewAbortRef.current.abort();
+			}
+			const controller =
+				typeof AbortController !== 'undefined'
+					? new AbortController()
+					: null;
+			previewAbortRef.current = controller;
+			const seq = ++previewSeqRef.current;
+			const isStale = () =>
+				seq !== previewSeqRef.current || controller?.signal?.aborted;
 			try {
-				const response = await fetchOptimizationPresets( name );
+				const response = await fetchOptimizationPresets(
+					name,
+					controller?.signal
+				);
+				if ( isStale() ) {
+					return;
+				}
 				if ( response?.success && response?.data ) {
 					const payload = response.data;
 					// Narrow (?preset=x) and full-list shapes both handled.
@@ -213,6 +283,13 @@ const OptimizationPresets = () => {
 					} );
 				}
 			} catch ( previewError ) {
+				if (
+					controller?.signal?.aborted ||
+					previewError?.name === 'AbortError' ||
+					isStale()
+				) {
+					return;
+				}
 				console.error(
 					'Error loading preset preview:',
 					getErrorLogMessage( previewError )
@@ -226,7 +303,9 @@ const OptimizationPresets = () => {
 					durationMs: 5000,
 				} );
 			} finally {
-				setLoadingDiff( false );
+				if ( ! isStale() ) {
+					setLoadingDiff( false );
+				}
 			}
 		},
 		[ dismiss, notify ]

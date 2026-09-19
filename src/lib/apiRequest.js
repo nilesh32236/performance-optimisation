@@ -213,6 +213,65 @@ export const patchSettingsCache = ( tab, patch ) => {
 };
 
 /**
+ * In-flight GET request registry for response sharing.
+ *
+ * Dashboard cards (e.g. GuidedNextStep and PerformanceAudit follow-ups)
+ * can mount concurrently and ask for the same read-only endpoint. Sharing
+ * one underlying fetch per action string avoids duplicate network trips on
+ * every Dashboard load while keeping every caller on its own abort
+ * semantics (see the per-caller race in apiCall()).
+ *
+ * Entries live only while the request is pending and are removed on
+ * settle, so sequential calls (and tests) always hit the network.
+ *
+ * @since NEXT
+ * @type {Map<string, Promise<Object>>}
+ */
+const inflightGets = new Map();
+
+/**
+ * Clear the in-flight GET registry (test seam).
+ *
+ * Production code never needs this — entries self-remove on settle. Tests
+ * that intentionally leave a request pending can reset the module state.
+ *
+ * @since NEXT
+ * @return {void}
+ */
+export const clearInflightGets = () => {
+	inflightGets.clear();
+};
+
+/**
+ * Reject when the caller's AbortSignal fires.
+ *
+ * Lets a caller sharing an in-flight GET observe its own abort without
+ * cancelling the shared underlying fetch for the other waiters.
+ *
+ * @since NEXT
+ * @param {AbortSignal} signal Caller's abort signal.
+ * @return {Promise<never>} Rejects with an AbortError on abort.
+ */
+const onCallerAbort = ( signal ) =>
+	new Promise( ( _, reject ) => {
+		if ( signal.aborted ) {
+			const aborted = new Error( 'Aborted' );
+			aborted.name = 'AbortError';
+			reject( aborted );
+			return;
+		}
+		signal.addEventListener(
+			'abort',
+			() => {
+				const aborted = new Error( 'Aborted' );
+				aborted.name = 'AbortError';
+				reject( aborted );
+			},
+			{ once: true }
+		);
+	} );
+
+/**
  * Make a REST API call to the Performance Optimisation plugin.
  *
  * Mutates wppoSettings.settings globally on successful `update_settings` or
@@ -230,6 +289,21 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		throw new Error( 'wppoSettings is not defined' );
 	}
 	const isGet = 'GET' === method;
+
+	// Share concurrent identical GETs: a second caller awaiting the same
+	// action while the first is still pending joins the same promise
+	// instead of issuing a duplicate request. Its own AbortSignal is
+	// raced locally so aborting one waiter never cancels the shared
+	// fetch for the others.
+	if ( isGet ) {
+		const shared = inflightGets.get( action );
+		if ( shared ) {
+			if ( ! signal ) {
+				return shared;
+			}
+			return Promise.race( [ shared, onCallerAbort( signal ) ] );
+		}
+	}
 
 	const doFetch = ( nonce ) =>
 		fetch( wppoSettings.apiUrl + action, {
@@ -297,6 +371,21 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 	};
 
 	try {
+		let pending;
+		if ( isGet ) {
+			pending = ( async () => {
+				const response = await doFetch( null );
+				return await handleResponse( response );
+			} )();
+			inflightGets.set( action, pending );
+			try {
+				return await pending;
+			} finally {
+				if ( inflightGets.get( action ) === pending ) {
+					inflightGets.delete( action );
+				}
+			}
+		}
 		const response = await doFetch( null );
 		return await handleResponse( response );
 	} catch ( error ) {

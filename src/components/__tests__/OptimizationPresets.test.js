@@ -13,7 +13,10 @@ jest.mock( '../../lib/apiRequest', () => {
 	};
 } );
 
-import OptimizationPresets from '../OptimizationPresets';
+import OptimizationPresets, {
+	exportSettingsJson,
+	stripSensitiveSettings,
+} from '../OptimizationPresets';
 import {
 	apiCall,
 	fetchOptimizationPresets,
@@ -77,7 +80,8 @@ describe( 'OptimizationPresets', () => {
 
 		await waitFor( () =>
 			expect( fetchOptimizationPresets ).toHaveBeenCalledWith(
-				'balanced'
+				'balanced',
+				expect.anything()
 			)
 		);
 		expect(
@@ -104,7 +108,10 @@ describe( 'OptimizationPresets', () => {
 		fireEvent.click( screen.getByRole( 'button', { name: 'Safe' } ) );
 		// Wait for the preview to settle: Apply stays disabled while loading.
 		await waitFor( () =>
-			expect( fetchOptimizationPresets ).toHaveBeenCalledWith( 'safe' )
+			expect( fetchOptimizationPresets ).toHaveBeenCalledWith(
+				'safe',
+				expect.anything()
+			)
 		);
 		await waitFor( () =>
 			expect(
@@ -145,7 +152,8 @@ describe( 'OptimizationPresets', () => {
 			);
 			await waitFor( () =>
 				expect( fetchOptimizationPresets ).toHaveBeenCalledWith(
-					'balanced'
+					'balanced',
+					expect.anything()
 				)
 			);
 			await waitFor( () =>
@@ -201,5 +209,124 @@ describe( 'OptimizationPresets', () => {
 		expect(
 			screen.getByText( 'Settings restored successfully.' )
 		).toBeInTheDocument();
+	} );
+
+	it( 'ignores a stale preview response after rapid preset switching', async () => {
+		let resolveBalanced;
+		let resolveSafe;
+		fetchOptimizationPresets.mockImplementation( ( name ) => {
+			if ( 'balanced' === name ) {
+				return new Promise( ( resolve ) => {
+					resolveBalanced = resolve;
+				} );
+			}
+			return new Promise( ( resolve ) => {
+				resolveSafe = resolve;
+			} );
+		} );
+
+		render( <OptimizationPresets /> );
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Balanced' } ) );
+		fireEvent.click( screen.getByRole( 'button', { name: 'Safe' } ) );
+
+		// Resolve out of order: the stale Balanced response settles last
+		// and must not overwrite the Safe diff.
+		resolveSafe( {
+			success: true,
+			data: { preset: 'safe', diff: [] },
+		} );
+		resolveBalanced( {
+			success: true,
+			data: {
+				preset: 'balanced',
+				diff: [
+					{
+						tab: 'file_optimisation',
+						key: 'minifyHTML',
+						from: false,
+						to: true,
+					},
+				],
+			},
+		} );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText(
+					'This preset already matches your settings — nothing would change.'
+				)
+			).toBeInTheDocument()
+		);
+		expect(
+			screen.queryByText( 'file_optimisation.minifyHTML' )
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'strips secrets from the exported JSON backup', () => {
+		global.wppoSettings = {
+			settings: {
+				cache_settings: { enableCache: true },
+				performance_audit: {
+					pagespeed_api_key: 'AIza-secret',
+					other: 'keep',
+				},
+				object_cache: { password: 's3cret', host: '127.0.0.1' },
+			},
+		};
+		// Capture the serialized payload synchronously by intercepting Blob
+		// construction (jsdom Blob.text() is async and timing-sensitive).
+		const RealBlob = global.Blob;
+		let captured = '';
+		global.Blob = jest.fn( ( parts, options ) => {
+			captured = Array.isArray( parts ) ? parts.join( '' ) : '';
+			return new RealBlob( parts, options );
+		} );
+		global.URL.createObjectURL = jest.fn( () => 'blob:mock-url' );
+		global.URL.revokeObjectURL = jest.fn();
+		const anchor = { click: jest.fn(), remove: jest.fn() };
+		const createSpy = jest
+			.spyOn( document, 'createElement' )
+			.mockReturnValue( anchor );
+		const appendSpy = jest
+			.spyOn( document.body, 'appendChild' )
+			.mockImplementation( () => anchor );
+		try {
+			const notify = jest.fn();
+			exportSettingsJson( notify );
+
+			expect( captured ).not.toBe( '' );
+			const parsed = JSON.parse( captured );
+			expect(
+				parsed.performance_audit.pagespeed_api_key
+			).toBeUndefined();
+			expect( parsed.object_cache.password ).toBeUndefined();
+			expect( parsed.performance_audit.other ).toBe( 'keep' );
+			expect( parsed.object_cache.host ).toBe( '127.0.0.1' );
+			expect( parsed.cache_settings.enableCache ).toBe( true );
+			// The live global keeps its secrets.
+			expect(
+				global.wppoSettings.settings.performance_audit.pagespeed_api_key
+			).toBe( 'AIza-secret' );
+			expect( global.wppoSettings.settings.object_cache.password ).toBe(
+				's3cret'
+			);
+			expect( notify ).toHaveBeenCalledWith(
+				expect.objectContaining( { type: 'success' } )
+			);
+		} finally {
+			createSpy.mockRestore();
+			appendSpy.mockRestore();
+			global.Blob = RealBlob;
+			delete global.URL.createObjectURL;
+			delete global.URL.revokeObjectURL;
+		}
+	} );
+
+	it( 'stripSensitiveSettings tolerates missing tabs and non-objects', () => {
+		expect( stripSensitiveSettings( null ) ).toEqual( {} );
+		expect( stripSensitiveSettings( { cache_settings: {} } ) ).toEqual( {
+			cache_settings: {},
+		} );
 	} );
 } );

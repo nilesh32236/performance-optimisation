@@ -466,7 +466,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$stored_tab = ( isset( $current[ $tab ] ) && is_array( $current[ $tab ] ) ) ? $current[ $tab ] : array();
 					foreach ( $keys as $key => $to ) {
 						$from = $stored_tab[ $key ] ?? null;
-						if ( true === $to && false === $from ) {
+						if ( true === $to && true !== $from ) {
 							$diff[] = array(
 								'tab'  => $tab,
 								'key'  => $key,

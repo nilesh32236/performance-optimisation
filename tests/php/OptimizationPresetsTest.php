@@ -123,6 +123,51 @@ class OptimizationPresetsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Safety-guard preview must surface guards that are missing or null
+	 * (fresh installs, older settings), not just strict false — apply
+	 * forces them ON, so the preview must match apply-time behavior.
+	 */
+	public function test_preset_diff_includes_missing_safety_guards(): void {
+		$this->install_option_stubs();
+
+		$diff = Util::get_preset_diff( 'safe', array() );
+
+		$changed_keys = array();
+		foreach ( $diff as $entry ) {
+			$changed_keys[] = $entry['tab'] . '.' . $entry['key'];
+		}
+		$this->assertContains( 'cache_settings.wooSafeMode', $changed_keys, 'Missing wooSafeMode guard must appear in the preview diff' );
+		$this->assertContains( 'file_optimisation.delayJSSafeMode', $changed_keys, 'Missing delayJSSafeMode guard must appear in the preview diff' );
+	}
+
+	/**
+	 * Safety-guard preview must stay silent for guards already ON.
+	 */
+	public function test_preset_diff_omits_satisfied_safety_guards(): void {
+		$this->install_option_stubs();
+
+		$current = array(
+			'cache_settings'    => array(
+				'wooSafeMode' => true,
+			),
+			'file_optimisation' => array(
+				'delayJSSafeMode'       => true,
+				'delayJSBuilderPreset'  => true,
+				'delayJSCommercePreset' => true,
+				'elementorSafeMode'     => true,
+			),
+		);
+
+		$diff         = Util::get_preset_diff( 'safe', $current );
+		$changed_keys = array();
+		foreach ( $diff as $entry ) {
+			$changed_keys[] = $entry['tab'] . '.' . $entry['key'];
+		}
+		$this->assertNotContains( 'cache_settings.wooSafeMode', $changed_keys, 'Satisfied wooSafeMode guard must not appear in the preview diff' );
+		$this->assertNotContains( 'file_optimisation.delayJSSafeMode', $changed_keys, 'Satisfied delayJSSafeMode guard must not appear in the preview diff' );
+	}
+
+	/**
 	 * Apply must merge the preset, snapshot the prior settings for one-click
 	 * undo, and force the fail-safe guards ON even when they were off.
 	 */

@@ -146,6 +146,16 @@ export const formatValue = ( value, unit ) => {
 	if ( unit === 'ms' ) {
 		return formatMs( value );
 	}
+	// Cumulative Layout Shift is unitless: render a clean localized number
+	// instead of falling through to the generic "%1$s %2$s" sprintf
+	// (which would print e.g. "0.24 cls").
+	if ( unit === 'cls' ) {
+		const num = Number( value );
+		if ( ! Number.isFinite( num ) ) {
+			return '—';
+		}
+		return num.toFixed( 3 );
+	}
 	if ( unit === undefined || unit === null || unit === '' ) {
 		return String( value );
 	}
