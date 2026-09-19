@@ -713,10 +713,14 @@ describe( 'PluginSetting', () => {
 		fireEvent.click( undoButton );
 
 		await waitFor( () =>
-			// Audit #1483: the transport message is surfaced, not the
-			// generic fallback.
-			expect( screen.getByText( 'network down' ) ).toBeInTheDocument()
+			// Audit #1483 follow-up: the translated fallback is shown to
+			// users while the raw transport detail stays in the console.
+			expect(
+				screen.getByText( 'Error restoring settings.' )
+			).toBeInTheDocument()
 		);
+		expect( screen.queryByText( 'network down' ) ).not.toBeInTheDocument();
+		expect( errorSpy ).toHaveBeenCalled();
 
 		errorSpy.mockRestore();
 	} );

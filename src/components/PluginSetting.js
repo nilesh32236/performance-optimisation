@@ -367,12 +367,10 @@ const PluginSetting = ( { options } ) => {
 			);
 			notifyUndo( {
 				type: 'error',
-				message:
-					restoreError?.message ||
-					__(
-						'Error restoring settings.',
-						'performance-optimisation'
-					),
+				message: __(
+					'Error restoring settings.',
+					'performance-optimisation'
+				),
 			} );
 		} finally {
 			restoreControllerRef.current = null;
@@ -538,7 +536,7 @@ const PluginSetting = ( { options } ) => {
 			}
 			notifyApiKey( {
 				type: 'error',
-				message: err?.message || catchNotice || errorNotice,
+				message: catchNotice || errorNotice,
 			} );
 			console.error( logLabel, getErrorLogMessage( err ) );
 		} finally {

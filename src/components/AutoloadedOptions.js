@@ -568,7 +568,10 @@ const AutoloadedOptions = () => {
 						className="wppo-button wppo-button--secondary wppo-button--sm wppo-mt-10"
 						onClick={ () => {
 							const controller = new AbortController();
-							load( controller.signal );
+							pendingRef.current.add( controller );
+							load( controller.signal ).finally( () => {
+								pendingRef.current.delete( controller );
+							} );
 						} }
 						disabled={ loading }
 					>

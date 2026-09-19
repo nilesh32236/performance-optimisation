@@ -7,7 +7,7 @@
  * @since 2.18.0
  */
 
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf, _n } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUsers, faSpinner } from '@fortawesome/free-solid-svg-icons';
@@ -48,6 +48,7 @@ const WebVitalsRum = () => {
 	const [ data, setData ] = useState( [] );
 	const [ loading, setLoading ] = useState( true );
 	const { notice, notify, dismiss } = useNotice();
+	const retryControllerRef = useRef( null );
 
 	const load = useCallback(
 		async ( signal ) => {
@@ -105,7 +106,10 @@ const WebVitalsRum = () => {
 	useEffect( () => {
 		const controller = new AbortController();
 		load( controller.signal );
-		return () => controller.abort();
+		return () => {
+			controller.abort();
+			retryControllerRef.current?.abort();
+		};
 	}, [ load ] );
 
 	const fmtMs = ( value ) =>
@@ -172,7 +176,16 @@ const WebVitalsRum = () => {
 				<button
 					type="button"
 					className="wppo-button wppo-button--secondary wppo-button--sm wppo-mt-10"
-					onClick={ () => load() }
+					onClick={ () => {
+						retryControllerRef.current?.abort();
+						const controller = new AbortController();
+						retryControllerRef.current = controller;
+						load( controller.signal ).finally( () => {
+							if ( retryControllerRef.current === controller ) {
+								retryControllerRef.current = null;
+							}
+						} );
+					} }
 					disabled={ loading }
 				>
 					{ __( 'Retry', 'performance-optimisation' ) }

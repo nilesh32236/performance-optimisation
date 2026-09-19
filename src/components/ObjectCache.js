@@ -281,9 +281,10 @@ const ObjectCache = ( { options = {} } ) => {
 			}
 			notify( {
 				type: 'error',
-				message:
-					err?.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 			console.error(
@@ -360,9 +361,7 @@ const ObjectCache = ( { options = {} } ) => {
 			}
 			notify( {
 				type: 'error',
-				message:
-					err?.message ||
-					__( 'Action failed.', 'performance-optimisation' ),
+				message: __( 'Action failed.', 'performance-optimisation' ),
 				durationMs: 5000,
 			} );
 		} finally {

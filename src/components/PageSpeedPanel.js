@@ -394,9 +394,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			setScanning( false );
 			notify( {
 				type: 'error',
-				message:
-					err?.message ||
-					__( 'PageSpeed scan failed.', 'performance-optimisation' ),
+				message: __(
+					'PageSpeed scan failed.',
+					'performance-optimisation'
+				),
 			} );
 			console.error( 'PageSpeed scan error:', getErrorLogMessage( err ) );
 		}

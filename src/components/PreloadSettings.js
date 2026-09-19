@@ -307,12 +307,10 @@ const PreloadSettings = ( { options = {} } ) => {
 			);
 			notify( {
 				type: 'error',
-				message:
-					err?.message ||
-					__(
-						'An unexpected error occurred.',
-						'performance-optimisation'
-					),
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {

@@ -278,10 +278,14 @@ describe( 'PreloadSettings Component', () => {
 		);
 
 		await waitFor( () => {
-			// Audit #1483: the server/transport message is surfaced, not
-			// the generic fallback.
-			expect( screen.getByText( 'Network error' ) ).toBeInTheDocument();
+			// Audit #1483 follow-up: the translated fallback is shown to
+			// users while the raw transport detail stays in the console.
+			expect(
+				screen.getByText( 'An unexpected error occurred.' )
+			).toBeInTheDocument();
 		} );
+		expect( screen.queryByText( 'Network error' ) ).not.toBeInTheDocument();
+		expect( consoleSpy ).toHaveBeenCalled();
 
 		consoleSpy.mockRestore();
 	} );
