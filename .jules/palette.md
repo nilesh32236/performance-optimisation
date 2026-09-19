@@ -55,3 +55,6 @@
 ## 2024-05-23 - Accessible Tooltip Fallbacks
 **Learning:** For icon-only tooltips, using the full string content as `aria-label` is better than a generic fallback, even if long. When `aria-label` exactly matches the tooltip content, `aria-describedby` should be omitted to prevent screen readers from announcing the text twice. Rich/JSX content requires an explicit `label` prop.
 **Action:** Added an optional `label` prop, removed the length restriction on the string fallback, and conditionally omitted `aria-describedby` when it duplicates the label.
+## YYYY-MM-DD - [Dynamic Danger Button Shadows]
+**Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
+**Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
