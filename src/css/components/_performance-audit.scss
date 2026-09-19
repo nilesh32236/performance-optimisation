@@ -104,10 +104,17 @@
 // Individual metric card
 // -----------------------------------------------------------------------------
 
+// Audit #1420: dl/dt/dd carry default margins — neutralized (BEM hooks unchanged).
 .wppo-metric-card {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+	margin: 0;
+	dt,
+	dd {
+		margin: 0;
+		padding: 0;
+	}
 	padding: 14px 16px;
 	background: var(--wppo-bg-card-surface);
 	border: 1px solid var(--wppo-border);

@@ -39,7 +39,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @var string
 		 * @since 1.6.0
 		 */
-		private $cache_dir;
+		private string $cache_dir; // Audit #1434: typed per docblock.
 
 		/**
 		 * Constructor.
@@ -359,21 +359,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'safe_mode_detect'          => array(
+					'methods'             => array( 'GET', 'POST' ),
+					'callback'            => array( $this, 'detect_safe_mode_excludes' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'safe_mode'                 => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'handle_safe_mode' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
 		/**
 		 * List the largest autoloaded options.
 		 *
+		 * Returns the full {@see Database_Cleanup::get_autoload_audit()}
+		 * payload (totals, critical flag, top-N list). Optional `parity=1`
+		 * attaches the read-only {@see Database_Cleanup::get_autoload_parity()}
+		 * `wp_load_alloptions()` comparison (opt-in: too heavy by default).
+		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_autoloaded_options( \WP_REST_Request $request ): \WP_REST_Response {
-			$limit  = isset( $request->get_params()['limit'] ) ? absint( $request->get_params()['limit'] ) : 20;
+			$params = $request->get_params();
+			$limit  = isset( $params['limit'] ) ? absint( $params['limit'] ) : 20;
 			$limit  = max( 1, min( 100, $limit ) );
-			$result = Database_Cleanup::get_autoloaded_options( $limit );
+			$result = Database_Cleanup::get_autoload_audit( $limit );
+			if ( ! empty( $params['parity'] ) ) {
+				try {
+					$result['parity'] = Database_Cleanup::get_autoload_parity();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
-			return $this->send_response( array( 'options' => $result ) );
+			try {
+				$result['size_limit'] = Database_Cleanup::get_autoload_size_limit();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response( $result );
 		}
 
 		/**
@@ -507,7 +537,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * Fail-open: queue/cache failures return idle/ok payloads, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 */
@@ -519,13 +549,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'total'       => 0,
 				'status'      => 'idle',
 				'failed_urls' => array(),
+				'cache_bytes' => 0,
+				'cache_files' => 0,
+				'stalled'     => false,
 			);
 			$cache   = array(
-				'bytes'     => 0,
-				'cap_bytes' => 0,
-				'state'     => 'ok',
-				'enforce'   => true,
-				'max_mb'    => 0,
+				'bytes'      => 0,
+				'cap_bytes'  => 0,
+				'state'      => 'ok',
+				'enforce'    => true,
+				'max_mb'     => 0,
+				'files'      => 0,
+				'cap_files'  => 0,
+				'warn_files' => 0,
 			);
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'get_preload_status' ) ) {
@@ -573,7 +609,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_lcp_preload_candidate( \WP_REST_Request $request ): \WP_REST_Response {
 			$params  = $request->get_params();
@@ -690,7 +726,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Resume the sitemap preload queue (re-schedule queued + failed URLs).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 */
@@ -737,7 +773,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * extension, or (for extensionless image-CDN URLs) carry image-ish
 		 * query params. Fail-open: any failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded as an image.
 		 */
@@ -793,7 +829,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * an unverifiable verdict maps to false. Fail-closed: any failure
 		 * returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may surface as a candidate.
 		 */
@@ -888,9 +924,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * Per-request static throttle buckets (audit #1453).
+		 *
+		 * Fallback when the transient API is unavailable: bounds bursts
+		 * within a single request lifecycle. Request-scoped by design —
+		 * cross-request throttling still needs transients.
+		 *
+		 * @since 2.2.0
+		 * @param string $endpoint Endpoint slug.
+		 * @param int    $limit    Max hits per window.
+		 * @param int    $window   Window in seconds.
+		 * @return bool True when throttled.
+		 */
+		private static function static_throttle_hit( string $endpoint, int $limit, int $window ): bool {
+			static $buckets = array();
+			$now            = time();
+			if ( ! isset( $buckets[ $endpoint ] ) || $now - $buckets[ $endpoint ]['at'] >= $window ) {
+				$buckets[ $endpoint ] = array(
+					'at'   => $now,
+					'hits' => 1,
+				);
+				return false;
+			}
+			++$buckets[ $endpoint ]['hits'];
+			return $buckets[ $endpoint ]['hits'] > $limit;
+		}
+
+		/**
 		 * Per-endpoint transient throttle for heavy admin endpoints.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $endpoint Endpoint slug.
 		 * @param int    $limit    Max hits per window.
 		 * @param int    $window   Window in seconds.
@@ -910,7 +973,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						unset( $e );
 					}
 				}
-				return false;
+				// Audit #1453: static per-request fallback bucket so a transient
+				// outage degrades throttling instead of disabling it.
+				return self::static_throttle_hit( $endpoint, $limit, $window );
 			}
 			try {
 				// Per-user/IP key so one actor cannot exhaust the budget for
@@ -970,7 +1035,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * 429 sooner rather than letting throttling be bypassed); sites
 		 * with a trusted proxy should enforce limits at the edge instead.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Anon throttle suffix.
 		 */
 		private static function throttle_client_suffix(): string {
@@ -981,7 +1046,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Same-site URL gate shared by readers and writers.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $url URL to check.
 		 * @return bool
 		 */
@@ -1154,17 +1219,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Server-only outage status flag (issue #1233): clients must not
 			// pin spoofed degraded/healthy state via update_settings. Drop
 			// any client value so the array_merge below preserves the stored
+			// Removed (#925, pruned #1373): the legacy
+			// file_optimisation.removeQueryStrings key is dropped on save so it
+			// decays naturally. A legacy client that still posts the key is
+			// accepted silently (fail-open, never fatal); stored legacy values
+			// are ignored and `?ver` is always preserved.
+			if ( 'file_optimisation' === $tab && isset( $sanitized_settings['removeQueryStrings'] ) ) {
+				unset( $sanitized_settings['removeQueryStrings'] );
+			}
+
 			// server-written value, mirroring password handling.
 			if ( 'object_cache' === $tab && isset( $sanitized_settings['outage_bypassed'] ) ) {
 				unset( $sanitized_settings['outage_bypassed'] );
-			}
-
-			// Removed (#925): the legacy file_optimisation.removeQueryStrings key
-			// is dropped on save so it decays naturally. A legacy client that
-			// still posts the key is accepted silently (fail-open, never fatal);
-			// stored legacy values are ignored and `?ver` is always preserved.
-			if ( 'file_optimisation' === $tab && isset( $sanitized_settings['removeQueryStrings'] ) ) {
-				unset( $sanitized_settings['removeQueryStrings'] );
 			}
 
 			$options = Util::get_settings();
@@ -1225,6 +1291,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// stored value self-heals instead of pinning auto-tune.
 			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['field_lcp_min_samples'] ) && isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
 				$sanitized_settings['field_lcp_min_samples'] = min( 1000, max( 1, absint( $options['ai_adaptive']['field_lcp_min_samples'] ) ) );
+			}
+
+			// Preserve the RUM-segmented speculation auto-tune keys when the
+			// request omits them (issue #1425): same partial-save hazard as
+			// the field-LCP threshold above — an older client/partial save
+			// must not wipe the opt-in flag or the tuning thresholds.
+			// Normalized like Util::sanitize_settings_recursively() so stored
+			// extremes self-heal instead of persisting verbatim.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_autotune_enabled'] ) && isset( $options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
+				$stored = $options['ai_adaptive']['speculation_autotune_enabled'];
+				if ( is_bool( $stored ) ) {
+					$sanitized_settings['speculation_autotune_enabled'] = $stored;
+				} else {
+					$bool = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized_settings['speculation_autotune_enabled'] = null === $bool ? false : $bool;
+				}
+			}
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_min_samples'] ) && isset( $options['ai_adaptive']['speculation_min_samples'] ) ) {
+				$sanitized_settings['speculation_min_samples'] = min( 1000, max( 1, absint( $options['ai_adaptive']['speculation_min_samples'] ) ) );
+			}
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_max_urls'] ) && isset( $options['ai_adaptive']['speculation_max_urls'] ) ) {
+				$stored_limit                               = is_numeric( $options['ai_adaptive']['speculation_max_urls'] ) ? (int) $options['ai_adaptive']['speculation_max_urls'] : 5;
+				$sanitized_settings['speculation_max_urls'] = min( 5, max( 1, $stored_limit ) );
 			}
 
 			// Preserve the RUM-priority ordering flags when the request omits
@@ -1373,7 +1462,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return array The sanitized settings array.
 		 * @since 1.1.1
 		 */
-		private function sanitize_settings_recursively( $settings ) {
+		private function sanitize_settings_recursively( array $settings ): array {
+			// Audit #1434: typed.
 			return Util::sanitize_settings_recursively( $settings );
 		}
 
@@ -1566,16 +1656,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$jobs_queued          = 0;
 
 			if ( $use_action_scheduler ) {
-				// Paginated scheduler snapshot for dedup instead of one
-				// as_has_scheduled_action() query per image (N+1). Falls back
-				// to per-item checks only when the snapshot is incomplete
-				// (unavailable/failed/page-cap hit); a complete snapshot is
-				// trusted (audit #1338). The snapshot is best-effort: a
-				// concurrent process enqueueing between snapshot and enqueue
-				// can still duplicate — the per-item fallback narrows that
-				// window only when the snapshot is known-incomplete.
-				$scheduled         = array();
-				$snapshot_complete = false;
+				// Paginated scheduler snapshot for in-request dedup instead of
+				// one as_has_scheduled_action() query per image (N+1, audit
+				// #1338). The snapshot is best-effort and advisory only: the
+				// atomic `$unique` enqueue below (issue #1408) is the dedup
+				// authority, so a concurrent enqueue between snapshot and
+				// enqueue still dedupes safely in the store.
+				$scheduled = array();
 				// Needed dedup keys (bounded by $jobs_cap): stop paginating as
 				// soon as every needed key is covered instead of fetching up
 				// to 10k rows.
@@ -1605,13 +1692,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								'offset'   => $as_page * 1000,
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
-							// Store failure is NOT complete: fall back to per-item checks
-							// rather than trusting an empty map (avoids double-queueing).
+							// Store failure yields a partial map at worst: the
+							// atomic `$unique` enqueue below still dedupes.
 							if ( ! is_array( $existing_actions ) ) {
 								break;
 							}
 							if ( empty( $existing_actions ) ) {
-								$snapshot_complete = true;
 								break;
 							}
 							foreach ( $existing_actions as $action ) {
@@ -1627,14 +1713,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
 									// All needed keys covered: stop paginating early.
 									if ( ! empty( $needed ) && ! array_diff_key( $needed, $scheduled ) ) {
-										$snapshot_complete = true;
 										break 2;
 									}
 								}
 							}
 							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 							if ( count( $existing_actions ) < 1000 ) {
-								$snapshot_complete = true;
 								break;
 							}
 						}
@@ -1644,6 +1728,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 				// Schedule background jobs via Action Scheduler with deduplication.
+				// Atomic-first on AS 4.x (issue #1408): Util::enqueue_unique_async_action()
+				// passes the explicit `$unique` flag so hook+args+group dedupe happens
+				// atomically in the store — no racy check-then-act and no per-item
+				// as_has_scheduled_action() SELECT (saves N queries per bulk request).
+				// The snapshot above stays as an in-flight/in-request map only; a 0
+				// return means deduped-or-failed and is never counted as queued.
 				foreach ( $webp_images as $webp_image ) {
 					$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
@@ -1658,17 +1748,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
-							$scheduled[ $dedup_key ] = true;
-							continue;
-						}
-						as_enqueue_async_action(
+						$job_id                  = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
 						$scheduled[ $dedup_key ] = true;
-						++$jobs_queued;
+						if ( $job_id > 0 ) {
+							++$jobs_queued;
+						}
 					}
 				}
 
@@ -1686,17 +1774,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( ! $snapshot_complete && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
-							$scheduled[ $dedup_key ] = true;
-							continue;
-						}
-						as_enqueue_async_action(
+						$job_id                  = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
 						$scheduled[ $dedup_key ] = true;
-						++$jobs_queued;
+						if ( $job_id > 0 ) {
+							++$jobs_queued;
+						}
 					}
 				}
 
@@ -1913,7 +1999,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_settings_snapshot( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
 			$snapshot = Util::get_settings_snapshot();
@@ -1944,7 +2030,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function restore_settings( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
 			if ( $this->is_endpoint_throttled( 'restore_settings', 5, 60 ) ) {
@@ -2300,7 +2386,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.4.0
-		 * @since NEXT Flush action uses Object_Cache::flush_scoped() for multisite scoping.
+		 * @since 2.2.0 Flush action uses Object_Cache::flush_scoped() for multisite scoping.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function handle_object_cache( \WP_REST_Request $request ) {
@@ -2524,7 +2610,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					if ( defined( 'WPPO_REDIS_PASSWORD' ) && ! apply_filters( 'wppo_redis_allow_request_password', false ) ) {
 						return '';
 					}
-					return sanitize_text_field( (string) $value );
+					// Audit #1453: no tag-stripping on passwords (mangles strong
+					// secrets) — string cast + length clamp only. Never
+					// persisted (unset/flag-only downstream); HTTPS-only for
+					// admin REST calls carrying a password.
+					if ( ! is_string( $value ) && ! is_numeric( $value ) ) {
+						return '';
+					}
+					return substr( (string) $value, 0, 512 );
 				case 'use_tls':
 				case 'persistent':
 					return (bool) $value;
@@ -2597,7 +2690,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * run_performance_scan(); verbose detail stays available under
 		 * WP_DEBUG via get_status().
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param \WP_Error $error Failing result.
 		 * @return \WP_Error Sanitized clone (same code, scrubbed message and data).
 		 */
@@ -2624,7 +2717,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Objects and resources are dropped (replaced with null) since a
 		 * verbose backend could hide paths or topology inside them.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $data Raw error data.
 		 * @return mixed Scrubbed error data.
 		 */
@@ -3115,7 +3208,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
 		 * @since 2.0.0
-		 * @since NEXT Added preload_checks, cart_checks and force_exclude to the result (issue #1256).
+		 * @since 2.2.0 Added preload_checks, cart_checks and force_exclude to the result (issue #1256).
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_woo_cache_self_test( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -3177,22 +3270,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 				$job_args = array( 'post_id' => $post_id );
-				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
-					return $this->send_response(
-						array(
-							'mode'    => 'single',
-							'post_id' => $post_id,
-						),
-						true,
-						202,
-						__( 'Used CSS regeneration already queued.', 'performance-optimisation' )
-					);
+				// Atomic-first on AS 4.x (issue #1408): the `$unique` insert dedupes
+				// hook+args+group in the store, closing the check-then-act race where
+				// two concurrent requests both passed as_has_scheduled_action() and
+				// double-queued. A 0 return is ambiguous (deduped vs failure), so
+				// re-probe the guard once to report "already queued" honestly.
+				$job_id = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+				if ( 0 === $job_id ) {
+					$already_pending = false;
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							$already_pending = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$already_pending = false;
+						}
+					}
+					if ( $already_pending ) {
+						return $this->send_response(
+							array(
+								'mode'    => 'single',
+								'post_id' => $post_id,
+							),
+							true,
+							202,
+							__( 'Used CSS regeneration already queued.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response( null, false, 500, __( 'Used CSS regeneration could not be queued.', 'performance-optimisation' ) );
 				}
-				as_enqueue_async_action(
-					'wppo_used_css_generate',
-					$job_args,
-					'performance_optimisation'
-				);
 				return $this->send_response(
 					array(
 						'mode'    => 'single',
@@ -3329,7 +3435,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * cost. Throttled like regenerate_ccss; fail-open messaging.
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function purge_derived_caches( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -3393,7 +3499,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * proof after an upgrade.
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_upgrade_purge_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -3567,7 +3673,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			$queued = Critical_CSS::regenerate_all();
+			$queued = Critical_CSS::regenerate_all( true );
 
 			// Suspended while deferJS/delayJS is active: regenerate_all()
 			// preserves existing variants and queues nothing (issue #1090).
@@ -3616,7 +3722,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_used_css_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$status = class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_staleness_info' )
@@ -3664,6 +3770,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Get AI suggestions.
 		 *
+		 * GET-with-side-effect (issue #1407, intentional): when the
+		 * `ai_adaptive.css_refresh_on_lcp_regression` opt-in is on and a
+		 * field-LCP regression fires, rendering the LCP suggestion may
+		 * enqueue at most one used-CSS regen job per URL per cooldown
+		 * window (minimum 1 day) plus one transient and one bounded
+		 * snapshot-option write, only on an actual queue. Admin-capability
+		 * (`manage_options`) gated; fail-open to a suggestion-only card.
+		 * See AI_Adaptive::get_suggestions() for the full contract.
+		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.0.0
@@ -3684,7 +3799,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function get_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$staged      = class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ? Sandbox_Preview::get_staged_settings() : array();
@@ -3710,7 +3825,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function save_sandbox_preview( \WP_REST_Request $request ): \WP_REST_Response {
 			if ( $this->is_endpoint_throttled( 'sandbox_save', 5, 60 ) ) {
@@ -3735,7 +3850,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function promote_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			if ( $this->is_endpoint_throttled( 'sandbox_promote', 5, 60 ) ) {
@@ -3763,7 +3878,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.2.0
 		 */
 		public function discard_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			if ( $this->is_endpoint_throttled( 'sandbox_discard', 5, 60 ) ) {
@@ -3779,6 +3894,271 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 500, __( 'Could not discard sandbox settings.', 'performance-optimisation' ) );
 			}
 			return $this->send_response( array( 'staged' => array() ) );
+		}
+
+		/**
+		 * Auto-exclude detector for the minify/combine/defer stack (issue #1465).
+		 *
+		 * Inspects the currently enqueued script/style handles (when
+		 * available) plus active-plugin signals (WooCommerce, Elementor,
+		 * Kadence — all function_exists/class_exists-guarded for WP 6.2+
+		 * compat) and maps them through
+		 * Main::detect_fragile_handles() so the UI can suggest the exact
+		 * handle to exclude. Read-only, per-site settings only
+		 * (multisite-safe). Fail-open: any failure returns an empty
+		 * suggestion list, never fatal.
+		 *
+		 * Limitation: inside a REST/admin request the frontend
+		 * `$GLOBALS['wp_scripts']->queue` / `$GLOBALS['wp_styles']->queue`
+		 * is never populated, so the endpoint falls back to plugin-signal
+		 * guesses unless the caller passes the page's real handles via the
+		 * optional `handles` param (array or comma-separated string, capped
+		 * at 100 entries of 128 chars). Accepts GET and POST: POST the
+		 * handles in the request body to avoid proxy/WAF URL-length limits.
+		 *
+		 * @param \WP_REST_Request $_request The request object. Optional `handles` param for accuracy.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function detect_safe_mode_excludes( \WP_REST_Request $_request ): \WP_REST_Response {
+			try {
+				$file_opt = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					try {
+						$settings = (array) Util::get_settings();
+						$file_opt = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$handles = array();
+				// Explicit handles param wins for accuracy: the REST/admin
+				// queue is empty, so the UI may POST the frontend queue it
+				// collected (array or comma-separated string, sanitized).
+				try {
+					$req_params = $_request->get_params();
+					if ( isset( $req_params['handles'] ) ) {
+						$raw_handles = $req_params['handles'];
+						if ( is_string( $raw_handles ) ) {
+							$raw_handles = explode( ',', $raw_handles );
+						}
+						if ( is_array( $raw_handles ) ) {
+							// Bound oversized direct REST input before
+							// sanitizing/looping so it is truncated cheaply
+							// (detect_fragile_handles caps suggestions at 20,
+							// but only after this loop runs).
+							$raw_handles = array_slice( $raw_handles, 0, 100 );
+							foreach ( $raw_handles as $handle ) {
+								if ( is_string( $handle ) || is_numeric( $handle ) ) {
+									$clean = trim( sanitize_text_field( (string) $handle ) );
+									$clean = substr( $clean, 0, 128 );
+									if ( '' !== $clean ) {
+										$handles[] = $clean;
+									}
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					$has_explicit = ! empty( $handles );
+					if ( ! $has_explicit && isset( $GLOBALS['wp_scripts'] ) && is_object( $GLOBALS['wp_scripts'] ) && ! empty( $GLOBALS['wp_scripts']->queue ) && is_array( $GLOBALS['wp_scripts']->queue ) ) {
+						foreach ( $GLOBALS['wp_scripts']->queue as $handle ) {
+							if ( is_string( $handle ) || is_numeric( $handle ) ) {
+								$handles[] = (string) $handle;
+							}
+						}
+					}
+					if ( ! $has_explicit && isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && ! empty( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
+						foreach ( $GLOBALS['wp_styles']->queue as $handle ) {
+							if ( is_string( $handle ) || is_numeric( $handle ) ) {
+								$handles[] = (string) $handle;
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Active-plugin signals when the queue is unavailable (e.g.
+				// admin-ajax context): suggest the canonical fragile handles
+				// so the UI still names the exact handle first.
+				try {
+					if ( empty( $handles ) ) {
+						$signals = array();
+						if ( function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || class_exists( 'WooCommerce' ) ) {
+							$signals[] = 'wc-cart-fragments';
+							$signals[] = 'wc-checkout';
+						}
+						if ( function_exists( 'elementor_pro_load_plugin' ) || ( function_exists( 'did_action' ) && did_action( 'elementor/loaded' ) ) || class_exists( 'Elementor\Plugin' ) ) {
+							$signals[] = 'elementor-frontend';
+						}
+						if ( class_exists( 'Kadence_Blocks' ) || ( function_exists( 'wp_get_theme' ) && false !== stripos( (string) ( function_exists( 'get_template' ) ? get_template() : '' ), 'kadence' ) ) ) {
+							$signals[] = 'kadence-blocks';
+						}
+						if ( function_exists( 'et_setup_theme' ) || class_exists( 'ET_Builder_Element' ) ) {
+							$signals[] = 'divi-custom-script';
+						}
+						if ( empty( $signals ) ) {
+							$signals[] = 'jquery-core';
+						}
+						$handles = $signals;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					if ( empty( $handles ) ) {
+						$handles = array( 'jquery-core' );
+					}
+				}
+				$suggestions = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'detect_fragile_handles' ) ) {
+					try {
+						$suggestions = Main::detect_fragile_handles( $handles );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$suggestions = array();
+					}
+				}
+				$stack = array(
+					'safe_mode'         => false,
+					'delay_js'          => ! empty( $file_opt['delayJS'] ),
+					'defer_js'          => ! empty( $file_opt['deferJS'] ),
+					'combine_css'       => ! empty( $file_opt['combineCSS'] ),
+					'remove_unused_css' => ! empty( $file_opt['removeUnusedCSS'] ),
+					'stack_enabled'     => false,
+				);
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'get_safe_mode_stack_state' ) ) {
+					try {
+						$stack = Main::get_safe_mode_stack_state( $file_opt );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $this->send_response(
+					array(
+						'stack'       => $stack,
+						'suggestions' => $suggestions,
+						'handles'     => array_values( array_unique( $handles ) ),
+					)
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $this->send_response(
+					array(
+						'stack'       => array(
+							'safe_mode'         => false,
+							'delay_js'          => false,
+							'defer_js'          => false,
+							'combine_css'       => false,
+							'remove_unused_css' => false,
+							'stack_enabled'     => false,
+						),
+						'suggestions' => array(),
+						'handles'     => array(),
+					)
+				);
+			}
+		}
+
+		/**
+		 * One-click safe mode for the minify/combine/defer stack (issue #1465).
+		 *
+		 * POST param `action` is `enable` (single action restores an unbroken
+		 * render: delay + defer + combine + used-CSS paused, settings
+		 * preserved) or `disable` (restores the previous configuration).
+		 * Persists per-site `file_optimisation.safeMode` with a settings
+		 * snapshot for one-click undo. Throttled, manage_options-gated via
+		 * the route permission callback. Fail-open: never fatal.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function handle_safe_mode( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'safe_mode', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
+			try {
+				$params = $request->get_params();
+				$action = isset( $params['action'] ) ? sanitize_text_field( (string) $params['action'] ) : 'enable';
+				if ( ! in_array( $action, array( 'enable', 'disable' ), true ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid safe-mode action.', 'performance-optimisation' ) );
+				}
+				$options = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ? (array) Util::get_settings() : array();
+				if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
+					$options['file_optimisation'] = array();
+				}
+				// Snapshot only on enable while safe mode is off: snapshotting
+				// on disable would overwrite the pre-enable undo state with
+				// the safeMode=true state, so a later restore would wrongly
+				// re-enable safe mode instead of the original config.
+				$was_safe = ! empty( $options['file_optimisation']['safeMode'] );
+				if ( 'enable' === $action && ! $was_safe ) {
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'take_settings_snapshot' ) ) {
+							Util::take_settings_snapshot( $options );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( 'enable' === $action ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'build_safe_mode_enable_payload' ) ) {
+						try {
+							$options['file_optimisation'] = Main::build_safe_mode_enable_payload( $options['file_optimisation'] );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$options['file_optimisation']['safeMode'] = true;
+						}
+					} else {
+						$options['file_optimisation']['safeMode'] = true;
+					}
+				} else {
+					$options['file_optimisation']['safeMode'] = false;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'save_settings' ) ) {
+					Util::save_settings( $options );
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+						try {
+							Util::set_settings_cache( $options );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				} elseif ( function_exists( 'update_option' ) ) {
+						update_option( 'wppo_settings', $options, false );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) && method_exists( 'PerformanceOptimise\Inc\Telemetry', 'invalidate_audit_cache' ) ) {
+					try {
+						Telemetry::invalidate_audit_cache();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Purge the static HTML page cache (plus combined-CSS sidecars)
+				// so safe mode takes effect immediately: cached pages are
+				// served via the advanced-cache.php drop-in bypassing
+				// WordPress, and would otherwise keep serving the broken
+				// markup until expiry. Fail-open: purge failure never blocks
+				// the toggle response.
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'clear_cache' ) ) {
+						Cache::clear_cache();
+					} elseif ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'clear_all_cache' ) ) {
+						Main::clear_all_cache();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$this->remove_sensitive_settings_from_response( $options );
+				return $this->send_response( $options );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $this->send_response( null, false, 500, __( 'Could not toggle safe mode.', 'performance-optimisation' ) );
+			}
 		}
 
 		/**

@@ -130,7 +130,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * non-autoloaded. Surfaced to the SPA so admins can see why the
 		 * last auto-purge ran after a plugin/theme/core update.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const LAST_PURGE_OPTION = 'wppo_last_purge';
@@ -141,7 +141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * The generic upgrader path defers the heavy derived-cache wipe so
 		 * routine auto-updates never block the upgrader on file I/O.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const UPGRADE_PURGE_HOOK = 'wppo_upgrade_purge';
@@ -154,7 +154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * mirrors the drift-path lock. Keyed per site via
 		 * Util::transient_key() for multisite safety.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var string
 		 */
 		public const UPGRADE_PURGE_LOCK = 'wppo_upgrade_purge_lock';
@@ -171,7 +171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * collapsing the double-observe (builder at 10 + generic at 20)
 		 * of the same firing.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string,true>
 		 */
 		private static array $upgrade_purged_hashes = array();
@@ -184,7 +184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * consistent even if the wppo_builder_purge_map filter is
 		 * non-deterministic between calls.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<string,array>
 		 */
 		private static array $resolved_builder_map_cache = array();
@@ -225,7 +225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * stats-bump writes — so both handlers share this set and skip a
 		 * post already purged this request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var array<int,bool>
 		 */
 		private static array $elementor_purged = array();
@@ -237,7 +237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * instance avoids N settings reads + N Cache constructions.
 		 * Reset by reset_elementor_purge_memo() for test isolation.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var mixed|null
 		 */
 		private static $shared_purge_cache = null;
@@ -250,7 +250,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * full purge (archive/home coverage) and one targeted Used-CSS
 		 * regen instead of N per-post scheduler writes.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var bool
 		 */
 		private static bool $bulk_regen_coalesced = false;
@@ -263,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * beyond it the deferred full purge + targeted regen own the
 		 * remaining work (archive fan-out + scheduler stampede guard).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @var int
 		 */
 		private const BULK_REGEN_THRESHOLD = 5;
@@ -271,7 +271,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Reset the Elementor per-request purge set (for tests).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_elementor_purge_memo(): void {
@@ -286,7 +286,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Named reset so tests never reach into private statics via
 		 * reflection to clear the drift dedupe flag.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_drift_state(): void {
@@ -300,7 +300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * (current behaviour). Fail-open: any read failure keeps the watcher
 		 * enabled so stale builder CSS still self-heals.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the watcher may run.
 		 */
 		public static function is_watcher_enabled(): bool {
@@ -314,7 +314,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * the "activity log records it" criterion passes on fresh installs.
 		 * Fail-open to logging.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when drift purges should write a log entry.
 		 */
 		public static function is_drift_log_enabled(): bool {
@@ -328,7 +328,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * so the fail-open shape (class/method guards, is_array guard, key
 		 * presence check, bool cast) cannot drift between the two callers.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $key Flag key inside file_optimisation.
 		 * @return bool True when the flag is enabled or unreadable.
 		 */
@@ -366,7 +366,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * serving.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Guarded behind function_exists + watcher setting.
+		 * @since 2.2.0 Guarded behind function_exists + watcher setting.
 		 * @return void
 		 */
 		public function register(): void {
@@ -473,7 +473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * stay as they are (full CSS keeps serving).
 		 *
 		 * @since 2.0.0
-		 * @return bool True when an event was enqueued or already pending.
+		 * @return bool True when a new event was enqueued. False when already pending (stays retryable) or on failure.
 		 */
 		protected function schedule_deferred_drift_purge(): bool {
 			try {
@@ -484,11 +484,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				$ttl       = defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS + 30 : 90;
 				$scheduled = false;
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
+					// Atomic-first on AS 4.x (issue #1408): the `$unique` insert
+					// dedupes the fixed empty-args hook+group in the store,
+					// closing the check-then-act race. The legacy guard survives
+					// inside the helper for older schedulers.
+					$job_id = Util::enqueue_unique_async_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' );
+					if ( $job_id > 0 ) {
+						$scheduled = true;
+					} else {
+						// A 0 is deduped-or-failed; either way no new job runs,
+						// so report false and keep the schedule retryable.
 						return false;
 					}
-					as_enqueue_async_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' );
-					$scheduled = true;
 				} elseif ( function_exists( 'wp_schedule_single_event' ) ) {
 					if ( function_exists( 'wp_next_scheduled' ) && wp_next_scheduled( self::DRIFT_PURGE_HOOK ) ) {
 						return false;
@@ -515,7 +522,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * failed schedule stays retryable later in the same request once
 		 * the lock clears. Fail-open: any error reports unlocked.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return bool True when the drift-purge lock transient exists.
 		 */
 		protected function is_drift_purge_locked(): bool {
@@ -678,7 +685,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Fully guarded and fail-open: any failure degrades to uncached
 		 * dynamic output, never stale-broken pages or fatal errors.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed $css_file Elementor post CSS-file object or post ID.
 		 * @param mixed $post_id  Optional second action payload (post ID) when Elementor passes two args.
@@ -726,7 +733,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * float-like strings ('12.9', 12.9) are rejected: a blind (int) cast
 		 * would truncate them and purge the wrong post's URL.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed $css_file CSS-file object or post ID.
 		 * @param mixed $post_id  Optional second action payload (post ID fallback).
@@ -768,7 +775,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * float-like strings, bools, arrays, and objects without get_post_id()
 		 * resolve to 0 so a truncated cast can never purge the wrong URL.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param mixed $value Raw payload.
 		 * @return int Post ID, or 0 when not a clean integer payload.
@@ -809,7 +816,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * which maybe_coalesce_bulk_regen() schedules once the purged set
 		 * grows past BULK_REGEN_THRESHOLD.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int  $post_id Post ID whose cache must be purged.
 		 * @param bool $bump_stats Whether to bump dashboard stats. Bulk-regen
@@ -858,7 +865,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * coalescing are skipped instead of stalling the save with a
 		 * 40-post query plus up to 20 freshness probes inline.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 *
 		 * @param int $post_id Post ID whose Used-CSS must be requeued.
 		 * @return bool True when a job was queued or already scheduled.
@@ -891,7 +898,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * the OR of the page-cache/used-CSS stores, so callers must log it
 		 * as "derived caches" rather than naming both stores.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $post_id Post ID just saved in the builder.
 		 * @return bool True when a purge seam ran without throwing.
 		 */
@@ -931,7 +938,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Fail-open: returns '' when the permalink API is unavailable or the
 		 * URL cannot be parsed, in which case callers skip the scoped purge.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int $post_id Post ID.
 		 * @return string URL path (e.g. '/my-page/') or '' when unresolvable.
 		 */
@@ -986,7 +993,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * scheduled once per request to fan out to those archives.
 		 * Fail-open: scheduling failures are swallowed.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		protected function maybe_coalesce_bulk_regen(): void {
@@ -1019,7 +1026,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * the success message reports the page-cache purge plus a requested
 		 * (not guaranteed) used/critical regeneration.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param bool $succeeded Whether the page-cache clear succeeded.
 		 * @return void
 		 */
@@ -1053,7 +1060,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * message reports neutral "derived caches" instead of claiming both
 		 * stores when only one healed (partial-heal transparency).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param int  $post_id Post ID saved in the builder.
 		 * @param bool $purged Whether the URL-scoped purge succeeded.
 		 * @param bool $queued Whether regeneration was requeued.
@@ -1217,7 +1224,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Shared by on_builder_update() and on_any_upgrade() so the two
 		 * handlers cannot drift out of sync.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $hook_extra Update context.
 		 * @return array{0:string[],1:string[]} Tuple of (plugins, themes).
 		 */
@@ -1253,7 +1260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Hash an upgrader payload for per-request dedupe.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $hook_extra Update context.
 		 * @return string Payload hash.
 		 */
@@ -1278,7 +1285,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Check whether this payload already purged this request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $hook_extra Update context.
 		 * @return bool True when the payload hash was already recorded.
 		 */
@@ -1289,7 +1296,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Record a payload hash as purged for this request.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $hook_extra Update context.
 		 * @return void
 		 */
@@ -1352,7 +1359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * cooldown debounces N separate auto-update requests. Guarded and
 		 * fail-open so an upgrader failure can never break the update.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param mixed $upgrader   Upgrader instance (unused).
 		 * @param mixed $hook_extra Update context (action/type/plugin/plugins/theme/themes).
 		 * @return void
@@ -1447,7 +1454,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 						/**
 						 * Fires after WPPO auto-purges derived caches for a generic upgrade.
 						 *
-						 * @since NEXT
+						 * @since 2.2.0
 						 *
 						 * @param string $reason Human-readable upgrade description.
 						 */
@@ -1464,7 +1471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Describe an upgrade payload for logs + SPA last-purge reason.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string   $type    Upgrade type (plugin/theme/core).
 		 * @param string[] $plugins Updated plugin files.
 		 * @param string[] $themes  Updated theme slugs.
@@ -1507,7 +1514,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * error or a missing scheduler reports false and the caller purges
 		 * inline.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $reason Optional upgrade description (ignored, kept for backward compatibility).
 		 * @return bool True when an event was enqueued or already pending.
 		 */
@@ -1515,11 +1522,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			unset( $reason );
 			try {
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
+					// Atomic-first on AS 4.x (issue #1408): see
+					// schedule_deferred_drift_purge() — the `$unique` insert
+					// dedupes the fixed empty-args hook+group in the store.
+					$job_id = Util::enqueue_unique_async_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' );
+					if ( $job_id > 0 ) {
 						return true;
 					}
-					as_enqueue_async_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' );
-					return true;
+					// A 0 is deduped-or-failed: probe once so an already-pending
+					// purge still reports true (enqueued-or-pending contract)
+					// while a real scheduler failure falls through to WP-Cron.
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							if ( as_has_scheduled_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
 				}
 				if ( function_exists( 'wp_schedule_single_event' ) ) {
 					if ( function_exists( 'wp_next_scheduled' ) && wp_next_scheduled( self::UPGRADE_PURGE_HOOK, array() ) ) {
@@ -1546,7 +1567,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * by older versions) is recorded verbatim. Guarded and fail-open
 		 * like the other purge seams.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $reason Optional legacy upgrade description.
 		 * @return void
 		 */
@@ -1575,7 +1596,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * combined-asset versions, and records the SPA-visible last-purge
 		 * reason. Fail-open: never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $reason Human-readable reason stored for the SPA.
 		 * @return void
 		 */
@@ -1601,7 +1622,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * reuse stale manifest data (and no-ops harmlessly when the clear
 		 * already bumped stats).
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return void
 		 */
 		protected function bump_combined_asset_versions(): void {
@@ -1620,7 +1641,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Per-site via get_option() (multisite-safe). Fail-open to an empty
 		 * record when the option is missing or malformed.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return array{reason:string,time:int} Last-purge record.
 		 */
 		public static function get_last_purge(): array {
@@ -1650,7 +1671,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 *
 		 * Non-autoloaded per-site option write. Fail-open: never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @param string $reason Human-readable purge reason.
 		 * @return void
 		 */
@@ -1659,7 +1680,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				$reason = trim( $reason );
+				// Audit #1434: REST/SPA-supplied reason stored to an option surfaced
+				// to the SPA — sanitize before persisting.
+				$reason = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $reason ) : trim( $reason );
 				if ( function_exists( 'mb_substr' ) ) {
 					$reason = mb_substr( $reason, 0, 200 );
 				} else {
@@ -1687,7 +1710,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * page renders styled even with aggressive optimisations on.
 		 * Fail-open to '' when home_url() is unavailable.
 		 *
-		 * @since NEXT
+		 * @since 2.2.0
 		 * @return string Preview URL, or '' when unresolvable.
 		 */
 		public static function get_safe_preview_url(): string {
@@ -1925,8 +1948,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * full stylesheet meanwhile (fail-open, never unstyled).
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Used-CSS path switched from forced full regen to targeted regen.
-		 * @since NEXT Returns whether the page-cache clear succeeded.
+		 * @since 2.2.0 Used-CSS path switched from forced full regen to targeted regen.
+		 * @since 2.2.0 Returns whether the page-cache clear succeeded.
 		 * @return bool True when the page-cache clear succeeded.
 		 */
 		protected function purge_wppo_derived_caches(): bool {
@@ -1947,7 +1970,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 							/**
 							 * Restore the legacy forced full used-CSS requeue after a builder purge.
 							 *
-							 * @since NEXT
+							 * @since 2.2.0
 							 *
 							 * @param bool $full Whether to force a full requeue. Default false (targeted).
 							 */
@@ -1985,9 +2008,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					if ( function_exists( 'as_enqueue_async_action' ) ) {
-						// Clears now and queues per-template regeneration (see
-						// the audit-entry note above).
-						Critical_CSS::regenerate_all();
+						// Targeted path (issue #1462): requeue at most 20
+						// templates (RUM-worst-first) instead of the full set,
+						// so a burst of builder updates cannot flood the
+						// scheduler; the 18000s full-regen cooldown in
+						// regenerate_all() guards the opt-in full path below.
+						// Operators can restore the legacy forced full requeue
+						// via the wppo_builder_ccss_full_regen filter.
+						$full = false;
+						if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_builder_ccss_full_regen' ) ) {
+							try {
+								/**
+								 * Restore the legacy forced full critical-CSS requeue after a builder purge.
+								 *
+								 * @since NEXT
+								 *
+								 * @param bool $full Whether to force a full requeue. Default false (targeted, max 20).
+								 */
+								$full = (bool) apply_filters( 'wppo_builder_ccss_full_regen', false );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						if ( $full ) {
+							Critical_CSS::regenerate_all( true );
+						} elseif ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'request_targeted_regen' ) ) {
+							Critical_CSS::request_targeted_regen( 'builder-update' );
+						} else {
+							// Clears now and queues per-template regeneration (see
+							// the audit-entry note above).
+							Critical_CSS::regenerate_all();
+						}
 					} else {
 						Critical_CSS::clear_all();
 					}

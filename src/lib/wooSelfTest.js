@@ -230,7 +230,16 @@ export const runWooSelfTest = ( signal ) => {
 		);
 	} else {
 		const timerId = setTimeout(
-			() => controller.abort( new Error( 'Woo self-test timed out' ) ),
+			() =>
+				controller.abort(
+					new Error(
+						// Audit #1420: localizable abort reason.
+						__(
+							'Woo self-test timed out',
+							'performance-optimisation'
+						)
+					)
+				),
 			WOO_SELF_TEST_TIMEOUT_MS
 		);
 		timers.push( () => clearTimeout( timerId ) );

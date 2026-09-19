@@ -643,7 +643,10 @@ export const sanitizeRumValues = ( raw ) => {
 			body: payload,
 			credentials: 'omit',
 			keepalive: true,
-		} ).catch( () => {} );
+		} ).catch( () => {
+			// Audit #1420: fire-and-forget beacon — network errors are
+			// expected (offline/navigation) and intentionally silent.
+		} );
 	};
 
 	// TTFB + FCP from navigation and paint timing.
@@ -747,14 +750,21 @@ export const sanitizeRumValues = ( raw ) => {
 		}
 
 		try {
+			// Audit #1366: running max across batches per the web.dev INP
+			// definition (max EventTiming duration) — last-of-batch
+			// under-reports multi-batch views.
+			let maxInp = 0;
 			inpObserver = new PerformanceObserver( ( list ) => {
 				const entries = list.getEntries();
 				if ( ! entries.length ) {
 					return;
 				}
-				values.inp = Math.round(
-					entries[ entries.length - 1 ].duration
-				);
+				for ( const entry of entries ) {
+					if ( entry.duration > maxInp ) {
+						maxInp = entry.duration;
+					}
+				}
+				values.inp = Math.round( maxInp );
 			} );
 			inpObserver.observe( {
 				type: 'event',

@@ -1,4 +1,5 @@
 import { apiCall } from './apiRequest';
+import { __ } from '@wordpress/i18n';
 
 /**
  * Shared database-cleanup counts cache.
@@ -12,12 +13,18 @@ import { apiCall } from './apiRequest';
 
 const DEFAULT_TTL_MS = 60000;
 
-let cachedAt = 0;
-let cachedData = null;
-let inflight = null;
-let inflightSignal = null;
-let generation = 0;
 let activeTtlMs = DEFAULT_TTL_MS;
+
+// Audit #1401: the module singleton is a thin wrapper over
+// createDbCountsCache() instead of a second copy of the TTL/inflight/
+// signal/abort/generation logic.
+let singleton = null;
+const getSingleton = () => {
+	if ( ! singleton ) {
+		singleton = createDbCountsCache( { ttlMs: activeTtlMs } );
+	}
+	return singleton;
+};
 
 /**
  * Override the TTL (primarily for tests).
@@ -29,6 +36,7 @@ let activeTtlMs = DEFAULT_TTL_MS;
 export const setDbCountsTtl = ( ttlMs ) => {
 	if ( Number.isFinite( ttlMs ) && ttlMs >= 0 ) {
 		activeTtlMs = ttlMs;
+		singleton = null;
 	}
 };
 
@@ -81,7 +89,12 @@ export const createDbCountsCache = ( {
 					return { ...response.data };
 				}
 				throw new Error(
-					response?.message || 'Failed to load counts.'
+					response?.message ||
+						// Audit #1420: localizable thrown message.
+						__(
+							'Failed to load counts.',
+							'performance-optimisation'
+						)
 				);
 			} );
 			localInflight = request.finally( () => {
@@ -115,54 +128,16 @@ const hasSignalArg = ( signal ) => signal !== undefined && signal !== null;
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Counts keyed by cleanup type.
  */
-export const getDbCounts = async ( signal ) => {
-	const hasSignal = hasSignalArg( signal );
-	const ownerSignal = signal ?? null;
-	const now = Date.now();
-	if ( cachedData && now - cachedAt < activeTtlMs ) {
-		// A cache hit must still honour an already-aborted caller signal —
-		// callers expect AbortError rather than a value after cancellation.
-		if ( hasSignal && signal.aborted ) {
-			throw new DOMException(
-				'The operation was aborted.',
-				'AbortError'
-			);
-		}
-		return { ...cachedData };
-	}
-	// Only coalesce onto an in-flight request created by the same caller
-	// signal (or by another signal-less caller). A different AbortSignal must
-	// not adopt — and then be rejected by — another component's request.
-	if ( inflight && inflightSignal === ownerSignal ) {
-		return inflight.then( ( data ) => ( { ...data } ) );
-	}
-	const requestGeneration = generation;
-	const request = (
-		hasSignal
-			? apiCall( 'database_cleanup_counts', {}, 'GET', signal )
-			: apiCall( 'database_cleanup_counts', {}, 'GET' )
-	).then( ( response ) => {
-		if ( response && response.success && response.data ) {
-			if ( requestGeneration === generation ) {
-				cachedData = { ...response.data };
-				cachedAt = Date.now();
-			}
-			return { ...response.data };
-		}
-		throw new Error( response?.message || 'Failed to load counts.' );
-	} );
-	inflight = request.finally( () => {
-		if (
-			generation === requestGeneration &&
-			inflightSignal === ownerSignal
-		) {
-			inflight = null;
-			inflightSignal = null;
-		}
-	} );
-	inflightSignal = ownerSignal;
-	return inflight;
-};
+/**
+ * Fetch database cleanup counts with memoization.
+ *
+ * Thin singleton over createDbCountsCache() (audit #1401).
+ *
+ * @since 2.0.0
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
+ * @return {Promise<Object>} Counts keyed by cleanup type.
+ */
+export const getDbCounts = ( signal ) => getSingleton().get( signal );
 
 /**
  * Clear the memoized counts (e.g. after a cleanup run invalidates them).
@@ -170,10 +145,4 @@ export const getDbCounts = async ( signal ) => {
  * @since 2.0.0
  * @return {void}
  */
-export const clearDbCountsCache = () => {
-	cachedData = null;
-	cachedAt = 0;
-	generation++;
-	inflight = null;
-	inflightSignal = null;
-};
+export const clearDbCountsCache = () => getSingleton().clear();
