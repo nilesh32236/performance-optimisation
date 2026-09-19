@@ -1863,6 +1863,7 @@ describe( 'FileOptimization Component', () => {
 				isSafePresetActive( {
 					minifyJS: true,
 					minifyCSS: true,
+					minifyHTML: true,
 					deferJS: true,
 					delayJS: true,
 					delayJSBuilderPreset: true,
@@ -1873,6 +1874,21 @@ describe( 'FileOptimization Component', () => {
 					elementorSafeMode: true,
 				} )
 			).toBe( true );
+			expect(
+				isSafePresetActive( {
+					minifyJS: true,
+					minifyCSS: true,
+					minifyHTML: false,
+					deferJS: true,
+					delayJS: true,
+					delayJSBuilderPreset: true,
+					delayJSCommercePreset: true,
+					delayJSInteractionPreset: true,
+					delayJSJqueryPreset: true,
+					delayJSSafeMode: true,
+					elementorSafeMode: true,
+				} )
+			).toBe( false );
 			expect(
 				isSafePresetActive( {
 					minifyJS: true,

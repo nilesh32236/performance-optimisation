@@ -200,7 +200,8 @@ export const isAggressiveDelay = ( values = {} ) => {
 };
 
 // Whether the Safe preset bundle is fully active (issue #1442): the
-// minify/defer/delay pipelines plus all four exclusion presets, the two
+// minify/defer/delay pipelines (including minifyHTML, which the bundle pins
+// true) plus all four exclusion presets, the two
 // safe-mode guards (delayJSSafeMode, elementorSafeMode) the bundle applies,
 // and combineCSS off (the bundle pins it false — FOUC risk — while
 // Aggressive pins it true), so enabling CSS combining after applying Safe
@@ -211,6 +212,7 @@ export const isSafePresetActive = ( values = {} ) => {
 	if (
 		! values.minifyJS ||
 		! values.minifyCSS ||
+		! values.minifyHTML ||
 		! values.deferJS ||
 		! values.delayJS
 	) {
@@ -1537,7 +1539,10 @@ const FileOptimization = ( {
 				// that into file-optimisation state would pollute the form,
 				// the baseline and the next save payload (issue #1442 review).
 				// A missing slice is a failed restore — the form stays
-				// untouched (fail-open).
+				// untouched (fail-open). Exact-restore semantics: defaults
+				// spread under the snapshot slice so a key absent from an
+				// older snapshot resets to its default instead of surviving
+				// from live (possibly edited) state.
 				const restored = data?.data?.file_optimisation;
 				if (
 					! restored ||
@@ -1555,7 +1560,7 @@ const FileOptimization = ( {
 					return;
 				}
 				const next = normalizeFileOpt( {
-					...settings,
+					...defaultSettings,
 					...restored,
 				} );
 				next.cdnMapping = withCdnRowIds( next.cdnMapping );

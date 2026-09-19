@@ -7680,7 +7680,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * with `combineCSS` off (the bundle pins it false — FOUC risk —
 		 * while Aggressive pins it true), so enabling CSS combining after
 		 * applying Safe clears the confirmation instead of overstating
-		 * safety. Fail-open: any failure returns false.
+		 * safety. `minifyHTML` is part of the pipeline gate because the
+		 * bundle pins it true. Fail-open: any failure returns false.
 		 *
 		 * @since NEXT
 		 * @param array<string, mixed> $file_opt file_optimisation settings slice.
@@ -7688,7 +7689,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function is_safe_preset_active( array $file_opt ): bool {
 			try {
-				foreach ( array( 'minifyJS', 'minifyCSS', 'deferJS', 'delayJS' ) as $key ) {
+				foreach ( array( 'minifyJS', 'minifyCSS', 'minifyHTML', 'deferJS', 'delayJS' ) as $key ) {
 					if ( empty( $file_opt[ $key ] ) ) {
 						return false;
 					}

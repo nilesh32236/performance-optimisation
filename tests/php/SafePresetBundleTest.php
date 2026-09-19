@@ -130,6 +130,10 @@ class SafePresetBundleTest extends \PHPUnit\Framework\TestCase {
 		$combine_on['combineCSS'] = true;
 		$this->assertFalse( Main::is_safe_preset_active( $combine_on ), 'Enabling combineCSS must clear the safe-active confirmation (FOUC risk).' );
 
+		$no_html               = $safe;
+		$no_html['minifyHTML'] = false;
+		$this->assertFalse( Main::is_safe_preset_active( $no_html ), 'Disabling minifyHTML must clear the safe-active confirmation.' );
+
 		$pipelines_off            = $safe;
 		$pipelines_off['delayJS'] = false;
 		$this->assertFalse( Main::is_safe_preset_active( $pipelines_off ) );
