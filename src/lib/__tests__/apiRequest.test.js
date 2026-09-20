@@ -528,6 +528,64 @@ describe( 'API Request library', () => {
 			);
 			expect( result ).toEqual( mockData );
 		} );
+
+		it( 'shares one fetch between concurrent identical GETs', async () => {
+			const mockData = { success: true, data: { value: 1 } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const [ first, second ] = await Promise.all( [
+				apiCall( 'system_info', {}, 'GET' ),
+				apiCall( 'system_info', {}, 'GET' ),
+			] );
+
+			expect( global.fetch ).toHaveBeenCalledTimes( 1 );
+			expect( first ).toEqual( mockData );
+			expect( second ).toEqual( mockData );
+		} );
+
+		it( 'lets one waiter abort without cancelling the shared GET', async () => {
+			const mockData = { success: true, data: { value: 2 } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest
+					.fn()
+					.mockImplementationOnce(
+						() =>
+							new Promise( ( resolve ) =>
+								setTimeout( () => resolve( mockData ), 20 )
+							)
+					),
+			} );
+
+			const controller = new AbortController();
+			const shared = apiCall( 'suggestions', {}, 'GET' );
+			const waiter = apiCall(
+				'suggestions',
+				{},
+				'GET',
+				controller.signal
+			);
+			controller.abort();
+
+			await expect( waiter ).rejects.toMatchObject( {
+				name: 'AbortError',
+			} );
+			await expect( shared ).resolves.toEqual( mockData );
+			expect( global.fetch ).toHaveBeenCalledTimes( 1 );
+		} );
+
+		it( 'fetches again once the shared GET has settled', async () => {
+			const mockData = { success: true, data: { value: 3 } };
+			global.fetch.mockResolvedValue( {
+				json: jest.fn().mockResolvedValue( mockData ),
+			} );
+
+			await apiCall( 'system_info', {}, 'GET' );
+			await apiCall( 'system_info', {}, 'GET' );
+
+			expect( global.fetch ).toHaveBeenCalledTimes( 2 );
+		} );
 	} );
 
 	describe( 'apiCall with AbortSignal', () => {

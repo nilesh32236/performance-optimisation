@@ -123,6 +123,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'optimization_presets'      => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_optimization_presets' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'apply_preset'              => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'apply_optimization_preset' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'database_cleanup'          => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'database_cleanup' ),
@@ -2043,6 +2055,96 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * List the Safe / Balanced / Aggressive preset definitions plus the
+		 * diff preview of each against the current settings.
+		 *
+		 * Read-only: never writes options. Optional GET param `preset`
+		 * (safe|balanced|aggressive) narrows the response to one preset.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_optimization_presets( \WP_REST_Request $request ): \WP_REST_Response {
+			$params = $request->get_params();
+			$only   = isset( $params['preset'] ) ? sanitize_text_field( (string) $params['preset'] ) : '';
+
+			$presets = Util::get_optimization_presets();
+			$current = Util::get_settings();
+
+			if ( '' !== $only ) {
+				if ( ! isset( $presets[ $only ] ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid preset name.', 'performance-optimisation' ) );
+				}
+				return $this->send_response(
+					array(
+						'preset'   => $only,
+						'settings' => $presets[ $only ],
+						'diff'     => Util::get_preset_diff( $only, $current ),
+					)
+				);
+			}
+
+			$payload = array();
+			foreach ( $presets as $name => $settings ) {
+				$payload[ $name ] = array(
+					'settings' => $settings,
+					'diff'     => Util::get_preset_diff( $name, $current ),
+				);
+			}
+			return $this->send_response( array( 'presets' => $payload ) );
+		}
+
+		/**
+		 * Apply a Safe / Balanced / Aggressive preset in one click.
+		 *
+		 * POST param `preset` (safe|balanced|aggressive, required). Snapshots
+		 * a restore point before overwriting (single-slot, fail-open via
+		 * `Util::apply_optimization_preset()`), forces the fail-safe guards
+		 * ON, and leaves per-page exclusions (postmeta) untouched. A failed
+		 * apply leaves the prior settings intact and returns an error.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function apply_optimization_preset( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'apply_preset', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
+			$params = $request->get_params();
+			$preset = isset( $params['preset'] ) ? sanitize_text_field( (string) $params['preset'] ) : '';
+			if ( '' === $preset || ! in_array( $preset, Util::OPTIMIZATION_PRESET_NAMES, true ) ) {
+				return $this->send_response( null, false, 400, __( 'Invalid preset name.', 'performance-optimisation' ) );
+			}
+
+			$applied = Util::apply_optimization_preset( $preset );
+			if ( ! is_array( $applied ) ) {
+				return $this->send_response( null, false, 500, __( 'Failed to apply the preset. Your settings were left unchanged.', 'performance-optimisation' ) );
+			}
+
+			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
+				Telemetry::invalidate_audit_cache();
+			}
+
+			$response_settings = isset( $applied['settings'] ) && is_array( $applied['settings'] ) ? $applied['settings'] : array();
+			$this->remove_sensitive_settings_from_response( $response_settings );
+
+			return $this->send_response(
+				array(
+					'preset'   => $preset,
+					'settings' => $response_settings,
+					'diff'     => isset( $applied['diff'] ) && is_array( $applied['diff'] ) ? $applied['diff'] : array(),
+				),
+				true,
+				200,
+				__( 'Preset applied successfully.', 'performance-optimisation' )
+			);
+		}
+
+		/**
 		 * Perform database cleanup for the requested cleanup type.
 		 *
 		 * Accepts a request param `type` (one of: `revisions`, `auto_drafts`, `trashed_posts`,
@@ -3023,7 +3125,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			if ( false === $telemetry ) {
 				return $this->send_response(
-					array( 'suggestions' => array() ),
+					array(
+						'suggestions' => array(),
+						'next_action' => $this->get_rum_next_action(),
+						'server_type' => $this->get_detected_server_type(),
+					),
 					true,
 					200,
 					__( 'No cached scan found for this URL. Run a scan first.', 'performance-optimisation' )
@@ -3039,7 +3145,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			return $this->send_response( array( 'suggestions' => $suggestions ) );
+			return $this->send_response(
+				array(
+					'suggestions' => $suggestions,
+					'next_action' => $this->get_rum_next_action(),
+					'server_type' => $this->get_detected_server_type(),
+				)
+			);
+		}
+
+		/**
+		 * Pick the single RUM-driven guided next action.
+		 *
+		 * Fail-open: RUM failures yield null, never a fatal.
+		 *
+		 * @since NEXT
+		 * @return array|null Single suggestion object, or null.
+		 */
+		private function get_rum_next_action(): ?array {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_aggregate_readonly' ) ) {
+					return Suggestion_Engine::pick_rum_next_action( RUM::get_aggregate_readonly() );
+				}
+			} catch ( \Throwable $rum_error ) {
+				unset( $rum_error );
+			}
+			return null;
+		}
+
+		/**
+		 * Detect the current server software for the guided next-step note.
+		 *
+		 * Fail-open: detection failures yield 'other'.
+		 *
+		 * @since NEXT
+		 * @return string 'apache', 'nginx', 'litespeed', or 'other'.
+		 */
+		private function get_detected_server_type(): string {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'get_server_type' ) ) {
+					return Server_Rules::get_server_type();
+				}
+			} catch ( \Throwable $server_error ) {
+				unset( $server_error );
+			}
+			return 'other';
 		}
 
 		/**
