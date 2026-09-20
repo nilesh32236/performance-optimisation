@@ -1360,10 +1360,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( ! empty( $this->options['cache_settings']['enableCache'] ) ) {
 				$this->cache = self::create_cache( $this->options );
-				if ( method_exists( $this->cache, 'set_image_optimisation' ) ) {
+				if ( is_object( $this->cache ) && method_exists( $this->cache, 'set_image_optimisation' ) ) {
 					$this->cache->set_image_optimisation( $this->image_optimisation );
 				}
-				if ( method_exists( $this->cache, 'set_google_fonts' ) ) {
+				if ( is_object( $this->cache ) && method_exists( $this->cache, 'set_google_fonts' ) ) {
 					$this->cache->set_google_fonts( $this->google_fonts );
 				}
 				if ( $use_core_buffer ) {
