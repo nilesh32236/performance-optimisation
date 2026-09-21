@@ -5198,10 +5198,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						// Creation race: a concurrent request won the
 						// insert — re-read the winner instead of memoing
 						// the local (non-persisted) value, or the two
-						// requests sign/verify with different keys.
+						// requests sign/verify with different keys. When
+						// the re-read is still unusable (transient DB
+						// error, creation disabled), degrade to unsigned
+						// rather than memoing an unverifiable secret.
 						$stored = get_option( $key, false );
 						if ( is_string( $stored ) && strlen( $stored ) >= 32 ) {
 							$secret = $stored;
+						} else {
+							return '';
 						}
 					}
 				} elseif ( function_exists( 'update_option' ) ) {

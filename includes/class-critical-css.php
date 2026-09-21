@@ -6398,6 +6398,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static function purge_template_artifacts( string $template_hash ): void {
 			try {
 				global $wp_filesystem;
+				// Filesystem may be uninitialized in an Action Scheduler
+				// background worker — init it (mirroring
+				// generate_and_store()) so the forgery purge does not
+				// silently no-op. Fail-open: any error leaves files in
+				// place; serving still falls back to unoptimized markup.
+				// Note: the global itself is never reassigned here
+				// (WordPress.Security.EscapeOutput forbids global writes);
+				// the initialized handle is used via the local copy.
+				$fs_handle = $wp_filesystem;
+				try {
+					if ( ( ! $fs_handle || ! method_exists( $fs_handle, 'exists' ) ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'init_filesystem' ) ) {
+						$fs = Util::init_filesystem();
+						if ( $fs ) {
+							$fs_handle = $fs;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 				$files = array();
 				try {
 					$main = self::get_ccss_file( $template_hash );
@@ -6415,8 +6434,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				foreach ( $files as $file ) {
 					try {
-						if ( $wp_filesystem && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'delete' ) && $wp_filesystem->exists( $file ) ) {
-							$wp_filesystem->delete( $file );
+						if ( $fs_handle && method_exists( $fs_handle, 'exists' ) && method_exists( $fs_handle, 'delete' ) && $fs_handle->exists( $file ) ) {
+							$fs_handle->delete( $file );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
