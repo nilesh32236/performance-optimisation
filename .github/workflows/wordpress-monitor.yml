@@ -101,7 +101,14 @@ jobs:
             compatibility-auditor, design-researcher, reviewer — plus one
             orchestrator (you) that reconciles the lane results into the
             final output.
-          - Budgets (STRICT): ≤12 sub-agents total, 4-6 searches/lane, 2-4
+          - Dispatch ALL 9 lanes in ONE parallel block (every Task call in
+             a single message turn) — NEVER chain lanes one-by-one
+             (core→competitor→…); serial dispatch burns the 18-minute
+             attempt budget before the final JSON and fails the run. If the
+             harness allows fewer parallel slots, fill every slot, then
+             dispatch the remainder the moment slots free — never
+             one-at-a-time.
+           - Budgets (STRICT): ≤12 sub-agents total, 4-6 searches/lane, 2-4
             findings/lane, 15 total max. High score first.
           - Every lane RETURNS ITS FINDINGS AS MESSAGE TEXT (evidence, URLs,
             versions, dates). NO lane writes /tmp/lane-*.md or ANY file — CI
