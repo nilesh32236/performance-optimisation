@@ -3474,11 +3474,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * by legacy callers) take the legacy capability+nonce path and
 		 * still run (fail-open).
 		 *
+		 * Residual (documented, not a bypass): the HMAC proves provenance
+		 * of first-party jobs only — it does not authenticate the
+		 * `wppo_used_css_generate` hook itself, so any caller that
+		 * enqueues without a `sig` still triggers generation via the
+		 * legacy path. Stored-XSS protection does not depend on the HMAC:
+		 * fetched CSS is sanitized on write
+		 * (sanitize_used_css_output()) and output degrades to unoptimized
+		 * markup. Unsigned executions are logged at a throttled WP_DEBUG
+		 * level so unexpected unsigned jobs stay visible.
+		 *
 		 * @param int         $post_id The post ID.
 		 * @param string|null $sig     Optional HMAC signature over the payload.
 		 * @return void
 		 * @since 1.9.0
 		 * @since NEXT Accepts and verifies the optional HMAC signature.
+		 * @since NEXT Documents the provenance-only residual and logs unsigned jobs throttled at WP_DEBUG level.
 		 */
 		public static function process_background( int $post_id, $sig = null ): void {
 			// Builder-template skip-and-continue (issue #1274): never fetch
@@ -3510,6 +3521,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						unset( $e );
 					}
 					return;
+				}
+			} else {
+				// Unsigned legacy job (no `sig`): runs the legacy path
+				// (fail-open, see docblock). Throttled WP_DEBUG-only
+				// visibility so unexpected unsigned executions are
+				// observable without spamming the activity log.
+				try {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( 'get_transient' ) && function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+						$unsigned_key = Util::transient_key( 'wppo_used_css_unsigned_log' );
+						if ( false === get_transient( $unsigned_key ) ) {
+							if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+								Log::add( 'WPPO used-CSS job running unsigned (legacy path) for post ' . (int) $post_id . '.' );
+							}
+							set_transient( $unsigned_key, 1, defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 			}
 			$permalink = get_permalink( $post_id );

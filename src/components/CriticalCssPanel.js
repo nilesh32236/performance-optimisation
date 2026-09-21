@@ -53,6 +53,14 @@ const getStatusConfig = () => {
 			className: 'wppo-badge--error',
 			label: __( 'Failed', 'performance-optimisation' ),
 		},
+		// Short-lived forgery-rejection marker (HMAC mismatch): distinct
+		// from a genuine generation failure so a forged job neither looks
+		// like breakage nor blocks the next signed retry.
+		rejected: {
+			icon: faExclamationTriangle,
+			className: 'wppo-badge--warning',
+			label: __( 'Rejected', 'performance-optimisation' ),
+		},
 		none: {
 			icon: faExclamationTriangle,
 			className: 'wppo-badge--warning',

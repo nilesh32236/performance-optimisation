@@ -3997,7 +3997,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$templates = self::get_templates();
 			$statuses  = array();
 
-			$allowed = array( 'queued', 'processing', 'done', 'skipped', 'failed', 'ready', 'pending', 'none' );
+			$allowed = array( 'queued', 'processing', 'done', 'skipped', 'failed', 'rejected', 'ready', 'pending', 'none' );
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
 				if ( self::ccss_exists( $hash ) ) {
@@ -6478,6 +6478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return void
 		 * @since 2.0.0
 		 * @since 2.2.0 Routed through the guarded generation wrapper.
+		 * @since NEXT HMAC-mismatch path stamps short-lived 'rejected' instead of day-long 'failed'; unsigned jobs logged throttled at WP_DEBUG level.
 		 */
 		public static function background_generate( array $args ): void {
 			// Suspended while deferJS/delayJS is active: generated variants
@@ -6500,6 +6501,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// generation. Unsigned jobs (queued before signing or by
 			// legacy callers) take the legacy path and still run
 			// (fail-open).
+			//
+			// Residual (documented, not a bypass): the HMAC proves
+			// provenance of first-party jobs only — it does not
+			// authenticate the `wppo_generate_ccss` hook itself, so any
+			// caller that enqueues without a `sig` still triggers
+			// generation via the legacy path. Stored-XSS protection does
+			// not depend on the HMAC: fetched CSS is sanitized on write
+			// and output degrades to unoptimized markup. Unsigned
+			// executions are logged at a throttled WP_DEBUG level so
+			// unexpected unsigned jobs stay visible.
 			if ( isset( $args['sig'] ) && is_string( $args['sig'] ) && '' !== $args['sig'] ) {
 				$verified = false;
 				try {
@@ -6516,11 +6527,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							Log::add( 'WPPO critical-CSS job rejected: HMAC mismatch for template hash.' );
 						}
 						self::purge_template_artifacts( $template_hash );
-						self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+						// Forgery rejections stamp a distinct short-lived
+						// `rejected` status (not day-long `failed`) so a
+						// single forged — or secret-rotated, hence
+						// unverifiable — job is distinguishable from a
+						// genuine generation failure in the status UI and
+						// does not block the next legitimate signed retry.
+						self::set_status_cache( $template_hash, 'rejected', defined( 'MINUTE_IN_SECONDS' ) ? 5 * MINUTE_IN_SECONDS : 300 );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
 					return;
+				}
+			} else {
+				// Unsigned legacy job (no `sig`): runs the legacy path
+				// (fail-open, see note above). Throttled WP_DEBUG-only
+				// visibility so unexpected unsigned executions are
+				// observable without spamming the activity log.
+				try {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( 'get_transient' ) && function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+						$unsigned_key = Util::transient_key( 'wppo_ccss_unsigned_log' );
+						if ( false === get_transient( $unsigned_key ) ) {
+							if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+								Log::add( 'WPPO critical-CSS job running unsigned (legacy path) for template hash.' );
+							}
+							set_transient( $unsigned_key, 1, defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 			}
 
@@ -7000,7 +7035,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 *
 		 * @param string $hash   Template hash.
-		 * @param string $status Status value ('queued'|'processing'|'done'|'skipped'|'failed'; legacy 'ready'|'pending' still accepted on read).
+		 * @param string $status Status value ('queued'|'processing'|'done'|'skipped'|'failed'|'rejected'; legacy 'ready'|'pending' still accepted on read).
 		 * @param int    $ttl    Time to live in seconds.
 		 * @return void
 		 */

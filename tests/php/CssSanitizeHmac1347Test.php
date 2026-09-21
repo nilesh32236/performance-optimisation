@@ -289,6 +289,45 @@ class CssSanitizeHmac1347Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * An HMAC mismatch stamps short-lived 'rejected', not day-long 'failed'.
+	 *
+	 * A forged (or secret-rotated, hence unverifiable) job must stay
+	 * distinguishable from a genuine generation failure in the status UI
+	 * and must not block the next legitimate signed retry for 24h.
+	 *
+	 * @return void
+	 */
+	public function test_hmac_mismatch_stamps_rejected_with_short_ttl(): void {
+		$this->install_stubs();
+		Functions\when( 'add_action' )->justReturn( true );
+		$hash    = md5( 'wppo-rejected-status-template' );
+		$written = array();
+		Functions\when( 'set_transient' )->alias(
+			static function ( $name, $value, $ttl = 0 ) use ( &$written ) {
+				$written[] = array( $name, $value, $ttl );
+				return true;
+			}
+		);
+		Critical_CSS::background_generate(
+			array(
+				'template_hash' => $hash,
+				'sig'           => 'invalid-signature',
+			)
+		);
+		$status_key = Util::transient_key( 'wppo_ccss_status_' . $hash );
+		$found      = null;
+		foreach ( $written as $row ) {
+			if ( $row[0] === $status_key ) {
+				$found = $row;
+			}
+		}
+		$this->assertNotNull( $found, 'Mismatch path must stamp a template status.' );
+		$this->assertSame( 'rejected', $found[1] );
+		$this->assertGreaterThan( 0, $found[2] );
+		$this->assertLessThanOrEqual( 3600, $found[2] );
+	}
+
+	/**
 	 * The uninstall constant covers the callback secret.
 	 *
 	 * @return void
