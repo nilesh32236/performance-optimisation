@@ -272,6 +272,176 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		}
 
 		/**
+		 * Build suggestion objects from aggregated real-user Web Vitals.
+		 *
+		 * Accepts the RUM aggregate shape (day => path => metric =>
+		 * `{n, sum, ...}`) from `RUM::get_data()` /
+		 * `RUM::get_aggregate_readonly()`, averages every metric site-wide,
+		 * and returns one suggestion per ailing Core Web Vital. Metrics
+		 * within the "good" range are skipped so an all-green site yields an
+		 * empty list (the caller then renders nothing instead of noise).
+		 * Malformed input yields an empty list; never fatal.
+		 *
+		 * Thresholds follow Google's Core Web Vitals guidance:
+		 * LCP good <= 2500ms / poor > 4000ms, INP good <= 200ms /
+		 * poor > 500ms, CLS good <= 0.1 / poor > 0.25.
+		 *
+		 * @since NEXT
+		 * @param array $aggregate RUM aggregate data.
+		 * @return array[] Array of suggestion objects.
+		 */
+		public static function from_rum( array $aggregate ): array {
+			try {
+				$averages = self::average_rum_metrics( $aggregate );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+			if ( empty( $averages ) ) {
+				return array();
+			}
+			$suggestions = array();
+			if ( isset( $averages['lcp'] ) ) {
+				$suggestions[] = self::make(
+					'rum_lcp',
+					(float) $averages['lcp'],
+					'ms',
+					array(
+						'good' => 2500,
+						'poor' => 4000,
+					),
+					'open_image_optimization_tab',
+					'Real-user Largest Contentful Paint'
+				);
+			}
+			if ( isset( $averages['inp'] ) ) {
+				$suggestions[] = self::make(
+					'rum_inp',
+					(float) $averages['inp'],
+					'ms',
+					array(
+						'good' => 200,
+						'poor' => 500,
+					),
+					'open_file_optimization_tab',
+					'Real-user Interaction to Next Paint'
+				);
+			}
+			if ( isset( $averages['cls'] ) ) {
+				$suggestions[] = self::make(
+					'rum_cls',
+					(float) $averages['cls'],
+					'cls',
+					array(
+						'good' => 0.1,
+						'poor' => 0.25,
+					),
+					'open_file_optimization_tab',
+					'Real-user Cumulative Layout Shift'
+				);
+			}
+			// Keep only actionable rows: `make()` marks in-range metrics
+			// `good` (with a `no_action_required` fix action), which carry
+			// no next step.
+			return array_values(
+				array_filter(
+					$suggestions,
+					static function ( $suggestion ) {
+						return is_array( $suggestion ) && ( $suggestion['status'] ?? 'good' ) !== 'good';
+					}
+				)
+			);
+		}
+
+		/**
+		 * Pick the single guided next action from aggregated RUM data.
+		 *
+		 * Returns the worst offender (a `poor` row beats
+		 * `needs_improvement`; ties break LCP > INP > CLS) or null when
+		 * every metric is good / no data exists, so the Dashboard can show
+		 * exactly one next step instead of a wall of suggestions.
+		 *
+		 * @since NEXT
+		 * @param array $aggregate RUM aggregate data.
+		 * @return array|null Single suggestion object, or null.
+		 */
+		public static function pick_rum_next_action( array $aggregate ): ?array {
+			$suggestions = self::from_rum( $aggregate );
+			if ( empty( $suggestions ) ) {
+				return null;
+			}
+			$rank_metric = array(
+				'rum_lcp' => 0,
+				'rum_inp' => 1,
+				'rum_cls' => 2,
+			);
+			$rank_status = array(
+				'poor'              => 0,
+				'needs_improvement' => 1,
+			);
+			usort(
+				$suggestions,
+				static function ( $a, $b ) use ( $rank_metric, $rank_status ) {
+					$status_rank = ( $rank_status[ $a['status'] ] ?? 9 ) - ( $rank_status[ $b['status'] ] ?? 9 );
+					if ( 0 !== $status_rank ) {
+						return $status_rank;
+					}
+					return ( $rank_metric[ $a['metric'] ] ?? 9 ) - ( $rank_metric[ $b['metric'] ] ?? 9 );
+				}
+			);
+			return $suggestions[0];
+		}
+
+		/**
+		 * Average every RUM metric site-wide across days and paths.
+		 *
+		 * @since NEXT
+		 * @param array $aggregate RUM aggregate (day => path => metric => bucket).
+		 * @return array<string, float> Metric => average (only metrics with samples).
+		 */
+		private static function average_rum_metrics( array $aggregate ): array {
+			$totals = array();
+			foreach ( $aggregate as $day ) {
+				if ( ! is_array( $day ) ) {
+					continue;
+				}
+				foreach ( $day as $path ) {
+					if ( ! is_array( $path ) ) {
+						continue;
+					}
+					foreach ( $path as $metric => $bucket ) {
+						if ( ! in_array( $metric, array( 'lcp', 'inp', 'cls' ), true ) ) {
+							continue;
+						}
+						if ( ! is_array( $bucket ) || ! isset( $bucket['n'], $bucket['sum'] ) ) {
+							continue;
+						}
+						$n   = (float) $bucket['n'];
+						$sum = (float) $bucket['sum'];
+						if ( ! is_finite( $n ) || ! is_finite( $sum ) || $n <= 0 ) {
+							continue;
+						}
+						if ( ! isset( $totals[ $metric ] ) ) {
+							$totals[ $metric ] = array(
+								'n'   => 0.0,
+								'sum' => 0.0,
+							);
+						}
+						$totals[ $metric ]['n']   += $n;
+						$totals[ $metric ]['sum'] += $sum;
+					}
+				}
+			}
+			$averages = array();
+			foreach ( $totals as $metric => $total ) {
+				if ( $total['n'] > 0 ) {
+					$averages[ $metric ] = $total['sum'] / $total['n'];
+				}
+			}
+			return $averages;
+		}
+
+		/**
 		 * Build a suggestion for a "lower is better" numeric metric.
 		 *
 		 * Status logic:

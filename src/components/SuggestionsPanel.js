@@ -29,10 +29,12 @@ import { formatMs, formatPercent } from '../lib/format';
 /**
  * Maps fix_action values to WPPO sidebar tab names.
  * Must stay in sync with App.js sidebarItems names.
+ * Exported so GuidedNextStep can navigate to the same tab for the single
+ * RUM-driven next action.
  *
  * @type {Object.<string, string>}
  */
-const FIX_ACTION_TAB_MAP = {
+export const FIX_ACTION_TAB_MAP = {
 	open_object_cache_tab: 'objectCache',
 	open_image_optimization_tab: 'imageOptimization',
 	open_file_optimization_tab: 'fileOptimization',
@@ -143,6 +145,21 @@ export const formatValue = ( value, unit ) => {
 	}
 	if ( unit === 'ms' ) {
 		return formatMs( value );
+	}
+	// Cumulative Layout Shift is unitless: render a clean localized number
+	// instead of falling through to the generic "%1$s %2$s" sprintf
+	// (which would print e.g. "0.24 cls"). toLocaleString() localizes the
+	// decimal separator like the neighbouring formatMs/formatPercent
+	// branches (which localize via sprintf patterns).
+	if ( unit === 'cls' ) {
+		const num = Number( value );
+		if ( ! Number.isFinite( num ) ) {
+			return '—';
+		}
+		return num.toLocaleString( undefined, {
+			minimumFractionDigits: 3,
+			maximumFractionDigits: 3,
+		} );
 	}
 	if ( unit === undefined || unit === null || unit === '' ) {
 		return String( value );

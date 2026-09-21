@@ -34,6 +34,8 @@ import PageSpeedPanel from './PageSpeedPanel';
 import WebVitalsTrends from './WebVitalsTrends';
 import WebVitalsRum from './WebVitalsRum';
 import SuggestionsPanel from './SuggestionsPanel';
+import GuidedNextStep from './GuidedNextStep';
+import OptimizationPresets from './OptimizationPresets';
 import SystemInfo from './SystemInfo';
 import AutoloadedOptions from './AutoloadedOptions';
 import LlmsPanel from './LlmsPanel';
@@ -1384,6 +1386,9 @@ const Dashboard = ( {
 
 			<WelcomePanel onNavigate={ onNavigate } />
 
+			{ /* One-click presets with diff preview + restore-point undo (NEXT) */ }
+			<OptimizationPresets />
+
 			{ upgradePurge &&
 				( ( upgradePurge.last_purge &&
 					upgradePurge.last_purge.reason ) ||
@@ -2139,6 +2144,9 @@ const Dashboard = ( {
 
 			{ /* Phase 1 — Performance Audit & System Info (v1.5.0) */ }
 			<div className="wppo-stacked-cards">
+				{ /* Guided single RUM-driven next action + server-type note (NEXT) */ }
+				<GuidedNextStep onNavigate={ onNavigate } />
+
 				<PerformanceAudit
 					onSuggestionsReady={ setTelemetrySuggestions }
 					onUrlChange={ handleAuditUrlChange }
