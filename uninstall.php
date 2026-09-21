@@ -587,6 +587,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 			'wppo_ai_css_refresh_snapshots',           // AI_Adaptive::CSS_REFRESH_SNAPSHOT_OPTION (issue #1407).
+			'wppo_callback_secret',                    // Util::CALLBACK_SECRET_OPTION (issue #1347).
 		);
 		foreach ( $wppo_options as $wppo_option ) {
 			delete_option( $wppo_option );

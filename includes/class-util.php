@@ -135,6 +135,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 			'wppo_ai_css_refresh_snapshots',           // AI_Adaptive::CSS_REFRESH_SNAPSHOT_OPTION (issue #1407).
+			'wppo_callback_secret',                    // CALLBACK_SECRET_OPTION (issue #1347).
 		);
 
 		/**
@@ -4926,6 +4927,280 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 			return hash( 'sha256', $css );
+		}
+
+		/**
+		 * Option name storing the per-site regeneration-callback HMAC secret.
+		 *
+		 * Written once (lazily, autoload off) and read on every signed
+		 * enqueue/verify; deleted on uninstall via {@see UNINSTALL_OPTIONS}.
+		 * Multisite-safe: accessed through {@see option_key()} so each blog
+		 * signs with its own secret. Never logged.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const CALLBACK_SECRET_OPTION = 'wppo_callback_secret';
+
+		/**
+		 * Maximum derived-CSS payload accepted for storage (bytes).
+		 *
+		 * Fail-open bound for {@see css_within_storage_bounds()}: outputs
+		 * above this size are refused and callers serve unoptimized markup
+		 * instead of persisting unbounded blobs.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const CSS_STORAGE_MAX_BYTES = 1048576;
+
+		/**
+		 * Sanitize derived CSS for safe storage inside <style> or a .css file.
+		 *
+		 * Shared worker for the used-CSS ingest path (the critical-CSS
+		 * pipeline keeps its own memoized/filter-aware variant): decodes
+		 * numeric/hex entities first so encoded payloads cannot smuggle
+		 * `<` past the encoder, then neutralizes the `</style>` raw-text
+		 * terminator, `<script`, HTML comments, CSS expression vectors
+		 * (`expression()`, `javascript:`/`vbscript:` URLs, the `behavior` /
+		 * `behaviour` property in property position only, `-moz-binding`),
+		 * whitespace-prefixed `on*=` HTML-attribute shapes (which cannot
+		 * execute inside `<style>` without a breakout, but are never valid
+		 * CSS outside an attribute selector so breaking them is safe), and
+		 * encodes any remaining `<` as the equivalent CSS escape so stored
+		 * CSS can never break out of the style element. Benign lookalikes
+		 * (`scroll-behavior:`, `.behavior-badge`) are preserved. Fail-open:
+		 * a sanitizer error drops the block (returns '') so output degrades
+		 * to unoptimized markup, never script execution.
+		 *
+		 * @param string $css Raw CSS content.
+		 * @return string Sanitized CSS, or '' when empty or on failure.
+		 * @since NEXT
+		 */
+		public static function sanitize_css_for_storage( string $css ): string {
+			if ( '' === $css ) {
+				return '';
+			}
+			try {
+				if ( function_exists( 'html_entity_decode' ) ) {
+					$css = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				}
+				$css = (string) preg_replace_callback(
+					'/&#\d+;?|&#x[0-9a-f]+;?/i',
+					static function ( array $matches ): string {
+						$entity = $matches[0];
+						if ( function_exists( 'html_entity_decode' ) ) {
+							return html_entity_decode( $entity, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+						}
+						return '';
+					},
+					$css
+				);
+				$css = str_ireplace( '</style', '<\/style', $css );
+				$css = str_ireplace( '<script', '<\script', $css );
+				$css = str_ireplace( '<!--', '<\!--', $css );
+				$css = str_ireplace( '-->', '--\>', $css );
+				$css = (string) preg_replace_callback(
+					'/expression\s*\(|javascript\s*:|vbscript\s*:/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				$css = (string) preg_replace_callback(
+					'/(?<![-\w])behaviou?r(?=\s*:)/i',
+					static function (): string {
+						return 'behavio\\r';
+					},
+					$css
+				);
+				$css = str_ireplace( '-moz-binding', '-moz-bindin\g', $css );
+				$css = (string) preg_replace_callback(
+					'/(\s)on([a-z]+\s*=)/i',
+					static function ( array $matches ): string {
+						return $matches[1] . 'o\\6e ' . $matches[2];
+					},
+					$css
+				);
+				$css = str_replace( '<', '\3c ', $css );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+			return $css;
+		}
+
+		/**
+		 * Whether derived CSS is within the size/charset storage bounds.
+		 *
+		 * Guards the store paths of both CSS pipelines (issue #1347):
+		 * payloads above $max_bytes or with undecodable UTF-8 are refused
+		 * so unbounded or mojibake blobs never reach the cache. Fail-open
+		 * to true when the verdict itself is unverifiable (no mbstring and
+		 * no strlen?) — strlen() is always available, so only the charset
+		 * leg is skipped without mbstring.
+		 *
+		 * @param string $css       CSS content.
+		 * @param int    $max_bytes Maximum accepted size in bytes.
+		 * @return bool True when the payload may be stored.
+		 * @since NEXT
+		 */
+		public static function css_within_storage_bounds( string $css, int $max_bytes = self::CSS_STORAGE_MAX_BYTES ): bool {
+			try {
+				if ( '' === $css ) {
+					return false;
+				}
+				if ( strlen( $css ) > $max_bytes ) {
+					return false;
+				}
+				if ( function_exists( 'mb_check_encoding' ) && ! mb_check_encoding( $css, 'UTF-8' ) ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			return true;
+		}
+
+		/**
+		 * Per-request memo for the callback HMAC secret (null = unresolved).
+		 *
+		 * @since NEXT
+		 * @var string|null
+		 */
+		private static ?string $callback_secret_memo = null;
+
+		/**
+		 * Reset the per-request callback-secret memo (tests, switch_blog).
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function reset_callback_secret_memo(): void {
+			self::$callback_secret_memo = null;
+		}
+
+		/**
+		 * Read (or lazily create) the per-site callback HMAC secret.
+		 *
+		 * Stored in its own non-autoloaded option (see
+		 * {@see CALLBACK_SECRET_OPTION}) through {@see option_key()} so
+		 * multisite blogs never share a signing key. Created once via
+		 * wp_generate_password() (random_bytes() fallback) and never
+		 * logged. Fail-open: returns '' when the secret cannot be read or
+		 * created, in which case signing/verification degrade to the
+		 * legacy capability+nonce-only path.
+		 *
+		 * @return string Site secret, or '' when unavailable.
+		 * @since NEXT
+		 */
+		public static function get_callback_secret(): string {
+			if ( is_string( self::$callback_secret_memo ) ) {
+				return self::$callback_secret_memo;
+			}
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return '';
+				}
+				$key    = self::option_key( self::CALLBACK_SECRET_OPTION );
+				$secret = get_option( $key, false );
+				if ( is_string( $secret ) && strlen( $secret ) >= 32 ) {
+					self::$callback_secret_memo = $secret;
+					return self::$callback_secret_memo;
+				}
+				if ( function_exists( 'wp_generate_password' ) ) {
+					$secret = wp_generate_password( 64, true, true );
+				} elseif ( function_exists( 'random_bytes' ) ) {
+					$secret = bin2hex( random_bytes( 32 ) );
+				} else {
+					return '';
+				}
+				if ( ! is_string( $secret ) || strlen( $secret ) < 32 ) {
+					return '';
+				}
+				if ( function_exists( 'add_option' ) ) {
+					add_option( $key, $secret, '', false );
+				} elseif ( function_exists( 'update_option' ) ) {
+					update_option( $key, $secret, false );
+				} else {
+					return '';
+				}
+				self::$callback_secret_memo = $secret;
+				return self::$callback_secret_memo;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Sign a regeneration-callback payload with the site secret.
+		 *
+		 * Canonicalizes the payload (key-sorted JSON) and HMACs it so the
+		 * scheduler-execution side can prove the job args were built by
+		 * this site. Fail-open: returns '' when signing is unavailable, in
+		 * which case callers enqueue unsigned and handlers take the legacy
+		 * capability+nonce-only path.
+		 *
+		 * @param array $payload Job payload (scalar values).
+		 * @return string Hex signature, or '' when unavailable.
+		 * @since NEXT
+		 */
+		public static function sign_callback_payload( array $payload ): string {
+			try {
+				$secret = self::get_callback_secret();
+				if ( '' === $secret || ! function_exists( 'hash_hmac' ) ) {
+					return '';
+				}
+				ksort( $payload );
+				if ( function_exists( 'wp_json_encode' ) ) {
+					$canonical = wp_json_encode( $payload );
+				} else {
+					$canonical = json_encode( $payload ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Fallback when wp_json_encode() is unavailable (unit-test doubles).
+				}
+				if ( ! is_string( $canonical ) || '' === $canonical ) {
+					return '';
+				}
+				return hash_hmac( 'sha256', $canonical, $secret );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Verify a regeneration-callback payload signature.
+		 *
+		 * Fail-closed on mismatch (returns false) so forged scheduler args
+		 * never execute; fail-open only in the sense that callers take the
+		 * legacy path when no signature scheme is available at all (see
+		 * sign_callback_payload()). Timing-safe comparison when
+		 * hash_equals() exists.
+		 *
+		 * @param array  $payload   Job payload as signed.
+		 * @param string $signature Hex signature to check.
+		 * @return bool True when the signature is valid.
+		 * @since NEXT
+		 */
+		public static function verify_callback_signature( array $payload, string $signature ): bool {
+			try {
+				if ( '' === $signature ) {
+					return false;
+				}
+				$expected = self::sign_callback_payload( $payload );
+				if ( '' === $expected ) {
+					return false;
+				}
+				if ( function_exists( 'hash_equals' ) ) {
+					return hash_equals( $expected, $signature );
+				}
+				return $expected === $signature;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**

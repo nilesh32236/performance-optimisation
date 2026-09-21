@@ -5900,6 +5900,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$filesystem = Util::init_filesystem();
 			$file       = self::get_ccss_file( $template_hash );
 
+			// Storage bounds (issue #1347): refuse oversized/undecodable
+			// output before the atomic write so unbounded blobs never reach
+			// the cache. Fail closed: keep the prior file in place.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'css_within_storage_bounds' ) && ! Util::css_within_storage_bounds( $critical_css ) ) {
+					self::record_generation_failure( $template_hash, $budget, $deadline );
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				self::record_generation_failure( $template_hash, $budget, $deadline );
+				return false;
+			}
+
 			// Atomic write via the shared tmp+rename helper (unique tmp
 			// name, no non-atomic fallback) so interrupted writes never
 			// leave a truncated live file behind. Fail closed: keep the
@@ -6387,6 +6401,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( ! self::is_valid_template_hash( $template_hash ) ) {
 				return;
 			}
+			// HMAC-bound jobs (issue #1347): when the scheduler args carry
+			// a `sig`, verify it against the signed `template_hash`
+			// payload before any fetch — a mismatch purges the template
+			// artifacts and aborts so forged job args can never trigger
+			// generation. Unsigned jobs (queued before signing or by
+			// legacy callers) take the legacy path and still run
+			// (fail-open).
+			if ( isset( $args['sig'] ) && is_string( $args['sig'] ) && '' !== $args['sig'] ) {
+				$verified = false;
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'verify_callback_signature' ) ) {
+						$verified = Util::verify_callback_signature( array( 'template_hash' => $template_hash ), $args['sig'] );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$verified = false;
+				}
+				if ( ! $verified ) {
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+							Log::add( 'WPPO critical-CSS job rejected: HMAC mismatch for template hash.' );
+						}
+						$file = self::get_ccss_file( $template_hash );
+						if ( is_string( $file ) && '' !== $file ) {
+							global $wp_filesystem;
+							if ( $wp_filesystem && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'delete' ) && $wp_filesystem->exists( $file ) ) {
+								$wp_filesystem->delete( $file );
+							}
+						}
+						self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					return;
+				}
+			}
 
 			$templates      = self::get_templates();
 			$found_template = '';
@@ -6732,6 +6782,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
 					$hook      = 'wppo_generate_ccss';
 					$hook_args = array( array( 'template_hash' => $hash ) );
+					// HMAC-bound jobs (issue #1347): sign the inner payload
+					// before scheduling so background_generate() can prove
+					// the args were built by this site. Deterministic per
+					// payload, so repeat requests still dedupe honestly.
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sign_callback_payload' ) ) {
+							$job_sig = Util::sign_callback_payload( $hook_args[0] );
+							if ( is_string( $job_sig ) && '' !== $job_sig ) {
+								$hook_args[0]['sig'] = $job_sig;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					// Atomic-first via the shared enqueue-gate helper
 					// (issue #1310 review): the unique insert dedupes by
 					// itself on AS 4.x, so the both-group pending re-check

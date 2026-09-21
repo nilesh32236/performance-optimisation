@@ -1829,7 +1829,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wppo_pagespeed_scan', array( 'PerformanceOptimise\Inc\Pagespeed', 'run_scan' ), 10, 1 );
 
 			// Register Action Scheduler callback for background used-CSS generation.
-			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 1 );
+			// Two accepted args (issue #1347): the optional HMAC signature
+			// travels as the second positional scheduler arg; legacy jobs
+			// pass one arg and take the legacy path.
+			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 2 );
 
 			// Self-healing CSS (issue #1407): refresh the matching
 			// critical-CSS template when an LCP regression queues a
