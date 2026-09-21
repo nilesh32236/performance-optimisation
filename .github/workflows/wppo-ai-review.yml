@@ -131,6 +131,11 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@main # floating: tracks latest reviewer action
         with:
           mode: fix
+          # Fail-open checksum (Sep 2026): upstream opencode releases
+          # publish no checksum asset (verified v1.18.29/v1.18.31), so
+          # fail-closed verification hard-fails every run. Restore the
+          # documented warn-and-continue default until checksums return.
+          require_opencode_checksum: 'false'
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           opencode_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -233,6 +238,8 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@main # floating: tracks latest reviewer action
         with:
           mode: review
+          # Fail-open checksum (Sep 2026): see fix job above.
+          require_opencode_checksum: 'false'
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           opencode_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -441,6 +448,8 @@ jobs:
         if: failure()
         with:
           mode: review
+          # Fail-open checksum (Sep 2026): see fix job above.
+          require_opencode_checksum: 'false'
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           opencode_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -558,6 +567,8 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@main # floating: tracks latest reviewer action
         with:
           mode: fix
+          # Fail-open checksum (Sep 2026): see first fix job above.
+          require_opencode_checksum: 'false'
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           opencode_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
