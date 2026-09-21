@@ -36,6 +36,12 @@ jest.mock( '../PageSpeedPanel', () => () => (
 jest.mock( '../SuggestionsPanel', () => () => (
 	<div data-testid="suggestions-panel" />
 ) );
+jest.mock( '../GuidedNextStep', () => () => (
+	<div data-testid="guided-next-step" />
+) );
+jest.mock( '../OptimizationPresets', () => () => (
+	<div data-testid="optimization-presets" />
+) );
 jest.mock( '../SystemInfo', () => () => <div data-testid="system-info" /> );
 jest.mock( '../WebVitalsRum', () => () => <div data-testid="rum-panel" /> );
 jest.mock( '../AutoloadedOptions', () => () => (
@@ -181,6 +187,17 @@ describe( 'Dashboard', () => {
 		expect( screen.getByText( 'Cache Size' ) ).toBeInTheDocument();
 		expect( screen.getByText( '10 MB' ) ).toBeInTheDocument();
 		expect( screen.getByText( '5' ) ).toBeInTheDocument();
+	} );
+
+	it( 'renders the presets and guided next-step cards', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		expect(
+			screen.getByTestId( 'optimization-presets' )
+		).toBeInTheDocument();
+		expect( screen.getByTestId( 'guided-next-step' ) ).toBeInTheDocument();
 	} );
 
 	it( 'clears the cache and announces success', async () => {

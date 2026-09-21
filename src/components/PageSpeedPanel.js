@@ -392,12 +392,13 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 				return;
 			}
 			setScanning( false );
+			// Audit #1483: surface the validation/transport detail so the
+			// user sees why the queue request failed, not the generic fallback.
 			notify( {
 				type: 'error',
-				message: __(
-					'PageSpeed scan failed.',
-					'performance-optimisation'
-				),
+				message:
+					err?.message ||
+					__( 'PageSpeed scan failed.', 'performance-optimisation' ),
 			} );
 			console.error( 'PageSpeed scan error:', getErrorLogMessage( err ) );
 		}
