@@ -149,11 +149,11 @@
 	&--danger {
 		background: var(--wppo-danger);
 		color: var(--wppo-bg-card);
-		box-shadow: 0 1px 3px color-mix(in srgb, var(--wppo-danger) 25%, transparent);
+		box-shadow: 0 1px 3px rgba(220, 38, 38, 0.25);
 
 		&:hover:not(:disabled) {
 			background: var(--wppo-danger-hover);
-			box-shadow: 0 4px 12px color-mix(in srgb, var(--wppo-danger) 30%, transparent);
+			box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 			transform: translateY(-1px);
 		}
 	}

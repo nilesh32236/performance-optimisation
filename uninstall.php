@@ -582,8 +582,6 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 			'wppo_used_css_last_full_regen',           // Used_CSS::LAST_FULL_REGEN_OPTION (issue #1107).
 			'wppo_used_css_last_targeted_regen',       // Used_CSS::TARGETED_REGEN_OPTION (issue #1220).
-			'wppo_ccss_last_full_regen',               // Critical_CSS::LAST_FULL_REGEN_OPTION (issue #1462).
-			'wppo_ccss_last_targeted_regen',           // Critical_CSS::TARGETED_REGEN_OPTION (issue #1462).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 			'wppo_ai_css_refresh_snapshots',           // AI_Adaptive::CSS_REFRESH_SNAPSHOT_OPTION (issue #1407).

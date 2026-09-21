@@ -103,7 +103,6 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		jest.restoreAllMocks();
 		delete global.wppoNativeLazy;
 		delete global.wppoDelayConfig;
-		delete global.wppoDelayReplayed;
 		if ( originalIntersectionObserver ) {
 			global.IntersectionObserver = originalIntersectionObserver;
 		} else {

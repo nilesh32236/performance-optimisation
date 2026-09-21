@@ -218,12 +218,6 @@ describe( 'formatValue', () => {
 		expect( formatValue( '500', 'ms' ) ).toBe( '500 ms' );
 	} );
 
-	it( 'formats unitless CLS without a raw unit suffix', () => {
-		expect( formatValue( 0.24, 'cls' ) ).toBe( '0.240' );
-		expect( formatValue( '0.08', 'cls' ) ).toBe( '0.080' );
-		expect( formatValue( 'oops', 'cls' ) ).toBe( '—' );
-	} );
-
 	it( 'formats default unit', () => {
 		expect( formatValue( '5', 'kb' ) ).toBe( '5 kb' );
 	} );

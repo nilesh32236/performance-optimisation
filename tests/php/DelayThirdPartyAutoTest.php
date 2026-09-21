@@ -538,7 +538,6 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 		$stored = array(
 			'file_optimisation' => array(
 				'delayJSThirdPartyAuto' => true,
-				'delayJSPreset'         => 'safe',
 			),
 		);
 		$writes = array();
@@ -557,14 +556,7 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		$main = $this->make_main(
-			array(
-				'file_optimisation' => array(
-					'delayJSThirdPartyAuto' => true,
-					'delayJSPreset'         => 'safe',
-				),
-			)
-		);
+		$main = $this->make_main( array( 'file_optimisation' => array( 'delayJSThirdPartyAuto' => true ) ) );
 		$main->maybe_migrate_third_party_auto();
 
 		$this->assertSame( array(), $writes, 'Migration must not write when the key exists' );

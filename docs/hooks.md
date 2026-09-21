@@ -541,27 +541,6 @@ add_filter( 'wppo_defer_js_preset_exclusions', function( $preset ) {
 
 ---
 
-### `wppo_fragile_handle_map`
-Filters the fragile-handle map used by the auto-exclude detector (`safe_mode_detect` REST route → `Main::detect_fragile_handles()`). Each key is a lowercase handle fragment; each value carries the exclude `fields` (subset of `excludeDeferJS` / `excludeDelayJS`) and a human-readable `reason`. Guarded by `has_filter()` — returns the built-in map when no listener is present; non-array results fall back to the built-in map and entries are sanitized (empty fragments skipped, empty `fields` default to both exclude lists). @since NEXT.
-
-**Parameters:**
-- `$map` *(array)* — Fragment => `array( 'fields' => string[], 'reason' => string )` map.
-
-**Example:**
-```php
-add_filter( 'wppo_fragile_handle_map', function( $map ) {
-    $map['my-slider'] = array(
-        'fields' => array( 'excludeDeferJS' ),
-        'reason' => 'Slider runtime — deferring breaks layout.',
-    );
-    return $map;
-} );
-```
-
-**REST routes (issue #1465):** `GET performance-optimisation/v1/safe_mode_detect` (optional `handles` param — array or comma-separated string — for accuracy; the frontend queue is empty in REST/admin context so plugin-signal guesses are used otherwise) and `POST performance-optimisation/v1/safe_mode` (`action`: `enable` | `disable`; enabling snapshots settings for one-click undo and purges the page + combined-CSS cache).
-
----
-
 ### `wppo_cve_guard_handles`
 Filter-only (S scope) list of handle strings to auto-exclude from optimization when a CVE is known. Default empty (no auto-exclude). Merged with `array_unique` into `minify_js`/`minify_css` (`exclude_js`/`exclude_css`) and `exclude_defer_js`/`exclude_delay_js` inside `PerformanceOptimise\Inc\Main::setup_hooks()`; respects the existing `litespeed_can_optm` gate; no `wp_options` persistence and no cron. @since 2.0.0.
 
@@ -2012,20 +1991,6 @@ add_filter( 'wppo_ccss_queue_cap', static function() { return 10; } );
 
 ---
 
-### `wppo_ccss_regen_cooldown`
-Filters the full-regeneration cooldown in seconds for Critical CSS (`Critical_CSS::regenerate_all()`). Repeat non-forced callers inside the window return `0` without re-scanning; explicit operator paths bypass it via `$force`. Non-numeric or non-positive filter output is ignored and the `18000` default is kept, so a rogue filter can never disable the cooldown. Default `18000`. @since NEXT.
-
-**Parameters:**
-- `$cooldown` *(int)* — Cooldown in seconds. Default `18000`.
-
-**Example:**
-
-```php
-add_filter( 'wppo_ccss_regen_cooldown', static function() { return 3600; } );
-```
-
----
-
 ### `wppo_ccss_inline_budget`
 Filters the gzipped inline budget in bytes for Critical CSS output (issue #1388). Over-budget output is never inlined: the prior good file is kept, no inline CSS is emitted, and stylesheet deferral is skipped for the request (deferred full stylesheet plus used CSS only). The over-budget warning is throttled to once per template per 12h. Stored values heal to the default `14` KB when missing or out of range; valid filter output clamps to 1–100 KB (`MIN..MAX_CCSS_INLINE_BUDGET_BYTES`); non-numeric filter output is ignored and the stored budget is kept. Default `14 * 1024` (stored `file_optimisation.ccssInlineBudgetKb`). @since NEXT.
 
@@ -2036,48 +2001,6 @@ Filters the gzipped inline budget in bytes for Critical CSS output (issue #1388)
 
 ```php
 add_filter( 'wppo_ccss_inline_budget', static function() { return 20 * 1024; } );
-```
-
----
-
-### `wppo_ccss_targeted_cooldown`
-Filters the burst-throttle window in seconds for targeted Critical CSS regens (`Critical_CSS::request_targeted_regen()`). Repeat builder/theme saves inside the window queue nothing, so a burst of saves collapses into one bounded pass (max 20 templates); the stamp is written only when at least one job was queued. Return `0` to disable the throttle. Non-numeric or negative filter output is ignored and the `3600` default is kept. Default `3600`. @since NEXT.
-
-**Parameters:**
-- `$cooldown` *(int)* — Cooldown in seconds. Default `3600`.
-
-**Example:**
-
-```php
-add_filter( 'wppo_ccss_targeted_cooldown', static function() { return 600; } );
-```
-
----
-
-### `wppo_committed_inline_bytes`
-Filters the bytes already committed to inline `<style>` output on this request, for the coordinated used-CSS / critical-CSS inline budget (`Critical_CSS::get_effective_ccss_budget()`). The default is the request-global ledger (`Util::get_committed_inline_bytes()`, fed by `inline_ccss()`; normally `0` because used CSS ships as an external file in every delivery mode). The filter wins over the ledger when a listener is registered, so operators can account for bytes committed outside the plugin. Non-numeric or non-positive output is ignored. Default `0`. @since NEXT.
-
-**Parameters:**
-- `$committed` *(int)* — Committed inline bytes. Default `0`.
-
-**Example:**
-
-```php
-add_filter( 'wppo_committed_inline_bytes', static function() { return 4800; } );
-```
-
----
-
-### `wppo_builder_ccss_full_regen`
-Restores the legacy forced full critical-CSS requeue after a builder purge. Default `false` (targeted regen, max 20 RUM-worst-first templates); return `true` to force the full requeue (bypasses the `18000`s full-regen cooldown via `$force`). @since NEXT.
-
-**Parameters:**
-- `$full` *(bool)* — Whether to force a full requeue. Default `false`.
-
-**Example:**
-
-```php
-add_filter( 'wppo_builder_ccss_full_regen', '__return_true' );
 ```
 
 ---

@@ -602,15 +602,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['delayJSThirdPartyAuto'] ) ) {
 				$this->options['file_optimisation']['delayJSThirdPartyAuto'] = false;
 			}
-			// One-click Delay-JS preset level (issue #1385): additive key,
-			// defaults to safe (maximum exclusions) so existing installs keep
-			// the safest behaviour. In-memory only here (no front-end DB
-			// write); persisted via update_settings/REST and backfilled once
-			// by maybe_migrate_third_party_auto(). Multisite-safe: per-site
-			// wppo_settings only.
-			if ( ! isset( $this->options['file_optimisation']['delayJSPreset'] ) || ! in_array( strtolower( trim( (string) $this->options['file_optimisation']['delayJSPreset'] ) ), array( 'safe', 'balanced', 'aggressive' ), true ) ) {
-				$this->options['file_optimisation']['delayJSPreset'] = 'safe';
-			}
 			// Unified safe-mode kill switch (issue #1098): additive key, defaults
 			// to off so existing installs keep current behaviour. In-memory only
 			// here (no front-end DB write); persisted via update_settings/REST.
@@ -1485,11 +1476,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_font_preload_emitted' ) );
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_image_lcp_memos' ), 10, 2 );
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
-			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] ) && $safe_mode_off;
-			// Unified safe-mode kill switch (issue #1465): safe mode also
-			// disables combineCSS registration so a single action restores an
-			// unbroken render. Staged combine widens registration for the
-			// preview admin only (per-tag guards enforce preview-only output).
+			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] );
 			if ( ! $combine_for_registration && ! empty( $staged_for_registration['combineCSS'] ) ) {
 				$combine_for_registration = true;
 			}
@@ -3148,10 +3135,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Runs on admin_init; in-memory default is applied in __construct so
 		 * front-end requests never pay for a DB write. Defaults to off so
-		 * upgraded installs keep current behaviour. Also backfills the
-		 * additive one-click preset level key (issue #1385, defaults to
-		 * safe). Multisite-safe: per-site get_option() so sites migrate
-		 * independently. Fail-open: never fatals.
+		 * upgraded installs keep current behaviour. Multisite-safe: per-site
+		 * get_option() so sites migrate independently. Fail-open: never fatals.
 		 *
 		 * @return void
 		 * @since 2.2.0
@@ -3178,20 +3163,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return;
 				}
 				$file_opts = $stored['file_optimisation'] ?? null;
-				$auto_ok   = is_array( $file_opts ) && isset( $file_opts['delayJSThirdPartyAuto'] ) && is_bool( $file_opts['delayJSThirdPartyAuto'] );
-				$preset_ok = is_array( $file_opts ) && isset( $file_opts['delayJSPreset'] ) && is_string( $file_opts['delayJSPreset'] ) && in_array( strtolower( trim( $file_opts['delayJSPreset'] ) ), array( 'safe', 'balanced', 'aggressive' ), true );
-				if ( $auto_ok && $preset_ok ) {
+				if ( is_array( $file_opts ) && isset( $file_opts['delayJSThirdPartyAuto'] ) && is_bool( $file_opts['delayJSThirdPartyAuto'] ) ) {
 					return;
 				}
 
 				$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
 
-				if ( ! $auto_ok ) {
-					$file['delayJSThirdPartyAuto'] = false;
-				}
-				if ( ! $preset_ok ) {
-					$file['delayJSPreset'] = 'safe';
-				}
+				$file['delayJSThirdPartyAuto'] = false;
 
 				$stored['file_optimisation'] = $file;
 				$updated                     = Util::save_settings( $stored );
@@ -3202,12 +3180,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 					$this->options['file_optimisation'] = array();
 				}
-				if ( ! $auto_ok ) {
-					$this->options['file_optimisation']['delayJSThirdPartyAuto'] = false;
-				}
-				if ( ! $preset_ok ) {
-					$this->options['file_optimisation']['delayJSPreset'] = 'safe';
-				}
+				$this->options['file_optimisation']['delayJSThirdPartyAuto'] = false;
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
@@ -4668,16 +4641,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Allowlisted top-level settings keys — single source is Util::ALLOWED_SETTINGS_KEYS
 					// (exposed here so JS `ALLOWED_IMPORT_KEYS` can stay in sync without codegen).
 					'allowedSettingsKeys'                  => Util::ALLOWED_SETTINGS_KEYS,
-					// Authoritative one-click preset bundles (issue #1442 review):
-					// the SPA prefers these server-localised copies via
-					// resolvePresetBundle() and only falls back to its local
-					// SAFE_/AGGRESSIVE_PRESET_BUNDLE mirrors when the global
-					// is absent, so the two can never drift. Fail-open getters
-					// (empty array worst case) so localisation never breaks.
-					'presetBundles'                        => array(
-						'safe'       => self::get_safe_preset_bundle(),
-						'aggressive' => self::get_aggressive_preset_bundle(),
-					),
 					// Upgrade auto-purge status (issue #1276): SPA-visible
 					// last-purge reason + safe-mode preview link bypassing
 					// minify (?wppo_nocache=1). Class/method-exists guarded +
@@ -6460,9 +6423,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			self::$delay_pattern_regex_cache            = array();
 			self::$delay_js_third_party_auto_cache      = null;
 			self::$delay_js_third_party_auto_cache_blog = 0;
-			self::$delay_js_auto_label_commerce         = null;
-			self::$delay_js_auto_label_categories       = null;
-			self::$delay_js_auto_label_blog             = 0;
 		}
 
 		/**
@@ -7105,222 +7065,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * One-click Delay-JS preset levels (issue #1385).
-		 *
-		 * Single source of truth for the Safe / Balanced / Aggressive
-		 * one-click presets. Builder plus commerce presets are forced ON at
-		 * every level so carts, checkouts, and builder runtimes never break.
-		 *
-		 * @since NEXT
-		 * @return string[]
-		 */
-		public static function get_delay_js_preset_levels(): array {
-			return array( 'safe', 'balanced', 'aggressive' );
-		}
-
-		/**
-		 * Toggle map applied by a one-click Delay-JS preset level (issue #1385).
-		 *
-		 * Maps a level to the existing exclusion-getter toggles only — no new
-		 * delay semantics. Fail-open: unknown levels degrade to the safe map.
-		 * Guarded by function_exists/has_filter plus a legacy fallback so the
-		 * current delay path is used when the filter API is unavailable.
-		 *
-		 * @since NEXT
-		 *
-		 * @param string $level Preset level (safe|balanced|aggressive).
-		 * @return array<string, bool>
-		 */
-		public static function get_delay_js_preset_level_settings( string $level ): array {
-			$level = strtolower( trim( $level ) );
-			if ( ! in_array( $level, array( 'safe', 'balanced', 'aggressive' ), true ) ) {
-				$level = 'safe';
-			}
-			$map      = array(
-				'safe'       => array(
-					'delayJSBuilderPreset'     => true,
-					'delayJSCommercePreset'    => true,
-					'delayJSInteractionPreset' => true,
-					'delayJSConsentPreset'     => true,
-					'delayJSAnalyticsPreset'   => true,
-					'delayJSGalleryPreset'     => true,
-					'delayJSJqueryPreset'      => true,
-					'delayJSThirdPartyAuto'    => false,
-				),
-				'balanced'   => array(
-					'delayJSBuilderPreset'     => true,
-					'delayJSCommercePreset'    => true,
-					'delayJSInteractionPreset' => true,
-					'delayJSConsentPreset'     => false,
-					'delayJSAnalyticsPreset'   => false,
-					'delayJSGalleryPreset'     => false,
-					'delayJSJqueryPreset'      => false,
-					'delayJSThirdPartyAuto'    => false,
-				),
-				'aggressive' => array(
-					'delayJSBuilderPreset'     => true,
-					'delayJSCommercePreset'    => true,
-					'delayJSInteractionPreset' => false,
-					'delayJSConsentPreset'     => false,
-					'delayJSAnalyticsPreset'   => false,
-					'delayJSGalleryPreset'     => false,
-					'delayJSJqueryPreset'      => false,
-					'delayJSThirdPartyAuto'    => true,
-				),
-			);
-			$settings = $map[ $level ];
-			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_preset_level_settings' ) ) {
-				return $settings;
-			}
-			try {
-				$raw = apply_filters( 'wppo_delay_js_preset_level_settings', $settings, $level ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Intentional curated preset filter.
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $settings;
-			}
-			if ( ! is_array( $raw ) ) {
-				return $settings;
-			}
-			foreach ( $settings as $key => $default ) {
-				if ( array_key_exists( $key, $raw ) && ! is_array( $raw[ $key ] ) ) {
-					if ( is_bool( $raw[ $key ] ) ) {
-						$settings[ $key ] = $raw[ $key ];
-						continue;
-					}
-					$bool = filter_var( $raw[ $key ], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					if ( null !== $bool ) {
-						$settings[ $key ] = $bool;
-					}
-				}
-			}
-			// Builder plus commerce presets stay forced ON at every level.
-			$settings['delayJSBuilderPreset']  = true;
-			$settings['delayJSCommercePreset'] = true;
-			return $settings;
-		}
-
-		/**
-		 * Merged exclusion list for a one-click Delay-JS preset level (issue #1385).
-		 *
-		 * Maps Safe / Balanced / Aggressive to the existing exclusion getters
-		 * only (builder, slider, commerce, interaction, consent, analytics,
-		 * gallery, jquery plus the always-on base preset). Manual exclusions
-		 * and the delayJSThirdPartyAuto patterns are merged by the caller, so
-		 * the manual textarea plus filter always win. Fail-open: any failure
-		 * degrades to the base preset list (safe direction — pages exclude
-		 * more, never delay everything), never fatal.
-		 *
-		 * @since NEXT
-		 *
-		 * @param string $level Preset level (safe|balanced|aggressive).
-		 * @return string[]
-		 */
-		public static function get_delay_js_preset_level_exclusions( string $level ): array {
-			try {
-				$level = strtolower( trim( $level ) );
-				if ( ! in_array( $level, array( 'safe', 'balanced', 'aggressive' ), true ) ) {
-					$level = 'safe';
-				}
-				$toggles = self::get_delay_js_preset_level_settings( $level );
-				$chunks  = array();
-				try {
-					$chunks[] = self::get_delay_js_base_preset_exclusions();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				// Builder plus commerce are forced ON at every level (see
-				// get_delay_js_preset_level_settings(), which re-forces both
-				// toggles after the filter). The toggle reads below document
-				// that mapping; they are always true by design, never dead.
-				if ( ! empty( $toggles['delayJSBuilderPreset'] ) ) {
-					try {
-						$chunks[] = self::get_delay_js_builder_exclusions();
-						$chunks[] = self::get_delay_js_slider_exclusions();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ! empty( $toggles['delayJSCommercePreset'] ) ) {
-					try {
-						$chunks[] = self::get_delay_js_commerce_exclusions();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ! empty( $toggles['delayJSInteractionPreset'] ) ) {
-					try {
-						$chunks[] = self::get_delay_js_interaction_exclusions();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				foreach ( self::get_delay_js_compat_preset_map() as $setting_key => $slug ) {
-					try {
-						if ( ! empty( $toggles[ $setting_key ] ) ) {
-							$chunks[] = self::get_delay_js_compat_preset_exclusions( (string) $slug );
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						continue;
-					}
-				}
-				$merged = array();
-				foreach ( $chunks as $chunk ) {
-					if ( is_array( $chunk ) && ! empty( $chunk ) ) {
-						$merged = array_merge( $merged, $chunk );
-					}
-				}
-				$merged = array_values(
-					array_unique(
-						array_filter(
-							array_map( 'strval', $merged ),
-							static function ( $val ): bool {
-								return '' !== $val;
-							}
-						)
-					)
-				);
-				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_preset_level_exclusions' ) ) {
-					return $merged;
-				}
-				try {
-					$raw = apply_filters( 'wppo_delay_js_preset_level_exclusions', $merged, $level ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Intentional curated preset filter.
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $merged;
-				}
-				if ( ! is_array( $raw ) ) {
-					return $merged;
-				}
-				return array_values(
-					array_unique(
-						array_filter(
-							array_map(
-								static function ( $val ): string {
-									return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
-								},
-								$raw
-							),
-							static function ( $val ): bool {
-								return '' !== $val;
-							}
-						)
-					)
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				// Fail safe, never aggressive: a catastrophic getter failure
-				// must still exclude the base preset, never delay everything.
-				try {
-					return self::get_delay_js_base_preset_exclusions();
-				} catch ( \Throwable $ignored ) {
-					unset( $ignored );
-					return array();
-				}
-			}
-		}
-
-		/**
 		 * Apply a preset exclusion filter with fail-open guards (issue #1308).
 		 *
 		 * Shared by the opt-in compat presets so a misbehaving filter callback
@@ -7554,170 +7298,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();
-			}
-		}
-
-		/**
-		 * One-click Safe preset bundle (issue #1442).
-		 *
-		 * Curated `file_optimisation` settings that enable minify plus defer
-		 * plus delay together with the builder, commerce, interaction and
-		 * jQuery exclusions pre-applied, so page builders, jQuery widgets and
-		 * WooCommerce never break. Returns only pre-existing settings keys:
-		 * additive, no schema change, safe-by-default. Consent, analytics and
-		 * gallery presets stay off (opt-in), combineCSS stays off (FOUC risk).
-		 * Multisite-safe: per-site `wppo_settings` only.
-		 *
-		 * @since NEXT
-		 * @return array<string, mixed>
-		 */
-		public static function get_safe_preset_bundle(): array {
-			try {
-				return array(
-					'minifyJS'                 => true,
-					'minifyCSS'                => true,
-					'minifyHTML'               => true,
-					'deferJS'                  => true,
-					'delayJS'                  => true,
-					'delayJSBuilderPreset'     => true,
-					'delayJSCommercePreset'    => true,
-					'delayJSInteractionPreset' => true,
-					'delayJSJqueryPreset'      => true,
-					'delayJSSafeMode'          => true,
-					'elementorSafeMode'        => true,
-					'delayJSConsentPreset'     => false,
-					'delayJSAnalyticsPreset'   => false,
-					'delayJSGalleryPreset'     => false,
-					'combineCSS'               => false,
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
-		}
-
-		/**
-		 * Aggressive preset bundle (issue #1442).
-		 *
-		 * Same pipelines as the Safe preset but with the builder, commerce,
-		 * interaction and jQuery safe presets off plus CSS combining on, for
-		 * users who manage exclusions manually. UI-gated behind an explicit
-		 * warning with one-click revert via the settings snapshot. Returns
-		 * only pre-existing settings keys: additive, no schema change.
-		 *
-		 * @since NEXT
-		 * @return array<string, mixed>
-		 */
-		public static function get_aggressive_preset_bundle(): array {
-			try {
-				return array(
-					'minifyJS'                 => true,
-					'minifyCSS'                => true,
-					'minifyHTML'               => true,
-					'deferJS'                  => true,
-					'delayJS'                  => true,
-					'delayJSBuilderPreset'     => false,
-					'delayJSCommercePreset'    => false,
-					'delayJSInteractionPreset' => false,
-					'delayJSJqueryPreset'      => false,
-					'delayJSSafeMode'          => false,
-					'elementorSafeMode'        => false,
-					'combineCSS'               => true,
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
-		}
-
-		/**
-		 * Merge a preset bundle additively into file-optimisation settings (issue #1442).
-		 *
-		 * Only allowlisted pre-existing keys from the bundle are applied; any
-		 * unknown key is skipped so a future bundle can never widen the schema
-		 * or persist unexpected values. Fail-open: any failure returns the
-		 * input unchanged.
-		 *
-		 * @since NEXT
-		 * @param array<string, mixed> $current Current file_optimisation settings.
-		 * @param array<string, mixed> $bundle  Preset bundle (e.g. get_safe_preset_bundle()).
-		 * @return array<string, mixed> Merged settings.
-		 */
-		public static function apply_preset_bundle( array $current, array $bundle ): array {
-			try {
-				$allowed = array(
-					'minifyJS',
-					'minifyCSS',
-					'minifyHTML',
-					'deferJS',
-					'delayJS',
-					'delayJSBuilderPreset',
-					'delayJSCommercePreset',
-					'delayJSInteractionPreset',
-					'delayJSJqueryPreset',
-					'delayJSSafeMode',
-					'elementorSafeMode',
-					'delayJSConsentPreset',
-					'delayJSAnalyticsPreset',
-					'delayJSGalleryPreset',
-					'combineCSS',
-				);
-				foreach ( $bundle as $key => $value ) {
-					if ( ! is_string( $key ) || ! in_array( $key, $allowed, true ) ) {
-						continue;
-					}
-					$current[ $key ] = $value;
-				}
-				return $current;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $current;
-			}
-		}
-
-		/**
-		 * Whether file-optimisation settings match the Safe preset (issue #1442).
-		 *
-		 * True when the minify/defer/delay pipelines are on together with all
-		 * four safe exclusion presets plus the two safe-mode guards
-		 * (`delayJSSafeMode`, `elementorSafeMode`) the bundle applies, and
-		 * with `combineCSS` off (the bundle pins it false — FOUC risk —
-		 * while Aggressive pins it true), so enabling CSS combining after
-		 * applying Safe clears the confirmation instead of overstating
-		 * safety. `minifyHTML` is part of the pipeline gate because the
-		 * bundle pins it true. Fail-open: any failure returns false.
-		 *
-		 * @since NEXT
-		 * @param array<string, mixed> $file_opt file_optimisation settings slice.
-		 * @return bool
-		 */
-		public static function is_safe_preset_active( array $file_opt ): bool {
-			try {
-				foreach ( array( 'minifyJS', 'minifyCSS', 'minifyHTML', 'deferJS', 'delayJS' ) as $key ) {
-					if ( empty( $file_opt[ $key ] ) ) {
-						return false;
-					}
-				}
-				$required_safe = array(
-					'delayJSBuilderPreset',
-					'delayJSCommercePreset',
-					'delayJSInteractionPreset',
-					'delayJSJqueryPreset',
-					'delayJSSafeMode',
-					'elementorSafeMode',
-				);
-				foreach ( $required_safe as $key ) {
-					if ( empty( $file_opt[ $key ] ) ) {
-						return false;
-					}
-				}
-				if ( ! empty( $file_opt['combineCSS'] ) ) {
-					return false;
-				}
-				return true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
 			}
 		}
 
@@ -8187,268 +7767,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					)
 				)
 			);
-		}
-
-		/**
-		 * Fragile-handle map for the auto-exclude detector (issue #1465).
-		 *
-		 * Ordered jQuery first, then cart fragments, then builders so the
-		 * detector names the most breakage-prone handle first. Each entry
-		 * maps a lowercase handle fragment to its exclude field(s) and a
-		 * short human-readable reason. Filterable via
-		 * `wppo_fragile_handle_map` (has_filter-guarded, fail-open to the
-		 * built-in map). Multisite-safe: static data only.
-		 *
-		 * @since NEXT
-		 *
-		 * @return array<string,array{fields:string[],reason:string}> Fragment => meta.
-		 */
-		public static function get_fragile_handle_map(): array {
-			$map = array(
-				'jquery-core'            => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'jQuery core — deferring or delaying breaks dependent scripts.',
-				),
-				'jquery-migrate'         => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'jQuery Migrate — deferring or delaying breaks dependent scripts.',
-				),
-				'jquery'                 => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'jQuery — deferring or delaying breaks dependent scripts.',
-				),
-				'wc-cart-fragments'      => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'WooCommerce cart fragments — delaying breaks the mini-cart AJAX refresh.',
-				),
-				'cart-fragments'         => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'WooCommerce cart fragments — delaying breaks the mini-cart AJAX refresh.',
-				),
-				'wc-checkout'            => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'WooCommerce checkout — deferring breaks payment and validation scripts.',
-				),
-				'wc-add-to-cart'         => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'WooCommerce add-to-cart — delaying breaks shop interactions.',
-				),
-				'wc-blocks'              => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'WooCommerce Blocks — deferring breaks Store API interactivity.',
-				),
-				'wc-store'               => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'WooCommerce Store API — deferring breaks cart and checkout blocks.',
-				),
-				'woocommerce'            => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'WooCommerce — deferring breaks cart and checkout flows.',
-				),
-				'elementor-frontend'     => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'Elementor frontend runtime — delaying breaks builder layout and widgets.',
-				),
-				'elementor-pro-frontend' => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'Elementor Pro runtime — delaying breaks builder widgets.',
-				),
-				'et-core-api'            => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'Divi builder runtime — delaying breaks builder layout.',
-				),
-				'divi-custom-script'     => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'Divi custom script — delaying breaks builder layout.',
-				),
-				'kadence'                => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'Kadence runtime — delaying breaks blocks and layout.',
-				),
-				'wp-interactivity'       => array(
-					'fields' => array( 'excludeDeferJS', 'excludeDelayJS' ),
-					'reason' => 'Block interactivity runtime — deferring breaks interactive blocks.',
-				),
-			);
-			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_fragile_handle_map' ) ) {
-				return $map;
-			}
-			try {
-				$raw = apply_filters( 'wppo_fragile_handle_map', $map );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $map;
-			}
-			if ( ! is_array( $raw ) ) {
-				return $map;
-			}
-			$sanitized = array();
-			foreach ( $raw as $fragment => $meta ) {
-				if ( ! is_string( $fragment ) && ! is_numeric( $fragment ) ) {
-					continue;
-				}
-				$fragment = trim( (string) $fragment );
-				if ( '' === $fragment || ! is_array( $meta ) ) {
-					continue;
-				}
-				$key = strtolower( $fragment );
-				if ( isset( $sanitized[ $key ] ) ) {
-					continue;
-				}
-				$allowed = array( 'excludeDeferJS', 'excludeDelayJS' );
-				$fields  = array();
-				if ( isset( $meta['fields'] ) && is_array( $meta['fields'] ) ) {
-					foreach ( $meta['fields'] as $field ) {
-						if ( is_string( $field ) || is_numeric( $field ) ) {
-							$field = trim( (string) $field );
-							if ( in_array( $field, $allowed, true ) ) {
-								$fields[] = $field;
-							}
-						}
-					}
-					$fields = array_values( array_unique( $fields ) );
-				}
-				if ( empty( $fields ) ) {
-					$fields = array( 'excludeDeferJS', 'excludeDelayJS' );
-				}
-				$reason            = isset( $meta['reason'] ) && is_string( $meta['reason'] ) ? $meta['reason'] : '';
-				$sanitized[ $key ] = array(
-					'fields' => $fields,
-					'reason' => $reason,
-				);
-			}
-			return ! empty( $sanitized ) ? $sanitized : $map;
-		}
-
-		/**
-		 * Map enqueued handles to fragile-handle exclude suggestions (issue #1465).
-		 *
-		 * Case-insensitive substring match against {@see get_fragile_handle_map()},
-		 * jQuery/cart/builders first via map order. Returns at most 20
-		 * suggestions, deduped by handle. Fail-open: any failure returns an
-		 * empty array (unoptimised guidance only, never fatal).
-		 *
-		 * @since NEXT
-		 *
-		 * @param string[] $handles Enqueued script/style handles.
-		 * @return array<int,array{handle:string,fields:string[],reason:string}> Suggestions.
-		 */
-		public static function detect_fragile_handles( array $handles ): array {
-			try {
-				$map = self::get_fragile_handle_map();
-				if ( empty( $map ) || empty( $handles ) ) {
-					return array();
-				}
-				$suggestions = array();
-				$seen        = array();
-				foreach ( $handles as $handle ) {
-					if ( ! is_string( $handle ) && ! is_numeric( $handle ) ) {
-						continue;
-					}
-					$handle = (string) $handle;
-					if ( '' === $handle || isset( $seen[ strtolower( $handle ) ] ) ) {
-						continue;
-					}
-					$lower = strtolower( $handle );
-					foreach ( $map as $fragment => $meta ) {
-						$frag = strtolower( (string) $fragment );
-						if ( '' === $frag ) {
-							continue;
-						}
-						if ( false !== strpos( $lower, $frag ) ) {
-							$fields                        = isset( $meta['fields'] ) && is_array( $meta['fields'] ) ? array_values( $meta['fields'] ) : array( 'excludeDeferJS', 'excludeDelayJS' );
-							$reason                        = isset( $meta['reason'] ) && is_string( $meta['reason'] ) ? $meta['reason'] : '';
-							$suggestions[]                 = array(
-								'handle' => $handle,
-								'fields' => $fields,
-								'reason' => $reason,
-							);
-							$seen[ strtolower( $handle ) ] = true;
-							break;
-						}
-					}
-					if ( count( $suggestions ) >= 20 ) {
-						break;
-					}
-				}
-				return $suggestions;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
-		}
-
-		/**
-		 * Current minify/combine/defer stack state for safe mode (issue #1465).
-		 *
-		 * Single choke point for the detector REST endpoint and the
-		 * one-click UI so the stack definition cannot drift between
-		 * call sites. Fail-open to all-off on any failure.
-		 *
-		 * @since NEXT
-		 *
-		 * @param array $file_optimisation Optional `file_optimisation` slice.
-		 * @return array{safe_mode:bool,delay_js:bool,defer_js:bool,combine_css:bool,remove_unused_css:bool,stack_enabled:bool} Stack flags.
-		 */
-		public static function get_safe_mode_stack_state( array $file_optimisation = array() ): array {
-			try {
-				if ( empty( $file_optimisation ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
-					try {
-						$settings          = (array) Util::get_settings();
-						$file_optimisation = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				$safe_mode   = self::is_safe_mode_active( $file_optimisation );
-				$delay_js    = ! empty( $file_optimisation['delayJS'] );
-				$defer_js    = ! empty( $file_optimisation['deferJS'] );
-				$combine_css = ! empty( $file_optimisation['combineCSS'] );
-				$remove_css  = ! empty( $file_optimisation['removeUnusedCSS'] );
-				return array(
-					'safe_mode'         => $safe_mode,
-					'delay_js'          => $delay_js,
-					'defer_js'          => $defer_js,
-					'combine_css'       => $combine_css,
-					'remove_unused_css' => $remove_css,
-					'stack_enabled'     => ( $delay_js || $defer_js || $combine_css ) && ! $safe_mode,
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array(
-					'safe_mode'         => false,
-					'delay_js'          => false,
-					'defer_js'          => false,
-					'combine_css'       => false,
-					'remove_unused_css' => false,
-					'stack_enabled'     => false,
-				);
-			}
-		}
-
-		/**
-		 * Build the one-click safe-mode enable payload (issue #1465).
-		 *
-		 * Returns the production `file_optimisation` slice with `safeMode`
-		 * forced on while every other setting is preserved untouched, so
-		 * disabling safe mode later restores the previous configuration
-		 * without re-entering settings. Pure function for testability;
-		 * persistence lives in the REST handler (per-site wppo_settings).
-		 * Fail-open: any failure returns the input unchanged with safeMode on.
-		 *
-		 * @since NEXT
-		 *
-		 * @param array $file_optimisation Production slice.
-		 * @return array Slice with safeMode enabled.
-		 */
-		public static function build_safe_mode_enable_payload( array $file_optimisation = array() ): array {
-			try {
-				$file_optimisation['safeMode'] = true;
-				return $file_optimisation;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array( 'safeMode' => true );
-			}
 		}
 
 		/**
@@ -9083,210 +8401,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static ?string $delay_js_third_party_auto_handle_key = null;
 
 		/**
-		 * Memoized commerce exclusions for the per-tag auto label (issue #1385 review).
-		 *
-		 * Per-tag memo: get_delay_js_third_party_auto_label() runs per script tag; without
-		 * a memo it would rebuild the commerce list (with has_filter /
-		 * apply_filters machinery) on every tag. Cached per blog id when no
-		 * related filter is registered; bypassed when a filter is present so
-		 * mid-request add_filter/remove_filter stays visible. Reset with
-		 * reset_delay_third_party_auto_cache().
-		 *
-		 * @since NEXT
-		 * @var string[]|null
-		 */
-		private static ?array $delay_js_auto_label_commerce = null;
-
-		/**
-		 * Memoized category buckets for the per-tag auto label (issue #1385 review).
-		 *
-		 * Same memo policy as $delay_js_auto_label_commerce above.
-		 *
-		 * @since NEXT
-		 * @var array<string, string[]>|null
-		 */
-		private static ?array $delay_js_auto_label_categories = null;
-
-		/**
-		 * Blog id the auto-label memo was computed for.
-		 *
-		 * @since NEXT
-		 * @var int
-		 */
-		private static int $delay_js_auto_label_blog = 0;
-
-		/**
-		 * Labelled auto third-party vendor categories (issue #1385).
-		 *
-		 * Single source of truth for the auto detector: analytics, ads, and
-		 * social buckets (chat/video/embeds roll into social so every curated
-		 * vendor carries exactly one label). The flat pattern list in
-		 * get_delay_js_third_party_auto_patterns() merges these buckets, so
-		 * the categories can never drift from the matcher. Filterable via
-		 * wppo_delay_js_third_party_auto_categories (has_filter-guarded,
-		 * fail-open to the curated buckets).
-		 *
-		 * @since NEXT
-		 * @return array<string, string[]>
-		 */
-		public static function get_delay_js_third_party_auto_categories(): array {
-			$categories = array(
-				'analytics' => array(
-					'googletagmanager.com',
-					'google-analytics.com',
-					'analytics.google.com',
-					'static.hotjar.com',
-					'hotjar.com',
-					'clarity.ms',
-					'cdn.mxpnl.com',
-					'cdn.segment.com',
-					'segment.io',
-					'fullstory.com',
-					'optimizely.com',
-					'vwo.com',
-					'mouseflow.com',
-					'newrelic.com',
-					'nr-data.net',
-					'browser.sentry-cdn.com',
-					'sentry.io',
-				),
-				'ads'       => array(
-					'googlesyndication.com',
-					'doubleclick.net',
-				),
-				'social'    => array(
-					'connect.facebook.net',
-					'facebook.net',
-					'platform.twitter.com',
-					'platform.linkedin.com',
-					'linkedin.com/insight',
-					'snap.licdn.com',
-					'connect.tiktok.com',
-					'platform.pinterest.com',
-					'widget.intercom.io',
-					'js.intercomcdn.com',
-					'js.hs-scripts.com',
-					'hs-scripts.com',
-					'static.crisp.chat',
-					'crisp.chat',
-					'tawk.to',
-					'youtube.com/iframe_api',
-					'player.vimeo.com',
-					'fast.wistia.com',
-					'disqus.com',
-				),
-			);
-			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_third_party_auto_categories' ) ) {
-				return $categories;
-			}
-			try {
-				$raw = apply_filters( 'wppo_delay_js_third_party_auto_categories', $categories ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Intentional curated preset filter.
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $categories;
-			}
-			if ( ! is_array( $raw ) ) {
-				return $categories;
-			}
-			$filtered = array();
-			foreach ( array( 'analytics', 'ads', 'social' ) as $bucket ) {
-				if ( ! isset( $raw[ $bucket ] ) || ! is_array( $raw[ $bucket ] ) ) {
-					$filtered[ $bucket ] = $categories[ $bucket ];
-					continue;
-				}
-				$list = array();
-				foreach ( $raw[ $bucket ] as $val ) {
-					if ( is_string( $val ) || is_numeric( $val ) ) {
-						$val = trim( (string) $val );
-						if ( '' !== $val ) {
-							$list[] = $val;
-						}
-					}
-				}
-				$filtered[ $bucket ] = ! empty( $list ) ? array_values( array_unique( $list ) ) : $categories[ $bucket ];
-			}
-			return $filtered;
-		}
-
-		/**
-		 * Label a script src/handle with its auto third-party category (issue #1385).
-		 *
-		 * Returns analytics, ads, or social for curated vendors, or an empty
-		 * string when the input is not an auto candidate (including
-		 * WooCommerce fragments plus cart AJAX, which are skipped via
-		 * get_delay_js_commerce_exclusions()). Fail-open: any failure
-		 * returns an empty string (unlabelled, left eager).
-		 *
-		 * @since NEXT
-		 *
-		 * @param string $src_or_handle Script src URL, tag markup, or handle.
-		 * @return string Category label or empty string.
-		 */
-		public static function get_delay_js_third_party_auto_label( string $src_or_handle ): string {
-			try {
-				$haystack = trim( $src_or_handle );
-				if ( '' === $haystack ) {
-					return '';
-				}
-				// Per-tag memo: rebuilding the commerce list plus the full
-				// category buckets (with has_filter/apply_filters machinery)
-				// on every script tag is wasteful on script-heavy pages, so
-				// reuse the memoized copies when no related filter is
-				// registered. Bypassed when a filter is present so dynamic
-				// callbacks stay visible; keyed per blog id for multisite.
-				$blog_id          = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-				$has_label_filter = function_exists( 'has_filter' ) && ( has_filter( 'wppo_delay_js_commerce_exclusions' ) || has_filter( 'wppo_delay_js_third_party_auto_categories' ) );
-				if ( ! $has_label_filter && null !== self::$delay_js_auto_label_commerce && null !== self::$delay_js_auto_label_categories && $blog_id === self::$delay_js_auto_label_blog ) {
-					$commerce   = self::$delay_js_auto_label_commerce;
-					$categories = self::$delay_js_auto_label_categories;
-				} else {
-					$commerce   = array();
-					$categories = array();
-					// Commerce skip: WooCommerce fragments plus cart AJAX never
-					// carry a third-party label.
-					try {
-						$commerce = self::get_delay_js_commerce_exclusions();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$commerce = array();
-					}
-					try {
-						$categories = self::get_delay_js_third_party_auto_categories();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$categories = array();
-					}
-					if ( ! $has_label_filter ) {
-						self::$delay_js_auto_label_commerce   = $commerce;
-						self::$delay_js_auto_label_categories = $categories;
-						self::$delay_js_auto_label_blog       = $blog_id;
-					}
-				}
-				foreach ( $commerce as $entry ) {
-					$entry = trim( (string) $entry );
-					if ( '' !== $entry && false !== stripos( $haystack, $entry ) ) {
-						return '';
-					}
-				}
-				foreach ( array( 'analytics', 'ads', 'social' ) as $bucket ) {
-					if ( empty( $categories[ $bucket ] ) || ! is_array( $categories[ $bucket ] ) ) {
-						continue;
-					}
-					foreach ( $categories[ $bucket ] as $pattern ) {
-						$pattern = trim( (string) $pattern );
-						if ( '' !== $pattern && false !== stripos( $haystack, $pattern ) ) {
-							return $bucket;
-						}
-					}
-				}
-				return '';
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
-		}
-
-		/**
 		 * Reset the auto third-party pattern memo (for tests).
 		 *
 		 * @since 2.2.0
@@ -9298,9 +8412,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			self::$delay_js_third_party_auto_handle_segments = array();
 			self::$delay_js_third_party_auto_handle_re       = '';
 			self::$delay_js_third_party_auto_handle_key      = null;
-			self::$delay_js_auto_label_commerce              = null;
-			self::$delay_js_auto_label_categories            = null;
-			self::$delay_js_auto_label_blog                  = 0;
 		}
 
 		/**
@@ -9331,65 +8442,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! $has_auto_filter && null !== self::$delay_js_third_party_auto_cache && $blog_id === self::$delay_js_third_party_auto_cache_blog ) {
 				return self::$delay_js_third_party_auto_cache;
 			}
-			// Single source of truth: the flat matcher merges the labelled
-			// analytics/ads/social buckets (issue #1385) so categories and
-			// patterns can never drift. Legacy fallback keeps the curated
-			// flat list when the category API is unavailable.
-			$preset = array();
-			try {
-				$categories = self::get_delay_js_third_party_auto_categories();
-				foreach ( array( 'analytics', 'ads', 'social' ) as $bucket ) {
-					if ( isset( $categories[ $bucket ] ) && is_array( $categories[ $bucket ] ) ) {
-						$preset = array_merge( $preset, $categories[ $bucket ] );
-					}
-				}
-				$preset = array_values( array_unique( $preset ) );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$preset = array();
-			}
-			if ( empty( $preset ) ) {
-				$preset = array(
-					'googletagmanager.com',
-					'google-analytics.com',
-					'analytics.google.com',
-					'googlesyndication.com',
-					'doubleclick.net',
-					'connect.facebook.net',
-					'facebook.net',
-					'platform.twitter.com',
-					'platform.linkedin.com',
-					'linkedin.com/insight',
-					'snap.licdn.com',
-					'static.hotjar.com',
-					'hotjar.com',
-					'clarity.ms',
-					'cdn.mxpnl.com',
-					'cdn.segment.com',
-					'segment.io',
-					'fullstory.com',
-					'optimizely.com',
-					'vwo.com',
-					'mouseflow.com',
-					'widget.intercom.io',
-					'js.intercomcdn.com',
-					'js.hs-scripts.com',
-					'hs-scripts.com',
-					'connect.tiktok.com',
-					'platform.pinterest.com',
-					'static.crisp.chat',
-					'crisp.chat',
-					'tawk.to',
-					'youtube.com/iframe_api',
-					'player.vimeo.com',
-					'fast.wistia.com',
-					'disqus.com',
-					'newrelic.com',
-					'nr-data.net',
-					'browser.sentry-cdn.com',
-					'sentry.io',
-				);
-			}
+			$preset = array(
+				'googletagmanager.com',
+				'google-analytics.com',
+				'analytics.google.com',
+				'googlesyndication.com',
+				'doubleclick.net',
+				'connect.facebook.net',
+				'facebook.net',
+				'platform.twitter.com',
+				'platform.linkedin.com',
+				'linkedin.com/insight',
+				'snap.licdn.com',
+				'static.hotjar.com',
+				'hotjar.com',
+				'clarity.ms',
+				'cdn.mxpnl.com',
+				'cdn.segment.com',
+				'segment.io',
+				'fullstory.com',
+				'optimizely.com',
+				'vwo.com',
+				'mouseflow.com',
+				'widget.intercom.io',
+				'js.intercomcdn.com',
+				'js.hs-scripts.com',
+				'hs-scripts.com',
+				'connect.tiktok.com',
+				'platform.pinterest.com',
+				'static.crisp.chat',
+				'crisp.chat',
+				'tawk.to',
+				'youtube.com/iframe_api',
+				'player.vimeo.com',
+				'fast.wistia.com',
+				'disqus.com',
+				'newrelic.com',
+				'nr-data.net',
+				'browser.sentry-cdn.com',
+				'sentry.io',
+			);
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_third_party_auto_patterns' ) ) {
 				self::$delay_js_third_party_auto_cache      = $preset;
 				self::$delay_js_third_party_auto_cache_blog = $blog_id;
@@ -9581,36 +8673,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					return false;
-				}
-				// Commerce-handle skip (issue #1385): WooCommerce fragments
-				// plus cart AJAX (wc-cart-fragments, add-to-cart,
-				// cart-fragments) never auto-delay, even outside excluded
-				// contexts, via get_delay_js_commerce_exclusions(). Per-tag
-				// memo (issue #1385 review): reuse the auto-label commerce
-				// memo when no commerce filter is registered so
-				// script-heavy pages skip the has_filter/apply_filters
-				// machinery per tag; bypassed when the filter is present.
-				try {
-					$candidate_blog_id   = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-					$has_commerce_filter = function_exists( 'has_filter' ) && has_filter( 'wppo_delay_js_commerce_exclusions' );
-					if ( ! $has_commerce_filter && null !== self::$delay_js_auto_label_commerce && $candidate_blog_id === self::$delay_js_auto_label_blog ) {
-						$commerce_excludes = self::$delay_js_auto_label_commerce;
-					} else {
-						$commerce_excludes = self::get_delay_js_commerce_exclusions();
-						if ( ! $has_commerce_filter ) {
-							self::$delay_js_auto_label_commerce = $commerce_excludes;
-							self::$delay_js_auto_label_blog     = $candidate_blog_id;
-						}
-					}
-					$commerce_haystack = strtolower( (string) $handle . "\0" . $src . "\0" . $tag );
-					foreach ( $commerce_excludes as $entry ) {
-						$entry = strtolower( trim( (string) $entry ) );
-						if ( '' !== $entry && false !== strpos( $commerce_haystack, $entry ) ) {
-							return false;
-						}
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
 				}
 				// User allowlist wins over auto patterns (parity with the
 				// manual third-party path). Handle matching uses the single
