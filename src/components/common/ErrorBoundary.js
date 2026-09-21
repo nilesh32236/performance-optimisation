@@ -48,6 +48,7 @@ class ErrorBoundary extends Component {
 						) }
 					</p>
 					<button
+						type="button"
 						className="wppo-button wppo-button--primary"
 						onClick={ () => window.location.reload() }
 					>

@@ -213,9 +213,14 @@ describe( 'Dashboard', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'clear_cache', {
-				action: 'clear_cache',
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'clear_cache',
+				{
+					action: 'clear_cache',
+				},
+				'POST',
+				expect.any( AbortSignal )
+			)
 		);
 		expect(
 			screen.getByText( 'Cache cleared successfully.' )
@@ -523,10 +528,17 @@ describe( 'Dashboard', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'cache_settings',
-				settings: expect.objectContaining( { enableCache: true } ),
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'cache_settings',
+					settings: expect.objectContaining( {
+						enableCache: true,
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			)
 		);
 	} );
 
@@ -546,10 +558,17 @@ describe( 'Dashboard', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'cache_settings',
-				settings: expect.objectContaining( { enableCache: true } ),
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'cache_settings',
+					settings: expect.objectContaining( {
+						enableCache: true,
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			)
 		);
 	} );
 
@@ -572,13 +591,18 @@ describe( 'Dashboard', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'cache_settings',
-				settings: expect.objectContaining( {
-					cdnPurgeService: 'cloudflare',
-					cloudflareZoneId: 'abc123',
-				} ),
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'cache_settings',
+					settings: expect.objectContaining( {
+						cdnPurgeService: 'cloudflare',
+						cloudflareZoneId: 'abc123',
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			)
 		);
 	} );
 
@@ -600,7 +624,9 @@ describe( 'Dashboard', () => {
 		await waitFor( () =>
 			expect( apiCall ).toHaveBeenCalledWith(
 				'delete_optimised_image',
-				{}
+				{},
+				'POST',
+				expect.any( AbortSignal )
 			)
 		);
 		expect(
@@ -627,10 +653,17 @@ describe( 'Dashboard', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'cache_settings',
-				settings: expect.objectContaining( { wooSafeMode: true } ),
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'cache_settings',
+					settings: expect.objectContaining( {
+						wooSafeMode: true,
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			)
 		);
 	} );
 

@@ -1131,6 +1131,9 @@ const FileOptimization = ( {
 			const res = await apiCall( 'sandbox_save', {
 				settings: buildStagedFromForm(),
 			} );
+			if ( ! isSandboxMountedRef.current ) {
+				return;
+			}
 			if ( res && res.success ) {
 				setSandboxStaged( res.data ? res.data.staged || {} : {} );
 				try {
@@ -1139,11 +1142,17 @@ const FileOptimization = ( {
 						{},
 						'GET'
 					);
+					if ( ! isSandboxMountedRef.current ) {
+						return;
+					}
 					if ( status && status.success && status.data ) {
 						setSandboxPreviewUrl( status.data.preview_url || '' );
 					}
 				} catch {
 					// Preview link is best-effort; staged state above is enough.
+				}
+				if ( ! isSandboxMountedRef.current ) {
+					return;
 				}
 				notifySandbox( {
 					type: 'success',
@@ -1162,6 +1171,9 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch {
+			if ( ! isSandboxMountedRef.current ) {
+				return;
+			}
 			notifySandbox( {
 				type: 'error',
 				message: __(
@@ -1179,6 +1191,9 @@ const FileOptimization = ( {
 		setSandboxBusy( true );
 		try {
 			const res = await apiCall( 'sandbox_promote', {} );
+			if ( ! isSandboxMountedRef.current ) {
+				return;
+			}
 			if ( res && res.success ) {
 				// Sync the production baseline so the form reflects the
 				// promoted values: prefer the production slice returned by
@@ -1212,6 +1227,9 @@ const FileOptimization = ( {
 						...stripCdnRowIds( synced ),
 					} ) );
 				}
+				if ( ! isSandboxMountedRef.current ) {
+					return;
+				}
 				setSandboxStaged( {} );
 				setSandboxPreviewUrl( '' );
 				notifySandbox( {
@@ -1236,6 +1254,9 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch {
+			if ( ! isSandboxMountedRef.current ) {
+				return;
+			}
 			notifySandbox( {
 				type: 'error',
 				message: __( 'Could not promote.', 'performance-optimisation' ),
@@ -1250,6 +1271,9 @@ const FileOptimization = ( {
 		setSandboxBusy( true );
 		try {
 			const res = await apiCall( 'sandbox_discard', {} );
+			if ( ! isSandboxMountedRef.current ) {
+				return;
+			}
 			if ( res && res.success ) {
 				setSandboxStaged( {} );
 				// Clear the stale preview link (its nonce and staged values
@@ -1272,6 +1296,9 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch {
+			if ( ! isSandboxMountedRef.current ) {
+				return;
+			}
 			notifySandbox( {
 				type: 'error',
 				message: __( 'Could not discard.', 'performance-optimisation' ),
@@ -1748,6 +1775,9 @@ const FileOptimization = ( {
 		dismiss: dismissPreset,
 	} = useNotice();
 	const applyPresetBundle = async ( bundle, successMessage ) => {
+		if ( isApplyingPreset ) {
+			return;
+		}
 		setIsApplyingPreset( true );
 		dismissPreset();
 		const next = normalizeFileOpt( { ...settings, ...bundle } );
@@ -2377,6 +2407,9 @@ const FileOptimization = ( {
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
+		}
+		if ( isSaving ) {
+			return;
 		}
 		setIsSaving( true );
 		dismiss();
@@ -3324,10 +3357,8 @@ const FileOptimization = ( {
 													className="wppo-input"
 													type="text"
 													id="wppoSingleTemplate"
-													placeholder={ __(
-														'single',
-														'performance-optimisation'
-													) }
+													// Translators: placeholder is a code slug used for template lookup — do not translate.
+													placeholder="single"
 													value={ singleTemplate }
 													onChange={ ( e ) =>
 														setSingleTemplate(

@@ -131,10 +131,15 @@ describe( 'PluginSetting', () => {
 			expect( screen.getByText( 'API key saved.' ) ).toBeInTheDocument()
 		);
 
-		expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-			tab: 'performance_audit',
-			settings: { pagespeed_api_key: 'AIza-super-secret' },
-		} );
+		expect( apiCall ).toHaveBeenCalledWith(
+			'update_settings',
+			{
+				tab: 'performance_audit',
+				settings: { pagespeed_api_key: 'AIza-super-secret' },
+			},
+			'POST',
+			expect.any( AbortSignal )
+		);
 	} );
 
 	it( 'shows an error notice when the API key save fails', async () => {
@@ -194,10 +199,15 @@ describe( 'PluginSetting', () => {
 			).toBeInTheDocument()
 		);
 
-		expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-			tab: 'performance_audit',
-			settings: { auto_rescan: 'weekly' },
-		} );
+		expect( apiCall ).toHaveBeenCalledWith(
+			'update_settings',
+			{
+				tab: 'performance_audit',
+				settings: { auto_rescan: 'weekly' },
+			},
+			'POST',
+			expect.any( AbortSignal )
+		);
 	} );
 
 	it( 'saves server timing and high-value URLs', async () => {
@@ -231,16 +241,21 @@ describe( 'PluginSetting', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'performance_audit',
-				settings: expect.objectContaining( {
-					server_timing_enabled: true,
-					high_value_urls: [
-						'http://example.com/about/',
-						'http://example.com/blog/',
-					],
-				} ),
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'performance_audit',
+					settings: expect.objectContaining( {
+						server_timing_enabled: true,
+						high_value_urls: [
+							'http://example.com/about/',
+							'http://example.com/blog/',
+						],
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			)
 		);
 	} );
 
@@ -273,12 +288,17 @@ describe( 'PluginSetting', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'performance_audit',
-				settings: expect.objectContaining( {
-					high_value_urls: [ 'http://example.com/about/' ],
-				} ),
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'performance_audit',
+					settings: expect.objectContaining( {
+						high_value_urls: [ 'http://example.com/about/' ],
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			)
 		);
 		expect(
 			screen.getByText( /Skipped 2 invalid URLs/ ) // Audit #1420: _n plural.
@@ -346,10 +366,17 @@ describe( 'PluginSetting', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'performance_audit',
-				settings: expect.objectContaining( { rum_enabled: true } ),
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'performance_audit',
+					settings: expect.objectContaining( {
+						rum_enabled: true,
+					} ),
+				},
+				'POST',
+				expect.any( AbortSignal )
+			)
 		);
 	} );
 
@@ -625,7 +652,12 @@ describe( 'PluginSetting', () => {
 				screen.getByText( 'Settings restored successfully.' )
 			).toBeInTheDocument()
 		);
-		expect( apiCall ).toHaveBeenCalledWith( 'restore_settings', {} );
+		expect( apiCall ).toHaveBeenCalledWith(
+			'restore_settings',
+			{},
+			'POST',
+			expect.any( AbortSignal )
+		);
 	} );
 
 	it( 'shows an error notice when no snapshot exists to restore', async () => {
@@ -681,10 +713,14 @@ describe( 'PluginSetting', () => {
 		fireEvent.click( undoButton );
 
 		await waitFor( () =>
+			// Audit #1483 follow-up: the translated fallback is shown to
+			// users while the raw transport detail stays in the console.
 			expect(
 				screen.getByText( 'Error restoring settings.' )
 			).toBeInTheDocument()
 		);
+		expect( screen.queryByText( 'network down' ) ).not.toBeInTheDocument();
+		expect( errorSpy ).toHaveBeenCalled();
 
 		errorSpy.mockRestore();
 	} );

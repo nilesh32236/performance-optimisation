@@ -240,10 +240,11 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						type="button"
 						className="wppo-button wppo-button--sm wppo-button--primary"
 						onClick={ () => onNavigate( targetTab ) }
-						aria-label={ `${ __(
-							'Fix It',
-							'performance-optimisation'
-						) }: ${ description }` }
+						aria-label={ sprintf(
+							/* translators: %s: suggestion description. */
+							__( 'Fix It: %s', 'performance-optimisation' ),
+							description
+						) }
 					>
 						{ __( 'Fix It', 'performance-optimisation' ) }
 						<FontAwesomeIcon

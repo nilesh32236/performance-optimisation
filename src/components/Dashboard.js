@@ -462,6 +462,7 @@ const Dashboard = ( {
 	const wooAbortRef = useRef( null );
 	const wooTimedOutRef = useRef( false );
 	const wooTimeoutRef = useRef( null );
+	const actionControllersRef = useRef( new Set() );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
@@ -664,6 +665,7 @@ const Dashboard = ( {
 	}, [ updateState, notify ] );
 
 	useEffect( () => {
+		const pendingActions = actionControllersRef.current;
 		return () => {
 			if ( pollingRef.current ) {
 				clearTimeout( pollingRef.current );
@@ -671,6 +673,8 @@ const Dashboard = ( {
 			if ( pollAbortRef.current ) {
 				pollAbortRef.current.abort();
 			}
+			pendingActions.forEach( ( c ) => c.abort() );
+			pendingActions.clear();
 		};
 	}, [] );
 
@@ -680,8 +684,14 @@ const Dashboard = ( {
 				e.preventDefault();
 			}
 			handleLoading( 'clear_cache', true );
-			apiCall( 'clear_cache', { action: 'clear_cache' } )
+			const controller = new AbortController();
+			actionControllersRef.current.add( controller );
+			const signal = controller.signal;
+			apiCall( 'clear_cache', { action: 'clear_cache' }, 'POST', signal )
 				.then( ( data ) => {
+					if ( signal.aborted ) {
+						return;
+					}
 					if ( data.success ) {
 						notify( {
 							type: 'success',
@@ -713,6 +723,9 @@ const Dashboard = ( {
 				} )
 				// Audit #1354: log rejections like the other handlers do.
 				.catch( ( clearError ) => {
+					if ( signal.aborted || clearError?.name === 'AbortError' ) {
+						return;
+					}
 					console.error(
 						'Failed to clear cache.',
 						getErrorLogMessage( clearError )
@@ -726,7 +739,12 @@ const Dashboard = ( {
 						durationMs: 5000,
 					} );
 				} )
-				.finally( () => handleLoading( 'clear_cache', false ) );
+				.finally( () => {
+					actionControllersRef.current.delete( controller );
+					if ( ! signal.aborted ) {
+						handleLoading( 'clear_cache', false );
+					}
+				} );
 		},
 		[ handleLoading, updateState, notify, refreshUpgradePurgeStatus ]
 	);
@@ -741,9 +759,15 @@ const Dashboard = ( {
 		}
 		submittingRef.current = true;
 		handleLoading( 'optimize_images', true );
+		const controller = new AbortController();
+		actionControllersRef.current.add( controller );
+		const signal = controller.signal;
 
-		apiCall( 'optimise_image', {} )
+		apiCall( 'optimise_image', {}, 'POST', signal )
 			.then( ( response ) => {
+				if ( signal.aborted ) {
+					return;
+				}
 				if ( response.data?.background ) {
 					// Background (Action Scheduler) path.
 					setBgProcessing( true );
@@ -795,6 +819,9 @@ const Dashboard = ( {
 			} )
 			// Audit #1354: log rejections like pollJobStatus does.
 			.catch( ( optimizeError ) => {
+				if ( signal.aborted || optimizeError?.name === 'AbortError' ) {
+					return;
+				}
 				console.error(
 					'Image optimisation failed.',
 					getErrorLogMessage( optimizeError )
@@ -809,8 +836,11 @@ const Dashboard = ( {
 				} );
 			} )
 			.finally( () => {
+				actionControllersRef.current.delete( controller );
 				submittingRef.current = false;
-				handleLoading( 'optimize_images', false );
+				if ( ! signal.aborted ) {
+					handleLoading( 'optimize_images', false );
+				}
 			} );
 	}, [
 		handleLoading,
@@ -823,8 +853,14 @@ const Dashboard = ( {
 
 	const removeImages = useCallback( () => {
 		handleLoading( 'remove_images', true );
-		apiCall( 'delete_optimised_image', {} )
+		const controller = new AbortController();
+		actionControllersRef.current.add( controller );
+		const signal = controller.signal;
+		apiCall( 'delete_optimised_image', {}, 'POST', signal )
 			.then( ( data ) => {
+				if ( signal.aborted ) {
+					return;
+				}
 				if ( data.success ) {
 					setState( ( prev ) => ( {
 						...prev,
@@ -856,6 +892,9 @@ const Dashboard = ( {
 				}
 			} )
 			.catch( ( dashboardError ) => {
+				if ( signal.aborted || dashboardError?.name === 'AbortError' ) {
+					return;
+				}
 				// Audit #1420: log before notify.
 				console.error(
 					'Dashboard request failed:',
@@ -870,7 +909,12 @@ const Dashboard = ( {
 					durationMs: 5000,
 				} );
 			} )
-			.finally( () => handleLoading( 'remove_images', false ) );
+			.finally( () => {
+				actionControllersRef.current.delete( controller );
+				if ( ! signal.aborted ) {
+					handleLoading( 'remove_images', false );
+				}
+			} );
 	}, [ handleLoading, notify ] );
 
 	/**
@@ -888,14 +932,25 @@ const Dashboard = ( {
 				getWppoSettings( 'settings.cache_settings', null ) ??
 				cacheSettings ??
 				{};
-			return apiCall( 'update_settings', {
-				tab: 'cache_settings',
-				settings: {
-					...currentSettings,
-					...patch,
+			const controller = new AbortController();
+			actionControllersRef.current.add( controller );
+			const signal = controller.signal;
+			return apiCall(
+				'update_settings',
+				{
+					tab: 'cache_settings',
+					settings: {
+						...currentSettings,
+						...patch,
+					},
 				},
-			} )
+				'POST',
+				signal
+			)
 				.then( ( response ) => {
+					if ( signal.aborted ) {
+						return;
+					}
 					if ( response.success && response.data ) {
 						notify( {
 							type: 'success',
@@ -911,6 +966,12 @@ const Dashboard = ( {
 					}
 				} )
 				.catch( ( dashboardError ) => {
+					if (
+						signal.aborted ||
+						dashboardError?.name === 'AbortError'
+					) {
+						return;
+					}
 					// Audit #1420: log before notify.
 					console.error(
 						'Dashboard request failed:',
@@ -922,7 +983,12 @@ const Dashboard = ( {
 						durationMs: 5000,
 					} );
 				} )
-				.finally( () => setSaving( false ) );
+				.finally( () => {
+					actionControllersRef.current.delete( controller );
+					if ( ! signal.aborted ) {
+						setSaving( false );
+					}
+				} );
 		},
 		[ cacheSettings, notify ]
 	);

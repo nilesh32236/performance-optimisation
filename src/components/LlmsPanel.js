@@ -1,5 +1,7 @@
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faRobot } from '@fortawesome/free-solid-svg-icons';
 import { apiCall, patchSettingsCache } from '../lib/apiRequest';
 import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
@@ -98,7 +100,7 @@ const LlmsPanel = () => {
 	return (
 		<FeatureCard
 			title={ __( 'LLMs.txt', 'performance-optimisation' ) }
-			icon={ <i className="fas fa-robot" aria-hidden="true"></i> } // Audit #1420: decorative.
+			icon={ <FontAwesomeIcon icon={ faRobot } aria-hidden="true" /> } // Audit #1420: decorative.
 		>
 			{ notice && (
 				<NoticeBanner

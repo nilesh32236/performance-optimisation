@@ -5,6 +5,7 @@ import {
 	useContext,
 	useMemo,
 	useCallback,
+	useRef,
 } from '@wordpress/element';
 import { useIsMounted, runAbortable } from '../lib/useAbortableFetch';
 import { handleChange } from '../lib/util';
@@ -106,6 +107,18 @@ const PreloadSettings = ( { options = {} } ) => {
 	// Audit #1401: shared abortable helper (useAbortableFetch) owns
 	// controller lifecycle + cancellation instead of ad-hoc flags.
 	const isMountedRef = useIsMounted();
+	const resumeControllerRef = useRef( null );
+	const saveControllerRef = useRef( null );
+	useEffect( () => {
+		return () => {
+			if ( resumeControllerRef.current ) {
+				resumeControllerRef.current.abort();
+			}
+			if ( saveControllerRef.current ) {
+				saveControllerRef.current.abort();
+			}
+		};
+	}, [] );
 	// Audit #1420: useCallback so the mount effect lists exhaustive deps.
 	const fetchPreloadStatus = useCallback(
 		async ( signal ) => {
@@ -153,9 +166,17 @@ const PreloadSettings = ( { options = {} } ) => {
 		if ( isResuming ) {
 			return;
 		}
+		if ( resumeControllerRef.current ) {
+			resumeControllerRef.current.abort();
+		}
+		resumeControllerRef.current = new AbortController();
+		const signal = resumeControllerRef.current.signal;
 		setIsResuming( true );
 		try {
-			const res = await apiCall( 'preload_resume', {} );
+			const res = await apiCall( 'preload_resume', {}, 'POST', signal );
+			if ( signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			// Audit #1354: only celebrate actual success.
 			if ( ! res.success ) {
 				throw new Error(
@@ -170,7 +191,10 @@ const PreloadSettings = ( { options = {} } ) => {
 			if ( payload && payload.preload ) {
 				setPreload( payload.preload );
 			} else {
-				await fetchPreloadStatus();
+				await fetchPreloadStatus( signal );
+			}
+			if ( signal.aborted || ! isMountedRef.current ) {
+				return;
 			}
 			notify( {
 				type: 'success',
@@ -180,6 +204,12 @@ const PreloadSettings = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} catch ( err ) {
+			if ( signal.aborted || err?.name === 'AbortError' ) {
+				return;
+			}
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			console.error(
 				'Failed resuming preload queue',
 				getErrorLogMessage( err )
@@ -195,7 +225,10 @@ const PreloadSettings = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setIsResuming( false );
+			resumeControllerRef.current = null;
+			if ( ! signal.aborted && isMountedRef.current ) {
+				setIsResuming( false );
+			}
 		}
 	};
 
@@ -214,14 +247,27 @@ const PreloadSettings = ( { options = {} } ) => {
 		if ( isLoading ) {
 			return;
 		}
+		if ( saveControllerRef.current ) {
+			saveControllerRef.current.abort();
+		}
+		saveControllerRef.current = new AbortController();
+		const submitSignal = saveControllerRef.current.signal;
 		setIsLoading( true );
 		dismiss();
 
 		try {
-			const res = await apiCall( 'update_settings', {
-				tab: 'preload_settings',
-				settings,
-			} );
+			const res = await apiCall(
+				'update_settings',
+				{
+					tab: 'preload_settings',
+					settings,
+				},
+				'POST',
+				submitSignal
+			);
+			if ( submitSignal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 
 			if ( res.success ) {
 				setBaseline( { ...settings } );
@@ -249,6 +295,12 @@ const PreloadSettings = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( err ) {
+			if ( submitSignal.aborted || err?.name === 'AbortError' ) {
+				return;
+			}
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			console.error(
 				'Failed updating preload settings',
 				getErrorLogMessage( err )
@@ -262,7 +314,10 @@ const PreloadSettings = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setIsLoading( false );
+			saveControllerRef.current = null;
+			if ( ! submitSignal.aborted && isMountedRef.current ) {
+				setIsLoading( false );
+			}
 		}
 	};
 

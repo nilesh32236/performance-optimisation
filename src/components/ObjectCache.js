@@ -140,9 +140,13 @@ const ObjectCache = ( { options = {} } ) => {
 
 	// Audit #1354: skip state updates after unmount.
 	const isMountedRef = useRef( true );
+	const submitControllerRef = useRef( null );
 	useEffect( () => {
 		return () => {
 			isMountedRef.current = false;
+			if ( submitControllerRef.current ) {
+				submitControllerRef.current.abort();
+			}
 		};
 	}, [] );
 
@@ -219,6 +223,11 @@ const ObjectCache = ( { options = {} } ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
+		if ( submitControllerRef.current ) {
+			submitControllerRef.current.abort();
+		}
+		submitControllerRef.current = new AbortController();
+		const signal = submitControllerRef.current.signal;
 		setIsLoading( true );
 		dismiss();
 
@@ -229,10 +238,18 @@ const ObjectCache = ( { options = {} } ) => {
 			// (enable/ping/authenticate) use handleAction instead.
 			const { password, ...rest } = settings;
 			const payload = password ? settings : { ...rest, password: '' };
-			const res = await apiCall( 'update_settings', {
-				tab: 'object_cache',
-				settings: payload,
-			} );
+			const res = await apiCall(
+				'update_settings',
+				{
+					tab: 'object_cache',
+					settings: payload,
+				},
+				'POST',
+				signal
+			);
+			if ( signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			if ( res.success ) {
 				setSettings( ( prev ) => ( { ...prev, password: '' } ) );
 				setBaseline( ( prev ) => ( { ...prev, password: '' } ) );
@@ -256,6 +273,12 @@ const ObjectCache = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( err ) {
+			if ( signal.aborted || err?.name === 'AbortError' ) {
+				return;
+			}
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __(
@@ -269,7 +292,10 @@ const ObjectCache = ( { options = {} } ) => {
 				getErrorLogMessage( err )
 			);
 		} finally {
-			setIsLoading( false );
+			submitControllerRef.current = null;
+			if ( ! signal.aborted && isMountedRef.current ) {
+				setIsLoading( false );
+			}
 		}
 	};
 
@@ -330,6 +356,9 @@ const ObjectCache = ( { options = {} } ) => {
 				'Object cache action failed:',
 				getErrorLogMessage( err )
 			);
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __( 'Action failed.', 'performance-optimisation' ),
@@ -639,19 +668,33 @@ const ObjectCache = ( { options = {} } ) => {
 								'performance-optimisation'
 							) }
 						>
-							{ cacheStatus.telemetry?.keyspace_hits || 0 }{ ' ' }
-							{ __( 'hits', 'performance-optimisation' ) } /{ ' ' }
-							{ (
-								parseInt(
-									cacheStatus.telemetry?.keyspace_hits || 0,
-									10
-								) +
-								parseInt(
-									cacheStatus.telemetry?.keyspace_misses || 0,
-									10
-								)
-							).toLocaleString() }{ ' ' }
-							{ __( 'total', 'performance-optimisation' ) }
+							{ sprintf(
+								/* translators: 1: hit count, 2: total request count. */
+								_n(
+									'%1$s hit / %2$s total',
+									'%1$s hits / %2$s total',
+									Number(
+										cacheStatus.telemetry?.keyspace_hits ||
+											0
+									) || 0,
+									'performance-optimisation'
+								),
+								Number(
+									cacheStatus.telemetry?.keyspace_hits || 0
+								).toLocaleString(),
+								(
+									parseInt(
+										cacheStatus.telemetry?.keyspace_hits ||
+											0,
+										10
+									) +
+									parseInt(
+										cacheStatus.telemetry
+											?.keyspace_misses || 0,
+										10
+									)
+								).toLocaleString()
+							) }
 						</span>
 					</div>
 					<div className="wppo-stat-item">

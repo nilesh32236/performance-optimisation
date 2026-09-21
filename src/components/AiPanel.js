@@ -521,7 +521,7 @@ const AiPanel = () => {
 											{ sprintf(
 												// translators: %1$s is the before LCP in ms, %2$s is the current LCP in ms.
 												__(
-													'LCP before: %1$sms, after: %2$sms',
+													'LCP before: %1$s ms, after: %2$s ms',
 													'performance-optimisation'
 												),
 												Math.round(

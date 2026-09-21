@@ -67,13 +67,13 @@ describe( 'LoadingSubmitButton', () => {
 		expect( button ).toHaveAttribute( 'aria-busy', 'true' );
 	} );
 
-	it( 'keeps a persistent (empty) live region when idle and announces loading text while loading', () => {
+	it( 'announces loading text while loading and never renders an empty live region when idle', () => {
 		const { rerender } = render(
 			<LoadingSubmitButton label="Submit" loadingLabel="Saving..." />
 		);
-		// Audit #1354: region always rendered so SRs never miss it.
-		const idleRegion = screen.getByRole( 'status' );
-		expect( idleRegion ).toHaveTextContent( '' );
+		// Audit #1483: an empty role=status announces nothing — idle with
+		// no doneLabel renders no live region at all.
+		expect( screen.queryByRole( 'status' ) ).not.toBeInTheDocument();
 
 		rerender(
 			<LoadingSubmitButton
@@ -85,5 +85,27 @@ describe( 'LoadingSubmitButton', () => {
 		const liveRegion = screen.getByRole( 'status' );
 		expect( liveRegion ).toBeInTheDocument();
 		expect( liveRegion ).toHaveTextContent( 'Saving...' );
+	} );
+
+	it( 'announces completion via doneLabel instead of clearing to empty', () => {
+		const { rerender } = render(
+			<LoadingSubmitButton
+				isLoading={ true }
+				label="Submit"
+				loadingLabel="Saving..."
+				doneLabel="Saved."
+			/>
+		);
+		expect( screen.getByRole( 'status' ) ).toHaveTextContent( 'Saving...' );
+
+		rerender(
+			<LoadingSubmitButton
+				isLoading={ false }
+				label="Submit"
+				loadingLabel="Saving..."
+				doneLabel="Saved."
+			/>
+		);
+		expect( screen.getByRole( 'status' ) ).toHaveTextContent( 'Saved.' );
 	} );
 } );

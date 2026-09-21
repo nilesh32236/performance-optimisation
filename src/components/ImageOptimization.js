@@ -291,8 +291,18 @@ const ImageOptimization = ( { options = {} } ) => {
 				settings: next,
 			} );
 			if ( res && res.success ) {
-				setSettings( next );
-				setBaseline( { ...next } );
+				// Merge functionally so edits typed during the request
+				// are not clobbered by the pre-await snapshot.
+				setSettings( ( prev ) => ( {
+					...prev,
+					autoPreloadLCP: true,
+					prioritizeLCPImages: true,
+				} ) );
+				setBaseline( ( prev ) => ( {
+					...prev,
+					autoPreloadLCP: true,
+					prioritizeLCPImages: true,
+				} ) );
 				setIsDirty( false );
 				notify( {
 					type: 'success',
