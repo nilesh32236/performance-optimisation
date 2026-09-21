@@ -2388,10 +2388,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// clear; the permalink memo additionally keys by blog ID, but it is
 			// dropped here too so any memo written before the switch (e.g. a
 			// cached ID on the previous site) cannot leak.
+			// The callback HMAC secret is per-site (option_key-isolated):
+			// drop its memo as well so site B never signs/verifies with
+			// site A's secret after switch_to_blog() mid-request.
 			// The hook params are unused (keys already isolate) — consumed
 			// explicitly to satisfy the unused-parameter sniff.
 			unset( $new_blog_id, $prev_blog_id );
 			self::clear_permalink_cache();
+			self::reset_callback_secret_memo();
 		}
 
 		/**
@@ -4957,21 +4961,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Sanitize derived CSS for safe storage inside <style> or a .css file.
 		 *
-		 * Shared worker for the used-CSS ingest path (the critical-CSS
-		 * pipeline keeps its own memoized/filter-aware variant): decodes
-		 * numeric/hex entities first so encoded payloads cannot smuggle
-		 * `<` past the encoder, then neutralizes the `</style>` raw-text
-		 * terminator, `<script`, HTML comments, CSS expression vectors
-		 * (`expression()`, `javascript:`/`vbscript:` URLs, the `behavior` /
+		 * Single source of truth for both CSS pipelines (issue #1347): the
+		 * used-CSS ingest path calls this directly, and the critical-CSS
+		 * pipeline delegates its token worker here (with its memo/filter
+		 * layered on top), so token lists cannot drift apart again. Decodes
+		 * entities (double pass, numeric/hex included) first so encoded
+		 * payloads cannot smuggle `<` past the encoder, then neutralizes
+		 * the `</style>` raw-text terminator, `<script`, HTML comments,
+		 * CSS expression vectors (`expression()`, `javascript:`/`vbscript:`/
+		 * `file:`/`expect:` URLs, script-capable `data:image/svg` and
+		 * `data:text/html` URLs from issue #1181, the `behavior` /
 		 * `behaviour` property in property position only, `-moz-binding`),
-		 * whitespace-prefixed `on*=` HTML-attribute shapes (which cannot
-		 * execute inside `<style>` without a breakout, but are never valid
-		 * CSS outside an attribute selector so breaking them is safe), and
+		 * entity remnants (`&lt;`/`&#60;` leftovers escaped as `\26 `),
+		 * `on*=` HTML-attribute shapes (which cannot execute inside
+		 * `<style>` without a breakout — already killed by the blanket
+		 * `<` escape — but are never valid CSS outside an attribute
+		 * selector so breaking them is safe defense-in-depth), and
 		 * encodes any remaining `<` as the equivalent CSS escape so stored
 		 * CSS can never break out of the style element. Benign lookalikes
-		 * (`scroll-behavior:`, `.behavior-badge`) are preserved. Fail-open:
-		 * a sanitizer error drops the block (returns '') so output degrades
-		 * to unoptimized markup, never script execution.
+		 * (`scroll-behavior:`, `.behavior-badge`, `[onload="x"]`
+		 * attribute selectors) are preserved. Fail-open: a sanitizer
+		 * error drops the block (returns '') so output degrades to
+		 * unoptimized markup, never script execution.
 		 *
 		 * @param string $css Raw CSS content.
 		 * @return string Sanitized CSS, or '' when empty or on failure.
@@ -4982,8 +4993,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 			try {
+				// Cheap benign fast-path (issue #1347 review): plain CSS
+				// with no angle brackets, no entities, and none of the
+				// script-capable keywords skips the regex passes entirely.
+				// Bulk regenerate_all() otherwise pays ~8 passes per page.
+				if ( false === strpos( $css, '<' ) && false === strpos( $css, '&' ) && false === strpos( $css, '-->' ) && ! preg_match( '/expression|javascript|vbscript|behaviou?r|binding|file\s*:|expect\s*:|data\s*:/i', $css ) ) {
+					if ( ! preg_match( '/on[a-z]+\s*=/i', $css ) ) {
+						return $css;
+					}
+				}
 				if ( function_exists( 'html_entity_decode' ) ) {
-					$css = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					// Double decode (mirrors the CCSS worker): triple-encoded
+					// input leaves a remnant that the entity-remnant pass
+					// below escapes as `\26 ` so it can never decode to `<`.
+					for ( $i = 0; $i < 2; ++$i ) {
+						$decoded = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+						if ( ! is_string( $decoded ) || $decoded === $css ) {
+							break;
+						}
+						$css = $decoded;
+					}
 				}
 				$css = (string) preg_replace_callback(
 					'/&#\d+;?|&#x[0-9a-f]+;?/i',
@@ -4996,12 +5025,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					},
 					$css
 				);
-				$css = str_ireplace( '</style', '<\/style', $css );
-				$css = str_ireplace( '<script', '<\script', $css );
-				$css = str_ireplace( '<!--', '<\!--', $css );
+				// Terminator-specific breaks emit the `\3c ` CSS escape for
+				// `<` directly (instead of a `<\` prefix the blanket pass
+				// would rewrite): the layering stays explicit and no pass
+				// is dead — the final blanket only catches novel shapes.
+				$css = str_ireplace( '</style', '\3c /style', $css );
+				$css = str_ireplace( '<script', '\3c script', $css );
+				$css = str_ireplace( '<!--', '\3c !--', $css );
 				$css = str_ireplace( '-->', '--\>', $css );
 				$css = (string) preg_replace_callback(
-					'/expression\s*\(|javascript\s*:|vbscript\s*:/i',
+					'/expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				// Neutralize script-capable data: URLs (issue #1181) so a
+				// poisoned stylesheet cannot smuggle `url(data:image/svg…)`
+				// or `url(data:text/html…)` past the scheme break above.
+				$css = (string) preg_replace_callback(
+					'/data\s*:\s*image\/svg|data\s*:\s*text\/html/i',
 					static function ( array $matches ): string {
 						$token = $matches[0];
 						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
@@ -5016,8 +5060,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$css
 				);
 				$css = str_ireplace( '-moz-binding', '-moz-bindin\g', $css );
+				// Neutralize entity remnants that survived decoding (e.g.
+				// triple-encoded input): encode the `&` as a CSS escape so
+				// `&#60;` / `&lt;` can never decode back to `<` at render.
 				$css = (string) preg_replace_callback(
-					'/(\s)on([a-z]+\s*=)/i',
+					'/&(?=#\d|#x[0-9a-f]|lt|gt|amp|quot);?/i',
+					static function (): string {
+						return "\\26 ";
+					},
+					$css
+				);
+				// Defense-in-depth `on*=` break: matches start-of-string and
+				// whitespace/semicolon/quote/slash/paren-prefixed shapes
+				// (` onload=`, `;onload=`, `"onload=`, `/onload=`), while
+				// `[`-prefixed attribute selectors (`[onload="x"]`) are
+				// preserved. The `on` syllable alone is broken (`o\6e `);
+				// the attribute tail is intentionally left in place — the
+				// result is invalid CSS either way, which is the point.
+				// Redundant given the blanket `<` escape (no breakout means
+				// no execution), but harmless to keep broken.
+				$css = (string) preg_replace_callback(
+					'/(^|[\s;\'"\/\(])on([a-z]+\s*=)/i',
 					static function ( array $matches ): string {
 						return $matches[1] . 'o\\6e ' . $matches[2];
 					},
@@ -5089,14 +5152,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * {@see CALLBACK_SECRET_OPTION}) through {@see option_key()} so
 		 * multisite blogs never share a signing key. Created once via
 		 * wp_generate_password() (random_bytes() fallback) and never
-		 * logged. Fail-open: returns '' when the secret cannot be read or
-		 * created, in which case signing/verification degrade to the
-		 * legacy capability+nonce-only path.
+		 * logged. The per-request memo is cleared on `switch_blog` (see
+		 * {@see on_switch_blog()}) so a switched blog never signs with
+		 * another site's secret. Fail-open: returns '' when the secret
+		 * cannot be read or created, in which case signing/verification
+		 * degrade to the legacy capability+nonce-only path.
 		 *
+		 * @param bool $create Whether a missing secret may be created.
+		 *                     Verify paths pass false (read-only) so a
+		 *                     background worker never writes options on
+		 *                     the hot verify path.
 		 * @return string Site secret, or '' when unavailable.
 		 * @since NEXT
 		 */
-		public static function get_callback_secret(): string {
+		public static function get_callback_secret( bool $create = true ): string {
 			if ( is_string( self::$callback_secret_memo ) ) {
 				return self::$callback_secret_memo;
 			}
@@ -5110,6 +5179,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					self::$callback_secret_memo = $secret;
 					return self::$callback_secret_memo;
 				}
+				if ( ! $create ) {
+					return '';
+				}
 				if ( function_exists( 'wp_generate_password' ) ) {
 					$secret = wp_generate_password( 64, true, true );
 				} elseif ( function_exists( 'random_bytes' ) ) {
@@ -5121,9 +5193,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return '';
 				}
 				if ( function_exists( 'add_option' ) ) {
-					add_option( $key, $secret, '', false );
+					$added = add_option( $key, $secret, '', false );
+					if ( ! $added ) {
+						// Creation race: a concurrent request won the
+						// insert — re-read the winner instead of memoing
+						// the local (non-persisted) value, or the two
+						// requests sign/verify with different keys.
+						$stored = get_option( $key, false );
+						if ( is_string( $stored ) && strlen( $stored ) >= 32 ) {
+							$secret = $stored;
+						}
+					}
 				} elseif ( function_exists( 'update_option' ) ) {
 					update_option( $key, $secret, false );
+					$stored = get_option( $key, false );
+					if ( is_string( $stored ) && strlen( $stored ) >= 32 ) {
+						$secret = $stored;
+					}
 				} else {
 					return '';
 				}
@@ -5175,9 +5261,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Fail-closed on mismatch (returns false) so forged scheduler args
 		 * never execute; fail-open only in the sense that callers take the
-		 * legacy path when no signature scheme is available at all (see
-		 * sign_callback_payload()). Timing-safe comparison when
-		 * hash_equals() exists.
+		 * legacy path when no signature is present at all (unsigned jobs
+		 * queued before signing or by legacy callers still run) or when no
+		 * signature scheme is available (see sign_callback_payload()).
+		 * Read-only: resolves the secret without creating it, so verify
+		 * never writes options on the background-worker hot path.
+		 * Timing-safe comparison when hash_equals() exists.
 		 *
 		 * @param array  $payload   Job payload as signed.
 		 * @param string $signature Hex signature to check.
@@ -5189,10 +5278,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( '' === $signature ) {
 					return false;
 				}
-				$expected = self::sign_callback_payload( $payload );
-				if ( '' === $expected ) {
+				$secret = self::get_callback_secret( false );
+				if ( '' === $secret || ! function_exists( 'hash_hmac' ) ) {
 					return false;
 				}
+				ksort( $payload );
+				if ( function_exists( 'wp_json_encode' ) ) {
+					$canonical = wp_json_encode( $payload );
+				} else {
+					$canonical = json_encode( $payload ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Fallback when wp_json_encode() is unavailable (unit-test doubles).
+				}
+				if ( ! is_string( $canonical ) || '' === $canonical ) {
+					return false;
+				}
+				$expected = hash_hmac( 'sha256', $canonical, $secret );
 				if ( function_exists( 'hash_equals' ) ) {
 					return hash_equals( $expected, $signature );
 				}

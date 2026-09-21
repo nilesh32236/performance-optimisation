@@ -3269,7 +3269,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						unset( $e );
 					}
 				}
-				$job_args = array( 'post_id' => $post_id );
+				// Normalized to int before signing (issue #1347 review): the
+				// verifier casts the same way, so scheduler int/string
+				// drift cannot fail a valid job. The `sig` key is appended
+				// after `post_id` and the `wppo_used_css_generate` hook
+				// accepts 2 positional args (see Main), so AS delivers
+				// ($post_id, $sig) in insertion order.
+				$job_args = array( 'post_id' => (int) $post_id );
 				// HMAC-bound jobs (issue #1347): sign the payload before the
 				// dedupe check so the scheduler-execution side can prove the
 				// args were built by this site. Deterministic per payload, so

@@ -11,6 +11,7 @@
  * @package PerformanceOptimise\Tests
  */
 
+use PerformanceOptimise\Inc\Critical_CSS;
 use PerformanceOptimise\Inc\Used_CSS;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
@@ -294,5 +295,139 @@ class CssSanitizeHmac1347Test extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_uninstall_options_cover_callback_secret(): void {
 		$this->assertContains( Util::CALLBACK_SECRET_OPTION, Util::UNINSTALL_OPTIONS );
+	}
+
+	/**
+	 * Sanitizer parity with the critical-CSS pipeline (issue #1181 vectors).
+	 *
+	 * @return void
+	 */
+	public function test_sanitizer_parity_vectors(): void {
+		$result = Util::sanitize_css_for_storage( '.x{background:url(file:///etc/passwd)}' );
+		$this->assertStringNotContainsString( 'file:', $result );
+		$result = Util::sanitize_css_for_storage( '.x{expect:foo}' );
+		$this->assertStringNotContainsString( 'expect:', $result );
+		$result = Util::sanitize_css_for_storage( '.x{background:url(data:image/svg+xml;base64,PHN2Zz4=)}' );
+		$this->assertStringNotContainsString( 'image/svg', $result );
+		$result = Util::sanitize_css_for_storage( '.x{background:url(data:text/html;base64,PGI+)}' );
+		$this->assertStringNotContainsString( 'text/html', $result );
+		$result = Util::sanitize_css_for_storage( '.a{content:"&lt;"}' );
+		$this->assertStringNotContainsString( '&lt;', $result );
+		$this->assertStringNotContainsString( '<', $result );
+	}
+
+	/**
+	 * Plain CSS (including child combinators) passes through byte-identical.
+	 *
+	 * @return void
+	 */
+	public function test_benign_fast_path_passthrough(): void {
+		$this->assertSame( '.a{color:red}', Util::sanitize_css_for_storage( '.a{color:red}' ) );
+		$this->assertSame( '.a>.b{color:red}', Util::sanitize_css_for_storage( '.a>.b{color:red}' ) );
+		$this->assertSame( '.a[onload="x"]{color:red}', Util::sanitize_css_for_storage( '.a[onload="x"]{color:red}' ) );
+	}
+
+	/**
+	 * Verify is read-only: no secret is created on the verify path.
+	 *
+	 * @return void
+	 */
+	public function test_verify_is_read_only_without_secret(): void {
+		$this->install_stubs();
+		Util::reset_callback_secret_memo();
+		$this->assertFalse( Util::verify_callback_signature( array( 'post_id' => 1 ), 'deadbeef' ) );
+		$this->assertArrayNotHasKey( Util::option_key( Util::CALLBACK_SECRET_OPTION ), $this->options );
+	}
+
+	/**
+	 * A lost creation race re-reads the winner instead of memoing local state.
+	 *
+	 * @return void
+	 */
+	public function test_creation_race_rereads_winner(): void {
+		$this->install_stubs();
+		$winner = str_repeat( 'w', 64 );
+		$reads  = 0;
+		Functions\when( 'get_option' )->alias(
+			function ( $name, $fallback = false ) use ( &$reads, $winner ) {
+				if ( array_key_exists( $name, $this->options ) ) {
+					return $this->options[ $name ];
+				}
+				++$reads;
+				// A concurrent request wins the insert between our first
+				// read and our failed add_option().
+				if ( $reads >= 2 ) {
+					return $winner;
+				}
+				return $fallback;
+			}
+		);
+		Functions\when( 'add_option' )->alias(
+			static function () {
+				return false;
+			}
+		);
+		Util::reset_callback_secret_memo();
+		$this->assertSame( $winner, Util::get_callback_secret() );
+	}
+
+	/**
+	 * Secrets are isolated per site on multisite.
+	 *
+	 * @return void
+	 */
+	public function test_secrets_isolated_per_site(): void {
+		$this->install_stubs();
+		if ( ! function_exists( 'hash_hmac' ) ) {
+			$this->markTestSkipped( 'hash_hmac unavailable.' );
+		}
+		Functions\when( 'is_multisite' )->justReturn( true );
+		$blog_id = 5;
+		Functions\when( 'get_current_blog_id' )->alias(
+			static function () use ( &$blog_id ) {
+				return $blog_id;
+			}
+		);
+		// The shared stub returns a constant password, which would give
+		// every blog the same secret: re-stub per-blog so isolation is real.
+		Functions\when( 'wp_generate_password' )->alias(
+			static function ( $length = 64 ) use ( &$blog_id ) {
+				return str_repeat( 'k', (int) $length - 2 ) . sprintf( '%02d', (int) $blog_id );
+			}
+		);
+		Util::reset_callback_secret_memo();
+		$sig5 = Util::sign_callback_payload( array( 'post_id' => 1 ) );
+		$this->assertNotSame( '', $sig5 );
+		$this->assertArrayHasKey( '5_' . Util::CALLBACK_SECRET_OPTION, $this->options );
+		$this->assertTrue( Util::verify_callback_signature( array( 'post_id' => 1 ), $sig5 ) );
+		$blog_id = 6;
+		Util::reset_callback_secret_memo();
+		$sig6 = Util::sign_callback_payload( array( 'post_id' => 1 ) );
+		$this->assertNotSame( '', $sig6 );
+		$this->assertArrayHasKey( '6_' . Util::CALLBACK_SECRET_OPTION, $this->options );
+		// Cross-blog signatures do not verify: each blog signs with its own secret.
+		$this->assertFalse( Util::verify_callback_signature( array( 'post_id' => 1 ), $sig5 ) );
+		$this->assertTrue( Util::verify_callback_signature( array( 'post_id' => 1 ), $sig6 ) );
+	}
+
+	/**
+	 * The forgery purge drops source baselines alongside the files.
+	 *
+	 * @return void
+	 */
+	public function test_forgery_purge_drops_baselines(): void {
+		$this->install_stubs();
+		$deleted = array();
+		Functions\when( 'delete_transient' )->alias(
+			static function ( $key ) use ( &$deleted ) {
+				$deleted[] = $key;
+				return true;
+			}
+		);
+		$hash   = md5( 'wppo-test-template' );
+		$method = new \ReflectionMethod( Critical_CSS::class, 'purge_template_artifacts' );
+		$method->invoke( null, $hash );
+		$this->assertContains( Util::transient_key( 'wppo_ccss_checksum_' . $hash ), $deleted );
+		$this->assertContains( Util::transient_key( 'wppo_ccss_sources_' . $hash ), $deleted );
 	}
 }

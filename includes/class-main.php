@@ -1831,7 +1831,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Register Action Scheduler callback for background used-CSS generation.
 			// Two accepted args (issue #1347): the optional HMAC signature
 			// travels as the second positional scheduler arg; legacy jobs
-			// pass one arg and take the legacy path.
+			// pass one arg and take the legacy path. Signers append `sig`
+			// after `post_id` (insertion order) and both sides normalize
+			// `post_id` to int, so reordering or int/string drift cannot
+			// fail a valid job.
 			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 2 );
 
 			// Self-healing CSS (issue #1407): refresh the matching

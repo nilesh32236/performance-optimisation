@@ -3466,10 +3466,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * HMAC-bound jobs (issue #1347): when the scheduler passes a `sig`
 		 * second argument, it is verified against the signed `post_id`
-		 * payload before any fetch — a mismatch purges the URL sidecar and
-		 * aborts so forged job args can never trigger generation. Unsigned
-		 * jobs (queued before signing or by legacy callers) take the legacy
-		 * capability+nonce path and still run (fail-open).
+		 * payload (normalized to int before sign/verify so scheduler
+		 * int/string drift cannot fail a valid job) before any fetch — a
+		 * mismatch purges the URL sidecar and aborts so forged job args
+		 * can never trigger generation. Only a present-but-invalid
+		 * signature is rejected: unsigned jobs (queued before signing or
+		 * by legacy callers) take the legacy capability+nonce path and
+		 * still run (fail-open).
 		 *
 		 * @param int         $post_id The post ID.
 		 * @param string|null $sig     Optional HMAC signature over the payload.
@@ -3489,7 +3492,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 			if ( is_string( $sig ) && '' !== $sig ) {
 				try {
-					$verified = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'verify_callback_signature' ) && Util::verify_callback_signature( array( 'post_id' => $post_id ), $sig );
+					$verified = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'verify_callback_signature' ) && Util::verify_callback_signature( array( 'post_id' => (int) $post_id ), $sig );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$verified = false;

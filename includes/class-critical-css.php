@@ -5182,17 +5182,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Token-breaking worker shared by sanitize_inline_css() (applied
 		 * both before and after the `wppo_ccss_sanitize_inline` filter so
-		 * hooked code cannot reintroduce breakout tokens). Neutralizes the
-		 * `</style>` raw-text terminator plus `script`, comment
-		 * (`<!--`/`-->`), and CSS expression vectors (`expression()`,
-		 * `javascript:`/`vbscript:` URLs, the `behavior` / `behaviour`
-		 * property in property position only, `-moz-binding`)
-		 * case-insensitively, decodes numeric/hex entities first so encoded
-		 * payloads cannot smuggle `<` past the encoder, then encodes any
-		 * remaining `<` as the equivalent CSS escape so stored CSS can never
-		 * break out of the style element. Fail-closed: a sanitizer error
-		 * drops the block (returns '') so output degrades to unoptimized
-		 * markup, never script execution.
+		 * hooked code cannot reintroduce breakout tokens). Delegates to the
+		 * single source of truth in {@see Util::sanitize_css_for_storage()}
+		 * (issue #1347) so the used-CSS and critical-CSS token lists can
+		 * never drift apart; the local implementation below is retained
+		 * only as a fallback when Util is unavailable. See the Util worker
+		 * for the neutralized token list.
 		 *
 		 * @param string $css Raw critical CSS.
 		 * @return string Sanitized critical CSS.
@@ -5200,12 +5195,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private static function sanitize_inline_css_tokens( string $css ): string {
 			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_css_for_storage' ) ) {
+					return Util::sanitize_css_for_storage( $css );
+				}
+			} catch ( \Throwable $e ) {
+				return '';
+			}
+			try {
 				$css = self::decode_css_entities( $css );
 				$css = str_ireplace( '</style', '<\/style', $css );
 				$css = str_ireplace( '<script', '<\script', $css );
 				$css = str_ireplace( '<!--', '<\!--', $css );
 				$css = str_ireplace( '-->', '--\>', $css );
-				// Break CSS expression/URL vectors, tolerating whitespace
+				// Fallback path (Util unavailable): mirrors the shared worker
+				// token-for-token so behavior stays identical. Break CSS
+				// expression/URL vectors, tolerating whitespace
 				// between the keyword and its delimiter (e.g. 'expression (').
 				// A callback builds the replacement so the backslash is never
 				// parsed as a PCRE backreference.
@@ -6375,6 +6379,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Purge every stored artifact for a template hash (issue #1347).
+		 *
+		 * Forgery-response worker shared by the HMAC-mismatch path in
+		 * {@see background_generate()}: deletes the single CCSS file plus
+		 * the viewport-split variants (`{hash}.mobile.css` /
+		 * `{hash}.desktop.css`, mirroring {@see generate_and_store()})
+		 * and drops the source checksum/URL baseline transients, so a
+		 * rejected job leaves nothing stale servable. Mirrors the
+		 * per-template file+transient subset of {@see clear_all()}.
+		 * Fail-open: any error leaves files in place; serving still falls
+		 * back via {@see get_ccss_variant_content()}.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function purge_template_artifacts( string $template_hash ): void {
+			try {
+				global $wp_filesystem;
+				$files = array();
+				try {
+					$main = self::get_ccss_file( $template_hash );
+					if ( is_string( $main ) && '' !== $main ) {
+						$files[] = $main;
+					}
+					foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+						$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
+						if ( is_string( $variant_file ) && '' !== $variant_file ) {
+							$files[] = $variant_file;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				foreach ( $files as $file ) {
+					try {
+						if ( $wp_filesystem && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'delete' ) && $wp_filesystem->exists( $file ) ) {
+							$wp_filesystem->delete( $file );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				try {
+					self::invalidate_ccss_memo( $template_hash );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( function_exists( 'clearstatcache' ) ) {
+					clearstatcache();
+				}
+				if ( function_exists( 'delete_transient' ) ) {
+					try {
+						delete_transient( self::get_source_checksum_key( $template_hash ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					try {
+						delete_transient( self::get_source_urls_key( $template_hash ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Background generation callback for Action Scheduler.
 		 *
 		 * Runs through the time-boxed generate_guarded() wrapper (issue
@@ -6423,13 +6496,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
 							Log::add( 'WPPO critical-CSS job rejected: HMAC mismatch for template hash.' );
 						}
-						$file = self::get_ccss_file( $template_hash );
-						if ( is_string( $file ) && '' !== $file ) {
-							global $wp_filesystem;
-							if ( $wp_filesystem && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'delete' ) && $wp_filesystem->exists( $file ) ) {
-								$wp_filesystem->delete( $file );
-							}
-						}
+						self::purge_template_artifacts( $template_hash );
 						self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 					} catch ( \Throwable $e ) {
 						unset( $e );
