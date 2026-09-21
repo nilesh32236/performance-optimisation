@@ -615,7 +615,16 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * Test that will_combine_css_inline is true for a small combined file.
 	 */
 	public function test_will_combine_css_inline_true_for_small_file(): void {
-		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
+		// Issue #1465: will_combine_css_inline() now probes safe-mode
+		// predicates (extra function_exists calls), so the strict
+		// once-expectation is replaced with an alias that answers true
+		// only for the core inline gate.
+		Functions\when( 'function_exists' )->alias(
+			static function ( $func_name ) {
+				return 'wp_maybe_inline_styles' === $func_name;
+			}
+		);
+		Functions\when( 'has_filter' )->justReturn( false );
 
 		global $wp_styles;
 		$wp_styles = $this->make_wp_styles(
@@ -638,7 +647,13 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * Test that will_combine_css_inline is false for a large combined file.
 	 */
 	public function test_will_combine_css_inline_false_for_large_file(): void {
-		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
+		// Issue #1465: see above — alias instead of a strict once-expectation.
+		Functions\when( 'function_exists' )->alias(
+			static function ( $func_name ) {
+				return 'wp_maybe_inline_styles' === $func_name;
+			}
+		);
+		Functions\when( 'has_filter' )->justReturn( false );
 
 		global $wp_styles;
 		$wp_styles = $this->make_wp_styles(
