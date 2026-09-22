@@ -2129,7 +2129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Resets all Util runtime memos (test-isolation entry point).
 		 *
 		 * Covers settings, home, canonical-host, normalized-host,
-		 * permalink, and Action Scheduler unique-probe memos. Prefer this
+		 * minify-roots, permalink, and Action Scheduler unique-probe memos. Prefer this
 		 * over calling the individual resetters so future memos are not
 		 * silently missed by test setUp() methods.
 		 *
@@ -2138,6 +2138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function reset_runtime_caches(): void {
 			self::reset_cached_home_urls();
+			Filesystem::reset_minify_roots_cache();
 			self::clear_settings_cache();
 			self::clear_permalink_cache();
 			self::reset_action_scheduler_unique_cache();

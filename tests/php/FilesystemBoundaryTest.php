@@ -545,6 +545,105 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Counts dir stays pinned to Util::min_cache_dir() (single source of truth).
+	 *
+	 * The private Filesystem::min_cache_dir_for_counts() mirrors
+	 * Util::min_cache_dir() by design (decoupling); this regression test
+	 * fails the suite on future drift that would silently corrupt the
+	 * dashboard JS/CSS counts.
+	 */
+	public function test_min_cache_dir_counts_matches_util(): void {
+		$this->stub_url_helpers();
+		Util::reset_runtime_caches();
+		$method = new \ReflectionMethod( Filesystem::class, 'min_cache_dir_for_counts' );
+		foreach ( array( 1, 2 ) as $blog_id ) {
+			Functions\when( 'get_current_blog_id' )->justReturn( $blog_id );
+			$this->assertSame( Util::min_cache_dir(), $method->invoke( null ), "Counts dir drifted for blog {$blog_id}." );
+		}
+	}
+
+	/**
+	 * Local-path mapping stays pinned to the Util facade on root + subdirectory installs.
+	 *
+	 * The private Filesystem::home_url_for_local_path() mirrors the no-arg
+	 * form of Util::cached_home_url() with extra early-boot guards; this
+	 * regression test fails the suite on drift that would silently break
+	 * subdirectory-install path stripping in get_local_path().
+	 */
+	public function test_get_local_path_matches_util_across_installs(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		foreach ( array( 'http://example.com', 'http://example.com/subdir' ) as $home ) {
+			$this->stub_url_helpers();
+			Functions\when( 'has_filter' )->justReturn( false );
+			Functions\when( 'home_url' )->alias(
+				static function () use ( $home ) {
+					return $home;
+				}
+			);
+			Util::reset_runtime_caches();
+			$urls = array(
+				$home . '/wp-content/a.css',
+				$home . '/wp-content/themes/my-theme/style.css',
+				'php://filter/convert.base64-encode/resource=/etc/passwd',
+				'http://example.com/../../etc/passwd',
+			);
+			foreach ( $urls as $url ) {
+				$this->assertSame(
+					Util::get_local_path( $url ),
+					Filesystem::get_local_path( $url ),
+					"Local-path drift for home {$home} url {$url}."
+				);
+			}
+		}
+	}
+
+	/**
+	 * Minify roots memo: one upload-dir lookup per blog, bypassed when filtered.
+	 */
+	public function test_minify_allowed_roots_memoization(): void {
+		$this->stub_url_helpers();
+		Functions\when( 'has_filter' )->justReturn( false );
+		$upload_calls = 0;
+		Functions\when( 'wp_upload_dir' )->alias(
+			static function () use ( &$upload_calls ) {
+				++$upload_calls;
+				return array( 'basedir' => '/tmp/wordpress/wp-content/uploads' );
+			}
+		);
+		Filesystem::reset_minify_roots_cache();
+
+		$first  = Filesystem::get_minify_allowed_roots();
+		$second = Filesystem::get_minify_allowed_roots();
+		$this->assertSame( $first, $second );
+		$this->assertSame( 1, $upload_calls, 'Second call must hit the per-blog memo.' );
+
+		// Hot-path callers (validate per asset) reuse the memo.
+		Filesystem::validate_minify_path( '/tmp/wordpress/wp-config.php' );
+		$this->assertSame( 1, $upload_calls, 'validate_minify_path() must reuse the memo.' );
+
+		// Per-blog isolation: a new blog recomputes once, then memoizes.
+		Functions\when( 'get_current_blog_id' )->justReturn( 2 );
+		Filesystem::get_minify_allowed_roots();
+		$this->assertSame( 2, $upload_calls, 'New blog must recompute once.' );
+		Filesystem::get_minify_allowed_roots();
+		$this->assertSame( 2, $upload_calls, 'Repeat call on the new blog must hit the memo.' );
+
+		// Filter present: bypass the memo so context-dependent output is never cached.
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'has_filter' )->justReturn( 10 );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value ) {
+				return $value;
+			}
+		);
+		Filesystem::reset_minify_roots_cache();
+		$upload_calls = 0;
+		Filesystem::get_minify_allowed_roots();
+		Filesystem::get_minify_allowed_roots();
+		$this->assertSame( 2, $upload_calls, 'Filtered calls must bypass the memo.' );
+	}
+
+	/**
 	 * REF-012 slot helpers stay in Util (explicit non-goal of REF-003).
 	 */
 	public function test_rollout_slot_helpers_stay_in_util(): void {

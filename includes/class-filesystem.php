@@ -58,6 +58,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		private static array $normalized_host_cache = array();
 
 		/**
+		 * Per-blog memo for minify allowed roots (see get_minify_allowed_roots()).
+		 *
+		 * `wp_upload_dir()` resolves per blog (multisite-safe) via option
+		 * reads; caching per blog ID avoids repeating that work once per
+		 * enqueued asset on asset-heavy pages. Bypassed whenever the
+		 * `wppo_minify_allowed_roots` filter is present (context-dependent
+		 * output must never be memoized). Bounded to avoid unbounded growth
+		 * on large multisite networks.
+		 *
+		 * @var array<int, string[]>
+		 * @since NEXT
+		 */
+		private static array $minify_roots_cache = array();
+
+		/**
 		 * Recursively creates cache directory if not exists.
 		 *
 		 * @param string $cache_dir Path to the cache directory.
@@ -214,10 +229,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * listener is registered; invalid or empty filtered values fall back
 		 * to the defaults so a poisoned filter can never open the tree.
 		 *
+		 * Per-request memo: results are cached per blog ID and reused across
+		 * calls (validate_minify_path() runs once per enqueued asset). The
+		 * memo is bypassed whenever the `wppo_minify_allowed_roots` filter
+		 * is present, mirroring the cached_content_url()/cached_home_url()
+		 * convention — filtered output may be context-dependent.
+		 *
 		 * @return string[] Normalized absolute root paths.
 		 * @since NEXT
 		 */
 		public static function get_minify_allowed_roots(): array {
+			$has_filter = function_exists( 'has_filter' ) ? has_filter( 'wppo_minify_allowed_roots' ) : false;
+			$use_memo   = false === $has_filter;
+			$blog_id    = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+
+			if ( $use_memo && isset( self::$minify_roots_cache[ $blog_id ] ) ) {
+				return self::$minify_roots_cache[ $blog_id ];
+			}
+
 			$defaults = array();
 
 			if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
@@ -274,7 +303,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				}
 			}
 
+			if ( $use_memo ) {
+				if ( count( self::$minify_roots_cache ) > 64 ) {
+					self::$minify_roots_cache = array();
+				}
+				self::$minify_roots_cache[ $blog_id ] = $defaults;
+			}
+
 			return $defaults;
+		}
+
+		/**
+		 * Reset the minify-roots memo (testing isolation).
+		 *
+		 * Called from `Util::reset_runtime_caches()` so the existing
+		 * test-isolation entry point keeps clearing per-blog state when
+		 * `switch_to_blog()` fixtures change the uploads basedir mid-suite.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_minify_roots_cache(): void {
+			self::$minify_roots_cache = array();
 		}
 
 		/**
