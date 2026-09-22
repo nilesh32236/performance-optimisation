@@ -2235,8 +2235,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * CLS (absolute arm): `upper = max(mean + 0.05, mean + 2*σ)`.
 		 * The tolerance band is folded in by callers via the resolved
 		 * `anomaly_tolerance_pct` / `anomaly_tolerance_abs` gates. Lower
-		 * mirrors the upper symmetrically for recovery hysteresis reads.
-		 * Fail-open: empty input yields a zero band (callers treat a
+		 * (`mean - 2*σ`) is intentionally retained for symmetric and
+		 * future recovery-hysteresis reads; current callers
+		 * (detect_anomalies(), detect_recoveries()) gate on upper/mean
+		 * only. Fail-open: empty input yields a zero band (callers treat a
 		 * non-positive mean as unusable).
 		 *
 		 * @param float[] $prior_window Trailing numeric samples (oldest first).
@@ -2576,10 +2578,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Detect recoveries closing the loop on tracked breaches (issue #1313).
 		 *
 		 * For each tracked breach, the latest trend sample is compared
-		 * against the current moving-average band: the signal must stay
-		 * inside the band (`latest <= upper`) for the full
-		 * `anomaly_recovery_days` window (`now - breached_at >= days`)
-		 * before a recovery notice fires, preventing flapping. At most
+		 * against the current moving-average band: a recovery fires only
+		 * after `anomaly_recovery_days` have elapsed since the breach
+		 * (`now - breached_at >= days`) AND the single latest sample reads
+		 * back inside the band (`latest <= upper`). This is a time-gated
+		 * single-sample check: intermediate samples between breach and now
+		 * are not examined, so flap suppression is time-based rather than
+		 * full-window stabilization-verified. At most
 		 * one recovery is returned with the same single-banner cooldown
 		 * as detect_anomalies() (active cooldown or low samples yields
 		 * zero notices). Read-only suggestions shape; never auto-applies.
