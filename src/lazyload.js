@@ -1393,9 +1393,11 @@ const loadScript = ( script ) => {
 			// Inline scripts execute synchronously during DOM insertion, so resolve here.
 			resolve();
 		} else {
-			// Empty inline script: resolve benignly.
+			// Empty inline script: resolve benignly. Log a static string
+			// only — never the live DOM node (its inline text would persist
+			// in the console for any devtools/extension reader).
 			if ( ! script.text ) {
-				console.warn( 'WPPO: empty inline script found', script );
+				console.warn( 'WPPO: empty inline script found' );
 			}
 			resolve();
 		}

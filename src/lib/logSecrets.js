@@ -22,11 +22,11 @@ export const redactLogSecrets = ( raw ) => {
 		)
 		.replace( /\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi, '$1=[redacted]' )
 		.replace(
-			/([?&](?:key|api[_-]?key|token|secret|password|pwd)\s*=)[^&\s]*/gi,
+			/([?&](?:key|api[_-]?key|token|secret|password|pwd|_wpnonce|nonce|wppo_esi|nonce_refresh)\s*=)[^&\s]*/gi,
 			'$1[redacted]'
 		)
 		.replace(
-			/\b(password|passwd|pwd|secret|token)\b\s*[:=\s]\s*(['"]?)\S+\2/gi,
+			/\b(password|passwd|pwd|secret|token|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(['"]?)\S+\2/gi,
 			'$1=[redacted]'
 		);
 };

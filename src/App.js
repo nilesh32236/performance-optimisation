@@ -82,6 +82,18 @@ const TabFallback = () => (
 
 const SIDEBAR_BREAKPOINT = 992;
 
+/**
+ * Whether a server-provided theme color is safe to pass into the
+ * style.setProperty CSS sink. Only plain hex colors are accepted; anything
+ * else (url(), expression(), semicolons, overlong strings) is skipped.
+ *
+ * @since NEXT
+ * @param {*} value Raw theme color value.
+ * @return {boolean} True when the value is a safe hex color.
+ */
+export const isSafeCssColor = ( value ) =>
+	typeof value === 'string' && /^#[0-9a-fA-F]{3,8}$/.test( value );
+
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
@@ -337,6 +349,10 @@ const App = () => {
 	}, [ mobileMenuOpen ] );
 
 	// Inject frontend theme accent colors as CSS custom properties.
+	// Server-provided values are validated against a strict hex-color
+	// pattern before reaching the setProperty CSS sink so a tampered
+	// settings payload cannot inject arbitrary declarations (e.g. url()
+	// exfiltration) into the admin page.
 	useEffect( () => {
 		const themeColors = getWppoSettings()?.themeColors;
 		if ( ! themeColors ) {
@@ -344,19 +360,19 @@ const App = () => {
 		}
 
 		const root = document.documentElement;
-		if ( themeColors.primary ) {
+		if ( isSafeCssColor( themeColors.primary ) ) {
 			root.style.setProperty(
 				'--wppo-frontend-primary',
 				themeColors.primary
 			);
 		}
-		if ( themeColors.secondary ) {
+		if ( isSafeCssColor( themeColors.secondary ) ) {
 			root.style.setProperty(
 				'--wppo-frontend-secondary',
 				themeColors.secondary
 			);
 		}
-		if ( themeColors.text ) {
+		if ( isSafeCssColor( themeColors.text ) ) {
 			root.style.setProperty( '--wppo-frontend-text', themeColors.text );
 		}
 	}, [] );

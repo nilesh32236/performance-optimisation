@@ -323,15 +323,21 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( inlineScript.hasAttribute( 'nonce' ) ).toBe( false );
 		} );
 
-		it( 'warns on empty inline script', async () => {
+		it( 'warns on empty inline script without logging the DOM node', async () => {
 			document.body.innerHTML =
 				'<script type="wppo/javascript"></script>';
 			await bootLazyload();
 
+			// Audit #1493: static string only — the live script node (with
+			// its inline text) must never persist in the console.
 			expect( consoleWarnSpy ).toHaveBeenCalledWith(
-				'WPPO: empty inline script found',
-				expect.any( HTMLScriptElement )
+				'WPPO: empty inline script found'
 			);
+			for ( const call of consoleWarnSpy.mock.calls ) {
+				for ( const arg of call ) {
+					expect( arg instanceof HTMLScriptElement ).toBe( false );
+				}
+			}
 		} );
 	} );
 

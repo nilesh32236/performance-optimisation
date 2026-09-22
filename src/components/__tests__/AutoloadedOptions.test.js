@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	waitFor,
+	fireEvent,
+	within,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -200,6 +206,16 @@ describe( 'AutoloadedOptions', () => {
 
 		fireEvent.click( screen.getByRole( 'button', { name: 'Apply fix' } ) );
 
+		// Audit #1493: Apply is gated behind a confirmation dialog showing
+		// the dry-run summary — confirm inside the dialog to proceed.
+		const dialog = await screen.findByRole( 'dialog' );
+		expect(
+			within( dialog ).getByText( /Apply autoload remediation\?/ )
+		).toBeInTheDocument();
+		fireEvent.click(
+			within( dialog ).getByRole( 'button', { name: 'Apply fix' } )
+		);
+
 		await waitFor( () =>
 			expect(
 				screen.getByText( 'Remediation applied to 1 option.' ) // Audit #1420: _n singular.
@@ -239,6 +255,71 @@ describe( 'AutoloadedOptions', () => {
 				mode: 'revert',
 				option: 'big_plugin_blob',
 			},
+			'POST',
+			expect.any( AbortSignal )
+		);
+	} );
+
+	it( 'gates Apply fix behind a confirmation dialog (no one-click DB write)', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				threshold: 1024,
+				supported: true,
+				total_autoload_bytes: 2097152,
+				count: 1,
+				bytes_saved: 1048576,
+				options: [ { option_name: 'big_plugin_blob', size: 1048576 } ],
+				remediated: {},
+			},
+		} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByRole( 'button', { name: 'Apply fix' } )
+			).toBeInTheDocument()
+		);
+
+		// Clicking Apply fix opens the dialog but must not call apply yet.
+		fireEvent.click( screen.getByRole( 'button', { name: 'Apply fix' } ) );
+
+		const dialog = await screen.findByRole( 'dialog' );
+		expect(
+			within( dialog ).getByText( /1 options, saving/ )
+		).toBeInTheDocument();
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'autoload_remediate',
+			expect.objectContaining( { mode: 'apply' } ),
+			'POST',
+			expect.any( AbortSignal )
+		);
+
+		// Cancelling closes the dialog without any DB write.
+		fireEvent.click(
+			within( dialog ).getByRole( 'button', { name: 'Cancel' } )
+		);
+		await waitFor( () =>
+			expect( screen.queryByRole( 'dialog' ) ).not.toBeInTheDocument()
+		);
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'autoload_remediate',
+			expect.objectContaining( { mode: 'apply' } ),
 			'POST',
 			expect.any( AbortSignal )
 		);
@@ -318,6 +399,12 @@ describe( 'AutoloadedOptions', () => {
 		);
 
 		fireEvent.click( screen.getByRole( 'button', { name: 'Apply fix' } ) );
+
+		// Audit #1493: confirm through the dialog to reach applyFix().
+		const applyDialog = await screen.findByRole( 'dialog' );
+		fireEvent.click(
+			within( applyDialog ).getByRole( 'button', { name: 'Apply fix' } )
+		);
 
 		await waitFor( () =>
 			expect(
@@ -427,6 +514,12 @@ describe( 'AutoloadedOptions', () => {
 		);
 
 		fireEvent.click( screen.getByRole( 'button', { name: 'Apply fix' } ) );
+
+		// Audit #1493: confirm through the dialog to reach applyFix().
+		const keepsDialog = await screen.findByRole( 'dialog' );
+		fireEvent.click(
+			within( keepsDialog ).getByRole( 'button', { name: 'Apply fix' } )
+		);
 
 		await waitFor( () =>
 			expect(

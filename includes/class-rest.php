@@ -1145,7 +1145,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$is_exact_match = ( $candidate_path === $normalized_cache_dir );
 					$is_under_dir   = ( 0 === strpos( $candidate_path, $normalized_cache_dir_trail ) );
 
-					$decoded       = rawurldecode( $candidate_path );
+					// Canonicalize percent-encoding with a bounded decode loop
+					// (max 5 passes until stable) so double-encoded traversal
+					// (e.g. %252e%252e) is exposed before the `..`-segment
+					// check instead of slipping through a single decode.
+					// @since NEXT Added decode loop for double-encoded traversal.
+					$decoded = $candidate_path;
+					for ( $i = 0; $i < 5; $i++ ) {
+						$next = rawurldecode( $decoded );
+						if ( $next === $decoded ) {
+							break;
+						}
+						$decoded = $next;
+					}
 					$has_traversal = false;
 					foreach ( explode( '/', $decoded ) as $segment ) {
 						if ( '..' === $segment ) {
