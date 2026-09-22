@@ -51,9 +51,9 @@ items:
     title: 'Extract Settings_Store from Util (settings memo, save, hook coherence, snapshots)'
     type: architecture
     priority: high
-    status: autofix-running
+    status: pr-review-running
     github_issue: 1498
-    github_pr: null
+    github_pr: 1499
     source: AUDIT/FINAL-REVIEW/architecture.md R-02/R-03 (A-02/A-03)
     notes:
       - 'Depends on REF-001 facade pattern (merged). Covers get/set/clear_settings_cache, save_settings, hook registration, snapshots. ALLOWED_SETTINGS_KEYS + sanitizer ownership deferred to REF-011 to keep the diff focused.'
