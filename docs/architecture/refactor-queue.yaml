@@ -25,9 +25,9 @@ items:
     title: 'Extract Cache_Key boundary from Util (transient_key/option_key/cache_salt)'
     type: architecture
     priority: high
-    status: autofix-running
+    status: pr-review-running
     github_issue: 1496
-    github_pr: null
+    github_pr: 1497
     rationale: >
       Smallest safe first extraction (3 methods + stampede key helper) with the
       widest fan-in (~23 consumers of transient_key). Establishes the
