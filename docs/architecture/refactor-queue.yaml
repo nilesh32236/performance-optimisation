@@ -25,7 +25,7 @@ items:
     title: 'Extract Cache_Key boundary from Util (transient_key/option_key/cache_salt)'
     type: architecture
     priority: high
-    status: issue-created
+    status: autofix-running
     github_issue: 1496
     github_pr: null
     rationale: >
