@@ -1653,6 +1653,290 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Stage used-CSS output for safe-rollout preview (issue #1348).
+		 *
+		 * Dry-run half of the stage → preview → promote flow: the sanitized
+		 * payload is written to the staged sibling
+		 * ({@see Util::get_staged_path_for()}) instead of the live file, so
+		 * a bad generation can never break styling site-wide before an
+		 * operator promotes it. Returns preview metadata (bytes, checksums,
+		 * changed-vs-live) for the status UI. Same sanitizer, host, domain,
+		 * and containment guards as {@see save_used_css()}. Fail-open: any
+		 * refusal returns `staged => false` with a reason, never fatal.
+		 *
+		 * @param string $css Raw used-CSS content.
+		 * @param string $url The page URL.
+		 * @return array{staged: bool, reason: string, bytes: int, checksum: string, live_bytes: int, live_checksum: string, changed: bool} Preview metadata.
+		 * @since NEXT
+		 */
+		public function stage_used_css( string $css, string $url = '' ): array {
+			$refused = static function ( string $reason ) use ( $url ): array {
+				return array(
+					'staged'        => false,
+					'reason'        => $reason,
+					'bytes'         => 0,
+					'checksum'      => '',
+					'live_bytes'    => 0,
+					'live_checksum' => '',
+					'changed'       => false,
+				);
+			};
+			try {
+				if ( '' === $css ) {
+					return $refused( 'empty' );
+				}
+				$css = self::sanitize_used_css_output( $css );
+				if ( '' === $css ) {
+					return $refused( 'sanitize' );
+				}
+				if ( $this->host_mismatch ) {
+					return $refused( 'host' );
+				}
+				if ( '' === $this->domain ) {
+					return $refused( 'domain' );
+				}
+				$file_path = $this->get_used_css_path( $url );
+				if ( '' === $file_path ) {
+					return $refused( 'path' );
+				}
+				$staged_path = Util::get_staged_path_for( $file_path );
+				if ( '' === $staged_path ) {
+					return $refused( 'path' );
+				}
+				$dir_path = dirname( $staged_path );
+				if ( ! $this->is_path_contained( $staged_path ) || ! $this->is_path_contained( trailingslashit( $dir_path ) ) ) {
+					$this->log_traversal_probe( $url );
+					return $refused( 'path' );
+				}
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return $refused( 'filesystem' );
+				}
+				if ( ! Util::prepare_cache_dir( $dir_path ) ) {
+					return $refused( 'filesystem' );
+				}
+				if ( ! $this->is_path_contained( $staged_path ) || ! $this->is_path_contained( trailingslashit( $dir_path ) ) ) {
+					$this->log_traversal_probe( $url );
+					return $refused( 'path' );
+				}
+				if ( ! Util::atomic_file_put_contents( $fs, $staged_path, $css ) ) {
+					return $refused( 'write' );
+				}
+				$slot = Util::describe_rollout_slot( $fs, $file_path );
+				return array(
+					'staged'        => true,
+					'reason'        => '',
+					'bytes'         => (int) $slot['staged_bytes'],
+					'checksum'      => (string) $slot['staged_checksum'],
+					'live_bytes'    => (int) $slot['live_bytes'],
+					'live_checksum' => (string) $slot['live_checksum'],
+					'changed'       => (bool) $slot['staged_changed'],
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $refused( 'error' );
+			}
+		}
+
+		/**
+		 * Promote staged used-CSS over the live file (issue #1348).
+		 *
+		 * Second half of the stage → preview → promote flow: the staged
+		 * sibling replaces the live file via
+		 * {@see Util::promote_staged_file()} (last-good fallback retained
+		 * first, so the promote stays reversible), the checksum sidecar is
+		 * dropped so re-generation re-baselines (mirrors
+		 * {@see delete_used_css()}), and the promotion is activity-logged.
+		 * A missing/empty stage is a no-op `false`. Never throws.
+		 *
+		 * @param string $url The page URL.
+		 * @return bool True when the staged file replaced the live file.
+		 * @since NEXT
+		 */
+		public function promote_staged_used_css( string $url = '' ): bool {
+			try {
+				if ( $this->host_mismatch || '' === $this->domain ) {
+					return false;
+				}
+				$file_path = $this->get_used_css_path( $url );
+				if ( '' === $file_path ) {
+					return false;
+				}
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return false;
+				}
+				$promoted = Util::promote_staged_file(
+					$fs,
+					function ( string $path ): bool {
+						return $this->is_path_contained( $path );
+					},
+					$file_path
+				);
+				if ( ! $promoted ) {
+					return false;
+				}
+				$checksum_path = $this->get_checksum_path( $file_path );
+				if ( '' !== $checksum_path && method_exists( $fs, 'exists' ) && method_exists( $fs, 'delete' ) ) {
+					try {
+						if ( $fs->exists( $checksum_path ) ) {
+							$fs->delete( $checksum_path );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				try {
+					Log::add( 'WPPO used-CSS staged output promoted for ' . $url . '.' );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Roll back used-CSS to the retained last-good fallback (issue #1348).
+		 *
+		 * Explicit-rollback primitive behind the admin rollback action and
+		 * the post-apply health gate ({@see verify_used_css_health()}):
+		 * copies the fallback payload over the live file (the fallback is
+		 * kept for repeated restores), drops the checksum sidecar so the
+		 * next generation re-baselines, and activity-logs the outcome with
+		 * its reason. A missing/empty fallback is a no-op `false`. Never
+		 * throws.
+		 *
+		 * @param string $url    The page URL.
+		 * @param string $reason Machine-readable reason recorded in the activity log.
+		 * @return bool True when the fallback payload replaced the live file.
+		 * @since NEXT
+		 */
+		public function rollback_used_css_to_fallback( string $url = '', string $reason = 'manual' ): bool {
+			try {
+				if ( '' === $this->domain ) {
+					return false;
+				}
+				$file_path = $this->get_used_css_path( $url );
+				if ( '' === $file_path ) {
+					return false;
+				}
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return false;
+				}
+				$restored = Util::restore_fallback_file(
+					$fs,
+					function ( string $path ): bool {
+						return $this->is_path_contained( $path );
+					},
+					$file_path
+				);
+				try {
+					Log::add( 'WPPO used-CSS rollback for ' . $url . ': ' . ( $restored ? 'restored last-good (' . $reason . ')' : 'no fallback available (' . $reason . ')' ) . '.' );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( ! $restored ) {
+					return false;
+				}
+				$checksum_path = $this->get_checksum_path( $file_path );
+				if ( '' !== $checksum_path && method_exists( $fs, 'exists' ) && method_exists( $fs, 'delete' ) ) {
+					try {
+						if ( $fs->exists( $checksum_path ) ) {
+							$fs->delete( $checksum_path );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Describe the used-CSS safe-rollout slot for a URL (issue #1348).
+		 *
+		 * Read-only status payload behind the rollout UI: live/staged
+		 * presence with byte sizes and checksums, staged-changed flag,
+		 * and fallback availability. Fail-open to the empty slot on any
+		 * failure. Never throws.
+		 *
+		 * @param string $url The page URL.
+		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool} Slot description.
+		 * @since NEXT
+		 */
+		public function get_used_css_rollout_status( string $url = '' ): array {
+			try {
+				$file_path = $this->get_used_css_path( $url );
+				if ( '' === $file_path ) {
+					return Util::describe_rollout_slot( null, '' );
+				}
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return Util::describe_rollout_slot( null, '' );
+				}
+				return Util::describe_rollout_slot( $fs, $file_path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return Util::describe_rollout_slot( null, '' );
+			}
+		}
+
+		/**
+		 * Verify used-CSS health for a URL, auto-restoring last-good (issue #1348).
+		 *
+		 * Post-apply health gate: a missing/empty live file is a broken
+		 * deploy signal — the retained last-good fallback is restored over
+		 * it automatically and the outcome (including the cache-hit reason:
+		 * live hit, restored-from-fallback, or degraded with no fallback)
+		 * is activity-logged so operators can see which slot served. A
+		 * healthy live file reports `healthy` with no writes. Never throws.
+		 *
+		 * @param string $url The page URL.
+		 * @return array{status: string, reason: string, bytes: int} One of healthy|restored|degraded.
+		 * @since NEXT
+		 */
+		public function verify_used_css_health( string $url = '' ): array {
+			try {
+				$slot = $this->get_used_css_rollout_status( $url );
+				if ( (int) $slot['live_bytes'] > 0 ) {
+					return array(
+						'status' => 'healthy',
+						'reason' => 'live',
+						'bytes'  => (int) $slot['live_bytes'],
+					);
+				}
+				$restored = $this->rollback_used_css_to_fallback( $url, 'health-gate' );
+				if ( $restored ) {
+					$after = $this->get_used_css_rollout_status( $url );
+					return array(
+						'status' => 'restored',
+						'reason' => 'fallback',
+						'bytes'  => (int) $after['live_bytes'],
+					);
+				}
+				return array(
+					'status' => 'degraded',
+					'reason' => (bool) $slot['fallback'] ? 'restore-failed' : 'no-fallback',
+					'bytes'  => 0,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'status' => 'degraded',
+					'reason' => 'error',
+					'bytes'  => 0,
+				);
+			}
+		}
+
+		/**
 		 * Stable content hash of CSS source (issue #1038).
 		 *
 		 * Thin backward-compatible wrapper around the shared
@@ -3566,42 +3850,143 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// would silently break used-CSS generation on localhost and
 			// staging installs (and on any site whose own hostname resolves
 			// to a private address).
-			$fetch_args = array(
-				'timeout' => 15,
-				'headers' => array(
-					'X-WPPO-Used-CSS' => '1',
-				),
-			);
-			$response   = wp_remote_get( $permalink, $fetch_args );
-
-			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					$error_msg = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP status ' . wp_remote_retrieve_response_code( $response );
-					// Audit #1362: centralized activity log instead of the
-					// PHP error log (WP_DEBUG gate retained).
-					if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
-						Log::add( 'WPPO used-CSS generation failed for post ' . (int) $post_id . ': ' . sanitize_text_field( $error_msg ) );
-					}
-				}
-				return;
-			}
-
-			$html = wp_remote_retrieve_body( $response );
-			if ( empty( $html ) ) {
-				return;
-			}
-
-			$css_assets = self::extract_css_assets_from_html( $html );
-			if ( empty( $css_assets ) ) {
-				return;
-			}
-
-			$options    = Util::get_settings();
-			$used_css   = new self( $options );
-			$purged_css = $used_css->generate_used_css( $html, $css_assets );
+			$purged_css = self::fetch_and_generate_used_css( $post_id, $permalink, 15 );
 
 			if ( ! empty( $purged_css ) ) {
+				$options  = Util::get_settings();
+				$used_css = new self( $options );
 				$used_css->save_used_css( $purged_css, $permalink );
+			}
+		}
+
+		/**
+		 * Fetch a permalink and generate its used CSS (issue #1348).
+		 *
+		 * Shared worker behind {@see process_background()} and
+		 * {@see generate_preview_for_post()}: fetches the (already
+		 * same-site-validated) permalink, extracts linked CSS assets, and
+		 * returns the purged CSS without writing anything, so the preview
+		 * path exercises the exact pipeline the background job persists.
+		 * Fetch failures keep the WP_DEBUG-gated activity-log behaviour of
+		 * the background path. Never throws.
+		 *
+		 * @param int    $post_id   The post ID (log context only).
+		 * @param string $permalink Same-site-validated permalink to fetch.
+		 * @param int    $timeout   Fetch timeout in seconds.
+		 * @return string Purged CSS, or '' on any failure.
+		 * @since NEXT
+		 */
+		private static function fetch_and_generate_used_css( int $post_id, string $permalink, int $timeout ): string {
+			try {
+				$fetch_args = array(
+					'timeout' => $timeout,
+					'headers' => array(
+						'X-WPPO-Used-CSS' => '1',
+					),
+				);
+				$response   = wp_remote_get( $permalink, $fetch_args );
+
+				if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						$error_msg = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP status ' . wp_remote_retrieve_response_code( $response );
+						// Audit #1362: centralized activity log instead of the
+						// PHP error log (WP_DEBUG gate retained).
+						if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+							Log::add( 'WPPO used-CSS generation failed for post ' . (int) $post_id . ': ' . sanitize_text_field( $error_msg ) );
+						}
+					}
+					return '';
+				}
+
+				$html = wp_remote_retrieve_body( $response );
+				if ( empty( $html ) ) {
+					return '';
+				}
+
+				$css_assets = self::extract_css_assets_from_html( $html );
+				if ( empty( $css_assets ) ) {
+					return '';
+				}
+
+				$options    = Util::get_settings();
+				$used_css   = new self( $options );
+				$purged_css = $used_css->generate_used_css( $html, $css_assets );
+				return is_string( $purged_css ) ? $purged_css : '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Dry-run used-CSS generation for a post with staged preview (issue #1348).
+		 *
+		 * Preview half of the safe rollout: resolves the permalink (same
+		 * same-site guard as the background job), generates through the
+		 * shared worker, and stages the output for operator review instead
+		 * of going live. The fetch timeout is filterable via
+		 * `wppo_css_preview_fetch_timeout` (default 10s — shorter than the
+		 * background job since an operator is waiting). Fail-open: any
+		 * failure returns `staged => false` with a reason. Never throws.
+		 *
+		 * @param int $post_id The post ID.
+		 * @return array{staged: bool, reason: string, bytes: int, checksum: string, live_bytes: int, live_checksum: string, changed: bool, post_id: int} Preview metadata.
+		 * @since NEXT
+		 */
+		public function generate_preview_for_post( int $post_id ): array {
+			$refused = static function ( string $reason ) use ( $post_id ): array {
+				return array(
+					'staged'        => false,
+					'reason'        => $reason,
+					'bytes'         => 0,
+					'checksum'      => '',
+					'live_bytes'    => 0,
+					'live_checksum' => '',
+					'changed'       => false,
+					'post_id'       => (int) $post_id,
+				);
+			};
+			try {
+				if ( $post_id <= 0 || ! function_exists( 'get_permalink' ) ) {
+					return $refused( 'post' );
+				}
+				$permalink = get_permalink( $post_id );
+				if ( ! is_string( $permalink ) || '' === $permalink ) {
+					return $refused( 'post' );
+				}
+				if ( function_exists( 'wp_parse_url' ) && function_exists( 'home_url' ) ) {
+					try {
+						$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+						$perm_host = wp_parse_url( $permalink, PHP_URL_HOST );
+						if ( '' === $permalink || $perm_host !== $home_host ) {
+							return $refused( 'host' );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return $refused( 'host' );
+					}
+				}
+				$timeout = 10;
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_css_preview_fetch_timeout' ) ) {
+					try {
+						$filtered = apply_filters( 'wppo_css_preview_fetch_timeout', $timeout );
+						if ( is_numeric( $filtered ) ) {
+							$timeout = max( 1, min( 60, (int) $filtered ) );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$css = self::fetch_and_generate_used_css( $post_id, $permalink, $timeout );
+				if ( '' === $css ) {
+					return $refused( 'generate' );
+				}
+				$preview            = $this->stage_used_css( $css, $permalink );
+				$preview['post_id'] = (int) $post_id;
+				return $preview;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $refused( 'error' );
 			}
 		}
 

@@ -627,6 +627,412 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Whether a path stays inside the CCSS directory (issue #1348).
+		 *
+		 * Containment validator for the staged/fallback slot helpers:
+		 * the normalized path must live under {@see get_ccss_dir()}.
+		 * All slot paths derive from {@see get_ccss_file()} (which
+		 * rejects anything but word chars + dash), so this is
+		 * defense-in-depth against future callers. Never throws.
+		 *
+		 * @param string $path Absolute path to check.
+		 * @return bool True when contained.
+		 * @since NEXT
+		 */
+		private static function is_ccss_path_contained( string $path ): bool {
+			try {
+				if ( '' === $path || false !== strpos( $path, "\0" ) ) {
+					return false;
+				}
+				$dir = self::get_ccss_dir();
+				if ( '' === $dir ) {
+					return false;
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$path = wp_normalize_path( $path );
+					$dir  = wp_normalize_path( $dir );
+				}
+				return 0 === strpos( $path, rtrim( $dir, '/' ) . '/' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Stage critical CSS for a template without going live (issue #1348).
+		 *
+		 * Sanitizes via the shared {@see Util::sanitize_css_for_storage()}
+		 * choke point plus the storage-bounds check (mirroring the live
+		 * write path), then persists to the staged sibling instead of the
+		 * live file. Returns preview metadata for the status UI. Never
+		 * touches variant mirrors, source checksums, or the live file.
+		 * Fail-open: any refusal returns `staged => false`. Never throws.
+		 *
+		 * @param string $template_hash Validated template hash.
+		 * @param string $css           Raw critical-CSS content.
+		 * @return array{staged: bool, reason: string, bytes: int, checksum: string, live_bytes: int, live_checksum: string, changed: bool} Preview metadata.
+		 * @since NEXT
+		 */
+		public static function stage_ccss_for_template( string $template_hash, string $css ): array {
+			$refused = static function ( string $reason ): array {
+				return array(
+					'staged'        => false,
+					'reason'        => $reason,
+					'bytes'         => 0,
+					'checksum'      => '',
+					'live_bytes'    => 0,
+					'live_checksum' => '',
+					'changed'       => false,
+				);
+			};
+			try {
+				if ( '' === $css || ! self::is_valid_template_hash( $template_hash ) ) {
+					return $refused( '' === $css ? 'empty' : 'hash' );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_css_for_storage' ) ) {
+					$css = Util::sanitize_css_for_storage( $css );
+				}
+				if ( '' === $css ) {
+					return $refused( 'sanitize' );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'css_within_storage_bounds' ) && ! Util::css_within_storage_bounds( $css ) ) {
+					return $refused( 'bounds' );
+				}
+				$live = self::get_ccss_file( $template_hash );
+				if ( '' === $live ) {
+					return $refused( 'path' );
+				}
+				$staged = Util::get_staged_path_for( $live );
+				if ( '' === $staged || ! self::is_ccss_path_contained( $staged ) ) {
+					return $refused( 'path' );
+				}
+				$filesystem = Util::init_filesystem();
+				if ( ! $filesystem ) {
+					return $refused( 'filesystem' );
+				}
+				if ( ! Util::atomic_file_put_contents( $filesystem, $staged, $css ) ) {
+					return $refused( 'write' );
+				}
+				self::invalidate_ccss_memo( $template_hash );
+				$slot = Util::describe_rollout_slot( $filesystem, $live );
+				return array(
+					'staged'        => true,
+					'reason'        => '',
+					'bytes'         => (int) $slot['staged_bytes'],
+					'checksum'      => (string) $slot['staged_checksum'],
+					'live_bytes'    => (int) $slot['live_bytes'],
+					'live_checksum' => (string) $slot['live_checksum'],
+					'changed'       => (bool) $slot['staged_changed'],
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $refused( 'error' );
+			}
+		}
+
+		/**
+		 * Promote staged critical CSS over the live file (issue #1348).
+		 *
+		 * The staged sibling replaces the live file via
+		 * {@see Util::promote_staged_file()} (last-good retained first),
+		 * variant mirrors are refreshed best-effort like the live write
+		 * path, and the promotion is activity-logged. Never throws.
+		 *
+		 * @param string $template_hash Validated template hash.
+		 * @return bool True when the staged file replaced the live file.
+		 * @since NEXT
+		 */
+		public static function promote_staged_ccss( string $template_hash ): bool {
+			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return false;
+				}
+				$live = self::get_ccss_file( $template_hash );
+				if ( '' === $live ) {
+					return false;
+				}
+				$filesystem = Util::init_filesystem();
+				if ( ! $filesystem ) {
+					return false;
+				}
+				$promoted = Util::promote_staged_file(
+					$filesystem,
+					static function ( string $path ): bool {
+						return self::is_ccss_path_contained( $path );
+					},
+					$live
+				);
+				if ( ! $promoted ) {
+					return false;
+				}
+				self::invalidate_ccss_memo( $template_hash );
+				if ( function_exists( 'clearstatcache' ) ) {
+					clearstatcache( true, $live );
+				}
+				// Refresh viewport mirrors from the promoted live file
+				// (best-effort, mirrors the live write path).
+				try {
+					if ( self::is_viewport_variants_enabled() && method_exists( $filesystem, 'get_contents' ) ) {
+						$content = $filesystem->get_contents( $live );
+						if ( is_string( $content ) && '' !== $content ) {
+							foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+								$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
+								if ( '' !== $variant_file ) {
+									Util::atomic_file_put_contents( $filesystem, $variant_file, $content );
+									if ( function_exists( 'clearstatcache' ) ) {
+										clearstatcache( true, $variant_file );
+									}
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+						Log::add( 'WPPO critical-CSS staged output promoted for template hash ' . $template_hash . '.' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Roll back critical CSS to the retained last-good fallback (issue #1348).
+		 *
+		 * Copies the fallback payload over the live file (fallback kept
+		 * for repeated restores) and activity-logs the outcome with its
+		 * reason. A missing/empty fallback is a no-op `false`. Never
+		 * throws.
+		 *
+		 * @param string $template_hash Validated template hash.
+		 * @param string $reason        Machine-readable reason recorded in the activity log.
+		 * @return bool True when the fallback payload replaced the live file.
+		 * @since NEXT
+		 */
+		public static function rollback_ccss_to_fallback( string $template_hash, string $reason = 'manual' ): bool {
+			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return false;
+				}
+				$live = self::get_ccss_file( $template_hash );
+				if ( '' === $live ) {
+					return false;
+				}
+				$filesystem = Util::init_filesystem();
+				if ( ! $filesystem ) {
+					return false;
+				}
+				$restored = Util::restore_fallback_file(
+					$filesystem,
+					static function ( string $path ): bool {
+						return self::is_ccss_path_contained( $path );
+					},
+					$live
+				);
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+						Log::add( 'WPPO critical-CSS rollback for template hash ' . $template_hash . ': ' . ( $restored ? 'restored last-good (' . $reason . ')' : 'no fallback available (' . $reason . ')' ) . '.' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( ! $restored ) {
+					return false;
+				}
+				self::invalidate_ccss_memo( $template_hash );
+				if ( function_exists( 'clearstatcache' ) ) {
+					clearstatcache( true, $live );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Describe the critical-CSS safe-rollout slot (issue #1348).
+		 *
+		 * Read-only status payload: live/staged presence with sizes and
+		 * checksums, staged-changed flag, fallback availability, plus a
+		 * computed health state (`healthy` when live serves,
+		 * `restorable` when live is broken but a fallback exists,
+		 * `degraded` otherwise). Never restores — use
+		 * {@see verify_ccss_health()} for the restoring gate. Never throws.
+		 *
+		 * @param string $template_hash Validated template hash.
+		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool, health: string} Slot description.
+		 * @since NEXT
+		 */
+		public static function get_ccss_rollout_status( string $template_hash ): array {
+			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return array(
+						'live_bytes'      => 0,
+						'live_checksum'   => '',
+						'staged'          => false,
+						'staged_bytes'    => 0,
+						'staged_checksum' => '',
+						'staged_changed'  => false,
+						'fallback'        => false,
+						'health'          => 'degraded',
+					);
+				}
+				$live = self::get_ccss_file( $template_hash );
+				if ( '' === $live ) {
+					return array(
+						'live_bytes'      => 0,
+						'live_checksum'   => '',
+						'staged'          => false,
+						'staged_bytes'    => 0,
+						'staged_checksum' => '',
+						'staged_changed'  => false,
+						'fallback'        => false,
+						'health'          => 'degraded',
+					);
+				}
+				$filesystem = Util::init_filesystem();
+				if ( ! $filesystem ) {
+					return array(
+						'live_bytes'      => 0,
+						'live_checksum'   => '',
+						'staged'          => false,
+						'staged_bytes'    => 0,
+						'staged_checksum' => '',
+						'staged_changed'  => false,
+						'fallback'        => false,
+						'health'          => 'degraded',
+					);
+				}
+				$slot           = Util::describe_rollout_slot( $filesystem, $live );
+				$slot['health'] = (int) $slot['live_bytes'] > 0 ? 'healthy' : ( (bool) $slot['fallback'] ? 'restorable' : 'degraded' );
+				return $slot;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'live_bytes'      => 0,
+					'live_checksum'   => '',
+					'staged'          => false,
+					'staged_bytes'    => 0,
+					'staged_checksum' => '',
+					'staged_changed'  => false,
+					'fallback'        => false,
+					'health'          => 'degraded',
+				);
+			}
+		}
+
+		/**
+		 * Verify critical-CSS health, auto-restoring last-good (issue #1348).
+		 *
+		 * Post-apply health gate: a missing/empty live file restores the
+		 * retained fallback automatically with reason logging; a healthy
+		 * live file reports `healthy` with no writes. Never throws.
+		 *
+		 * @param string $template_hash Validated template hash.
+		 * @return array{status: string, reason: string, bytes: int} One of healthy|restored|degraded.
+		 * @since NEXT
+		 */
+		public static function verify_ccss_health( string $template_hash ): array {
+			try {
+				$slot = self::get_ccss_rollout_status( $template_hash );
+				if ( (int) $slot['live_bytes'] > 0 ) {
+					return array(
+						'status' => 'healthy',
+						'reason' => 'live',
+						'bytes'  => (int) $slot['live_bytes'],
+					);
+				}
+				$restored = self::rollback_ccss_to_fallback( $template_hash, 'health-gate' );
+				if ( $restored ) {
+					$after = self::get_ccss_rollout_status( $template_hash );
+					return array(
+						'status' => 'restored',
+						'reason' => 'fallback',
+						'bytes'  => (int) $after['live_bytes'],
+					);
+				}
+				return array(
+					'status' => 'degraded',
+					'reason' => (bool) $slot['fallback'] ? 'restore-failed' : 'no-fallback',
+					'bytes'  => 0,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'status' => 'degraded',
+					'reason' => 'error',
+					'bytes'  => 0,
+				);
+			}
+		}
+
+		/**
+		 * Dry-run critical-CSS generation with staged preview (issue #1348).
+		 *
+		 * Runs the guarded generation pipeline with `$stage_only` so the
+		 * output lands on the staged sibling instead of going live, then
+		 * reports preview metadata. Timeouts report `timed-out` (the
+		 * timed-out run leaves live output untouched per the guard
+		 * contract). Never throws.
+		 *
+		 * @param string $template Template identifier.
+		 * @return array{staged: bool, reason: string, bytes: int, checksum: string, live_bytes: int, live_checksum: string, changed: bool, template: string} Preview metadata.
+		 * @since NEXT
+		 */
+		public static function generate_preview_for_template( string $template ): array {
+			$refused = static function ( string $reason ) use ( $template ): array {
+				return array(
+					'staged'        => false,
+					'reason'        => $reason,
+					'bytes'         => 0,
+					'checksum'      => '',
+					'live_bytes'    => 0,
+					'live_checksum' => '',
+					'changed'       => false,
+					'template'      => (string) $template,
+				);
+			};
+			try {
+				$templates = self::get_templates();
+				if ( ! is_string( $template ) || '' === $template || ! array_key_exists( $template, $templates ) ) {
+					return $refused( 'template' );
+				}
+				if ( self::is_deferral_suspended_by_js() ) {
+					return $refused( 'suspended' );
+				}
+				$template_hash = self::get_template_hash( $template );
+				$timed_out     = null;
+				$ok            = self::generate_guarded( $template_hash, $template, $timed_out, true );
+				if ( ! $ok ) {
+					return $refused( true === $timed_out ? 'timed-out' : 'generate' );
+				}
+				$slot = self::get_ccss_rollout_status( $template_hash );
+				return array(
+					'staged'        => (bool) $slot['staged'],
+					'reason'        => (bool) $slot['staged'] ? '' : 'stage',
+					'bytes'         => (int) $slot['staged_bytes'],
+					'checksum'      => (string) $slot['staged_checksum'],
+					'live_bytes'    => (int) $slot['live_bytes'],
+					'live_checksum' => (string) $slot['live_checksum'],
+					'changed'       => (bool) $slot['staged_changed'],
+					'template'      => (string) $template,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $refused( 'error' );
+			}
+		}
+
+		/**
 		 * Read the configured CCSS inline size cap in bytes.
 		 *
 		 * The single source of truth is `Util::get_default_settings()`
@@ -2360,10 +2766,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string    $template_hash Template hash to generate.
 		 * @param string    $template      Template identifier for the sample URL.
 		 * @param bool|null $timed_out     Out-param: true when the run hit the timeout budget.
+		 * @param bool      $stage_only    When true (issue #1348 dry-run), the output lands on the staged sibling instead of going live.
 		 * @return bool True on success, false on failure or timeout.
 		 * @since 2.2.0
+		 * @since NEXT Added the $stage_only dry-run flag.
 		 */
-		public static function generate_guarded( string $template_hash, string $template, ?bool &$timed_out = null ): bool {
+		public static function generate_guarded( string $template_hash, string $template, ?bool &$timed_out = null, bool $stage_only = false ): bool {
 			$timed_out = false;
 			$budget    = self::DEFAULT_CCSS_GEN_TIMEOUT;
 			$deadline  = null;
@@ -2375,7 +2783,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 				$had_file = self::ccss_exists( $template_hash );
 
-				$result = self::generate_and_store( $template_hash, $template, $deadline, $budget );
+				$result = self::generate_and_store( $template_hash, $template, $deadline, $budget, $stage_only );
 				if ( $result ) {
 					try {
 						self::clear_ccss_timeout_attempts( $template_hash );
@@ -4026,6 +4434,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						'truncated' => false,
 					);
 				}
+				// Safe-rollout slot (issue #1348): staged/health truth for
+				// the status UI. Read-only stats — never restores; the
+				// restoring gate is verify_ccss_health().
+				$statuses[ $hash ]['rollout'] = self::get_ccss_rollout_status( $hash );
 			}
 
 			return $statuses;
@@ -5784,11 +6196,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string     $template      Template identifier for the sample URL.
 		 * @param float|null $deadline      Optional absolute wall-clock deadline.
 		 * @param int|null   $budget        Optional already-resolved budget for logging (avoids a second settings read).
+		 * @param bool       $stage_only    When true (issue #1348 dry-run), commit to the staged sibling: no variant mirrors, no source-checksum baselining, live file untouched.
 		 * @return bool True on success, false on failure or timeout.
 		 * @since 2.0.0
 		 * @since 2.2.0 Time-boxed generation with fail-open timeout handling.
+		 * @since NEXT Added the $stage_only dry-run flag.
 		 */
-		private static function generate_and_store( string $template_hash, string $template, ?float $deadline = null, ?int $budget = null ): bool {
+		private static function generate_and_store( string $template_hash, string $template, ?float $deadline = null, ?int $budget = null, bool $stage_only = false ): bool {
 			if ( ! self::is_valid_template_hash( $template_hash ) ) {
 				return false;
 			}
@@ -5902,7 +6316,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			$filesystem = Util::init_filesystem();
-			$file       = self::get_ccss_file( $template_hash );
+			$live_file  = self::get_ccss_file( $template_hash );
+			// Dry-run (issue #1348): commit to the staged sibling so a
+			// bad generation can never break styling before promote.
+			$file = $stage_only && '' !== $live_file ? Util::get_staged_path_for( $live_file ) : $live_file;
+			if ( '' === $file ) {
+				self::record_generation_failure( $template_hash, $budget, $deadline );
+				return false;
+			}
 
 			// Storage bounds (issue #1347): refuse oversized/undecodable
 			// output before the atomic write so unbounded blobs never reach
@@ -5938,7 +6359,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// transient writes only — no remote fetch. An empty source (no
 			// locally-resolvable external stylesheets) stores nothing, so the
 			// probe stays a no-op and never churns.
-			if ( '' !== $source_css ) {
+			// Staged dry-runs (issue #1348) must not baseline source
+			// checksums: the staged output is a candidate, and baselining
+			// it would suppress future refresh detection for the live file.
+			if ( ! $stage_only && '' !== $source_css ) {
 				self::store_source_checksum( $template_hash, $source_css );
 				self::store_source_urls( $template_hash, $resolved_urls );
 			}
@@ -5948,7 +6372,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// this template's memo entries are invalidated — a bulk loop keeps
 			// the other templates' memo entries.
 			self::invalidate_ccss_memo( $template_hash );
-			clearstatcache( true, self::get_ccss_file( $template_hash ) );
+			clearstatcache( true, $file );
 
 			// Viewport-split variants (issue #1164): when enabled, mirror the
 			// single output to `{hash}.mobile.css` / `{hash}.desktop.css` so
@@ -5960,7 +6384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// (soft-budget, issue #1235 review): the file is whole, never
 			// partial, so it must not be routed to handle_ccss_timeout() here.
 			// Variant mirrors stay best-effort and are skipped past expiry.
-			if ( ! self::generation_expired( $deadline ) && self::is_viewport_variants_enabled() ) {
+			if ( ! $stage_only && ! self::generation_expired( $deadline ) && self::is_viewport_variants_enabled() ) {
 				try {
 					foreach ( self::VIEWPORT_VARIANTS as $variant ) {
 						$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
@@ -5972,6 +6396,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+			}
+
+			// Dry-run success (issue #1348): the staged sibling holds
+			// complete output — the live verdict, status cache, and retry
+			// state stay untouched so the preview never masquerades as a
+			// live deploy. Rollout fields (get_ccss_rollout_status())
+			// carry the staged truth to the status UI instead.
+			if ( $stage_only ) {
+				$staged_ok = false;
+				try {
+					if ( $filesystem && method_exists( $filesystem, 'exists' ) && $filesystem->exists( $file ) ) {
+						if ( method_exists( $filesystem, 'size' ) ) {
+							$staged_ok = (int) $filesystem->size( $file ) > 0;
+						} elseif ( method_exists( $filesystem, 'get_contents' ) ) {
+							$probe     = $filesystem->get_contents( $file );
+							$staged_ok = is_string( $probe ) && '' !== $probe;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$staged_ok = false;
+				}
+				if ( $staged_ok ) {
+					return true;
+				}
+				self::record_generation_failure( $template_hash, $budget, $deadline );
+				return false;
 			}
 
 			if ( self::ccss_exists( $template_hash ) ) {

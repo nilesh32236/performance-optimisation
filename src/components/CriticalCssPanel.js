@@ -70,6 +70,33 @@ const getStatusConfig = () => {
 };
 
 /**
+ * Normalize a rollout slot into a null-safe shape.
+ *
+ * Anything but a plain object (null, arrays, scalars) reads as no
+ * rollout information. Unknown health strings pass through as-is so
+ * future server states render instead of crashing.
+ *
+ * @since NEXT
+ * @param {*} raw Raw rollout value.
+ * @return {{staged: boolean, stagedChanged: boolean, stagedBytes: number|null, health: string|null, fallback: boolean}|null} Normalized rollout.
+ */
+export const normalizeRollout = ( raw ) => {
+	if ( ! raw || typeof raw !== 'object' || Array.isArray( raw ) ) {
+		return null;
+	}
+	return {
+		staged: !! raw.staged,
+		stagedChanged: !! raw.staged_changed,
+		stagedBytes: Number.isFinite( raw.staged_bytes )
+			? raw.staged_bytes
+			: null,
+		health:
+			typeof raw.health === 'string' && raw.health ? raw.health : null,
+		fallback: !! raw.fallback,
+	};
+};
+
+/**
  * Normalize a status entry into a null-safe shape.
  *
  * Malformed payloads (null, numbers, missing status) fall back to 'none'
@@ -78,7 +105,7 @@ const getStatusConfig = () => {
  * @since NEXT
  * @param {*} hash  Status key.
  * @param {*} entry Raw entry value.
- * @return {{statusKey: string, label: string, size: number|null, truncated: boolean}} Normalized entry.
+ * @return {{statusKey: string, label: string, size: number|null, truncated: boolean, rollout: *}} Normalized entry.
  */
 export const normalizeCcssEntry = ( hash, entry ) => {
 	const safeHash = typeof hash === 'string' ? hash : String( hash ?? '' );
@@ -90,6 +117,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 			label: fallbackLabel,
 			size: null,
 			truncated: false,
+			rollout: null,
 		};
 	}
 	if ( ! entry || typeof entry !== 'object' ) {
@@ -98,6 +126,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 			label: fallbackLabel,
 			size: null,
 			truncated: false,
+			rollout: null,
 		};
 	}
 	return {
@@ -111,6 +140,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 				: fallbackLabel,
 		size: Number.isFinite( entry.size ) ? entry.size : null,
 		truncated: !! entry.truncated,
+		rollout: normalizeRollout( entry.rollout ),
 	};
 };
 
@@ -138,6 +168,9 @@ const CriticalCssPanel = ( {
 	status = {},
 	onRegenerate,
 	onRegenerateSingle,
+	onPreviewTemplate,
+	onPromoteTemplate,
+	onRollbackTemplate,
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
 	// Audit #1420: memoized Map so entries.map does not rebuild 8 objects
@@ -150,6 +183,10 @@ const CriticalCssPanel = ( {
 		return configCache.get( statusKey );
 	};
 	const [ singleBusy, setSingleBusy ] = useState( null );
+	// Safe-rollout action in flight ({ hash, action } while a
+	// preview/promote/rollback request runs). Kept separate from
+	// singleBusy so regenerate spinners never collide with rollout ones.
+	const [ rolloutBusy, setRolloutBusy ] = useState( null );
 	// No local useNotice/NoticeBanner here (issue #1274 review): the
 	// parent (FileOptimization via withNotification) is the single
 	// feedback owner; this panel logs locally and rethrows.
@@ -193,6 +230,30 @@ const CriticalCssPanel = ( {
 			setSingleBusy( null );
 		}
 	};
+
+	const handleRolloutAction = async ( hash, label, action, handler ) => {
+		if ( typeof handler !== 'function' ) {
+			return;
+		}
+		setRolloutBusy( { hash, action } );
+		try {
+			await handler( hash );
+		} catch ( err ) {
+			// Same single-owner feedback as single regenerate: the
+			// parent notifies and owns the banner; log locally here.
+			console.error(
+				`Failed to ${ action } critical CSS for template`,
+				getErrorLogMessage( err )
+			);
+		} finally {
+			setRolloutBusy( null );
+		}
+	};
+
+	const isRolloutBusy = ( hash, action ) =>
+		!! rolloutBusy &&
+		rolloutBusy.hash === hash &&
+		rolloutBusy.action === action;
 
 	const entries = useMemo( () => {
 		if (
@@ -265,6 +326,51 @@ const CriticalCssPanel = ( {
 									/>
 									{ config.label }
 								</span>
+								{ normalized.rollout &&
+									normalized.rollout.staged && (
+										<span className="wppo-badge wppo-badge--info">
+											<FontAwesomeIcon
+												icon={ faClock }
+												aria-hidden="true"
+											/>
+											{ normalized.rollout.stagedChanged
+												? __(
+														'Staged preview — differs from live',
+														'performance-optimisation'
+												  )
+												: __(
+														'Staged preview — matches live',
+														'performance-optimisation'
+												  ) }
+										</span>
+									) }
+								{ normalized.rollout &&
+									normalized.rollout.health &&
+									'healthy' !== normalized.rollout.health && (
+										<span
+											className={ `wppo-badge ${
+												'restorable' ===
+												normalized.rollout.health
+													? 'wppo-badge--warning'
+													: 'wppo-badge--error'
+											}` }
+										>
+											<FontAwesomeIcon
+												icon={ faExclamationTriangle }
+												aria-hidden="true"
+											/>
+											{ 'restorable' ===
+											normalized.rollout.health
+												? __(
+														'Restorable from last-good',
+														'performance-optimisation'
+												  )
+												: __(
+														'Degraded — no fallback',
+														'performance-optimisation'
+												  ) }
+										</span>
+									) }
 								{ onRegenerateSingle && (
 									<button
 										className="wppo-button wppo-button--secondary wppo-button--small"
@@ -288,6 +394,103 @@ const CriticalCssPanel = ( {
 										) }
 									</button>
 								) }
+								{ onPreviewTemplate && (
+									<button
+										className="wppo-button wppo-button--secondary wppo-button--small"
+										type="button"
+										disabled={ isRolloutBusy(
+											hash,
+											'preview'
+										) }
+										aria-label={ sprintf(
+											/* translators: %s: template label. */
+											__(
+												'Preview %s',
+												'performance-optimisation'
+											),
+											label
+										) }
+										onClick={ () =>
+											handleRolloutAction(
+												hash,
+												label,
+												'preview',
+												onPreviewTemplate
+											)
+										}
+									>
+										{ __(
+											'Preview',
+											'performance-optimisation'
+										) }
+									</button>
+								) }
+								{ onPromoteTemplate &&
+									normalized.rollout &&
+									normalized.rollout.staged && (
+										<button
+											className="wppo-button wppo-button--secondary wppo-button--small"
+											type="button"
+											disabled={ isRolloutBusy(
+												hash,
+												'promote'
+											) }
+											aria-label={ sprintf(
+												/* translators: %s: template label. */
+												__(
+													'Promote staged %s',
+													'performance-optimisation'
+												),
+												label
+											) }
+											onClick={ () =>
+												handleRolloutAction(
+													hash,
+													label,
+													'promote',
+													onPromoteTemplate
+												)
+											}
+										>
+											{ __(
+												'Promote staged',
+												'performance-optimisation'
+											) }
+										</button>
+									) }
+								{ onRollbackTemplate &&
+									normalized.rollout &&
+									normalized.rollout.fallback && (
+										<button
+											className="wppo-button wppo-button--secondary wppo-button--small"
+											type="button"
+											disabled={ isRolloutBusy(
+												hash,
+												'rollback'
+											) }
+											aria-label={ sprintf(
+												/* translators: %s: template label. */
+												__(
+													'Restore last-good %s',
+													'performance-optimisation'
+												),
+												label
+											) }
+											onClick={ () =>
+												handleRolloutAction(
+													hash,
+													label,
+													'rollback',
+													onRollbackTemplate
+												)
+											}
+										>
+											{ __(
+												'Restore last-good',
+												'performance-optimisation'
+											) }
+										</button>
+									) }
 							</div>
 						);
 					} ) }

@@ -7736,7 +7736,314 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Global per-day throttle for purge-fallback serve logging.
+		 * Map a derived CSS/JS file to its sibling staged-rollout path.
+		 *
+		 * Safe-rollout slot behind `Used_CSS` / `Critical_CSS` staging
+		 * (issue #1348): `used-css.css` maps to `used-css.staged.css` in
+		 * the same directory (and `used-css.mobile.css` to
+		 * `used-css.mobile.staged.css`, `{hash}.css` to
+		 * `{hash}.staged.css`) so staged output never collides with the
+		 * live file, the purge fallback, or the checksum sidecar.
+		 * Staged/fallback inputs map to `''` (loop guard: staging a
+		 * staged file or a fallback must never nest). Compressed
+		 * (`.gz`/`.br`) inputs map to `''` so gzip bytes can never be
+		 * staged as servable CSS. Guards mirror
+		 * {@see get_purge_fallback_path_for()}; downstream containment
+		 * stays authoritative. Never throws.
+		 *
+		 * @param string $file_path Absolute live derived-file path.
+		 * @return string Sibling staged path, or '' when not applicable.
+		 *
+		 * @since NEXT
+		 */
+		public static function get_staged_path_for( string $file_path ): string {
+			try {
+				if ( '' === $file_path || false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
+					return '';
+				}
+				$probe = rawurldecode( $file_path );
+				if ( false !== strpos( $probe, "\0" ) || false !== strpos( $probe, '..' ) ) {
+					return '';
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$normalized = wp_normalize_path( $file_path );
+				} else {
+					$normalized = str_replace( '\\', '/', $file_path );
+				}
+				if ( '' === $normalized ) {
+					return '';
+				}
+				if ( preg_match( '#^[a-zA-Z]:[\\\\/]#', $normalized ) || 0 === strpos( $normalized, '//' ) || 0 === strpos( $normalized, '\\\\' ) ) {
+					return '';
+				}
+				// Refuse compressed siblings outright: staging `index.css.gz`
+				// would treat gzip bytes as candidate CSS.
+				if ( preg_match( '/\.(?:gz|br)$/i', $normalized ) ) {
+					return '';
+				}
+				$base     = $normalized;
+				$basename = strtolower( (string) preg_replace( '#^.*/#', '', $base ) );
+				if (
+					'fallback.css' === $basename || 'fallback.js' === $basename
+					|| 'fallback.mobile.css' === $basename || 'fallback.desktop.css' === $basename
+					|| 'fallback.mobile.js' === $basename || 'fallback.desktop.js' === $basename
+					|| false !== strpos( $basename, '.staged.' )
+				) {
+					return '';
+				}
+				$variant = '';
+				if ( preg_match( '/\.(mobile|desktop)\.(css|js)$/', $basename, $m ) ) {
+					$variant = '.' . strtolower( $m[1] );
+				}
+				$ext = strtolower( (string) pathinfo( $base, PATHINFO_EXTENSION ) );
+				if ( 'css' !== $ext && 'js' !== $ext ) {
+					return '';
+				}
+				$dir = (string) preg_replace( '#/[^/]*$#', '', $base );
+				// No slash means no directory sibling to stage into
+				// (the replace above returns its input unchanged).
+				if ( '' === $dir || $dir === $base ) {
+					return '';
+				}
+				$stem = (string) preg_replace( '/\.(?:(?:mobile|desktop)\.)?(?:css|js)$/i', '', $basename );
+				if ( '' === $stem ) {
+					return '';
+				}
+				return $dir . '/' . $stem . $variant . '.staged.' . $ext;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Promote a staged-rollout file over its live sibling (issue #1348).
+		 *
+		 * Order is deliberate: the staged payload must exist non-empty,
+		 * both paths must pass containment, the current live file is
+		 * retained as the last-good purge fallback first (so a bad
+		 * promote stays reversible), and only then is the staged file
+		 * moved over the live path (`move()` when available, copy+delete
+		 * otherwise). A missing/empty staged file is a no-op `false` —
+		 * never a live-file delete. Never throws.
+		 *
+		 * @since NEXT
+		 * @param object   $fs        Filesystem exposing exists()/size()/get_contents()/move()/copy()/delete().
+		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
+		 * @param string   $live_path Absolute live derived-file path.
+		 * @return bool True when the staged file replaced the live file.
+		 */
+		public static function promote_staged_file( $fs, callable $is_allowed, string $live_path ): bool {
+			try {
+				if ( ! is_object( $fs ) || '' === $live_path ) {
+					return false;
+				}
+				$staged = self::get_staged_path_for( $live_path );
+				if ( '' === $staged ) {
+					return false;
+				}
+				try {
+					if ( ! $is_allowed( $live_path ) || ! $is_allowed( $staged ) ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				if ( ! method_exists( $fs, 'exists' ) || ! $fs->exists( $staged ) ) {
+					return false;
+				}
+				// Never promote an empty stage over a good live file.
+				if ( ! self::is_purge_fallback_payload_valid( $fs, $staged ) ) {
+					return false;
+				}
+				// Retain last-good first so the promote stays reversible
+				// (best-effort: retention is gated + fail-open internally).
+				self::retain_purge_fallback_file( $fs, $is_allowed, $live_path );
+				if ( method_exists( $fs, 'move' ) ) {
+					try {
+						if ( $fs->move( $staged, $live_path, true ) ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! method_exists( $fs, 'copy' ) || ! method_exists( $fs, 'delete' ) ) {
+					return false;
+				}
+				try {
+					if ( ! $fs->copy( $staged, $live_path, true ) ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				try {
+					$fs->delete( $staged );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Restore a derived file from its retained last-good fallback (issue #1348).
+		 *
+		 * Explicit-rollback + health-gate primitive: when the fallback
+		 * holds a servable payload it is copied over the live path
+		 * (the fallback copy is kept so repeated restores stay
+		 * possible). A missing/empty fallback is a no-op `false` —
+		 * never a live-file delete. Never throws.
+		 *
+		 * @since NEXT
+		 * @param object   $fs        Filesystem exposing copy()/delete() plus the fallback-validity surface.
+		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
+		 * @param string   $live_path Absolute live derived-file path.
+		 * @return bool True when the fallback payload replaced the live file.
+		 */
+		public static function restore_fallback_file( $fs, callable $is_allowed, string $live_path ): bool {
+			try {
+				if ( ! is_object( $fs ) || '' === $live_path ) {
+					return false;
+				}
+				$fallback = self::get_purge_fallback_path_for( $live_path );
+				if ( '' === $fallback ) {
+					return false;
+				}
+				try {
+					if ( ! $is_allowed( $live_path ) || ! $is_allowed( $fallback ) ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				if ( ! self::is_purge_fallback_payload_valid( $fs, $fallback ) ) {
+					return false;
+				}
+				if ( ! method_exists( $fs, 'copy' ) ) {
+					return false;
+				}
+				try {
+					return (bool) $fs->copy( $fallback, $live_path, true );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Describe the safe-rollout slot triple for a live file (issue #1348).
+		 *
+		 * Read-only helper behind the rollout status payloads: reports
+		 * live/staged/fallback presence with byte sizes and CSS
+		 * checksums plus whether the staged payload differs from live,
+		 * so the admin UI can render preview/health state without
+		 * reading file bodies itself. Never throws.
+		 *
+		 * @since NEXT
+		 * @param object $fs        Filesystem exposing exists()/size()/get_contents().
+		 * @param string $live_path Absolute live derived-file path.
+		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool} Slot description.
+		 */
+		public static function describe_rollout_slot( $fs, string $live_path ): array {
+			$empty = array(
+				'live_bytes'      => 0,
+				'live_checksum'   => '',
+				'staged'          => false,
+				'staged_bytes'    => 0,
+				'staged_checksum' => '',
+				'staged_changed'  => false,
+				'fallback'        => false,
+			);
+			try {
+				if ( ! is_object( $fs ) || '' === $live_path ) {
+					return $empty;
+				}
+				$read_bytes                         = static function ( string $path ) use ( $fs ): array {
+					try {
+						if ( ! method_exists( $fs, 'exists' ) || ! $fs->exists( $path ) ) {
+							return array( 0, '' );
+						}
+						$size = 0;
+						if ( method_exists( $fs, 'size' ) ) {
+							try {
+								$size = (int) $fs->size( $path );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$size = 0;
+							}
+						}
+						if ( $size <= 0 && method_exists( $fs, 'get_contents' ) ) {
+							try {
+								$body = $fs->get_contents( $path );
+								$size = is_string( $body ) ? strlen( $body ) : 0;
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+							if ( $size <= 0 ) {
+								return array( 0, '' );
+							}
+							return array( $size, self::compute_css_checksum( is_string( $body ) ? $body : '' ) );
+						}
+						if ( $size <= 0 ) {
+							return array( 0, '' );
+						}
+						// Bounded checksum read: checksums are for
+						// change-detection, so cap the hashed window at
+						// 256KB instead of hashing multi-MB blobs twice.
+						$checksum = '';
+						if ( method_exists( $fs, 'get_contents' ) ) {
+							try {
+								$body = $fs->get_contents( $path );
+								if ( is_string( $body ) && '' !== $body ) {
+									$checksum = self::compute_css_checksum( strlen( $body ) > 262144 ? substr( $body, 0, 262144 ) : $body );
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						return array( $size, $checksum );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return array( 0, '' );
+					}
+				};
+				list( $live_bytes, $live_checksum ) = $read_bytes( $live_path );
+				$empty['live_bytes']                = $live_bytes;
+				$empty['live_checksum']             = $live_checksum;
+				$staged                             = self::get_staged_path_for( $live_path );
+				if ( '' !== $staged ) {
+					list( $staged_bytes, $staged_checksum ) = $read_bytes( $staged );
+					if ( $staged_bytes > 0 ) {
+						$empty['staged']          = true;
+						$empty['staged_bytes']    = $staged_bytes;
+						$empty['staged_checksum'] = $staged_checksum;
+						$empty['staged_changed']  = '' === $live_checksum || ( '' !== $staged_checksum && ! hash_equals( $live_checksum, $staged_checksum ) );
+					}
+				}
+				$fallback = self::get_purge_fallback_path_for( $live_path );
+				if ( '' !== $fallback ) {
+					$empty['fallback'] = self::is_purge_fallback_payload_valid( $fs, $fallback );
+				}
+				return $empty;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $empty;
+			}
+		}
+
+		/**
 		 *
 		 * A single blog-prefixed transient (`wppo_purge_fallback_served`)
 		 * gates all fallback-serve log rows (both Cache and used-CSS share
