@@ -1587,31 +1587,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Home URL for local-path mapping (no-arg form of Util::cached_home_url()).
 		 *
 		 * Mirrored from `Util::cached_home_url()` by design (decoupling — the
-		 * home-URL memo stays owned by `Util`); keep in sync. Intentionally
-		 * unmemoized: `home_url()` resolves via the per-request option cache
-		 * in core, so values match the memoized owner on every stable stub
-		 * while this class carries no new state.
+		 * home-URL memo stays owned by `Util`); keep in sync. Blog-keyed memo
+		 * preserves the original per-request caching: `get_local_path()` runs
+		 * once per enqueued asset on asset-heavy pages, and uncached `home_url()`
+		 * calls there would re-run hook resolution per asset (see .jules/bolt.md).
+		 * Bypassed whenever the `home_url` filter is present (context-dependent
+		 * output must never be memoized).
+		 *
+		 * @since NEXT
+		 * @var array<int, string>
+		 */
+		private static array $home_url_cache = array();
+
+		/**
+		 * Resolve the untrailed home URL with a per-blog memo.
 		 *
 		 * @since NEXT
 		 * @return string Untrailed home URL, or '' when unavailable.
 		 */
 		private static function home_url_for_local_path(): string {
 			if ( function_exists( 'has_filter' ) && false !== has_filter( 'home_url' ) ) {
-				return untrailingslashit( home_url() );
+				return function_exists( 'home_url' ) ? untrailingslashit( (string) home_url() ) : '';
 			}
 			if ( ! function_exists( 'home_url' ) ) {
 				return '';
 			}
-			try {
-				$home = home_url();
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
+			$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( ! isset( self::$home_url_cache[ $blog_id ] ) ) {
+				try {
+					$home = home_url();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return '';
+				}
+				if ( ! is_string( $home ) || '' === $home ) {
+					return '';
+				}
+				self::$home_url_cache[ $blog_id ] = untrailingslashit( $home );
 			}
-			if ( ! is_string( $home ) || '' === $home ) {
-				return '';
-			}
-			return untrailingslashit( $home );
+			return self::$home_url_cache[ $blog_id ];
+		}
+
+		/**
+		 * Reset the home-URL memo (testing isolation / switch_to_blog).
+		 *
+		 * Called from `Util::reset_cached_home_urls()` so the existing
+		 * test-isolation entry point keeps clearing per-blog state.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_home_url_cache(): void {
+			self::$home_url_cache = array();
 		}
 
 		/**

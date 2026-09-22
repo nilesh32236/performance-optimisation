@@ -39,8 +39,8 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( $url, $component = -1 ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Emulates wp_parse_url() in tests; native int-component support.
 				if ( -1 === $component ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Emulates wp_parse_url() in tests; native int-component support.
 					$result = parse_url( (string) $url );
 					return false === $result ? false : $result;
 				}
@@ -187,7 +187,7 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * realpath resolver keeps the lexical remainder for not-yet-existing paths.
+	 * Realpath resolver keeps the lexical remainder for not-yet-existing paths.
 	 */
 	public function test_resolve_realpath_vectors(): void {
 		$this->stub_url_helpers();
@@ -384,7 +384,7 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( Filesystem::atomic_file_put_contents( $fs, '', 'body{}' ) );
 		$this->assertFalse( Filesystem::atomic_file_put_contents( new \stdClass(), '/tmp/atomic.css', 'body{}' ) );
 
-		$failing_move = new WPPO_Filesystem_Boundary_FS_Mock();
+		$failing_move              = new WPPO_Filesystem_Boundary_FS_Mock();
 		$failing_move->move_result = false;
 		$this->assertFalse( Filesystem::atomic_file_put_contents( $failing_move, '/tmp/atomic.css', 'body{}' ) );
 		$this->assertArrayNotHasKey( '/tmp/atomic.css', $failing_move->store );
@@ -409,9 +409,9 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 		$valid = "<?php\ndefine( 'DB_NAME', 'test' );\n";
 
 		// Success path.
-		$fs = new WPPO_Filesystem_Boundary_FS_Mock();
+		$fs                              = new WPPO_Filesystem_Boundary_FS_Mock();
 		$fs->store['/tmp/wp-config.php'] = $valid;
-		$new = $valid . "define( 'WP_CACHE', true );\n";
+		$new                             = $valid . "define( 'WP_CACHE', true );\n";
 		$this->assertTrue(
 			Filesystem::atomic_write_php_verified(
 				$fs,
@@ -426,13 +426,13 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayNotHasKey( '/tmp/wp-config.php.wppo-bak', $fs->store );
 
 		// Broken syntax leaves the live file untouched.
-		$fs2 = new WPPO_Filesystem_Boundary_FS_Mock();
+		$fs2                              = new WPPO_Filesystem_Boundary_FS_Mock();
 		$fs2->store['/tmp/wp-config.php'] = $valid;
 		$this->assertFalse( Filesystem::atomic_write_php_verified( $fs2, '/tmp/wp-config.php', "<?php if ( true ) { broken\n" ) );
 		$this->assertSame( $valid, $fs2->store['/tmp/wp-config.php'] );
 
 		// Failing caller expectation leaves the live file untouched.
-		$fs3 = new WPPO_Filesystem_Boundary_FS_Mock();
+		$fs3                              = new WPPO_Filesystem_Boundary_FS_Mock();
 		$fs3->store['/tmp/wp-config.php'] = $valid;
 		$this->assertFalse(
 			Filesystem::atomic_write_php_verified(
@@ -453,7 +453,7 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * htaccess isolation guard vectors.
+	 * Htaccess isolation guard vectors.
 	 */
 	public function test_htaccess_path_allowed_vectors(): void {
 		$this->assertTrue( Filesystem::is_htaccess_path_allowed( '/tmp/wordpress/.htaccess' ) );
@@ -507,7 +507,7 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 
 		// Atomic writers with fresh identical fixtures per side.
 		$make = static function (): WPPO_Filesystem_Boundary_FS_Mock {
-			$fs = new WPPO_Filesystem_Boundary_FS_Mock();
+			$fs                      = new WPPO_Filesystem_Boundary_FS_Mock();
 			$fs->store['/tmp/p.css'] = 'a{}';
 			return $fs;
 		};
@@ -517,7 +517,7 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 		);
 		$valid = "<?php\ndefine( 'X', 1 );\n";
 		$mkphp = static function () use ( $valid ): WPPO_Filesystem_Boundary_FS_Mock {
-			$fs = new WPPO_Filesystem_Boundary_FS_Mock();
+			$fs                      = new WPPO_Filesystem_Boundary_FS_Mock();
 			$fs->store['/tmp/w.php'] = $valid;
 			return $fs;
 		};
@@ -662,6 +662,7 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 	}
 }
 
+// phpcs:disable Generic.Files.OneObjectStructurePerFile -- Test fixture co-located by convention.
 /**
  * In-memory WP_Filesystem-shaped mock for the boundary tests.
  *
@@ -705,7 +706,7 @@ class WPPO_Filesystem_Boundary_FS_Mock {
 	 * @param string $path Path.
 	 * @return bool
 	 */
-	public function is_dir( $path ): bool {
+	public function is_dir( $path ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		return false;
 	}
 
@@ -716,7 +717,7 @@ class WPPO_Filesystem_Boundary_FS_Mock {
 	 * @param int    $chmod Mode.
 	 * @return bool
 	 */
-	public function mkdir( $path, $chmod = 0755 ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function mkdir( $path, $chmod = 0755 ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		return true;
 	}
 
@@ -738,7 +739,7 @@ class WPPO_Filesystem_Boundary_FS_Mock {
 	 * @param int    $chmod Mode.
 	 * @return bool
 	 */
-	public function put_contents( $path, $contents, $chmod = 0644 ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function put_contents( $path, $contents, $chmod = 0644 ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		if ( ! $this->put_result ) {
 			return false;
 		}
@@ -754,7 +755,7 @@ class WPPO_Filesystem_Boundary_FS_Mock {
 	 * @param bool   $overwrite Overwrite.
 	 * @return bool
 	 */
-	public function move( $from, $to, $overwrite = false ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function move( $from, $to, $overwrite = false ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		if ( ! $this->move_result || ! array_key_exists( $from, $this->store ) ) {
 			return false;
 		}
@@ -771,7 +772,7 @@ class WPPO_Filesystem_Boundary_FS_Mock {
 	 * @param bool   $overwrite Overwrite.
 	 * @return bool
 	 */
-	public function copy( $from, $to, $overwrite = false ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function copy( $from, $to, $overwrite = false ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		if ( ! array_key_exists( $from, $this->store ) ) {
 			return false;
 		}

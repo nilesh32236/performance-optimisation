@@ -2122,6 +2122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			self::$home_url_cache       = array();
 			self::$canonical_host_cache = array();
 			Filesystem::reset_normalized_host_cache();
+			Filesystem::reset_home_url_cache();
 			self::$same_site_home_host = array();
 		}
 
