@@ -2282,6 +2282,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function clear_settings_cache( $blog_id = null ): void {
 			Settings_Store::clear_settings_cache( $blog_id );
+			self::clear_purge_fallback_memo( $blog_id );
+		}
+
+		/**
+		 * Clear the purge-fallback gate memo (e.g. on settings delete).
+		 *
+		 * The gate is derived from `wppo_settings` (`file_optimisation.purgeFallbackEnabled`)
+		 * but its memo lives here, not in {@see \PerformanceOptimise\Inc\Settings_Store}
+		 * (dependency direction: features → Settings_Store → WP core). The
+		 * `delete_option_wppo_settings` hook is owned by Settings_Store for the
+		 * settings memo; this method is hooked to the same action so the
+		 * pre-extraction behavior (single delete callback clearing both memos)
+		 * is preserved without the store referencing this class.
+		 *
+		 * @since NEXT
+		 * @param mixed $blog_id Optional blog ID to clear. Non-int (e.g. the option-name arg passed by the delete hook) clears all.
+		 * @return void
+		 */
+		public static function clear_purge_fallback_memo( $blog_id = null ): void {
 			if ( null !== $blog_id && is_int( $blog_id ) ) {
 				unset( self::$purge_fallback_memo[ (int) $blog_id ] );
 			} else {
@@ -2342,7 +2361,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * The option hooks (`update/add/delete_option_wppo_settings`) are owned
 		 * by {@see \PerformanceOptimise\Inc\Settings_Store}; the `switch_blog`
 		 * hook stays here because its callback also clears the permalink and
-		 * callback-secret memos that live in this class.
+		 * callback-secret memos that live in this class. The delete hook is
+		 * additionally registered here for {@see self::clear_purge_fallback_memo()}
+		 * so the pre-extraction single-callback behavior (delete clears both
+		 * the settings memo and the purge-fallback gate memo) is preserved.
 		 *
 		 * @since 2.0.0
 		 * @return void
@@ -2354,6 +2376,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			$hooked = true;
 			Settings_Store::register_settings_cache_hooks();
+			add_action( 'delete_option_wppo_settings', array( self::class, 'clear_purge_fallback_memo' ) );
 			add_action( 'switch_blog', array( self::class, 'on_switch_blog' ), 10, 2 );
 		}
 
