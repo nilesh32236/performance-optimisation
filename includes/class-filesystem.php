@@ -13,8 +13,11 @@
  * Minimal WordPress APIs only: `wp_normalize_path()`, `WP_Filesystem()`,
  * `wp_mkdir_p()` (via callers), `home_url()`, `wp_upload_dir()`, plus the
  * `wppo_minify_allowed_roots` / `wppo_allow_php_lint` filters where already
- * used. Depends on nothing else in the plugin (no cycles, no new state — the
- * normalized-host memo moved here with its owner).
+ * used. Cross-plugin calls are limited to `Util::get_settings()`,
+ * `Util::transient_key()` and `Util::compute_css_checksum()` (REF-012 slot
+ * helpers) with a fail-open `Log` guard in `log_css_fallback()`; `Util`
+ * keeps one-line facade proxies back into `Filesystem`, resolved at call
+ * time via the spl autoloader so there is no load-time cycle.
  *
  * Rollout/purge-fallback slot lifecycle (REF-012): file-slot ownership
  * (stage/promote/rollback/verify) lives here now, moved verbatim from `Util`
@@ -38,7 +41,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 	 *
 	 * Static filesystem boundary. Depends only on the minimal WordPress
 	 * APIs required to preserve the existing implementation verbatim
-	 * (see file docblock). Depends on nothing else in the plugin.
+	 * (see file docblock) plus the `Util` settings/transient/checksum
+	 * helpers for the REF-012 slot lifecycle (`Log` guarded fail-open).
+	 * `Util` proxies back at call time only (autoloader, no load-time
+	 * cycle).
 	 *
 	 * @since NEXT
 	 */
