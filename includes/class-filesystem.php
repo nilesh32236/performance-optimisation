@@ -13,16 +13,19 @@
  * Minimal WordPress APIs only: `wp_normalize_path()`, `WP_Filesystem()`,
  * `wp_mkdir_p()` (via callers), `home_url()`, `wp_upload_dir()`, plus the
  * `wppo_minify_allowed_roots` / `wppo_allow_php_lint` filters where already
- * used. Depends on nothing else in the plugin (no cycles, no new state — the
- * normalized-host memo moved here with its owner).
+ * used. Cross-plugin calls are limited to `Util::get_settings()`,
+ * `Util::transient_key()` and `Util::compute_css_checksum()` (REF-012 slot
+ * helpers) with a fail-open `Log` guard in `log_css_fallback()` plus
+ * guarded `sanitize_key()` / `__()` / `get_transient()` / `set_transient()`
+ * (`DAY_IN_SECONDS` with an 86400 fallback); `Util`
+ * keeps one-line facade proxies back into `Filesystem`, resolved at call
+ * time via the spl autoloader so there is no load-time cycle.
  *
- * Deliberately OUT (REF-012): the rollout/purge-fallback slot helpers
- * (`get_staged_path_for`, `promote_staged_file`, `restore_fallback_file`,
- * `describe_rollout_slot`, `is_purge_fallback_enabled`,
- * `get_purge_fallback_path_for`, `retain_purge_fallback_file`,
- * `is_purge_fallback_payload_valid`, `purge_fallback_should_log`,
- * `css_file_valid`, `log_css_fallback`) and the `$purge_fallback_memo` state,
- * which stay in `Util`.
+ * Rollout/purge-fallback slot lifecycle (REF-012): file-slot ownership
+ * (stage/promote/rollback/verify) lives here now, moved verbatim from `Util`
+ * (only cross-boundary `self::` calls were rewired to `Util::`). `Util::`
+ * keeps one-line facade proxies so all existing callers keep working
+ * untouched.
  *
  * @package PerformanceOptimise\Inc
  * @since   NEXT
@@ -40,7 +43,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 	 *
 	 * Static filesystem boundary. Depends only on the minimal WordPress
 	 * APIs required to preserve the existing implementation verbatim
-	 * (see file docblock). Depends on nothing else in the plugin.
+	 * (see file docblock) plus the `Util` settings/transient/checksum
+	 * helpers for the REF-012 slot lifecycle (`Log` guarded fail-open).
+	 * `Util` proxies back at call time only (autoloader, no load-time
+	 * cycle).
 	 *
 	 * @since NEXT
 	 */
@@ -71,6 +77,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @since NEXT
 		 */
 		private static array $minify_roots_cache = array();
+
+		/**
+		 * Per-request memo for the purge-fallback gate (issue #1275).
+		 *
+		 * The gate result is request-stable (settings + constant + filter);
+		 * memoizing avoids re-running get_settings + apply_filters on every
+		 * retain/serve call (3x+ per single-page clear). Cleared alongside
+		 * the settings cache so tests and option updates stay coherent.
+		 * Keyed by blog ID so switch_to_blog() cannot leak one site's
+		 * decision into another (multisite-safe).
+		 *
+		 * Moved with its owner from `Util` (REF-012).
+		 *
+		 * @var array<int, bool>
+		 * @since NEXT
+		 */
+		private static array $purge_fallback_memo = array();
+
+		/**
+		 * Clear the purge-fallback gate memo (testing isolation, settings save).
+		 *
+		 * Called from `Util::clear_settings_cache()` so the existing
+		 * settings-cache entry point keeps clearing gate state with
+		 * identical semantics: a blog ID clears that blog only,
+		 * anything else clears all.
+		 *
+		 * Moved with its owner from `Util` (REF-012).
+		 *
+		 * @param int|null $blog_id Optional blog ID to clear. Null clears all.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function clear_purge_fallback_memo( $blog_id = null ): void {
+			if ( null !== $blog_id && is_int( $blog_id ) ) {
+				unset( self::$purge_fallback_memo[ (int) $blog_id ] );
+			} else {
+				self::$purge_fallback_memo = array();
+			}
+		}
 
 		/**
 		 * Recursively creates cache directory if not exists.
@@ -1581,6 +1626,723 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
+		}
+
+		/**
+		 * Whether the post-purge last-good fallback is enabled.
+		 *
+		 * Shared gate for the purge-fallback path (retain `fallback.css` /
+		 * `fallback.js` beside derived assets on purge; serve the fallback
+		 * with a 302 on a miss under the cache path). Default off: when
+		 * disabled the legacy hard-404-on-miss behavior is kept unchanged.
+		 * The `WPPO_PURGE_FALLBACK` constant (when defined true) forces the
+		 * fallback on even when the setting is off (fail-open kill-switch).
+		 * Multisite-safe: reads the per-site `wppo_settings` option.
+		 *
+		 * Moved from `Util` (REF-012); `Util::is_purge_fallback_enabled()`
+		 * remains as a facade proxy.
+		 *
+		 * @return bool True when purge-fallback retention/serving is active.
+		 * @since NEXT
+		 */
+		public static function is_purge_fallback_enabled(): bool {
+			$bid = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( array_key_exists( $bid, self::$purge_fallback_memo ) ) {
+				return self::$purge_fallback_memo[ $bid ];
+			}
+			try {
+				if ( defined( 'WPPO_PURGE_FALLBACK' ) ) {
+					$flag = filter_var( WPPO_PURGE_FALLBACK, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					if ( true === $flag ) {
+						self::$purge_fallback_memo[ $bid ] = true;
+						return true;
+					}
+				}
+				$settings = Util::get_settings();
+				$raw      = $settings['file_optimisation']['purgeFallbackEnabled'] ?? false;
+				$enabled  = filter_var( $raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				$enabled  = true === $enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				self::$purge_fallback_memo[ $bid ] = false;
+				return false;
+			}
+			if ( ! function_exists( 'apply_filters' ) ) {
+				self::$purge_fallback_memo[ $bid ] = $enabled;
+				return $enabled;
+			}
+			try {
+				/**
+				 * Filters whether the post-purge last-good fallback is enabled.
+				 *
+				 * @since 2.2.0
+				 * @param bool $enabled Whether the purge fallback is enabled.
+				 */
+				$filtered = apply_filters( 'wppo_purge_fallback_enabled', $enabled );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				self::$purge_fallback_memo[ $bid ] = false;
+				return false;
+			}
+			$normalized                        = filter_var( $filtered, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+			self::$purge_fallback_memo[ $bid ] = true === $normalized;
+			return self::$purge_fallback_memo[ $bid ];
+		}
+
+		/**
+		 * Map a derived asset path to its sibling last-good fallback path.
+		 *
+		 * `.css` bases map to `fallback.css` and `.js` bases to `fallback.js`
+		 * in the same directory; viewport variants (`*.mobile.css`,
+		 * `*.desktop.css` from used-CSS) map to their own
+		 * `fallback.mobile.css` / `fallback.desktop.css` so a base-URL miss
+		 * can never 302-serve variant-specific CSS (and vice versa — issue
+		 * #1275 follow-up). Anything else (HTML, images, unknown) maps to
+		 * `''`. A trailing `.gz`/`.br` sibling suffix is stripped before
+		 * the extension check. Paths that already point at a fallback file
+		 * map to `''` so retention/serving can never loop onto itself.
+		 * Pure path math only — no filesystem or containment checks; callers
+		 * re-check containment via their own validators.
+		 *
+		 * Moved from `Util` (REF-012); `Util::get_purge_fallback_path_for()`
+		 * remains as a facade proxy.
+		 *
+		 * @param string $file_path Absolute derived-asset path.
+		 * @return string Sibling fallback path, or '' when not applicable.
+		 * @since NEXT
+		 */
+		public static function get_purge_fallback_path_for( string $file_path ): string {
+			try {
+				if ( '' === $file_path || false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
+					return '';
+				}
+				// Single-decode probe: reject encoded traversal/NUL that the
+				// raw check above cannot see. Downstream containment remains
+				// the authoritative guard; this only fails fast.
+				$probe = rawurldecode( $file_path );
+				if ( false !== strpos( $probe, "\0" ) || false !== strpos( $probe, '..' ) ) {
+					return '';
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$normalized = wp_normalize_path( $file_path );
+				} else {
+					$normalized = str_replace( '\\', '/', $file_path );
+				}
+				if ( '' === $normalized ) {
+					return '';
+				}
+				// Reject drive-letter and UNC shapes (mirror
+				// sanitize_cache_url_path()): absolute cache paths must be
+				// POSIX-style; downstream containment is authoritative.
+				if ( preg_match( '#^[a-zA-Z]:[\\\\/]#', $normalized ) || 0 === strpos( $normalized, '//' ) || 0 === strpos( $normalized, '\\\\' ) ) {
+					return '';
+				}
+				$base = (string) preg_replace( '/\.(?:gz|br)$/i', '', $normalized );
+				if ( '' === $base ) {
+					return '';
+				}
+				$basename = strtolower( (string) preg_replace( '#^.*/#', '', $base ) );
+				if (
+					'fallback.css' === $basename || 'fallback.js' === $basename
+					|| 'fallback.mobile.css' === $basename || 'fallback.desktop.css' === $basename
+					|| 'fallback.mobile.js' === $basename || 'fallback.desktop.js' === $basename
+				) {
+					return '';
+				}
+				$variant = '';
+				if ( preg_match( '/\.(mobile|desktop)\.css$/', $basename, $m ) ) {
+					$variant = '.' . strtolower( $m[1] );
+				} elseif ( preg_match( '/\.(mobile|desktop)\.js$/', $basename, $m ) ) {
+					$variant = '.' . strtolower( $m[1] );
+				}
+				$ext = strtolower( (string) pathinfo( $base, PATHINFO_EXTENSION ) );
+				if ( 'css' !== $ext && 'js' !== $ext ) {
+					return '';
+				}
+				$dir = (string) preg_replace( '#/[^/]*$#', '', $base );
+				// No slash means no directory sibling to stage into
+				// (the replace above returns its input unchanged).
+				if ( '' === $dir || $dir === $base ) {
+					return '';
+				}
+				return $dir . '/fallback' . $variant . '.' . $ext;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Retain a last-good fallback copy before a derived file is purged.
+		 *
+		 * Single shared implementation behind `Cache::retain_purge_fallback()`
+		 * and `Used_CSS::retain_purge_fallback()` (issue #1275 follow-up:
+		 * the two copies had already diverged, so all retain fixes land
+		 * here once). Order is deliberate: cheap pure-path reject first
+		 * (non CSS/JS inputs skip containment stats entirely), then
+		 * containment of base + fallback, then a cheap `size()` guard with
+		 * a content-probe fallback only when the size is unknown — the
+		 * `copy()` fast path never pays a full read. Compressed (`.gz`/`.br`)
+		 * inputs are refused so gzip bytes can never poison `fallback.css`.
+		 * Writes prefer atomic + `FS_CHMOD_FILE`. Never throws.
+		 *
+		 * Moved from `Util` (REF-012); `Util::retain_purge_fallback_file()`
+		 * remains as a facade proxy.
+		 *
+		 * @param object   $fs         Filesystem exposing exists()/size()/copy()/get_contents()/put_contents().
+		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
+		 * @param string   $file_path  The derived file about to be deleted.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function retain_purge_fallback_file( $fs, callable $is_allowed, string $file_path ): void {
+			try {
+				if ( ! self::is_purge_fallback_enabled() ) {
+					return;
+				}
+				if ( '' === $file_path ) {
+					return;
+				}
+				// Refuse compressed siblings outright: the mapper strips the
+				// suffix, so retaining `index.css.gz` would copy gzip bytes
+				// onto `fallback.css`.
+				if ( preg_match( '/\.(?:gz|br)$/i', $file_path ) ) {
+					return;
+				}
+				// Cheap pure-path reject before any containment stat.
+				$fallback = self::get_purge_fallback_path_for( $file_path );
+				if ( '' === $fallback ) {
+					return;
+				}
+				try {
+					if ( ! $is_allowed( $file_path ) || ! $is_allowed( $fallback ) ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return;
+				}
+				if ( ! is_object( $fs ) || ! method_exists( $fs, 'exists' ) || ! $fs->exists( $file_path ) ) {
+					return;
+				}
+				if ( method_exists( $fs, 'size' ) ) {
+					try {
+						$size = $fs->size( $file_path );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$size = null;
+					}
+					if ( false === $size || null === $size ) {
+						// Stat failure (WP_Filesystem::size() signals via
+						// false): probe non-emptiness so transient stat
+						// failure neither drops last-good retention nor
+						// lets an empty base overwrite a good fallback.
+						if ( method_exists( $fs, 'get_contents' ) ) {
+							try {
+								$probe = $fs->get_contents( $file_path );
+							} catch ( \Throwable $ignored ) {
+								unset( $ignored );
+								$probe = null;
+							}
+							if ( ! is_string( $probe ) || '' === $probe ) {
+								return;
+							}
+						}
+					} elseif ( (int) $size <= 0 ) {
+						return;
+					}
+				}
+				if ( method_exists( $fs, 'copy' ) ) {
+					try {
+						$fs->copy( $file_path, $fallback, true );
+						return;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! method_exists( $fs, 'get_contents' ) || ! method_exists( $fs, 'put_contents' ) ) {
+					return;
+				}
+				$contents = $fs->get_contents( $file_path );
+				if ( ! is_string( $contents ) || '' === $contents ) {
+					return;
+				}
+				if ( method_exists( self::class, 'atomic_file_put_contents' ) ) {
+					self::atomic_file_put_contents( $fs, $fallback, $contents );
+					return;
+				}
+				$fs->put_contents( $fallback, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Whether a retained fallback file holds a servable payload.
+		 *
+		 * Shared validator behind the purge-fallback resolvers: prefers the
+		 * cheap `size() > 0` stat and reads the body only when `size()` is
+		 * unavailable, so a fallback hit never pays a full-file read it can
+		 * avoid. Never throws.
+		 *
+		 * Moved from `Util` (REF-012);
+		 * `Util::is_purge_fallback_payload_valid()` remains as a facade proxy.
+		 *
+		 * @param object $fs       Filesystem exposing size()/get_contents().
+		 * @param string $fallback Absolute fallback path.
+		 * @return bool True when the fallback exists with non-empty content.
+		 * @since NEXT
+		 */
+		public static function is_purge_fallback_payload_valid( $fs, string $fallback ): bool {
+			try {
+				if ( ! is_object( $fs ) || '' === $fallback ) {
+					return false;
+				}
+				if ( method_exists( $fs, 'size' ) ) {
+					try {
+						return (int) $fs->size( $fallback ) > 0;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				}
+				if ( method_exists( $fs, 'get_contents' ) ) {
+					try {
+						$contents = $fs->get_contents( $fallback );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+					return is_string( $contents ) && '' !== $contents;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
+		 * Map a derived CSS/JS file to its sibling staged-rollout path.
+		 *
+		 * Safe-rollout slot behind `Used_CSS` / `Critical_CSS` staging
+		 * (issue #1348): `used-css.css` maps to `used-css.staged.css` in
+		 * the same directory (and `used-css.mobile.css` to
+		 * `used-css.mobile.staged.css`, `{hash}.css` to
+		 * `{hash}.staged.css`) so staged output never collides with the
+		 * live file, the purge fallback, or the checksum sidecar.
+		 * Staged/fallback inputs map to `''` (loop guard: staging a
+		 * staged file or a fallback must never nest). Compressed
+		 * (`.gz`/`.br`) inputs map to `''` so gzip bytes can never be
+		 * staged as servable CSS. Guards mirror
+		 * {@see get_purge_fallback_path_for()}; downstream containment
+		 * stays authoritative. Never throws.
+		 *
+		 * Moved from `Util` (REF-012); `Util::get_staged_path_for()`
+		 * remains as a facade proxy.
+		 *
+		 * @param string $file_path Absolute live derived-file path.
+		 * @return string Sibling staged path, or '' when not applicable.
+		 * @since NEXT
+		 */
+		public static function get_staged_path_for( string $file_path ): string {
+			try {
+				if ( '' === $file_path || false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
+					return '';
+				}
+				$probe = rawurldecode( $file_path );
+				if ( false !== strpos( $probe, "\0" ) || false !== strpos( $probe, '..' ) ) {
+					return '';
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$normalized = wp_normalize_path( $file_path );
+				} else {
+					$normalized = str_replace( '\\', '/', $file_path );
+				}
+				if ( '' === $normalized ) {
+					return '';
+				}
+				if ( preg_match( '#^[a-zA-Z]:[\\\\/]#', $normalized ) || 0 === strpos( $normalized, '//' ) || 0 === strpos( $normalized, '\\\\' ) ) {
+					return '';
+				}
+				// Refuse compressed siblings outright: staging `index.css.gz`
+				// would treat gzip bytes as candidate CSS.
+				if ( preg_match( '/\.(?:gz|br)$/i', $normalized ) ) {
+					return '';
+				}
+				$base     = $normalized;
+				$basename = strtolower( (string) preg_replace( '#^.*/#', '', $base ) );
+				if (
+					'fallback.css' === $basename || 'fallback.js' === $basename
+					|| 'fallback.mobile.css' === $basename || 'fallback.desktop.css' === $basename
+					|| 'fallback.mobile.js' === $basename || 'fallback.desktop.js' === $basename
+					|| false !== strpos( $basename, '.staged.' )
+				) {
+					return '';
+				}
+				$variant = '';
+				if ( preg_match( '/\.(mobile|desktop)\.(css|js)$/', $basename, $m ) ) {
+					$variant = '.' . strtolower( $m[1] );
+				}
+				$ext = strtolower( (string) pathinfo( $base, PATHINFO_EXTENSION ) );
+				if ( 'css' !== $ext && 'js' !== $ext ) {
+					return '';
+				}
+				$dir = (string) preg_replace( '#/[^/]*$#', '', $base );
+				// No slash means no directory sibling to stage into
+				// (the replace above returns its input unchanged).
+				if ( '' === $dir || $dir === $base ) {
+					return '';
+				}
+				$stem = (string) preg_replace( '/\.(?:(?:mobile|desktop)\.)?(?:css|js)$/i', '', $basename );
+				if ( '' === $stem ) {
+					return '';
+				}
+				return $dir . '/' . $stem . $variant . '.staged.' . $ext;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Promote a staged-rollout file over its live sibling (issue #1348).
+		 *
+		 * Order is deliberate: the staged payload must exist non-empty,
+		 * both paths must pass containment, the current live file is
+		 * retained as the last-good purge fallback first (so a bad
+		 * promote stays reversible), and only then is the staged file
+		 * moved over the live path (`move()` when available, copy+delete
+		 * otherwise). A missing/empty staged file is a no-op `false` —
+		 * never a live-file delete. Never throws.
+		 *
+		 * Moved from `Util` (REF-012); `Util::promote_staged_file()`
+		 * remains as a facade proxy.
+		 *
+		 * @param object   $fs        Filesystem exposing exists()/size()/get_contents()/move()/copy()/delete().
+		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
+		 * @param string   $live_path Absolute live derived-file path.
+		 * @return bool True when the staged file replaced the live file.
+		 * @since NEXT
+		 */
+		public static function promote_staged_file( $fs, callable $is_allowed, string $live_path ): bool {
+			try {
+				if ( ! is_object( $fs ) || '' === $live_path ) {
+					return false;
+				}
+				$staged = self::get_staged_path_for( $live_path );
+				if ( '' === $staged ) {
+					return false;
+				}
+				try {
+					if ( ! $is_allowed( $live_path ) || ! $is_allowed( $staged ) ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				if ( ! method_exists( $fs, 'exists' ) || ! $fs->exists( $staged ) ) {
+					return false;
+				}
+				// Never promote an empty stage over a good live file.
+				if ( ! self::is_purge_fallback_payload_valid( $fs, $staged ) ) {
+					return false;
+				}
+				// Retain last-good first so the promote stays reversible
+				// (best-effort: retention is gated + fail-open internally).
+				self::retain_purge_fallback_file( $fs, $is_allowed, $live_path );
+				if ( method_exists( $fs, 'move' ) ) {
+					try {
+						if ( $fs->move( $staged, $live_path, true ) ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! method_exists( $fs, 'copy' ) || ! method_exists( $fs, 'delete' ) ) {
+					return false;
+				}
+				try {
+					if ( ! $fs->copy( $staged, $live_path, true ) ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				try {
+					$fs->delete( $staged );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Restore a derived file from its retained last-good fallback (issue #1348).
+		 *
+		 * Explicit-rollback + health-gate primitive: when the fallback
+		 * holds a servable payload it is copied over the live path
+		 * (the fallback copy is kept so repeated restores stay
+		 * possible). A missing/empty fallback is a no-op `false` —
+		 * never a live-file delete. Never throws.
+		 *
+		 * Moved from `Util` (REF-012); `Util::restore_fallback_file()`
+		 * remains as a facade proxy.
+		 *
+		 * @param object   $fs        Filesystem exposing copy()/delete() plus the fallback-validity surface.
+		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
+		 * @param string   $live_path Absolute live derived-file path.
+		 * @return bool True when the fallback payload replaced the live file.
+		 * @since NEXT
+		 */
+		public static function restore_fallback_file( $fs, callable $is_allowed, string $live_path ): bool {
+			try {
+				if ( ! is_object( $fs ) || '' === $live_path ) {
+					return false;
+				}
+				$fallback = self::get_purge_fallback_path_for( $live_path );
+				if ( '' === $fallback ) {
+					return false;
+				}
+				try {
+					if ( ! $is_allowed( $live_path ) || ! $is_allowed( $fallback ) ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				if ( ! self::is_purge_fallback_payload_valid( $fs, $fallback ) ) {
+					return false;
+				}
+				if ( ! method_exists( $fs, 'copy' ) ) {
+					return false;
+				}
+				try {
+					return (bool) $fs->copy( $fallback, $live_path, true );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Describe the safe-rollout slot triple for a live file (issue #1348).
+		 *
+		 * Read-only helper behind the rollout status payloads: reports
+		 * live/staged/fallback presence with byte sizes and CSS
+		 * checksums plus whether the staged payload differs from live,
+		 * so the admin UI can render preview/health state without
+		 * reading file bodies itself. Never throws.
+		 *
+		 * Moved from `Util` (REF-012); `Util::describe_rollout_slot()`
+		 * remains as a facade proxy.
+		 *
+		 * @param object $fs        Filesystem exposing exists()/size()/get_contents().
+		 * @param string $live_path Absolute live derived-file path.
+		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool} Slot description.
+		 * @since NEXT
+		 */
+		public static function describe_rollout_slot( $fs, string $live_path ): array {
+			$empty = array(
+				'live_bytes'      => 0,
+				'live_checksum'   => '',
+				'staged'          => false,
+				'staged_bytes'    => 0,
+				'staged_checksum' => '',
+				'staged_changed'  => false,
+				'fallback'        => false,
+			);
+			try {
+				if ( ! is_object( $fs ) || '' === $live_path ) {
+					return $empty;
+				}
+				$read_bytes                         = static function ( string $path ) use ( $fs ): array {
+					try {
+						if ( ! method_exists( $fs, 'exists' ) || ! $fs->exists( $path ) ) {
+							return array( 0, '' );
+						}
+						$size = 0;
+						if ( method_exists( $fs, 'size' ) ) {
+							try {
+								$size = (int) $fs->size( $path );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$size = 0;
+							}
+						}
+						if ( $size <= 0 && method_exists( $fs, 'get_contents' ) ) {
+							try {
+								$body = $fs->get_contents( $path );
+								$size = is_string( $body ) ? strlen( $body ) : 0;
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+							if ( $size <= 0 ) {
+								return array( 0, '' );
+							}
+							return array( $size, Util::compute_css_checksum( is_string( $body ) ? $body : '' ) );
+						}
+						if ( $size <= 0 ) {
+							return array( 0, '' );
+						}
+						// Bounded checksum read: checksums are for
+						// change-detection, so cap the hashed window at
+						// 256KB instead of hashing multi-MB blobs twice.
+						$checksum = '';
+						if ( method_exists( $fs, 'get_contents' ) ) {
+							try {
+								$body = $fs->get_contents( $path );
+								if ( is_string( $body ) && '' !== $body ) {
+									$checksum = Util::compute_css_checksum( strlen( $body ) > 262144 ? substr( $body, 0, 262144 ) : $body );
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						return array( $size, $checksum );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return array( 0, '' );
+					}
+				};
+				list( $live_bytes, $live_checksum ) = $read_bytes( $live_path );
+				$empty['live_bytes']                = $live_bytes;
+				$empty['live_checksum']             = $live_checksum;
+				$staged                             = self::get_staged_path_for( $live_path );
+				if ( '' !== $staged ) {
+					list( $staged_bytes, $staged_checksum ) = $read_bytes( $staged );
+					if ( $staged_bytes > 0 ) {
+						$empty['staged']          = true;
+						$empty['staged_bytes']    = $staged_bytes;
+						$empty['staged_checksum'] = $staged_checksum;
+						$empty['staged_changed']  = '' === $live_checksum || ( '' !== $staged_checksum && ! hash_equals( $live_checksum, $staged_checksum ) );
+					}
+				}
+				$fallback = self::get_purge_fallback_path_for( $live_path );
+				if ( '' !== $fallback ) {
+					$empty['fallback'] = self::is_purge_fallback_payload_valid( $fs, $fallback );
+				}
+				return $empty;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $empty;
+			}
+		}
+
+		/**
+		 *
+		 * A single blog-prefixed transient (`wppo_purge_fallback_served`)
+		 * gates all fallback-serve log rows (both Cache and used-CSS share
+		 * it) so a post-purge miss storm writes one row per day instead of
+		 * one per directory. Returns true when the caller should log.
+		 * Fail-open: logging failures never affect serving. Never throws.
+		 *
+		 * Moved from `Util` (REF-012); `Util::purge_fallback_should_log()`
+		 * remains as a facade proxy.
+		 *
+		 * @return bool True when the caller should write its log row.
+		 * @since NEXT
+		 */
+		public static function purge_fallback_should_log(): bool {
+			try {
+				$key = Util::transient_key( 'wppo_purge_fallback_served' );
+				if ( function_exists( 'get_transient' ) && get_transient( $key ) ) {
+					return false;
+				}
+				if ( function_exists( 'set_transient' ) ) {
+					$ttl = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
+					set_transient( $key, 1, $ttl );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a generated CSS file is valid (exists, readable, non-empty).
+		 *
+		 * Shared validator for combined-CSS and used-CSS sidecar files. The stat
+		 * cache is cleared for the exact path so a file written earlier in the
+		 * same request is never judged stale.
+		 *
+		 * Moved from `Util` (REF-012); `Util::css_file_valid()` remains as
+		 * a facade proxy.
+		 *
+		 * @param string $path Absolute path to the CSS file.
+		 * @return bool True when the file is usable.
+		 * @since NEXT
+		 */
+		public static function css_file_valid( string $path ): bool {
+			if ( '' !== $path ) {
+				clearstatcache( true, $path );
+			}
+			return '' !== $path && is_file( $path ) && is_readable( $path ) && filesize( $path ) > 0;
+		}
+
+		/**
+		 * Log a guarded CSS fallback (combine or used-CSS) event with throttling.
+		 *
+		 * Per-reason transient throttling (DAY_IN_SECONDS) prevents the log from
+		 * growing per pageview on persistent failures, without a process-wide
+		 * static flag (so a later request failure in the same process is still
+		 * observable).
+		 *
+		 * Moved from `Util` (REF-012); `Util::log_css_fallback()` remains as
+		 * a facade proxy.
+		 *
+		 * @param string $reason  Machine-readable reason code (empty_payload, write_failure, head_match_failure, ...).
+		 * @param array  $handles Handles preserved by the fallback.
+		 * @param string $context 'combine' or 'usedcss' — selects the log-key prefix and message.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function log_css_fallback( string $reason, array $handles, string $context ): void {
+			if ( ! in_array( $context, array( 'combine', 'usedcss' ), true ) ) {
+				$context = 'combine';
+			}
+
+			if ( ! class_exists( Log::class ) ) {
+				return;
+			}
+
+			$count  = count( $handles );
+			$reason = function_exists( 'sanitize_key' ) ? sanitize_key( $reason ) : strtolower( (string) preg_replace( '/[^a-z0-9_-]/i', '', $reason ) );
+			if ( '' === $reason ) {
+				$reason = 'unknown';
+			}
+
+			$log_key = Util::transient_key( 'wppo_' . $context . '_fallback_' . md5( $reason . '|' . implode( ',', $handles ) ) );
+			if ( function_exists( 'get_transient' ) && get_transient( $log_key ) ) {
+				return;
+			}
+			if ( function_exists( 'set_transient' ) ) {
+				set_transient( $log_key, 1, defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+			}
+
+			$message = ( 'usedcss' === $context )
+				? ( function_exists( '__' ) ? /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'Used-CSS fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' ) : 'Used-CSS fallback: %1$s — preserved %2$d stylesheet(s) (served originals).' )
+				: ( function_exists( '__' ) ? /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'CSS combine fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' ) : 'CSS combine fallback: %1$s — preserved %2$d stylesheet(s) (served originals).' );
+
+			Log::add(
+				sprintf(
+					$message,
+					$reason,
+					$count
+				)
+			);
 		}
 
 		/**
