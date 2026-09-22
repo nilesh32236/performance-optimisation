@@ -12,7 +12,7 @@ baseline:
   Util_facade_proxies: 33
   Cache_Key_methods: 4
   Settings_Store_methods: 13
-  Filesystem_methods: 28
+  Filesystem_methods: 40
   Cache_methods_max: 135
   Image_Optimisation_methods_max: 165
   Critical_CSS_methods_max: 137
@@ -145,6 +145,9 @@ items:
     status: autofix-running
     github_issue: 1502
     github_pr: 1503
+    merge_commit: d76295a0
+    notes:
+      - 'Merged 2026-09-22. Util stayed 166 (11 public proxies kept). Loop iterations added two reviewed hardenings (slash-less-dir guard, fail-open WP-fn guards in log_css_fallback) — accepted as safe edge fixes, not reverted.'
     source: REF-003
     order_note: 'Processed right after REF-003 (direct continuation of its split) ahead of REF-004.'
     notes:
