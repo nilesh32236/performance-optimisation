@@ -2393,7 +2393,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		/**
 		 * Reset the home-URL memo (testing isolation / switch_to_blog).
 		 *
-		 * Called from `Util::reset_cached_home_urls()` so the existing
+		 * Called from `Url::reset_cached_home_urls()` so the existing
 		 * test-isolation entry point keeps clearing per-blog state.
 		 *
 		 * @since NEXT

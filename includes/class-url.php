@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * @since NEXT
 		 * @var array<int, string>
 		 */
-		private static $same_site_home_host = array();
+		private static array $same_site_home_host = array();
 
 		/**
 		 * Resets the home_url static cache for testing isolation.
