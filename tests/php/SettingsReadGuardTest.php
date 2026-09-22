@@ -12,7 +12,7 @@ use Brain\Monkey\Functions;
 /**
  * Fails CI when a direct get_option('wppo_settings') appears outside the
  * documented allowlist. All runtime reads must go through the per-request
- * memo in Util::get_settings().
+ * memo in Settings_Store::get_settings() (Util::get_settings() proxies there).
  *
  * @package PerformanceOptimise\Tests
  *
@@ -28,9 +28,9 @@ class SettingsReadGuardTest extends \PHPUnit\Framework\TestCase {
 	 * @var array<string, array{count: int, reason: string}>
 	 */
 	private const ALLOWLIST = array(
-		'includes/class-util.php'            => array(
+		'includes/class-settings-store.php'  => array(
 			'count'  => 1,
-			'reason' => 'Canonical read inside Util::get_settings().',
+			'reason' => 'Canonical read inside Settings_Store::get_settings() (REF-002; Util::get_settings() proxies here).',
 		),
 		'includes/class-activate.php'        => array(
 			'count'  => 1,
@@ -110,7 +110,7 @@ class SettingsReadGuardTest extends \PHPUnit\Framework\TestCase {
 
 			// Non-canonical allowlist entries must carry an inline marker so the
 			// exception stays documented at the call site.
-			if ( 'includes/class-util.php' === $file ) {
+			if ( 'includes/class-settings-store.php' === $file ) {
 				continue;
 			}
 			$source = file( dirname( __DIR__, 2 ) . '/' . $file );

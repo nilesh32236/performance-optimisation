@@ -195,6 +195,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * {@see self::restore_settings_snapshot()}. Multisite-safe: stored via
 		 * plain per-site `get_option()`/`update_option()`, never network-wide.
 		 *
+		 * Facade alias: canonical owner is {@see \PerformanceOptimise\Inc\Settings_Store::SETTINGS_SNAPSHOT_OPTION};
+		 * kept here for backward compatibility (same value, guarded by SettingsStoreTest).
+		 *
 		 * @since 2.2.0
 		 * @var string
 		 */
@@ -203,23 +206,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Read the stored prior-settings snapshot.
 		 *
+		 * Facade proxy: snapshot storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
+		 *
 		 * @since 2.2.0
 		 * @return array|null Snapshot array with `settings` + `taken_at` keys, or null when absent/malformed.
 		 */
 		public static function get_settings_snapshot(): ?array {
-			try {
-				if ( ! function_exists( 'get_option' ) ) {
-					return null;
-				}
-				$snapshot = get_option( self::SETTINGS_SNAPSHOT_OPTION, null );
-				if ( ! is_array( $snapshot ) || ! isset( $snapshot['settings'] ) || ! is_array( $snapshot['settings'] ) ) {
-					return null;
-				}
-				return $snapshot;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return null;
-			}
+			return Settings_Store::get_settings_snapshot();
 		}
 
 		/**
@@ -228,27 +221,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Fail-open: any failure returns false and must never block the
 		 * settings save that triggered it.
 		 *
+		 * Facade proxy: snapshot storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
+		 *
 		 * @since 2.2.0
 		 * @param array|null $settings Settings to snapshot (defaults to the current stored settings).
 		 * @return bool True when the snapshot was written.
 		 */
 		public static function take_settings_snapshot( ?array $settings = null ): bool {
-			try {
-				if ( ! function_exists( 'update_option' ) ) {
-					return false;
-				}
-				if ( null === $settings ) {
-					$settings = self::get_settings();
-				}
-				$payload = array(
-					'settings' => $settings,
-					'taken_at' => function_exists( 'time' ) ? time() : 0,
-				);
-				return (bool) update_option( self::SETTINGS_SNAPSHOT_OPTION, $payload, false );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return Settings_Store::take_settings_snapshot( $settings );
 		}
 
 		/**
@@ -257,39 +237,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Fail-open: snapshot-restore failure leaves the current settings
 		 * intact and returns null; never fatal.
 		 *
+		 * Facade proxy: snapshot storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
+		 *
 		 * @since 2.2.0
 		 * @return array|null The restored settings array, or null when no valid snapshot exists or the write failed.
 		 */
 		public static function restore_settings_snapshot(): ?array {
-			try {
-				$snapshot = self::get_settings_snapshot();
-				if ( null === $snapshot ) {
-					return null;
-				}
-				if ( ! function_exists( 'update_option' ) ) {
-					return null;
-				}
-				$restored = $snapshot['settings'];
-				// The memo holds the pre-restore DB state (kept fresh for
-				// same-request writes by the update_option_wppo_settings
-				// hook), so update_option()'s ambiguous false return can be
-				// disambiguated without a direct get_option() read: false
-				// with identical values means "unchanged" (success), false
-				// with differing values means the write failed.
-				$before  = self::get_settings();
-				$updated = self::save_settings( $restored );
-				self::set_settings_cache( $restored );
-				if ( ! $updated && $before !== $restored ) {
-					// Write failed: roll the memo back so it keeps
-					// describing the intact current settings (fail-open).
-					self::set_settings_cache( $before );
-					return null;
-				}
-				return $restored;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return null;
-			}
+			return Settings_Store::restore_settings_snapshot();
 		}
 
 		/**
@@ -2147,24 +2101,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		private static array $normalized_host_cache = array();
 
 		/**
-		 * Per-request memo for wppo_settings to avoid repeated get_option deserialization.
-		 *
-		 * Keyed by blog ID for multisite correctness under switch_to_blog().
-		 *
-		 * @var array<int, array>
-		 * @since 2.0.0
-		 */
-		private static array $settings_cache = array();
-
-		/**
-		 * Whether the settings cache has been populated this request, keyed by blog ID.
-		 *
-		 * @var array<int, bool>
-		 * @since 2.0.0
-		 */
-		private static array $settings_cache_loaded = array();
-
-		/**
 		 * Per-request memo for the purge-fallback gate (issue #1275).
 		 *
 		 * The gate result is request-stable (settings + constant + filter);
@@ -2261,6 +2197,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Resolve current blog ID safely (handles Brain Monkey stub mis-configuration in tests).
 		 *
+		 * Mirrored in Settings_Store::current_blog_id() by design (decoupling); keep in sync.
+		 *
 		 * @since 2.0.0
 		 * @return int Blog ID.
 		 */
@@ -2284,36 +2222,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * on update/add/delete of the option. Blog-keyed to avoid cross-site
 		 * leakage under switch_to_blog() (see F-COMPAT-03).
 		 *
+		 * Facade proxy: memo storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
+		 *
 		 * @since 2.0.0
 		 * @return array The plugin settings.
 		 */
 		public static function get_settings(): array {
-			$bid = self::current_blog_id();
-			if ( ! empty( self::$settings_cache_loaded[ $bid ] ) ) {
-				return self::$settings_cache[ $bid ] ?? array();
-			}
 			self::ensure_settings_cache_hook();
-			$raw = get_option( 'wppo_settings', array() );
-			if ( ! is_array( $raw ) ) {
-				$raw = array();
-			}
-			self::$settings_cache[ $bid ]        = $raw;
-			self::$settings_cache_loaded[ $bid ] = true;
-			return $raw;
+			return Settings_Store::get_settings();
 		}
 
 		/**
 		 * Set the settings cache to a known value (e.g. after update_option in same request).
+		 *
+		 * Facade proxy: memo storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
 		 *
 		 * @since 2.0.0
 		 * @param array $settings The settings to cache.
 		 * @return void
 		 */
 		public static function set_settings_cache( array $settings ): void {
-			$bid                                 = self::current_blog_id();
-			self::$settings_cache[ $bid ]        = $settings;
-			self::$settings_cache_loaded[ $bid ] = true;
 			self::ensure_settings_cache_hook();
+			Settings_Store::set_settings_cache( $settings );
 		}
 
 		/**
@@ -2323,25 +2253,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * sit in alloptions. Refreshes the per-request memo on success so
 		 * same-request reads observe the write.
 		 *
+		 * Facade proxy: write-through lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
+		 *
 		 * @since 2.2.0
 		 * @param array $settings Settings array to store.
 		 * @return bool True on success (mirrors update_option()).
 		 */
 		public static function save_settings( array $settings ): bool {
-			try {
-				$updated = update_option( 'wppo_settings', $settings, false );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-			if ( $updated ) {
-				try {
-					self::set_settings_cache( $settings );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			return (bool) $updated;
+			self::ensure_settings_cache_hook();
+			return Settings_Store::save_settings( $settings );
 		}
 
 		/**
@@ -2352,37 +2272,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * delete_option_wppo_settings action passes no blog ID, so the full
 		 * clear path is taken. switch_blog is handled by on_switch_blog().
 		 *
+		 * Facade proxy: memo storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
+		 * The purge-fallback gate memo stays here (not settings state) and is
+		 * cleared alongside so tests and option updates stay coherent.
+		 *
 		 * @since 2.0.0
 		 * @param int|null $blog_id Optional blog ID to clear. Null clears all.
 		 * @return void
 		 */
 		public static function clear_settings_cache( $blog_id = null ): void {
+			Settings_Store::clear_settings_cache( $blog_id );
 			if ( null !== $blog_id && is_int( $blog_id ) ) {
 				unset( self::$purge_fallback_memo[ (int) $blog_id ] );
 			} else {
 				self::$purge_fallback_memo = array();
 			}
-			if ( null !== $blog_id && is_int( $blog_id ) ) {
-				$bid = (int) $blog_id;
-				unset( self::$settings_cache[ $bid ], self::$settings_cache_loaded[ $bid ] );
-				return;
-			}
-			// Action callbacks (update/delete) pass $old/$new or $option/$value
-			// which are not int blog IDs; treat non-int as "clear all" for
-			// backwards-compat with the pre-blog-keyed API.
-			if ( null !== $blog_id && ! is_int( $blog_id ) ) {
-				self::$settings_cache        = array();
-				self::$settings_cache_loaded = array();
-				return;
-			}
-			self::$settings_cache        = array();
-			self::$settings_cache_loaded = array();
 		}
 
 		/**
 		 * Handler for switch_blog — clears stale memo association.
 		 *
 		 * Kept separate from clear_settings_cache for hook arity clarity.
+		 * Delegates the settings part to {@see \PerformanceOptimise\Inc\Settings_Store::on_switch_blog()}
+		 * (blog-keyed, no destructive clear); the permalink memo and the
+		 * callback HMAC secret memo stay local to this class.
 		 *
 		 * @since 2.0.0
 		 * @param int $new_blog_id New blog ID.
@@ -2390,6 +2303,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function on_switch_blog( $new_blog_id, $prev_blog_id ): void {
+			Settings_Store::on_switch_blog( $new_blog_id, $prev_blog_id );
 			// Settings and home URLs are blog-keyed and need no destructive
 			// clear; the permalink memo additionally keys by blog ID, but it is
 			// dropped here too so any memo written before the switch (e.g. a
@@ -2397,9 +2311,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// The callback HMAC secret is per-site (option_key-isolated):
 			// drop its memo as well so site B never signs/verifies with
 			// site A's secret after switch_to_blog() mid-request.
-			// The hook params are unused (keys already isolate) — consumed
-			// explicitly to satisfy the unused-parameter sniff.
-			unset( $new_blog_id, $prev_blog_id );
 			self::clear_permalink_cache();
 			self::reset_callback_secret_memo();
 		}
@@ -2416,6 +2327,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Safe to call multiple times — a static guard makes the registration
 		 * idempotent.
 		 *
+		 * Facade proxy: option-hook ownership lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
+		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
@@ -2426,6 +2339,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Ensure the invalidation hooks for wppo_settings are registered once per request.
 		 *
+		 * The option hooks (`update/add/delete_option_wppo_settings`) are owned
+		 * by {@see \PerformanceOptimise\Inc\Settings_Store}; the `switch_blog`
+		 * hook stays here because its callback also clears the permalink and
+		 * callback-secret memos that live in this class.
+		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
@@ -2435,14 +2353,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return;
 			}
 			$hooked = true;
-			add_action( 'update_option_wppo_settings', array( self::class, 'on_settings_update' ), 10, 2 );
-			add_action( 'add_option_wppo_settings', array( self::class, 'on_settings_add' ), 10, 2 );
-			add_action( 'delete_option_wppo_settings', array( self::class, 'clear_settings_cache' ) );
+			Settings_Store::register_settings_cache_hooks();
 			add_action( 'switch_blog', array( self::class, 'on_switch_blog' ), 10, 2 );
 		}
 
 		/**
 		 * Invalidate/update the memo when wppo_settings is updated.
+		 *
+		 * Facade proxy: memo storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
 		 *
 		 * @since 2.0.0
 		 * @param mixed $old_value Previous value.
@@ -2450,13 +2368,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function on_settings_update( $old_value, $value ): void {
-			$bid                                 = self::current_blog_id();
-			self::$settings_cache[ $bid ]        = is_array( $value ) ? $value : array();
-			self::$settings_cache_loaded[ $bid ] = true;
+			Settings_Store::on_settings_update( $old_value, $value );
 		}
 
 		/**
 		 * Populate the memo when wppo_settings is added.
+		 *
+		 * Facade proxy: memo storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
 		 *
 		 * @since 2.0.0
 		 * @param string $option Option name.
@@ -2464,11 +2382,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function on_settings_add( $option, $value ): void {
-			if ( 'wppo_settings' === $option ) {
-				$bid                                 = self::current_blog_id();
-				self::$settings_cache[ $bid ]        = is_array( $value ) ? $value : array();
-				self::$settings_cache_loaded[ $bid ] = true;
-			}
+			Settings_Store::on_settings_add( $option, $value );
 		}
 
 		/**

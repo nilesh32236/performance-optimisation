@@ -221,6 +221,12 @@ trait WPPO_Test_Bootstrap {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
+		if ( class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
+			// Settings memo now lives in Settings_Store (REF-002); the proxy
+			// above already clears it, but reset the owner directly so the
+			// boundary stays coherent even if the proxy path ever changes.
+			\PerformanceOptimise\Inc\Settings_Store::clear_settings_cache();
+		}
 		if ( method_exists( 'PerformanceOptimise\Inc\Util', 'reset_callback_secret_memo' ) ) {
 			// Callback HMAC secret memoizes per process: reset so each test
 			// reads its own wppo_callback_secret fixture.

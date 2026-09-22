@@ -398,6 +398,18 @@
         "static_state": true
     },
     {
+        "file": "includes/class-settings-store.php",
+        "class": null,
+        "lines": 384,
+        "methods": 13,
+        "hooks": [
+            "update_option_wppo_settings",
+            "add_option_wppo_settings",
+            "delete_option_wppo_settings"
+        ],
+        "static_state": true
+    },
+    {
         "file": "includes/class-suggestion-engine.php",
         "class": null,
         "lines": 586,
