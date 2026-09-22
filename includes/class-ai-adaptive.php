@@ -1897,14 +1897,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private const DEPLOY_NOTES_OPTION = 'wppo_ai_deploy_notes';
 
 		/**
-		 * Maximum stored deploy-note / breach-state rows (issue #1313).
+		 * Maximum stored deploy-note rows (issue #1313).
 		 *
-		 * Keeps the per-site options bounded (~1 extra row per deploy).
+		 * Keeps the per-site option bounded (~1 extra row per deploy).
 		 *
 		 * @since NEXT
 		 * @var int
 		 */
 		private const DEPLOY_NOTES_LIMIT = 20;
+
+		/**
+		 * Maximum stored breach-state rows (issue #1313).
+		 *
+		 * Separate from DEPLOY_NOTES_LIMIT so a future deploy-notes
+		 * cap change cannot silently alter breach-state retention.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const BREACH_STATE_LIMIT = 20;
 
 		/**
 		 * Deploy-note correlation window in days (issue #1313).
@@ -2308,9 +2319,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							if ( $ts <= 0 || '' === trim( $note ) ) {
 								continue;
 							}
+							$clip    = function_exists( 'mb_substr' ) ? mb_substr( $note, 0, 200 ) : substr( $note, 0, 200 );
 							$notes[] = array(
 								'ts'   => $ts,
-								'note' => function_exists( 'sanitize_text_field' ) ? sanitize_text_field( mb_substr( $note, 0, 200 ) ) : substr( $note, 0, 200 ),
+								'note' => function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $clip ) : $clip,
 							);
 						}
 					}
@@ -2327,17 +2339,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							if ( $ts <= 0 || '' === trim( $note ) ) {
 								continue;
 							}
+							$clip    = function_exists( 'mb_substr' ) ? mb_substr( $note, 0, 200 ) : substr( $note, 0, 200 );
 							$notes[] = array(
 								'ts'   => $ts,
-								'note' => function_exists( 'sanitize_text_field' ) ? sanitize_text_field( mb_substr( $note, 0, 200 ) ) : substr( $note, 0, 200 ),
+								'note' => function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $clip ) : $clip,
 							);
 						}
 					}
 				}
+				$seen    = array();
+				$deduped = array();
+				foreach ( $notes as $row ) {
+					$k = (int) ( $row['ts'] ?? 0 );
+					if ( ! isset( $seen[ $k ] ) ) {
+						$seen[ $k ] = true;
+						$deduped[]  = $row;
+					}
+				}
+				$notes = $deduped;
 				usort(
 					$notes,
 					static function ( $a, $b ) {
-						return ( $a['ts'] ?? 0 ) - ( $b['ts'] ?? 0 );
+						return ( $a['ts'] ?? 0 ) <=> ( $b['ts'] ?? 0 );
 					}
 				);
 				if ( count( $notes ) > self::DEPLOY_NOTES_LIMIT ) {
@@ -2367,7 +2390,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( '' === trim( $note ) || ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return false;
 				}
-				$clean = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( mb_substr( $note, 0, 200 ) ) : substr( $note, 0, 200 );
+				$clip  = function_exists( 'mb_substr' ) ? mb_substr( $note, 0, 200 ) : substr( $note, 0, 200 );
+				$clean = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $clip ) : $clip;
 				if ( '' === trim( $clean ) ) {
 					return false;
 				}
@@ -2453,7 +2477,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return array();
 				}
 				$stored = get_option( self::BREACH_STATE_OPTION, array() );
-				return is_array( $stored ) ? $stored : array();
+				if ( ! is_array( $stored ) ) {
+					return array();
+				}
+				foreach ( $stored as $k => $row ) {
+					if ( ! is_array( $row ) || ! isset( $row['metric'], $row['breached_at'] ) ) {
+						unset( $stored[ $k ] );
+					}
+				}
+				return $stored;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();
@@ -2475,8 +2507,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				if ( count( $state ) > self::DEPLOY_NOTES_LIMIT ) {
-					$state = array_slice( $state, -self::DEPLOY_NOTES_LIMIT, self::DEPLOY_NOTES_LIMIT, true );
+				if ( count( $state ) > self::BREACH_STATE_LIMIT ) {
+					$state = array_slice( $state, -self::BREACH_STATE_LIMIT, self::BREACH_STATE_LIMIT, true );
 				}
 				update_option( self::BREACH_STATE_OPTION, $state, false );
 			} catch ( \Throwable $e ) {
@@ -2651,8 +2683,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					} else {
 						$recovery['change_pct'] = $band['mean'] > 0 ? (float) ( ( $latest - $band['mean'] ) / $band['mean'] * 100.0 ) : 0.0;
 					}
-					self::clear_breach_state( (string) $trend_key );
-					self::set_last_anomaly_alarm( $resolved_now );
 					$filtered = $recovery;
 					if ( function_exists( 'apply_filters' ) ) {
 						$filtered_rows = apply_filters( 'wppo_ai_anomaly_recovered', array( $recovery ) );
@@ -2665,6 +2695,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							return array();
 						}
 					}
+					self::clear_breach_state( (string) $trend_key );
+					self::set_last_anomaly_alarm( $resolved_now );
 					return array( $filtered );
 				}
 			} catch ( \Throwable $e ) {
