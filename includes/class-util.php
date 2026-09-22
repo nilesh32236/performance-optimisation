@@ -135,6 +135,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 			'wppo_ai_css_refresh_snapshots',           // AI_Adaptive::CSS_REFRESH_SNAPSHOT_OPTION (issue #1407).
+			'wppo_ai_anomaly_breach_state',            // AI_Adaptive::BREACH_STATE_OPTION (issue #1313).
+			'wppo_ai_deploy_notes',                    // AI_Adaptive::DEPLOY_NOTES_OPTION (issue #1313).
 			'wppo_callback_secret',                    // CALLBACK_SECRET_OPTION (issue #1347).
 			'wppo_last_purge',                       // Builder_Purge_Watcher::LAST_PURGE_OPTION (upgrade auto-purge).
 		);
@@ -785,6 +787,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'anomaly_tolerance_abs'         => 0.01,
 					'anomaly_persistence_windows'   => 3,
 					'anomaly_p75_min_samples'       => 10,
+					'anomaly_band_window'           => 10,
+					'anomaly_recovery_days'         => 3,
+					'deploy_notes'                  => array(),
 				),
 				'edge_cache'            => array(
 					'enabled' => false,

@@ -1850,6 +1850,85 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private const ANOMALY_PERSISTENCE_MAX = 29;
 
 		/**
+		 * Default trailing-window size for the moving-average band (issue #1313).
+		 *
+		 * The breach baseline is the mean of the trailing
+		 * `anomaly_band_window` samples before the persistence tail, not
+		 * all history, so stale history cannot skew the band.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_BAND_WINDOW = 10;
+
+		/**
+		 * Default in-band stabilization window before a recovery notice (issue #1313).
+		 *
+		 * A breach must stay inside the band for this many days before a
+		 * recovery notice fires, preventing flapping notices.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_RECOVERY_DAYS = 3;
+
+		/**
+		 * Per-site option storing the active breach state (issue #1313).
+		 *
+		 * Shape: `trend_key => { metric, baseline, current, breached_at }`.
+		 * Per-site option, hence inherently multisite-safe. Bounded to 20
+		 * entries; autoload=false; never fatal.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const BREACH_STATE_OPTION = 'wppo_ai_anomaly_breach_state';
+
+		/**
+		 * Per-site option storing manual deploy notes (issue #1313).
+		 *
+		 * Shape: list of `{ ts, note }` rows, additive, capped at 20 rows,
+		 * autoload=false. Breaches near a noted deploy are annotated
+		 * instead of treated as mysteries.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const DEPLOY_NOTES_OPTION = 'wppo_ai_deploy_notes';
+
+		/**
+		 * Maximum stored deploy-note rows (issue #1313).
+		 *
+		 * Keeps the per-site option bounded (~1 extra row per deploy).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DEPLOY_NOTES_LIMIT = 20;
+
+		/**
+		 * Maximum stored breach-state rows (issue #1313).
+		 *
+		 * Separate from DEPLOY_NOTES_LIMIT so a future deploy-notes
+		 * cap change cannot silently alter breach-state retention.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const BREACH_STATE_LIMIT = 20;
+
+		/**
+		 * Deploy-note correlation window in days (issue #1313).
+		 *
+		 * A breach whose timestamp falls within this many days after a
+		 * noted deploy carries the note as annotation.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DEPLOY_CORRELATION_DAYS = 7;
+
+		/**
 		 * Resolve the anomaly minimum-sample threshold.
 		 *
 		 * Reads the additive `ai_adaptive.anomaly_min_samples` setting,
@@ -2071,6 +2150,565 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				unset( $e );
 				return self::ANOMALY_P75_MIN_SAMPLES;
 			}
+		}
+
+		/**
+		 * Resolve the moving-average band window size (issue #1313).
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_band_window` setting,
+		 * falling back to ANOMALY_BAND_WINDOW. Filterable via
+		 * `wppo_ai_anomaly_band_window`. Fail-open to 10. Clamped to
+		 * 1–29 so every admittable value stays reachable within the
+		 * 30-snapshot trend cap.
+		 *
+		 * @return int Trailing samples forming the band baseline (>=1, <=29).
+		 * @since NEXT
+		 */
+		private static function anomaly_band_window(): int {
+			try {
+				$window = self::ANOMALY_BAND_WINDOW;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_band_window'] ) ) {
+						$candidate = (int) $settings['ai_adaptive']['anomaly_band_window'];
+						if ( $candidate >= 1 ) {
+							$window = min( $candidate, self::ANOMALY_PERSISTENCE_MAX );
+						}
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_band_window', $window );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
+						$window = min( (int) $filtered, self::ANOMALY_PERSISTENCE_MAX );
+					}
+				}
+				if ( $window < 1 ) {
+					return self::ANOMALY_BAND_WINDOW;
+				}
+				return min( $window, self::ANOMALY_PERSISTENCE_MAX );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_BAND_WINDOW;
+			}
+		}
+
+		/**
+		 * Resolve the recovery hysteresis window in days (issue #1313).
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_recovery_days` setting,
+		 * falling back to ANOMALY_RECOVERY_DAYS. Filterable via
+		 * `wppo_ai_anomaly_recovery_days`. Fail-open to 3.
+		 *
+		 * @return int In-band stabilization days (>=0; 0 recovers immediately).
+		 * @since NEXT
+		 */
+		private static function anomaly_recovery_days(): int {
+			try {
+				$days = self::ANOMALY_RECOVERY_DAYS;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_recovery_days'] ) ) {
+						$candidate = (int) $settings['ai_adaptive']['anomaly_recovery_days'];
+						if ( $candidate >= 0 ) {
+							$days = $candidate;
+						}
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_recovery_days', $days );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 0 ) {
+						$days = (int) $filtered;
+					}
+				}
+				return $days >= 0 ? $days : self::ANOMALY_RECOVERY_DAYS;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_RECOVERY_DAYS;
+			}
+		}
+
+		/**
+		 * Compute the moving-average band for a trailing baseline window (issue #1313).
+		 *
+		 * Pure helper: mean plus a sigma floor over the trailing window.
+		 * LCP (relative arm): `upper = max(mean * 1.3, mean + 2*σ)`.
+		 * CLS (absolute arm): `upper = max(mean + 0.05, mean + 2*σ)`.
+		 * The tolerance band is folded in by callers via the resolved
+		 * `anomaly_tolerance_pct` / `anomaly_tolerance_abs` gates. Lower
+		 * (`mean - 2*σ`) is intentionally retained for symmetric and
+		 * future recovery-hysteresis reads; current callers
+		 * (detect_anomalies(), detect_recoveries()) gate on upper/mean
+		 * only. Fail-open: empty input yields a zero band (callers treat a
+		 * non-positive mean as unusable).
+		 *
+		 * @param float[] $prior_window Trailing numeric samples (oldest first).
+		 * @param string  $metric Metric name ('lcp'|'cls'; others use the LCP shape).
+		 * @return array{mean:float,std:float,upper:float,lower:float} Band edges.
+		 * @since NEXT
+		 */
+		private static function moving_band( array $prior_window, string $metric ): array {
+			$zero = array(
+				'mean'  => 0.0,
+				'std'   => 0.0,
+				'upper' => 0.0,
+				'lower' => 0.0,
+			);
+			try {
+				$values = array();
+				foreach ( $prior_window as $value ) {
+					if ( ! is_numeric( $value ) ) {
+						continue;
+					}
+					$value = (float) $value;
+					if ( function_exists( 'is_finite' ) && ! is_finite( $value ) ) {
+						continue;
+					}
+					$values[] = $value;
+				}
+				$count = count( $values );
+				if ( 0 === $count ) {
+					return $zero;
+				}
+				$mean     = array_sum( $values ) / $count;
+				$variance = 0.0;
+				foreach ( $values as $value ) {
+					$variance += ( $value - $mean ) * ( $value - $mean );
+				}
+				$variance = $variance / $count;
+				$std      = $variance > 0 ? (float) sqrt( $variance ) : 0.0;
+				if ( 'cls' === $metric ) {
+					$upper = max( $mean + self::CLS_ABSOLUTE_DELTA, $mean + 2.0 * $std );
+				} else {
+					$upper = max( $mean * self::LCP_RELATIVE_MULTIPLIER, $mean + 2.0 * $std );
+				}
+				$lower = $mean - 2.0 * $std;
+				return array(
+					'mean'  => (float) $mean,
+					'std'   => (float) $std,
+					'upper' => (float) $upper,
+					'lower' => (float) $lower,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $zero;
+			}
+		}
+
+		/**
+		 * Read the stored deploy notes (issue #1313).
+		 *
+		 * Manual-only v2 surface: a timestamped list managed via settings
+		 * (`ai_adaptive.deploy_notes`) with a per-site option mirror for
+		 * programmatic adds. Settings entries win on timestamp collision.
+		 * Capped, sanitized, fail-open to an empty list.
+		 *
+		 * @return array[] List of {ts:int, note:string} rows (newest last, max 20).
+		 * @since NEXT
+		 */
+		public static function get_deploy_notes(): array {
+			try {
+				$notes = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings        = Util::get_settings();
+					$stored_settings = $settings['ai_adaptive']['deploy_notes'] ?? array();
+					if ( is_array( $stored_settings ) ) {
+						foreach ( $stored_settings as $row ) {
+							if ( ! is_array( $row ) ) {
+								continue;
+							}
+							$ts   = isset( $row['ts'] ) ? (int) $row['ts'] : 0;
+							$note = isset( $row['note'] ) && is_string( $row['note'] ) ? $row['note'] : '';
+							if ( $ts <= 0 || '' === trim( $note ) ) {
+								continue;
+							}
+							$clip    = function_exists( 'mb_substr' ) ? mb_substr( $note, 0, 200 ) : substr( $note, 0, 200 );
+							$notes[] = array(
+								'ts'   => $ts,
+								'note' => function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $clip ) : $clip,
+							);
+						}
+					}
+				}
+				if ( function_exists( 'get_option' ) ) {
+					$option_rows = get_option( self::DEPLOY_NOTES_OPTION, array() );
+					if ( is_array( $option_rows ) ) {
+						foreach ( $option_rows as $row ) {
+							if ( ! is_array( $row ) ) {
+								continue;
+							}
+							$ts   = isset( $row['ts'] ) ? (int) $row['ts'] : 0;
+							$note = isset( $row['note'] ) && is_string( $row['note'] ) ? $row['note'] : '';
+							if ( $ts <= 0 || '' === trim( $note ) ) {
+								continue;
+							}
+							$clip    = function_exists( 'mb_substr' ) ? mb_substr( $note, 0, 200 ) : substr( $note, 0, 200 );
+							$notes[] = array(
+								'ts'   => $ts,
+								'note' => function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $clip ) : $clip,
+							);
+						}
+					}
+				}
+				$seen    = array();
+				$deduped = array();
+				foreach ( $notes as $row ) {
+					$k = (int) ( $row['ts'] ?? 0 );
+					if ( ! isset( $seen[ $k ] ) ) {
+						$seen[ $k ] = true;
+						$deduped[]  = $row;
+					}
+				}
+				$notes = $deduped;
+				usort(
+					$notes,
+					static function ( $a, $b ) {
+						return ( $a['ts'] ?? 0 ) <=> ( $b['ts'] ?? 0 );
+					}
+				);
+				if ( count( $notes ) > self::DEPLOY_NOTES_LIMIT ) {
+					$notes = array_slice( $notes, -self::DEPLOY_NOTES_LIMIT );
+				}
+				return array_values( $notes );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Record a manual deploy note (issue #1313).
+		 *
+		 * Additive, per-site, capped at 20 rows (oldest evicted),
+		 * autoload=false. Best-effort: never throws, never fatal when the
+		 * options API is missing.
+		 *
+		 * @param string   $note Note text (sanitized, max 200 chars).
+		 * @param int|null $ts Optional timestamp (defaults to now).
+		 * @return bool True when stored.
+		 * @since NEXT
+		 */
+		public static function add_deploy_note( string $note, ?int $ts = null ): bool {
+			try {
+				if ( '' === trim( $note ) || ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return false;
+				}
+				$clip  = function_exists( 'mb_substr' ) ? mb_substr( $note, 0, 200 ) : substr( $note, 0, 200 );
+				$clean = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $clip ) : $clip;
+				if ( '' === trim( $clean ) ) {
+					return false;
+				}
+				$at = null !== $ts && $ts > 0 ? (int) $ts : self::anomaly_now();
+				if ( $at <= 0 ) {
+					return false;
+				}
+				$stored = get_option( self::DEPLOY_NOTES_OPTION, array() );
+				if ( ! is_array( $stored ) ) {
+					$stored = array();
+				}
+				$stored[] = array(
+					'ts'   => $at,
+					'note' => $clean,
+				);
+				if ( count( $stored ) > self::DEPLOY_NOTES_LIMIT ) {
+					$stored = array_slice( $stored, -self::DEPLOY_NOTES_LIMIT );
+				}
+				update_option( self::DEPLOY_NOTES_OPTION, array_values( $stored ), false );
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Find the deploy note nearest before a breach timestamp (issue #1313).
+		 *
+		 * A breach within DEPLOY_CORRELATION_DAYS after a noted deploy is
+		 * annotated with that note instead of treated as a mystery.
+		 * Fail-open: any failure returns an empty string.
+		 *
+		 * @param int $breach_ts Breach timestamp.
+		 * @return string Matching note text, or '' when none nearby.
+		 * @since NEXT
+		 */
+		public static function find_deploy_note_near( int $breach_ts ): string {
+			try {
+				if ( $breach_ts <= 0 ) {
+					return '';
+				}
+				$notes = self::get_deploy_notes();
+				if ( empty( $notes ) ) {
+					return '';
+				}
+				$day_seconds = defined( 'DAY_IN_SECONDS' ) ? (int) DAY_IN_SECONDS : 86400;
+				$window      = self::DEPLOY_CORRELATION_DAYS * $day_seconds;
+				$best        = '';
+				$best_ts     = 0;
+				foreach ( $notes as $row ) {
+					$ts = isset( $row['ts'] ) ? (int) $row['ts'] : 0;
+					if ( $ts <= 0 || $ts > $breach_ts ) {
+						continue;
+					}
+					if ( ( $breach_ts - $ts ) > $window ) {
+						continue;
+					}
+					if ( $ts >= $best_ts ) {
+						$best_ts = $ts;
+						$best    = isset( $row['note'] ) ? (string) $row['note'] : '';
+					}
+				}
+				return $best;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Read the active breach state (issue #1313).
+		 *
+		 * Per-site option, hence inherently multisite-safe. Fail-open to
+		 * an empty array.
+		 *
+		 * @return array<string, array{metric:string,baseline:float,current:float,breached_at:int}> Breach rows keyed by trend key.
+		 * @since NEXT
+		 */
+		public static function get_breach_state(): array {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$stored = get_option( self::BREACH_STATE_OPTION, array() );
+				if ( ! is_array( $stored ) ) {
+					return array();
+				}
+				foreach ( $stored as $k => $row ) {
+					if ( ! is_array( $row ) || ! isset( $row['metric'], $row['breached_at'] ) ) {
+						unset( $stored[ $k ] );
+					}
+				}
+				return $stored;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Persist the active breach state (issue #1313).
+		 *
+		 * Bounded to 20 entries; per-site option with autoload=false;
+		 * never throws.
+		 *
+		 * @param array $state Breach rows keyed by trend key.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function set_breach_state( array $state ): void {
+			try {
+				if ( ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				if ( count( $state ) > self::BREACH_STATE_LIMIT ) {
+					$state = array_slice( $state, -self::BREACH_STATE_LIMIT, self::BREACH_STATE_LIMIT, true );
+				}
+				update_option( self::BREACH_STATE_OPTION, $state, false );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Record a breach for recovery hysteresis tracking (issue #1313).
+		 *
+		 * Never throws; fail-open (a write failure simply skips recovery).
+		 *
+		 * @param string $trend_key Trend key.
+		 * @param string $metric Metric name.
+		 * @param float  $baseline Band baseline.
+		 * @param float  $current Breach sample.
+		 * @param int    $breached_at Breach timestamp.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function record_breach_state( string $trend_key, string $metric, float $baseline, float $current, int $breached_at ): void {
+			try {
+				if ( '' === $trend_key ) {
+					return;
+				}
+				$state               = self::get_breach_state();
+				$state[ $trend_key ] = array(
+					'metric'      => $metric,
+					'baseline'    => $baseline,
+					'current'     => $current,
+					'breached_at' => $breached_at,
+				);
+				self::set_breach_state( $state );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Clear a tracked breach after recovery (issue #1313).
+		 *
+		 * Never throws.
+		 *
+		 * @param string $trend_key Trend key.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function clear_breach_state( string $trend_key ): void {
+			try {
+				if ( '' === $trend_key ) {
+					return;
+				}
+				$state = self::get_breach_state();
+				if ( ! array_key_exists( $trend_key, $state ) ) {
+					return;
+				}
+				unset( $state[ $trend_key ] );
+				self::set_breach_state( $state );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Detect recoveries closing the loop on tracked breaches (issue #1313).
+		 *
+		 * For each tracked breach, the latest trend sample is compared
+		 * against the current moving-average band: a recovery fires only
+		 * after `anomaly_recovery_days` have elapsed since the breach
+		 * (`now - breached_at >= days`) AND the single latest sample reads
+		 * back inside the band (`latest <= upper`). This is a time-gated
+		 * single-sample check: intermediate samples between breach and now
+		 * are not examined, so flap suppression is time-based rather than
+		 * full-window stabilization-verified. At most
+		 * one recovery is returned with the same single-banner cooldown
+		 * as detect_anomalies() (active cooldown or low samples yields
+		 * zero notices). Read-only suggestions shape; never auto-applies.
+		 *
+		 * Lazy boot: returns immediately when no breach state or no trend
+		 * data exists. Fail-open: any failure returns an empty array.
+		 *
+		 * @param array|null $trends Optional trends map (null = live Pagespeed::get_trends()).
+		 * @param int|null   $now Optional current timestamp (tests).
+		 * @return array[] At most one recovery: array(array('key'=>string,'route'=>string,'metric'=>string,'baseline'=>float,'current'=>float,'samples'=>int,'recovered'=>true,'breached_at'=>int)).
+		 * @since NEXT
+		 */
+		public static function detect_recoveries( ?array $trends = null, ?int $now = null ): array {
+			try {
+				$state = self::get_breach_state();
+				if ( empty( $state ) ) {
+					return array();
+				}
+				if ( null === $trends ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
+						return array();
+					}
+					if ( ! method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+						return array();
+					}
+					$trends = Pagespeed::get_trends();
+				}
+				if ( ! is_array( $trends ) || empty( $trends ) ) {
+					return array();
+				}
+				$resolved_now = self::anomaly_now( $now );
+				if ( ! self::is_anomaly_cooled_down( $resolved_now ) ) {
+					return array();
+				}
+				$min_samples = self::anomaly_min_samples();
+				if ( $min_samples < 1 ) {
+					$min_samples = self::ANOMALY_MIN_SAMPLES;
+				}
+				$band_window = self::anomaly_band_window();
+				if ( $band_window < 1 ) {
+					$band_window = self::ANOMALY_BAND_WINDOW;
+				}
+				$recovery_days = self::anomaly_recovery_days();
+				$day_seconds   = defined( 'DAY_IN_SECONDS' ) ? (int) DAY_IN_SECONDS : 86400;
+				$tol_pct       = self::anomaly_tolerance_pct();
+				$tol_abs       = self::anomaly_tolerance_abs();
+				foreach ( $state as $trend_key => $breach ) {
+					if ( ! is_array( $breach ) ) {
+						continue;
+					}
+					$metric = isset( $breach['metric'] ) ? (string) $breach['metric'] : '';
+					if ( ! in_array( $metric, array( 'lcp', 'cls' ), true ) ) {
+						continue;
+					}
+					$breached_at = isset( $breach['breached_at'] ) ? (int) $breach['breached_at'] : 0;
+					if ( $breached_at <= 0 ) {
+						continue;
+					}
+					if ( ( $resolved_now - $breached_at ) < ( $recovery_days * $day_seconds ) ) {
+						continue;
+					}
+					if ( ! isset( $trends[ $trend_key ] ) || ! is_array( $trends[ $trend_key ] ) ) {
+						continue;
+					}
+					$samples = self::collect_trend_samples( $trends[ $trend_key ], $metric, 'lcp' === $metric );
+					if ( count( $samples ) < $min_samples ) {
+						continue;
+					}
+					$window = min( $band_window, count( $samples ) - 1 );
+					if ( $window < 1 ) {
+						continue;
+					}
+					$prior = array_slice( $samples, count( $samples ) - 1 - $window, $window );
+					$band  = self::moving_band( $prior, $metric );
+					if ( $band['mean'] <= 0 && 'lcp' === $metric ) {
+						continue;
+					}
+					if ( 'cls' === $metric ) {
+						$upper = max( $band['upper'], $band['mean'] + self::CLS_ABSOLUTE_DELTA + $tol_abs );
+					} else {
+						$upper = max( $band['upper'], $band['mean'] * self::LCP_RELATIVE_MULTIPLIER * ( 1.0 + $tol_pct / 100.0 ) );
+					}
+					$latest = (float) end( $samples );
+					if ( $latest > $upper ) {
+						continue;
+					}
+					$recovery = array(
+						'key'         => (string) $trend_key,
+						'route'       => (string) $trend_key,
+						'metric'      => $metric,
+						'baseline'    => (float) $band['mean'],
+						'current'     => $latest,
+						'p75'         => self::anomaly_p75( $samples ),
+						'delta'       => (float) ( $latest - $band['mean'] ),
+						'samples'     => count( $samples ),
+						'recovered'   => true,
+						'breached_at' => $breached_at,
+					);
+					if ( 'cls' === $metric ) {
+						$recovery['change_abs'] = (float) ( $latest - $band['mean'] );
+					} else {
+						$recovery['change_pct'] = $band['mean'] > 0 ? (float) ( ( $latest - $band['mean'] ) / $band['mean'] * 100.0 ) : 0.0;
+					}
+					$filtered = $recovery;
+					if ( function_exists( 'apply_filters' ) ) {
+						$filtered_rows = apply_filters( 'wppo_ai_anomaly_recovered', array( $recovery ) );
+						if ( is_array( $filtered_rows ) && ! empty( $filtered_rows ) ) {
+							$first = $filtered_rows[0];
+							if ( is_array( $first ) ) {
+								$filtered = $first;
+							}
+						} elseif ( is_array( $filtered_rows ) && empty( $filtered_rows ) ) {
+							return array();
+						}
+					}
+					self::clear_breach_state( (string) $trend_key );
+					self::set_last_anomaly_alarm( $resolved_now );
+					return array( $filtered );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+			return array();
 		}
 
 		/**
@@ -2700,15 +3338,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Detect LCP/CLS regressions from stored Web Vitals trend history.
 		 *
-		 * Multi-metric rolling-baseline comparison per URL+strategy key with
-		 * ratio persistence: the baseline is the mean of all numeric samples
-		 * before the last N trailing windows (N =
-		 * `anomaly_persistence_windows()`, default 3), and a key regresses
-		 * only when EVERY trailing window breaches the gate:
-		 * - LCP: each trailing sample >= baseline * 1.3 (+30%, relative), or
-		 * - CLS: each trailing sample - baseline >= 0.05 (absolute delta, NOT percent).
+		 * Detector v2 (issue #1313): moving-average bands with ratio
+		 * persistence. The baseline is the mean of the trailing
+		 * `anomaly_band_window` samples (default 10) before the last N
+		 * trailing windows (N = `anomaly_persistence_windows()`, default
+		 * 3), and a key regresses only when EVERY trailing window clears
+		 * the band upper edge (mean plus sigma floor plus tolerance):
+		 * - LCP: each trailing sample >= max(baseline * 1.3 * (1+tol%), baseline + 2*σ), or
+		 * - CLS: each trailing sample >= max(baseline + 0.05 + tol_abs, baseline + 2*σ).
 		 *
-		 * A single noisy window can therefore never page on its own.
+		 * A single noisy window can therefore never page on its own, and
+		 * stale history cannot skew the band.
 		 *
 		 * Quiet-reliability gates: below the configured trend sample floor
 		 * (`anomaly_min_samples()`, default 10) no notice fires; each firing
@@ -2720,6 +3360,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * overall is returned with a 7-day cooldown
 		 * (`anomaly_cooldown_days`, default 7) persisted in the per-site
 		 * `wppo_ai_anomaly_last_alarm` option (multisite-safe).
+		 *
+		 * Breaches are tracked per key in the per-site
+		 * `wppo_ai_anomaly_breach_state` option so detect_recoveries()
+		 * can close the loop with hysteresis, and breaches near a manual
+		 * deploy note carry a `deploy_note` annotation.
 		 *
 		 * Every returned notice carries route plus p75 plus baseline plus
 		 * delta plus samples (`route`, `p75`, `baseline`, `delta`,
@@ -2743,6 +3388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @return array[] At most one anomaly: array(array('key'=>string,'route'=>string,'metric'=>string,'baseline'=>float,'current'=>float,'p75'=>float,'delta'=>float,'samples'=>int,'change_pct'=>float|'change_abs'=>float)).
 		 * @since 2.0.0
 		 * @since NEXT Three-window ratio persistence; RUM-disabled short-circuit; enriched route/p75/baseline/delta/samples payload.
+		 * @since NEXT v2 moving-average bands, deploy-note annotation, breach-state tracking for recovery hysteresis.
 		 */
 		public static function detect_anomalies( ?array $trends = null, ?array $rum = null, ?int $now = null ): array {
 			try {
@@ -2783,20 +3429,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( $rum_floor < 1 ) {
 					$rum_floor = self::ANOMALY_P75_MIN_SAMPLES;
 				}
+				$band_window = self::anomaly_band_window();
+				if ( $band_window < 1 ) {
+					$band_window = self::ANOMALY_BAND_WINDOW;
+				}
+				$tol_pct = self::anomaly_tolerance_pct();
+				$tol_abs = self::anomaly_tolerance_abs();
 				foreach ( $trends as $trend_key => $snapshots ) {
 					if ( ! is_array( $snapshots ) ) {
 						continue;
 					}
 					$candidates = array();
-					// LCP arm (relative +30% with ratio persistence).
+					// LCP arm (v2 moving-average band + persistence).
 					$lcps = self::collect_trend_samples( $snapshots, 'lcp', true );
 					if ( count( $lcps ) >= $min_samples && count( $lcps ) >= ( $persistence + 1 ) ) {
-						$tail      = array_slice( $lcps, -$persistence );
-						$prior     = array_slice( $lcps, 0, count( $lcps ) - $persistence );
-						$baseline  = array_sum( $prior ) / count( $prior );
-						$persisted = true;
-						foreach ( $tail as $window ) {
-							if ( (float) $window < $baseline * self::LCP_RELATIVE_MULTIPLIER ) {
+						$tail         = array_slice( $lcps, -$persistence );
+						$window       = min( $band_window, count( $lcps ) - $persistence );
+						$prior_window = array_slice( $lcps, count( $lcps ) - $persistence - $window, $window );
+						$band         = self::moving_band( $prior_window, 'lcp' );
+						$baseline     = (float) $band['mean'];
+						$gate         = max( $band['upper'], $baseline * self::LCP_RELATIVE_MULTIPLIER * ( 1.0 + $tol_pct / 100.0 ) );
+						$persisted    = true;
+						foreach ( $tail as $window_sample ) {
+							if ( (float) $window_sample < $gate ) {
 								$persisted = false;
 								break;
 							}
@@ -2817,25 +3472,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							);
 						}
 					}
-					// CLS arm (absolute delta, NOT percent, with persistence).
+					// CLS arm (v2 moving-average band + persistence, absolute delta NOT percent).
 					$clss = self::collect_trend_samples( $snapshots, 'cls', false );
 					if ( count( $clss ) >= $min_samples && count( $clss ) >= ( $persistence + 1 ) ) {
-						$tail     = array_slice( $clss, -$persistence );
-						$prior    = array_slice( $clss, 0, count( $clss ) - $persistence );
-						$baseline = array_sum( $prior ) / count( $prior );
-						$finite   = true;
+						$tail         = array_slice( $clss, -$persistence );
+						$window       = min( $band_window, count( $clss ) - $persistence );
+						$prior_window = array_slice( $clss, count( $clss ) - $persistence - $window, $window );
+						$band         = self::moving_band( $prior_window, 'cls' );
+						$baseline     = (float) $band['mean'];
+						$gate         = max( $band['upper'], $baseline + self::CLS_ABSOLUTE_DELTA + $tol_abs );
+						$finite       = true;
 						if ( function_exists( 'is_finite' ) ) {
 							$finite = is_finite( $baseline );
-							foreach ( $tail as $window ) {
-								if ( ! is_finite( (float) $window ) ) {
+							foreach ( $tail as $tail_sample ) {
+								if ( ! is_finite( (float) $tail_sample ) ) {
 									$finite = false;
 									break;
 								}
 							}
 						}
 						$persisted = true;
-						foreach ( $tail as $window ) {
-							if ( ( (float) $window - $baseline ) < self::CLS_ABSOLUTE_DELTA ) {
+						foreach ( $tail as $tail_sample ) {
+							if ( (float) $tail_sample < $gate ) {
 								$persisted = false;
 								break;
 							}
@@ -2864,6 +3522,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						// Record the alarm before filtering so a repeated
 						// regression re-alarms only after the cooldown elapses.
 						self::set_last_anomaly_alarm( $resolved_now );
+						// v2: track the breach for recovery hysteresis and
+						// annotate breaches near a noted deploy.
+						self::record_breach_state( (string) $anomaly['key'], (string) $anomaly['metric'], (float) $anomaly['baseline'], (float) $anomaly['current'], $resolved_now );
+						$deploy_note = self::find_deploy_note_near( $resolved_now );
+						if ( '' !== $deploy_note ) {
+							$anomaly['deploy_note'] = $deploy_note;
+						}
 						/**
 						 * Filters the detected performance anomalies.
 						 *
@@ -4336,6 +5001,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					$anomalies = array();
 				}
 			}
+			// v2 recovery close-the-loop (issue #1313): when no breach
+			// fires, a tracked breach that stayed in-band for the
+			// recovery window renders a read-only recovery notice.
+			$recovery_notice = null;
+			if ( ! is_array( $anomalies ) || empty( $anomalies ) ) {
+				try {
+					$recoveries = self::detect_recoveries();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$recoveries = array();
+				}
+				if ( is_array( $recoveries ) && ! empty( $recoveries ) ) {
+					$recovery_notice = $recoveries[0];
+				}
+			}
+			if ( is_array( $recovery_notice ) && ! empty( $recovery_notice ) ) {
+				$rec_metric = $recovery_notice['metric'] ?? '';
+				if ( in_array( $rec_metric, array( 'lcp', 'cls' ), true ) ) {
+					$rec_route = isset( $recovery_notice['route'] ) ? (string) $recovery_notice['route'] : ( isset( $recovery_notice['key'] ) ? (string) $recovery_notice['key'] : '' );
+					if ( 'cls' === $rec_metric ) {
+						/* translators: %s is the recovered route. */
+						$rec_description = sprintf( __( 'AI: CLS recovered on %s — back inside the band', 'performance-optimisation' ), '' !== $rec_route ? $rec_route : __( 'site', 'performance-optimisation' ) );
+						$suggestions[]   = array(
+							'metric'      => 'ai_cls_recovered',
+							'value'       => __( 'recovered', 'performance-optimisation' ),
+							'unit'        => 'string',
+							'status'      => 'good',
+							'description' => $rec_description,
+							'fix_action'  => 'no_action_required',
+							'ai_payload'  => array(
+								'tab'      => 'image_optimisation',
+								'settings' => array(),
+								'anomaly'  => array(
+									'route'     => $rec_route,
+									'metric'    => 'cls',
+									'recovered' => true,
+									'baseline'  => isset( $recovery_notice['baseline'] ) ? (float) $recovery_notice['baseline'] : 0.0,
+									'samples'   => isset( $recovery_notice['samples'] ) ? (int) $recovery_notice['samples'] : 0,
+								),
+							),
+						);
+					} else {
+						/* translators: %s is the recovered route. */
+						$rec_description = sprintf( __( 'AI: LCP recovered on %s — back inside the band', 'performance-optimisation' ), '' !== $rec_route ? $rec_route : __( 'site', 'performance-optimisation' ) );
+						$suggestions[]   = array(
+							'metric'      => 'ai_lcp_recovered',
+							'value'       => __( 'recovered', 'performance-optimisation' ),
+							'unit'        => 'string',
+							'status'      => 'good',
+							'description' => $rec_description,
+							'fix_action'  => 'no_action_required',
+							'ai_payload'  => array(
+								'tab'      => 'file_optimisation',
+								'settings' => array(),
+								'anomaly'  => array(
+									'route'     => $rec_route,
+									'metric'    => 'lcp',
+									'recovered' => true,
+									'baseline'  => isset( $recovery_notice['baseline'] ) ? (float) $recovery_notice['baseline'] : 0.0,
+									'samples'   => isset( $recovery_notice['samples'] ) ? (int) $recovery_notice['samples'] : 0,
+								),
+							),
+						);
+					}
+				}
+			}
 			if ( is_array( $anomalies ) && ! empty( $anomalies ) ) {
 				$anomaly = $anomalies[0];
 				// Fail-closed: only explicit 'cls'/'lcp' metrics render; unknown
@@ -4346,7 +5077,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$anomaly_window = isset( $anomaly['window'] ) && is_string( $anomaly['window'] ) && '' !== $anomaly['window'] ? ( function_exists( 'mb_substr' ) ? mb_substr( $anomaly['window'], 0, 128, 'UTF-8' ) : substr( $anomaly['window'], 0, 128 ) ) : '';
 				// Enriched anomaly context (issue #1384): every rendered
 				// notice carries route plus p75 plus baseline plus delta
-				// plus samples alongside the legacy change keys.
+				// plus samples alongside the legacy change keys. v2
+				// (issue #1313): breaches near a noted deploy carry the
+				// `deploy_note` annotation.
 				$anomaly_context = array(
 					'route'    => isset( $anomaly['route'] ) ? (string) $anomaly['route'] : ( isset( $anomaly['key'] ) ? (string) $anomaly['key'] : '' ),
 					'metric'   => isset( $anomaly['metric'] ) ? (string) $anomaly['metric'] : 'lcp',
@@ -4355,6 +5088,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					'delta'    => isset( $anomaly['delta'] ) ? (float) $anomaly['delta'] : 0.0,
 					'samples'  => isset( $anomaly['samples'] ) ? (int) $anomaly['samples'] : 0,
 				);
+				if ( isset( $anomaly['deploy_note'] ) && is_string( $anomaly['deploy_note'] ) && '' !== $anomaly['deploy_note'] ) {
+					$anomaly_context['deploy_note'] = function_exists( 'mb_substr' ) ? mb_substr( $anomaly['deploy_note'], 0, 200, 'UTF-8' ) : substr( $anomaly['deploy_note'], 0, 200 );
+				}
 				if ( 'cls' === $anomaly_metric ) {
 					$change_abs = isset( $anomaly['change_abs'] ) ? (float) $anomaly['change_abs'] : 0.0;
 					if ( '' !== $anomaly_path && '' !== $anomaly_window ) {
@@ -4366,6 +5102,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						/* translators: %s is the CLS absolute increase vs baseline. */
 						$cls_value       = sprintf( __( 'CLS +%s vs baseline', 'performance-optimisation' ), number_format( $change_abs, 2 ) );
 						$cls_description = __( 'AI: CLS regression detected', 'performance-optimisation' );
+					}
+					if ( isset( $anomaly_context['deploy_note'] ) ) {
+						/* translators: %s is the deploy note. */
+						$cls_description .= sprintf( __( ' (near deploy: %s)', 'performance-optimisation' ), $anomaly_context['deploy_note'] );
 					}
 					$suggestions[] = array(
 						'metric'      => 'ai_cls_regression',
@@ -4437,6 +5177,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					}
 					if ( ! empty( $css_refresh['queued'] ) ) {
 						$description = __( 'AI: LCP regression detected — used-CSS refresh queued', 'performance-optimisation' );
+					} elseif ( isset( $anomaly_context['deploy_note'] ) ) {
+						/* translators: %s is the deploy note. */
+						$description .= sprintf( __( ' (near deploy: %s)', 'performance-optimisation' ), $anomaly_context['deploy_note'] );
 					}
 					$suggestions[] = array(
 						'metric'      => 'ai_lcp_regression',

@@ -112,6 +112,9 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_preload_queue',
 		// Issue #1407 RUM-triggered CSS-refresh before/after snapshots.
 		'wppo_ai_css_refresh_snapshots',
+		// Issue #1313 anomaly detector v2 breach state + deploy notes.
+		'wppo_ai_anomaly_breach_state',
+		'wppo_ai_deploy_notes',
 		// Issue #1347 regeneration-callback HMAC secret (Util::CALLBACK_SECRET_OPTION).
 		'wppo_callback_secret',
 		// Upgrade auto-purge last-purge timestamp (Builder_Purge_Watcher::LAST_PURGE_OPTION).

@@ -793,6 +793,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['ai_adaptive']['anomaly_p75_min_samples'] ) ) {
 				$this->options['ai_adaptive']['anomaly_p75_min_samples'] = 10;
 			}
+			// Existing installs whose stored settings predate the anomaly
+			// detector v2 keys (issue #1313) inherit the defaults in-memory
+			// here (no database write on front-end requests); the persisted
+			// values are backfilled once by
+			// maybe_migrate_ai_anomaly_v2() on admin_init.
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_band_window'] ) ) {
+				$this->options['ai_adaptive']['anomaly_band_window'] = 10;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_recovery_days'] ) ) {
+				$this->options['ai_adaptive']['anomaly_recovery_days'] = 3;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['deploy_notes'] ) || ! is_array( $this->options['ai_adaptive']['deploy_notes'] ) ) {
+				$this->options['ai_adaptive']['deploy_notes'] = array();
+			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
 				$this->options['edge_cache'] = array();
@@ -1238,6 +1252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_object_cache_outage_flag' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ai_speculation_autotune' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_ai_anomaly_v2' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_comment_image_hardening' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_builder_watcher' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_third_party_auto' ) );
@@ -2986,6 +3001,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					Util::set_settings_cache( $stored );
 				}
 				Log::add( __( 'Added default RUM-segmented speculation auto-tune settings (off; manual speculation settings untouched).', 'performance-optimisation' ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * One-time backfill for anomaly detector v2 keys (issue #1313).
+		 *
+		 * Adds the additive `ai_adaptive.anomaly_band_window`,
+		 * `ai_adaptive.anomaly_recovery_days`, and
+		 * `ai_adaptive.deploy_notes` keys to stored settings that predate
+		 * them. Runs on `admin_init` (not the constructor) so a cacheable
+		 * front-end request never triggers a settings write. Only installs
+		 * missing a key are backfilled; any stored explicit value is
+		 * preserved verbatim, and fresh installs with no stored option are
+		 * skipped because the constructor defaults already match.
+		 * Idempotent (key presence is the marker). Uses per-site
+		 * `get_option()` so multisite sites migrate independently with no
+		 * cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_ai_anomaly_v2(): void {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return;
+				}
+				if ( isset( $this->options['ai_adaptive'] ) && is_array( $this->options['ai_adaptive'] )
+					&& array_key_exists( 'anomaly_band_window', $this->options['ai_adaptive'] )
+					&& array_key_exists( 'anomaly_recovery_days', $this->options['ai_adaptive'] )
+					&& array_key_exists( 'deploy_notes', $this->options['ai_adaptive'] ) ) {
+					return;
+				}
+				// allowlist(settings-read-guard): deliberate direct read — must distinguish
+				// "no stored row" (false) from "stored array", which Util::get_settings()
+				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				$stored = get_option( 'wppo_settings' );
+				if ( ! is_array( $stored ) ) {
+					return;
+				}
+
+				$ai = isset( $stored['ai_adaptive'] ) && is_array( $stored['ai_adaptive'] ) ? $stored['ai_adaptive'] : array();
+
+				$changed = false;
+				if ( ! array_key_exists( 'anomaly_band_window', $ai ) ) {
+					$ai['anomaly_band_window'] = 10;
+					$changed                   = true;
+				}
+				if ( ! array_key_exists( 'anomaly_recovery_days', $ai ) ) {
+					$ai['anomaly_recovery_days'] = 3;
+					$changed                     = true;
+				}
+				if ( ! array_key_exists( 'deploy_notes', $ai ) ) {
+					$ai['deploy_notes'] = array();
+					$changed            = true;
+				}
+				if ( ! $changed ) {
+					return;
+				}
+
+				$stored['ai_adaptive'] = $ai;
+				Util::save_settings( $stored );
+
+				if ( ! isset( $this->options['ai_adaptive'] ) || ! is_array( $this->options['ai_adaptive'] ) ) {
+					$this->options['ai_adaptive'] = array();
+				}
+				foreach ( array(
+					'anomaly_band_window'   => 10,
+					'anomaly_recovery_days' => 3,
+					'deploy_notes'          => array(),
+				) as $key => $default ) {
+					if ( ! array_key_exists( $key, $this->options['ai_adaptive'] ) ) {
+						$this->options['ai_adaptive'][ $key ] = $default;
+					}
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+					Util::set_settings_cache( $stored );
+				}
+				Log::add( __( 'Added default anomaly detector v2 settings (band window, recovery days, deploy notes).', 'performance-optimisation' ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

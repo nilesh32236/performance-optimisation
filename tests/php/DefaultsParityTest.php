@@ -75,6 +75,7 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		// opt-in off + min 20 samples + max 5 URLs by default.
 		// RUM anomaly digest tolerance band (issue #1445): 5% relative + 0.01 absolute.
 		// p75 anomaly hardening (issue #1384): additive keys, 3-window persistence + 10 RUM samples.
+		// Anomaly detector v2 (issue #1313): additive keys, 10-sample band window + 3-day recovery + manual deploy notes.
 		$this->assertSame(
 			array(
 				'enabled'                       => false,
@@ -92,6 +93,9 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 				'anomaly_tolerance_abs'         => 0.01,
 				'anomaly_persistence_windows'   => 3,
 				'anomaly_p75_min_samples'       => 10,
+				'anomaly_band_window'           => 10,
+				'anomaly_recovery_days'         => 3,
+				'deploy_notes'                  => array(),
 			),
 			$defaults['ai_adaptive']
 		);
