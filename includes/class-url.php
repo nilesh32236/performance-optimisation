@@ -72,6 +72,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		private static array $same_site_home_host = array();
 
 		/**
+		 * Memoized compiled exclusion rules, keyed by blog ID + rules hash.
+		 *
+		 * Rules containing root-relative entries are resolved against
+		 * cached_home_url(), which is blog-aware, so the compiled form must
+		 * also be blog-keyed — otherwise switch_to_blog() mid-request would
+		 * reuse the first blog's home-resolved rules on a second blog with
+		 * an identical rules array.
+		 *
+		 * @since NEXT
+		 * @var array<string, array{exact: array<string, bool>, prefix: string[]}>
+		 */
+		private static array $exclusion_rule_cache = array();
+
+		/**
+		 * Per-blog memo for content URLs, keyed by blog ID then path.
+		 *
+		 * @since NEXT
+		 * @var array<int, array<string, string>>
+		 */
+		private static array $content_url_cache = array();
+
+		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
 		 * Also clears the canonical-host, normalized-host, and same-site
@@ -88,7 +110,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 			self::$canonical_host_cache = array();
 			Filesystem::reset_normalized_host_cache();
 			Filesystem::reset_home_url_cache();
-			self::$same_site_home_host = array();
+			self::$same_site_home_host  = array();
+			self::$exclusion_rule_cache = array();
+			self::$content_url_cache    = array();
 		}
 
 		/**
@@ -170,11 +194,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 				return $u;
 			};
 
-			static $cache = array();
+			$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize
-			$cache_key = md5( serialize( $exclude_urls ) ); // We use serialize since it's faster and guaranteed safe for arrays of strings internally generated.
+			$cache_key = $blog_id . ':' . md5( serialize( $exclude_urls ) ); // We use serialize since it's faster and guaranteed safe for arrays of strings internally generated.
 
-			if ( ! isset( $cache[ $cache_key ] ) ) {
+			if ( ! isset( self::$exclusion_rule_cache[ $cache_key ] ) ) {
 				$home_base = self::cached_home_url();
 				$exact     = array();
 				$prefix    = array();
@@ -200,7 +224,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 					}
 				}
 
-				$cache[ $cache_key ] = array(
+				self::$exclusion_rule_cache[ $cache_key ] = array(
 					'exact'  => $exact,
 					'prefix' => $prefix,
 				);
@@ -208,11 +232,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 
 			$normalized_url = $strip_scheme( $url );
 
-			if ( isset( $cache[ $cache_key ]['exact'][ $normalized_url ] ) ) {
+			if ( isset( self::$exclusion_rule_cache[ $cache_key ]['exact'][ $normalized_url ] ) ) {
 				return true;
 			}
 
-			foreach ( $cache[ $cache_key ]['prefix'] as $exclude_prefix ) {
+			foreach ( self::$exclusion_rule_cache[ $cache_key ]['prefix'] as $exclude_prefix ) {
 				if ( 0 === strpos( $normalized_url . '/', $exclude_prefix ) ) {
 					return true;
 				}
@@ -375,17 +399,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 				return content_url( $path );
 			}
 
-			static $cache = array();
-			$blog_id      = get_current_blog_id();
+			$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 
-			if ( ! isset( $cache[ $blog_id ] ) ) {
-				$cache[ $blog_id ] = array();
+			if ( ! isset( self::$content_url_cache[ $blog_id ] ) ) {
+				self::$content_url_cache[ $blog_id ] = array();
 			}
-			if ( ! isset( $cache[ $blog_id ][ $path ] ) ) {
-				$cache[ $blog_id ][ $path ] = self::pin_url_scheme( content_url( $path ) );
+			if ( ! isset( self::$content_url_cache[ $blog_id ][ $path ] ) ) {
+				self::$content_url_cache[ $blog_id ][ $path ] = self::pin_url_scheme( content_url( $path ) );
 			}
 
-			return $cache[ $blog_id ][ $path ];
+			return self::$content_url_cache[ $blog_id ][ $path ];
 		}
 
 		/**
