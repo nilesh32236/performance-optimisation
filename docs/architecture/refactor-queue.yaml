@@ -9,6 +9,8 @@ created: 2026-09-22
 baseline:
   Main_methods_max: 232
   Util_methods_max: 170
+  Util_facade_proxies: 4
+  Cache_Key_methods: 4
   Cache_methods_max: 135
   Image_Optimisation_methods_max: 165
   Critical_CSS_methods_max: 137
@@ -25,9 +27,10 @@ items:
     title: 'Extract Cache_Key boundary from Util (transient_key/option_key/cache_salt)'
     type: architecture
     priority: high
-    status: pr-review-running
+    status: merged
     github_issue: 1496
     github_pr: 1497
+    merge_commit: cb08369a
     rationale: >
       Smallest safe first extraction (3 methods + stampede key helper) with the
       widest fan-in (~23 consumers of transient_key). Establishes the
@@ -39,17 +42,21 @@ items:
     non_goals:
       - No storage I/O or TTL policy changes; no multisite prefix change ({blog_id}_ stays).
       - No other Util splits bundled in.
-    notes: []
+    notes:
+      - 'Merged 2026-09-22. Util methods stayed 170 (4 proxies kept); lines 8746→8712.
+        Real count ratchet happens when proxies are removed or logic moves (REF-002+).'
     discoveries: []
 
   - id: REF-002
-    title: 'Extract Settings_Store from Util + Main backfills (memo, snapshots, DEFAULTS)'
+    title: 'Extract Settings_Store from Util (settings memo, save, hook coherence, snapshots)'
     type: architecture
     priority: high
-    status: queued
+    status: planning
+    github_issue: null
+    github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-02/R-03 (A-02/A-03)
     notes:
-      - 'Depends on REF-001 facade pattern. Covers get/set/clear_settings_cache, save_settings, snapshots, ALLOWED_SETTINGS_KEYS ownership.'
+      - 'Depends on REF-001 facade pattern (merged). Covers get/set/clear_settings_cache, save_settings, hook registration, snapshots. ALLOWED_SETTINGS_KEYS + sanitizer ownership deferred to REF-011 to keep the diff focused.'
 
   - id: REF-003
     title: 'Extract Filesystem boundary from Util (atomic writes, path containment, slot helpers)'
@@ -118,3 +125,12 @@ items:
     priority: low
     status: queued
     source: AUDIT/FINAL-REVIEW/architecture.md R-11
+
+  - id: REF-011
+    title: 'Move ALLOWED_SETTINGS_KEYS + sanitizer-map ownership into Settings_Store'
+    type: architecture
+    priority: medium
+    status: queued
+    source: REF-002
+    discoveries:
+      - 'Split out of REF-002 during planning: constant ownership touches Rest/CLI/Main consumers, so it ships as its own focused item after Settings_Store merges.'
