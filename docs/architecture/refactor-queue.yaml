@@ -66,9 +66,9 @@ items:
     title: 'Extract Filesystem boundary core from Util (dirs, local path, atomic writes, containment)'
     type: architecture
     priority: high
-    status: autofix-running
+    status: pr-review-running
     github_issue: 1500
-    github_pr: null
+    github_pr: 1501
     source: AUDIT/FINAL-REVIEW/architecture.md R-07
     notes:
       - 'Security-sensitive: keep is_link/realpath/prefix guards byte-identical; CacheSafePathTest + traversal battery must pin behavior first.'
