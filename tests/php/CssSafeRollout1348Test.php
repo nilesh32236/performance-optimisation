@@ -13,6 +13,7 @@
  */
 
 use PerformanceOptimise\Inc\Critical_CSS;
+use PerformanceOptimise\Inc\Rest;
 use PerformanceOptimise\Inc\Used_CSS;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
@@ -571,6 +572,40 @@ class CssSafeRollout1348Test extends \PHPUnit\Framework\TestCase {
 			$this->assertArrayHasKey( 'rollout', $entry );
 			$this->assertArrayHasKey( 'health', $entry['rollout'] );
 			$this->assertContains( $entry['rollout']['health'], array( 'healthy', 'restorable', 'degraded' ) );
+		}
+	}
+
+	/**
+	 * Rollout flags without a post scope 400 instead of bulk-queueing.
+	 *
+	 * Guards the issue #1348 review footgun: dry_run/promote/rollback/
+	 * health with no post_id must never fall through to bulk
+	 * regenerate_all().
+	 *
+	 * @return void
+	 */
+	public function test_used_css_rollout_flags_require_post_id(): void {
+		$rest = new Rest();
+		foreach ( array( 'dry_run', 'promote', 'rollback', 'health' ) as $flag ) {
+			$request  = new \WP_REST_Request( array( $flag => 1 ) );
+			$response = $rest->used_css_regenerate( $request );
+			$this->assertSame( 400, $response->get_status(), "Flag {$flag} without post_id must 400" );
+			$this->assertFalse( $response->get_data()['success'] );
+		}
+	}
+
+	/**
+	 * Rollout flags without a template scope 400 instead of bulk-queueing.
+	 *
+	 * @return void
+	 */
+	public function test_ccss_rollout_flags_require_template(): void {
+		$rest = new Rest();
+		foreach ( array( 'dry_run', 'promote', 'rollback', 'health' ) as $flag ) {
+			$request  = new \WP_REST_Request( array( $flag => 1 ) );
+			$response = $rest->regenerate_ccss( $request );
+			$this->assertSame( 400, $response->get_status(), "Flag {$flag} without template must 400" );
+			$this->assertFalse( $response->get_data()['success'] );
 		}
 	}
 

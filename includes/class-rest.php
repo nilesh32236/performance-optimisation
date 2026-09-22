@@ -3242,6 +3242,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
 
+			// Safe-rollout scope guard (issue #1348 review): flags without
+			// a single-post scope must 400 here — falling through would
+			// bulk regenerate_all() and mass-queue on a typo.
+			if ( 0 === $post_id && ( ! empty( $params['dry_run'] ) || ! empty( $params['promote'] ) || ! empty( $params['rollback'] ) || ! empty( $params['health'] ) ) ) {
+				return $this->send_response( null, false, 400, __( 'Rollout actions require a post ID.', 'performance-optimisation' ) );
+			}
+
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 				return $this->send_response( null, false, 500, __( 'Action Scheduler is not available.', 'performance-optimisation' ) );
 			}
@@ -3795,6 +3802,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// allowlist lookup in regenerate_single().
 			try {
 				$params = $_request->get_params();
+				// Safe-rollout scope guard (issue #1348 review): flags
+				// without a template key must 400 here — falling through
+				// would bulk regenerate_all() on a typo.
+				if ( ! array_key_exists( 'template', $params ) && ( ! empty( $params['dry_run'] ) || ! empty( $params['promote'] ) || ! empty( $params['rollback'] ) || ! empty( $params['health'] ) ) ) {
+					return $this->send_response( null, false, 400, __( 'Rollout actions require a template.', 'performance-optimisation' ) );
+				}
 				if ( array_key_exists( 'template', $params ) ) {
 					// An explicit but empty/non-string template key must
 					// not fall through to bulk regen (issue #1274 review):
