@@ -9,7 +9,7 @@ created: 2026-09-22
 baseline:
   Main_methods_max: 232
   Util_methods_max: 166
-  Util_facade_proxies: 30
+  Util_facade_proxies: 33
   Cache_Key_methods: 4
   Settings_Store_methods: 13
   Filesystem_methods: 28
@@ -142,8 +142,11 @@ items:
     title: 'Move rollout/purge-fallback slot helpers from Util into Filesystem boundary'
     type: architecture
     priority: medium
-    status: queued
+    status: autofix-running
+    github_issue: 1502
+    github_pr: null
     source: REF-003
+    order_note: 'Processed right after REF-003 (direct continuation of its split) ahead of REF-004.'
     notes:
       - 'Split out of REF-003 during planning. Covers get_staged_path_for/promote/restore_fallback/describe_rollout_slot + purge-fallback path/payload/log helpers + $purge_fallback_memo state. Ships after Filesystem merges.'
 
