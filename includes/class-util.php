@@ -3570,6 +3570,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * part), and Abilities::same_site_url_or_home() all funnel here so
 		 * port/case/IDN edge cases cannot drift apart.
 		 *
+		 * Audit #1490 review: the port is pinned as well as the host. A URL
+		 * with no explicit port (the scheme default 80/443) always passes
+		 * this leg; an explicit nonstandard port must equal the home URL's
+		 * effective port (so dev/staging hosts on :8080 keep working while
+		 * a redirect hop cannot pivot to a sidecar on another port of the
+		 * same host). Residual acceptance: an explicit :80/:443 on the home
+		 * host is allowed — those are the standard web ports sharing the
+		 * web attack surface, and the host gate still applies.
+		 *
 		 * @since 2.2.0
 		 * @param string $url URL to check.
 		 * @return bool True when safe.
@@ -3590,11 +3599,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
 					return false;
 				}
+				if ( ! self::is_allowed_same_site_port( $parsed ) ) {
+					return false;
+				}
 				return self::is_same_site_host( $url );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
 			}
+		}
+
+		/**
+		 * Whether a parsed URL's port is allowed by the same-site policy.
+		 *
+		 * @since NEXT
+		 * @param array<string, mixed> $parsed wp_parse_url() output for the candidate URL.
+		 * @return bool True when the port leg passes.
+		 */
+		private static function is_allowed_same_site_port( array $parsed ): bool {
+			if ( ! array_key_exists( 'port', $parsed ) || null === $parsed['port'] || '' === $parsed['port'] ) {
+				// No explicit port — the scheme default (80/443). Allowed.
+				return true;
+			}
+			$port = (int) $parsed['port'];
+			if ( 80 === $port || 443 === $port ) {
+				// Explicit standard web ports share the web attack surface.
+				return true;
+			}
+			// Nonstandard explicit port: only the home URL's own effective
+			// port may be used (dev/staging hosts on :8080 etc.).
+			$home_port = self::home_effective_port();
+			return null !== $home_port && $port === $home_port;
+		}
+
+		/**
+		 * Effective port of the home URL (explicit port or scheme default).
+		 *
+		 * @since NEXT
+		 * @return int|null Effective home port, or null when indeterminable (fail closed).
+		 */
+		private static function home_effective_port(): ?int {
+			if ( ! function_exists( 'wp_parse_url' ) ) {
+				return null;
+			}
+			$home_port = wp_parse_url( self::cached_home_url(), PHP_URL_PORT );
+			if ( is_int( $home_port ) || ( is_string( $home_port ) && ctype_digit( $home_port ) ) ) {
+				return (int) $home_port;
+			}
+			$home_scheme = wp_parse_url( self::cached_home_url(), PHP_URL_SCHEME );
+			$home_scheme = is_string( $home_scheme ) ? strtolower( $home_scheme ) : '';
+			if ( 'http' === $home_scheme ) {
+				return 80;
+			}
+			if ( 'https' === $home_scheme ) {
+				return 443;
+			}
+			return null;
 		}
 
 		/**
@@ -3620,11 +3680,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Single shared SSRF-adjacent resolver (audit #1490 review): absolute
 		 * URLs are taken as-is, protocol-relative URLs inherit the current
 		 * scheme, and relative URLs resolve against the current URL's
-		 * directory. The resolved hop must then pass the same-host policy
-		 * ({@see is_same_site_url()}) so a same-host response can never
-		 * bounce the server into internal endpoints (e.g. link-local
-		 * metadata). Used by Telemetry and the LiteSpeed crawler so the two
-		 * copies of this logic cannot drift apart.
+		 * directory with RFC 3986 dot-segment normalization (so `../other`
+		 * resolves to a canonical path instead of fetching a literal
+		 * `/subdir/../other`). Query-only (`?x=1`) locations keep the
+		 * current path, fragment-only (`#frag`) locations re-resolve to the
+		 * current URL minus its fragment. The resolved hop must then pass
+		 * the same-host policy ({@see is_same_site_url()}) so a same-host
+		 * response can never bounce the server into internal endpoints
+		 * (e.g. link-local metadata). Used by Telemetry and the LiteSpeed
+		 * crawler so the two copies of this logic cannot drift apart.
 		 *
 		 * @since NEXT
 		 * @param string $location    Raw Location header value.
@@ -3655,13 +3719,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$scheme   = isset( $base_parts['scheme'] ) ? $base_parts['scheme'] : 'https';
 					$host     = $base_parts['host'];
 					$port     = isset( $base_parts['port'] ) ? ':' . $base_parts['port'] : '';
-					$base_dir = dirname( isset( $base_parts['path'] ) ? $base_parts['path'] : '/' );
+					$base_dir = dirname( isset( $base_parts['path'] ) && '' !== $base_parts['path'] ? $base_parts['path'] : '/' );
 
-					if ( 0 === strpos( $location, '/' ) ) {
-						$resolved = $scheme . '://' . $host . $port . $location;
+					if ( 0 === strpos( $location, '?' ) ) {
+						// Query-only — keep the current path, replace the query.
+						$current_path = isset( $base_parts['path'] ) && '' !== $base_parts['path'] ? $base_parts['path'] : '/';
+						$resolved     = $scheme . '://' . $host . $port . $current_path . $location;
+					} elseif ( 0 === strpos( $location, '#' ) ) {
+						// Fragment-only — never sent to the server; re-resolve
+						// to the current URL minus its fragment so the hop
+						// validates (and fetches) the same canonical page.
+						$hash_pos = strpos( $current_url, '#' );
+						$resolved = ( false !== $hash_pos ? substr( $current_url, 0, $hash_pos ) : $current_url ) . $location;
+					} elseif ( 0 === strpos( $location, '/' ) ) {
+						$resolved = $scheme . '://' . $host . $port . self::normalize_redirect_target( $location );
 					} else {
-						// rtrim — dirname('/') yields '//path'.
-						$resolved = $scheme . '://' . $host . $port . rtrim( $base_dir, '/' ) . '/' . $location;
+						// rtrim — dirname('/') yields '/'.
+						$merged   = rtrim( $base_dir, '/' ) . '/' . $location;
+						$resolved = $scheme . '://' . $host . $port . self::normalize_redirect_target( $merged );
 					}
 				}
 
@@ -3681,6 +3756,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				unset( $e );
 				return false;
 			}
+		}
+
+		/**
+		 * Normalize a redirect target (path + optional ?query/#fragment).
+		 *
+		 * Splits off the query/fragment suffix so dot-segment removal
+		 * applies to the path part only (audit #1490 review: a bare
+		 * concatenation would fetch `/subdir/../other` literally), then
+		 * reattaches the suffix untouched.
+		 *
+		 * @since NEXT
+		 * @param string $target Path with optional query/fragment suffix.
+		 * @return string Normalized target.
+		 */
+		private static function normalize_redirect_target( string $target ): string {
+			$suffix   = '';
+			$hash_pos = strpos( $target, '#' );
+			if ( false !== $hash_pos ) {
+				$suffix = substr( $target, $hash_pos );
+				$target = substr( $target, 0, $hash_pos );
+			}
+			$query_pos = strpos( $target, '?' );
+			if ( false !== $query_pos ) {
+				$suffix = substr( $target, $query_pos ) . $suffix;
+				$target = substr( $target, 0, $query_pos );
+			}
+			return self::remove_dot_segments( $target ) . $suffix;
+		}
+
+		/**
+		 * Remove RFC 3986 section 5.2.4 dot segments from a URL path.
+		 *
+		 * Collapses `/./` and resolves `/../` lexically (a leading `/..`
+		 * that escapes the root is dropped — the host gate applied by the
+		 * caller still bounds where the resolved hop may go). A trailing
+		 * slash implied by the input (including `/./` and `/../` endings)
+		 * is preserved so directory redirects keep their canonical form.
+		 *
+		 * @since NEXT
+		 * @param string $path URL path to normalize.
+		 * @return string Normalized path (always starting with '/').
+		 */
+		private static function remove_dot_segments( string $path ): string {
+			$segments = explode( '/', $path );
+			$out      = array();
+			foreach ( $segments as $segment ) {
+				if ( '' === $segment || '.' === $segment ) {
+					continue;
+				}
+				if ( '..' === $segment ) {
+					array_pop( $out );
+					continue;
+				}
+				$out[] = $segment;
+			}
+			$normalized = '/' . implode( '/', $out );
+			if ( '/' !== $normalized && ( str_ends_with( $path, '/' ) || str_ends_with( $path, '/.' ) || str_ends_with( $path, '/..' ) ) ) {
+				$normalized .= '/';
+			}
+			return $normalized;
 		}
 
 		/**

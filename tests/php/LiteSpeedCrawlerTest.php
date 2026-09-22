@@ -646,4 +646,34 @@ class LiteSpeedCrawlerTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 1, $result['failed'] );
 		$this->assertCount( 6, $fetched );
 	}
+
+	public function test_resolve_validated_redirect_normalizes_and_pins_ports(): void {
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_http_validate_url' )->returnArg();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $v ) {
+				return rtrim( (string) $v, '/' );
+			}
+		);
+		Util::reset_cached_home_urls();
+		$method = new \ReflectionMethod( LiteSpeed_Crawler::class, 'resolve_validated_redirect' );
+		// Audit #1490 review: dot-segments resolve canonically instead of
+		// fetching a literal `/subdir/../other` path.
+		$this->assertSame( 'https://example.com/other', $method->invoke( null, '../other', 'https://example.com/sub/dir/' ) );
+		$this->assertSame( 'https://example.com/b', $method->invoke( null, '/a/../b', 'https://example.com/a' ) );
+		$this->assertSame( 'https://example.com/b?x=1', $method->invoke( null, '/a/../b?x=1', 'https://example.com/a' ) );
+		// Query-only keeps the current path; fragment-only re-resolves to
+		// the same canonical page.
+		$this->assertSame( 'https://example.com/a?x=1', $method->invoke( null, '?x=1', 'https://example.com/a' ) );
+		$this->assertSame( 'https://example.com/a#sec', $method->invoke( null, '#sec', 'https://example.com/a' ) );
+		// Port pinning (home is http://example.com, effective port 80):
+		// nonstandard-port hops are dropped, standard ports pass.
+		$this->assertFalse( $method->invoke( null, 'https://example.com:8443/x', 'https://example.com/a' ) );
+		$this->assertFalse( $method->invoke( null, 'http://example.com:8080/x', 'http://example.com/a' ) );
+		$this->assertSame( 'https://example.com:443/x', $method->invoke( null, 'https://example.com:443/x', 'https://example.com/a' ) );
+		$this->assertSame( 'http://example.com:80/x', $method->invoke( null, 'http://example.com:80/x', 'http://example.com/a' ) );
+	}
 }

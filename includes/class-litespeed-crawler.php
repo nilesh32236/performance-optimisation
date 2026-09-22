@@ -80,8 +80,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Maximum manually-followed same-host redirects per queued request.
 		 *
-		 * Mirrors Telemetry::MAX_REDIRECT_HOPS so a redirect loop can never
-		 * spin the curl_multi batch past the wall-clock budget.
+		 * Bounded hop budget so a redirect loop can never spin the
+		 * curl_multi batch past the wall-clock budget. Telemetry enforces
+		 * its own smaller bound tuned for single-fetch scans; the crawler
+		 * allows up to 5 hops here to tolerate legitimate multi-hop
+		 * chains (http→https, trailing slash, canonicalization). Do not
+		 * sync the two values — they serve different budgets.
 		 *
 		 * @since NEXT
 		 * @var int
@@ -724,10 +728,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			}
 
 			if ( empty( $requests ) ) {
+				// Audit #1490 review: failed already counts $prefailed, so
+				// skipped must be the blacklist count only — falling back to
+				// count( $urls ) here would double-count off-host URLs as
+				// both failed and skipped.
 				return array(
 					'success' => 0,
 					'failed'  => $prefailed,
-					'skipped' => $skipped_blacklist > 0 ? $skipped_blacklist : count( $urls ),
+					'skipped' => $skipped_blacklist,
 				);
 			}
 

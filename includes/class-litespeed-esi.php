@@ -250,32 +250,59 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
-		 * Log a throttled nonce-refresh burst (at most once per hour).
+		 * Log a throttled nonce-refresh burst (at most once per hour per source).
 		 *
 		 * Audit #1490: the `nonce`-refresh block stays reachable with a
 		 * stale/expired nonce (stale static-HTML cache recovery), which makes
 		 * it an unauthenticated fragment-nonce minting oracle. The tiered
 		 * throttle + fail-closed behavior is unchanged; this only records
-		 * repeated refresh-mint bursts so operators can spot abuse. The
+		 * repeated refresh-mint bursts so operators can spot abuse and act
+		 * on the source. The row carries the block name, the throttled
+		 * bucket count, and the client IP (REMOTE_ADDR only, never
+		 * X-Forwarded-For) so the minting source is identifiable. The
 		 * minted nonce grants fragment hydration only, never privileged
 		 * actions. Never throws.
 		 *
 		 * @since NEXT
+		 * @param string $block Block name scoping the throttle bucket.
 		 * @return void
 		 */
-		private static function log_refresh_mint_burst(): void {
+		private static function log_refresh_mint_burst( string $block ): void {
 			try {
 				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
 					return;
 				}
-				$sentinel = Util::transient_key( 'wppo_esi_refresh_burst_logged' );
+				$ip = '';
+				if ( isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+					$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+				}
+				$source_hash = md5( ( '' !== $ip ? $ip : 'anon' ) . '|' . strtolower( $block ) );
+				// Per-source sentinel (audit #1490 review): a global sentinel
+				// would collapse every attacker's burst into one row/hour with
+				// no attributable source. One row/hour per IP+block stays
+				// bounded while keeping each minting source visible.
+				$sentinel = Util::transient_key( 'wppo_esi_refresh_burst_logged_' . $source_hash );
 				if ( false !== get_transient( $sentinel ) ) {
 					return;
 				}
 				$hour = defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600;
 				set_transient( $sentinel, 1, $hour );
+				// Re-read the throttle bucket for the throttled-hit count so
+				// the row shows burst magnitude, not just occurrence.
+				$count  = 0;
+				$bucket = get_transient( Util::transient_key( 'wppo_esi_throttle_' . $source_hash ) );
+				if ( is_array( $bucket ) && isset( $bucket['count'] ) ) {
+					$count = (int) $bucket['count'];
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && is_callable( array( 'PerformanceOptimise\Inc\Log', 'add' ) ) ) {
-					Log::add( 'ESI nonce-refresh minting throttled (possible burst)' );
+					Log::add(
+						sprintf(
+							'ESI nonce-refresh minting throttled for block %s from %s (%d throttled hits, possible burst)',
+							$block,
+							'' !== $ip ? $ip : 'unknown IP',
+							$count
+						)
+					);
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -1234,10 +1261,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				if ( self::is_fragment_throttled( $block, $refresh_limit, 60 ) ) {
 					// Audit #1490: the refresh block is an unauthenticated
 					// nonce-minting oracle by design (stale-cache recovery), so
-					// log throttled bursts for operator visibility. The sentinel
-					// transient bounds this to one log row per hour even under
-					// a sustained minting flood.
-					self::log_refresh_mint_burst();
+					// log throttled bursts for operator visibility. The
+					// per-source sentinel bounds this to one log row per hour
+					// per IP+block even under a sustained minting flood.
+					self::log_refresh_mint_burst( $block );
 					self::emit_private_fail_closed();
 					if ( function_exists( 'wp_send_json_error' ) ) {
 						wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
