@@ -2249,5 +2249,219 @@ describe( 'FileOptimization Component', () => {
 				screen.queryByText( /Settings restored to the previous/i )
 			).not.toBeInTheDocument();
 		} );
+
+		it( 'Preview button stages a used-CSS dry run for the post ID', async () => {
+			apiCall.mockResolvedValue( { success: true, data: {} } );
+			render(
+				<FileOptimization
+					options={ { removeUnusedCSS: true } }
+					serverRules={ {} }
+				/>
+			);
+
+			fireEvent.change(
+				screen.getByLabelText( /Regenerate Used CSS for Post ID/i ),
+				{ target: { value: '42' } }
+			);
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: 'Preview' } )
+				);
+			} );
+
+			await waitFor( () => {
+				expect( apiCall ).toHaveBeenCalledWith( 'used_css_regenerate', {
+					post_id: 42,
+					dry_run: 1,
+				} );
+			} );
+		} );
+
+		it( 'rollout actions require a valid post ID', async () => {
+			apiCall.mockResolvedValue( { success: true, data: {} } );
+			render(
+				<FileOptimization
+					options={ { removeUnusedCSS: true } }
+					serverRules={ {} }
+				/>
+			);
+
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: 'Preview' } )
+				);
+			} );
+
+			await waitFor( () => {
+				expect(
+					screen.getByText( 'Enter a valid post ID to regenerate.' )
+				).toBeInTheDocument();
+			} );
+			const regenerateCalls = apiCall.mock.calls.filter(
+				( call ) => 'used_css_regenerate' === call[ 0 ]
+			);
+			expect( regenerateCalls ).toHaveLength( 0 );
+		} );
+
+		it( 'Promote enables after a staged preview and sends the promote flag', async () => {
+			apiCall.mockImplementation( ( endpoint, params ) => {
+				if ( 'used_css_status' === endpoint ) {
+					const parsed = parseInt( params?.post_id, 10 );
+					return Promise.resolve( {
+						success: true,
+						data:
+							Number.isFinite( parsed ) && parsed > 0
+								? {
+										rollout: {
+											staged: true,
+											staged_changed: true,
+											health: 'healthy',
+											fallback: false,
+										},
+								  }
+								: {},
+					} );
+				}
+				return Promise.resolve( {
+					success: true,
+					data: {},
+					message: 'Preview staged.',
+				} );
+			} );
+			render(
+				<FileOptimization
+					options={ { removeUnusedCSS: true } }
+					serverRules={ {} }
+				/>
+			);
+
+			// No staged slot before any lookup: promote stays disabled.
+			expect(
+				screen.getByRole( 'button', { name: 'Promote staged' } )
+			).toBeDisabled();
+
+			fireEvent.change(
+				screen.getByLabelText( /Regenerate Used CSS for Post ID/i ),
+				{ target: { value: '42' } }
+			);
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: 'Preview' } )
+				);
+			} );
+
+			await waitFor( () => {
+				expect(
+					screen.getByRole( 'button', { name: 'Promote staged' } )
+				).not.toBeDisabled();
+			} );
+
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: 'Promote staged' } )
+				);
+			} );
+
+			await waitFor( () => {
+				expect( apiCall ).toHaveBeenCalledWith( 'used_css_regenerate', {
+					post_id: 42,
+					promote: 1,
+				} );
+			} );
+		} );
+
+		it( 'Restore last-good sends the rollback flag', async () => {
+			apiCall.mockImplementation( ( endpoint, params ) => {
+				if ( 'used_css_status' === endpoint ) {
+					const parsed = parseInt( params?.post_id, 10 );
+					return Promise.resolve( {
+						success: true,
+						data:
+							Number.isFinite( parsed ) && parsed > 0
+								? {
+										rollout: {
+											staged: false,
+											health: 'restorable',
+											fallback: true,
+										},
+								  }
+								: {},
+					} );
+				}
+				return Promise.resolve( { success: true, data: {} } );
+			} );
+			render(
+				<FileOptimization
+					options={ { removeUnusedCSS: true } }
+					serverRules={ {} }
+				/>
+			);
+
+			// No fallback known before any lookup: restore stays disabled.
+			expect(
+				screen.getByRole( 'button', { name: 'Restore last-good' } )
+			).toBeDisabled();
+
+			fireEvent.change(
+				screen.getByLabelText( /Regenerate Used CSS for Post ID/i ),
+				{ target: { value: '7' } }
+			);
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: 'Preview' } )
+				);
+			} );
+
+			await waitFor( () => {
+				expect(
+					screen.getByRole( 'button', { name: 'Restore last-good' } )
+				).not.toBeDisabled();
+			} );
+
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: 'Restore last-good' } )
+				);
+			} );
+
+			await waitFor( () => {
+				expect( apiCall ).toHaveBeenCalledWith( 'used_css_regenerate', {
+					post_id: 7,
+					rollback: 1,
+				} );
+			} );
+		} );
+
+		it( 'CCSS Preview button sends the dry-run flag for the template hash', async () => {
+			const onCcssRefresh = jest.fn();
+			apiCall.mockResolvedValue( { success: true, data: {} } );
+			render(
+				<FileOptimization
+					options={ { criticalCSS: true } }
+					serverRules={ {} }
+					ccssStatus={ {
+						abcdef1234567890abcdef1234567890: {
+							status: 'done',
+							label: 'Home',
+						},
+					} }
+					onCcssRefresh={ onCcssRefresh }
+				/>
+			);
+
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: 'Preview Home' } )
+				);
+			} );
+
+			await waitFor( () => {
+				expect( apiCall ).toHaveBeenCalledWith( 'regenerate_ccss', {
+					template: 'abcdef1234567890abcdef1234567890',
+					dry_run: 1,
+				} );
+			} );
+			expect( onCcssRefresh ).toHaveBeenCalled();
+		} );
 	} );
 } );
