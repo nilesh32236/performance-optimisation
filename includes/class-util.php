@@ -136,6 +136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 			'wppo_ai_css_refresh_snapshots',           // AI_Adaptive::CSS_REFRESH_SNAPSHOT_OPTION (issue #1407).
 			'wppo_callback_secret',                    // CALLBACK_SECRET_OPTION (issue #1347).
+			'wppo_last_purge',                       // Builder_Purge_Watcher::LAST_PURGE_OPTION (upgrade auto-purge).
 		);
 
 		/**
