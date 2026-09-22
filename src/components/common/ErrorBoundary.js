@@ -30,10 +30,19 @@ class ErrorBoundary extends Component {
 				redactLogSecrets( message ) || 'an error.'
 			);
 		} else if ( error instanceof Error ) {
-			console.error( 'ErrorBoundary caught:', error.message );
+			// Audit #1493 review: error messages can embed request URLs or
+			// payload fragments carrying nonces/tokens, so the non-debug
+			// branch is redacted too.
+			console.error(
+				'ErrorBoundary caught:',
+				redactLogSecrets( error.message ) || 'an error.'
+			);
 		} else {
 			const primitive = String( error );
-			console.error( 'ErrorBoundary caught:', primitive || 'an error.' );
+			console.error(
+				'ErrorBoundary caught:',
+				redactLogSecrets( primitive ) || 'an error.'
+			);
 		}
 	}
 

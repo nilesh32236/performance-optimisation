@@ -29,12 +29,15 @@ export const isSensitivePollutionKey = ( key ) =>
  * private_key, google_key, etc.; the separator requirement avoids matching
  * words like "monkey" that merely end in "key". The separator-optional
  * api[_-]?keys? alternative covers separator-less 'apikey'/'apiKey'
- * variants.
+ * variants, and the (private|secret|public|client|consumer)keys?
+ * alternative covers separator-less camelCase '*Key' names (secretKey,
+ * privateKey, clientKey) — the explicit prefix list keeps bare words like
+ * "monkey" unmatched.
  *
  * @since NEXT
  */
 export const SECRET_KEY_PATTERN =
-	/(?:[_-]keys?|api[_-]?keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
+	/(?:[_-]keys?|api[_-]?keys?|(?:private|secret|public|client|consumer)keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
 
 /**
  * Deep-clone a value while deleting every nested key matching

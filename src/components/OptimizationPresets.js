@@ -109,6 +109,12 @@ export const SENSITIVE_EXPORT_PATHS = [
  * edge-cache identifiers/tokens) is stripped by default. The live global
  * is never mutated — the export works on a deep clone.
  *
+ * Note: unlike the PluginSetting Tools export (mask-with-'REDACTED'),
+ * secrets are deleted, not masked, here — so a re-imported Presets
+ * backup silently drops secret keys instead of preserving masked
+ * placeholders. The two exports share the key pattern only, not the
+ * redaction treatment, and must not be assumed interchangeable.
+ *
  * @param {Object} settings Raw settings object.
  * @return {Object} Cloned settings safe for export.
  */

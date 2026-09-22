@@ -1158,6 +1158,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						}
 						$decoded = $next;
 					}
+					// Normalize backslashes post-decode so %5c-encoded
+					// separators (..%5c) cannot evade the `/`-split check.
+					$decoded       = str_replace( '\\', '/', $decoded );
 					$has_traversal = false;
 					foreach ( explode( '/', $decoded ) as $segment ) {
 						if ( '..' === $segment ) {

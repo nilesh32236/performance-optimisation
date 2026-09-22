@@ -92,7 +92,8 @@ const SIDEBAR_BREAKPOINT = 992;
  * @return {boolean} True when the value is a safe hex color.
  */
 export const isSafeCssColor = ( value ) =>
-	typeof value === 'string' && /^#[0-9a-fA-F]{3,8}$/.test( value );
+	typeof value === 'string' &&
+	/^#[0-9a-fA-F]{3,4}$|^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/.test( value );
 
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );

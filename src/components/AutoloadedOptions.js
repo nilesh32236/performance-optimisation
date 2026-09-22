@@ -764,8 +764,14 @@ const AutoloadedOptions = () => {
 			<ConfirmDialog
 				isOpen={ confirmApplyOpen }
 				onConfirm={ () => {
-					setConfirmApplyOpen( false );
-					applyFix();
+					// Audit #1493 review: keep the dialog mounted (with the
+					// isBusy spinner) while applyFix runs; close it only once
+					// the write settles so the busy state is visible.
+					applyFix().finally( () => {
+						if ( isMounted.current ) {
+							setConfirmApplyOpen( false );
+						}
+					} );
 				} }
 				onCancel={ () => setConfirmApplyOpen( false ) }
 				title={ __(
