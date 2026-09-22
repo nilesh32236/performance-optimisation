@@ -622,37 +622,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Whether a URL is allowed as a crawler target or redirect landing.
 		 *
-		 * Same-host SSRF policy mirroring Telemetry::resolve_redirect():
-		 * the URL must pass wp_http_validate_url(), use http/https, and share
-		 * the home-URL host so a same-host response can never bounce the
-		 * server into internal endpoints (e.g. link-local metadata).
+		 * Same-host SSRF policy delegating to the canonical
+		 * {@see Util::is_same_site_url()} check (wp_http_validate_url() +
+		 * http/https + case-insensitive home-host match) so a same-host
+		 * response can never bounce the server into internal endpoints
+		 * (e.g. link-local metadata). Fails closed when the core URL
+		 * validator is unavailable.
 		 *
 		 * @param string $url URL to check.
 		 * @return bool True when the URL is allowed.
 		 * @since NEXT
 		 */
 		private static function is_url_same_host_allowed( string $url ): bool {
-			if ( '' === $url || ! function_exists( 'wp_http_validate_url' ) || ! wp_http_validate_url( $url ) ) {
+			if ( ! function_exists( 'wp_http_validate_url' ) ) {
 				return false;
 			}
-			$parsed = wp_parse_url( $url );
-			if ( ! isset( $parsed['scheme'] ) || ! in_array( $parsed['scheme'], array( 'http', 'https' ), true ) ) {
-				return false;
-			}
-			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
-			if ( ! isset( $parsed['host'] ) || '' === (string) $home_host || $parsed['host'] !== $home_host ) {
-				return false;
-			}
-			return true;
+			return Util::is_same_site_url( $url );
 		}
 
 		/**
 		 * Resolve a redirect Location against the current URL and validate it.
 		 *
-		 * Resolution mirrors Telemetry::resolve_redirect(): absolute URLs are
-		 * taken as-is, protocol-relative URLs inherit the current scheme, and
-		 * relative URLs resolve against the current URL's directory. The
-		 * resolved hop must then pass the same-host SSRF policy.
+		 * Thin wrapper over {@see Util::resolve_same_host_redirect()} so the
+		 * crawler and telemetry redirect policies share one implementation
+		 * (audit #1490 review) instead of drifting apart.
 		 *
 		 * @param string $location    Raw Location header value.
 		 * @param string $current_url URL of the response that sent the Location.
@@ -660,34 +653,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * @since NEXT
 		 */
 		private static function resolve_validated_redirect( string $location, string $current_url ): string|false {
-			$location = trim( $location );
-			if ( '' === $location ) {
-				return false;
-			}
-			if ( preg_match( '/^https?:\/\//i', $location ) ) {
-				$resolved = $location;
-			} elseif ( 0 === strpos( $location, '//' ) ) {
-				$scheme   = wp_parse_url( $current_url, PHP_URL_SCHEME );
-				$resolved = ( $scheme ? $scheme : 'https' ) . ':' . $location;
-			} else {
-				$base_parts = wp_parse_url( $current_url );
-				if ( empty( $base_parts['host'] ) ) {
-					return false;
-				}
-				$scheme   = isset( $base_parts['scheme'] ) ? $base_parts['scheme'] : 'https';
-				$host     = $base_parts['host'];
-				$port     = isset( $base_parts['port'] ) ? ':' . $base_parts['port'] : '';
-				$base_dir = dirname( isset( $base_parts['path'] ) ? $base_parts['path'] : '/' );
-				if ( 0 === strpos( $location, '/' ) ) {
-					$resolved = $scheme . '://' . $host . $port . $location;
-				} else {
-					$resolved = $scheme . '://' . $host . $port . rtrim( $base_dir, '/' ) . '/' . $location;
-				}
-			}
-			if ( ! self::is_url_same_host_allowed( $resolved ) ) {
-				return false;
-			}
-			return $resolved;
+			return Util::resolve_same_host_redirect( $location, $current_url );
 		}
 
 		/**
@@ -789,10 +755,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					--$remaining;
 					// Audit #1490: no auto-follow here either — redirects are
 					// followed manually below so each hop passes the same-host
-					// policy (mirrors Telemetry::fetch_via_curl()).
+					// policy (mirrors Util::resolve_same_host_redirect()).
 					$current = $req['url'];
 					$hops    = 0;
 					while ( true ) {
+						if ( microtime( true ) >= $fallback_deadline ) {
+							// Budget exhausted mid-chain: this hop plus the
+							// un-attempted remainder count as failed WITHOUT
+							// blacklist penalty (never fetched).
+							$failed += $remaining + 1;
+							break 2;
+						}
 						$resp = wp_remote_get(
 							$current,
 							array(
@@ -807,7 +780,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							++$failed;
 							break;
 						}
-						if ( $code >= 300 && $code < 400 && $hops < self::MAX_REDIRECT_HOPS ) {
+						if ( $code >= 300 && $code < 400 ) {
+							if ( $hops >= self::MAX_REDIRECT_HOPS ) {
+								// Hop cap exhausted without reaching the
+								// terminal page: failure, not success.
+								self::record_failure( $req['url'] );
+								++$failed;
+								break;
+							}
 							$location = wp_remote_retrieve_header( $resp, 'location' );
 							if ( is_array( $location ) ) {
 								$location = reset( $location );
@@ -815,14 +795,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							$next = self::resolve_validated_redirect( (string) $location, $current );
 							if ( false === $next ) {
 								// No Location, or an off-host/link-local hop:
-								// drop it as a failure without ever fetching it.
-								if ( '' !== trim( (string) $location ) ) {
-									self::record_failure( $req['url'] );
-									++$failed;
-								} else {
-									self::clear_blacklist( $req['url'] );
-									++$success;
-								}
+								// a 3xx with nowhere allowed to go warmed
+								// nothing — drop it as a failure without
+								// ever fetching it.
+								self::record_failure( $req['url'] );
+								++$failed;
 								break;
 							}
 							$current = $next;
@@ -863,7 +840,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				curl_setopt( $ch, CURLOPT_TIMEOUT, 5 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
 				// Audit #1490: never auto-follow redirects server-side — 3xx
 				// targets are re-queued below only after passing the same-host
-				// policy (mirrors Telemetry::fetch_via_curl()).
+				// policy (mirrors Util::resolve_same_host_redirect()).
 				curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, false ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
 				curl_setopt( $ch, CURLOPT_MAXREDIRS, 0 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
 				// Restrict to HTTP/HTTPS only — prevent file://, ftp://, etc.
@@ -954,14 +931,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 									'hops'    => $meta['hops'] + 1,
 									'root'    => $root,
 								);
-							} elseif ( '' !== $redirect ) {
+							} else {
+								// Off-host/link-local hop, or a 3xx with no
+								// Location (warmed nothing): failure, never
+								// fetched, never counted as success.
 								self::record_failure( $root );
 								++$failed;
-							} else {
-								self::clear_blacklist( $root );
-								++$success;
 							}
-						} elseif ( '' !== $err || $code >= 400 || 0 === $code || ! self::is_url_same_host_allowed( $effective ) ) {
+						} elseif ( '' !== $err || $code >= 400 || 0 === $code || ( $code >= 300 && $code < 400 ) || ! self::is_url_same_host_allowed( $effective ) ) {
 							self::record_failure( $root );
 							++$failed;
 						} else {
@@ -1067,6 +1044,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			if ( '' === $url ) {
 				return;
 			}
+			// Audit #1490: same-host gate on the entry URL — filtered-in
+			// off-host URLs are never fetched.
+			if ( ! self::is_url_same_host_allowed( $url ) ) {
+				self::record_failure( $url );
+				return;
+			}
 			if ( self::is_blacklisted( $url ) ) {
 				return;
 			}
@@ -1085,17 +1068,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				'headers' => array(),
 			);
 			// Respect is_litespeed && is_wppo_cache_owner gating for LS headers? Non-LS still warms file cache.
-			$resp = wp_remote_get(
-				$primary['url'],
-				array(
-					'timeout' => 5,
-					'headers' => $primary['headers'],
-				)
-			);
-			if ( is_wp_error( $resp ) || (int) wp_remote_retrieve_response_code( $resp ) >= 400 ) {
-				self::record_failure( $url );
-			} else {
+			// Audit #1490: never auto-follow redirects server-side — each hop
+			// is re-validated against the same-host policy (mirrors the
+			// crawl_batch() fallback loop) so a same-host response cannot
+			// bounce the server into link-local/off-host targets.
+			$current = $primary['url'];
+			$hops    = 0;
+			while ( true ) {
+				// The variant filter may rewrite URLs; validate every hop,
+				// not just the entry URL.
+				if ( ! self::is_url_same_host_allowed( $current ) ) {
+					self::record_failure( $url );
+					return;
+				}
+				$resp = wp_remote_get(
+					$current,
+					array(
+						'timeout'     => 5,
+						'headers'     => $primary['headers'],
+						'redirection' => 0,
+					)
+				);
+				$code = is_wp_error( $resp ) ? 0 : (int) wp_remote_retrieve_response_code( $resp );
+				if ( is_wp_error( $resp ) || 0 === $code || $code >= 400 ) {
+					self::record_failure( $url );
+					return;
+				}
+				if ( $code >= 300 && $code < 400 ) {
+					if ( $hops >= self::MAX_REDIRECT_HOPS ) {
+						self::record_failure( $url );
+						return;
+					}
+					$location = wp_remote_retrieve_header( $resp, 'location' );
+					if ( is_array( $location ) ) {
+						$location = reset( $location );
+					}
+					$next = self::resolve_validated_redirect( (string) $location, $current );
+					if ( false === $next ) {
+						self::record_failure( $url );
+						return;
+					}
+					$current = $next;
+					++$hops;
+					continue;
+				}
 				self::clear_blacklist( $url );
+				return;
 			}
 		}
 

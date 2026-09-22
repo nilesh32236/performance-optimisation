@@ -3525,18 +3525,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			try {
 				$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 				if ( ! array_key_exists( $blog_id, self::$same_site_home_host ) ) {
-					$home_host                             = function_exists( 'wp_parse_url' ) ? wp_parse_url( self::cached_home_url(), PHP_URL_HOST ) : '';
-					self::$same_site_home_host[ $blog_id ] = ( is_string( $home_host ) ) ? strtolower( $home_host ) : '';
+					$home_host = function_exists( 'wp_parse_url' ) ? wp_parse_url( self::cached_home_url(), PHP_URL_HOST ) : '';
+					// DNS is case-insensitive and a single trailing dot is the
+					// FQDN root form of the same host (audit #1490 review).
+					self::$same_site_home_host[ $blog_id ] = ( is_string( $home_host ) ) ? self::normalize_host_for_compare( $home_host ) : '';
 				}
 				if ( '' === self::$same_site_home_host[ $blog_id ] ) {
 					return false;
 				}
 				$host = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_HOST ) : '';
-				return is_string( $host ) && '' !== $host && strtolower( $host ) === self::$same_site_home_host[ $blog_id ];
+				return is_string( $host ) && '' !== $host && self::normalize_host_for_compare( $host ) === self::$same_site_home_host[ $blog_id ];
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
 			}
+		}
+
+		/**
+		 * Normalize a host for case-insensitive same-site comparison.
+		 *
+		 * Lowercases and strips a single trailing dot (the DNS FQDN root
+		 * form, e.g. `example.com.`), which denotes the same host as the
+		 * bare name. Only one dot is stripped so malformed `example.com..`
+		 * never canonicalizes to a valid host.
+		 *
+		 * @since NEXT
+		 * @param string $host Raw host value.
+		 * @return string Normalized host.
+		 */
+		private static function normalize_host_for_compare( string $host ): string {
+			$host = strtolower( $host );
+			if ( str_ends_with( $host, '.' ) ) {
+				$host = substr( $host, 0, -1 );
+			}
+			return $host;
 		}
 
 		/**
@@ -3589,6 +3611,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return $fallback;
+			}
+		}
+
+		/**
+		 * Resolve a redirect Location against the current URL and validate it.
+		 *
+		 * Single shared SSRF-adjacent resolver (audit #1490 review): absolute
+		 * URLs are taken as-is, protocol-relative URLs inherit the current
+		 * scheme, and relative URLs resolve against the current URL's
+		 * directory. The resolved hop must then pass the same-host policy
+		 * ({@see is_same_site_url()}) so a same-host response can never
+		 * bounce the server into internal endpoints (e.g. link-local
+		 * metadata). Used by Telemetry and the LiteSpeed crawler so the two
+		 * copies of this logic cannot drift apart.
+		 *
+		 * @since NEXT
+		 * @param string $location    Raw Location header value.
+		 * @param string $current_url URL of the response that sent the Location.
+		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
+		 */
+		public static function resolve_same_host_redirect( string $location, string $current_url ): string|false {
+			try {
+				$location = trim( $location );
+				if ( '' === $location ) {
+					return false;
+				}
+
+				// Absolute URL — take as-is.
+				if ( preg_match( '/^https?:\/\//i', $location ) ) {
+					$resolved = $location;
+				} elseif ( 0 === strpos( $location, '//' ) ) {
+					// Protocol-relative — inherit the current scheme.
+					$scheme   = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current_url, PHP_URL_SCHEME ) : '';
+					$resolved = ( $scheme ? $scheme : 'https' ) . ':' . $location;
+				} else {
+					// Relative URL — resolve against the current URL's directory.
+					$base_parts = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current_url ) : false;
+					if ( ! is_array( $base_parts ) || empty( $base_parts['host'] ) ) {
+						return false;
+					}
+
+					$scheme   = isset( $base_parts['scheme'] ) ? $base_parts['scheme'] : 'https';
+					$host     = $base_parts['host'];
+					$port     = isset( $base_parts['port'] ) ? ':' . $base_parts['port'] : '';
+					$base_dir = dirname( isset( $base_parts['path'] ) ? $base_parts['path'] : '/' );
+
+					if ( 0 === strpos( $location, '/' ) ) {
+						$resolved = $scheme . '://' . $host . $port . $location;
+					} else {
+						// rtrim — dirname('/') yields '//path'.
+						$resolved = $scheme . '://' . $host . $port . rtrim( $base_dir, '/' ) . '/' . $location;
+					}
+				}
+
+				// Fail closed without the core URL validator, mirroring the
+				// pre-extraction callers which both required it.
+				if ( ! function_exists( 'wp_http_validate_url' ) ) {
+					return false;
+				}
+
+				// Validate the hop with the same SSRF rules as the initial URL.
+				if ( ! self::is_same_site_url( $resolved ) ) {
+					return false;
+				}
+
+				return $resolved;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
 		}
 

@@ -492,9 +492,158 @@ class LiteSpeedCrawlerTest extends \PHPUnit\Framework\TestCase {
 		// Same-host absolute + root-relative hops pass.
 		$this->assertSame( 'https://example.com/b', $method->invoke( null, 'https://example.com/b', 'https://example.com/a' ) );
 		$this->assertSame( 'https://example.com/b', $method->invoke( null, '/b', 'https://example.com/a' ) );
+		// DNS is case-insensitive; the FQDN trailing-dot form is the same host.
+		$this->assertSame( 'https://EXAMPLE.com/b', $method->invoke( null, 'https://EXAMPLE.com/b', 'https://example.com/a' ) );
+		$this->assertSame( 'https://example.com./b', $method->invoke( null, 'https://example.com./b', 'https://example.com/a' ) );
 		// Off-host, link-local, and empty hops are dropped.
 		$this->assertFalse( $method->invoke( null, 'https://evil.example.net/x', 'https://example.com/a' ) );
 		$this->assertFalse( $method->invoke( null, 'http://169.254.169.254/latest/meta-data/', 'https://example.com/a' ) );
 		$this->assertFalse( $method->invoke( null, '', 'https://example.com/a' ) );
+	}
+
+	/**
+	 * Shared stubs for single/fetch-loop crawler tests.
+	 *
+	 * @param array    $fetched   Out-param collecting wp_remote_get() calls.
+	 * @param callable $responder Callback returning a fake response per URL.
+	 */
+	private function stub_crawler_fetch_functions( array &$fetched, callable $responder ): void {
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_http_validate_url' )->returnArg();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $v ) {
+				return rtrim( (string) $v, '/' );
+			}
+		);
+		Functions\when( 'is_wp_error' )->justReturn( false );
+		Functions\when( 'wp_remote_retrieve_response_code' )->alias(
+			static function ( $resp ) {
+				return isset( $resp['response']['code'] ) ? (int) $resp['response']['code'] : 0;
+			}
+		);
+		Functions\when( 'wp_remote_retrieve_header' )->alias(
+			static function ( $resp, $name ) {
+				if ( 'location' === strtolower( (string) $name ) && isset( $resp['headers']['location'] ) ) {
+					return $resp['headers']['location'];
+				}
+				return '';
+			}
+		);
+		Functions\when( 'wp_remote_get' )->alias(
+			static function ( $url, $args = array() ) use ( &$fetched, $responder ) {
+				$fetched[] = array(
+					'url'  => $url,
+					'args' => $args,
+				);
+				return $responder( $url, $args );
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value ) {
+				if ( 'wppo_crawler_disable_curl' === $tag ) {
+					return true;
+				}
+				if ( 'wppo_crawler_load_limit' === $tag ) {
+					return 100.0;
+				}
+				if ( 'wppo_crawler_is_overloaded' === $tag ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'wp_next_scheduled' )->justReturn( false );
+		Functions\when( 'wp_schedule_single_event' )->justReturn( true );
+	}
+
+	public function test_crawl_single_rejects_off_host_url(): void {
+		$fetched = array();
+		$this->stub_crawler_fetch_functions(
+			$fetched,
+			static function ( $url, $args ) {
+				return array( 'response' => array( 'code' => 200 ) );
+			}
+		);
+		// Audit #1490 review: the off-host entry URL must never be fetched.
+		LiteSpeed_Crawler::crawl_single( 'https://evil.example.net/x' );
+		$this->assertSame( array(), $fetched );
+	}
+
+	public function test_crawl_single_follows_same_host_redirect_without_auto_follow(): void {
+		$fetched = array();
+		$this->stub_crawler_fetch_functions(
+			$fetched,
+			static function ( $url, $args ) {
+				if ( 'https://example.com/a' === $url ) {
+					return array(
+						'response' => array( 'code' => 302 ),
+						'headers'  => array( 'location' => 'https://example.com/b' ),
+					);
+				}
+				return array( 'response' => array( 'code' => 200 ) );
+			}
+		);
+		LiteSpeed_Crawler::crawl_single( 'https://example.com/a' );
+		$this->assertSame( array( 'https://example.com/a', 'https://example.com/b' ), array_column( $fetched, 'url' ) );
+		// Neither hop auto-follows redirects server-side.
+		foreach ( $fetched as $call ) {
+			$this->assertSame( 0, $call['args']['redirection'] );
+		}
+	}
+
+	public function test_crawl_single_drops_link_local_redirect(): void {
+		$fetched = array();
+		$this->stub_crawler_fetch_functions(
+			$fetched,
+			static function ( $url, $args ) {
+				return array(
+					'response' => array( 'code' => 302 ),
+					'headers'  => array( 'location' => 'http://169.254.169.254/latest/meta-data/' ),
+				);
+			}
+		);
+		// The link-local hop must be dropped without ever fetching it.
+		LiteSpeed_Crawler::crawl_single( 'https://example.com/a' );
+		$this->assertSame( array( 'https://example.com/a' ), array_column( $fetched, 'url' ) );
+	}
+
+	public function test_crawl_batch_fallback_location_less_3xx_is_failure(): void {
+		$fetched = array();
+		$this->stub_crawler_fetch_functions(
+			$fetched,
+			static function ( $url, $args ) {
+				// 3xx with no Location warmed nothing.
+				return array( 'response' => array( 'code' => 302 ) );
+			}
+		);
+		$result = LiteSpeed_Crawler::crawl_batch( array( 'https://example.com/a' ) );
+		$this->assertSame( 0, $result['success'] );
+		$this->assertSame( 1, $result['failed'] );
+	}
+
+	public function test_crawl_batch_fallback_hop_cap_exhaustion_is_failure(): void {
+		$fetched = array();
+		$this->stub_crawler_fetch_functions(
+			$fetched,
+			static function ( $url, $args ) {
+				// Endless same-host chain: every hop redirects again.
+				return array(
+					'response' => array( 'code' => 302 ),
+					'headers'  => array( 'location' => 'https://example.com/loop' ),
+				);
+			}
+		);
+		$result = LiteSpeed_Crawler::crawl_batch( array( 'https://example.com/a' ) );
+		// The terminal page was never warmed: failure, and the chain stops
+		// at the hop cap (initial fetch + 5 hops).
+		$this->assertSame( 0, $result['success'] );
+		$this->assertSame( 1, $result['failed'] );
+		$this->assertCount( 6, $fetched );
 	}
 }

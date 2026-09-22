@@ -260,6 +260,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$caller = isset( $trace[1]['function'] ) && is_string( $trace[1]['function'] ) ? $trace[1]['function'] : '';
 			}
 			if ( '' === $caller || ! in_array( $caller, $allowed_callers, true ) ) {
+				// Fail closed, but loudly: a silent `false` here would stop
+				// scheduled cleanups deleting with no operator-visible signal
+				// (audit #1490 review), e.g. via a future wrapper/closure path.
+				Log::add( 'Database cleanup blocked: unexpected caller ' . $caller );
 				return false;
 			}
 			// Allowlist identifiers (cannot use placeholders for table/column names).
@@ -3278,7 +3282,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// Audit #1490: runtime regex assert defense-in-depth — scanners
 			// cannot verify the TABLE_MAP allowlist statically, so re-assert
 			// the identifier shape here (table prefix + name).
-			if ( 1 !== preg_match( '/^[A-Za-z0-9_]+$/', $full_table_name ) ) {
+			if ( 1 !== preg_match( '/^[A-Za-z0-9_]+\z/', $full_table_name ) ) {
 				return false;
 			}
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $full_table_name is allowlisted via TABLE_MAP + $wpdb property; safe identifier interpolation.
