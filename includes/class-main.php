@@ -1096,6 +1096,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Advanced_Cache_Handler' => 'class-advanced-cache-handler.php',
 				'Asset_Manager'          => 'class-asset-manager.php',
 				'Cache'                  => 'class-cache.php',
+				'Cache_Key'              => 'class-cache-key.php',
 				'CDN_Purger'             => 'class-cdn-purger.php',
 				'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
 				'Core_Tweaks'            => 'class-core-tweaks.php',

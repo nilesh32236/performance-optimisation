@@ -115,6 +115,14 @@
         "static_state": false
     },
     {
+        "file": "includes/class-cache-key.php",
+        "class": null,
+        "lines": 142,
+        "methods": 4,
+        "hooks": [],
+        "static_state": false
+    },
+    {
         "file": "includes/class-ai-adaptive.php",
         "class": null,
         "lines": 6323,
