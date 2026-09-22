@@ -290,7 +290,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		 * LCP good <= 2500ms / poor > 4000ms, INP good <= 200ms /
 		 * poor > 500ms, CLS good <= 0.1 / poor > 0.25.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param array $aggregate RUM aggregate data.
 		 * @return array[] Array of suggestion objects.
 		 */
@@ -365,7 +365,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		 * every metric is good / no data exists, so the Dashboard can show
 		 * exactly one next step instead of a wall of suggestions.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param array $aggregate RUM aggregate data.
 		 * @return array|null Single suggestion object, or null.
 		 */
@@ -399,7 +399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		/**
 		 * Average every RUM metric site-wide across days and paths.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param array $aggregate RUM aggregate (day => path => metric => bucket).
 		 * @return array<string, float> Metric => average (only metrics with samples).
 		 */

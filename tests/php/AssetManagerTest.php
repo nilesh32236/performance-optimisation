@@ -8,7 +8,7 @@
  * without ever writing post meta.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.3.0
  */
 
 use PerformanceOptimise\Inc\Asset_Manager;

@@ -11,7 +11,7 @@
  * intact and surfaces a NoticeBanner error (fail-open, never fatal).
  * Per-page exclusions (postmeta) are untouched by presets by design.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 
 import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
@@ -93,7 +93,7 @@ export const formatDiffValue = ( value ) => {
  *             stripSensitiveSettings() now uses the shared generic
  *             SECRET_KEY_PATTERN redactor (src/lib/stripSensitive.js) so
  *             newly added secret keys are stripped by default.
- * @since NEXT
+ * @since 2.3.0
  * @type {Array.<[string, string]>} [tab, key] pairs.
  */
 export const SENSITIVE_EXPORT_PATHS = [

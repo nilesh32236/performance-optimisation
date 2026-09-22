@@ -20,7 +20,7 @@ import {
  * Allowed notice types. Unknown values fall back to 'info' so a typo never
  * emits an unstyled `.wppo-notice--foo` class.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {string[]}
  */
 export const NOTICE_TYPES = Object.freeze( [
@@ -33,7 +33,7 @@ export const NOTICE_TYPES = Object.freeze( [
 /**
  * Per-type icon map so info notices no longer reuse the warning triangle.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {Object<string, *>}
  */
 export const NOTICE_ICONS = Object.freeze( {

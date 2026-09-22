@@ -87,7 +87,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * chains (http→https, trailing slash, canonicalization). Do not
 		 * sync the two values — they serve different budgets.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const MAX_REDIRECT_HOPS = 5;
@@ -635,7 +635,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 *
 		 * @param string $url URL to check.
 		 * @return bool True when the URL is allowed.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function is_url_same_host_allowed( string $url ): bool {
 			if ( ! function_exists( 'wp_http_validate_url' ) ) {
@@ -654,7 +654,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * @param string $location    Raw Location header value.
 		 * @param string $current_url URL of the response that sent the Location.
 		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function resolve_validated_redirect( string $location, string $current_url ): string|false {
 			return Util::resolve_same_host_redirect( $location, $current_url );

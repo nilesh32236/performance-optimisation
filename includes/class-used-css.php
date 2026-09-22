@@ -1333,7 +1333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $css Derived CSS content.
 		 * @return string Safe CSS, or '' when refused.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function sanitize_used_css_output( string $css ): string {
 			try {
@@ -1667,7 +1667,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $css Raw used-CSS content.
 		 * @param string $url The page URL.
 		 * @return array{staged: bool, reason: string, bytes: int, checksum: string, live_bytes: int, live_checksum: string, changed: bool} Preview metadata.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function stage_used_css( string $css, string $url = '' ): array {
 			$refused = static function ( string $reason ) use ( $url ): array {
@@ -1751,7 +1751,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $url The page URL.
 		 * @return bool True when the staged file replaced the live file.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function promote_staged_used_css( string $url = '' ): bool {
 			try {
@@ -1812,7 +1812,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $url    The page URL.
 		 * @param string $reason Machine-readable reason recorded in the activity log.
 		 * @return bool True when the fallback payload replaced the live file.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function rollback_used_css_to_fallback( string $url = '', string $reason = 'manual' ): bool {
 			try {
@@ -1869,7 +1869,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $url The page URL.
 		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool} Slot description.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function get_used_css_rollout_status( string $url = '' ): array {
 			try {
@@ -1900,7 +1900,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $url The page URL.
 		 * @return array{status: string, reason: string, bytes: int} One of healthy|restored|degraded.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function verify_used_css_health( string $url = '' ): array {
 			try {
@@ -3772,8 +3772,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string|null $sig     Optional HMAC signature over the payload.
 		 * @return void
 		 * @since 1.9.0
-		 * @since NEXT Accepts and verifies the optional HMAC signature.
-		 * @since NEXT Documents the provenance-only residual and logs unsigned jobs throttled at WP_DEBUG level.
+		 * @since 2.3.0 Accepts and verifies the optional HMAC signature.
+		 * @since 2.3.0 Documents the provenance-only residual and logs unsigned jobs throttled at WP_DEBUG level.
 		 */
 		public static function process_background( int $post_id, $sig = null ): void {
 			// Builder-template skip-and-continue (issue #1274): never fetch
@@ -3874,7 +3874,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $permalink Same-site-validated permalink to fetch.
 		 * @param int    $timeout   Fetch timeout in seconds.
 		 * @return string Purged CSS, or '' on any failure.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function fetch_and_generate_used_css( int $post_id, string $permalink, int $timeout ): string {
 			try {
@@ -3931,7 +3931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param int $post_id The post ID.
 		 * @return array{staged: bool, reason: string, bytes: int, checksum: string, live_bytes: int, live_checksum: string, changed: bool, post_id: int} Preview metadata.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function generate_preview_for_post( int $post_id ): array {
 			$refused = static function ( string $reason ) use ( $post_id ): array {

@@ -4,7 +4,7 @@ import { fetchWooCacheSelfTest } from './apiRequest';
 /**
  * Timeout for the read-only WooCommerce cache self-test.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {number}
  */
 export const WOO_SELF_TEST_TIMEOUT_MS = 5000;
@@ -12,7 +12,7 @@ export const WOO_SELF_TEST_TIMEOUT_MS = 5000;
 /**
  * Whether the self-test result is unrunnable or WooCommerce is inactive.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Object} data Self-test result payload.
  * @return {boolean} True when the proof could not run.
  */
@@ -30,7 +30,7 @@ export const isWooSelfTestUnrunnable = ( data ) => {
  * sites can never drift: runnable + active + explicit failure evidence
  * (failed route or fail-closed force_exclude recommendation).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Object} data Self-test result payload.
  * @return {boolean} True when the safe-mode fix CTA applies.
  */
@@ -47,7 +47,7 @@ export const shouldShowWooFixCta = ( data ) => {
 /**
  * Tri-state check result: explicit true/false, inconclusive otherwise.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} pass Raw pass value from a check entry.
  * @return {string} 'pass', 'fail', or 'inconclusive'.
  */
@@ -69,7 +69,7 @@ export const getWooCheckState = ( pass ) => {
  * payload with all_pass missing renders inconclusive info (never a FAIL
  * warning with no evidence).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Object} data Self-test result payload.
  * @return {Object} { type, message } descriptor for useNotice().notify().
  */
@@ -121,7 +121,7 @@ export const getWooSelfTestNotice = ( data ) => {
  * Keeps translators' reordering intact (one format string, no hard-coded
  * bullet joins across separate __() calls).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {boolean}  safeMode      Safe-mode toggle state.
  * @param {string[]} excludedPaths Excluded path list.
  * @return {string} Translated summary string.
@@ -150,7 +150,7 @@ export const formatWooSummary = ( safeMode, excludedPaths ) => {
  * Rendered next to each failing row so store owners know what to do
  * before going live. Pass-through for passing rows (returns empty).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} kind Check group: route|fragment|editor|preload|cart.
  * @param {*}      pass Raw pass value from a check entry.
  * @return {string} Remediation copy, or empty string when passing.
@@ -196,7 +196,7 @@ export const getWooRuleRemediation = ( kind, pass ) => {
  * cannot depend on each caller remembering a timeout: the caller signal
  * (if any) and the timeout race, whichever aborts first wins.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {AbortSignal} [signal] Optional AbortSignal for cancellation.
  * @return {Promise<Object>} Resolved self-test response.
  */

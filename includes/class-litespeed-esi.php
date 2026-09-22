@@ -263,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * minted nonce grants fragment hydration only, never privileged
 		 * actions. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $block Block name scoping the throttle bucket.
 		 * @return void
 		 */
@@ -1094,7 +1094,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * cross-session cart. Pure guidance helper: no I/O, no Woo calls,
 		 * multisite-safe.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array{esi_available: string, bypass_routes: string[], fragment_blocks: string[], cookie_vary: string[], fallback: string} Structured ESI guidance.
 		 */
 		public static function get_woo_fragment_guidance(): array {
@@ -1119,7 +1119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * counts without any configuration. Fail-open to the placeholder:
 		 * any detection failure returns dynamic-safe markup, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return string Kses-safe cart fragment HTML.
 		 */
 		public static function render_woo_cart_fragment(): string {

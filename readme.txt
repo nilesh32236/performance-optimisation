@@ -4,7 +4,7 @@ Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
-Stable tag: 2.2.0
+Stable tag: 2.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -99,6 +99,12 @@ After activation, you can manage the following from the settings tabs:
 - **Tools** — Import/export settings for quick deployment across multiple sites.
 
 == Changelog ==
+
+= 2.3.0 (2026-09-22) =
+* New: safe CSS rollout for used CSS and critical CSS — dry-run preview staged to a `.staged` sibling (bytes/checksum/changed-vs-live), staged promote with last-good retention, explicit last-good rollback, and a post-apply health gate that auto-restores with reason logging. Regenerate endpoints accept `dry_run`/`promote`/`rollback`/`health` flags (scoped validation: flags without a post/template return 400), status payloads expose the read-only rollout slot, and the admin UI shows staged/health badges plus Preview/Promote/Restore actions. Preview fetch timeout filterable via `wppo_css_preview_fetch_timeout`.
+* New: anomaly detector v2 — trailing moving-average bands over RUM/trend data, per-key breach state with time-gated recovery hysteresis and recovery notices, plus manual deploy-note annotation for breach correlation. Read-only suggestions only, bounded options with uninstall parity and migration backfill.
+* Security: LiteSpeed crawler SSRF hardening via manual same-host redirect validation (no auto-follow on either fetch path, per-hop host/port/scheme policy, shared resolver), used-CSS/critical-CSS ingest sanitization with storage bounds and HMAC-signed regeneration callbacks, settings-export and error-log secret redaction, and double-decode traversal canonicalization in cache clearing.
+* Improvement: uninstall option sync (`wppo_last_purge`, anomaly breach state, deploy notes), translation template refresh, and settings-read guard coverage for the new migration paths.
 
 = 2.2.0 (2026-09-18) =
 * New: Auto-delay known third parties when idle — opt-in Delay-JS mode that defers curated vendor scripts until the browser is idle, with load-when-idle parity, per-attribute allowlist matching, and a `wppo_delay_js_third_party_auto_patterns` filter. Payment gateways and consent banners stay eager by default.

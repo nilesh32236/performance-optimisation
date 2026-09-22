@@ -665,7 +665,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * disabled bridge, missing OD API, no metrics, or any failure
 		 * returns an empty array (callers leave markup unchanged).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return string[] Normalized occluded image URLs (may be empty).
 		 */
 		public static function get_occluded_image_urls(): array {
@@ -783,7 +783,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * matches ordinary below-the-fold nodes). The LCP element itself is
 		 * never occluded (callers skip LCP first). Fail-open to false.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $element Element object or array.
 		 * @return bool True when occluded.
 		 */
@@ -880,7 +880,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * therefore requires an explicit occlusion/visibility signal
 		 * (checked in `element_is_occluded()`) or a zero-area rect.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param array $data Element data as an array.
 		 * @return bool True when geometry implies occlusion.
 		 */
@@ -941,7 +941,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * describe the current site URL only; no cross-site leakage
 		 * (in-memory per-request state).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array<int, array{url: string, srcset: string, sizes: string, media: string, type: string}> Breakpoint LCP entries.
 		 */
 		public static function get_breakpoint_lcp_elements(): array {
@@ -1007,7 +1007,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * returns the raw elements so callers can extract srcset/sizes/
 		 * media/type per viewport group. Fail-open to an empty list.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $metric Single OD metric object or array.
 		 * @return array List of LCP elements.
 		 */
@@ -1078,7 +1078,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * (`getAttribute('srcset')` / `get_attribute()`), property, and
 		 * array (`attributes.srcset`) shapes all resolve.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed  $element Element object or array.
 		 * @param string $name    Attribute name (e.g. 'srcset').
 		 * @return string Attribute value or empty string.
@@ -1158,7 +1158,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		/**
 		 * Extract the srcset value from an OD element.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $element Element object or array.
 		 * @return string Srcset value or empty string.
 		 */
@@ -1169,7 +1169,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		/**
 		 * Extract the sizes value from an OD element.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $element Element object or array.
 		 * @return string Sizes value or empty string.
 		 */
@@ -1183,7 +1183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * Non-empty media on a `picture` source marks art-directed output
 		 * that the single-preload emitter skips instead of mispredicting.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $element Element object or array.
 		 * @return string Media value or empty string.
 		 */
@@ -1200,7 +1200,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * (`picture`/`source` → picture, `video` → video-poster),
 		 * defaulting to `img`. Fail-open to `img`.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $element Element object or array.
 		 * @return string Element type.
 		 */

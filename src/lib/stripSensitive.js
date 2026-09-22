@@ -7,7 +7,7 @@
  * Both export paths now share this pattern so a newly added secret-bearing
  * key is stripped by default instead of leaking into a downloadable backup.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 
 /**
@@ -15,7 +15,7 @@
  * `__proto__` on a plain object mutates its prototype (prototype
  * pollution); `constructor`/`prototype` keys are the companion gadget path.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} key Raw object key.
  * @return {boolean} True when the key is a pollution vector.
  */
@@ -34,7 +34,7 @@ export const isSensitivePollutionKey = ( key ) =>
  * privateKey, clientKey) — the explicit prefix list keeps bare words like
  * "monkey" unmatched.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 export const SECRET_KEY_PATTERN =
 	/(?:[_-]keys?|api[_-]?keys?|(?:private|secret|public|client|consumer)keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
@@ -45,7 +45,7 @@ export const SECRET_KEY_PATTERN =
  * well so a future non-string credential shape cannot leak either.
  * Pollution-vector keys are never copied.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} value Value to strip.
  * @return {*} Stripped clone.
  */

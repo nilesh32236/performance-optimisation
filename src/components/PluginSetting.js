@@ -101,7 +101,7 @@ const MAX_IMPORT_NESTED_KEYS = 1000;
  * mutates its prototype (prototype pollution); `constructor`/`prototype`
  * keys are the companion gadget path.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} key Raw object key.
  * @return {boolean} True when the key is a pollution vector.
  */

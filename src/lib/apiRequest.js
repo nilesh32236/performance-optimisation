@@ -19,7 +19,7 @@ export { AUTH_ERROR_CODES, isAuthErrorCode } from './authErrors';
  * mutation contract.
  *
  * @since 2.0.0
- * @since NEXT Accepts an optional dot-path with fallback (getWppoSettings('settings.cache.enabled', false)).
+ * @since 2.3.0 Accepts an optional dot-path with fallback (getWppoSettings('settings.cache.enabled', false)).
  * @param {string} [path]     Optional dot-separated path (e.g. 'settings.cache').
  * @param {*}      [fallback] Optional fallback returned when the global or path is absent.
  * @return {*} The global settings object (or path value), or fallback/{} when absent.
@@ -56,7 +56,7 @@ export const getWppoSettings = ( path, fallback = {} ) => {
  * console output persists in devtools/extensions, so only the message is
  * logged, never the full error/response object.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} error Caught error value.
  * @return {string} Safe message string.
  */
@@ -163,7 +163,7 @@ const refreshNonce = async () => {
  * so a full replace here is correct. If an endpoint ever echoes only the
  * saved tab slice, callers must use patchSettingsCache() instead.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} payload Resolved settings payload (typically `data.data`).
  * @return {void}
  */
@@ -183,7 +183,7 @@ export const commitSettingsCache = ( payload ) => {
  * live global so sibling panels see the new value without a reload. The
  * merged tab and the top-level object are both frozen like commitSettingsCache().
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} tab   Settings tab key (e.g. 'ai_adaptive').
  * @param {Object} patch Tab settings to merge.
  * @return {void}
@@ -224,7 +224,7 @@ export const patchSettingsCache = ( tab, patch ) => {
  * Entries live only while the request is pending and are removed on
  * settle, so sequential calls (and tests) always hit the network.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {Map<string, Promise<Object>>}
  */
 const inflightGets = new Map();
@@ -235,7 +235,7 @@ const inflightGets = new Map();
  * Production code never needs this — entries self-remove on settle. Tests
  * that intentionally leave a request pending can reset the module state.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {void}
  */
 export const clearInflightGets = () => {
@@ -248,7 +248,7 @@ export const clearInflightGets = () => {
  * Lets a caller sharing an in-flight GET observe its own abort without
  * cancelling the shared underlying fetch for the other waiters.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {AbortSignal} signal Caller's abort signal.
  * @return {Promise<never>} Rejects with an AbortError on abort.
  */
@@ -509,7 +509,7 @@ export const isValidScanUrl = ( url ) => {
  * Allowed PageSpeed scan strategies (server-side allowlisting remains
  * authoritative).
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {string[]}
  */
 export const SCAN_STRATEGIES = [ 'mobile', 'desktop' ];
@@ -520,7 +520,7 @@ export const SCAN_STRATEGIES = [ 'mobile', 'desktop' ];
  * Single choke point so callers cannot forget encodeURIComponent and inject
  * `&`/`#` through user-controlled values.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} action REST action (e.g. 'pagespeed_results').
  * @param {Object} params Query params.
  * @return {string} Action path with query string.
@@ -540,7 +540,7 @@ export const buildAction = ( action, params = {} ) => {
 /**
  * Throw when a scan URL fails client-side validation.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string}  url        Raw scan URL.
  * @param {boolean} allowEmpty Whether '' is accepted (list endpoints).
  * @return {void}
@@ -551,7 +551,7 @@ export const buildAction = ( action, params = {} ) => {
  * Reads wppoSettings.translations with an English fallback so validation
  * rejections are localizable like other UI notice strings.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} key      Translations key.
  * @param {string} fallback English fallback.
  * @return {string} Translated or fallback message.
@@ -588,7 +588,7 @@ export const assertScanUrl = ( url, allowEmpty = false ) => {
 /**
  * Throw when a scan strategy fails client-side validation.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string}  strategy   Raw strategy value.
  * @param {boolean} allowEmpty Whether '' is accepted (list endpoints).
  * @return {void}
@@ -773,7 +773,7 @@ export const fetchServerRules = ( signal ) => {
  * Retrieve the Safe / Balanced / Aggressive preset definitions with a diff
  * preview of each against the current settings.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string}      [preset] Optional preset name to narrow the response.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved presets payload.
@@ -792,7 +792,7 @@ export const fetchOptimizationPresets = ( preset = '', signal ) => {
  * The server snapshots a restore point after a successful overwrite; a failed apply
  * leaves the prior settings intact.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} preset Preset name (safe|balanced|aggressive).
  * @return {Promise<Object>} Resolved apply payload ({preset, settings, diff}).
  */
@@ -810,7 +810,7 @@ export const applyOptimizationPreset = ( preset ) => {
  * force_exclude recommendation.
  *
  * @since 2.0.0
- * @since NEXT Added preload_checks, cart_checks and force_exclude to the result (issue #1256).
+ * @since 2.3.0 Added preload_checks, cart_checks and force_exclude to the result (issue #1256).
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved self-test result data.
  */

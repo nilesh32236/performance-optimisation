@@ -56,14 +56,14 @@ const MAX_POLL_ATTEMPTS = 60;
  * attempts, capped at 15s) so slow PageSpeed jobs do not hit the REST
  * endpoint at the same rate as near-complete ones.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 const MAX_POLL_DELAY_MS = 15000;
 
 /**
  * Delay before the next poll tick, backing off with the attempt count.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {number} attempts 1-based poll attempt count.
  * @return {number} Milliseconds to wait before the next tick.
  */
@@ -99,7 +99,7 @@ const scoreStatus = ( score ) => {
  *
  * Falls back to the raw value when parsing fails.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} raw Raw timestamp.
  * @return {string} Localized date/time or the raw value.
  */

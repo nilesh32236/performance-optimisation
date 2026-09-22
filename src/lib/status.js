@@ -1,13 +1,13 @@
 /**
  * Shared audit status helpers (single source for score → status mapping).
  *
- * @since NEXT
+ * @since 2.3.0
  */
 
 /**
  * Status levels used across audit panels.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {string[]}
  */
 /**
@@ -15,7 +15,7 @@
  * Kept (not deleted) as the documented contract for future panels and
  * external consumers — import this instead of inventing new level strings.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 export const STATUS_LEVELS = Object.freeze( [
 	'good',
@@ -27,7 +27,7 @@ export const STATUS_LEVELS = Object.freeze( [
 /**
  * Map a 0-100 score to a status level.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} score Numeric score.
  * @return {string} good|warning|poor|unknown.
  */
@@ -48,7 +48,7 @@ export const scoreToStatus = ( score ) => {
 /**
  * Map a boolean to a status level.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} value Boolean value.
  * @return {string} good|poor|unknown.
  */
@@ -59,7 +59,7 @@ export const scoreToStatus = ( score ) => {
  * cutoffs differ per metric (audit #1401): single home so threshold
  * changes cannot silently skip a panel.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*}      value The metric value.
  * @param {number} good  Upper bound for 'good'.
  * @param {number} poor  Lower bound for 'poor'.

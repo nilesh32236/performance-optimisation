@@ -295,7 +295,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Valid one-click optimization preset names.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string[]
 		 */
 		public const OPTIMIZATION_PRESET_NAMES = array( 'safe', 'balanced', 'aggressive' );
@@ -308,7 +308,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * safe-mode can never be disabled by a one-click preset (fail-safe).
 		 * Per-page exclusions (postmeta) are untouched by presets by design.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array<string, array<string, bool>> Guards keyed by tab.
 		 */
 		public static function get_preset_safety_guards(): array {
@@ -335,7 +335,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * the full pipeline with the safety guards from
 		 * {@see self::get_preset_safety_guards()} forced ON.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array<string, array<string, array<string, mixed>>> Preset name => tab => key => value.
 		 */
 		public static function get_optimization_presets(): array {
@@ -429,7 +429,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * never fatal. Only keys present in the preset definition are
 		 * compared; per-page exclusions (postmeta) are never part of the diff.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string     $preset  Preset name (safe|balanced|aggressive).
 		 * @param array|null $current Optional current settings (defaults to get_settings()).
 		 * @return array[] List of {tab, key, from, to} entries that would change.
@@ -500,7 +500,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * fail-open) and forces the safety guards ON. Unknown preset names
 		 * or write failures leave the prior settings intact and return null.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $preset Preset name (safe|balanced|aggressive).
 		 * @return array|null {preset, settings, diff} on success, null on failure.
 		 */
@@ -1369,7 +1369,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * are dynamic JSON and must never be cached or preloaded.
 		 * Fail-open: detection failure returns true (treated as dynamic).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $path         Request path (leading slash optional).
 		 * @param string $query_string Raw query string (without leading `?`).
 		 * @return bool True when the values indicate a wc-ajax request.
@@ -1413,7 +1413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * cart session and must bypass the static cache while safe mode is
 		 * on. Fail-open: detection failure returns true (treated as dynamic).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $query_string Raw query string (without leading `?`).
 		 * @return bool True when the query carries an add-to-cart action.
 		 */
@@ -3560,7 +3560,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * bare name. Only one dot is stripped so malformed `example.com..`
 		 * never canonicalizes to a valid host.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $host Raw host value.
 		 * @return string Normalized host.
 		 */
@@ -3623,7 +3623,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Whether a parsed URL's port is allowed by the same-site policy.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param array<string, mixed> $parsed wp_parse_url() output for the candidate URL.
 		 * @return bool True when the port leg passes.
 		 */
@@ -3646,7 +3646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Effective port of the home URL (explicit port or scheme default).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return int|null Effective home port, or null when indeterminable (fail closed).
 		 */
 		private static function home_effective_port(): ?int {
@@ -3701,7 +3701,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * (e.g. link-local metadata). Used by Telemetry and the LiteSpeed
 		 * crawler so the two copies of this logic cannot drift apart.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $location    Raw Location header value.
 		 * @param string $current_url URL of the response that sent the Location.
 		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
@@ -3777,7 +3777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * concatenation would fetch `/subdir/../other` literally), then
 		 * reattaches the suffix untouched.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $target Path with optional query/fragment suffix.
 		 * @return string Normalized target.
 		 */
@@ -3805,7 +3805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * slash implied by the input (including `/./` and `/../` endings)
 		 * is preserved so directory redirects keep their canonical form.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $path URL path to normalize.
 		 * @return string Normalized path (always starting with '/').
 		 */
@@ -4849,7 +4849,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $tmp_file_for_lint Optional tmp file holding $code for `php -l`.
 		 * @return bool True when the code looks parseable.
 		 * @since 2.0.0
-		 * @since NEXT Added the `wppo_allow_php_lint` filter gate for the `php -l` layer.
+		 * @since 2.3.0 Added the `wppo_allow_php_lint` filter gate for the `php -l` layer.
 		 */
 		public static function verify_php_syntax( string $code, string $tmp_file_for_lint = '' ): bool {
 			if ( '' === $code ) {
@@ -5184,7 +5184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Multisite-safe: accessed through {@see option_key()} so each blog
 		 * signs with its own secret. Never logged.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string
 		 */
 		public const CALLBACK_SECRET_OPTION = 'wppo_callback_secret';
@@ -5196,7 +5196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * above this size are refused and callers serve unoptimized markup
 		 * instead of persisting unbounded blobs.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		public const CSS_STORAGE_MAX_BYTES = 1048576;
@@ -5229,7 +5229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $css Raw CSS content.
 		 * @return string Sanitized CSS, or '' when empty or on failure.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function sanitize_css_for_storage( string $css ): string {
 			if ( '' === $css ) {
@@ -5350,7 +5350,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $css       CSS content.
 		 * @param int    $max_bytes Maximum accepted size in bytes.
 		 * @return bool True when the payload may be stored.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function css_within_storage_bounds( string $css, int $max_bytes = self::CSS_STORAGE_MAX_BYTES ): bool {
 			try {
@@ -5373,7 +5373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Per-request memo for the callback HMAC secret (null = unresolved).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string|null
 		 */
 		private static ?string $callback_secret_memo = null;
@@ -5382,7 +5382,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Reset the per-request callback-secret memo (tests, switch_blog).
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function reset_callback_secret_memo(): void {
 			self::$callback_secret_memo = null;
@@ -5406,7 +5406,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *                     background worker never writes options on
 		 *                     the hot verify path.
 		 * @return string Site secret, or '' when unavailable.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_callback_secret( bool $create = true ): string {
 			if ( is_string( self::$callback_secret_memo ) ) {
@@ -5480,7 +5480,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param array $payload Job payload (scalar values).
 		 * @return string Hex signature, or '' when unavailable.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function sign_callback_payload( array $payload ): string {
 			try {
@@ -5519,7 +5519,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param array  $payload   Job payload as signed.
 		 * @param string $signature Hex signature to check.
 		 * @return bool True when the signature is valid.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function verify_callback_signature( array $payload, string $signature ): bool {
 			try {
@@ -6432,7 +6432,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * {@see transient_key()}, so site A's miss never serves site B's
 		 * options and there is no cross-site leakage.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param callable $rebuild Zero-arg rebuild callback performing the single database query. Returning false or WP_Error means "not cacheable" (stale served when available).
 		 * @param array    $args    Optional overrides for `ttl`, `stale_ttl`, `lock_ttl`, `retries`, `retry_delay_us`, and `group` (see get_with_stampede_lock()).
 		 * @return mixed Fresh value, stale fallback, rebuild result, or false on total miss failure.
@@ -7760,7 +7760,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $file_path Absolute live derived-file path.
 		 * @return string Sibling staged path, or '' when not applicable.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_staged_path_for( string $file_path ): string {
 			try {
@@ -7833,7 +7833,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * otherwise). A missing/empty staged file is a no-op `false` —
 		 * never a live-file delete. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param object   $fs        Filesystem exposing exists()/size()/get_contents()/move()/copy()/delete().
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @param string   $live_path Absolute live derived-file path.
@@ -7907,7 +7907,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * possible). A missing/empty fallback is a no-op `false` —
 		 * never a live-file delete. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param object   $fs        Filesystem exposing copy()/delete() plus the fallback-validity surface.
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @param string   $live_path Absolute live derived-file path.
@@ -7957,7 +7957,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * so the admin UI can render preview/health state without
 		 * reading file bodies itself. Never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param object $fs        Filesystem exposing exists()/size()/get_contents().
 		 * @param string $live_path Absolute live derived-file path.
 		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool} Slot description.
@@ -8474,7 +8474,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * invalid-limit path never invokes the filter twice per call.
 		 *
 		 * @return int The default inline size limit in bytes.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_styles_inline_default(): int {
 			$default = 40000;
@@ -8499,7 +8499,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Multisite-safe: request memory only, no storage.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private static int $committed_inline_bytes = 0;
@@ -8515,7 +8515,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param int $bytes Bytes just committed to inline output.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function add_committed_inline_bytes( int $bytes ): void {
 			try {
@@ -8533,7 +8533,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Multisite-safe: request memory only.
 		 *
 		 * @return int Committed inline bytes (>= 0).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_committed_inline_bytes(): int {
 			try {
@@ -8552,7 +8552,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * between cases.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function reset_committed_inline_bytes(): void {
 			self::$committed_inline_bytes = 0;
@@ -8571,7 +8571,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param int      $already_inlined Bytes already committed to inline output on this request.
 		 * @param int|null $limit Optional budget override (defaults to get_styles_inline_limit()).
 		 * @return int Remaining bytes available for inline output (>= 0).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_remaining_inline_budget( int $already_inlined = 0, ?int $limit = null ): int {
 			try {
@@ -8607,7 +8607,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string   $css CSS content to split.
 		 * @param int|null $limit Optional budget override (defaults to get_styles_inline_limit()).
 		 * @return array{inline: string, deferred: string} Inline prefix and deferred remainder.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function split_css_for_inline_budget( string $css, ?int $limit = null ): array {
 			try {
@@ -8664,7 +8664,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $css CSS content.
 		 * @param int    $budget Maximum bytes for the inline prefix.
 		 * @return int|null Offset of the cut brace, or null when nothing fits.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function find_top_level_css_cut( string $css, int $budget ): ?int {
 			try {

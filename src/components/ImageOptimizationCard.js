@@ -15,7 +15,7 @@ import { __, sprintf, _n } from '@wordpress/i18n';
 /**
  * Shared conversion progress section (WebP/AVIF were ~30-line duplicates).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Object} props       Props.
  * @param {string} props.id    Progress label id.
  * @param {string} props.title Section title.

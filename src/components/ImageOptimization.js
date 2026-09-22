@@ -88,7 +88,7 @@ const coerceLongestEdge = ( value, fallback ) => {
 
 // Audit #1401: single placeholderType derivation (was copy-pasted in
 // init + baseline-sync; a new value needs one edit now).
-// @since NEXT
+// @since 2.3.0
 const derivePlaceholderType = ( opts ) =>
 	opts.placeholderType ?? ( opts.replacePlaceholderWithSVG ? 'svg' : 'none' );
 

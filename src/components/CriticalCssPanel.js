@@ -76,7 +76,7 @@ const getStatusConfig = () => {
  * rollout information. Unknown health strings pass through as-is so
  * future server states render instead of crashing.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} raw Raw rollout value.
  * @return {{staged: boolean, stagedChanged: boolean, stagedBytes: number|null, health: string|null, fallback: boolean}|null} Normalized rollout.
  */
@@ -102,7 +102,7 @@ export const normalizeRollout = ( raw ) => {
  * Malformed payloads (null, numbers, missing status) fall back to 'none'
  * with a hash-derived label instead of throwing.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} hash  Status key.
  * @param {*} entry Raw entry value.
  * @return {{statusKey: string, label: string, size: number|null, truncated: boolean, rollout: *}} Normalized entry.
@@ -150,7 +150,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
  * Plain property access would resolve inherited keys like '__proto__' to
  * Object.prototype (truthy) instead of the intended `none` fallback.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} statusKey Raw status key.
  * @return {{icon: *, className: string, label: string}} Badge config.
  */

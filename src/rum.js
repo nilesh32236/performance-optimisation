@@ -58,7 +58,7 @@ export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
  * value is omitted client-side so unknown/slow-2g variants never pollute
  * the stored aggregates.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {string[]}
  */
 export const RUM_ALLOWED_CONNECTIONS = [ 'slow-2g', '2g', '3g', '4g' ];
@@ -69,7 +69,7 @@ export const RUM_ALLOWED_CONNECTIONS = [ 'slow-2g', '2g', '3g', '4g' ];
  * Fail-open: returns null for missing/invalid values so callers omit the
  * field and the numeric beacon path is unchanged.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} raw Raw `navigator.connection.effectiveType` value.
  * @return {string|null} Allowlisted connection type or null.
  */
@@ -89,7 +89,7 @@ export const classifyConnectionType = ( raw ) => {
  * 100 keeps the pre-sampling behavior verbatim (every page view sends).
  * Mirrors `RUM::RUM_SAMPLE_RATE_DEFAULT` in includes/class-rum.php.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {number}
  */
 export const RUM_DEFAULT_SAMPLE_RATE = 100;
@@ -114,7 +114,7 @@ export const RUM_DEFAULT_SAMPLE_RATE = 100;
  * is approximately rate²/100. This client gate is a best-effort
  * bandwidth saver; the server gate stays authoritative.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} rate        Configured sample rate (1–100) from `window.wppoRum.sampleRate`.
  * @param {*} randomValue Optional deterministic roll in [0, 1).
  * @return {boolean} True when the beacon should be sent.
@@ -162,7 +162,7 @@ export const RUM_MAX_METRIC_MS = 60000;
  *
  * Mirrors `RUM::LCP_SELECTOR_MAX_LENGTH` in includes/class-rum.php.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {number}
  */
 export const RUM_MAX_LCP_SELECTOR_LENGTH = 256;
@@ -172,7 +172,7 @@ export const RUM_MAX_LCP_SELECTOR_LENGTH = 256;
  *
  * Mirrors `RUM::SLOW_RESOURCES_MAX_COUNT` in includes/class-rum.php.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {number}
  */
 export const RUM_MAX_SLOW_RESOURCES = 5;
@@ -181,7 +181,7 @@ export const RUM_MAX_SLOW_RESOURCES = 5;
  * Slow-resource duration threshold (ms): only entries slower than this
  * are considered for the audit. Mirrors the server-side clamp range.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {number}
  */
 export const RUM_SLOW_RESOURCE_THRESHOLD_MS = 300;
@@ -191,7 +191,7 @@ export const RUM_SLOW_RESOURCE_THRESHOLD_MS = 300;
  *
  * Mirrors `RUM::ALLOWED_SLOW_RESOURCE_TYPES` in includes/class-rum.php.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {string[]}
  */
 export const RUM_ALLOWED_RESOURCE_TYPES = [
@@ -212,7 +212,7 @@ export const RUM_ALLOWED_RESOURCE_TYPES = [
  * or outerHTML. Returns null when the element is unavailable so callers
  * omit the field and the numeric beacon path is unchanged.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} element LCP entry element (`last.element`).
  * @return {string|null} Compact selector (<=256 chars) or null.
  */
@@ -259,7 +259,7 @@ export const deriveLcpSelector = ( element ) => {
  *
  * Fail-open: returns null for malformed entries so callers drop them.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} entry Raw resource-timing entry.
  * @return {Object|null} Shaped `{name, type, duration}` entry or null.
  */
@@ -317,7 +317,7 @@ export const sanitizeSlowResourceEntry = ( entry ) => {
  * slowest) on overflow.
  * Returns an empty array when the API is absent so callers omit the field.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {Object[]} Shaped slow-resource entries (possibly empty).
  */
 export const collectSlowResources = () => {

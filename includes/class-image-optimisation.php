@@ -435,7 +435,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * a second call in the same response degrades to '' instead of a
 		 * second high hint. Reset via `clear_runtime_caches()`.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var bool
 		 */
 		private static $responsive_lcp_preload_emitted = false;
@@ -1019,7 +1019,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `function_exists()`/`has_filter()` so behaviour is unchanged
 		 * when no callback is registered. Fail-open to false.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return bool True when occluded nodes should be demoted to low.
 		 */
 		private function is_occlusion_fetchpriority_low_enabled(): bool {
@@ -1030,7 +1030,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					/**
 					 * Filters whether OD-occluded images are demoted to fetchpriority low.
 					 *
-					 * @since NEXT
+					 * @since 2.3.0
 					 * @param bool $enabled Whether occlusion demotion is enabled.
 					 */
 					$enabled = (bool) apply_filters( 'wppo_occlusion_fetchpriority_low_enabled', $enabled );
@@ -1050,7 +1050,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * or any failure) is an empty list meaning no attribute change.
 		 * Multisite-safe: per-URL metrics only, no cross-site leakage.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return string[] Occluded image URLs (may be empty).
 		 */
 		private function get_occluded_image_urls_for_request(): array {
@@ -1082,7 +1082,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `is_html_api_available()` (WordPress 6.2+) else the regex
 		 * fallback. Fail-open: any failure returns `$buffer` unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string      $buffer        The HTML buffer.
 		 * @param string[]    $occluded_urls Raw occluded image URLs.
 		 * @param string|null $lcp_url       Optional true-LCP URL to protect.
@@ -1097,7 +1097,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					/**
 					 * Filters the occluded image URL list before fetchpriority demotion.
 					 *
-					 * @since NEXT
+					 * @since 2.3.0
 					 * @param string[] $occluded_urls Occluded image URLs.
 					 * @param string   $buffer        The HTML buffer being processed.
 					 */
@@ -1869,7 +1869,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Fail-open to true when the verdict is unverifiable so markup is
 		 * never worse than the pre-guard behaviour.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $url The candidate image URL.
 		 * @return bool True when the filesystem lookup may run.
 		 */
@@ -1921,7 +1921,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * unknown local paths leave the tag untouched.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
+		 * @since 2.3.0 Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
 		 *
 		 * @param string $buffer The HTML buffer after WP_HTML_Tag_Processor serialization.
 		 * @return string The modified buffer.
@@ -2012,7 +2012,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Processor-based dimension injection using serialize_token().
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
+		 * @since 2.3.0 Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -2095,7 +2095,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * falls through to the regex fallback.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
+		 * @since 2.3.0 Falls back to `src` when `data-src` is absent so eager heroes get stable dimensions.
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -4545,7 +4545,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * prefer this emitter instead of reimplementing the OD → RUM →
 		 * single-high flow.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer for responsive fallback scans.
 		 * @return string The preload `<link>` tag, or empty string when skipped.
 		 */
@@ -4626,7 +4626,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * when the art-directed case must be skipped. Fail-open: any failure
 		 * returns `array()`.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer for fallback scans.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Empty when unresolved.
 		 */
@@ -4675,7 +4675,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * skipped entry by entry (next-most-common) so one poisoned entry
 		 * cannot suppress a valid runner-up.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param array       $entries OD breakpoint entries.
 		 * @param string|null $buffer  Optional HTML buffer for gap-fill.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Winner or empty.
@@ -4805,7 +4805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * the candidate fails validation. Fail-open: any failure returns
 		 * `array()`.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer for gap-fill.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Candidate or empty.
 		 */
@@ -4889,7 +4889,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * lives in `claim_hero_preload_slot()`, not here. Fail-open to
 		 * false.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer to inspect.
 		 * @return bool True when a high hint already exists.
 		 */
@@ -5021,7 +5021,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * so callers fall back to the legacy single-href data. Fail-open to
 		 * an empty pair on any failure.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string      $lcp_url The resolved LCP image URL.
 		 * @param string|null $buffer  Optional HTML buffer for gap-fill.
 		 * @return array{srcset: string, sizes: string} Responsive pair.

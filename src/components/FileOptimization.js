@@ -92,7 +92,7 @@ const CCSS_EXCLUDED_DEFAULT = 'fl-builder-template\nelementor_library';
 // them, so they are guarded explicitly to fail open to 5.
 // Math.trunc() mirrors the (int) cast for values like '3.7'.
 // Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const normalizeRetries = ( value ) => {
 	if ( typeof value === 'number' ) {
 		return Number.isFinite( value )
@@ -122,7 +122,7 @@ export const normalizeRetries = ( value ) => {
 // (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
 // disagrees with the server on a single render (issue #1220).
 // Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const normalizeDeliveryMode = ( value ) => {
 	if ( typeof value !== 'string' ) {
 		return 'file';
@@ -140,7 +140,7 @@ export const normalizeDeliveryMode = ( value ) => {
 // server-localised wppoSettings.presetBundles.safe copy (see
 // resolvePresetBundle()) is authoritative at runtime; this constant is the
 // fail-open fallback. Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const SAFE_PRESET_BUNDLE = {
 	minifyJS: true,
 	minifyCSS: true,
@@ -166,7 +166,7 @@ export const SAFE_PRESET_BUNDLE = {
 // wppoSettings.presetBundles.aggressive copy (see resolvePresetBundle())
 // is authoritative at runtime; this constant is the fail-open fallback.
 // Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const AGGRESSIVE_PRESET_BUNDLE = {
 	minifyJS: true,
 	minifyCSS: true,
@@ -187,7 +187,7 @@ export const AGGRESSIVE_PRESET_BUNDLE = {
 // commerce, interaction, jQuery) is covered here so a jquery-only-off
 // state still raises the warning instead of slipping through silently.
 // Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const isAggressiveDelay = ( values = {} ) => {
 	if ( ! values.delayJS ) {
 		return false;
@@ -208,7 +208,7 @@ export const isAggressiveDelay = ( values = {} ) => {
 // Aggressive pins it true), so enabling CSS combining after applying Safe
 // clears the confirmation instead of overstating safety. Exported for
 // direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const isSafePresetActive = ( values = {} ) => {
 	if (
 		! values.minifyJS ||
@@ -235,7 +235,7 @@ export const isSafePresetActive = ( values = {} ) => {
 // server copy to this allowlist so a corrupted presetBundles localisation
 // can never flow unknown keys through normalizeFileOpt into the save
 // payload. Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const PRESET_BUNDLE_KEYS = Object.freeze( [
 	'minifyJS',
 	'minifyCSS',
@@ -263,7 +263,7 @@ export const PRESET_BUNDLE_KEYS = Object.freeze( [
 // null so the caller falls back to the full local mirror instead of
 // applying e.g. a 1-key preset while the UI reports a full success.
 // Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const getServerPresetBundle = ( name ) => {
 	const server = getWppoSettings( `presetBundles.${ name }`, null );
 	if (
@@ -300,7 +300,7 @@ export const getServerPresetBundle = ( name ) => {
 // Resolve the bundle to apply: server-authoritative when localised,
 // otherwise the local fallback mirror (issue #1442 review).
 // Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const resolvePresetBundle = ( name ) => {
 	if ( 'aggressive' === name ) {
 		return (
@@ -438,7 +438,7 @@ const FILE_OPT_SYNC_KEYS = [
 // server-provided preview_url to the resource-intensive scan endpoint.
 // Server-side host allowlisting + rate limiting remains authoritative.
 // Exported for direct Jest coverage.
-// @since NEXT
+// @since 2.3.0
 export const stripPreviewParams = ( url ) => {
 	if ( ! isSafeHttpUrl( url ) ) {
 		return '';
@@ -466,7 +466,7 @@ export const stripPreviewParams = ( url ) => {
 // reuses the same keys instead of remounting every row and losing focus.
 // Rows created via "Add Mapping" carry counter ids (`cdn-N`) from
 // useCdnRowId and pass through untouched.
-// @since NEXT
+// @since 2.3.0
 export const withCdnRowIds = ( mapping ) => {
 	const list = Array.isArray( mapping ) ? mapping : [];
 	const used = new Set(
@@ -498,7 +498,7 @@ export const withCdnRowIds = ( mapping ) => {
 // Strip client-only CDN row ids before submit/baseline/dirty-compare so the
 // payload never persists synthetic ids server-side and the id-less server
 // baseline compares clean against local state.
-// @since NEXT
+// @since 2.3.0
 export const stripCdnRowIds = ( source = {} ) => {
 	if ( ! source || typeof source !== 'object' ) {
 		return source;
@@ -527,7 +527,7 @@ export const stripCdnRowIds = ( source = {} ) => {
 // Audit #1401: shared guarded-number core behind the sibling
 // normalizers (idle/ccss/regression) so PHP-parity fixes land once.
 // Returns { ok, n }: ok=false means fail open to the caller default.
-// @since NEXT
+// @since 2.3.0
 const parseGuardedNumber = ( value ) => {
 	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
 		return { ok: false, n: 0 };
@@ -546,7 +546,7 @@ const parseGuardedNumber = ( value ) => {
 // Booleans/arrays fail open (true must not coerce to 1 via Number()), and
 // hex/octal/binary literals fail open to match PHP is_numeric() parity
 // (see normalizeRetries).
-// @since NEXT
+// @since 2.3.0
 export const normalizeIdleTimeout = ( value ) => {
 	const { ok, n } = parseGuardedNumber( value );
 	if ( ! ok || n <= 0 ) {
@@ -554,7 +554,7 @@ export const normalizeIdleTimeout = ( value ) => {
 	}
 	return Math.min( 20000, Math.max( 500, Math.trunc( n ) ) );
 };
-// @since NEXT
+// @since 2.3.0
 export const normalizeCcssMaxSize = ( value ) => {
 	const { ok, n } = parseGuardedNumber( value );
 	if ( ! ok || n <= 0 ) {
@@ -563,7 +563,7 @@ export const normalizeCcssMaxSize = ( value ) => {
 	return Math.trunc( n );
 };
 
-// @since NEXT
+// @since 2.3.0
 export const normalizeRegressionThreshold = ( value ) => {
 	const { ok, n } = parseGuardedNumber( value );
 	if ( ! ok ) {
@@ -862,7 +862,7 @@ const FileOptimization = ( {
 	// calling handleChange( setSettings ) inline would allocate a new closure
 	// per input (~80 inputs) on every render, churning GC on each keystroke.
 	// setSettings is a stable React setter, so memoizing once is safe.
-	// @since NEXT
+	// @since 2.3.0
 	const onFieldChange = useMemo(
 		() => handleChange( setSettings ),
 		[ setSettings ]
@@ -871,7 +871,7 @@ const FileOptimization = ( {
 	// setSettings closures (one per field key). Stable identity avoids
 	// re-allocating O(rows) closures and re-rendering the large form on
 	// every CDN keystroke.
-	// @since NEXT
+	// @since 2.3.0
 	const updateCdnEntry = useCallback( ( idx, key, value ) => {
 		setSettings( ( prev ) => {
 			const m = [ ...( prev.cdnMapping || [] ) ];
@@ -2470,7 +2470,7 @@ const FileOptimization = ( {
 	 * the rollout row (passing the acted post ID so the status carries
 	 * the slot description).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 * @param {Object} flagParams  Rollout flag, e.g. { dry_run: 1 }.
 	 * @param {string} successText Fallback success message.
 	 * @param {string} failureText Fallback failure message.
@@ -2560,7 +2560,7 @@ const FileOptimization = ( {
 	 * template slug or hash resolves server-side), then refreshes the
 	 * template status list so staged/health badges update.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 * @param {string} hash        Template slug or hash.
 	 * @param {Object} flagParams  Rollout flag, e.g. { dry_run: 1 }.
 	 * @param {string} successText Fallback success message.

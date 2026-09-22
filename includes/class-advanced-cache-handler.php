@@ -261,7 +261,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 *
 		 * @param string $raw_host Raw host value (e.g. `$_SERVER['HTTP_HOST']`).
 		 * @return string Normalized lowercase host, or '' when invalid.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function sanitize_host( string $raw_host ): string {
 			return self::normalize_dropin_host( $raw_host );

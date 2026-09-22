@@ -6,7 +6,7 @@
  * (lazyload.js, esi.js, main.js). Imported by all four so a new secret
  * shape can never be redacted in one bundle and leak from another.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} raw Raw message.
  * @return {string} Redacted message.
  */

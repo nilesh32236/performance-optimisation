@@ -54,7 +54,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * re-running them on every future version bump.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private const AUTOLOAD_BACKFILL_FLOOR = '2.0.0';
 
@@ -324,7 +324,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @return bool True when the value looks like a dotted version number,
 		 *              optionally followed by a single `-`/`+` prerelease/build
 		 *              suffix (dots and hyphens allowed, e.g. `2.0.0-rc-1`).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function is_plausible_version( string $stored_version ): bool {
 			return (bool) preg_match( '/^\d+(?:\.\d+)*(?:[-+][0-9A-Za-z.-]+)?$/', $stored_version );

@@ -22,7 +22,7 @@ import NoticeBanner from './common/NoticeBanner';
  * Single choke point for the `dismiss_welcome` call shared by
  * handleStepAction() and handleDismiss() below.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {Promise<Object>} Resolved dismiss response.
  */
 export const dismissWelcome = () => apiCall( 'dismiss_welcome' );
@@ -39,7 +39,7 @@ export const dismissWelcome = () => apiCall( 'dismiss_welcome' );
  * When visibleLabel is provided the accessible name contains the visible
  * button text first (WCAG 2.5.3 Label in Name), followed by the step title.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Object}  step         Step entry from STEPS.
  * @param {boolean} isActive     Whether the step action is in flight.
  * @param {boolean} isWoo        Whether this is the Woo self-test step.
@@ -95,7 +95,7 @@ export const getStepAriaLabel = ( step, isActive, isWoo, visibleLabel ) => {
  * on the dashboard tab) and the Dashboard FAIL block land keyboard and
  * screen-reader users on the fix.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {boolean} True when the switch was found and scrolled to.
  */
 export const scrollToWooSafeMode = () => {

@@ -885,7 +885,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * index) stays owner-only. The 0644 path survives only as a fallback
 		 * when the restrictive chmod fails.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return int File mode (0600 intersected with FS_CHMOD_FILE).
 		 */
 		private static function restricted_file_mode(): int {
@@ -901,7 +901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * files keep their old (possibly 0644) mode — tighten them here.
 		 * Never throws; a failed chmod keeps the FS_CHMOD_FILE fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param object $wp_filesystem Filesystem instance.
 		 * @param string $path          Absolute file path.
 		 * @return void
@@ -1399,7 +1399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * try/catch so a killed Redis serves 200 uncached with the notice
 		 * armed instead of fataling.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param \WP_Error $error Original transient failure.
 		 * @return void
 		 */
@@ -2099,7 +2099,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * file is left untouched; any other failure leaves the previous file
 		 * (or no file) in place so the site fails open uncached, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $wp_filesystem Filesystem object from Util::init_filesystem().
 		 * @return bool|\WP_Error True on verified publish, WP_Error (foreign_dropin/write_error) on failure.
 		 */
@@ -2223,7 +2223,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Sweep orphan object-cache drop-in staging siblings (best-effort, never throws).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed  $wp_filesystem Filesystem object.
 		 * @param string $current_tmp   Tmp path just consumed (already moved; skipped when still listed).
 		 * @return void

@@ -1149,7 +1149,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					// (max 5 passes until stable) so double-encoded traversal
 					// (e.g. %252e%252e) is exposed before the `..`-segment
 					// check instead of slipping through a single decode.
-					// @since NEXT Added decode loop for double-encoded traversal.
+					// @since 2.3.0 Added decode loop for double-encoded traversal.
 					$decoded = $candidate_path;
 					for ( $i = 0; $i < 5; $i++ ) {
 						$next = rawurldecode( $decoded );
@@ -2078,7 +2078,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function get_optimization_presets( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
@@ -2121,7 +2121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function apply_optimization_preset( \WP_REST_Request $request ): \WP_REST_Response {
 			if ( $this->is_endpoint_throttled( 'apply_preset', 5, 60 ) ) {
@@ -3174,7 +3174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * Fail-open: RUM failures yield null, never a fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array|null Single suggestion object, or null.
 		 */
 		private function get_rum_next_action(): ?array {
@@ -3193,7 +3193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * Fail-open: detection failures yield 'other'.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return string 'apache', 'nginx', 'litespeed', or 'other'.
 		 */
 		private function get_detected_server_type(): string {
@@ -3238,7 +3238,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.9.0
-		 * @since NEXT Single-post safe-rollout flags.
+		 * @since 2.3.0 Single-post safe-rollout flags.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function used_css_regenerate( \WP_REST_Request $request ): \WP_REST_Response {
@@ -3404,7 +3404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param string $action  One of dry_run|promote|rollback|health.
 		 * @param int    $post_id Validated post ID.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private function handle_used_css_rollout_action( string $action, int $post_id ): \WP_REST_Response {
 			try {
@@ -3495,7 +3495,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param string     $template      Validated template slug or hash.
 		 * @param array|null $templates_map Optional template map (avoids a second theme scan).
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private function handle_ccss_rollout_action( string $action, string $template, $templates_map ): \WP_REST_Response {
 			try {
@@ -3802,7 +3802,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @since 2.0.0
-		 * @since NEXT Single-template safe-rollout flags.
+		 * @since 2.3.0 Single-template safe-rollout flags.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -3995,7 +3995,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
-		 * @since NEXT Optional post_id rollout detail.
+		 * @since 2.3.0 Optional post_id rollout detail.
 		 */
 		public function get_used_css_status( \WP_REST_Request $request ): \WP_REST_Response {
 			$status = class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_staleness_info' )
@@ -4213,7 +4213,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object. Optional `handles` param for accuracy.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function detect_safe_mode_excludes( \WP_REST_Request $_request ): \WP_REST_Response {
 			try {
@@ -4368,7 +4368,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function handle_safe_mode( \WP_REST_Request $request ): \WP_REST_Response {
 			if ( $this->is_endpoint_throttled( 'safe_mode', 5, 60 ) ) {

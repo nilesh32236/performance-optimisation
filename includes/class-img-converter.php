@@ -289,7 +289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * `apply_smart_quality_offsets()` so the per-type/size delta stays
 		 * bounded to ±10.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param array $size Optional source dimensions ('width'/'height'). Empty means full-size original.
 		 * @return int Offset in `[-10, +10]`.
@@ -327,7 +327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * false-positive. Multisite-safe: per-site file paths only, no
 		 * cross-site state is read.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @return bool True when the file looks like a hero candidate.
@@ -360,7 +360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * flat rule is unchanged. Multisite-safe: per-site file paths
 		 * only, no cross-site state.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @return int Offset in `[-10, +10]`.
@@ -394,7 +394,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * what guarantees the "quality delta bounded to ±10 per type and
 		 * size" acceptance criterion.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param int $base        Base quality (1-100) before offsets.
 		 * @param int $size_offset Size-aware offset (`[-10, +10]`).
@@ -419,7 +419,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * throws. Multisite-safe: `get_attached_file()` resolves per-site
 		 * upload paths, no cross-site state is shared.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param array $attachment_ids Attachment IDs in scan order.
 		 * @return array Reordered IDs with hero candidates first.
@@ -1539,7 +1539,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				/**
 				 * Filter the resolved smart quality value.
 				 *
-				 * @since NEXT
+				 * @since 2.3.0
 				 * @param int    $quality      Base quality before size/role offsets.
 				 * @param string $mime         Output MIME type.
 				 * @param array  $effective_size Effective source dimensions ('width'/'height'), derived from the `-WxH` suffix when `$size` is empty.

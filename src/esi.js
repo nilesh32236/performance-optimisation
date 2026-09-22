@@ -43,7 +43,7 @@ import { redactLogSecrets } from './lib/logSecrets';
  * console output persists in devtools, so only the message is logged,
  * never full objects.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} err Caught error value.
  * @return {string} Safe message string.
  */

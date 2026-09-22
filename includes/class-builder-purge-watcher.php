@@ -2021,7 +2021,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 								/**
 								 * Restore the legacy forced full critical-CSS requeue after a builder purge.
 								 *
-								 * @since NEXT
+								 * @since 2.3.0
 								 *
 								 * @param bool $full Whether to force a full requeue. Default false (targeted, max 20).
 								 */

@@ -2841,7 +2841,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * OD-occluded in-viewport node gets fetchpriority low with no loading lazy added (issue #1426).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_occlusion_fetchpriority_low_demotes_occluded_without_lazy(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2866,7 +2866,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * True LCP keeps the single fetchpriority high; occluded demotion never touches it (issue #1426).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_occlusion_fetchpriority_low_preserves_true_lcp_high(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -2893,7 +2893,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * No occluded URLs means no attribute change (issue #1426 fail-open).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_occlusion_fetchpriority_low_no_metrics_no_change(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';

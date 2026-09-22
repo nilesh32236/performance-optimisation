@@ -29,7 +29,7 @@ const getSingleton = () => {
 /**
  * Override the TTL (primarily for tests).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {number} ttlMs TTL in milliseconds.
  * @return {void}
  */
@@ -43,7 +43,7 @@ export const setDbCountsTtl = ( ttlMs ) => {
 /**
  * Create an isolated counts cache (for tests; production uses the module singleton).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Object}   options       Options.
  * @param {number}   options.ttlMs TTL in milliseconds.
  * @param {Function} options.fetch Fetch implementation receiving a signal.

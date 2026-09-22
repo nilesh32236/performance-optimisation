@@ -12,7 +12,7 @@ import UnsavedChangesContext from './UnsavedChangesContext';
  * value can never throw out of useMemo and crash every tab.
  *
  * @since 2.0.0
- * @since NEXT Circular guard, toJSON support and never-throw hardening; exported for shared use.
+ * @since 2.3.0 Circular guard, toJSON support and never-throw hardening; exported for shared use.
  * @param {*} value Value to stringify.
  * @return {string} Stable JSON string.
  */

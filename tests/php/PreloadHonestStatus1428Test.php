@@ -7,7 +7,7 @@
  * ::is_randomized_query_asset() patterns (epoch matches, YYYYMMDD does not).
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.3.0
  */
 
 use PerformanceOptimise\Inc\Cache;

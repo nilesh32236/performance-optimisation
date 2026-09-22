@@ -87,7 +87,7 @@ const SIDEBAR_BREAKPOINT = 992;
  * style.setProperty CSS sink. Only plain hex colors are accepted; anything
  * else (url(), expression(), semicolons, overlong strings) is skipped.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} value Raw theme color value.
  * @return {boolean} True when the value is a safe hex color.
  */

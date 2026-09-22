@@ -469,7 +469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * write a cache file.
 		 *
 		 * @return bool True when the request host differs from the canonical host.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function host_mismatch(): bool {
 			return $this->host_mismatch;
@@ -946,7 +946,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * here (null = unresolved) so the predicate is evaluated once per
 		 * Cache instance lifetime (one request).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var bool|null
 		 */
 		private $sandbox_preview_memo = null;
@@ -958,7 +958,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * with the same options reuse the verdict. Fail-open: unresolved
 		 * or failed lookups mean "do not bypass".
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var array<string,bool>
 		 */
 		private $safe_mode_inline_memo = array();
@@ -1949,7 +1949,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * verdict is memoized per production slice hash. Preview admins are
 		 * exempt so staged output stays verifiable. Fail-open to false.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param array $file_opt Production `file_optimisation` slice.
 		 * @return bool True when inlining must be skipped.
@@ -2495,7 +2495,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * second pass finds nothing after `</head>` and no-ops) and
 		 * fail-open (any unexpected shape returns the input unchanged).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string The HTML with late block styles hoisted, or the input unchanged.
@@ -2669,7 +2669,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * comments) are skipped, so callers always resolve to a genuine
 		 * stylesheet tag. Never uses regex.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @param string $href   The stylesheet href to locate.
@@ -2712,7 +2712,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * a bare href substring (script string, preload, comment) before the
 		 * head close does not count. Never uses regex.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string $buffer     The HTML buffer.
 		 * @param string $href       The stylesheet href to test.
@@ -6625,7 +6625,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * frontend — the cap only warns first, then evicts oldest entries.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Disk-safe slice (issue #1428): `max_files`/`randomized_guard` keys.
+		 * @since 2.3.0 Disk-safe slice (issue #1428): `max_files`/`randomized_guard` keys.
 		 * @return array{max_mb:int,warn_ratio:float,enforce:bool,max_files:int,randomized_guard:bool}
 		 */
 		public static function get_cache_cap_settings(): array {
@@ -6685,7 +6685,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * dimension. Fail-open: returns zeros when the filesystem or
 		 * directory is unavailable.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array{bytes:int,files:int} Bytes used and file count.
 		 */
 		public static function get_cache_bytes_and_files(): array {
@@ -6744,7 +6744,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * enumeration with {@see get_cache_size_bytes()} so cap accounting
 		 * and eviction never drift.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return int File count, or 0 on failure.
 		 */
 		public static function get_cache_file_count(): int {
@@ -6762,7 +6762,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * combinable. Fail-open: any parse failure returns false.
 		 * Filterable via `wppo_exclude_randomized_from_combine`.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $src Asset src URL.
 		 * @return bool True when the query looks randomized.
 		 */
@@ -6835,7 +6835,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * dimension can push `ok` to `warn`/`over`.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT File-count dimension (issue #1428): `files`/`cap_files`/`warn_files` fields.
+		 * @since 2.3.0 File-count dimension (issue #1428): `files`/`cap_files`/`warn_files` fields.
 		 * @return array{bytes:int,cap_bytes:int,warn_bytes:int,state:string,enforce:bool,max_mb:int,files:int,cap_files:int,warn_files:int}
 		 */
 		public static function get_cache_cap_status(): array {
@@ -7035,7 +7035,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * multiple throttled runs (see {@see maybe_enforce_cache_cap()}).
 		 * Fail-open: filesystem failures stop silently.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param int $files_to_free Minimum entries to remove.
 		 * @return int Entries actually removed (best effort).
 		 */

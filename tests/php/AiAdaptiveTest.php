@@ -116,7 +116,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * later test. Forcing the context via the filter keeps slow-path
 	 * downgrade expectations deterministic regardless of test order.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 * @return void
 	 */
 	private function install_non_commerce_stubs(): void {
@@ -136,7 +136,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Explicit counterpart of install_non_commerce_stubs(): pins the
 	 * commerce guardrail on regardless of test order or login stubs.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 * @return void
 	 */
 	private function install_commerce_stubs(): void {
@@ -1606,7 +1606,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Exercises the three-window ratio-persistence gate (issue #1384):
 	 * every trailing window breaches the ratio/delta threshold.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @param string $metric Metric key ('lcp'|'cls').
 	 * @param int    $baseline_count Number of baseline samples.
@@ -1698,7 +1698,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * evaluated Then no page fires — three persisted windows are
 	 * required (issue #1384).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -1717,7 +1717,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * evaluated Then one notice fires carrying route plus p75 plus
 	 * baseline plus delta plus samples (issue #1384).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -1747,7 +1747,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * appear and the provisional state reports rum_disabled (issue
 	 * #1384).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -1775,7 +1775,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * read Then it reports trends_thin; given satisfied floors it
 	 * reports ready (issue #1384).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -1860,7 +1860,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * confirms the +0.05 absolute shift Then one notice fires (issue
 	 * #1384).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -1889,7 +1889,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * 30-snapshot history Then the clamp (29) keeps the value reachable
 	 * and one notice fires (issue #1384).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -1935,7 +1935,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Each window is array( date, path, n, avg ).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @param string $metric Metric key ('lcp'|'inp'|'cls').
 	 * @param array  $windows Window rows.
@@ -1965,7 +1965,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Given a window below 10 samples When evaluated Then no digest —
 	 * and a single date bucket (no baseline) also stays silent.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2007,7 +2007,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * A +32.5% LCP shift clears the +30% arm but not the 5% tolerance
 	 * band (effective bar 2730ms); a +40% shift clears both and alerts.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2045,7 +2045,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * read-only source marker; no settings mutation happens (the digest
 	 * only persists the shared cooldown timestamp).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2087,7 +2087,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * A +0.055 absolute shift stays silent inside the 0.05 + 0.01 band;
 	 * a +0.07 shift alerts.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2585,7 +2585,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * The stubbed home_url() returns http://example.com + path, so the home
 	 * candidate is http://example.com/ (esc_url_raw is identity in tests).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return array LCP anomaly array.
 	 */
@@ -2602,7 +2602,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Stub the scheduler + post-resolution helpers for CSS-refresh tests.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @param int   $post_id Post ID returned by url_to_postid().
 	 * @param array $enqueued Captured enqueue calls (by reference).
@@ -2623,7 +2623,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Seed wppo_settings with the CSS-refresh opt-in state.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @param bool $enabled Whether the opt-in toggle is on.
 	 * @return void
@@ -2654,7 +2654,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * MissingFunctionExpectations once its test ends, which would flip
 	 * function_exists-guarded branches elsewhere).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2692,7 +2692,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Isolated in a separate process so the scheduler stubs cannot leak
 	 * (see test_maybe_queue_css_refresh_queues_single_job_when_opted_in).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2723,7 +2723,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Isolated in a separate process so the scheduler stubs cannot leak
 	 * (see test_maybe_queue_css_refresh_queues_single_job_when_opted_in).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2751,7 +2751,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Isolated in a separate process so the scheduler stubs cannot leak
 	 * (see test_maybe_queue_css_refresh_queues_single_job_when_opted_in).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2782,7 +2782,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test the LCP suggestion carries the CSS-refresh payload (toggle off).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2820,7 +2820,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Three degraded samples satisfy the persistence gate merged from master
 	 * (anomaly_persistence_windows default 3: every trailing window must breach).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @param string $metric Metric key.
 	 * @param float  $baseline_value Baseline value.
@@ -2845,7 +2845,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * the slow-path suppression branch; `eagerness=moderate` pins the
 	 * contradictory-card branch (base card emitted, downgrade=conservative).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @param string $preload_url Preload URL to persist.
 	 * @param string $downgrade   Persisted downgrade value.
@@ -2901,7 +2901,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * contradictory payloads), the legacy dual preloads are suppressed,
 	 * and prefetch collapses to 1 URL.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2945,7 +2945,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * render Then no slow-path cards appear and static defaults stay (the
 	 * base eagerness card is kept, no speculation change is forced).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2972,7 +2972,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test the one-step downgrade ladder floors at conservative.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -2994,7 +2994,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * `eager` downgrade When suggestions render Then the emitted downgrade
 	 * is clamped to moderate, never loosened back to eager.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */
@@ -3023,7 +3023,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * suggestions render Then the URL is dropped and the copy names the
 	 * manual metabox hero as winning instead of rendering the payload.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 *
 	 * @return void
 	 */

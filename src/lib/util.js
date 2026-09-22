@@ -92,7 +92,7 @@ export const handleChange = ( setSettings ) => ( e ) => {
  * joined instead of dropped (issue #1217). Single shared implementation
  * replacing the per-component toDelayLines/toExcludeLines copies.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} value Raw value.
  * @return {string} Textarea-safe string.
  */
@@ -125,7 +125,7 @@ export const toTextLines = ( value ) => {
  * per invocation. The WP admin locale is fixed for the page lifetime, so a
  * module-level cache is safe.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {{pattern: string|null, units: string[]|null}}
  */
 const cachedByteUnits = { pattern: null, units: null };

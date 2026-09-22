@@ -78,14 +78,14 @@ const MAX_POLL_ATTEMPTS = 60;
  * attempts) so deep queues do not hammer admin-ajax at the same rate as
  * near-complete ones.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 const MAX_POLL_DELAY_MS = 15000;
 
 /**
  * Delay before the next poll tick, backing off with the attempt count.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {number} attempts 1-based poll attempt count.
  * @return {number} Milliseconds to wait before the next tick.
  */
@@ -123,7 +123,7 @@ const CDN_PURGE_SERVICES = [ 'none', 'cloudflare', 'varnish' ];
  * A malformed entry with pass missing must never render FAIL copy with no
  * evidence — it renders an inconclusive label instead.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*}      pass     Raw pass value from a check entry.
  * @param {string} passCopy Pass label.
  * @param {string} failCopy Fail label.
@@ -186,7 +186,7 @@ const normalizeImageInfo = ( raw ) => {
  * with different data + remediation kinds; a tri-state fix in 4/5 copies
  * used to leave one list mislabeling FAIL as pass.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Object} props             Component props.
  * @param {Array}  props.items       Check entries ({ path|key, pass }).
  * @param {string} props.kind        Remediation kind for getWooRuleRemediation.
@@ -230,7 +230,7 @@ const WooCheckList = ( { items, kind, idPrefix, pathKey, listLabel } ) => (
  * The Posts/Pages/Products selects shared one 7-option list copy-pasted
  * 3×; a duration added to 2 of 3 silently diverged per-type expiry.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {Element} Option elements.
  */
 const TTL_DURATIONS = [

@@ -478,7 +478,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	 * The Size column renders for scripts and styles, with an em dash
 	 * when the captured entry has no measured size.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_render_asset_manager_shows_size_column(): void {
 		$assets = array(
@@ -514,7 +514,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	 * The suggest-only assistant lists heavy candidates without checking
 	 * any disable box for them.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_render_asset_manager_suggests_without_auto_disabling(): void {
 		$assets = array(
@@ -547,7 +547,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	 * A pending blocked-handle notice renders once, server-side (the React
 	 * NoticeBanner cannot run inside the iframed post editor).
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_render_asset_manager_shows_blocked_notice_once(): void {
 		$assets = array(
@@ -628,7 +628,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	 * MB10 guard: with no capture yet, existing disables are preserved
 	 * instead of being overwritten to [].
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_save_preserves_disables_when_no_assets_captured(): void {
 		$saved   = array();
@@ -649,7 +649,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	 * Protected handles submitted for disabling are stripped and reported
 	 * via the flash notice; only per-post meta is written, never site-wide.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_save_blocks_protected_handles_with_notice(): void {
 		$assets = array(
@@ -679,7 +679,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * One-click revert deletes every per-page disable on the page only.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	public function test_save_revert_clears_all_disables(): void {
 		$assets = array(

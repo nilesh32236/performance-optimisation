@@ -997,7 +997,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * https://core.trac.wordpress.org/ticket/61276). Filterable via
 		 * `wppo_autoload_critical_threshold`.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		public const AUTOLOAD_CRITICAL_BYTES = 819200;
@@ -1270,7 +1270,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * constant (fail-open: audit-only, never fatal). Zero is rejected
 		 * because it would flag every site as critical.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return int Threshold in bytes (> 0).
 		 */
 		public static function get_autoload_critical_threshold(): int {
@@ -1278,7 +1278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				if ( ! function_exists( 'apply_filters' ) ) {
 					return self::AUTOLOAD_CRITICAL_BYTES;
 				}
-				/** Filters the critical autoload payload threshold in bytes. @since NEXT @param int $threshold Threshold in bytes. */
+				/** Filters the critical autoload payload threshold in bytes. @since 2.3.0 @param int $threshold Threshold in bytes. */
 				$filtered = apply_filters( 'wppo_autoload_critical_threshold', self::AUTOLOAD_CRITICAL_BYTES );
 				if ( is_numeric( $filtered ) ) {
 					$value = (int) $filtered;
@@ -1299,7 +1299,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * ({@see get_autoload_audit()}, Abilities, REST) delegates here so
 		 * the comparison cannot drift.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param int|null $total     Optional total bytes (defaults to {@see get_autoload_total_bytes()}).
 		 * @param int|null $threshold Optional threshold bytes (defaults to {@see get_autoload_critical_threshold()}; pass the already-resolved value to avoid a second filter call).
 		 * @return bool True when $total >= critical threshold.
@@ -1327,7 +1327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * threshold is resolved live (filter, no DB cost) and the critical
 		 * verdict delegates to {@see is_autoload_critical()}.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param int $limit Maximum number of options to return.
 		 * @return array{total_autoload_bytes:int,count:int,critical_threshold:int,is_critical:bool,options:array}
 		 */
@@ -1393,7 +1393,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Serialization framing differs from SUM(LENGTH()), so exact equality
 		 * is wrong — parity holds within max(1024, 1% of total).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array{reported:int,alloptions_bytes:int,delta:int,matches_within_rounding:bool}
 		 */
 		public static function get_autoload_parity(): array {
@@ -1444,7 +1444,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * `site_status_autoloaded_options_size_limit` filter when available
 		 * so installs that tune the threshold stay in parity.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		public const AUTOLOAD_SIZE_LIMIT_DEFAULT = 800000;
@@ -1456,7 +1456,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * when the filter throws, or when the filtered value is not positive.
 		 * Per-site options only (`$wpdb->options` is site-scoped on multisite).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return int Size limit in bytes.
 		 */
 		public static function get_autoload_size_limit(): int {

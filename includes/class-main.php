@@ -1168,7 +1168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * the documented `wppo_litespeed_is_litespeed` filter via
 		 * LiteSpeed_Integration::is_litespeed().
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return bool True when the LiteSpeed stack should be required.
 		 */
 		private static function should_load_litespeed_stack(): bool {
@@ -2124,7 +2124,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return void
 		 * @since 2.2.0 Also backfills the 25s `ccssGenTimeout` generation budget.
-		 * @since NEXT Also backfills the #1388 keys (`ccssInlineBudgetKb`,
+		 * @since 2.3.0 Also backfills the #1388 keys (`ccssInlineBudgetKb`,
 		 *        `ccssCommerceExclude`, `ccssChecksumRegen`).
 		 */
 		public function maybe_migrate_css_queue_defaults(): void {
@@ -2939,7 +2939,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * with no cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function maybe_migrate_ai_speculation_autotune(): void {
 			try {
@@ -3022,7 +3022,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function maybe_migrate_ai_anomaly_v2(): void {
 			try {
@@ -4054,7 +4054,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param int    $post_id Queued post ID.
 		 * @param array  $anomaly The firing LCP anomaly.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public function on_ai_css_refresh_queued( $url, $post_id, $anomaly ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			try {
@@ -5491,7 +5491,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * set (mirroring core's $checked param): a dependent that is itself
 		 * blocked by a third handle poisons its own dependencies.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param object   $wp_scripts WP_Scripts registry.
 		 * @param string   $handle     Script handle.
@@ -5625,7 +5625,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Fail-open: false on any unreadable version or missing API, in which
 		 * case callers fall back to the pre-6.9 legacy path.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @return bool True when the core template-enhancement buffer path is allowed.
 		 */
@@ -5816,7 +5816,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// order (queue-order independence). Excluded handles stay out, so
 			// their dependencies correctly observe them as blocking.
 			//
-			// @since NEXT.
+			// @since 2.3.0.
 			$intended_defer_handles = array();
 			foreach ( $wp_scripts->queue as $queued_handle ) {
 				$queued_handle = (string) $queued_handle;
@@ -5844,7 +5844,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Cheap exclusion filter first (issue #1466 review): explicitly
 				// excluded handles skip the O(queue) eligibility scan entirely.
 				//
-				// @since NEXT.
+				// @since 2.3.0.
 				if ( in_array( $handle, $this->exclude_defer_js, true ) ) {
 					continue;
 				}
@@ -5855,7 +5855,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// undeferred (no strategy, no deferred mark, no
 				// fetchpriority/group) with queue order untouched.
 				//
-				// @since NEXT.
+				// @since 2.3.0.
 				if ( ! $this->is_defer_eligible_for_handle( $wp_scripts, (string) $handle, $intended_defer_handles ) ) {
 					continue;
 				}
@@ -7212,7 +7212,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * one-click presets. Builder plus commerce presets are forced ON at
 		 * every level so carts, checkouts, and builder runtimes never break.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_preset_levels(): array {
@@ -7227,7 +7227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Guarded by function_exists/has_filter plus a legacy fallback so the
 		 * current delay path is used when the filter API is unavailable.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string $level Preset level (safe|balanced|aggressive).
 		 * @return array<string, bool>
@@ -7311,7 +7311,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * degrades to the base preset list (safe direction — pages exclude
 		 * more, never delay everything), never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string $level Preset level (safe|balanced|aggressive).
 		 * @return string[]
@@ -7669,7 +7669,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * gallery presets stay off (opt-in), combineCSS stays off (FOUC risk).
 		 * Multisite-safe: per-site `wppo_settings` only.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array<string, mixed>
 		 */
 		public static function get_safe_preset_bundle(): array {
@@ -7706,7 +7706,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * warning with one-click revert via the settings snapshot. Returns
 		 * only pre-existing settings keys: additive, no schema change.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array<string, mixed>
 		 */
 		public static function get_aggressive_preset_bundle(): array {
@@ -7739,7 +7739,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * or persist unexpected values. Fail-open: any failure returns the
 		 * input unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param array<string, mixed> $current Current file_optimisation settings.
 		 * @param array<string, mixed> $bundle  Preset bundle (e.g. get_safe_preset_bundle()).
 		 * @return array<string, mixed> Merged settings.
@@ -7788,7 +7788,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * safety. `minifyHTML` is part of the pipeline gate because the
 		 * bundle pins it true. Fail-open: any failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param array<string, mixed> $file_opt file_optimisation settings slice.
 		 * @return bool
 		 */
@@ -8300,7 +8300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `wppo_fragile_handle_map` (has_filter-guarded, fail-open to the
 		 * built-in map). Multisite-safe: static data only.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @return array<string,array{fields:string[],reason:string}> Fragment => meta.
 		 */
@@ -8429,7 +8429,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * suggestions, deduped by handle. Fail-open: any failure returns an
 		 * empty array (unoptimised guidance only, never fatal).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string[] $handles Enqueued script/style handles.
 		 * @return array<int,array{handle:string,fields:string[],reason:string}> Suggestions.
@@ -8486,7 +8486,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * one-click UI so the stack definition cannot drift between
 		 * call sites. Fail-open to all-off on any failure.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param array $file_optimisation Optional `file_optimisation` slice.
 		 * @return array{safe_mode:bool,delay_js:bool,defer_js:bool,combine_css:bool,remove_unused_css:bool,stack_enabled:bool} Stack flags.
@@ -8537,7 +8537,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * persistence lives in the REST handler (per-site wppo_settings).
 		 * Fail-open: any failure returns the input unchanged with safeMode on.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param array $file_optimisation Production slice.
 		 * @return array Slice with safeMode enabled.
@@ -9193,7 +9193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * mid-request add_filter/remove_filter stays visible. Reset with
 		 * reset_delay_third_party_auto_cache().
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string[]|null
 		 */
 		private static ?array $delay_js_auto_label_commerce = null;
@@ -9203,7 +9203,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Same memo policy as $delay_js_auto_label_commerce above.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var array<string, string[]>|null
 		 */
 		private static ?array $delay_js_auto_label_categories = null;
@@ -9211,7 +9211,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Blog id the auto-label memo was computed for.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private static int $delay_js_auto_label_blog = 0;
@@ -9227,7 +9227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * wppo_delay_js_third_party_auto_categories (has_filter-guarded,
 		 * fail-open to the curated buckets).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array<string, string[]>
 		 */
 		public static function get_delay_js_third_party_auto_categories(): array {
@@ -9318,7 +9318,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * get_delay_js_commerce_exclusions()). Fail-open: any failure
 		 * returns an empty string (unlabelled, left eager).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string $src_or_handle Script src URL, tag markup, or handle.
 		 * @return string Category label or empty string.

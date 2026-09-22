@@ -595,7 +595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			// Site-wide settings are never touched; other per-page toggles
 			// below still save normally.
 			//
-			// @since NEXT.
+			// @since 2.3.0.
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$revert_all = isset( $_POST['wppo_asset_manager_revert'] ) && ! empty( $_POST['wppo_asset_manager_revert'] );
 
@@ -791,7 +791,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * Format a captured asset size for the metabox Size column.
 		 *
 		 * @param  mixed $size Size in bytes (int) or null when unknown.
-		 * @since  NEXT
+		 * @since 2.3.0
 		 * @return string Human-readable size (e.g. `12.3 KB`) or an em dash when unknown.
 		 */
 		public static function format_asset_size( $size ): string {
@@ -814,7 +814,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * is no cross-site leakage.
 		 *
 		 * @param  int $post_id The post ID.
-		 * @since  NEXT
+		 * @since 2.3.0
 		 * @return string The transient key.
 		 */
 		private static function blocked_notice_key( int $post_id ): string {
@@ -831,7 +831,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 *
 		 * @param  int   $post_id The post ID.
 		 * @param  array $handles Blocked handles.
-		 * @since  NEXT
+		 * @since 2.3.0
 		 * @return void
 		 */
 		private static function set_blocked_notice( int $post_id, array $handles ): void {
@@ -852,7 +852,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * Consume (read + delete) the blocked-handle flash notice.
 		 *
 		 * @param  int $post_id The post ID.
-		 * @since  NEXT
+		 * @since 2.3.0
 		 * @return array Blocked handles, or empty when none pending.
 		 */
 		private static function consume_blocked_notice( int $post_id ): array {
@@ -890,7 +890,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * Clear any pending blocked-handle notice (used by one-click revert).
 		 *
 		 * @param  int $post_id The post ID.
-		 * @since  NEXT
+		 * @since 2.3.0
 		 * @return void
 		 */
 		private static function clear_blocked_notice( int $post_id ): void {

@@ -10,7 +10,7 @@
  * Fail-open: a failed fetch hides the card body behind a NoticeBanner error
  * and never blocks the rest of the Dashboard.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 
 import { useState, useEffect, useCallback } from '@wordpress/element';

@@ -45,7 +45,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * $now) is memoized — injected args (tests) always compute fresh.
 		 * Reset via reset_rum_anomaly_digest_memo() (tests).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var array|null
 		 */
 		private static ?array $rum_digest_memo = null;
@@ -56,7 +56,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Distinguishes "not computed yet" (false) from a computed empty
 		 * digest (memo is array(), still a valid cached result).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var bool
 		 */
 		private static bool $rum_digest_memo_computed = false;
@@ -64,7 +64,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Blog ID the digest memo was computed for (multisite safety).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private static int $rum_digest_memo_blog = 0;
@@ -143,7 +143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Reset the per-request RUM anomaly digest memo (for testing).
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function reset_rum_anomaly_digest_memo(): void {
 			self::$rum_digest_memo          = null;
@@ -157,7 +157,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Fail-open to 0 when the multisite API is unavailable (unit tests).
 		 *
 		 * @return int Current blog ID or 0 when unavailable.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function rum_digest_memo_blog_id(): int {
 			try {
@@ -844,7 +844,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * aggregate. Commerce/auth contexts are capped downstream via
 		 * maybe_cap_eagerness() when the downgrade target is computed.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @return array{slow:bool,path:string,segment:array|null,p75:float,samples:int,min_samples:int,preload_url:string} Slow-path state.
 		 */
 		public static function get_slow_top_path_state(): array {
@@ -919,7 +919,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * allowlisted and capped at moderate in commerce/auth contexts via
 		 * normalize_eagerness() so transactional pages never loosen.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $eagerness Current learned eagerness.
 		 * @return string Downgraded eagerness.
 		 */
@@ -937,7 +937,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * cannot drift apart when the ladder changes. Unknown values floor
 		 * to conservative (0).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param string $eagerness Allowlisted eagerness value.
 		 * @return int Numeric ladder level (0-2).
 		 */
@@ -956,7 +956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Inverse of eagerness_level(): levels are clamped to 0-2 so a
 		 * one-step downgrade from conservative floors at conservative.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param int $level Numeric ladder level.
 		 * @return string Allowlisted eagerness value.
 		 */
@@ -975,7 +975,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Centralizes the segment triple extraction shared by the slow-path
 		 * preload and downgrade cards so copy stays consistent.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $segment Segment descriptor (or null).
 		 * @return array{0:string,1:string,2:string} Device, template, connection labels.
 		 */
@@ -996,7 +996,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * stale or tampered model value (off-origin, javascript:) can never
 		 * be rendered into suggestion copy. Fail-open to '' on any error.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @param mixed $url Raw URL value.
 		 * @return string Sanitized URL or '' when invalid.
 		 */
@@ -1772,7 +1772,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * relative-multiplier arm (lab trends carry no INP snapshots, hence
 		 * INP regressions surface only via the field-data digest).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var float
 		 */
 		private const INP_RELATIVE_MULTIPLIER = 1.3;
@@ -1784,7 +1784,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * (1 + tolerance_pct/100)` before the LCP/INP digest arm fires, so
 		 * borderline wobble inside the band stays silent.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var float
 		 */
 		private const ANOMALY_TOLERANCE_PCT = 5.0;
@@ -1796,7 +1796,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * before the CLS digest arm fires, so borderline wobble inside the
 		 * band stays silent.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var float
 		 */
 		private const ANOMALY_TOLERANCE_ABS = 0.01;
@@ -1808,7 +1808,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * A single noisy PageSpeed window can never page on its own; the
 		 * last N windows must all persist above baseline.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const ANOMALY_PERSISTENCE_WINDOWS = 3;
@@ -1817,7 +1817,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Default minimum RUM samples before field data may corroborate
 		 * a trend anomaly (issue #1384).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const ANOMALY_P75_MIN_SAMPLES = 10;
@@ -1830,7 +1830,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * cannot silently disable paging forever with an enormous value.
 		 * The persistence-window resolver uses ANOMALY_PERSISTENCE_MAX.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const ANOMALY_GATE_MAX = 30;
@@ -1844,7 +1844,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * persistence=30 (admittable under ANOMALY_GATE_MAX) could never
 		 * fire. Clamping to 29 keeps every admittable value reachable.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const ANOMALY_PERSISTENCE_MAX = 29;
@@ -1856,7 +1856,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * `anomaly_band_window` samples before the persistence tail, not
 		 * all history, so stale history cannot skew the band.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const ANOMALY_BAND_WINDOW = 10;
@@ -1867,7 +1867,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * A breach must stay inside the band for this many days before a
 		 * recovery notice fires, preventing flapping notices.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const ANOMALY_RECOVERY_DAYS = 3;
@@ -1879,7 +1879,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Per-site option, hence inherently multisite-safe. Bounded to 20
 		 * entries; autoload=false; never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string
 		 */
 		private const BREACH_STATE_OPTION = 'wppo_ai_anomaly_breach_state';
@@ -1891,7 +1891,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * autoload=false. Breaches near a noted deploy are annotated
 		 * instead of treated as mysteries.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string
 		 */
 		private const DEPLOY_NOTES_OPTION = 'wppo_ai_deploy_notes';
@@ -1901,7 +1901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Keeps the per-site option bounded (~1 extra row per deploy).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const DEPLOY_NOTES_LIMIT = 20;
@@ -1912,7 +1912,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Separate from DEPLOY_NOTES_LIMIT so a future deploy-notes
 		 * cap change cannot silently alter breach-state retention.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const BREACH_STATE_LIMIT = 20;
@@ -1923,7 +1923,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * A breach whose timestamp falls within this many days after a
 		 * noted deploy carries the note as annotation.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const DEPLOY_CORRELATION_DAYS = 7;
@@ -2007,7 +2007,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * 0–50 so a rogue value cannot silence every regression.
 		 *
 		 * @return float Tolerance percent (>=0).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function anomaly_tolerance_pct(): float {
 			try {
@@ -2046,7 +2046,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * paging forever.
 		 *
 		 * @return int Trailing windows that must each breach (>=1, <=29).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function anomaly_persistence_windows(): int {
 			try {
@@ -2085,7 +2085,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * 0–1 so a rogue value cannot silence every regression.
 		 *
 		 * @return float Absolute tolerance (>=0).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function anomaly_tolerance_abs(): float {
 			try {
@@ -2122,7 +2122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * disable paging forever.
 		 *
 		 * @return int Minimum RUM samples (>=1, <=30).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function anomaly_p75_min_samples(): int {
 			try {
@@ -2162,7 +2162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * 30-snapshot trend cap.
 		 *
 		 * @return int Trailing samples forming the band baseline (>=1, <=29).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function anomaly_band_window(): int {
 			try {
@@ -2200,7 +2200,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * `wppo_ai_anomaly_recovery_days`. Fail-open to 3.
 		 *
 		 * @return int In-band stabilization days (>=0; 0 recovers immediately).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function anomaly_recovery_days(): int {
 			try {
@@ -2244,7 +2244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param float[] $prior_window Trailing numeric samples (oldest first).
 		 * @param string  $metric Metric name ('lcp'|'cls'; others use the LCP shape).
 		 * @return array{mean:float,std:float,upper:float,lower:float} Band edges.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function moving_band( array $prior_window, string $metric ): array {
 			$zero = array(
@@ -2303,7 +2303,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Capped, sanitized, fail-open to an empty list.
 		 *
 		 * @return array[] List of {ts:int, note:string} rows (newest last, max 20).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_deploy_notes(): array {
 			try {
@@ -2385,7 +2385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param string   $note Note text (sanitized, max 200 chars).
 		 * @param int|null $ts Optional timestamp (defaults to now).
 		 * @return bool True when stored.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function add_deploy_note( string $note, ?int $ts = null ): bool {
 			try {
@@ -2429,7 +2429,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param int $breach_ts Breach timestamp.
 		 * @return string Matching note text, or '' when none nearby.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function find_deploy_note_near( int $breach_ts ): string {
 			try {
@@ -2471,7 +2471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * an empty array.
 		 *
 		 * @return array<string, array{metric:string,baseline:float,current:float,breached_at:int}> Breach rows keyed by trend key.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_breach_state(): array {
 			try {
@@ -2502,7 +2502,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param array $state Breach rows keyed by trend key.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function set_breach_state( array $state ): void {
 			try {
@@ -2529,7 +2529,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param float  $current Breach sample.
 		 * @param int    $breached_at Breach timestamp.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function record_breach_state( string $trend_key, string $metric, float $baseline, float $current, int $breached_at ): void {
 			try {
@@ -2556,7 +2556,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param string $trend_key Trend key.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function clear_breach_state( string $trend_key ): void {
 			try {
@@ -2595,7 +2595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $trends Optional trends map (null = live Pagespeed::get_trends()).
 		 * @param int|null   $now Optional current timestamp (tests).
 		 * @return array[] At most one recovery: array(array('key'=>string,'route'=>string,'metric'=>string,'baseline'=>float,'current'=>float,'samples'=>int,'recovered'=>true,'breached_at'=>int)).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function detect_recoveries( ?array $trends = null, ?int $now = null ): array {
 			try {
@@ -2719,7 +2719,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Fail-open to false (no corroboration without field collection).
 		 *
 		 * @return bool True when RUM collection is enabled.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function is_rum_collection_enabled(): bool {
 			try {
@@ -2743,7 +2743,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param float[] $samples Numeric samples.
 		 * @return float p75 value or 0.0 when empty.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function anomaly_p75( array $samples ): float {
 			try {
@@ -2775,7 +2775,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * the 6.2 floor. Fail-open: any failure returns an empty array.
 		 *
 		 * @return array Aggregate data (empty array when missing/invalid).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function read_rum_aggregate_for_anomaly(): array {
 			try {
@@ -2922,8 +2922,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param int|null   $p75_min_samples Optional pre-resolved sample floor (null = resolve once via anomaly_p75_min_samples()).
 		 * @return bool True when real-user data agrees with the trend arm.
 		 * @since 2.0.0
-		 * @since NEXT Supports the 'inp' metric (behaves like 'lcp').
-		 * @since NEXT RUM-disabled short-circuit; read-only aggregate path; p75 sample floor.
+		 * @since 2.3.0 Supports the 'inp' metric (behaves like 'lcp').
+		 * @since 2.3.0 RUM-disabled short-circuit; read-only aggregate path; p75 sample floor.
 		 */
 		private static function is_rum_corroborated( string $metric, ?array $rum, float $baseline, ?int $p75_min_samples = null ): bool {
 			try {
@@ -3031,7 +3031,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param array $samples Numeric samples.
 		 * @return float Median value or 0.0 when empty.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function rum_median( array $samples ): float {
 			try {
@@ -3097,7 +3097,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $rum Optional RUM aggregate for testability. When null, reads RUM::get_aggregate_readonly().
 		 * @param int|null   $now Optional current timestamp for testability. When null, uses time().
 		 * @return array[] At most one digest anomaly: array(array('key'=>string,'metric'=>string,'path'=>string,'baseline'=>float,'current'=>float,'recent'=>float,'window'=>string,'samples'=>int,'source'=>string,'change_pct'=>float|'change_abs'=>float)).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_rum_anomaly_digest( ?array $rum = null, ?int $now = null ): array {
 			// Per-request memo (live path only): repeated
@@ -3140,7 +3140,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $rum Optional RUM aggregate for testability.
 		 * @param int|null   $now Optional current timestamp for testability.
 		 * @return array[] At most one digest anomaly.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function compute_rum_anomaly_digest( ?array $rum = null, ?int $now = null ): array {
 			try {
@@ -3305,7 +3305,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				 * `source: rum-digest` so the alert can link the affected
 				 * path and window.
 				 *
-				 * @since NEXT Digest entries flow through this filter.
+				 * @since 2.3.0 Digest entries flow through this filter.
 				 * @param array[] $anomalies At most one anomaly array.
 				 */
 				if ( function_exists( 'apply_filters' ) ) {
@@ -3387,8 +3387,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param int|null   $now Optional current timestamp for testability. When null, uses time().
 		 * @return array[] At most one anomaly: array(array('key'=>string,'route'=>string,'metric'=>string,'baseline'=>float,'current'=>float,'p75'=>float,'delta'=>float,'samples'=>int,'change_pct'=>float|'change_abs'=>float)).
 		 * @since 2.0.0
-		 * @since NEXT Three-window ratio persistence; RUM-disabled short-circuit; enriched route/p75/baseline/delta/samples payload.
-		 * @since NEXT v2 moving-average bands, deploy-note annotation, breach-state tracking for recovery hysteresis.
+		 * @since 2.3.0 Three-window ratio persistence; RUM-disabled short-circuit; enriched route/p75/baseline/delta/samples payload.
+		 * @since 2.3.0 v2 moving-average bands, deploy-note annotation, breach-state tracking for recovery hysteresis.
 		 */
 		public static function detect_anomalies( ?array $trends = null, ?array $rum = null, ?int $now = null ): array {
 			try {
@@ -3575,7 +3575,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * blog-qualified via Util::transient_key() so multisite sites cool
 		 * down independently. Stored value is the queue timestamp.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string
 		 */
 		private const CSS_REFRESH_COOLDOWN_PREFIX = 'wppo_ai_css_refresh_';
@@ -3586,7 +3586,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Per-site option, hence inherently multisite-safe. Bounded to 20
 		 * entries; proves the refresh loop with before/after LCP numbers.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string
 		 */
 		private const CSS_REFRESH_SNAPSHOT_OPTION = 'wppo_ai_css_refresh_snapshots';
@@ -3594,7 +3594,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Default per-URL CSS-refresh cooldown in days.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const CSS_REFRESH_COOLDOWN_DAYS = 7;
@@ -3609,7 +3609,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * keeps the loop suggestion-only.
 		 *
 		 * @return bool True when a regression may queue a CSS regen job.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_css_refresh_enabled(): bool {
 			try {
@@ -3622,7 +3622,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					/**
 					 * Filters whether RUM-triggered CSS refresh may queue jobs.
 					 *
-					 * @since NEXT
+					 * @since 2.3.0
 					 * @param bool $enabled Whether the CSS-refresh opt-in is on.
 					 */
 					$enabled = (bool) apply_filters( 'wppo_ai_css_refresh_enabled', $enabled );
@@ -3647,7 +3647,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * floor is 1 day: stored/filtered values below 1 are normalized up.
 		 *
 		 * @return int Cooldown days (>=1).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function css_refresh_cooldown_days(): int {
 			try {
@@ -3668,7 +3668,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					 * Values below 1 are normalized up to 1 (see
 					 * css_refresh_cooldown_days()).
 					 *
-					 * @since NEXT
+					 * @since 2.3.0
 					 * @param int $days Cooldown days.
 					 */
 					$filtered = apply_filters( 'wppo_ai_css_refresh_cooldown_days', $days );
@@ -3700,7 +3700,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param string $trend_key Trend key (`md5(url)_strategy`).
 		 * @return string Resolved absolute URL, or '' when unresolvable.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function resolve_anomaly_url( string $trend_key ): string {
 			try {
@@ -3763,7 +3763,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param string $url Absolute URL.
 		 * @return bool True when the URL is the homepage.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_homepage_url( string $url ): bool {
 			try {
@@ -3797,7 +3797,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * suggestion-only with the distinct `homepage` reason.
 		 *
 		 * @return int Front-page post ID (>0), or 0 when none configured.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function resolve_front_page_post_id(): int {
 			try {
@@ -3830,7 +3830,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param string $url Absolute URL.
 		 * @return int Post ID (>0), or 0 when unresolvable.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function resolve_anomaly_post_id( string $url ): int {
 			try {
@@ -3865,7 +3865,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param string $snapshot_key Snapshot key (md5 of URL or trend key).
 		 * @param array  $entry Snapshot entry (url, before_lcp, current_lcp, queued, ...).
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function record_css_refresh_snapshot( string $snapshot_key, array $entry ): void {
 			try {
@@ -3894,7 +3894,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param string $url Absolute URL.
 		 * @return array Snapshot entry, or empty array when none stored.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_css_refresh_snapshot( string $url ): array {
 			try {
@@ -3940,7 +3940,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array    $anomaly Anomaly array from detect_anomalies().
 		 * @param int|null $now Optional current timestamp (tests).
 		 * @return array{queued:bool,reason:string,url:string,post_id:int,before_lcp:float,current_lcp:float} Refresh decision.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function maybe_queue_css_refresh( array $anomaly, ?int $now = null ): array {
 			$fallback = array(
@@ -4079,7 +4079,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					 * consumer: Main::on_ai_css_refresh_queued() regenerates the
 					 * matching critical-CSS template (`home`/`page`/`single`).
 					 *
-					 * @since NEXT
+					 * @since 2.3.0
 					 * @param string $url regressed URL.
 					 * @param int    $post_id Queued post ID.
 					 * @param array  $anomaly The firing LCP anomaly.
@@ -4105,7 +4105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param string $cooldown_key Blog-aware transient key.
 		 * @param int    $now Current timestamp.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function set_css_refresh_cooldown( string $cooldown_key, int $now ): void {
 			try {
@@ -4146,7 +4146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $rum Optional RUM aggregate (null = live read-only aggregate).
 		 * @param int|null   $now Optional current timestamp for testability.
 		 * @return array{provisional:bool,reason:string,samples:int,min_samples:int,rum_samples:int,rum_min_samples:int} Provisional state.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_anomaly_provisional_state( ?array $trends = null, ?array $rum = null, ?int $now = null ): array {
 			$fallback = array(
@@ -5272,7 +5272,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * false (legacy path).
 		 *
 		 * @return bool True when the RUM-segmented per-URL auto-tune applies.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_speculation_autotune_enabled(): bool {
 			try {
@@ -5282,7 +5282,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					/**
 					 * Filters whether RUM-segmented speculation auto-tune applies.
 					 *
-					 * @since NEXT
+					 * @since 2.3.0
 					 * @param bool $enabled Whether the speculation auto-tune is on.
 					 */
 					return (bool) apply_filters( 'wppo_ai_speculation_autotune_enabled', $enabled );
@@ -5303,7 +5303,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * the key keep the shared gate. Fail-open to 20.
 		 *
 		 * @return int Minimum samples (>=1).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function speculation_min_samples(): int {
 			try {
@@ -5336,7 +5336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * (5 URLs x ~150 bytes). Fail-open to 5.
 		 *
 		 * @return int Maximum URLs (1-5).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function speculation_max_urls(): int {
 			try {
@@ -5372,7 +5372,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param string[] $urls Candidate absolute URLs (rank-ordered).
 		 * @param int      $budget_bytes Maximum encoded size in bytes.
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function trim_speculation_urls_to_budget( array $urls, int $budget_bytes = 1024 ): array {
 			try {
@@ -5632,7 +5632,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param array $metrics Single path-bucket metric map.
 		 * @return int Peak `n` (>= 0).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function peak_rum_metric_samples( array $metrics ): int {
 			try {
@@ -5880,7 +5880,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param int|null $min_override Optional pre-resolved minimum samples (avoids an extra settings read on the hot path).
 		 * @param int|null $max_override Optional pre-resolved maximum URLs (avoids an extra settings read on the hot path).
 		 * @return array|null Rules with the auto-tuned list rule appended, the input unchanged, or null on failure.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function get_autotuned_speculation_rule( $rules, ?int $min_override = null, ?int $max_override = null ) {
 			try {
@@ -5962,7 +5962,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					/**
 					 * Filters AI-injected speculation rules.
 					 *
-					 * @since NEXT
+					 * @since 2.3.0
 					 * @param array $rules Updated rules.
 					 * @param array $urls AI prefetch URLs.
 					 */
@@ -6001,7 +6001,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param int   $max Maximum URLs per list rule (1-5).
 		 * @param bool  $strict When false, commerce/eager guards are contextual.
 		 * @return array Sanitized rules.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function sanitize_speculation_rules_after_filter( $filtered, array $fallback, int $max, bool $strict = true ): array {
 			try {

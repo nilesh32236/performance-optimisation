@@ -9,13 +9,13 @@
  * bundle independence and `src/lib/__tests__/authSync.test.js` asserts the
  * three sets stay in sync.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 
 /**
  * Payload codes indicating an expired/invalid nonce even on HTTP 200.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {string[]}
  */
 export const AUTH_ERROR_CODES = Object.freeze( [
@@ -31,7 +31,7 @@ export const AUTH_ERROR_CODES = Object.freeze( [
  * any importer mutate the nonce-refresh contract behind the sync test's
  * back. Importers must use isAuthErrorCode().
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {Set<string>}
  */
 const AUTH_ERROR_CODE_SET = new Set( AUTH_ERROR_CODES );
@@ -39,7 +39,7 @@ const AUTH_ERROR_CODE_SET = new Set( AUTH_ERROR_CODES );
 /**
  * Whether a server payload code signals an auth/nonce failure.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} code Payload `code` value.
  * @return {boolean} True when the code means "refresh nonce and retry once".
  */

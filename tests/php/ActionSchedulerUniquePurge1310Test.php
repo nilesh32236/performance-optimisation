@@ -438,7 +438,7 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 	 * Runs in a separate process with a 4.x-shaped store-deduping stub so
 	 * reflection detects unique support.
 	 *
-	 * @since NEXT
+	 * @since 2.3.0
 	 */
 	#[RunInSeparateProcess]
 	#[PreserveGlobalState( false )]

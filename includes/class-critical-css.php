@@ -244,7 +244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * only. Overridable per site via
 		 * `file_optimisation.ccssInlineBudgetKb`.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const DEFAULT_CCSS_INLINE_BUDGET_BYTES = 14336;
@@ -252,7 +252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Minimum gzipped inline budget in bytes (1 KB, issue #1388).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const MIN_CCSS_INLINE_BUDGET_BYTES = 1024;
@@ -263,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * A rogue setting can never mean unbounded: oversized values clamp
 		 * here, non-numeric/missing values fall back to the default.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const MAX_CCSS_INLINE_BUDGET_BYTES = 102400;
@@ -379,7 +379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * triggers cannot re-queue the whole template set on every call.
 		 * Per-site option (core get_option is multisite-safe).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string
 		 */
 		public const LAST_FULL_REGEN_OPTION = 'wppo_ccss_last_full_regen';
@@ -390,7 +390,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Matches the used-CSS FULL_REGEN_COOLDOWN_SECONDS so both pipelines
 		 * share one cadence; filterable via wppo_ccss_regen_cooldown.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const FULL_REGEN_COOLDOWN_SECONDS = 18000;
@@ -402,7 +402,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * update cannot flood the scheduler; mirrors the used-CSS
 		 * request_targeted_regen() default of 20.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const TARGETED_REGEN_CAP = 20;
@@ -416,7 +416,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * stacking up to 20 jobs per save. Per-site option (core get_option
 		 * is multisite-safe). Deleted on uninstall.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var string
 		 */
 		public const TARGETED_REGEN_OPTION = 'wppo_ccss_last_targeted_regen';
@@ -428,7 +428,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * pipelines share one cadence; filterable via
 		 * wppo_ccss_targeted_cooldown.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var int
 		 */
 		private const TARGETED_REGEN_COOLDOWN_SECONDS = 3600;
@@ -489,7 +489,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * (20 entries, FIFO evict) so unbounded CSS cannot grow memory.
 		 * Reset via reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var array<string, int>
 		 */
 		private static array $gzip_size_memo = array();
@@ -501,7 +501,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * defer_stylesheets() called it once per stylesheet tag. Null means
 		 * uncomputed. Reset via reset_ccss_memo() (tests reset between cases).
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var bool|null
 		 */
 		private static ?bool $commerce_context_memo = null;
@@ -513,7 +513,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * one settings + context evaluation. Null means uncomputed. Reset via
 		 * reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @var bool|null
 		 */
 		private static ?bool $commerce_excluded_context_memo = null;
@@ -637,7 +637,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $path Absolute path to check.
 		 * @return bool True when contained.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function is_ccss_path_contained( string $path ): bool {
 			try {
@@ -672,7 +672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $template_hash Validated template hash.
 		 * @param string $css           Raw critical-CSS content.
 		 * @return array{staged: bool, reason: string, bytes: int, checksum: string, live_bytes: int, live_checksum: string, changed: bool} Preview metadata.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function stage_ccss_for_template( string $template_hash, string $css ): array {
 			$refused = static function ( string $reason ): array {
@@ -741,7 +741,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Validated template hash.
 		 * @return bool True when the staged file replaced the live file.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function promote_staged_ccss( string $template_hash ): bool {
 			try {
@@ -815,7 +815,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $template_hash Validated template hash.
 		 * @param string $reason        Machine-readable reason recorded in the activity log.
 		 * @return bool True when the fallback payload replaced the live file.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function rollback_ccss_to_fallback( string $template_hash, string $reason = 'manual' ): bool {
 			try {
@@ -870,7 +870,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Validated template hash.
 		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool, health: string} Slot description.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_ccss_rollout_status( string $template_hash ): array {
 			try {
@@ -939,7 +939,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Validated template hash.
 		 * @return array{status: string, reason: string, bytes: int} One of healthy|restored|degraded.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function verify_ccss_health( string $template_hash ): array {
 			try {
@@ -986,7 +986,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template Template identifier.
 		 * @return array{staged: bool, reason: string, bytes: int, checksum: string, live_bytes: int, live_checksum: string, changed: bool, template: string} Preview metadata.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function generate_preview_for_template( string $template ): array {
 			$refused = static function ( string $reason ) use ( $template ): array {
@@ -1100,7 +1100,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * here — it always runs through Util::get_styles_inline_limit().
 		 *
 		 * @return int Cooldown in seconds.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_full_regen_cooldown(): int {
 			try {
@@ -1130,7 +1130,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * values clamp, so a rogue filter can never uncap inline weight.
 		 *
 		 * @return int Budget in bytes, clamped to MIN..MAX_CCSS_INLINE_BUDGET_BYTES.
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @see Critical_CSS::get_ccss_max_size()
 		 */
 		public static function get_ccss_inline_budget_bytes(): int {
@@ -1162,7 +1162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * unreadable timestamp never blocks work.
 		 *
 		 * @return bool True when the last full regen is newer than the cooldown.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_full_regen_cooled_down(): bool {
 			try {
@@ -1192,7 +1192,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Fail-open.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function mark_full_regen(): void {
 			try {
@@ -1215,7 +1215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * cooldown, which must never be disabled.
 		 *
 		 * @return int Cooldown in seconds (>= 0).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_targeted_regen_cooldown(): int {
 			try {
@@ -1227,7 +1227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					 * Bounds how often builder/theme updates may queue bounded
 					 * targeted requeues. Return 0 to disable the throttle.
 					 *
-					 * @since NEXT
+					 * @since 2.3.0
 					 *
 					 * @param int $cooldown Cooldown in seconds. Default 3600.
 					 */
@@ -1250,7 +1250,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * unreadable timestamp never blocks work.
 		 *
 		 * @return bool True when the last targeted regen is newer than the cooldown.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_targeted_regen_cooled_down(): bool {
 			try {
@@ -1276,7 +1276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * the throttle window. Fail-open.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function mark_targeted_regen(): void {
 			try {
@@ -1304,7 +1304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * so nothing is committed in the default configuration.
 		 *
 		 * @return int Committed inline bytes (>= 0).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function estimate_committed_inline_bytes(): int {
 			try {
@@ -1344,7 +1344,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param int $already_inlined Bytes already committed to inline output.
 		 * @return int Effective budget in bytes (>= 0).
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_effective_ccss_budget( int $already_inlined = 0 ): int {
 			try {
@@ -1381,7 +1381,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string|int $used_css Used-CSS content already committed inline ('' when file-delivered),
 		 *                             or a byte count to avoid materialising a stub string.
 		 * @return array{inline: string, deferred: string} Budget-aware CCSS split.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function coordinate_inline_budgets( string $ccss, string|int $used_css = '' ): array {
 			try {
@@ -1440,7 +1440,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $reason Short reason for logging (e.g. 'builder-update').
 		 * @param int    $cap Maximum templates to requeue in this pass (0 = empty pass, no work; negatives clamp to 0).
 		 * @return int Number of jobs queued.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function request_targeted_regen( string $reason = '', int $cap = 20 ): int {
 			try {
@@ -1526,7 +1526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $css CSS content.
 		 * @return int Gzipped size in bytes, or raw size without zlib.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function gzipped_size( string $css ): int {
 			if ( '' === $css ) {
@@ -1569,7 +1569,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $css CSS content.
 		 * @return bool True when the gzipped size exceeds the inline budget.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_over_inline_budget( string $css ): bool {
 			if ( '' === $css ) {
@@ -1591,7 +1591,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * commerce pages never risk stale inlined CSS.
 		 *
 		 * @return bool True when commerce exclusion is active.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_commerce_excluded(): bool {
 			try {
@@ -1626,7 +1626,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * behaviour.
 		 *
 		 * @return bool True on cart/checkout pages.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_commerce_context(): bool {
 			if ( null !== self::$commerce_context_memo ) {
@@ -1701,7 +1701,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Reset via reset_ccss_memo(). Fail-open to false.
 		 *
 		 * @return bool True when inline/deferral must yield to normal stylesheets.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function is_commerce_excluded_context(): bool {
 			if ( null !== self::$commerce_excluded_context_memo ) {
@@ -1725,7 +1725,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * configurable (1–100 KB + wppo_ccss_inline_budget filter).
 		 *
 		 * @return string e.g. "14 KB" or "2.5 KB".
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function get_ccss_inline_budget_label(): string {
 			try {
@@ -1753,7 +1753,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * per-view checksum file reads for stored variants).
 		 *
 		 * @return bool True when checksum regen is active.
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		public static function is_checksum_regen_enabled(): bool {
 			try {
@@ -2769,7 +2769,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param bool      $stage_only    When true (issue #1348 dry-run), the output lands on the staged sibling instead of going live.
 		 * @return bool True on success, false on failure or timeout.
 		 * @since 2.2.0
-		 * @since NEXT Added the $stage_only dry-run flag.
+		 * @since 2.3.0 Added the $stage_only dry-run flag.
 		 */
 		public static function generate_guarded( string $template_hash, string $template, ?bool &$timed_out = null, bool $stage_only = false ): bool {
 			$timed_out = false;
@@ -3929,7 +3929,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $template_hash Template hash.
 		 * @return bool True when the stored variant was dropped as stale.
 		 * @since 2.0.0
-		 * @since NEXT Also activates via `ccssChecksumRegen` (issue #1388).
+		 * @since 2.3.0 Also activates via `ccssChecksumRegen` (issue #1388).
 		 */
 		public static function maybe_check_stale_and_requeue( string $template_hash ): bool {
 			if ( '' === $template_hash ) {
@@ -4007,7 +4007,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param int   $post_id Post ID.
 		 * @param mixed $post    Post object or null.
 		 * @return bool True when at least one stale template was requeued.
-		 * @since NEXT
+		 * @since 2.3.0
 		 * @see Critical_CSS::maybe_refresh_from_local_css()
 		 * @see Critical_CSS::regenerate_single()
 		 */
@@ -4883,7 +4883,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * entities, and comment markers stay literal), so no
 		 * decode/strip step is needed for parity.
 		 *
-		 * @since NEXT
+		 * @since 2.3.0
 		 *
 		 * @param string     $html     Page HTML (already byte-capped by the caller).
 		 * @param float|null $deadline Absolute deadline, or null when uncapped.
@@ -6200,7 +6200,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return bool True on success, false on failure or timeout.
 		 * @since 2.0.0
 		 * @since 2.2.0 Time-boxed generation with fail-open timeout handling.
-		 * @since NEXT Added the $stage_only dry-run flag.
+		 * @since 2.3.0 Added the $stage_only dry-run flag.
 		 */
 		private static function generate_and_store( string $template_hash, string $template, ?float $deadline = null, ?int $budget = null, bool $stage_only = false ): bool {
 			if ( ! self::is_valid_template_hash( $template_hash ) ) {
@@ -6483,7 +6483,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return void
 		 * @since 2.0.0
 		 * @since 2.2.0 Over-cap output without a file URL defers to the full stylesheet (and blocks deferral for the request).
-		 * @since NEXT Commerce exclusion plus gzipped-budget used-CSS fallback (issue #1388).
+		 * @since 2.3.0 Commerce exclusion plus gzipped-budget used-CSS fallback (issue #1388).
 		 * @since 2.2.0 Field-measured LCP image is preloaded alongside served CCSS.
 		 */
 		public static function inline_ccss(): void {
@@ -6844,7 +6844,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static function purge_template_artifacts( string $template_hash ): void {
 			try {
@@ -6929,7 +6929,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return void
 		 * @since 2.0.0
 		 * @since 2.2.0 Routed through the guarded generation wrapper.
-		 * @since NEXT HMAC-mismatch path stamps short-lived 'rejected' instead of day-long 'failed'; unsigned jobs logged throttled at WP_DEBUG level.
+		 * @since 2.3.0 HMAC-mismatch path stamps short-lived 'rejected' instead of day-long 'failed'; unsigned jobs logged throttled at WP_DEBUG level.
 		 */
 		public static function background_generate( array $args ): void {
 			// Suspended while deferJS/delayJS is active: generated variants
@@ -7085,7 +7085,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * semantics unchanged. Multisite-safe: per-site option reads only.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Blends the template-segment LCP weight (issue #1388).
+		 * @since 2.3.0 Blends the template-segment LCP weight (issue #1388).
 		 * @param array<string, string> $templates Template identifier => Label.
 		 * @return array<string, string> Ordered templates (same entries).
 		 */
@@ -7224,7 +7224,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return int Number of jobs queued.
 		 * @since 2.0.0
 		 * @since 2.2.0 Capped per-run queue with RUM-worst-first ordering.
-		 * @since NEXT Added $force parameter and 18000s full-regen cooldown.
+		 * @since 2.3.0 Added $force parameter and 18000s full-regen cooldown.
 		 */
 		public static function regenerate_all( bool $force = false ): int {
 			if ( self::is_deferral_suspended_by_js() ) {

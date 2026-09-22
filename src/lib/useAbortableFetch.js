@@ -6,7 +6,7 @@
  * PreloadSettings, PerformanceAudit and WelcomePanel, so an abort-semantics
  * fix in one place reaches all five.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 import { useEffect, useRef } from '@wordpress/element';
 
@@ -17,7 +17,7 @@ import { useEffect, useRef } from '@wordpress/element';
  * for in-flight work; use this only for non-abortable completions
  * (audit #1420).
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {Object} Ref object with .current boolean.
  */
 export const useIsMounted = () => {
@@ -33,7 +33,7 @@ export const useIsMounted = () => {
 /**
  * Whether an error is a request cancellation.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} error Caught error value.
  * @return {boolean} True for AbortError.
  */
@@ -47,7 +47,7 @@ export const isAbortError = ( error ) =>
  * into effect cleanup — this helper cannot auto-abort (audit #1420).
  * Rejections other than abort propagate to the caller.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Function} task Async task receiving the signal.
  * @return {{ promise: Promise, cancel: Function }} Task promise + cancel.
  */

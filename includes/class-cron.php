@@ -207,7 +207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * counters untouched.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Bytes-aware payload (issue #1428): `cache_bytes`/`cache_files`/`stalled` fields plus zero-byte downgrade.
+		 * @since 2.3.0 Bytes-aware payload (issue #1428): `cache_bytes`/`cache_files`/`stalled` fields plus zero-byte downgrade.
 		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[],cache_bytes:int,cache_files:int,stalled:bool}
 		 */
 		public static function get_preload_status(): array {

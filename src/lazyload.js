@@ -11,7 +11,7 @@ import { redactLogSecrets } from './lib/logSecrets';
  * Dependency-free mirror of the SPA's getErrorLogMessage(): console output
  * persists in devtools, so only the message is logged, never full objects.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} err Caught error value.
  * @return {string} Safe message string.
  */
@@ -123,7 +123,7 @@ try {
  * up without paying a DOM query on every registration while delay is
  * active. Never re-arms after the exactly-once replay. Never throws.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {boolean} Whether delay is (now) pending.
  */
 const refreshDelayQueuePending = () => {
@@ -170,7 +170,7 @@ const refreshDelayQueuePending = () => {
  * placeholder is replaced by a live node without `type="wppo/javascript"`
  * / `wppo-src`), so this accurately reflects the unflushed remainder.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {boolean} Whether any unloaded delayed script remains.
  */
 const hasRemainingDelayedScripts = () => {
@@ -369,7 +369,7 @@ try {
  * having actually released something (pending flag or captured listeners),
  * so a spurious replay with nothing delayed never double-fires beacons.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {void}
  */
 const replayDelayedLifecycleEvents = () => {
@@ -865,7 +865,7 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
  * allowlisted tokens (audit #1401): single pipeline behind both iframe
  * sanitizers so tightening the token shape in one cannot miss the other.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} value      Raw attribute value.
  * @param {RegExp} split      Split pattern.
  * @param {Set}    allowedSet Allowlisted tokens.
@@ -936,7 +936,7 @@ let wildcardWarned = false;
  * getScriptSrcHosts runs per deferred script, so this warning must also
  * fire once, not per script.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {boolean}
  */
 let windowHostsWarned = false;
@@ -1028,7 +1028,7 @@ const getScriptSrcHosts = () => {
  * protocol check. Every URL validator below normalises through this helper
  * first so a bypass fixed in one validator stays fixed in all of them.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} raw Raw attribute value.
  * @return {string} Normalised string (empty when input is not a string).
  */
@@ -1046,7 +1046,7 @@ const stripUrlControls = ( raw ) => {
  * controls, parses with `window.location.origin` as base, and returns null
  * instead of throwing so validators stay branch-light.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} raw Raw attribute value.
  * @return {URL|null} Parsed URL, or null when it does not parse.
  */
@@ -1068,7 +1068,7 @@ const parseLazyUrl = ( raw ) => {
  * The URL parser lower-cases the scheme, so no caller-side lowercasing is
  * needed; this single check rejects javascript:/vbscript:/data:/blob:.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {URL} url Parsed URL.
  * @return {boolean} True for http:/https: only.
  */
@@ -1082,7 +1082,7 @@ const isHttpProtocol = ( url ) =>
  * Host-allowlisted validators (scripts, video embeds) apply their allowlist
  * on top of this; generic subresources stop here.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {URL} url Parsed URL.
  * @return {boolean} True when the URL is safe under the generic policy.
  */
@@ -1184,7 +1184,7 @@ const isSafeSubresourceUrl = ( src ) => {
  * cross-origin load (tracking beacon). `javascript:` in `img` does not
  * execute script, so this is hardening rather than stored-XSS prevention.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} value Raw data-srcset attribute value.
  * @return {boolean} True when every candidate URL is safe to assign.
  */
@@ -2023,7 +2023,7 @@ window.addEventListener( 'beforeunload', teardownLazyload );
  * exists yet at arm time (async/deferred evaluation before insertion),
  * arming is retried once on DOMContentLoaded.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {boolean} [retried=false] Whether this is the DOMContentLoaded retry.
  */
 const armScriptRemovalGuard = ( retried = false ) => {
@@ -2385,7 +2385,7 @@ const restoreHeroImage = ( el ) => {
  * an empty string (an empty value would otherwise resolve to the document
  * base URL via `new URL( '', base )`).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} url The raw URL to normalize.
  * @return {string} The normalized host + path, or an empty string.
  */
@@ -2414,7 +2414,7 @@ const normalizeLcpUrl = ( url ) => {
  * Each comma-separated candidate is `URL [descriptor]`; only the URL token
  * is returned. Fail-open: unparseable input yields an empty list.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} value Raw srcset attribute value.
  * @return {string[]} Candidate URL tokens (may be empty).
  */
@@ -2434,7 +2434,7 @@ const getSrcsetUrls = ( value ) => {
  * parent `<picture>`, so srcset-only heroes can match an explicit LCP
  * candidate URL.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Element} img The IMG element.
  * @return {string[]} Candidate URL tokens (may be empty).
  */
@@ -2469,7 +2469,7 @@ const collectImgSrcsetUrls = ( img ) => {
  * so the same hero is never hinted twice. Attribute comparison avoids
  * selector-injection from attacker-influenced URLs.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} resolvedUrl The resolved LCP URL about to be preloaded.
  * @return {boolean} True when a covering preload hint already exists.
  */
@@ -2511,7 +2511,7 @@ const hasExistingLcpPreload = ( resolvedUrl ) => {
  * attributes are never touched, so no CLS is introduced; an explicit
  * `fetchpriority="low"` is preserved.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {string} [candidateUrl] Optional explicit LCP image URL.
  * @return {string} The resolved LCP URL, or an empty string when none resolved.
  */
@@ -2706,7 +2706,7 @@ const observeElement = ( el ) => {
  * data-srcset) never get double placeholder setup here — they are handled
  * by the IntersectionObserver path instead.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {string}
  */
 const NATIVE_PLACEHOLDER_SELECTOR =
@@ -2719,7 +2719,7 @@ const NATIVE_PLACEHOLDER_SELECTOR =
  * Idempotent via a dataset flag so repeated loadImages() calls (and the
  * dynamic-content observer below) never stack duplicate listeners.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Element} img The IMG element to prepare.
  * @return {void}
  */
@@ -2759,7 +2759,7 @@ const prepareOneNativePlaceholder = ( img ) => {
  * `data-wppo-lqip`, zero external HTTP) and clears them once the real image
  * loads. The LCP hero never carries these attributes (excluded server-side).
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {void}
  */
 const prepareNativePlaceholders = () => {
@@ -2774,7 +2774,7 @@ const prepareNativePlaceholders = () => {
  * Covers natively-lazy images injected later via infinite-scroll/AJAX.
  * Safe to call for any node type; non-matching nodes are ignored.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {Node} node The added DOM node to scan.
  * @return {void}
  */
@@ -2801,7 +2801,7 @@ const prepareNativePlaceholdersForNode = ( node ) => {
  * Singleton — safe to call repeatedly. Runs independently of the data-src
  * observer so placeholders resolve in full native-lazy mode too.
  *
- * @since NEXT
+ * @since 2.3.0
  * @return {void}
  */
 const observeNativePlaceholders = () => {
@@ -3106,7 +3106,7 @@ const loadImages = () => {
 
 			// Coalesced mutation state: burst inserts accumulate here and are
 			// processed once per frame by processMutationBatch() below.
-			// @since NEXT
+			// @since 2.3.0
 			let pendingMutationBatch = [];
 			let mutationFlushScheduled = false;
 			const processMutationBatch = ( mutations ) => {

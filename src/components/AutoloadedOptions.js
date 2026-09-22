@@ -32,7 +32,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
  * critical_threshold (old cached payloads). Mirrors
  * Database_Cleanup::AUTOLOAD_CRITICAL_BYTES.
  *
- * @since NEXT
+ * @since 2.3.0
  * @type {number}
  */
 const CRITICAL_THRESHOLD_FALLBACK = 819200;

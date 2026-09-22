@@ -72,7 +72,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * src when capture_page_assets() runs on the wp_footer hot path.
 		 *
 		 * @var   array<string,int|null>
-		 * @since NEXT
+		 * @since 2.3.0
 		 */
 		private static array $size_cache = array();
 
@@ -262,7 +262,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * keeps the legacy (unknown-size) fallback.
 		 *
 		 * @param  string $src The registered asset `src` (URL or path).
-		 * @since  NEXT
+		 * @since 2.3.0
 		 * @return int|null Local file size in bytes, or null when unknown.
 		 */
 		public static function resolve_asset_size( $src ) {
@@ -316,7 +316,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 *
 		 * @param  array $assets Captured page assets (`scripts`/`styles` lists).
 		 * @param  int   $threshold Minimum size in bytes for a suggestion. Defaults to 50 KB.
-		 * @since  NEXT
+		 * @since 2.3.0
 		 * @return array List of `array( 'type' => 'script'|'style', 'handle' => string, 'size' => int )`.
 		 */
 		public static function get_asset_suggestions( $assets, $threshold = 51200 ) {

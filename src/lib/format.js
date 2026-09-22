@@ -4,7 +4,7 @@
  * Unit suffixes compose through sprintf() with translatable patterns
  * (audit #1354) so UI-facing values localize like lib/util.js formatBytes.
  *
- * @since NEXT
+ * @since 2.3.0
  */
 
 import { __, sprintf } from '@wordpress/i18n';
@@ -12,7 +12,7 @@ import { __, sprintf } from '@wordpress/i18n';
 /**
  * Format milliseconds.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} value Numeric value.
  * @return {string} Formatted value or '—' fallback.
  */
@@ -22,7 +22,7 @@ import { __, sprintf } from '@wordpress/i18n';
  * Null, undefined, booleans, arrays, and blank strings render the '—'
  * fallback instead of a coerced number (e.g. true → 1, [] → 0).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} value Raw value.
  * @return {boolean} Whether to render the fallback.
  */
@@ -66,7 +66,7 @@ export const formatMs = ( value ) => {
  * formats the value as-is, `{ ratio: true }` always scales by 100. Omitting
  * the option keeps the legacy heuristic for backward compatibility.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*}       value           Numeric value (ratio 0-1 or percent 0-100).
  * @param {Object}  [options]       Formatting options.
  * @param {boolean} [options.ratio] Explicit ratio flag; omit for heuristic.
@@ -102,7 +102,7 @@ export const formatPercent = ( value, options = {} ) => {
  * translation is handled elsewhere) use this helper. The two intentionally
  * differ in rounding/caps/fallback — do not mix them in one view.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} value Numeric value.
  * @return {string} Formatted value or '—' fallback.
  */
@@ -111,7 +111,7 @@ export const formatPercent = ( value, options = {} ) => {
  * by design (background payloads/logs). UI call sites must use the
  * translated formatBytes() in lib/util.js instead of rendering this directly.
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {number} value Bytes.
  * @return {string} e.g. '1.5 MB'.
  */
@@ -139,7 +139,7 @@ export const formatBytesShared = ( value ) => {
 /**
  * Compute a savings percent with guards (no NaN% on partial payloads).
  *
- * @since NEXT
+ * @since 2.3.0
  * @param {*} original  Original size.
  * @param {*} optimized Optimized size.
  * @return {number|null} Percent saved, or null when not computable.
