@@ -5578,19 +5578,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * (Redis, Memcached) is present. On single-site installs the key is
 		 * returned unchanged. For option names use {@see option_key()} instead.
 		 *
+		 * Facade proxy: key construction lives in {@see \PerformanceOptimise\Inc\Cache_Key}.
+		 *
 		 * @param string $key The bare transient key.
 		 * @return string Blog-ID-prefixed key on multisite, or the original key.
 		 * @since 2.0.0
 		 */
 		public static function transient_key( string $key ): string {
-			if ( ! function_exists( 'is_multisite' ) ) {
-				return $key;
-			}
-			try {
-				return is_multisite() ? (string) get_current_blog_id() . '_' . $key : $key;
-			} catch ( \Throwable $e ) {
-				return $key;
-			}
+			return Cache_Key::transient_key( $key );
 		}
 
 		/**
@@ -5602,19 +5597,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * and can diverge in the future. On single-site installs the key is
 		 * returned unchanged.
 		 *
+		 * Facade proxy: key construction lives in {@see \PerformanceOptimise\Inc\Cache_Key}.
+		 *
 		 * @param string $key The bare option name.
 		 * @return string Blog-ID-prefixed option name on multisite, or the original name.
 		 * @since 2.0.0
 		 */
 		public static function option_key( string $key ): string {
-			if ( ! function_exists( 'is_multisite' ) ) {
-				return $key;
-			}
-			try {
-				return is_multisite() ? (string) get_current_blog_id() . '_' . $key : $key;
-			} catch ( \Throwable $e ) {
-				return $key;
-			}
+			return Cache_Key::option_key( $key );
 		}
 
 		/**
@@ -6116,35 +6106,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * the current blog prefix only `_stale` is appended; bare keys are
 		 * still qualified via {@see transient_key()} so they stay isolated.
 		 *
+		 * Facade proxy: key construction lives in {@see \PerformanceOptimise\Inc\Cache_Key}.
+		 * Lock acquire/release stays here for a later Scheduler extraction.
+		 *
 		 * @since 2.2.0
 		 * @param string $key Value cache key as passed to get_with_stampede_lock().
 		 * @return string Stale-copy key.
 		 */
 		public static function stampede_stale_key( string $key ): string {
-			try {
-				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) && is_multisite() ) {
-					$prefix = (string) get_current_blog_id() . '_';
-					if ( '' !== $prefix && str_starts_with( $key, $prefix ) ) {
-						return $key . '_stale';
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			// Single-site, or a bare key on multisite: qualify normally.
-			// On single-site transient_key() returns the key unchanged, so a
-			// caller-passed prefixed key is never double-prefixed there.
-			if ( function_exists( 'is_multisite' ) ) {
-				try {
-					if ( ! is_multisite() ) {
-						return $key . '_stale';
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $key . '_stale';
-				}
-			}
-			return self::transient_key( $key . '_stale' );
+			return Cache_Key::stampede_stale_key( $key );
 		}
 
 		/**
@@ -7326,18 +7296,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * (the comparison never changes) and reduce invalidation to the
 		 * entry TTL alone.
 		 *
+		 * Facade proxy: salt lookup lives in {@see \PerformanceOptimise\Inc\Cache_Key}.
+		 *
 		 * @since 2.0.0
 		 *
 		 * @param string $option Option key holding the salt.
 		 * @return string Current salt value ('0' until the first bump).
 		 */
 		public static function cache_salt( string $option ): string {
-			$value = get_option( $option, '0' );
-			// false (unset option) maps to the '0' sentinel, never ''.
-			if ( ! is_scalar( $value ) || false === $value ) {
-				return '0';
-			}
-			return (string) $value;
+			return Cache_Key::cache_salt( $option );
 		}
 
 		/**
