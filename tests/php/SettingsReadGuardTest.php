@@ -28,7 +28,7 @@ class SettingsReadGuardTest extends \PHPUnit\Framework\TestCase {
 	 * @var array<string, array{count: int, reason: string}>
 	 */
 	private const ALLOWLIST = array(
-		'includes/class-settings-store.php' => array(
+		'includes/class-settings-store.php'  => array(
 			'count'  => 1,
 			'reason' => 'Canonical read inside Settings_Store::get_settings() (REF-002; Util::get_settings() proxies here).',
 		),

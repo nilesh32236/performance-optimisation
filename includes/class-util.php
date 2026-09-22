@@ -2197,6 +2197,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Resolve current blog ID safely (handles Brain Monkey stub mis-configuration in tests).
 		 *
+		 * Mirrored in Settings_Store::current_blog_id() by design (decoupling); keep in sync.
+		 *
 		 * @since 2.0.0
 		 * @return int Blog ID.
 		 */
@@ -2346,12 +2348,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		private static function ensure_settings_cache_hook(): void {
-			Settings_Store::register_settings_cache_hooks();
 			static $hooked = false;
 			if ( $hooked ) {
 				return;
 			}
 			$hooked = true;
+			Settings_Store::register_settings_cache_hooks();
 			add_action( 'switch_blog', array( self::class, 'on_switch_blog' ), 10, 2 );
 		}
 

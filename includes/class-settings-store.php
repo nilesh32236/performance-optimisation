@@ -78,6 +78,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		/**
 		 * Resolve current blog ID safely (handles Brain Monkey stub mis-configuration in tests).
 		 *
+		 * Mirrored in Util::current_blog_id() by design (decoupling); keep in sync.
+		 *
 		 * @since NEXT
 		 * @return int Blog ID.
 		 */
@@ -367,7 +369,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 				// with differing values means the write failed.
 				$before  = self::get_settings();
 				$updated = self::save_settings( $restored );
-				self::set_settings_cache( $restored );
+				if ( ! $updated && $before === $restored ) {
+					self::set_settings_cache( $restored );
+				}
 				if ( ! $updated && $before !== $restored ) {
 					// Write failed: roll the memo back so it keeps
 					// describing the intact current settings (fail-open).
