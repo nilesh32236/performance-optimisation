@@ -3997,7 +3997,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$templates = self::get_templates();
 			$statuses  = array();
 
-			$allowed = array( 'queued', 'processing', 'done', 'skipped', 'failed', 'ready', 'pending', 'none' );
+			$allowed = array( 'queued', 'processing', 'done', 'skipped', 'failed', 'rejected', 'ready', 'pending', 'none' );
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
 				if ( self::ccss_exists( $hash ) ) {
@@ -5182,17 +5182,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Token-breaking worker shared by sanitize_inline_css() (applied
 		 * both before and after the `wppo_ccss_sanitize_inline` filter so
-		 * hooked code cannot reintroduce breakout tokens). Neutralizes the
-		 * `</style>` raw-text terminator plus `script`, comment
-		 * (`<!--`/`-->`), and CSS expression vectors (`expression()`,
-		 * `javascript:`/`vbscript:` URLs, the `behavior` / `behaviour`
-		 * property in property position only, `-moz-binding`)
-		 * case-insensitively, decodes numeric/hex entities first so encoded
-		 * payloads cannot smuggle `<` past the encoder, then encodes any
-		 * remaining `<` as the equivalent CSS escape so stored CSS can never
-		 * break out of the style element. Fail-closed: a sanitizer error
-		 * drops the block (returns '') so output degrades to unoptimized
-		 * markup, never script execution.
+		 * hooked code cannot reintroduce breakout tokens). Delegates to the
+		 * single source of truth in {@see Util::sanitize_css_for_storage()}
+		 * (issue #1347) so the used-CSS and critical-CSS token lists can
+		 * never drift apart; the local implementation below is retained
+		 * only as a fallback when Util is unavailable. See the Util worker
+		 * for the neutralized token list.
 		 *
 		 * @param string $css Raw critical CSS.
 		 * @return string Sanitized critical CSS.
@@ -5200,12 +5195,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private static function sanitize_inline_css_tokens( string $css ): string {
 			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_css_for_storage' ) ) {
+					return Util::sanitize_css_for_storage( $css );
+				}
+			} catch ( \Throwable $e ) {
+				return '';
+			}
+			try {
 				$css = self::decode_css_entities( $css );
 				$css = str_ireplace( '</style', '<\/style', $css );
 				$css = str_ireplace( '<script', '<\script', $css );
 				$css = str_ireplace( '<!--', '<\!--', $css );
 				$css = str_ireplace( '-->', '--\>', $css );
-				// Break CSS expression/URL vectors, tolerating whitespace
+				// Fallback path (Util unavailable): mirrors the shared worker
+				// token-for-token so behavior stays identical. Break CSS
+				// expression/URL vectors, tolerating whitespace
 				// between the keyword and its delimiter (e.g. 'expression (').
 				// A callback builds the replacement so the backslash is never
 				// parsed as a PCRE backreference.
@@ -5900,6 +5904,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$filesystem = Util::init_filesystem();
 			$file       = self::get_ccss_file( $template_hash );
 
+			// Storage bounds (issue #1347): refuse oversized/undecodable
+			// output before the atomic write so unbounded blobs never reach
+			// the cache. Fail closed: keep the prior file in place.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'css_within_storage_bounds' ) && ! Util::css_within_storage_bounds( $critical_css ) ) {
+					self::record_generation_failure( $template_hash, $budget, $deadline );
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				self::record_generation_failure( $template_hash, $budget, $deadline );
+				return false;
+			}
+
 			// Atomic write via the shared tmp+rename helper (unique tmp
 			// name, no non-atomic fallback) so interrupted writes never
 			// leave a truncated live file behind. Fail closed: keep the
@@ -6361,6 +6379,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Purge every stored artifact for a template hash (issue #1347).
+		 *
+		 * Forgery-response worker shared by the HMAC-mismatch path in
+		 * {@see background_generate()}: deletes the single CCSS file plus
+		 * the viewport-split variants (`{hash}.mobile.css` /
+		 * `{hash}.desktop.css`, mirroring {@see generate_and_store()})
+		 * and drops the source checksum/URL baseline transients, so a
+		 * rejected job leaves nothing stale servable. Mirrors the
+		 * per-template file+transient subset of {@see clear_all()}.
+		 * Fail-open: any error leaves files in place; serving still falls
+		 * back via {@see get_ccss_variant_content()}.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function purge_template_artifacts( string $template_hash ): void {
+			try {
+				global $wp_filesystem;
+				// Filesystem may be uninitialized in an Action Scheduler
+				// background worker — init it (mirroring
+				// generate_and_store()) so the forgery purge does not
+				// silently no-op. Fail-open: any error leaves files in
+				// place; serving still falls back to unoptimized markup.
+				// Note: the global itself is never reassigned here
+				// (WordPress.Security.EscapeOutput forbids global writes);
+				// the initialized handle is used via the local copy.
+				$fs_handle = $wp_filesystem;
+				try {
+					if ( ( ! $fs_handle || ! method_exists( $fs_handle, 'exists' ) ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'init_filesystem' ) ) {
+						$fs = Util::init_filesystem();
+						if ( $fs ) {
+							$fs_handle = $fs;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$files = array();
+				try {
+					$main = self::get_ccss_file( $template_hash );
+					if ( is_string( $main ) && '' !== $main ) {
+						$files[] = $main;
+					}
+					foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+						$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
+						if ( is_string( $variant_file ) && '' !== $variant_file ) {
+							$files[] = $variant_file;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				foreach ( $files as $file ) {
+					try {
+						if ( $fs_handle && method_exists( $fs_handle, 'exists' ) && method_exists( $fs_handle, 'delete' ) && $fs_handle->exists( $file ) ) {
+							$fs_handle->delete( $file );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				try {
+					self::invalidate_ccss_memo( $template_hash );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( function_exists( 'clearstatcache' ) ) {
+					clearstatcache();
+				}
+				if ( function_exists( 'delete_transient' ) ) {
+					try {
+						delete_transient( self::get_source_checksum_key( $template_hash ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					try {
+						delete_transient( self::get_source_urls_key( $template_hash ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Background generation callback for Action Scheduler.
 		 *
 		 * Runs through the time-boxed generate_guarded() wrapper (issue
@@ -6372,6 +6478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return void
 		 * @since 2.0.0
 		 * @since 2.2.0 Routed through the guarded generation wrapper.
+		 * @since NEXT HMAC-mismatch path stamps short-lived 'rejected' instead of day-long 'failed'; unsigned jobs logged throttled at WP_DEBUG level.
 		 */
 		public static function background_generate( array $args ): void {
 			// Suspended while deferJS/delayJS is active: generated variants
@@ -6386,6 +6493,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// type-hints and kill the queue worker (issue #1235 review).
 			if ( ! self::is_valid_template_hash( $template_hash ) ) {
 				return;
+			}
+			// HMAC-bound jobs (issue #1347): when the scheduler args carry
+			// a `sig`, verify it against the signed `template_hash`
+			// payload before any fetch — a mismatch purges the template
+			// artifacts and aborts so forged job args can never trigger
+			// generation. Unsigned jobs (queued before signing or by
+			// legacy callers) take the legacy path and still run
+			// (fail-open).
+			//
+			// Residual (documented, not a bypass): the HMAC proves
+			// provenance of first-party jobs only — it does not
+			// authenticate the `wppo_generate_ccss` hook itself, so any
+			// caller that enqueues without a `sig` still triggers
+			// generation via the legacy path. Stored-XSS protection does
+			// not depend on the HMAC: fetched CSS is sanitized on write
+			// and output degrades to unoptimized markup. Unsigned
+			// executions are logged at a throttled WP_DEBUG level so
+			// unexpected unsigned jobs stay visible.
+			if ( isset( $args['sig'] ) && is_string( $args['sig'] ) && '' !== $args['sig'] ) {
+				$verified = false;
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'verify_callback_signature' ) ) {
+						$verified = Util::verify_callback_signature( array( 'template_hash' => $template_hash ), $args['sig'] );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$verified = false;
+				}
+				if ( ! $verified ) {
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+							Log::add( 'WPPO critical-CSS job rejected: HMAC mismatch for template hash.' );
+						}
+						self::purge_template_artifacts( $template_hash );
+						// Forgery rejections stamp a distinct short-lived
+						// `rejected` status (not day-long `failed`) so a
+						// single forged — or secret-rotated, hence
+						// unverifiable — job is distinguishable from a
+						// genuine generation failure in the status UI and
+						// does not block the next legitimate signed retry.
+						self::set_status_cache( $template_hash, 'rejected', defined( 'MINUTE_IN_SECONDS' ) ? 5 * MINUTE_IN_SECONDS : 300 );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					return;
+				}
+			} else {
+				// Unsigned legacy job (no `sig`): runs the legacy path
+				// (fail-open, see note above). Throttled WP_DEBUG-only
+				// visibility so unexpected unsigned executions are
+				// observable without spamming the activity log.
+				try {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( 'get_transient' ) && function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+						$unsigned_key = Util::transient_key( 'wppo_ccss_unsigned_log' );
+						if ( false === get_transient( $unsigned_key ) ) {
+							if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+								Log::add( 'WPPO critical-CSS job running unsigned (legacy path) for template hash.' );
+							}
+							set_transient( $unsigned_key, 1, defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 			$templates      = self::get_templates();
@@ -6732,6 +6903,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
 					$hook      = 'wppo_generate_ccss';
 					$hook_args = array( array( 'template_hash' => $hash ) );
+					// HMAC-bound jobs (issue #1347): sign the inner payload
+					// before scheduling so background_generate() can prove
+					// the args were built by this site. Deterministic per
+					// payload, so repeat requests still dedupe honestly.
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sign_callback_payload' ) ) {
+							$job_sig = Util::sign_callback_payload( $hook_args[0] );
+							if ( is_string( $job_sig ) && '' !== $job_sig ) {
+								$hook_args[0]['sig'] = $job_sig;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					// Atomic-first via the shared enqueue-gate helper
 					// (issue #1310 review): the unique insert dedupes by
 					// itself on AS 4.x, so the both-group pending re-check
@@ -6850,7 +7035,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 *
 		 * @param string $hash   Template hash.
-		 * @param string $status Status value ('queued'|'processing'|'done'|'skipped'|'failed'; legacy 'ready'|'pending' still accepted on read).
+		 * @param string $status Status value ('queued'|'processing'|'done'|'skipped'|'failed'|'rejected'; legacy 'ready'|'pending' still accepted on read).
 		 * @param int    $ttl    Time to live in seconds.
 		 * @return void
 		 */

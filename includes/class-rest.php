@@ -3269,7 +3269,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						unset( $e );
 					}
 				}
-				$job_args = array( 'post_id' => $post_id );
+				// Normalized to int before signing (issue #1347 review): the
+				// verifier casts the same way, so scheduler int/string
+				// drift cannot fail a valid job. The `sig` key is appended
+				// after `post_id` and the `wppo_used_css_generate` hook
+				// accepts 2 positional args (see Main), so AS delivers
+				// ($post_id, $sig) in insertion order.
+				$job_args = array( 'post_id' => (int) $post_id );
+				// HMAC-bound jobs (issue #1347): sign the payload before the
+				// dedupe check so the scheduler-execution side can prove the
+				// args were built by this site. Deterministic per payload, so
+				// repeat requests still dedupe honestly.
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sign_callback_payload' ) ) {
+						$job_sig = Util::sign_callback_payload( $job_args );
+						if ( is_string( $job_sig ) && '' !== $job_sig ) {
+							$job_args['sig'] = $job_sig;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 				// Atomic-first on AS 4.x (issue #1408): the `$unique` insert dedupes
 				// hook+args+group in the store, closing the check-then-act race where
 				// two concurrent requests both passed as_has_scheduled_action() and

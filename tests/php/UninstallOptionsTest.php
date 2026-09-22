@@ -112,6 +112,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_preload_queue',
 		// Issue #1407 RUM-triggered CSS-refresh before/after snapshots.
 		'wppo_ai_css_refresh_snapshots',
+		// Issue #1347 regeneration-callback HMAC secret (Util::CALLBACK_SECRET_OPTION).
+		'wppo_callback_secret',
 	);
 
 	/**

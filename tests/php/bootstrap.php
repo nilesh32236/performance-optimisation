@@ -221,6 +221,11 @@ trait WPPO_Test_Bootstrap {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
+		if ( method_exists( 'PerformanceOptimise\Inc\Util', 'reset_callback_secret_memo' ) ) {
+			// Callback HMAC secret memoizes per process: reset so each test
+			// reads its own wppo_callback_secret fixture.
+			\PerformanceOptimise\Inc\Util::reset_callback_secret_memo();
+		}
 		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			\PerformanceOptimise\Inc\Image_Optimisation::clear_runtime_caches();
 		}

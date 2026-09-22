@@ -1302,7 +1302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						__( 'Used-CSS purging skipped: WP_HTML_Tag_Processor is unavailable (requires WordPress 6.2+). Serving unprocessed CSS instead.', 'performance-optimisation' )
 					);
 				}
-				return $combined_css;
+				return self::sanitize_used_css_output( $combined_css );
 			}
 
 			$used_selectors = $this->extract_selectors( $html );
@@ -1316,10 +1316,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// large input) fails back to the full stylesheet, never fatal.
 			if ( $this->is_regression_guard_tripped( $combined_css, $purged ) ) {
 				$this->log_used_css_fallback( 'regression_guard', array_keys( $css_assets ) );
-				return $combined_css;
+				return self::sanitize_used_css_output( $combined_css );
 			}
 
-			return $purged;
+			return self::sanitize_used_css_output( $purged );
+		}
+
+		/**
+		 * Sanitize + bound derived CSS before it is served or stored (issue #1347).
+		 *
+		 * Shared choke point for generate_used_css() outputs: strips
+		 * script-capable constructs via {@see Util::sanitize_css_for_storage()}
+		 * and refuses oversized/undecodable payloads via {@see Util::css_within_storage_bounds()}.
+		 * Fail-open rendering: refused output degrades to '' so callers
+		 * serve unoptimized markup, never script execution, never fatal.
+		 *
+		 * @param string $css Derived CSS content.
+		 * @return string Safe CSS, or '' when refused.
+		 * @since NEXT
+		 */
+		public static function sanitize_used_css_output( string $css ): string {
+			try {
+				if ( '' === $css ) {
+					return '';
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'css_within_storage_bounds' ) ) {
+					if ( ! Util::css_within_storage_bounds( $css ) ) {
+						return '';
+					}
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_css_for_storage' ) ) {
+					return Util::sanitize_css_for_storage( $css );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+			return $css;
 		}
 
 		/**
@@ -1543,6 +1576,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 */
 		public function save_used_css( string $css, string $url = '' ): bool {
 			if ( empty( $css ) ) {
+				return false;
+			}
+
+			// Ingest hardening (issue #1347): never persist derived CSS
+			// carrying script-capable constructs or breaching the
+			// size/charset storage bounds — defense-in-depth alongside the
+			// generate_used_css() choke point. Fail-open: refuse the write
+			// and serve the unoptimized buffer instead.
+			$css = self::sanitize_used_css_output( $css );
+			if ( '' === $css ) {
 				return false;
 			}
 
@@ -3421,11 +3464,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * Builder-template post types are skipped without fetching (issue #1274).
 		 *
-		 * @param int $post_id The post ID.
+		 * HMAC-bound jobs (issue #1347): when the scheduler passes a `sig`
+		 * second argument, it is verified against the signed `post_id`
+		 * payload (normalized to int before sign/verify so scheduler
+		 * int/string drift cannot fail a valid job) before any fetch — a
+		 * mismatch purges the URL sidecar and aborts so forged job args
+		 * can never trigger generation. Only a present-but-invalid
+		 * signature is rejected: unsigned jobs (queued before signing or
+		 * by legacy callers) take the legacy capability+nonce path and
+		 * still run (fail-open).
+		 *
+		 * Residual (documented, not a bypass): the HMAC proves provenance
+		 * of first-party jobs only — it does not authenticate the
+		 * `wppo_used_css_generate` hook itself, so any caller that
+		 * enqueues without a `sig` still triggers generation via the
+		 * legacy path. Stored-XSS protection does not depend on the HMAC:
+		 * fetched CSS is sanitized on write
+		 * (sanitize_used_css_output()) and output degrades to unoptimized
+		 * markup. Unsigned executions are logged at a throttled WP_DEBUG
+		 * level so unexpected unsigned jobs stay visible.
+		 *
+		 * @param int         $post_id The post ID.
+		 * @param string|null $sig     Optional HMAC signature over the payload.
 		 * @return void
 		 * @since 1.9.0
+		 * @since NEXT Accepts and verifies the optional HMAC signature.
+		 * @since NEXT Documents the provenance-only residual and logs unsigned jobs throttled at WP_DEBUG level.
 		 */
-		public static function process_background( int $post_id ): void {
+		public static function process_background( int $post_id, $sig = null ): void {
 			// Builder-template skip-and-continue (issue #1274): never fetch
 			// non-renderable library templates for used CSS.
 			try {
@@ -3434,6 +3500,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+			if ( is_string( $sig ) && '' !== $sig ) {
+				try {
+					$verified = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'verify_callback_signature' ) && Util::verify_callback_signature( array( 'post_id' => (int) $post_id ), $sig );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$verified = false;
+				}
+				if ( ! $verified ) {
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+							Log::add( 'WPPO used-CSS job rejected: HMAC mismatch for post ' . (int) $post_id . '.' );
+						}
+						$permalink = function_exists( 'get_permalink' ) ? get_permalink( $post_id ) : false;
+						if ( is_string( $permalink ) && '' !== $permalink ) {
+							self::delete_used_css( $permalink );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					return;
+				}
+			} else {
+				// Unsigned legacy job (no `sig`): runs the legacy path
+				// (fail-open, see docblock). Throttled WP_DEBUG-only
+				// visibility so unexpected unsigned executions are
+				// observable without spamming the activity log.
+				try {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( 'get_transient' ) && function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+						$unsigned_key = Util::transient_key( 'wppo_used_css_unsigned_log' );
+						if ( false === get_transient( $unsigned_key ) ) {
+							if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+								Log::add( 'WPPO used-CSS job running unsigned (legacy path) for post ' . (int) $post_id . '.' );
+							}
+							set_transient( $unsigned_key, 1, defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			$permalink = get_permalink( $post_id );
 			if ( ! $permalink ) {
