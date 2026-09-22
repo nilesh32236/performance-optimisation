@@ -611,7 +611,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				'tripped_at' => $tripped_at,
 				'failures'   => $failures,
 			);
-			$wp_filesystem->put_contents( $this->get_disabled_state_path(), (string) wp_json_encode( $payload ), FS_CHMOD_FILE );
+			$wp_filesystem->put_contents( $this->get_disabled_state_path(), (string) wp_json_encode( $payload ), self::restricted_file_mode() );
+			self::restrict_file_mode( $wp_filesystem, $this->get_disabled_state_path() );
 
 			update_option(
 				self::CIRCUIT_OPTION,
@@ -873,6 +874,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return '';
 			}
 			return WP_CONTENT_DIR . '/' . self::FAILURES_FILE;
+		}
+
+		/**
+		 * Owner-only file mode for Redis state/config/drop-in writes.
+		 *
+		 * Audit #1490: these files were written with FS_CHMOD_FILE (0644
+		 * fallback) — world-readable on shared hosting. The config no longer
+		 * stores the password, but topology (hosts, ports, TLS mode, DB
+		 * index) stays owner-only. The 0644 path survives only as a fallback
+		 * when the restrictive chmod fails.
+		 *
+		 * @since NEXT
+		 * @return int File mode (0600 intersected with FS_CHMOD_FILE).
+		 */
+		private static function restricted_file_mode(): int {
+			$base = defined( 'FS_CHMOD_FILE' ) ? (int) FS_CHMOD_FILE : 0644;
+			$mode = $base & 0600;
+			return $mode > 0 ? $mode : 0600;
+		}
+
+		/**
+		 * Best-effort owner-only chmod on an already-written file.
+		 *
+		 * Fresh writes already carry the mode at creation, but pre-existing
+		 * files keep their old (possibly 0644) mode — tighten them here.
+		 * Never throws; a failed chmod keeps the FS_CHMOD_FILE fallback.
+		 *
+		 * @since NEXT
+		 * @param object $wp_filesystem Filesystem instance.
+		 * @param string $path          Absolute file path.
+		 * @return void
+		 */
+		private static function restrict_file_mode( $wp_filesystem, string $path ): void {
+			try {
+				if ( '' !== $path && is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'chmod' ) && method_exists( $wp_filesystem, 'exists' ) && $wp_filesystem->exists( $path ) ) {
+					$wp_filesystem->chmod( $path, self::restricted_file_mode() );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -1460,8 +1501,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 							$encoded = json_encode( $payload ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Early fallback when wp_json_encode() is unavailable.
 						}
 						if ( is_string( $encoded ) && '' !== $encoded && method_exists( $wp_filesystem, 'put_contents' ) ) {
-							$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
-							$wp_filesystem->put_contents( $this->get_disabled_state_path(), $encoded, $chmod );
+							$wp_filesystem->put_contents( $this->get_disabled_state_path(), $encoded, self::restricted_file_mode() );
+							self::restrict_file_mode( $wp_filesystem, $this->get_disabled_state_path() );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -1831,7 +1872,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						$tmp = $uniq;
 					}
 				}
-				$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+				$chmod = self::restricted_file_mode();
 
 				// In-memory original for post-rename restore on non-atomic
 				// (FTP/SSH copy+delete) transports.
@@ -1935,6 +1976,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 
 				$this->sweep_orphan_config_tmp( $wp_filesystem );
+				// Audit #1490: tighten the published config to owner-only
+				// (pre-existing files keep their old mode otherwise).
+				self::restrict_file_mode( $wp_filesystem, $this->config_path );
 				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2132,7 +2176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 				$tmp = $this->dropin_path . '.tmp.' . time() . '.' . $rand_part . '.' . $uniq_part;
 			}
-			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			$chmod = self::restricted_file_mode();
 
 			try {
 				if ( ! $wp_filesystem->put_contents( $tmp, $template, $chmod ) ) {
@@ -2165,6 +2209,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
 				}
 				$this->sweep_orphan_dropin_tmp( $wp_filesystem, $tmp );
+				// Audit #1490: tighten the published drop-in to owner-only
+				// (pre-existing files keep their old mode otherwise).
+				self::restrict_file_mode( $wp_filesystem, $this->dropin_path );
 				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2318,6 +2365,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$wp_filesystem->delete( $this->config_path );
 				return $dropin_published;
 			}
+
+			// Audit #1490: tighten any pre-existing state/config files to
+			// owner-only on enable (fresh publishes already restrict above;
+			// the chmod is best-effort with the 0644 path as fallback).
+			self::restrict_file_mode( $wp_filesystem, $this->config_path );
+			self::restrict_file_mode( $wp_filesystem, $this->dropin_path );
+			self::restrict_file_mode( $wp_filesystem, $this->get_disabled_state_path() );
+			self::restrict_file_mode( $wp_filesystem, $this->get_failures_path() );
 
 			// The drop-in file changed — invalidate the memoized ownership
 			// verdict so a later flush_scoped() on this instance re-checks.

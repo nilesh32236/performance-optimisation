@@ -2137,6 +2137,19 @@ Filters whether `nproc` may be probed (via `shell_exec`) as a fallback for CPU-c
 
 ---
 
+### `wppo_allow_php_lint`
+Filters whether `Util::verify_php_syntax()` may shell out to `php -l` (via `exec()`) against the on-disk tmp file when publishing the Redis config / object-cache drop-in (audit #1490). Both argv parts are `escapeshellarg()`'d and `disable_functions` is respected; return `false` on locked-down hosts to disable the system call entirely — the token-based bracket check stays primary either way. @since NEXT.
+
+**Parameters:**
+- `$allow` *(bool)* — Default `true`.
+
+**Example:**
+```php
+add_filter( 'wppo_allow_php_lint', '__return_false' ); // Hardened host: no system calls.
+```
+
+---
+
 ### `wppo_crawler_load_limit`
 Filters the server-load ceiling above which the crawler idles. @since 2.0.0.
 

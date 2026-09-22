@@ -243,6 +243,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		private static function delete_in_batches( string $select_sql, string $meta_table, string $meta_column, string $main_table, string $id_column, int $batch = 1000 ): int|false {
 			global $wpdb;
+			// Audit #1490: caller allowlist — the '%' guard below rejects
+			// placeholders, but safety must not depend on a future-caller
+			// contract alone. Only the hardcoded clean_* builders below may
+			// reach this sink; anything else fails closed.
+			$allowed_callers = array(
+				'clean_revisions',
+				'clean_auto_drafts',
+				'clean_trashed_posts',
+				'clean_spam_comments',
+				'clean_trashed_comments',
+			);
+			$caller          = '';
+			$caller_known    = false;
+			if ( function_exists( 'debug_backtrace' ) ) {
+				$trace  = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 3 ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_debug_backtrace -- Caller allowlist enforcement, not logging.
+				$caller = isset( $trace[1]['function'] ) && is_string( $trace[1]['function'] ) ? $trace[1]['function'] : '';
+				// A frame is only "known" when it names a real function/method;
+				// wrappers, closures, and top-level calls leave trace[1] empty
+				// or anonymous and must not be treated as allowlisted.
+				$caller_known = '' !== $caller && 'unknown' !== $caller && '{closure}' !== $caller;
+			}
+			if ( $caller_known && ! in_array( $caller, $allowed_callers, true ) ) {
+				// Fail closed, but loudly: a silent `false` here would stop
+				// scheduled cleanups deleting with no operator-visible signal
+				// (audit #1490 review), e.g. via a future wrapper/closure path.
+				Log::add( 'Database cleanup blocked: unexpected caller ' . $caller );
+				return false;
+			}
+			// When the caller cannot be determined (debug_backtrace disabled via
+			// disable_functions, or an anonymous/top-level frame), fall through
+			// to the identifier + placeholder guards below instead of blocking:
+			// scheduled cleanups on hardened hosts must keep deleting, and the
+			// table/column allowlists plus the static-SQL '%' rejection still
+			// bound what this sink can touch. Wrappers must still call the
+			// clean_* builders above directly so the allowlist can attest them.
 			// Allowlist identifiers (cannot use placeholders for table/column names).
 			$allowed_tables  = array( $wpdb->posts, $wpdb->postmeta, $wpdb->comments, $wpdb->commentmeta );
 			$allowed_columns = array( 'ID', 'comment_ID', 'post_id', 'comment_id' );
@@ -3256,6 +3291,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 			// Allowlisted identifier: $full_table_name is derived from $wpdb->{allowlisted key}
 			// (TABLE_MAP), not from user input. Cannot use $wpdb->prepare() for identifiers.
+			// Audit #1490: runtime regex assert defense-in-depth — scanners
+			// cannot verify the TABLE_MAP allowlist statically, so re-assert
+			// the identifier shape here (table prefix + name).
+			if ( 1 !== preg_match( '/^[A-Za-z0-9_]+\z/', $full_table_name ) ) {
+				// Loud rejection, matching the delete_in_batches() path above:
+				// a silent `false` here would skip optimization with no
+				// operator-visible signal (audit #1490 review).
+				Log::add( 'Database cleanup blocked: unexpected table name for OPTIMIZE TABLE.' );
+				return false;
+			}
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $full_table_name is allowlisted via TABLE_MAP + $wpdb property; safe identifier interpolation.
 			$result = $wpdb->query( "OPTIMIZE TABLE {$full_table_name}" );
 

@@ -78,6 +78,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		private const DEFERRED_BATCH_TTL = 2 * HOUR_IN_SECONDS;
 
 		/**
+		 * Maximum manually-followed same-host redirects per queued request.
+		 *
+		 * Bounded hop budget so a redirect loop can never spin the
+		 * curl_multi batch past the wall-clock budget. Telemetry enforces
+		 * its own smaller bound tuned for single-fetch scans; the crawler
+		 * allows up to 5 hops here to tolerate legitimate multi-hop
+		 * chains (http→https, trailing slash, canonicalization). Do not
+		 * sync the two values — they serve different budgets.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MAX_REDIRECT_HOPS = 5;
+
+		/**
 		 * Get concurrency (2-4) filtered via wppo_crawler_concurrency.
 		 *
 		 * Adaptive by load: when overloaded, caller should defer; when load is
@@ -609,6 +624,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		}
 
 		/**
+		 * Whether a URL is allowed as a crawler target or redirect landing.
+		 *
+		 * Same-host SSRF policy delegating to the canonical
+		 * {@see Util::is_same_site_url()} check (wp_http_validate_url() +
+		 * http/https + case-insensitive home-host match) so a same-host
+		 * response can never bounce the server into internal endpoints
+		 * (e.g. link-local metadata). Fails closed when the core URL
+		 * validator is unavailable.
+		 *
+		 * @param string $url URL to check.
+		 * @return bool True when the URL is allowed.
+		 * @since NEXT
+		 */
+		private static function is_url_same_host_allowed( string $url ): bool {
+			if ( ! function_exists( 'wp_http_validate_url' ) ) {
+				return false;
+			}
+			return Util::is_same_site_url( $url );
+		}
+
+		/**
+		 * Resolve a redirect Location against the current URL and validate it.
+		 *
+		 * Thin wrapper over {@see Util::resolve_same_host_redirect()} so the
+		 * crawler and telemetry redirect policies share one implementation
+		 * (audit #1490 review) instead of drifting apart.
+		 *
+		 * @param string $location    Raw Location header value.
+		 * @param string $current_url URL of the response that sent the Location.
+		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
+		 * @since NEXT
+		 */
+		private static function resolve_validated_redirect( string $location, string $current_url ): string|false {
+			return Util::resolve_same_host_redirect( $location, $current_url );
+		}
+
+		/**
 		 * Execute curl_multi batch for URLs (variant matrix).
 		 *
 		 * Each URL is expanded to variant matrix; requests are run via curl_multi
@@ -649,9 +701,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			// Expand to variant matrix via varyGroups wiring.
 			$requests          = array();
 			$skipped_blacklist = 0;
+			$prefailed         = 0;
 			foreach ( $urls as $url ) {
 				if ( self::is_blacklisted( $url ) ) {
 					++$skipped_blacklist;
+					continue;
+				}
+				// Audit #1490: same-host gate on the initial URL — filtered-in
+				// off-host URLs never enter the curl queue.
+				if ( ! self::is_url_same_host_allowed( $url ) ) {
+					self::record_failure( $url );
+					++$prefailed;
 					continue;
 				}
 				$matrix = self::get_variants_to_warm( $url );
@@ -668,10 +728,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			}
 
 			if ( empty( $requests ) ) {
+				// Audit #1490 review: failed already counts $prefailed, so
+				// skipped must be the blacklist count only — falling back to
+				// count( $urls ) here would double-count off-host URLs as
+				// both failed and skipped.
 				return array(
 					'success' => 0,
-					'failed'  => 0,
-					'skipped' => $skipped_blacklist > 0 ? $skipped_blacklist : count( $urls ),
+					'failed'  => $prefailed,
+					'skipped' => $skipped_blacklist,
 				);
 			}
 
@@ -685,7 +749,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			$disable_curl = (bool) apply_filters( 'wppo_crawler_disable_curl', false );
 			if ( ! function_exists( 'curl_multi_init' ) || $disable_curl ) {
 				$success = 0;
-				$failed  = 0;
+				$failed  = $prefailed;
 				// Audit #1325: bound the sequential fallback like the
 				// curl_multi path (15s wall clock). Un-attempted remainders
 				// count as failed WITHOUT blacklist penalty (never fetched).
@@ -697,19 +761,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 						break;
 					}
 					--$remaining;
-					$resp = wp_remote_get(
-						$req['url'],
-						array(
-							'timeout' => 5,
-							'headers' => $req['headers'],
-						)
-					);
-					if ( is_wp_error( $resp ) || (int) wp_remote_retrieve_response_code( $resp ) >= 400 ) {
-						self::record_failure( $req['url'] );
-						++$failed;
-					} else {
+					// Audit #1490: no auto-follow here either — redirects are
+					// followed manually below so each hop passes the same-host
+					// policy (mirrors Util::resolve_same_host_redirect()).
+					$current = $req['url'];
+					$hops    = 0;
+					while ( true ) {
+						if ( microtime( true ) >= $fallback_deadline ) {
+							// Budget exhausted mid-chain: this hop plus the
+							// un-attempted remainder count as failed WITHOUT
+							// blacklist penalty (never fetched).
+							$failed += $remaining + 1;
+							break 2;
+						}
+						$resp = wp_remote_get(
+							$current,
+							array(
+								'timeout'     => 5,
+								'headers'     => $req['headers'],
+								'redirection' => 0,
+							)
+						);
+						$code = is_wp_error( $resp ) ? 0 : (int) wp_remote_retrieve_response_code( $resp );
+						if ( is_wp_error( $resp ) || 0 === $code || $code >= 400 ) {
+							self::record_failure( $req['url'] );
+							++$failed;
+							break;
+						}
+						if ( $code >= 300 && $code < 400 ) {
+							if ( $hops >= self::MAX_REDIRECT_HOPS ) {
+								// Hop cap exhausted without reaching the
+								// terminal page: failure, not success.
+								self::record_failure( $req['url'] );
+								++$failed;
+								break;
+							}
+							$location = wp_remote_retrieve_header( $resp, 'location' );
+							if ( is_array( $location ) ) {
+								$location = reset( $location );
+							}
+							$next = self::resolve_validated_redirect( (string) $location, $current );
+							if ( false === $next ) {
+								// No Location, or an off-host/link-local hop:
+								// a 3xx with nowhere allowed to go warmed
+								// nothing — drop it as a failure without
+								// ever fetching it.
+								self::record_failure( $req['url'] );
+								++$failed;
+								break;
+							}
+							$current = $next;
+							++$hops;
+							continue;
+						}
 						self::clear_blacklist( $req['url'] );
 						++$success;
+						break;
 					}
 				}
 				return array(
@@ -719,18 +826,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				);
 			}
 
-			$server_ip    = self::get_server_ip();
-			$mh           = curl_multi_init(); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_init -- crawler requires curl_multi for variant matrix
-			$handles      = array();
-			$queue        = $requests;
-			$active       = 0;
-			$success      = 0;
-			$failed       = 0;
-			$deadline     = microtime( true ) + 15;
-			$index_to_url = array();
+			$server_ip     = self::get_server_ip();
+			$mh            = curl_multi_init(); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_init -- crawler requires curl_multi for variant matrix
+			$handles       = array();
+			$queue         = $requests;
+			$active        = 0;
+			$success       = 0;
+			$failed        = $prefailed;
+			$deadline      = microtime( true ) + 15;
+			$index_to_url  = array();
+			$index_to_meta = array();
 
 			// Helper to add next handle.
-			$add_next = function () use ( &$queue, &$handles, &$index_to_url, $mh, $server_ip ) {
+			$add_next = function () use ( &$queue, &$handles, &$index_to_url, &$index_to_meta, $mh, $server_ip ) {
 				if ( empty( $queue ) ) {
 					return;
 				}
@@ -738,7 +846,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				$ch  = curl_init( $req['url'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_init -- crawler requires curl
 				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
 				curl_setopt( $ch, CURLOPT_TIMEOUT, 5 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
-				curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
+				// Audit #1490: never auto-follow redirects server-side — 3xx
+				// targets are re-queued below only after passing the same-host
+				// policy (mirrors Util::resolve_same_host_redirect()).
+				curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, false ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
+				curl_setopt( $ch, CURLOPT_MAXREDIRS, 0 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
+				// Restrict to HTTP/HTTPS only — prevent file://, ftp://, etc.
+				if ( defined( 'CURLPROTO_HTTP' ) && defined( 'CURLPROTO_HTTPS' ) ) {
+					curl_setopt( $ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
+					if ( defined( 'CURLOPT_REDIR_PROTOCOLS' ) ) {
+						curl_setopt( $ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
+					}
+				}
 				$headers = array();
 				foreach ( $req['headers'] as $k => $v ) {
 					// CRLF-strip filter-supplied headers to block response splitting.
@@ -766,8 +885,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					}
 				}
 				curl_multi_add_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_add_handle -- crawler requires curl_multi
-				$handles[]                            = $ch;
-				$index_to_url[ spl_object_id( $ch ) ] = $req['url']; // Audit #1434: spl_object_id() — (int) cast collides on PHP 8 CurlHandle objects.
+				$handles[]                   = $ch;
+				$object_id                   = spl_object_id( $ch ); // Audit #1434: spl_object_id() — (int) cast collides on PHP 8 CurlHandle objects.
+				$index_to_url[ $object_id ]  = $req['url'];
+				$index_to_meta[ $object_id ] = array(
+					'url'     => $req['url'],
+					'headers' => $req['headers'],
+					'hops'    => isset( $req['hops'] ) ? (int) $req['hops'] : 0,
+					'root'    => isset( $req['root'] ) && is_string( $req['root'] ) && '' !== $req['root'] ? $req['root'] : $req['url'],
+				);
 			};
 
 			// Prime initial batch.
@@ -785,16 +911,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				}
 				// Process completed handles.
 				while ( ( $info = curl_multi_info_read( $mh ) ) ) { // phpcs:ignore Generic.CodeAnalysis.AssignmentInCondition.FoundInWhileCondition,WordPress.WP.AlternativeFunctions.curl_curl_multi_info_read -- intentional loop
-					$ch   = $info['handle'];
-					$code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- crawler requires curl
-					$err  = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
-					$url  = $index_to_url[ spl_object_id( $ch ) ] ?? '';
-					if ( '' !== $url ) {
-						if ( '' !== $err || $code >= 400 || 0 === $code ) {
-							self::record_failure( $url );
+					$ch        = $info['handle'];
+					$object_id = spl_object_id( $ch );
+					$code      = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- crawler requires curl
+					$err       = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
+					$meta      = $index_to_meta[ $object_id ] ?? null;
+					unset( $index_to_meta[ $object_id ] );
+					$url = $index_to_url[ $object_id ] ?? '';
+					unset( $index_to_url[ $object_id ] );
+					if ( '' !== $url && null !== $meta ) {
+						// Audit #1490: re-validate the effective URL — a
+						// same-host response must not have bounced the
+						// transfer to an off-host/link-local target.
+						$effective = (string) curl_getinfo( $ch, CURLINFO_EFFECTIVE_URL ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- crawler requires curl
+						$root      = $meta['root'];
+						if ( '' === $err && $code >= 300 && $code < 400 && $meta['hops'] < self::MAX_REDIRECT_HOPS ) {
+							// Manual same-host redirect: curl_getinfo() resolves
+							// the Location to the absolute URL curl would have
+							// fetched. Off-host targets are dropped as failures;
+							// allowed ones are re-queued with the same variant
+							// headers so warming still reaches the final page.
+							$redirect = defined( 'CURLINFO_REDIRECT_URL' ) ? (string) curl_getinfo( $ch, CURLINFO_REDIRECT_URL ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- crawler requires curl
+							if ( '' !== $redirect && self::is_url_same_host_allowed( $redirect ) ) {
+								$queue[] = array(
+									'url'     => $redirect,
+									'headers' => $meta['headers'],
+									'hops'    => $meta['hops'] + 1,
+									'root'    => $root,
+								);
+							} else {
+								// Off-host/link-local hop, or a 3xx with no
+								// Location (warmed nothing): failure, never
+								// fetched, never counted as success.
+								self::record_failure( $root );
+								++$failed;
+							}
+						} elseif ( '' !== $err || $code >= 400 || 0 === $code || ( $code >= 300 && $code < 400 ) || ! self::is_url_same_host_allowed( $effective ) ) {
+							self::record_failure( $root );
 							++$failed;
 						} else {
-							self::clear_blacklist( $url );
+							self::clear_blacklist( $root );
 							++$success;
 						}
 					}
@@ -896,6 +1052,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			if ( '' === $url ) {
 				return;
 			}
+			// Audit #1490: same-host gate on the entry URL — filtered-in
+			// off-host URLs are never fetched.
+			if ( ! self::is_url_same_host_allowed( $url ) ) {
+				self::record_failure( $url );
+				return;
+			}
 			if ( self::is_blacklisted( $url ) ) {
 				return;
 			}
@@ -914,17 +1076,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				'headers' => array(),
 			);
 			// Respect is_litespeed && is_wppo_cache_owner gating for LS headers? Non-LS still warms file cache.
-			$resp = wp_remote_get(
-				$primary['url'],
-				array(
-					'timeout' => 5,
-					'headers' => $primary['headers'],
-				)
-			);
-			if ( is_wp_error( $resp ) || (int) wp_remote_retrieve_response_code( $resp ) >= 400 ) {
-				self::record_failure( $url );
-			} else {
+			// Audit #1490: never auto-follow redirects server-side — each hop
+			// is re-validated against the same-host policy (mirrors the
+			// crawl_batch() fallback loop) so a same-host response cannot
+			// bounce the server into link-local/off-host targets.
+			$current = $primary['url'];
+			$hops    = 0;
+			while ( true ) {
+				// The variant filter may rewrite URLs; validate every hop,
+				// not just the entry URL.
+				if ( ! self::is_url_same_host_allowed( $current ) ) {
+					self::record_failure( $url );
+					return;
+				}
+				$resp = wp_remote_get(
+					$current,
+					array(
+						'timeout'     => 5,
+						'headers'     => $primary['headers'],
+						'redirection' => 0,
+					)
+				);
+				$code = is_wp_error( $resp ) ? 0 : (int) wp_remote_retrieve_response_code( $resp );
+				if ( is_wp_error( $resp ) || 0 === $code || $code >= 400 ) {
+					self::record_failure( $url );
+					return;
+				}
+				if ( $code >= 300 && $code < 400 ) {
+					if ( $hops >= self::MAX_REDIRECT_HOPS ) {
+						self::record_failure( $url );
+						return;
+					}
+					$location = wp_remote_retrieve_header( $resp, 'location' );
+					if ( is_array( $location ) ) {
+						$location = reset( $location );
+					}
+					$next = self::resolve_validated_redirect( (string) $location, $current );
+					if ( false === $next ) {
+						self::record_failure( $url );
+						return;
+					}
+					$current = $next;
+					++$hops;
+					continue;
+				}
 				self::clear_blacklist( $url );
+				return;
 			}
 		}
 

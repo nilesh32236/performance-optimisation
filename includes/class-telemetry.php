@@ -322,12 +322,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		/**
 		 * Resolve and validate a redirect Location against the current URL.
 		 *
-		 * Resolution mirrors Critical_CSS::resolve_import_url(): absolute URLs
-		 * are taken as-is, protocol-relative URLs inherit the current scheme,
-		 * and relative URLs resolve against the current URL's directory. The
-		 * resolved hop must then pass the same SSRF rules as the initial scan
-		 * URL: wp_http_validate_url(), http/https schemes only, and the same
-		 * host as this website's home URL.
+		 * Thin wrapper over {@see Util::resolve_same_host_redirect()} so the
+		 * telemetry and crawler redirect policies share one implementation
+		 * (audit #1490 review) instead of drifting apart.
 		 *
 		 * @since  2.2.0
 		 * @param  string $location    Raw Location header value.
@@ -335,54 +332,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
 		 */
 		private static function resolve_redirect( string $location, string $current_url ): string|false {
-			$location = trim( $location );
-			if ( '' === $location ) {
-				return false;
-			}
-
-			// Absolute URL — take as-is.
-			if ( preg_match( '/^https?:\/\//i', $location ) ) {
-				$resolved = $location;
-			} elseif ( 0 === strpos( $location, '//' ) ) {
-				// Protocol-relative — inherit the current scheme.
-				$scheme   = wp_parse_url( $current_url, PHP_URL_SCHEME );
-				$resolved = ( $scheme ? $scheme : 'https' ) . ':' . $location;
-			} else {
-				// Relative URL — resolve against the current URL's directory.
-				$base_parts = wp_parse_url( $current_url );
-				if ( empty( $base_parts['host'] ) ) {
-					return false;
-				}
-
-				$scheme   = isset( $base_parts['scheme'] ) ? $base_parts['scheme'] : 'https';
-				$host     = $base_parts['host'];
-				$port     = isset( $base_parts['port'] ) ? ':' . $base_parts['port'] : '';
-				$base_dir = dirname( isset( $base_parts['path'] ) ? $base_parts['path'] : '/' );
-
-				if ( 0 === strpos( $location, '/' ) ) {
-					$resolved = $scheme . '://' . $host . $port . $location;
-				} else {
-					// Audit #1434: rtrim — dirname('/') yields '//path'.
-					$resolved = $scheme . '://' . $host . $port . rtrim( $base_dir, '/' ) . '/' . $location;
-				}
-			}
-
-			// Validate the hop with the same SSRF rules as the initial URL.
-			if ( ! wp_http_validate_url( $resolved ) ) {
-				return false;
-			}
-
-			$parsed = wp_parse_url( $resolved );
-			if ( ! isset( $parsed['scheme'] ) || ! in_array( $parsed['scheme'], array( 'http', 'https' ), true ) ) {
-				return false;
-			}
-
-			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
-			if ( ! isset( $parsed['host'] ) || $parsed['host'] !== $home_host ) {
-				return false;
-			}
-
-			return $resolved;
+			return Util::resolve_same_host_redirect( $location, $current_url );
 		}
 
 		/**

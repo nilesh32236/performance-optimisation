@@ -3530,18 +3530,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			try {
 				$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 				if ( ! array_key_exists( $blog_id, self::$same_site_home_host ) ) {
-					$home_host                             = function_exists( 'wp_parse_url' ) ? wp_parse_url( self::cached_home_url(), PHP_URL_HOST ) : '';
-					self::$same_site_home_host[ $blog_id ] = ( is_string( $home_host ) ) ? strtolower( $home_host ) : '';
+					$home_host = function_exists( 'wp_parse_url' ) ? wp_parse_url( self::cached_home_url(), PHP_URL_HOST ) : '';
+					// DNS is case-insensitive and a single trailing dot is the
+					// FQDN root form of the same host (audit #1490 review).
+					self::$same_site_home_host[ $blog_id ] = ( is_string( $home_host ) ) ? self::normalize_host_for_compare( $home_host ) : '';
 				}
 				if ( '' === self::$same_site_home_host[ $blog_id ] ) {
 					return false;
 				}
 				$host = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_HOST ) : '';
-				return is_string( $host ) && '' !== $host && strtolower( $host ) === self::$same_site_home_host[ $blog_id ];
+				return is_string( $host ) && '' !== $host && self::normalize_host_for_compare( $host ) === self::$same_site_home_host[ $blog_id ];
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
 			}
+		}
+
+		/**
+		 * Normalize a host for case-insensitive same-site comparison.
+		 *
+		 * Lowercases and strips a single trailing dot (the DNS FQDN root
+		 * form, e.g. `example.com.`), which denotes the same host as the
+		 * bare name. Only one dot is stripped so malformed `example.com..`
+		 * never canonicalizes to a valid host.
+		 *
+		 * @since NEXT
+		 * @param string $host Raw host value.
+		 * @return string Normalized host.
+		 */
+		private static function normalize_host_for_compare( string $host ): string {
+			$host = strtolower( $host );
+			if ( str_ends_with( $host, '.' ) ) {
+				$host = substr( $host, 0, -1 );
+			}
+			return $host;
 		}
 
 		/**
@@ -3552,6 +3574,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Rest::is_same_site_url(), Critical_CSS::is_same_site_host() (host
 		 * part), and Abilities::same_site_url_or_home() all funnel here so
 		 * port/case/IDN edge cases cannot drift apart.
+		 *
+		 * Audit #1490 review: the port is pinned as well as the host. A URL
+		 * with no explicit port (the scheme default 80/443) always passes
+		 * this leg; an explicit nonstandard port must equal the home URL's
+		 * effective port (so dev/staging hosts on :8080 keep working while
+		 * a redirect hop cannot pivot to a sidecar on another port of the
+		 * same host). Residual acceptance: an explicit :80/:443 on the home
+		 * host is allowed — those are the standard web ports sharing the
+		 * web attack surface, and the host gate still applies.
 		 *
 		 * @since 2.2.0
 		 * @param string $url URL to check.
@@ -3573,11 +3604,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
 					return false;
 				}
+				if ( ! self::is_allowed_same_site_port( $parsed ) ) {
+					return false;
+				}
 				return self::is_same_site_host( $url );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
 			}
+		}
+
+		/**
+		 * Whether a parsed URL's port is allowed by the same-site policy.
+		 *
+		 * @since NEXT
+		 * @param array<string, mixed> $parsed wp_parse_url() output for the candidate URL.
+		 * @return bool True when the port leg passes.
+		 */
+		private static function is_allowed_same_site_port( array $parsed ): bool {
+			if ( ! array_key_exists( 'port', $parsed ) || null === $parsed['port'] || '' === $parsed['port'] ) {
+				// No explicit port — the scheme default (80/443). Allowed.
+				return true;
+			}
+			$port = (int) $parsed['port'];
+			if ( 80 === $port || 443 === $port ) {
+				// Explicit standard web ports share the web attack surface.
+				return true;
+			}
+			// Nonstandard explicit port: only the home URL's own effective
+			// port may be used (dev/staging hosts on :8080 etc.).
+			$home_port = self::home_effective_port();
+			return null !== $home_port && $port === $home_port;
+		}
+
+		/**
+		 * Effective port of the home URL (explicit port or scheme default).
+		 *
+		 * @since NEXT
+		 * @return int|null Effective home port, or null when indeterminable (fail closed).
+		 */
+		private static function home_effective_port(): ?int {
+			if ( ! function_exists( 'wp_parse_url' ) ) {
+				return null;
+			}
+			$home_port = wp_parse_url( self::cached_home_url(), PHP_URL_PORT );
+			if ( is_int( $home_port ) || ( is_string( $home_port ) && ctype_digit( $home_port ) ) ) {
+				return (int) $home_port;
+			}
+			$home_scheme = wp_parse_url( self::cached_home_url(), PHP_URL_SCHEME );
+			$home_scheme = is_string( $home_scheme ) ? strtolower( $home_scheme ) : '';
+			if ( 'http' === $home_scheme ) {
+				return 80;
+			}
+			if ( 'https' === $home_scheme ) {
+				return 443;
+			}
+			return null;
 		}
 
 		/**
@@ -3595,6 +3677,150 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				unset( $e );
 				return $fallback;
 			}
+		}
+
+		/**
+		 * Resolve a redirect Location against the current URL and validate it.
+		 *
+		 * Single shared SSRF-adjacent resolver (audit #1490 review): absolute
+		 * URLs are taken as-is, protocol-relative URLs inherit the current
+		 * scheme, and relative URLs resolve against the current URL's
+		 * directory with RFC 3986 dot-segment normalization (so `../other`
+		 * resolves to a canonical path instead of fetching a literal
+		 * `/subdir/../other`). Query-only (`?x=1`) locations keep the
+		 * current path, fragment-only (`#frag`) locations re-resolve to the
+		 * current URL minus its fragment. The resolved hop must then pass
+		 * the same-host policy ({@see is_same_site_url()}) so a same-host
+		 * response can never bounce the server into internal endpoints
+		 * (e.g. link-local metadata). Used by Telemetry and the LiteSpeed
+		 * crawler so the two copies of this logic cannot drift apart.
+		 *
+		 * @since NEXT
+		 * @param string $location    Raw Location header value.
+		 * @param string $current_url URL of the response that sent the Location.
+		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
+		 */
+		public static function resolve_same_host_redirect( string $location, string $current_url ): string|false {
+			try {
+				$location = trim( $location );
+				if ( '' === $location ) {
+					return false;
+				}
+
+				// Absolute URL — take as-is.
+				if ( preg_match( '/^https?:\/\//i', $location ) ) {
+					$resolved = $location;
+				} elseif ( 0 === strpos( $location, '//' ) ) {
+					// Protocol-relative — inherit the current scheme.
+					$scheme   = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current_url, PHP_URL_SCHEME ) : '';
+					$resolved = ( $scheme ? $scheme : 'https' ) . ':' . $location;
+				} else {
+					// Relative URL — resolve against the current URL's directory.
+					$base_parts = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current_url ) : false;
+					if ( ! is_array( $base_parts ) || empty( $base_parts['host'] ) ) {
+						return false;
+					}
+
+					$scheme   = isset( $base_parts['scheme'] ) ? $base_parts['scheme'] : 'https';
+					$host     = $base_parts['host'];
+					$port     = isset( $base_parts['port'] ) ? ':' . $base_parts['port'] : '';
+					$base_dir = dirname( isset( $base_parts['path'] ) && '' !== $base_parts['path'] ? $base_parts['path'] : '/' );
+
+					if ( 0 === strpos( $location, '?' ) ) {
+						// Query-only — keep the current path, replace the query.
+						$current_path = isset( $base_parts['path'] ) && '' !== $base_parts['path'] ? $base_parts['path'] : '/';
+						$resolved     = $scheme . '://' . $host . $port . $current_path . $location;
+					} elseif ( 0 === strpos( $location, '#' ) ) {
+						// Fragment-only — never sent to the server; re-resolve
+						// to the current URL minus its fragment so the hop
+						// validates (and fetches) the same canonical page.
+						$hash_pos = strpos( $current_url, '#' );
+						$resolved = ( false !== $hash_pos ? substr( $current_url, 0, $hash_pos ) : $current_url ) . $location;
+					} elseif ( 0 === strpos( $location, '/' ) ) {
+						$resolved = $scheme . '://' . $host . $port . self::normalize_redirect_target( $location );
+					} else {
+						// rtrim — dirname('/') yields '/'.
+						$merged   = rtrim( $base_dir, '/' ) . '/' . $location;
+						$resolved = $scheme . '://' . $host . $port . self::normalize_redirect_target( $merged );
+					}
+				}
+
+				// Fail closed without the core URL validator, mirroring the
+				// pre-extraction callers which both required it.
+				if ( ! function_exists( 'wp_http_validate_url' ) ) {
+					return false;
+				}
+
+				// Validate the hop with the same SSRF rules as the initial URL.
+				if ( ! self::is_same_site_url( $resolved ) ) {
+					return false;
+				}
+
+				return $resolved;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Normalize a redirect target (path + optional ?query/#fragment).
+		 *
+		 * Splits off the query/fragment suffix so dot-segment removal
+		 * applies to the path part only (audit #1490 review: a bare
+		 * concatenation would fetch `/subdir/../other` literally), then
+		 * reattaches the suffix untouched.
+		 *
+		 * @since NEXT
+		 * @param string $target Path with optional query/fragment suffix.
+		 * @return string Normalized target.
+		 */
+		private static function normalize_redirect_target( string $target ): string {
+			$suffix   = '';
+			$hash_pos = strpos( $target, '#' );
+			if ( false !== $hash_pos ) {
+				$suffix = substr( $target, $hash_pos );
+				$target = substr( $target, 0, $hash_pos );
+			}
+			$query_pos = strpos( $target, '?' );
+			if ( false !== $query_pos ) {
+				$suffix = substr( $target, $query_pos ) . $suffix;
+				$target = substr( $target, 0, $query_pos );
+			}
+			return self::remove_dot_segments( $target ) . $suffix;
+		}
+
+		/**
+		 * Remove RFC 3986 section 5.2.4 dot segments from a URL path.
+		 *
+		 * Collapses `/./` and resolves `/../` lexically (a leading `/..`
+		 * that escapes the root is dropped — the host gate applied by the
+		 * caller still bounds where the resolved hop may go). A trailing
+		 * slash implied by the input (including `/./` and `/../` endings)
+		 * is preserved so directory redirects keep their canonical form.
+		 *
+		 * @since NEXT
+		 * @param string $path URL path to normalize.
+		 * @return string Normalized path (always starting with '/').
+		 */
+		private static function remove_dot_segments( string $path ): string {
+			$segments = explode( '/', $path );
+			$out      = array();
+			foreach ( $segments as $segment ) {
+				if ( '' === $segment || '.' === $segment ) {
+					continue;
+				}
+				if ( '..' === $segment ) {
+					array_pop( $out );
+					continue;
+				}
+				$out[] = $segment;
+			}
+			$normalized = '/' . implode( '/', $out );
+			if ( '/' !== $normalized && ( str_ends_with( $path, '/' ) || str_ends_with( $path, '/.' ) || str_ends_with( $path, '/..' ) ) ) {
+				$normalized .= '/';
+			}
+			return $normalized;
 		}
 
 		/**
@@ -4608,13 +4834,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *   `ParseError` on broken syntax).
 		 * - Layer 2: optional `php -l` against a sibling tmp file, only when
 		 *   an exec function exists, is not disabled, and `PHP_BINARY` is
-		 *   defined. Never lints the live file.
+		 *   defined. Never lints the live file. Gated behind the
+		 *   `wppo_allow_php_lint` filter (default true) so hardened hosts
+		 *   can disable the system call.
 		 * - Layer 3 (always): the code must open with `<?php`.
 		 *
 		 * @param string $code PHP source to check.
 		 * @param string $tmp_file_for_lint Optional tmp file holding $code for `php -l`.
 		 * @return bool True when the code looks parseable.
 		 * @since 2.0.0
+		 * @since NEXT Added the `wppo_allow_php_lint` filter gate for the `php -l` layer.
 		 */
 		public static function verify_php_syntax( string $code, string $tmp_file_for_lint = '' ): bool {
 			if ( '' === $code ) {
@@ -4653,7 +4882,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Optional `php -l` against the on-disk tmp file only (never the
 			// live file). Skipped when the tmp path is not a real readable
 			// file — e.g. under WP_Filesystem transports or unit-test mocks.
-			if ( '' !== $tmp_file_for_lint && function_exists( 'escapeshellarg' ) && defined( 'PHP_BINARY' ) && '' !== (string) constant( 'PHP_BINARY' ) ) {
+			// Audit #1490: the exec() path is gated behind wppo_allow_php_lint
+			// (default true) so locked-down hosts can disable system calls
+			// entirely; the token-based bracket check above stays primary.
+			$allow_lint = true;
+			if ( function_exists( 'apply_filters' ) ) {
+				/** This filter is documented in docs/hooks.md. */
+				$allow_lint = (bool) apply_filters( 'wppo_allow_php_lint', true );
+			}
+			if ( $allow_lint && '' !== $tmp_file_for_lint && function_exists( 'escapeshellarg' ) && defined( 'PHP_BINARY' ) && '' !== (string) constant( 'PHP_BINARY' ) ) {
 				$disabled = '';
 				if ( function_exists( 'ini_get' ) ) {
 					$disabled = (string) ini_get( 'disable_functions' );
