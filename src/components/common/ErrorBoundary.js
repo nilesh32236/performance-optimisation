@@ -1,5 +1,6 @@
 import { Component } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+import { redactLogSecrets } from '../../lib/logSecrets';
 
 class ErrorBoundary extends Component {
 	constructor( props ) {
@@ -11,22 +12,37 @@ class ErrorBoundary extends Component {
 		return { hasError: true, error };
 	}
 
-	componentDidCatch( error, errorInfo ) {
-		// Minimal logging by default: the full errorInfo component stack can
+	componentDidCatch( error ) {
+		// Minimal logging by default: the errorInfo component stack can
 		// contain props/state fragments (settings, request payloads) that
-		// should not sit in a shared console. Verbose output is gated behind
-		// window.wppoSettings.debug.
+		// should not sit in a shared console, so it is never logged — even
+		// verbose debug output is restricted to the redacted message-only
+		// string. Verbose output is gated behind window.wppoSettings.debug.
 		const debug =
 			typeof window !== 'undefined' &&
 			typeof window.wppoSettings !== 'undefined' &&
 			window.wppoSettings?.debug;
 		if ( debug ) {
-			console.error( 'ErrorBoundary caught:', error, errorInfo );
+			const message =
+				error instanceof Error ? error.message : String( error );
+			console.error(
+				'ErrorBoundary caught:',
+				redactLogSecrets( message ) || 'an error.'
+			);
 		} else if ( error instanceof Error ) {
-			console.error( 'ErrorBoundary caught:', error.message );
+			// Audit #1493 review: error messages can embed request URLs or
+			// payload fragments carrying nonces/tokens, so the non-debug
+			// branch is redacted too.
+			console.error(
+				'ErrorBoundary caught:',
+				redactLogSecrets( error.message ) || 'an error.'
+			);
 		} else {
 			const primitive = String( error );
-			console.error( 'ErrorBoundary caught:', primitive || 'an error.' );
+			console.error(
+				'ErrorBoundary caught:',
+				redactLogSecrets( primitive ) || 'an error.'
+			);
 		}
 	}
 

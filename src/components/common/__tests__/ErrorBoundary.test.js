@@ -68,7 +68,7 @@ describe( 'ErrorBoundary Component', () => {
 		);
 	} );
 
-	it( 'logs the full error and component stack when wppoSettings.debug is set', () => {
+	it( 'logs only the redacted message (never the component stack) when wppoSettings.debug is set', () => {
 		const saved = global.wppoSettings;
 		global.wppoSettings = { ...( saved || {} ), debug: true };
 		try {
@@ -79,9 +79,30 @@ describe( 'ErrorBoundary Component', () => {
 			);
 			expect( console.error ).toHaveBeenCalledWith(
 				'ErrorBoundary caught:',
-				expect.any( Error ),
-				expect.any( Object )
+				'Test error'
 			);
+			// The raw Error object and the errorInfo component stack (which
+			// can carry props/state fragments) must never reach the console
+			// via our own logging (React internals may log separately).
+			const ownCalls = console.error.mock.calls.filter(
+				( call ) => call[ 0 ] === 'ErrorBoundary caught:'
+			);
+			expect( ownCalls.length ).toBeGreaterThan( 0 );
+			const leakedObjects = ownCalls
+				.map( ( call ) => call.slice( 1 ) )
+				.flat()
+				.filter( ( arg ) => arg instanceof Error );
+			expect( leakedObjects ).toEqual( [] );
+			const leakedStacks = ownCalls
+				.map( ( call ) => call.slice( 1 ) )
+				.flat()
+				.filter(
+					( arg ) =>
+						arg &&
+						typeof arg === 'object' &&
+						'componentStack' in arg
+				);
+			expect( leakedStacks ).toEqual( [] );
 		} finally {
 			global.wppoSettings = saved;
 		}

@@ -31,6 +31,7 @@ import {
 	getWppoSettings,
 } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import { stripSensitiveKeys } from '../lib/stripSensitive';
 import NoticeBanner from './common/NoticeBanner';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -88,10 +89,10 @@ export const formatDiffValue = ( value ) => {
 /**
  * Known secret-bearing settings paths stripped before a JSON export.
  *
- * Mirrors Rest::remove_sensitive_settings_from_response() so a downloaded
- * backup can be shared without leaking credentials. The live global is
- * never mutated — the export works on a deep clone.
- *
+ * @deprecated NEXT Kept for backward compatibility with existing imports;
+ *             stripSensitiveSettings() now uses the shared generic
+ *             SECRET_KEY_PATTERN redactor (src/lib/stripSensitive.js) so
+ *             newly added secret keys are stripped by default.
  * @since NEXT
  * @type {Array.<[string, string]>} [tab, key] pairs.
  */
@@ -103,6 +104,17 @@ export const SENSITIVE_EXPORT_PATHS = [
 /**
  * Return a deep-cloned copy of the settings with secret values removed.
  *
+ * Uses the shared generic secret-key redactor so any secret-bearing key
+ * added outside the legacy SENSITIVE_EXPORT_PATHS allowlist (e.g.
+ * edge-cache identifiers/tokens) is stripped by default. The live global
+ * is never mutated — the export works on a deep clone.
+ *
+ * Note: unlike the PluginSetting Tools export (mask-with-'REDACTED'),
+ * secrets are deleted, not masked, here — so a re-imported Presets
+ * backup silently drops secret keys instead of preserving masked
+ * placeholders. The two exports share the key pattern only, not the
+ * redaction treatment, and must not be assumed interchangeable.
+ *
  * @param {Object} settings Raw settings object.
  * @return {Object} Cloned settings safe for export.
  */
@@ -111,12 +123,7 @@ export const stripSensitiveSettings = ( settings ) => {
 		settings && typeof settings === 'object'
 			? JSON.parse( JSON.stringify( settings ) )
 			: {};
-	for ( const [ tab, key ] of SENSITIVE_EXPORT_PATHS ) {
-		if ( clone[ tab ] && typeof clone[ tab ] === 'object' ) {
-			delete clone[ tab ][ key ];
-		}
-	}
-	return clone;
+	return stripSensitiveKeys( clone );
 };
 
 /**

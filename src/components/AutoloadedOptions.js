@@ -21,6 +21,7 @@ import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import NoticeBanner from './common/NoticeBanner';
+import ConfirmDialog from './common/ConfirmDialog';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -66,6 +67,7 @@ const AutoloadedOptions = () => {
 	const [ remediated, setRemediated ] = useState( {} );
 	const [ checking, setChecking ] = useState( false );
 	const [ applying, setApplying ] = useState( false );
+	const [ confirmApplyOpen, setConfirmApplyOpen ] = useState( false );
 	const [ revertingAll, setRevertingAll ] = useState( false );
 	const [ reverting, setReverting ] = useState( {} );
 	const { notice, notify, dismiss } = useNotice();
@@ -646,7 +648,7 @@ const AutoloadedOptions = () => {
 						<LoadingSubmitButton
 							type="button"
 							className="wppo-button wppo-button--primary wppo-button--sm"
-							onClick={ applyFix }
+							onClick={ () => setConfirmApplyOpen( true ) }
 							isLoading={ applying }
 							disabled={ checking || revertingAll }
 							label={ __(
@@ -759,6 +761,43 @@ const AutoloadedOptions = () => {
 					</div>
 				) }
 			</div>
+			<ConfirmDialog
+				isOpen={ confirmApplyOpen }
+				onConfirm={ () => {
+					// Audit #1493 review: keep the dialog mounted (with the
+					// isBusy spinner) while applyFix runs; close it only once
+					// the write settles so the busy state is visible.
+					applyFix().finally( () => {
+						if ( isMounted.current ) {
+							setConfirmApplyOpen( false );
+						}
+					} );
+				} }
+				onCancel={ () => setConfirmApplyOpen( false ) }
+				title={ __(
+					'Apply autoload remediation?',
+					'performance-optimisation'
+				) }
+				message={
+					report && report.count > 0
+						? sprintf(
+								/* translators: 1: option count, 2: bytes saved. */
+								__(
+									'This will turn autoload off for %1$d options, saving %2$s. Every change can be reverted. Continue?',
+									'performance-optimisation'
+								),
+								report.count || 0,
+								formatBytes( report.bytes_saved || 0 )
+						  )
+						: __(
+								'This will turn autoload off for the reported options. Every change can be reverted. Continue?',
+								'performance-optimisation'
+						  )
+				}
+				confirmLabel={ __( 'Apply fix', 'performance-optimisation' ) }
+				variant="warning"
+				isBusy={ applying }
+			/>
 		</FeatureCard>
 	);
 };

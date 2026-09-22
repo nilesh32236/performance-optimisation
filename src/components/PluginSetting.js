@@ -25,6 +25,7 @@ import NoticeBanner from './common/NoticeBanner';
 import CheckboxOption from './common/CheckboxOption';
 
 import { __, sprintf, _n } from '@wordpress/i18n';
+import { SECRET_KEY_PATTERN as SHARED_SECRET_KEY_PATTERN } from '../lib/stripSensitive';
 
 // Keep in sync with PHP Util::ALLOWED_SETTINGS_KEYS (single source).
 // At runtime the list is also available as wppoSettings.allowedSettingsKeys
@@ -139,15 +140,12 @@ const validateImportData = ( data ) => {
 /**
  * Pattern matching nested secret keys redacted on export (Redis password,
  * Cloudflare/Bunny tokens, nonces, generic *key/*token/*secret/password).
- * The generic [_-]keys? suffix covers auth_key, consumer_key, private_key,
- * google_key, etc.; the separator requirement avoids matching words like
- * "monkey" that merely end in "key". The separator-optional api[_-]?keys?
- * alternative covers separator-less 'apikey'/'apiKey' variants.
+ * Shared with OptimizationPresets.js via src/lib/stripSensitive.js so both
+ * export paths strip newly added secret keys by default.
  *
  * @since 2.0.0
  */
-const SECRET_KEY_PATTERN =
-	/(?:[_-]keys?|api[_-]?keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
+const SECRET_KEY_PATTERN = SHARED_SECRET_KEY_PATTERN;
 
 /**
  * Deep-clone an object while masking every nested key matching
