@@ -4603,13 +4603,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *   `ParseError` on broken syntax).
 		 * - Layer 2: optional `php -l` against a sibling tmp file, only when
 		 *   an exec function exists, is not disabled, and `PHP_BINARY` is
-		 *   defined. Never lints the live file.
+		 *   defined. Never lints the live file. Gated behind the
+		 *   `wppo_allow_php_lint` filter (default true) so hardened hosts
+		 *   can disable the system call.
 		 * - Layer 3 (always): the code must open with `<?php`.
 		 *
 		 * @param string $code PHP source to check.
 		 * @param string $tmp_file_for_lint Optional tmp file holding $code for `php -l`.
 		 * @return bool True when the code looks parseable.
 		 * @since 2.0.0
+		 * @since NEXT Added the `wppo_allow_php_lint` filter gate for the `php -l` layer.
 		 */
 		public static function verify_php_syntax( string $code, string $tmp_file_for_lint = '' ): bool {
 			if ( '' === $code ) {
@@ -4648,7 +4651,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Optional `php -l` against the on-disk tmp file only (never the
 			// live file). Skipped when the tmp path is not a real readable
 			// file — e.g. under WP_Filesystem transports or unit-test mocks.
-			if ( '' !== $tmp_file_for_lint && function_exists( 'escapeshellarg' ) && defined( 'PHP_BINARY' ) && '' !== (string) constant( 'PHP_BINARY' ) ) {
+			// Audit #1490: the exec() path is gated behind wppo_allow_php_lint
+			// (default true) so locked-down hosts can disable system calls
+			// entirely; the token-based bracket check above stays primary.
+			$allow_lint = true;
+			if ( function_exists( 'apply_filters' ) ) {
+				/** This filter is documented in docs/hooks.md. */
+				$allow_lint = (bool) apply_filters( 'wppo_allow_php_lint', true );
+			}
+			if ( $allow_lint && '' !== $tmp_file_for_lint && function_exists( 'escapeshellarg' ) && defined( 'PHP_BINARY' ) && '' !== (string) constant( 'PHP_BINARY' ) ) {
 				$disabled = '';
 				if ( function_exists( 'ini_get' ) ) {
 					$disabled = (string) ini_get( 'disable_functions' );

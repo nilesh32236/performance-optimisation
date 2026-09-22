@@ -92,6 +92,13 @@ class LiteSpeedCrawlerTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 500 );
 		Functions\when( 'is_wp_error' )->justReturn( false );
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_http_validate_url' )->returnArg();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $v ) {
+				return rtrim( (string) $v, '/' );
+			}
+		);
 
 		$url = 'https://example.com/a';
 		// Record 3 failures => blacklisted.
@@ -324,7 +331,15 @@ class LiteSpeedCrawlerTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'delete_transient' )->justReturn( true );
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_http_validate_url' )->returnArg();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $v ) {
+				return rtrim( (string) $v, '/' );
+			}
+		);
 		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
+		Functions\when( 'wp_remote_retrieve_header' )->justReturn( '' );
 		Functions\when( 'is_wp_error' )->justReturn( false );
 		$called = 0;
 		Functions\when( 'wp_remote_get' )->alias(
@@ -353,5 +368,133 @@ class LiteSpeedCrawlerTest extends \PHPUnit\Framework\TestCase {
 		// With fallback, each URL => primary variant only => 2 wp_remote_get calls.
 		$this->assertSame( 2, $called );
 		$this->assertSame( 2, $result['success'] );
+	}
+
+	public function test_crawl_batch_rejects_off_host_initial_url(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_http_validate_url' )->returnArg();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $v ) {
+				return rtrim( (string) $v, '/' );
+			}
+		);
+		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
+		Functions\when( 'wp_remote_retrieve_header' )->justReturn( '' );
+		Functions\when( 'is_wp_error' )->justReturn( false );
+		$fetched = array();
+		Functions\when( 'wp_remote_get' )->alias(
+			static function ( $url, $args ) use ( &$fetched ) {
+				$fetched[] = $url;
+				return array( 'response' => array( 'code' => 200 ) );
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value ) {
+				if ( 'wppo_crawler_disable_curl' === $tag ) {
+					return true;
+				}
+				if ( 'wppo_crawler_load_limit' === $tag ) {
+					return 100.0;
+				}
+				if ( 'wppo_crawler_is_overloaded' === $tag ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'wp_next_scheduled' )->justReturn( false );
+		Functions\when( 'wp_schedule_single_event' )->justReturn( true );
+		// Audit #1490: the off-host URL must never enter the fetch queue.
+		$result = LiteSpeed_Crawler::crawl_batch( array( 'https://example.com/a', 'https://evil.example.net/x' ) );
+		$this->assertSame( array( 'https://example.com/a' ), $fetched );
+		$this->assertSame( 1, $result['success'] );
+		$this->assertSame( 1, $result['failed'] );
+	}
+
+	public function test_crawl_batch_fallback_drops_off_host_redirect(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_http_validate_url' )->returnArg();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $v ) {
+				return rtrim( (string) $v, '/' );
+			}
+		);
+		Functions\when( 'is_wp_error' )->justReturn( false );
+		Functions\when( 'wp_remote_retrieve_response_code' )->alias(
+			static function ( $resp ) {
+				return isset( $resp['response']['code'] ) ? (int) $resp['response']['code'] : 0;
+			}
+		);
+		Functions\when( 'wp_remote_retrieve_header' )->alias(
+			static function ( $resp, $name ) {
+				if ( 'location' === strtolower( (string) $name ) && isset( $resp['headers']['location'] ) ) {
+					return $resp['headers']['location'];
+				}
+				return '';
+			}
+		);
+		$fetched = array();
+		Functions\when( 'wp_remote_get' )->alias(
+			static function ( $url, $args ) use ( &$fetched ) {
+				$fetched[] = $url;
+				// Same-host response bouncing to a link-local target.
+				return array(
+					'response' => array( 'code' => 302 ),
+					'headers'  => array( 'location' => 'http://169.254.169.254/latest/meta-data/' ),
+				);
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value ) {
+				if ( 'wppo_crawler_disable_curl' === $tag ) {
+					return true;
+				}
+				if ( 'wppo_crawler_load_limit' === $tag ) {
+					return 100.0;
+				}
+				if ( 'wppo_crawler_is_overloaded' === $tag ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'wp_next_scheduled' )->justReturn( false );
+		Functions\when( 'wp_schedule_single_event' )->justReturn( true );
+		// Audit #1490: the link-local hop must be dropped without fetching.
+		$result = LiteSpeed_Crawler::crawl_batch( array( 'https://example.com/a' ) );
+		$this->assertSame( array( 'https://example.com/a' ), $fetched );
+		$this->assertSame( 0, $result['success'] );
+		$this->assertSame( 1, $result['failed'] );
+	}
+
+	public function test_resolve_validated_redirect_allows_same_host_only(): void {
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_http_validate_url' )->returnArg();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $v ) {
+				return rtrim( (string) $v, '/' );
+			}
+		);
+		$method = new \ReflectionMethod( LiteSpeed_Crawler::class, 'resolve_validated_redirect' );
+		// Same-host absolute + root-relative hops pass.
+		$this->assertSame( 'https://example.com/b', $method->invoke( null, 'https://example.com/b', 'https://example.com/a' ) );
+		$this->assertSame( 'https://example.com/b', $method->invoke( null, '/b', 'https://example.com/a' ) );
+		// Off-host, link-local, and empty hops are dropped.
+		$this->assertFalse( $method->invoke( null, 'https://evil.example.net/x', 'https://example.com/a' ) );
+		$this->assertFalse( $method->invoke( null, 'http://169.254.169.254/latest/meta-data/', 'https://example.com/a' ) );
+		$this->assertFalse( $method->invoke( null, '', 'https://example.com/a' ) );
 	}
 }

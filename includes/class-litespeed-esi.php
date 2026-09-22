@@ -250,6 +250,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Log a throttled nonce-refresh burst (at most once per hour).
+		 *
+		 * Audit #1490: the `nonce`-refresh block stays reachable with a
+		 * stale/expired nonce (stale static-HTML cache recovery), which makes
+		 * it an unauthenticated fragment-nonce minting oracle. The tiered
+		 * throttle + fail-closed behavior is unchanged; this only records
+		 * repeated refresh-mint bursts so operators can spot abuse. The
+		 * minted nonce grants fragment hydration only, never privileged
+		 * actions. Never throws.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function log_refresh_mint_burst(): void {
+			try {
+				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+					return;
+				}
+				$sentinel = Util::transient_key( 'wppo_esi_refresh_burst_logged' );
+				if ( false !== get_transient( $sentinel ) ) {
+					return;
+				}
+				$hour = defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600;
+				set_transient( $sentinel, 1, $hour );
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && is_callable( array( 'PerformanceOptimise\Inc\Log', 'add' ) ) ) {
+					Log::add( 'ESI nonce-refresh minting throttled (possible burst)' );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Emit the private pair, fail-closed when the emitter is unavailable.
 		 *
 		 * The ESI bridge can run on admin-ajax/early hooks where the emitter
@@ -1199,6 +1232,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				}
 				$refresh_limit = self::has_nonce_receipt_proof( $nonce ) ? 10 : 3;
 				if ( self::is_fragment_throttled( $block, $refresh_limit, 60 ) ) {
+					// Audit #1490: the refresh block is an unauthenticated
+					// nonce-minting oracle by design (stale-cache recovery), so
+					// log throttled bursts for operator visibility. The sentinel
+					// transient bounds this to one log row per hour even under
+					// a sustained minting flood.
+					self::log_refresh_mint_burst();
 					self::emit_private_fail_closed();
 					if ( function_exists( 'wp_send_json_error' ) ) {
 						wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
