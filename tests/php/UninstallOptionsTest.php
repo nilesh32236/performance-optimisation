@@ -114,6 +114,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_ai_css_refresh_snapshots',
 		// Issue #1347 regeneration-callback HMAC secret (Util::CALLBACK_SECRET_OPTION).
 		'wppo_callback_secret',
+		// Upgrade auto-purge last-purge timestamp (Builder_Purge_Watcher::LAST_PURGE_OPTION).
+		'wppo_last_purge',
 	);
 
 	/**

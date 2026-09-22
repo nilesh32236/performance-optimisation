@@ -3218,8 +3218,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Regenerate used-CSS for all pages or a single post.
 		 *
+		 * Single-post safe-rollout flags (issue #1348): `dry_run`,
+		 * `promote`, `rollback`, `health`.
+		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.9.0
+		 * @since NEXT Single-post safe-rollout flags.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function used_css_regenerate( \WP_REST_Request $request ): \WP_REST_Response {
@@ -3237,6 +3241,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid post ID.', 'performance-optimisation' ) );
 			}
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
+
+			// Safe-rollout scope guard (issue #1348 review): flags without
+			// a single-post scope must 400 here — falling through would
+			// bulk regenerate_all() and mass-queue on a typo.
+			if ( 0 === $post_id && ( ! empty( $params['dry_run'] ) || ! empty( $params['promote'] ) || ! empty( $params['rollback'] ) || ! empty( $params['health'] ) ) ) {
+				return $this->send_response( null, false, 400, __( 'Rollout actions require a post ID.', 'performance-optimisation' ) );
+			}
 
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 				return $this->send_response( null, false, 500, __( 'Action Scheduler is not available.', 'performance-optimisation' ) );
@@ -3268,6 +3279,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
+				}
+				// Safe rollout (issue #1348): dry-run preview, staged
+				// promote, last-good rollback, and the post-apply health
+				// gate for a single post. Flag-driven; absent flags fall
+				// through to the queue behaviour below unchanged.
+				$rollout_action = '';
+				foreach ( array( 'dry_run', 'promote', 'rollback', 'health' ) as $candidate_action ) {
+					if ( ! empty( $params[ $candidate_action ] ) ) {
+						$rollout_action = $candidate_action;
+						break;
+					}
+				}
+				if ( '' !== $rollout_action ) {
+					return $this->handle_used_css_rollout_action( $rollout_action, $post_id );
 				}
 				// Normalized to int before signing (issue #1347 review): the
 				// verifier casts the same way, so scheduler int/string
@@ -3348,6 +3373,191 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$queued
 				)
 			);
+		}
+
+		/**
+		 * Handle a used-CSS safe-rollout action for a single post (issue #1348).
+		 *
+		 * Flag-driven sub-actions of `used_css_regenerate`: `dry_run`
+		 * stages a preview without going live, `promote` swaps the staged
+		 * sibling over the live file, `rollback` restores the retained
+		 * last-good fallback, and `health` runs the post-apply health gate
+		 * (auto-restore + reason logging). All state reports return 200
+		 * with explicit flags; only generation/validation failures are
+		 * errors. Never throws.
+		 *
+		 * @param string $action  One of dry_run|promote|rollback|health.
+		 * @param int    $post_id Validated post ID.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		private function handle_used_css_rollout_action( string $action, int $post_id ): \WP_REST_Response {
+			try {
+				$permalink = function_exists( 'get_permalink' ) ? get_permalink( $post_id ) : false;
+				if ( ! is_string( $permalink ) || '' === $permalink ) {
+					return $this->send_response( null, false, 404, __( 'Invalid post ID.', 'performance-optimisation' ) );
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+					return $this->send_response( null, false, 500, __( 'Used CSS is not available.', 'performance-optimisation' ) );
+				}
+				$used_css = new Used_CSS();
+				if ( 'dry_run' === $action ) {
+					$preview         = $used_css->generate_preview_for_post( $post_id );
+					$preview['mode'] = 'preview';
+					if ( empty( $preview['staged'] ) ) {
+						return $this->send_response(
+							$preview,
+							false,
+							500,
+							sprintf(
+								/* translators: %s: machine-readable failure reason. */
+								__( 'Used-CSS preview failed (%s). Live output untouched.', 'performance-optimisation' ),
+								isset( $preview['reason'] ) && is_string( $preview['reason'] ) ? $preview['reason'] : 'error'
+							)
+						);
+					}
+					return $this->send_response(
+						$preview,
+						true,
+						200,
+						! empty( $preview['changed'] )
+							? __( 'Preview staged: output differs from live. Promote to apply.', 'performance-optimisation' )
+							: __( 'Preview staged: output matches live.', 'performance-optimisation' )
+					);
+				}
+				if ( 'promote' === $action ) {
+					$promoted           = $used_css->promote_staged_used_css( $permalink );
+					$status             = $used_css->get_used_css_rollout_status( $permalink );
+					$status['mode']     = 'promote';
+					$status['promoted'] = $promoted;
+					$status['post_id']  = (int) $post_id;
+					if ( ! $promoted ) {
+						return $this->send_response( $status, false, 400, __( 'Nothing staged to promote: run a dry-run preview first.', 'performance-optimisation' ) );
+					}
+					return $this->send_response( $status, true, 200, __( 'Staged used-CSS promoted.', 'performance-optimisation' ) );
+				}
+				if ( 'rollback' === $action ) {
+					$restored           = $used_css->rollback_used_css_to_fallback( $permalink, 'manual' );
+					$status             = $used_css->get_used_css_rollout_status( $permalink );
+					$status['mode']     = 'rollback';
+					$status['restored'] = $restored;
+					$status['post_id']  = (int) $post_id;
+					return $this->send_response(
+						$status,
+						true,
+						200,
+						$restored
+							? __( 'Last-good used-CSS restored.', 'performance-optimisation' )
+							: __( 'No last-good fallback available: live output unchanged.', 'performance-optimisation' )
+					);
+				}
+				$health            = $used_css->verify_used_css_health( $permalink );
+				$health['mode']    = 'health';
+				$health['post_id'] = (int) $post_id;
+				if ( 'healthy' === $health['status'] ) {
+					return $this->send_response( $health, true, 200, __( 'Used CSS is healthy: live file serves.', 'performance-optimisation' ) );
+				}
+				if ( 'restored' === $health['status'] ) {
+					return $this->send_response( $health, true, 200, __( 'Used CSS was broken and has been restored from last-good.', 'performance-optimisation' ) );
+				}
+				return $this->send_response( $health, false, 500, __( 'Used CSS is degraded with no fallback available.', 'performance-optimisation' ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $this->send_response( null, false, 500, __( 'Rollout action failed.', 'performance-optimisation' ) );
+			}
+		}
+
+		/**
+		 * Handle a critical-CSS safe-rollout action for a template (issue #1348).
+		 *
+		 * Flag-driven sub-actions of `regenerate_ccss` mirroring
+		 * {@see handle_used_css_rollout_action()}: `dry_run` generates
+		 * into the staged sibling, `promote` swaps it live (variant
+		 * mirrors refreshed), `rollback` restores last-good, and `health`
+		 * runs the restoring gate. Never throws.
+		 *
+		 * @param string     $action        One of dry_run|promote|rollback|health.
+		 * @param string     $template      Validated template slug or hash.
+		 * @param array|null $templates_map Optional template map (avoids a second theme scan).
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		private function handle_ccss_rollout_action( string $action, string $template, $templates_map ): \WP_REST_Response {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+					return $this->send_response( null, false, 500, __( 'Critical CSS is not available.', 'performance-optimisation' ) );
+				}
+				$slug = method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'resolve_template_slug' )
+					? Critical_CSS::resolve_template_slug( $template, is_array( $templates_map ) ? $templates_map : null )
+					: '';
+				if ( '' === $slug ) {
+					return $this->send_response( null, false, 404, __( 'Unknown template: nothing queued.', 'performance-optimisation' ) );
+				}
+				$hash = Critical_CSS::get_template_hash( $slug );
+				if ( 'dry_run' === $action ) {
+					$preview         = Critical_CSS::generate_preview_for_template( $slug );
+					$preview['mode'] = 'preview';
+					if ( empty( $preview['staged'] ) ) {
+						return $this->send_response(
+							$preview,
+							false,
+							500,
+							sprintf(
+								/* translators: %s: machine-readable failure reason. */
+								__( 'Critical-CSS preview failed (%s). Live output untouched.', 'performance-optimisation' ),
+								isset( $preview['reason'] ) && is_string( $preview['reason'] ) ? $preview['reason'] : 'error'
+							)
+						);
+					}
+					return $this->send_response(
+						$preview,
+						true,
+						200,
+						! empty( $preview['changed'] )
+							? __( 'Preview staged: output differs from live. Promote to apply.', 'performance-optimisation' )
+							: __( 'Preview staged: output matches live.', 'performance-optimisation' )
+					);
+				}
+				if ( 'promote' === $action ) {
+					$promoted           = Critical_CSS::promote_staged_ccss( $hash );
+					$status             = Critical_CSS::get_ccss_rollout_status( $hash );
+					$status['mode']     = 'promote';
+					$status['promoted'] = $promoted;
+					$status['template'] = $slug;
+					if ( ! $promoted ) {
+						return $this->send_response( $status, false, 400, __( 'Nothing staged to promote: run a dry-run preview first.', 'performance-optimisation' ) );
+					}
+					return $this->send_response( $status, true, 200, __( 'Staged critical-CSS promoted.', 'performance-optimisation' ) );
+				}
+				if ( 'rollback' === $action ) {
+					$restored           = Critical_CSS::rollback_ccss_to_fallback( $hash, 'manual' );
+					$status             = Critical_CSS::get_ccss_rollout_status( $hash );
+					$status['mode']     = 'rollback';
+					$status['restored'] = $restored;
+					$status['template'] = $slug;
+					return $this->send_response(
+						$status,
+						true,
+						200,
+						$restored
+							? __( 'Last-good critical-CSS restored.', 'performance-optimisation' )
+							: __( 'No last-good fallback available: live output unchanged.', 'performance-optimisation' )
+					);
+				}
+				$health             = Critical_CSS::verify_ccss_health( $hash );
+				$health['mode']     = 'health';
+				$health['template'] = $slug;
+				if ( 'healthy' === $health['status'] ) {
+					return $this->send_response( $health, true, 200, __( 'Critical CSS is healthy: live file serves.', 'performance-optimisation' ) );
+				}
+				if ( 'restored' === $health['status'] ) {
+					return $this->send_response( $health, true, 200, __( 'Critical CSS was broken and has been restored from last-good.', 'performance-optimisation' ) );
+				}
+				return $this->send_response( $health, false, 500, __( 'Critical CSS is degraded with no fallback available.', 'performance-optimisation' ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $this->send_response( null, false, 500, __( 'Rollout action failed.', 'performance-optimisation' ) );
+			}
 		}
 
 		/**
@@ -3572,8 +3782,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Regenerate critical CSS for all templates.
 		 *
+		 * Single-template safe-rollout flags (issue #1348): `dry_run`,
+		 * `promote`, `rollback`, `health` (with `template`).
+		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @since 2.0.0
+		 * @since NEXT Single-template safe-rollout flags.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -3588,6 +3802,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// allowlist lookup in regenerate_single().
 			try {
 				$params = $_request->get_params();
+				// Safe-rollout scope guard (issue #1348 review): flags
+				// without a template key must 400 here — falling through
+				// would bulk regenerate_all() on a typo.
+				if ( ! array_key_exists( 'template', $params ) && ( ! empty( $params['dry_run'] ) || ! empty( $params['promote'] ) || ! empty( $params['rollback'] ) || ! empty( $params['health'] ) ) ) {
+					return $this->send_response( null, false, 400, __( 'Rollout actions require a template.', 'performance-optimisation' ) );
+				}
 				if ( array_key_exists( 'template', $params ) ) {
 					// An explicit but empty/non-string template key must
 					// not fall through to bulk regen (issue #1274 review):
@@ -3653,6 +3873,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							200,
 							__( 'Critical CSS generation is suspended while deferred or delayed JavaScript is enabled.', 'performance-optimisation' )
 						);
+					}
+					// Safe rollout (issue #1348): dry-run preview, staged
+					// promote, last-good rollback, and the post-apply
+					// health gate for a single template. Flag-driven;
+					// absent flags fall through to the queue below.
+					$rollout_action = '';
+					foreach ( array( 'dry_run', 'promote', 'rollback', 'health' ) as $candidate_action ) {
+						if ( ! empty( $params[ $candidate_action ] ) ) {
+							$rollout_action = $candidate_action;
+							break;
+						}
+					}
+					if ( '' !== $rollout_action ) {
+						return $this->handle_ccss_rollout_action( $rollout_action, $template, $templates_map );
 					}
 					$queued = Critical_CSS::regenerate_single( $template, $templates_map );
 					if ( -1 === $queued ) {
@@ -3740,11 +3974,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * remaining, and the active delivery mode for the admin staleness
 		 * warning. Fail-open to safe defaults on any failure.
 		 *
-		 * @param \WP_REST_Request $_request The request object (unused).
+		 * An optional `post_id` attaches the read-only safe-rollout slot
+		 * description (issue #1348) under the `rollout` key.
+		 *
+		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
+		 * @since NEXT Optional post_id rollout detail.
 		 */
-		public function get_used_css_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		public function get_used_css_status( \WP_REST_Request $request ): \WP_REST_Response {
 			$status = class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_staleness_info' )
 				? Used_CSS::get_staleness_info()
 				: array(
@@ -3754,6 +3992,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'cooldown_remaining' => 0,
 					'delivery_mode'      => 'file',
 				);
+			// Safe-rollout detail (issue #1348): an optional post_id
+			// attaches the read-only slot description (live/staged
+			// presence, checksums, fallback, health state) for the
+			// rollout UI. Read-only: never restores — the restoring
+			// gate is verify_used_css_health() via the health flag.
+			$status['rollout'] = null;
+			try {
+				$params = $request->get_params();
+				if ( isset( $params['post_id'] ) && is_numeric( $params['post_id'] ) && (int) $params['post_id'] > 0 && function_exists( 'get_permalink' ) && class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+					$permalink = get_permalink( (int) $params['post_id'] );
+					if ( is_string( $permalink ) && '' !== $permalink ) {
+						$used_css          = new Used_CSS();
+						$slot              = $used_css->get_used_css_rollout_status( $permalink );
+						$slot['health']    = (int) $slot['live_bytes'] > 0 ? 'healthy' : ( (bool) $slot['fallback'] ? 'restorable' : 'degraded' );
+						$slot['post_id']   = (int) $params['post_id'];
+						$status['rollout'] = $slot;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$status['rollout'] = null;
+			}
 
 			return $this->send_response( $status );
 		}

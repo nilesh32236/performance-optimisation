@@ -321,6 +321,21 @@ add_filter( 'wppo_used_css_safelist', function( $safelist ) {
 
 ---
 
+### `wppo_css_preview_fetch_timeout`
+Filters the dry-run preview fetch timeout in seconds (issue #1348). Bounds the permalink fetch inside `Used_CSS::generate_preview_for_post()` — shorter than the 15s background-job fetch since an operator is waiting on the preview response. Clamped to 1–60s; failures return `staged => false` with a reason. @since NEXT.
+
+**Parameters:**
+- `$timeout` *(int)* — Fetch timeout in seconds. Default 10.
+
+**Example:**
+```php
+add_filter( 'wppo_css_preview_fetch_timeout', function() {
+    return 20;
+} );
+```
+
+---
+
 ### `wppo_used_css_regen_cooldown`
 Filters the used-CSS full-regeneration cooldown in seconds (issue #1107). Bounds how often `Used_CSS::regenerate_all()` may queue site-wide work when not forced (default 5 hours, matching the `wppo_used_css_cron` schedule). Explicit operator paths (builder purge after a wipe, manual REST/ability triggers) pass `$force` and bypass the cooldown; per-post freshness still applies. @since NEXT.
 

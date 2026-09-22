@@ -895,9 +895,18 @@ const FileOptimization = ( {
 	// read-only used_css_status endpoint, shown as a warning banner while
 	// removeUnusedCSS is on. Fail-open: a failed fetch simply hides the banner.
 	const [ usedCssStatus, setUsedCssStatus ] = useState( null );
-	const refreshUsedCssStatus = useCallback( async () => {
+	const refreshUsedCssStatus = useCallback( async ( postIdOverride ) => {
 		try {
-			const res = await apiCall( 'used_css_status', {}, 'GET' );
+			// Safe-rollout detail (issue #1348): a post ID attaches the
+			// read-only slot description (staged/health) for the rollout
+			// row. Omit it otherwise so the call stays identical to the
+			// staleness-only fetch.
+			const parsed = parseInt( postIdOverride, 10 );
+			const params =
+				Number.isFinite( parsed ) && parsed > 0
+					? { post_id: parsed }
+					: {};
+			const res = await apiCall( 'used_css_status', params, 'GET' );
 			if ( res && res.success && res.data ) {
 				setUsedCssStatus( res.data );
 			}
@@ -919,6 +928,54 @@ const FileOptimization = ( {
 		// (issue #1220). Fail-open: a failed fetch leaves the banner hidden.
 		refreshUsedCssStatus();
 	}, [ options.removeUnusedCSS, refreshUsedCssStatus ] );
+	// Safe-rollout row state (issue #1348): the slot description attached
+	// by refreshUsedCssStatus( postId ) — staged preview presence plus the
+	// read-only health state. Null until a single-post lookup runs.
+	const usedCssRollout =
+		usedCssStatus && usedCssStatus.rollout ? usedCssStatus.rollout : null;
+	// Human-readable rollout line without nested ternaries: staged state
+	// first, then the non-healthy reason. Null when nothing is actionable.
+	let usedCssRolloutMessage = null;
+	if ( usedCssRollout ) {
+		const rolloutParts = [];
+		if ( usedCssRollout.staged ) {
+			if ( usedCssRollout.staged_changed ) {
+				rolloutParts.push(
+					__(
+						'Staged preview differs from live — promote to apply.',
+						'performance-optimisation'
+					)
+				);
+			} else {
+				rolloutParts.push(
+					__(
+						'Staged preview matches live.',
+						'performance-optimisation'
+					)
+				);
+			}
+		}
+		if ( usedCssRollout.health && 'healthy' !== usedCssRollout.health ) {
+			if ( 'restorable' === usedCssRollout.health ) {
+				rolloutParts.push(
+					__(
+						'Live output is broken but restorable from last-good.',
+						'performance-optimisation'
+					)
+				);
+			} else {
+				rolloutParts.push(
+					__(
+						'Live output is degraded with no fallback.',
+						'performance-optimisation'
+					)
+				);
+			}
+		}
+		if ( rolloutParts.length > 0 ) {
+			usedCssRolloutMessage = rolloutParts.join( ' ' );
+		}
+	}
 	// Upgrade auto-purge status (issue #1276): SPA-visible last-purge
 	// reason + safe-mode preview link bypassing minify (?wppo_nocache=1).
 	// Seeded from wppoSettings.upgradePurge, refreshed from the read-only
@@ -2404,6 +2461,199 @@ const FileOptimization = ( {
 		[]
 	);
 
+	/**
+	 * Run one safe-rollout sub-action for the single-post input.
+	 *
+	 * Shared worker behind the Preview/Promote/Restore buttons (issue
+	 * #1348): validates the post ID, calls used_css_regenerate with the
+	 * rollout flag, notifies via the single feedback owner, and refreshes
+	 * the rollout row (passing the acted post ID so the status carries
+	 * the slot description).
+	 *
+	 * @since NEXT
+	 * @param {Object} flagParams  Rollout flag, e.g. { dry_run: 1 }.
+	 * @param {string} successText Fallback success message.
+	 * @param {string} failureText Fallback failure message.
+	 */
+	const runSingleUsedCssRolloutAction = async (
+		flagParams,
+		successText,
+		failureText
+	) => {
+		const postId = parseInt( singlePostId, 10 );
+		if ( ! Number.isFinite( postId ) || postId <= 0 ) {
+			notify( {
+				type: 'error',
+				message: __(
+					'Enter a valid post ID to regenerate.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+			return;
+		}
+		setIsRegenerating( true );
+		dismiss();
+		try {
+			const res = await apiCall( 'used_css_regenerate', {
+				post_id: postId,
+				...flagParams,
+			} );
+			notify( {
+				type: res.success ? 'success' : 'error',
+				message:
+					res.message || ( res.success ? successText : failureText ),
+				durationMs: 3000,
+			} );
+			if ( res.success ) {
+				refreshUsedCssStatus( postId );
+			}
+		} catch ( err ) {
+			console.error(
+				'Failed to run used-CSS rollout action.',
+				getErrorLogMessage( err )
+			);
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsRegenerating( false );
+		}
+	};
+
+	const handlePreviewUsedCss = () =>
+		runSingleUsedCssRolloutAction(
+			{ dry_run: 1 },
+			__( 'Preview staged.', 'performance-optimisation' ),
+			__(
+				'Failed to stage used-CSS preview.',
+				'performance-optimisation'
+			)
+		);
+
+	const handlePromoteUsedCss = () =>
+		runSingleUsedCssRolloutAction(
+			{ promote: 1 },
+			__( 'Staged used-CSS promoted.', 'performance-optimisation' ),
+			__(
+				'Failed to promote staged used CSS.',
+				'performance-optimisation'
+			)
+		);
+
+	const handleRollbackUsedCss = () =>
+		runSingleUsedCssRolloutAction(
+			{ rollback: 1 },
+			__( 'Last-good used-CSS restored.', 'performance-optimisation' ),
+			__( 'Failed to restore used CSS.', 'performance-optimisation' )
+		);
+
+	/**
+	 * Run one safe-rollout sub-action for a critical-CSS template.
+	 *
+	 * Mirrors runSingleUsedCssRolloutAction against regenerate_ccss (the
+	 * template slug or hash resolves server-side), then refreshes the
+	 * template status list so staged/health badges update.
+	 *
+	 * @since NEXT
+	 * @param {string} hash        Template slug or hash.
+	 * @param {Object} flagParams  Rollout flag, e.g. { dry_run: 1 }.
+	 * @param {string} successText Fallback success message.
+	 * @param {string} failureText Fallback failure message.
+	 */
+	const runCcssRolloutAction = async (
+		hash,
+		flagParams,
+		successText,
+		failureText
+	) => {
+		const raw = String( hash ?? '' )
+			.trim()
+			.slice( 0, 200 );
+		if ( '' === raw || /[\u0000-\u001F\u007F]/.test( raw ) ) {
+			notify( {
+				type: 'error',
+				message: __(
+					'Enter a template to regenerate.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+			return;
+		}
+		setIsRegenerating( true );
+		dismiss();
+		try {
+			const res = await apiCall( 'regenerate_ccss', {
+				template: raw,
+				...flagParams,
+			} );
+			notify( {
+				type: res?.success ? 'success' : 'error',
+				message:
+					res?.message ||
+					( res?.success ? successText : failureText ),
+				durationMs: 3000,
+			} );
+			if ( res?.success && onCcssRefresh ) {
+				onCcssRefresh();
+			}
+		} catch ( err ) {
+			console.error(
+				'Failed to run critical-CSS rollout action.',
+				getErrorLogMessage( err )
+			);
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsRegenerating( false );
+		}
+	};
+
+	const handlePreviewCcss = ( hash ) =>
+		runCcssRolloutAction(
+			hash,
+			{ dry_run: 1 },
+			__( 'Preview staged.', 'performance-optimisation' ),
+			__(
+				'Failed to stage critical-CSS preview.',
+				'performance-optimisation'
+			)
+		);
+
+	const handlePromoteCcss = ( hash ) =>
+		runCcssRolloutAction(
+			hash,
+			{ promote: 1 },
+			__( 'Staged critical-CSS promoted.', 'performance-optimisation' ),
+			__(
+				'Failed to promote staged critical CSS.',
+				'performance-optimisation'
+			)
+		);
+
+	const handleRollbackCcss = ( hash ) =>
+		runCcssRolloutAction(
+			hash,
+			{ rollback: 1 },
+			__(
+				'Last-good critical-CSS restored.',
+				'performance-optimisation'
+			),
+			__( 'Failed to restore critical CSS.', 'performance-optimisation' )
+		);
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
@@ -3132,6 +3382,67 @@ const FileOptimization = ( {
 													) }
 												</button>
 											</div>
+											{ usedCssRolloutMessage && (
+												<p
+													className="wppo-text-muted wppo-mt-8 wppo-text-small"
+													aria-live="polite"
+												>
+													{ usedCssRolloutMessage }
+												</p>
+											) }
+											<div className="wppo-inline-row wppo-mt-8">
+												<button
+													className="wppo-button wppo-button--secondary wppo-button--small"
+													type="button"
+													disabled={ isRegenerating }
+													onClick={
+														handlePreviewUsedCss
+													}
+												>
+													{ __(
+														'Preview',
+														'performance-optimisation'
+													) }
+												</button>
+												<button
+													className="wppo-button wppo-button--secondary wppo-button--small"
+													type="button"
+													disabled={
+														isRegenerating ||
+														! (
+															usedCssRollout &&
+															usedCssRollout.staged
+														)
+													}
+													onClick={
+														handlePromoteUsedCss
+													}
+												>
+													{ __(
+														'Promote staged',
+														'performance-optimisation'
+													) }
+												</button>
+												<button
+													className="wppo-button wppo-button--secondary wppo-button--small"
+													type="button"
+													disabled={
+														isRegenerating ||
+														! (
+															usedCssRollout &&
+															usedCssRollout.fallback
+														)
+													}
+													onClick={
+														handleRollbackUsedCss
+													}
+												>
+													{ __(
+														'Restore last-good',
+														'performance-optimisation'
+													) }
+												</button>
+											</div>
 											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
 												{ __(
 													'Builder-template post types are skipped automatically.',
@@ -3406,6 +3717,15 @@ const FileOptimization = ( {
 											onRegenerate={ handleRegenerateCss }
 											onRegenerateSingle={
 												handleRegenerateSingleCcss
+											}
+											onPreviewTemplate={
+												handlePreviewCcss
+											}
+											onPromoteTemplate={
+												handlePromoteCcss
+											}
+											onRollbackTemplate={
+												handleRollbackCcss
 											}
 										/>
 									</>

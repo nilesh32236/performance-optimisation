@@ -275,7 +275,36 @@ describe( 'normalizeCcssEntry', () => {
 			label: 'Single',
 			size: 1234,
 			truncated: true,
+			rollout: null,
 		} );
+	} );
+
+	it( 'normalizes rollout slots and rejects non-objects', () => {
+		const normalized = normalizeCcssEntry( 'abcdef1234567890', {
+			status: 'done',
+			label: 'Single',
+			size: 100,
+			rollout: {
+				staged: true,
+				staged_changed: 1,
+				staged_bytes: 200,
+				health: 'healthy',
+				fallback: 0,
+			},
+		} );
+		expect( normalized.rollout ).toEqual( {
+			staged: true,
+			stagedChanged: true,
+			stagedBytes: 200,
+			health: 'healthy',
+			fallback: false,
+		} );
+		expect(
+			normalizeCcssEntry( 'abcdef1234567890', {
+				status: 'done',
+				rollout: 'staged',
+			} ).rollout
+		).toBeNull();
 	} );
 
 	it( 'nulls non-finite sizes and coerces truncated', () => {
@@ -328,5 +357,107 @@ describe( 'statusConfigFor', () => {
 		expect(
 			screen.getByRole( 'button', { name: 'Regenerate Home' } )
 		).toBeInTheDocument();
+	} );
+
+	it( 'renders staged and health badges from the rollout slot', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: {
+						status: 'done',
+						label: 'Home',
+						size: 100,
+						rollout: {
+							staged: true,
+							staged_changed: true,
+							staged_bytes: 200,
+							health: 'restorable',
+							fallback: true,
+						},
+					},
+				} }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.getByText( 'Staged preview — differs from live' )
+		).toBeInTheDocument();
+		expect(
+			screen.getByText( 'Restorable from last-good' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'renders rollout action buttons only when handlers are provided', () => {
+		const status = {
+			abcdef1234567890: {
+				status: 'done',
+				label: 'Home',
+				rollout: {
+					staged: true,
+					staged_changed: false,
+					health: 'healthy',
+					fallback: true,
+				},
+			},
+		};
+		const { rerender } = render(
+			<CriticalCssPanel status={ status } onRegenerate={ jest.fn() } />
+		);
+		expect(
+			screen.queryByRole( 'button', { name: 'Preview Home' } )
+		).not.toBeInTheDocument();
+
+		const onPreviewTemplate = jest.fn();
+		const onPromoteTemplate = jest.fn();
+		const onRollbackTemplate = jest.fn();
+		rerender(
+			<CriticalCssPanel
+				status={ status }
+				onRegenerate={ jest.fn() }
+				onPreviewTemplate={ onPreviewTemplate }
+				onPromoteTemplate={ onPromoteTemplate }
+				onRollbackTemplate={ onRollbackTemplate }
+			/>
+		);
+		screen.getByRole( 'button', { name: 'Preview Home' } ).click();
+		expect( onPreviewTemplate ).toHaveBeenCalledWith( 'abcdef1234567890' );
+		screen.getByRole( 'button', { name: 'Promote staged Home' } ).click();
+		expect( onPromoteTemplate ).toHaveBeenCalledWith( 'abcdef1234567890' );
+		screen
+			.getByRole( 'button', { name: 'Restore last-good Home' } )
+			.click();
+		expect( onRollbackTemplate ).toHaveBeenCalledWith( 'abcdef1234567890' );
+	} );
+
+	it( 'hides promote without a stage and rollback without a fallback', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: {
+						status: 'done',
+						label: 'Home',
+						rollout: {
+							staged: false,
+							health: 'healthy',
+							fallback: false,
+						},
+					},
+				} }
+				onRegenerate={ jest.fn() }
+				onPreviewTemplate={ jest.fn() }
+				onPromoteTemplate={ jest.fn() }
+				onRollbackTemplate={ jest.fn() }
+			/>
+		);
+		expect(
+			screen.getByRole( 'button', { name: 'Preview Home' } )
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole( 'button', { name: 'Promote staged Home' } )
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole( 'button', { name: 'Restore last-good Home' } )
+		).not.toBeInTheDocument();
 	} );
 } );
