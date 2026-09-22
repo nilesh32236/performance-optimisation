@@ -83,7 +83,9 @@ items:
     title: 'Extract Url boundary from Util (cached_home_url/content_url, normalize, same-site)'
     type: architecture
     priority: medium
-    status: queued
+    status: autofix-running
+    github_issue: 1504
+    github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-02 (.jules/bolt.md cache lessons)
     notes:
       - 'Keep has_filter guards + blog-ID keying; hot-path memo behavior unchanged.'
@@ -152,6 +154,33 @@ items:
     order_note: 'Processed right after REF-003 (direct continuation of its split) ahead of REF-004.'
     notes:
       - 'Split out of REF-003 during planning. Covers get_staged_path_for/promote/restore_fallback/describe_rollout_slot + purge-fallback path/payload/log helpers + $purge_fallback_memo state. Ships after Filesystem merges.'
+
+  - id: REF-013
+    title: 'Extract Woo_Detect boundary from Util (is_woo_* + excluded paths + self-test)'
+    type: architecture
+    priority: medium
+    status: queued
+    source: BOUNDARIES.md Woo_Detect
+    notes:
+      - 'Discovered during campaign: Woo detection cluster never queued. Keepwoo-safe-mode semantics byte-identical; WooSafeModeTest pins behavior.'
+
+  - id: REF-014
+    title: 'Extract Scheduler boundary from Util (Action-Scheduler unique helpers + stampede locks)'
+    type: architecture
+    priority: medium
+    status: queued
+    source: BOUNDARIES.md Scheduler
+    notes:
+      - 'Covers enqueue_unique_async_action/schedule_unique_single_action/probes + acquire/release_stampede_lock (key helpers already in Cache_Key). Lock semantics must stay advisory-identical.'
+
+  - id: REF-015
+    title: 'Extract Http boundary from Util (curl/finfo/xml/gd teardown + last-response headers)'
+    type: architecture
+    priority: low
+    status: queued
+    source: BOUNDARIES.md Http
+    notes:
+      - 'Mechanical move of close_*/destroy_*/free_* helpers + get_last_response_headers. Low risk; keeps PHP 8.5-compat scanner green.'
 
   - id: REF-011
     title: 'Move ALLOWED_SETTINGS_KEYS + sanitizer-map ownership into Settings_Store'
