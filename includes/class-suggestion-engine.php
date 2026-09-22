@@ -60,6 +60,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		 * Delegates to AI_Adaptive::get_suggestions() when the feature is
 		 * enabled (guard: never auto-applies — caller must render Apply UX).
 		 * Returns an empty list when the AI feature is disabled or unavailable.
+		 * Breach (`ai_lcp_regression` / `ai_cls_regression`) and v2
+		 * recovery (`ai_lcp_recovered` / `ai_cls_recovered`, issue #1313)
+		 * notices pass through the same validation; deploy-note
+		 * annotations ride inside `ai_payload.anomaly.deploy_note`.
 		 *
 		 * GET-with-side-effect (issue #1407, intentional): served by the
 		 * `ai_suggestions` GET endpoint, so rendering may enqueue at most
