@@ -644,21 +644,167 @@ class FilesystemBoundaryTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * REF-012 slot helpers stay in Util (explicit non-goal of REF-003).
+	 * REF-012 owns the rollout/purge-fallback slot helpers in Filesystem.
+	 *
+	 * All 11 slot helpers plus the gate-memo clearer live in Filesystem now;
+	 * Util keeps one-line facade proxies so existing callers work untouched.
 	 */
-	public function test_rollout_slot_helpers_stay_in_util(): void {
-		foreach ( array( 'get_staged_path_for', 'promote_staged_file', 'is_purge_fallback_enabled', 'describe_rollout_slot', 'css_file_valid' ) as $method ) {
-			$this->assertTrue( method_exists( Util::class, $method ), "Util must keep {$method} (REF-012)." );
-			$this->assertFalse( method_exists( Filesystem::class, $method ), "Filesystem must not own {$method} (REF-012)." );
+	public function test_rollout_slot_helpers_owned_by_filesystem(): void {
+		foreach ( array(
+			'is_purge_fallback_enabled',
+			'get_purge_fallback_path_for',
+			'retain_purge_fallback_file',
+			'is_purge_fallback_payload_valid',
+			'get_staged_path_for',
+			'promote_staged_file',
+			'restore_fallback_file',
+			'describe_rollout_slot',
+			'purge_fallback_should_log',
+			'css_file_valid',
+			'log_css_fallback',
+		) as $method ) {
+			$this->assertTrue( method_exists( Filesystem::class, $method ), "Filesystem must own {$method} (REF-012)." );
+			$this->assertTrue( method_exists( Util::class, $method ), "Util must keep the {$method} proxy (REF-012)." );
 		}
+		$this->assertTrue( method_exists( Filesystem::class, 'clear_purge_fallback_memo' ), 'Filesystem must own the gate-memo clearer (REF-012).' );
 	}
 
 	/**
-	 * Guardrail: Util must not exceed 170 methods after the extraction.
+	 * Facade proxies: Util slot proxies === Filesystem owners.
+	 *
+	 * Path/payload vectors (staged/fallback mapping, traversal, loop-guard,
+	 * compressed-sibling and variant cases) plus behavioural equivalence for
+	 * the gate, payload validity, retain/promote/restore round-trips, the
+	 * slot description, and the CSS file validator.
+	 */
+	public function test_rollout_slot_proxies_match_boundary(): void {
+		$this->stub_url_helpers();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) {
+				if ( 'wppo_settings' === $name ) {
+					return array( 'file_optimisation' => array( 'purgeFallbackEnabled' => true ) );
+				}
+				return $fallback;
+			}
+		);
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Util::clear_settings_cache();
+
+		// Pure path math: staged mapping.
+		foreach ( array(
+			'/c/used-css.css'        => '/c/used-css.staged.css',
+			'/c/used-css.mobile.css' => '/c/used-css.mobile.staged.css',
+			'/c/abc123.css'          => '/c/abc123.staged.css',
+			'/c/app.js'              => '/c/app.staged.js',
+		) as $live => $staged ) {
+			$this->assertSame( $staged, Util::get_staged_path_for( $live ) );
+			$this->assertSame( Filesystem::get_staged_path_for( $live ), Util::get_staged_path_for( $live ) );
+		}
+		foreach ( array( '', '/c/fallback.css', '/c/used-css.staged.css', '/c/used-css.css.gz', '/c/page.html', '/c/../evil.css', 'used-css.css' ) as $refused ) {
+			$this->assertSame( '', Util::get_staged_path_for( $refused ) );
+			$this->assertSame( Filesystem::get_staged_path_for( $refused ), Util::get_staged_path_for( $refused ) );
+		}
+
+		// Pure path math: fallback mapping (variants, loop guard, .gz strip).
+		foreach ( array(
+			'/c/used-css.css'        => '/c/fallback.css',
+			'/c/used-css.mobile.css' => '/c/fallback.mobile.css',
+			'/c/app.js'              => '/c/fallback.js',
+			'/c/index.css.gz'        => '/c/fallback.css',
+		) as $live => $fallback ) {
+			$this->assertSame( $fallback, Util::get_purge_fallback_path_for( $live ) );
+			$this->assertSame( Filesystem::get_purge_fallback_path_for( $live ), Util::get_purge_fallback_path_for( $live ) );
+		}
+		foreach ( array( '', '/c/fallback.css', '/c/fallback.mobile.css', '/c/page.html', '/c/../evil.css' ) as $refused ) {
+			$this->assertSame( '', Util::get_purge_fallback_path_for( $refused ) );
+			$this->assertSame( Filesystem::get_purge_fallback_path_for( $refused ), Util::get_purge_fallback_path_for( $refused ) );
+		}
+
+		// Gate + log-gate equivalence (settings fixture enables the gate).
+		$this->assertTrue( Util::is_purge_fallback_enabled() );
+		$this->assertSame( Filesystem::is_purge_fallback_enabled(), Util::is_purge_fallback_enabled() );
+		$this->assertSame( Filesystem::purge_fallback_should_log(), Util::purge_fallback_should_log() );
+
+		// Stateful round-trips on fresh identical fixtures per side.
+		$make  = static function (): WPPO_Filesystem_Boundary_FS_Mock {
+			$fs                           = new WPPO_Filesystem_Boundary_FS_Mock();
+			$fs->store['/c/used-css.css'] = 'a{color:red}';
+
+			return $fs;
+		};
+		$allow = static function ( $path ): bool {
+			return '' !== $path;
+		};
+
+		// Retain: both copy live -> fallback.
+		$fs_a = $make();
+		$fs_b = $make();
+		Filesystem::retain_purge_fallback_file( $fs_a, $allow, '/c/used-css.css' );
+		Util::retain_purge_fallback_file( $fs_b, $allow, '/c/used-css.css' );
+		$this->assertSame( $fs_a->store, $fs_b->store );
+		$this->assertSame( 'a{color:red}', $fs_b->store['/c/fallback.css'] ?? null );
+
+		// Payload validity on both sides.
+		$this->assertTrue( Util::is_purge_fallback_payload_valid( $fs_b, '/c/fallback.css' ) );
+		$this->assertSame(
+			Filesystem::is_purge_fallback_payload_valid( $fs_a, '/c/fallback.css' ),
+			Util::is_purge_fallback_payload_valid( $fs_b, '/c/fallback.css' )
+		);
+		$this->assertFalse( Util::is_purge_fallback_payload_valid( $fs_b, '/c/nope.css' ) );
+
+		// Promote: seed staged on both, compare verdict + resulting store.
+		$fs_a->store['/c/used-css.staged.css'] = 'a{color:blue}';
+		$fs_b->store['/c/used-css.staged.css'] = 'a{color:blue}';
+		$this->assertSame(
+			Filesystem::promote_staged_file( $fs_a, $allow, '/c/used-css.css' ),
+			Util::promote_staged_file( $fs_b, $allow, '/c/used-css.css' )
+		);
+		$this->assertSame( $fs_a->store, $fs_b->store );
+		$this->assertSame( 'a{color:blue}', $fs_b->store['/c/used-css.css'] ?? null );
+
+		// Restore: both roll back to the retained fallback.
+		$this->assertSame(
+			Filesystem::restore_fallback_file( $fs_a, $allow, '/c/used-css.css' ),
+			Util::restore_fallback_file( $fs_b, $allow, '/c/used-css.css' )
+		);
+		$this->assertSame( $fs_a->store, $fs_b->store );
+		$this->assertSame( 'a{color:red}', $fs_b->store['/c/used-css.css'] ?? null );
+
+		// Slot description equivalence (live + empty-input vectors).
+		$this->assertSame(
+			Filesystem::describe_rollout_slot( $fs_a, '/c/used-css.css' ),
+			Util::describe_rollout_slot( $fs_b, '/c/used-css.css' )
+		);
+		$this->assertSame(
+			Filesystem::describe_rollout_slot( $fs_a, '' ),
+			Util::describe_rollout_slot( $fs_b, '' )
+		);
+
+		// CSS file validator: real temp file + refusal vectors.
+		$tmp = sys_get_temp_dir() . '/wppo-slot-valid-' . getmypid() . '.css';
+		file_put_contents( $tmp, 'a{}' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		try {
+			$this->assertTrue( Util::css_file_valid( $tmp ) );
+			$this->assertSame( Filesystem::css_file_valid( $tmp ), Util::css_file_valid( $tmp ) );
+		} finally {
+			unlink( $tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+		}
+		$this->assertFalse( Util::css_file_valid( '' ) );
+		$this->assertSame( Filesystem::css_file_valid( '' ), Util::css_file_valid( '' ) );
+		$missing = sys_get_temp_dir() . '/wppo-no-such-' . getmypid() . '.css';
+		$this->assertSame( Filesystem::css_file_valid( $missing ), Util::css_file_valid( $missing ) );
+	}
+
+	/**
+	 * Guardrail: Util must not exceed 166 methods after the extraction.
 	 */
 	public function test_util_method_count_guardrail(): void {
 		$count = count( ( new \ReflectionClass( Util::class ) )->getMethods() );
-		$this->assertLessThanOrEqual( 170, $count, "Util grew past 170 methods ({$count})." );
+		$this->assertLessThanOrEqual( 166, $count, "Util grew past 166 methods ({$count})." );
 	}
 }
 

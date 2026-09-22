@@ -86,7 +86,7 @@
     {
         "file": "includes/class-util.php",
         "class": null,
-        "lines": 7601,
+        "lines": 7136,
         "methods": 166,
         "hooks": [
             "switch_blog"
@@ -259,8 +259,8 @@
     {
         "file": "includes/class-filesystem.php",
         "class": null,
-        "lines": 1660,
-        "methods": 28,
+        "lines": 2409,
+        "methods": 40,
         "hooks": [],
         "static_state": false
     },

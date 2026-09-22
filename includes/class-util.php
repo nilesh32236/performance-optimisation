@@ -2093,21 +2093,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		private static array $canonical_host_cache = array();
 
 		/**
-		 * Per-request memo for the purge-fallback gate (issue #1275).
-		 *
-		 * The gate result is request-stable (settings + constant + filter);
-		 * memoizing avoids re-running get_settings + apply_filters on every
-		 * retain/serve call (3x+ per single-page clear). Cleared alongside
-		 * the settings cache so tests and option updates stay coherent.
-		 * Keyed by blog ID so switch_to_blog() cannot leak one site's
-		 * decision into another (multisite-safe).
-		 *
-		 * @var array<int, bool>
-		 * @since 2.2.0
-		 */
-		private static array $purge_fallback_memo = array();
-
-		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
 		 * Also clears the canonical-host, normalized-host, and same-site
@@ -2269,8 +2254,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * clear path is taken. switch_blog is handled by on_switch_blog().
 		 *
 		 * Facade proxy: memo storage lives in {@see \PerformanceOptimise\Inc\Settings_Store}.
-		 * The purge-fallback gate memo stays here (not settings state) and is
-		 * cleared alongside so tests and option updates stay coherent.
+		 * The purge-fallback gate memo lives in {@see \PerformanceOptimise\Inc\Filesystem}
+		 * (not settings state) and is cleared alongside so tests and option
+		 * updates stay coherent.
 		 *
 		 * @since 2.0.0
 		 * @param int|null $blog_id Optional blog ID to clear. Null clears all.
@@ -2278,11 +2264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function clear_settings_cache( $blog_id = null ): void {
 			Settings_Store::clear_settings_cache( $blog_id );
-			if ( null !== $blog_id && is_int( $blog_id ) ) {
-				unset( self::$purge_fallback_memo[ (int) $blog_id ] );
-			} else {
-				self::$purge_fallback_memo = array();
-			}
+			Filesystem::clear_purge_fallback_memo( $blog_id );
 		}
 
 		/**
@@ -6328,51 +6310,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * fallback on even when the setting is off (fail-open kill-switch).
 		 * Multisite-safe: reads the per-site `wppo_settings` option.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.2.0
 		 * @return bool True when purge-fallback retention/serving is active.
 		 */
 		public static function is_purge_fallback_enabled(): bool {
-			$bid = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-			if ( array_key_exists( $bid, self::$purge_fallback_memo ) ) {
-				return self::$purge_fallback_memo[ $bid ];
-			}
-			try {
-				if ( defined( 'WPPO_PURGE_FALLBACK' ) ) {
-					$flag = filter_var( WPPO_PURGE_FALLBACK, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					if ( true === $flag ) {
-						self::$purge_fallback_memo[ $bid ] = true;
-						return true;
-					}
-				}
-				$settings = self::get_settings();
-				$raw      = $settings['file_optimisation']['purgeFallbackEnabled'] ?? false;
-				$enabled  = filter_var( $raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-				$enabled  = true === $enabled;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				self::$purge_fallback_memo[ $bid ] = false;
-				return false;
-			}
-			if ( ! function_exists( 'apply_filters' ) ) {
-				self::$purge_fallback_memo[ $bid ] = $enabled;
-				return $enabled;
-			}
-			try {
-				/**
-				 * Filters whether the post-purge last-good fallback is enabled.
-				 *
-				 * @since 2.2.0
-				 * @param bool $enabled Whether the purge fallback is enabled.
-				 */
-				$filtered = apply_filters( 'wppo_purge_fallback_enabled', $enabled );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				self::$purge_fallback_memo[ $bid ] = false;
-				return false;
-			}
-			$normalized                        = filter_var( $filtered, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-			self::$purge_fallback_memo[ $bid ] = true === $normalized;
-			return self::$purge_fallback_memo[ $bid ];
+			return Filesystem::is_purge_fallback_enabled();
 		}
 
 		/**
@@ -6390,67 +6334,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Pure path math only — no filesystem or containment checks; callers
 		 * re-check containment via their own validators.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.2.0
 		 * @param string $file_path Absolute derived-asset path.
 		 * @return string Sibling fallback path, or '' when not applicable.
 		 */
 		public static function get_purge_fallback_path_for( string $file_path ): string {
-			try {
-				if ( '' === $file_path || false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
-					return '';
-				}
-				// Single-decode probe: reject encoded traversal/NUL that the
-				// raw check above cannot see. Downstream containment remains
-				// the authoritative guard; this only fails fast.
-				$probe = rawurldecode( $file_path );
-				if ( false !== strpos( $probe, "\0" ) || false !== strpos( $probe, '..' ) ) {
-					return '';
-				}
-				if ( function_exists( 'wp_normalize_path' ) ) {
-					$normalized = wp_normalize_path( $file_path );
-				} else {
-					$normalized = str_replace( '\\', '/', $file_path );
-				}
-				if ( '' === $normalized ) {
-					return '';
-				}
-				// Reject drive-letter and UNC shapes (mirror
-				// sanitize_cache_url_path()): absolute cache paths must be
-				// POSIX-style; downstream containment is authoritative.
-				if ( preg_match( '#^[a-zA-Z]:[\\\\/]#', $normalized ) || 0 === strpos( $normalized, '//' ) || 0 === strpos( $normalized, '\\\\' ) ) {
-					return '';
-				}
-				$base = (string) preg_replace( '/\.(?:gz|br)$/i', '', $normalized );
-				if ( '' === $base ) {
-					return '';
-				}
-				$basename = strtolower( (string) preg_replace( '#^.*/#', '', $base ) );
-				if (
-					'fallback.css' === $basename || 'fallback.js' === $basename
-					|| 'fallback.mobile.css' === $basename || 'fallback.desktop.css' === $basename
-					|| 'fallback.mobile.js' === $basename || 'fallback.desktop.js' === $basename
-				) {
-					return '';
-				}
-				$variant = '';
-				if ( preg_match( '/\.(mobile|desktop)\.css$/', $basename, $m ) ) {
-					$variant = '.' . strtolower( $m[1] );
-				} elseif ( preg_match( '/\.(mobile|desktop)\.js$/', $basename, $m ) ) {
-					$variant = '.' . strtolower( $m[1] );
-				}
-				$ext = strtolower( (string) pathinfo( $base, PATHINFO_EXTENSION ) );
-				if ( 'css' !== $ext && 'js' !== $ext ) {
-					return '';
-				}
-				$dir = (string) preg_replace( '#/[^/]*$#', '', $base );
-				if ( '' === $dir ) {
-					return '';
-				}
-				return $dir . '/fallback' . $variant . '.' . $ext;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
+			return Filesystem::get_purge_fallback_path_for( $file_path );
 		}
 
 		/**
@@ -6467,6 +6358,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * inputs are refused so gzip bytes can never poison `fallback.css`.
 		 * Writes prefer atomic + `FS_CHMOD_FILE`. Never throws.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.2.0
 		 * @param object   $fs         Filesystem exposing exists()/size()/copy()/get_contents()/put_contents().
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
@@ -6474,85 +6367,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function retain_purge_fallback_file( $fs, callable $is_allowed, string $file_path ): void {
-			try {
-				if ( ! self::is_purge_fallback_enabled() ) {
-					return;
-				}
-				if ( '' === $file_path ) {
-					return;
-				}
-				// Refuse compressed siblings outright: the mapper strips the
-				// suffix, so retaining `index.css.gz` would copy gzip bytes
-				// onto `fallback.css`.
-				if ( preg_match( '/\.(?:gz|br)$/i', $file_path ) ) {
-					return;
-				}
-				// Cheap pure-path reject before any containment stat.
-				$fallback = self::get_purge_fallback_path_for( $file_path );
-				if ( '' === $fallback ) {
-					return;
-				}
-				try {
-					if ( ! $is_allowed( $file_path ) || ! $is_allowed( $fallback ) ) {
-						return;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return;
-				}
-				if ( ! is_object( $fs ) || ! method_exists( $fs, 'exists' ) || ! $fs->exists( $file_path ) ) {
-					return;
-				}
-				if ( method_exists( $fs, 'size' ) ) {
-					try {
-						$size = $fs->size( $file_path );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$size = null;
-					}
-					if ( false === $size || null === $size ) {
-						// Stat failure (WP_Filesystem::size() signals via
-						// false): probe non-emptiness so transient stat
-						// failure neither drops last-good retention nor
-						// lets an empty base overwrite a good fallback.
-						if ( method_exists( $fs, 'get_contents' ) ) {
-							try {
-								$probe = $fs->get_contents( $file_path );
-							} catch ( \Throwable $ignored ) {
-								unset( $ignored );
-								$probe = null;
-							}
-							if ( ! is_string( $probe ) || '' === $probe ) {
-								return;
-							}
-						}
-					} elseif ( (int) $size <= 0 ) {
-						return;
-					}
-				}
-				if ( method_exists( $fs, 'copy' ) ) {
-					try {
-						$fs->copy( $file_path, $fallback, true );
-						return;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ! method_exists( $fs, 'get_contents' ) || ! method_exists( $fs, 'put_contents' ) ) {
-					return;
-				}
-				$contents = $fs->get_contents( $file_path );
-				if ( ! is_string( $contents ) || '' === $contents ) {
-					return;
-				}
-				if ( method_exists( self::class, 'atomic_file_put_contents' ) ) {
-					self::atomic_file_put_contents( $fs, $fallback, $contents );
-					return;
-				}
-				$fs->put_contents( $fallback, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			Filesystem::retain_purge_fallback_file( $fs, $is_allowed, $file_path );
 		}
 
 		/**
@@ -6563,37 +6378,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * unavailable, so a fallback hit never pays a full-file read it can
 		 * avoid. Never throws.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.2.0
 		 * @param object $fs       Filesystem exposing size()/get_contents().
 		 * @param string $fallback Absolute fallback path.
 		 * @return bool True when the fallback exists with non-empty content.
 		 */
 		public static function is_purge_fallback_payload_valid( $fs, string $fallback ): bool {
-			try {
-				if ( ! is_object( $fs ) || '' === $fallback ) {
-					return false;
-				}
-				if ( method_exists( $fs, 'size' ) ) {
-					try {
-						return (int) $fs->size( $fallback ) > 0;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return false;
-					}
-				}
-				if ( method_exists( $fs, 'get_contents' ) ) {
-					try {
-						$contents = $fs->get_contents( $fallback );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return false;
-					}
-					return is_string( $contents ) && '' !== $contents;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return false;
+			return Filesystem::is_purge_fallback_payload_valid( $fs, $fallback );
 		}
 
 		/**
@@ -6612,69 +6405,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * {@see get_purge_fallback_path_for()}; downstream containment
 		 * stays authoritative. Never throws.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @param string $file_path Absolute live derived-file path.
 		 * @return string Sibling staged path, or '' when not applicable.
 		 *
 		 * @since 2.3.0
 		 */
 		public static function get_staged_path_for( string $file_path ): string {
-			try {
-				if ( '' === $file_path || false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
-					return '';
-				}
-				$probe = rawurldecode( $file_path );
-				if ( false !== strpos( $probe, "\0" ) || false !== strpos( $probe, '..' ) ) {
-					return '';
-				}
-				if ( function_exists( 'wp_normalize_path' ) ) {
-					$normalized = wp_normalize_path( $file_path );
-				} else {
-					$normalized = str_replace( '\\', '/', $file_path );
-				}
-				if ( '' === $normalized ) {
-					return '';
-				}
-				if ( preg_match( '#^[a-zA-Z]:[\\\\/]#', $normalized ) || 0 === strpos( $normalized, '//' ) || 0 === strpos( $normalized, '\\\\' ) ) {
-					return '';
-				}
-				// Refuse compressed siblings outright: staging `index.css.gz`
-				// would treat gzip bytes as candidate CSS.
-				if ( preg_match( '/\.(?:gz|br)$/i', $normalized ) ) {
-					return '';
-				}
-				$base     = $normalized;
-				$basename = strtolower( (string) preg_replace( '#^.*/#', '', $base ) );
-				if (
-					'fallback.css' === $basename || 'fallback.js' === $basename
-					|| 'fallback.mobile.css' === $basename || 'fallback.desktop.css' === $basename
-					|| 'fallback.mobile.js' === $basename || 'fallback.desktop.js' === $basename
-					|| false !== strpos( $basename, '.staged.' )
-				) {
-					return '';
-				}
-				$variant = '';
-				if ( preg_match( '/\.(mobile|desktop)\.(css|js)$/', $basename, $m ) ) {
-					$variant = '.' . strtolower( $m[1] );
-				}
-				$ext = strtolower( (string) pathinfo( $base, PATHINFO_EXTENSION ) );
-				if ( 'css' !== $ext && 'js' !== $ext ) {
-					return '';
-				}
-				$dir = (string) preg_replace( '#/[^/]*$#', '', $base );
-				// No slash means no directory sibling to stage into
-				// (the replace above returns its input unchanged).
-				if ( '' === $dir || $dir === $base ) {
-					return '';
-				}
-				$stem = (string) preg_replace( '/\.(?:(?:mobile|desktop)\.)?(?:css|js)$/i', '', $basename );
-				if ( '' === $stem ) {
-					return '';
-				}
-				return $dir . '/' . $stem . $variant . '.staged.' . $ext;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
+			return Filesystem::get_staged_path_for( $file_path );
 		}
 
 		/**
@@ -6688,6 +6427,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * otherwise). A missing/empty staged file is a no-op `false` —
 		 * never a live-file delete. Never throws.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.3.0
 		 * @param object   $fs        Filesystem exposing exists()/size()/get_contents()/move()/copy()/delete().
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
@@ -6695,62 +6436,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return bool True when the staged file replaced the live file.
 		 */
 		public static function promote_staged_file( $fs, callable $is_allowed, string $live_path ): bool {
-			try {
-				if ( ! is_object( $fs ) || '' === $live_path ) {
-					return false;
-				}
-				$staged = self::get_staged_path_for( $live_path );
-				if ( '' === $staged ) {
-					return false;
-				}
-				try {
-					if ( ! $is_allowed( $live_path ) || ! $is_allowed( $staged ) ) {
-						return false;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return false;
-				}
-				if ( ! method_exists( $fs, 'exists' ) || ! $fs->exists( $staged ) ) {
-					return false;
-				}
-				// Never promote an empty stage over a good live file.
-				if ( ! self::is_purge_fallback_payload_valid( $fs, $staged ) ) {
-					return false;
-				}
-				// Retain last-good first so the promote stays reversible
-				// (best-effort: retention is gated + fail-open internally).
-				self::retain_purge_fallback_file( $fs, $is_allowed, $live_path );
-				if ( method_exists( $fs, 'move' ) ) {
-					try {
-						if ( $fs->move( $staged, $live_path, true ) ) {
-							return true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ! method_exists( $fs, 'copy' ) || ! method_exists( $fs, 'delete' ) ) {
-					return false;
-				}
-				try {
-					if ( ! $fs->copy( $staged, $live_path, true ) ) {
-						return false;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return false;
-				}
-				try {
-					$fs->delete( $staged );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				return true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return Filesystem::promote_staged_file( $fs, $is_allowed, $live_path );
 		}
 
 		/**
@@ -6762,6 +6448,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * possible). A missing/empty fallback is a no-op `false` —
 		 * never a live-file delete. Never throws.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.3.0
 		 * @param object   $fs        Filesystem exposing copy()/delete() plus the fallback-validity surface.
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
@@ -6769,38 +6457,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return bool True when the fallback payload replaced the live file.
 		 */
 		public static function restore_fallback_file( $fs, callable $is_allowed, string $live_path ): bool {
-			try {
-				if ( ! is_object( $fs ) || '' === $live_path ) {
-					return false;
-				}
-				$fallback = self::get_purge_fallback_path_for( $live_path );
-				if ( '' === $fallback ) {
-					return false;
-				}
-				try {
-					if ( ! $is_allowed( $live_path ) || ! $is_allowed( $fallback ) ) {
-						return false;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return false;
-				}
-				if ( ! self::is_purge_fallback_payload_valid( $fs, $fallback ) ) {
-					return false;
-				}
-				if ( ! method_exists( $fs, 'copy' ) ) {
-					return false;
-				}
-				try {
-					return (bool) $fs->copy( $fallback, $live_path, true );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return false;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return Filesystem::restore_fallback_file( $fs, $is_allowed, $live_path );
 		}
 
 		/**
@@ -6812,96 +6469,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * so the admin UI can render preview/health state without
 		 * reading file bodies itself. Never throws.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.3.0
 		 * @param object $fs        Filesystem exposing exists()/size()/get_contents().
 		 * @param string $live_path Absolute live derived-file path.
 		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool} Slot description.
 		 */
 		public static function describe_rollout_slot( $fs, string $live_path ): array {
-			$empty = array(
-				'live_bytes'      => 0,
-				'live_checksum'   => '',
-				'staged'          => false,
-				'staged_bytes'    => 0,
-				'staged_checksum' => '',
-				'staged_changed'  => false,
-				'fallback'        => false,
-			);
-			try {
-				if ( ! is_object( $fs ) || '' === $live_path ) {
-					return $empty;
-				}
-				$read_bytes                         = static function ( string $path ) use ( $fs ): array {
-					try {
-						if ( ! method_exists( $fs, 'exists' ) || ! $fs->exists( $path ) ) {
-							return array( 0, '' );
-						}
-						$size = 0;
-						if ( method_exists( $fs, 'size' ) ) {
-							try {
-								$size = (int) $fs->size( $path );
-							} catch ( \Throwable $e ) {
-								unset( $e );
-								$size = 0;
-							}
-						}
-						if ( $size <= 0 && method_exists( $fs, 'get_contents' ) ) {
-							try {
-								$body = $fs->get_contents( $path );
-								$size = is_string( $body ) ? strlen( $body ) : 0;
-							} catch ( \Throwable $e ) {
-								unset( $e );
-							}
-							if ( $size <= 0 ) {
-								return array( 0, '' );
-							}
-							return array( $size, self::compute_css_checksum( is_string( $body ) ? $body : '' ) );
-						}
-						if ( $size <= 0 ) {
-							return array( 0, '' );
-						}
-						// Bounded checksum read: checksums are for
-						// change-detection, so cap the hashed window at
-						// 256KB instead of hashing multi-MB blobs twice.
-						$checksum = '';
-						if ( method_exists( $fs, 'get_contents' ) ) {
-							try {
-								$body = $fs->get_contents( $path );
-								if ( is_string( $body ) && '' !== $body ) {
-									$checksum = self::compute_css_checksum( strlen( $body ) > 262144 ? substr( $body, 0, 262144 ) : $body );
-								}
-							} catch ( \Throwable $e ) {
-								unset( $e );
-							}
-						}
-						return array( $size, $checksum );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return array( 0, '' );
-					}
-				};
-				list( $live_bytes, $live_checksum ) = $read_bytes( $live_path );
-				$empty['live_bytes']                = $live_bytes;
-				$empty['live_checksum']             = $live_checksum;
-				$staged                             = self::get_staged_path_for( $live_path );
-				if ( '' !== $staged ) {
-					list( $staged_bytes, $staged_checksum ) = $read_bytes( $staged );
-					if ( $staged_bytes > 0 ) {
-						$empty['staged']          = true;
-						$empty['staged_bytes']    = $staged_bytes;
-						$empty['staged_checksum'] = $staged_checksum;
-						$empty['staged_changed']  = '' === $live_checksum || ( '' !== $staged_checksum && ! hash_equals( $live_checksum, $staged_checksum ) );
-					}
-				}
-				$fallback = self::get_purge_fallback_path_for( $live_path );
-				if ( '' !== $fallback ) {
-					$empty['fallback'] = self::is_purge_fallback_payload_valid( $fs, $fallback );
-				}
-				return $empty;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $empty;
-			}
+			return Filesystem::describe_rollout_slot( $fs, $live_path );
 		}
 
 		/**
@@ -6912,24 +6488,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * one per directory. Returns true when the caller should log.
 		 * Fail-open: logging failures never affect serving. Never throws.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.2.0
 		 * @return bool True when the caller should write its log row.
 		 */
 		public static function purge_fallback_should_log(): bool {
-			try {
-				$key = self::transient_key( 'wppo_purge_fallback_served' );
-				if ( function_exists( 'get_transient' ) && get_transient( $key ) ) {
-					return false;
-				}
-				if ( function_exists( 'set_transient' ) ) {
-					$ttl = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
-					set_transient( $key, 1, $ttl );
-				}
-				return true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return true;
-			}
+			return Filesystem::purge_fallback_should_log();
 		}
 
 		/**
@@ -6939,15 +6504,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * cache is cleared for the exact path so a file written earlier in the
 		 * same request is never judged stale.
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.0.0
 		 * @param string $path Absolute path to the CSS file.
 		 * @return bool True when the file is usable.
 		 */
 		public static function css_file_valid( string $path ): bool {
-			if ( '' !== $path ) {
-				clearstatcache( true, $path );
-			}
-			return '' !== $path && is_file( $path ) && is_readable( $path ) && filesize( $path ) > 0;
+			return Filesystem::css_file_valid( $path );
 		}
 
 		/**
@@ -6958,6 +6522,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * static flag (so a later request failure in the same process is still
 		 * observable).
 		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
 		 * @since 2.0.0
 		 * @param string $reason  Machine-readable reason code (empty_payload, write_failure, head_match_failure, ...).
 		 * @param array  $handles Handles preserved by the fallback.
@@ -6965,37 +6531,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function log_css_fallback( string $reason, array $handles, string $context ): void {
-			if ( ! in_array( $context, array( 'combine', 'usedcss' ), true ) ) {
-				$context = 'combine';
-			}
-
-			if ( ! class_exists( Log::class ) ) {
-				return;
-			}
-
-			$count  = count( $handles );
-			$reason = sanitize_key( $reason );
-			if ( '' === $reason ) {
-				$reason = 'unknown';
-			}
-
-			$log_key = self::transient_key( 'wppo_' . $context . '_fallback_' . md5( $reason . '|' . implode( ',', $handles ) ) );
-			if ( get_transient( $log_key ) ) {
-				return;
-			}
-			set_transient( $log_key, 1, DAY_IN_SECONDS );
-
-			$message = ( 'usedcss' === $context )
-				? /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'Used-CSS fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' )
-				: /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'CSS combine fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' );
-
-			Log::add(
-				sprintf(
-					$message,
-					$reason,
-					$count
-				)
-			);
+			Filesystem::log_css_fallback( $reason, $handles, $context );
 		}
 
 		/**
