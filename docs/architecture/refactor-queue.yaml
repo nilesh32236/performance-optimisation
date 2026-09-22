@@ -8,10 +8,11 @@ campaign: incremental-architecture-refactor
 created: 2026-09-22
 baseline:
   Main_methods_max: 232
-  Util_methods_max: 170
-  Util_facade_proxies: 15
+  Util_methods_max: 166
+  Util_facade_proxies: 30
   Cache_Key_methods: 4
   Settings_Store_methods: 13
+  Filesystem_methods: 28
   Cache_methods_max: 135
   Image_Optimisation_methods_max: 165
   Critical_CSS_methods_max: 137
@@ -66,9 +67,13 @@ items:
     title: 'Extract Filesystem boundary core from Util (dirs, local path, atomic writes, containment)'
     type: architecture
     priority: high
-    status: pr-review-running
+    status: merged
     github_issue: 1500
     github_pr: 1501
+    merge_commit: e41523ef
+    notes:
+      - 'Merged 2026-09-22. Manual control taken after loop 3/3 (needs-manual-review): fixed 7 WPCS test nits, restored blog-keyed home_url memo parity in Filesystem (master used memoized cached_home_url), kept the loop-added minify-roots memo (sound, has_filter-guarded) as a noted exception to no-perf-in-refactor.'
+      - 'Scope note: normalize_cache_host + sanitize_cache_url_path moved with Filesystem as cache-path-adjacent (REF-004 keeps the rest of URL helpers). Inventory JSON update missed by loop — backfill on next queue commit.'
     source: AUDIT/FINAL-REVIEW/architecture.md R-07
     notes:
       - 'Security-sensitive: keep is_link/realpath/prefix guards byte-identical; CacheSafePathTest + traversal battery must pin behavior first.'

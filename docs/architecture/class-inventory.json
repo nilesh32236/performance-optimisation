@@ -2,7 +2,7 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14639,
+        "lines": 14642,
         "methods": 232,
         "hooks": [
             "admin_menu",
@@ -86,12 +86,9 @@
     {
         "file": "includes/class-util.php",
         "class": null,
-        "lines": 8746,
-        "methods": 170,
+        "lines": 7601,
+        "methods": 166,
         "hooks": [
-            "update_option_wppo_settings",
-            "add_option_wppo_settings",
-            "delete_option_wppo_settings",
             "switch_blog"
         ],
         "static_state": true
@@ -112,14 +109,6 @@
         "hooks": [
             "shutdown"
         ],
-        "static_state": false
-    },
-    {
-        "file": "includes/class-cache-key.php",
-        "class": null,
-        "lines": 142,
-        "methods": 4,
-        "hooks": [],
         "static_state": false
     },
     {
@@ -268,6 +257,14 @@
         "static_state": true
     },
     {
+        "file": "includes/class-filesystem.php",
+        "class": null,
+        "lines": 1660,
+        "methods": 28,
+        "hooks": [],
+        "static_state": false
+    },
+    {
         "file": "includes/class-od-bridge.php",
         "class": null,
         "lines": 1509,
@@ -398,18 +395,6 @@
         "static_state": true
     },
     {
-        "file": "includes/class-settings-store.php",
-        "class": null,
-        "lines": 384,
-        "methods": 13,
-        "hooks": [
-            "update_option_wppo_settings",
-            "add_option_wppo_settings",
-            "delete_option_wppo_settings"
-        ],
-        "static_state": true
-    },
-    {
         "file": "includes/class-suggestion-engine.php",
         "class": null,
         "lines": 586,
@@ -488,6 +473,18 @@
         "static_state": false
     },
     {
+        "file": "includes/class-settings-store.php",
+        "class": null,
+        "lines": 389,
+        "methods": 13,
+        "hooks": [
+            "update_option_wppo_settings",
+            "add_option_wppo_settings",
+            "delete_option_wppo_settings"
+        ],
+        "static_state": false
+    },
+    {
         "file": "includes/class-deactivate.php",
         "class": null,
         "lines": 368,
@@ -561,6 +558,14 @@
         "class": null,
         "lines": 174,
         "methods": 3,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-cache-key.php",
+        "class": null,
+        "lines": 143,
+        "methods": 4,
         "hooks": [],
         "static_state": false
     },
