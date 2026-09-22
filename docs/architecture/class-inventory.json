@@ -1,0 +1,563 @@
+[
+    {
+        "file": "includes/class-main.php",
+        "class": null,
+        "lines": 14639,
+        "methods": 232,
+        "hooks": [
+            "admin_menu",
+            "admin_init",
+            "wppo_run_upgrades",
+            "upgrader_process_complete",
+            "admin_enqueue_scripts",
+            "init",
+            "wp_logout",
+            "wp_enqueue_scripts",
+            "template_redirect",
+            "wp",
+            "script_loader_tag",
+            "admin_bar_menu",
+            "wp_template_enhancement_output_buffer",
+            "wp_finalized_template_enhancement_output_buffer",
+            "save_post",
+            "added_post_meta",
+            "updated_post_meta",
+            "deleted_post_meta",
+            "woocommerce_update_product",
+            "woocommerce_checkout_order_created",
+            "woocommerce_update_order",
+            "woocommerce_coupon_options_save",
+            "deleted_post",
+            "switch_blog",
+            "wppo_after_cache_clear",
+            "wp_head",
+            "rest_api_init",
+            "wp_footer",
+            "wp_get_attachment_url",
+            "wp_calculate_image_srcset",
+            "style_loader_src",
+            "script_loader_src",
+            "litespeed_buffer_finalize",
+            "query_vars",
+            "send_headers",
+            "update_option_wppo_settings",
+            "style_loader_tag",
+            "wppo_generate_ccss",
+            "wp_ajax_wppo_get_nonce",
+            "wp_resource_hints",
+            "wppo_convert_image_background",
+            "wppo_pagespeed_scan",
+            "wppo_used_css_generate",
+            "wppo_ai_css_refresh_queued",
+            "wppo_google_fonts_download",
+            "update_option_permalink_structure",
+            "switch_theme",
+            "update_option_home",
+            "update_option_siteurl",
+            "activated_plugin",
+            "deactivated_plugin",
+            "should_load_separate_core_block_assets",
+            "should_load_block_assets_on_demand",
+            "admin_notices",
+            "script_module_data_wppo-lazyload",
+            "wp_speculation_rules_href_exclude_paths",
+            "wp_speculation_rules_configuration",
+            "wp_speculation_rules",
+            "wp_load_speculation_rules"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-image-optimisation.php",
+        "class": null,
+        "lines": 10967,
+        "methods": 165,
+        "hooks": [
+            "wp_generate_attachment_metadata",
+            "wp_get_attachment_image_src",
+            "delete_attachment",
+            "wp_get_attachment_image_attributes",
+            "client_side_supported_mime_types",
+            "wp_client_side_media_processing_enabled",
+            "shutdown"
+        ],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-util.php",
+        "class": null,
+        "lines": 8746,
+        "methods": 170,
+        "hooks": [
+            "update_option_wppo_settings",
+            "add_option_wppo_settings",
+            "delete_option_wppo_settings",
+            "switch_blog"
+        ],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-critical-css.php",
+        "class": null,
+        "lines": 7595,
+        "methods": 137,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-cache.php",
+        "class": null,
+        "lines": 7228,
+        "methods": 135,
+        "hooks": [
+            "shutdown"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-ai-adaptive.php",
+        "class": null,
+        "lines": 6323,
+        "methods": 98,
+        "hooks": [
+            "wp_speculation_rules"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-used-css.php",
+        "class": null,
+        "lines": 4961,
+        "methods": 94,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-rest.php",
+        "class": null,
+        "lines": 4495,
+        "methods": 73,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-img-converter.php",
+        "class": null,
+        "lines": 4078,
+        "methods": 66,
+        "hooks": [
+            "shutdown"
+        ],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-database-cleanup.php",
+        "class": null,
+        "lines": 3354,
+        "methods": 58,
+        "hooks": [],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-rum.php",
+        "class": null,
+        "lines": 3349,
+        "methods": 63,
+        "hooks": [
+            "update_option_",
+            "add_option_",
+            "delete_option_"
+        ],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-object-cache.php",
+        "class": null,
+        "lines": 3201,
+        "methods": 54,
+        "hooks": [
+            "object_cache_allow_flush_all"
+        ],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-litespeed-integration.php",
+        "class": null,
+        "lines": 2793,
+        "methods": 58,
+        "hooks": [
+            "shutdown",
+            "litespeed_purged_all",
+            "litespeed_purged_post",
+            "litespeed_purge_finalize",
+            "send_headers",
+            "litespeed_vary",
+            "init",
+            "wp_logout",
+            "save_post",
+            "delete_post",
+            "permalink_structure_changed"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-wppo-cli-command.php",
+        "class": null,
+        "lines": 2373,
+        "methods": 27,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-builder-purge-watcher.php",
+        "class": null,
+        "lines": 2108,
+        "methods": 45,
+        "hooks": [],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-cron.php",
+        "class": null,
+        "lines": 1847,
+        "methods": 37,
+        "hooks": [
+            "init",
+            "wppo_page_cron_hook",
+            "wppo_page_cron_batch",
+            "wppo_img_conversion",
+            "cron_schedules",
+            "wppo_generate_static_page",
+            "wppo_generate_static_url",
+            "wppo_preload_url_batch",
+            "wppo_litespeed_crawler_batch",
+            "wppo_crawler_warm",
+            "wppo_database_cleanup_cron",
+            "wppo_web_vitals_rescan",
+            "wppo_llms_txt_daily",
+            "wppo_used_css_cron",
+            "wppo_ccss_regeneration",
+            "wppo_rum_flush",
+            "wppo_object_cache_probe"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-litespeed-esi.php",
+        "class": null,
+        "lines": 1781,
+        "methods": 29,
+        "hooks": [
+            "wp_ajax_wppo_esi_fragment",
+            "wp_ajax_nopriv_wppo_esi_fragment",
+            "wp_enqueue_scripts",
+            "send_headers",
+            "litespeed_esi_nonces",
+            "litespeed_nonce",
+            "wppo_esi_fragment_html",
+            "wppo_litespeed_esi_fragment_html"
+        ],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-od-bridge.php",
+        "class": null,
+        "lines": 1509,
+        "methods": 25,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-abilities.php",
+        "class": null,
+        "lines": 1460,
+        "methods": 33,
+        "hooks": [
+            "wp_abilities_api_categories_init",
+            "wp_abilities_api_init",
+            "wp_abilities_init"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-htaccess-handler.php",
+        "class": null,
+        "lines": 1327,
+        "methods": 20,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-litespeed-crawler.php",
+        "class": null,
+        "lines": 1161,
+        "methods": 18,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-telemetry.php",
+        "class": null,
+        "lines": 1158,
+        "methods": 21,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-google-fonts.php",
+        "class": null,
+        "lines": 1034,
+        "methods": 18,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-metabox.php",
+        "class": null,
+        "lines": 1007,
+        "methods": 16,
+        "hooks": [
+            "add_meta_boxes",
+            "save_post"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-system-info.php",
+        "class": null,
+        "lines": 990,
+        "methods": 23,
+        "hooks": [],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-pagespeed.php",
+        "class": null,
+        "lines": 989,
+        "methods": 21,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-advanced-cache-handler.php",
+        "class": null,
+        "lines": 949,
+        "methods": 13,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-cdn.php",
+        "class": null,
+        "lines": 797,
+        "methods": 13,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-admin-notices.php",
+        "class": null,
+        "lines": 785,
+        "methods": 15,
+        "hooks": [
+            "admin_notices",
+            "admin_init"
+        ],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-llms.php",
+        "class": null,
+        "lines": 638,
+        "methods": 14,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/redis-connect-helper.php",
+        "class": null,
+        "lines": 624,
+        "methods": 0,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-sandbox-preview.php",
+        "class": null,
+        "lines": 589,
+        "methods": 11,
+        "hooks": [],
+        "static_state": true
+    },
+    {
+        "file": "includes/class-suggestion-engine.php",
+        "class": null,
+        "lines": 586,
+        "methods": 11,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-activate.php",
+        "class": null,
+        "lines": 553,
+        "methods": 8,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-core-tweaks.php",
+        "class": null,
+        "lines": 538,
+        "methods": 29,
+        "hooks": [
+            "init",
+            "wp_enqueue_scripts",
+            "admin_enqueue_scripts",
+            "xmlrpc_methods",
+            "xmlrpc_enabled",
+            "wp_headers",
+            "wp_head",
+            "rest_post_dispatch",
+            "do_feed",
+            "do_feed_rdf",
+            "do_feed_rss",
+            "do_feed_rss2",
+            "do_feed_atom",
+            "do_feed_rss2_comments",
+            "do_feed_atom_comments",
+            "after_setup_theme",
+            "the_generator",
+            "wp_default_scripts",
+            "wp_print_scripts",
+            "pre_ping",
+            "widgets_init",
+            "show_recent_comments_widget_style",
+            "tiny_mce_plugins",
+            "wp_resource_hints",
+            "embed_oembed_discover",
+            "rewrite_rules_array",
+            "heartbeat_settings"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-bfcache.php",
+        "class": null,
+        "lines": 472,
+        "methods": 14,
+        "hooks": [
+            "wp_footer",
+            "attach_session_information",
+            "set_logged_in_cookie",
+            "clear_auth_cookie",
+            "nocache_headers",
+            "wp_enqueue_scripts"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-asset-manager.php",
+        "class": null,
+        "lines": 406,
+        "methods": 8,
+        "hooks": [
+            "wp_footer",
+            "wp_enqueue_scripts"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-deactivate.php",
+        "class": null,
+        "lines": 368,
+        "methods": 7,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-edge-purger.php",
+        "class": null,
+        "lines": 334,
+        "methods": 10,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-server-rules.php",
+        "class": null,
+        "lines": 329,
+        "methods": 6,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-edge-cache.php",
+        "class": null,
+        "lines": 324,
+        "methods": 7,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-perf-translations.php",
+        "class": null,
+        "lines": 297,
+        "methods": 7,
+        "hooks": [
+            "load_translation_file",
+            "load_textdomain_mofile",
+            "wppo_perf_translations_file_written",
+            "upgrader_process_complete"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-cdn-purger.php",
+        "class": null,
+        "lines": 263,
+        "methods": 6,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-log.php",
+        "class": null,
+        "lines": 249,
+        "methods": 6,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-header-emitter.php",
+        "class": null,
+        "lines": 183,
+        "methods": 9,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-cloudflare-purger.php",
+        "class": null,
+        "lines": 174,
+        "methods": 3,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-css-safelist.php",
+        "class": null,
+        "lines": 84,
+        "methods": 2,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/trait-purge-logger.php",
+        "class": null,
+        "lines": 66,
+        "methods": 1,
+        "hooks": [],
+        "static_state": false
+    }
+]

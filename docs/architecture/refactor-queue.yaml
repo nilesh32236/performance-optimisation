@@ -1,0 +1,120 @@
+# Refactor queue — source of truth for the incremental architecture campaign.
+# Rules: ONE active item at a time; at most ONE campaign GitHub issue open.
+# Statuses: queued|planning|issue-created|analysis-running|analysis-question|
+#   analysis-approved|autofix-running|pr-created|pr-review-running|
+#   human-verification|changes-requested|merged|blocked|cancelled
+
+campaign: incremental-architecture-refactor
+created: 2026-09-22
+baseline:
+  Main_methods_max: 232
+  Util_methods_max: 170
+  Cache_methods_max: 135
+  Image_Optimisation_methods_max: 165
+  Critical_CSS_methods_max: 137
+  largest_php_class_lines_max: 14639
+  largest_react_component_lines_max: 6228
+  inventory: docs/architecture/class-inventory.json
+automation:
+  trigger: 'label autofix-trigger on the issue, or /fix comment (fires fix-issue job in wppo-ai-review.yml)'
+  note: 'No standalone issue-analysis workflow exists; design review happens on the
+    issue itself, then fix-issue produces the plan + PR, then review/autofix loop.'
+
+items:
+  - id: REF-001
+    title: 'Extract Cache_Key boundary from Util (transient_key/option_key/cache_salt)'
+    type: architecture
+    priority: high
+    status: issue-created
+    github_issue: 1496
+    github_pr: null
+    rationale: >
+      Smallest safe first extraction (3 methods + stampede key helper) with the
+      widest fan-in (~23 consumers of transient_key). Establishes the
+      boundary-class + Util-facade pattern every later Util split reuses, without
+      touching behavior, storage I/O, or hot paths.
+    scope:
+      - includes/class-util.php transient_key/option_key/cache_salt/stampede_stale_key
+      - new includes/class-cache-key.php behind Util:: proxies
+    non_goals:
+      - No storage I/O or TTL policy changes; no multisite prefix change ({blog_id}_ stays).
+      - No other Util splits bundled in.
+    notes: []
+    discoveries: []
+
+  - id: REF-002
+    title: 'Extract Settings_Store from Util + Main backfills (memo, snapshots, DEFAULTS)'
+    type: architecture
+    priority: high
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-02/R-03 (A-02/A-03)
+    notes:
+      - 'Depends on REF-001 facade pattern. Covers get/set/clear_settings_cache, save_settings, snapshots, ALLOWED_SETTINGS_KEYS ownership.'
+
+  - id: REF-003
+    title: 'Extract Filesystem boundary from Util (atomic writes, path containment, slot helpers)'
+    type: architecture
+    priority: high
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-07
+    notes:
+      - 'Security-sensitive: keep is_link/realpath/prefix guards byte-identical; CacheSafePathTest + traversal battery must pin behavior first.'
+
+  - id: REF-004
+    title: 'Extract Url boundary from Util (cached_home_url/content_url, normalize, same-site)'
+    type: architecture
+    priority: medium
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-02 (.jules/bolt.md cache lessons)
+    notes:
+      - 'Keep has_filter guards + blog-ID keying; hot-path memo behavior unchanged.'
+
+  - id: REF-005
+    title: 'Extract Hook_Registry from Main::setup_hooks (McCabe >30, ~59 hooks)'
+    type: architecture
+    priority: medium
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-01/R-05
+    notes:
+      - 'Registry pattern only; no hook add/remove/reorder. CronHookParityTest pins registration.'
+
+  - id: REF-006
+    title: 'Constructor injection for Cache (remove setter injection, single construction path)'
+    type: architecture
+    priority: medium
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-05
+    notes:
+      - 'Blocked until REF-002 clarifies options ownership (stale-snapshot risk). Do not start before REF-002 merges.'
+
+  - id: REF-007
+    title: 'Main private const DEFAULTS + lazy get_options() (constructor I/O)'
+    type: architecture
+    priority: medium
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-03
+    notes:
+      - 'Pairs naturally with REF-002; keep file-load new Main() contract.'
+
+  - id: REF-008
+    title: 'Decompose Dashboard.js god component (2296 lines) into cards'
+    type: architecture
+    priority: medium
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-09
+    notes:
+      - 'One card per PR; keep wppoSettings/apiCall/useNotice patterns.'
+
+  - id: REF-009
+    title: 'Extract App.js data-fetch hooks (useServerRules/useCcssStatus, memo component map)'
+    type: architecture
+    priority: low
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-08
+
+  - id: REF-010
+    title: 'Central Wp_Version gate (replace scattered version_compare + TODOs)'
+    type: architecture
+    priority: low
+    status: queued
+    source: AUDIT/FINAL-REVIEW/architecture.md R-11
