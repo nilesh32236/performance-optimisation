@@ -144,7 +144,7 @@ items:
     priority: medium
     status: autofix-running
     github_issue: 1502
-    github_pr: null
+    github_pr: 1503
     source: REF-003
     order_note: 'Processed right after REF-003 (direct continuation of its split) ahead of REF-004.'
     notes:
