@@ -15,7 +15,9 @@
  * `wppo_minify_allowed_roots` / `wppo_allow_php_lint` filters where already
  * used. Cross-plugin calls are limited to `Util::get_settings()`,
  * `Util::transient_key()` and `Util::compute_css_checksum()` (REF-012 slot
- * helpers) with a fail-open `Log` guard in `log_css_fallback()`; `Util`
+ * helpers) with a fail-open `Log` guard in `log_css_fallback()` plus
+ * guarded `sanitize_key()` / `__()` / `get_transient()` / `set_transient()`
+ * (`DAY_IN_SECONDS` with an 86400 fallback); `Util`
  * keeps one-line facade proxies back into `Filesystem`, resolved at call
  * time via the spl autoloader so there is no load-time cycle.
  *
@@ -1758,7 +1760,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 					return '';
 				}
 				$dir = (string) preg_replace( '#/[^/]*$#', '', $base );
-				if ( '' === $dir ) {
+				// No slash means no directory sibling to stage into
+				// (the replace above returns its input unchanged).
+				if ( '' === $dir || $dir === $base ) {
 					return '';
 				}
 				return $dir . '/fallback' . $variant . '.' . $ext;
@@ -2315,20 +2319,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 			}
 
 			$count  = count( $handles );
-			$reason = sanitize_key( $reason );
+			$reason = function_exists( 'sanitize_key' ) ? sanitize_key( $reason ) : strtolower( (string) preg_replace( '/[^a-z0-9_-]/i', '', $reason ) );
 			if ( '' === $reason ) {
 				$reason = 'unknown';
 			}
 
 			$log_key = Util::transient_key( 'wppo_' . $context . '_fallback_' . md5( $reason . '|' . implode( ',', $handles ) ) );
-			if ( get_transient( $log_key ) ) {
+			if ( function_exists( 'get_transient' ) && get_transient( $log_key ) ) {
 				return;
 			}
-			set_transient( $log_key, 1, DAY_IN_SECONDS );
+			if ( function_exists( 'set_transient' ) ) {
+				set_transient( $log_key, 1, defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+			}
 
 			$message = ( 'usedcss' === $context )
-				? /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'Used-CSS fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' )
-				: /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'CSS combine fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' );
+				? ( function_exists( '__' ) ? /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'Used-CSS fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' ) : 'Used-CSS fallback: %1$s — preserved %2$d stylesheet(s) (served originals).' )
+				: ( function_exists( '__' ) ? /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'CSS combine fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' ) : 'CSS combine fallback: %1$s — preserved %2$d stylesheet(s) (served originals).' );
 
 			Log::add(
 				sprintf(
