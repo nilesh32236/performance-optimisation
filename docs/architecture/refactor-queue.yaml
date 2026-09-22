@@ -51,8 +51,8 @@ items:
     title: 'Extract Settings_Store from Util (settings memo, save, hook coherence, snapshots)'
     type: architecture
     priority: high
-    status: planning
-    github_issue: null
+    status: autofix-running
+    github_issue: 1498
     github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-02/R-03 (A-02/A-03)
     notes:
