@@ -1105,6 +1105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Cron'                   => 'class-cron.php',
 				'Database_Cleanup'       => 'class-database-cleanup.php',
 				'Deactivate'             => 'class-deactivate.php',
+				'Filesystem'             => 'class-filesystem.php',
 				'Google_Fonts'           => 'class-google-fonts.php',
 				'Htaccess_Handler'       => 'class-htaccess-handler.php',
 				'Image_Optimisation'     => 'class-image-optimisation.php',
