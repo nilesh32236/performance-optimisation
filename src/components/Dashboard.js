@@ -47,6 +47,8 @@ import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
 import { __, sprintf, _n } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
+import useUpgradePurgeStatus from '../lib/useUpgradePurgeStatus';
+import UpgradePurgeBanner from './common/UpgradePurgeBanner';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faServer,
@@ -352,40 +354,9 @@ const Dashboard = ( {
 	const [ wooSelfTest, setWooSelfTest ] = useState( null );
 	const [ wooSelfTestLoading, setWooSelfTestLoading ] = useState( false );
 	// Upgrade auto-purge status (issue #1276): last-purge reason + safe
-	// preview link bypassing minify. Seeded from wppoSettings.upgradePurge.
-	const initialUpgradePurge = getWppoSettings( 'upgradePurge', {} ) || {};
-	const [ upgradePurge, setUpgradePurge ] = useState( {
-		last_purge:
-			initialUpgradePurge.last_purge ||
-			initialUpgradePurge.lastPurge ||
-			null,
-		safe_preview_url:
-			initialUpgradePurge.safe_preview_url ||
-			initialUpgradePurge.safePreviewUrl ||
-			'',
-	} );
-	// Note: seeded from wppoSettings.upgradePurge (localized by PHP); no
-	// auto-fetch on mount so existing mocked-apiCall flows are unaffected.
-	// The read-only upgrade_purge_status endpoint is used for manual refresh
-	// (e.g. after a derived-cache purge elsewhere in the same admin session).
-	const refreshUpgradePurgeStatus = useCallback( async () => {
-		try {
-			const res = await apiCall( 'upgrade_purge_status', {}, 'GET' );
-			if ( res && res.success && res.data ) {
-				setUpgradePurge( ( prev ) => ( {
-					last_purge: res.data.last_purge || null,
-					safe_preview_url:
-						res.data.safe_preview_url || prev.safe_preview_url,
-				} ) );
-			}
-		} catch ( statusError ) {
-			// Fail-open: keep the seeded wppoSettings value.
-			console.error(
-				'Failed refreshing upgrade purge status:',
-				getErrorLogMessage( statusError )
-			);
-		}
-	}, [] );
+	// preview link bypassing minify. Shared hook seeded from
+	// wppoSettings.upgradePurge (audit #1515).
+	const { upgradePurge, refreshUpgradePurgeStatus } = useUpgradePurgeStatus();
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
 		!! cacheSettings.enableLoggedInCache
 	);
@@ -1454,50 +1425,7 @@ const Dashboard = ( {
 			{ /* One-click presets with diff preview + restore-point undo (NEXT) */ }
 			<OptimizationPresets />
 
-			{ upgradePurge &&
-				( ( upgradePurge.last_purge &&
-					upgradePurge.last_purge.reason ) ||
-					( upgradePurge.safe_preview_url &&
-						isSafeHttpUrl( upgradePurge.safe_preview_url ) ) ) && (
-					<div
-						className="wppo-notice wppo-notice--info wppo-mb-16"
-						role="status"
-						aria-live="polite"
-					>
-						<span>
-							{ upgradePurge.last_purge &&
-							upgradePurge.last_purge.reason
-								? sprintf(
-										// translators: %s: last purge reason.
-										__(
-											'Last purge: %s',
-											'performance-optimisation'
-										),
-										upgradePurge.last_purge.reason
-								  )
-								: __(
-										'Updates auto-purge derived caches',
-										'performance-optimisation'
-								  ) }
-							{ ' — ' }
-							{ upgradePurge.safe_preview_url &&
-								isSafeHttpUrl(
-									upgradePurge.safe_preview_url
-								) && (
-									<a
-										href={ upgradePurge.safe_preview_url }
-										target="_blank"
-										rel="noopener noreferrer"
-									>
-										{ __(
-											'Open safe preview (bypasses minify)',
-											'performance-optimisation'
-										) }
-									</a>
-								) }
-						</span>
-					</div>
-				) }
+			<UpgradePurgeBanner upgradePurge={ upgradePurge } />
 
 			{ isCacheMissing && (
 				<div className="wppo-banner wppo-banner--warning" role="alert">

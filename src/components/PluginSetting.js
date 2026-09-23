@@ -25,7 +25,11 @@ import NoticeBanner from './common/NoticeBanner';
 import CheckboxOption from './common/CheckboxOption';
 
 import { __, sprintf, _n } from '@wordpress/i18n';
-import { SECRET_KEY_PATTERN as SHARED_SECRET_KEY_PATTERN } from '../lib/stripSensitive';
+import {
+	SECRET_KEY_PATTERN as SHARED_SECRET_KEY_PATTERN,
+	isSensitivePollutionKey,
+	redactSecrets as sharedRedactSecrets,
+} from '../lib/stripSensitive';
 
 // Keep in sync with PHP Util::ALLOWED_SETTINGS_KEYS (single source).
 // At runtime the list is also available as wppoSettings.allowedSettingsKeys
@@ -97,16 +101,15 @@ const MAX_IMPORT_NESTED_KEYS = 1000;
 
 /**
  * Key names that must never be accepted in imported settings or copied
- * during secret redaction. Assigning to `__proto__` on a plain object
- * mutates its prototype (prototype pollution); `constructor`/`prototype`
- * keys are the companion gadget path.
+ * during secret redaction. Single home is `isSensitivePollutionKey` in
+ * src/lib/stripSensitive.js; this alias keeps the existing named export
+ * (and its tests) working.
  *
  * @since 2.3.0
  * @param {string} key Raw object key.
  * @return {boolean} True when the key is a pollution vector.
  */
-const isPollutionKey = ( key ) =>
-	key === '__proto__' || key === 'constructor' || key === 'prototype';
+const isPollutionKey = isSensitivePollutionKey;
 
 const validateImportData = ( data ) => {
 	if ( ! data || typeof data !== 'object' || Array.isArray( data ) ) {
@@ -149,38 +152,15 @@ const SECRET_KEY_PATTERN = SHARED_SECRET_KEY_PATTERN;
 
 /**
  * Deep-clone an object while masking every nested key matching
- * SECRET_KEY_PATTERN with 'REDACTED'.
+ * SECRET_KEY_PATTERN with 'REDACTED'. Shared walker in
+ * src/lib/stripSensitive.js (mask mode); this alias keeps the existing
+ * named export (and its tests) working.
  *
  * @since 2.0.0
  * @param {*} value Value to redact.
  * @return {*} Redacted clone.
  */
-const redactSecrets = ( value ) => {
-	if ( Array.isArray( value ) ) {
-		return value.map( redactSecrets );
-	}
-	if ( value && typeof value === 'object' ) {
-		const out = {};
-		Object.entries( value ).forEach( ( [ key, val ] ) => {
-			// Never copy pollution vectors: out['__proto__'] = … would
-			// mutate the clone's prototype instead of creating a key.
-			if ( isPollutionKey( key ) ) {
-				return;
-			}
-			if (
-				SECRET_KEY_PATTERN.test( key ) &&
-				typeof val === 'string' &&
-				val
-			) {
-				out[ key ] = 'REDACTED';
-			} else {
-				out[ key ] = redactSecrets( val );
-			}
-		} );
-		return out;
-	}
-	return value;
-};
+const redactSecrets = sharedRedactSecrets;
 
 /**
  * Recursively validate an imported settings value: only plain objects,

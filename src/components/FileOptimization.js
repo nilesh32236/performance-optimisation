@@ -22,6 +22,7 @@ import {
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
+import useUpgradePurgeStatus from '../lib/useUpgradePurgeStatus';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -978,19 +979,9 @@ const FileOptimization = ( {
 	}
 	// Upgrade auto-purge status (issue #1276): SPA-visible last-purge
 	// reason + safe-mode preview link bypassing minify (?wppo_nocache=1).
-	// Seeded from wppoSettings.upgradePurge, refreshed from the read-only
-	// upgrade_purge_status endpoint. Fail-open: a failed fetch keeps the seed.
-	const initialUpgradePurge = getWppoSettings( 'upgradePurge', {} ) || {};
-	const [ upgradePurge, setUpgradePurge ] = useState( {
-		last_purge:
-			initialUpgradePurge.last_purge ||
-			initialUpgradePurge.lastPurge ||
-			null,
-		safe_preview_url:
-			initialUpgradePurge.safe_preview_url ||
-			initialUpgradePurge.safePreviewUrl ||
-			'',
-	} );
+	// Shared hook seeded from wppoSettings.upgradePurge (audit #1515).
+	const { upgradePurge, refreshUpgradePurgeStatus, setUpgradePurge } =
+		useUpgradePurgeStatus();
 	const [ isPurgingDerived, setIsPurgingDerived ] = useState( false );
 	const purgingDerivedRef = useRef( false );
 	const {
@@ -998,24 +989,6 @@ const FileOptimization = ( {
 		notify: notifyDerivedPurge,
 		dismiss: dismissDerivedPurge,
 	} = useNotice();
-	const refreshUpgradePurgeStatus = useCallback( async () => {
-		try {
-			const res = await apiCall( 'upgrade_purge_status', {}, 'GET' );
-			if ( res && res.success && res.data ) {
-				setUpgradePurge( ( prev ) => ( {
-					last_purge: res.data.last_purge || null,
-					safe_preview_url:
-						res.data.safe_preview_url || prev.safe_preview_url,
-				} ) );
-			}
-		} catch ( upgradeError ) {
-			// Fail-open: keep the seeded wppoSettings value.
-			console.error(
-				'Failed refreshing upgrade purge status:',
-				getErrorLogMessage( upgradeError )
-			);
-		}
-	}, [] );
 	// Note: no auto-fetch on mount/tab-open — the status is seeded from
 	// wppoSettings.upgradePurge (localized by PHP) so existing mocked-apiCall
 	// flows are unaffected; refresh runs after a manual derived purge.

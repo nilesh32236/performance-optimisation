@@ -111,6 +111,12 @@ export const formatPercent = ( value, options = {} ) => {
  * by design (background payloads/logs). UI call sites must use the
  * translated formatBytes() in lib/util.js instead of rendering this directly.
  *
+ * Confusable-twin guard (audit #1515): `formatBytes` (lib/util.js, localised,
+ * GB cap) is the UI contract; `formatBytesShared` (here, untranslated,
+ * TB/PB caps) is the background/metric contract. Do not merge the twins —
+ * caps/rounding intentionally differ. UI code importing this helper by
+ * mistake renders untranslated units; pick the import site deliberately.
+ *
  * @since 2.3.0
  * @param {number} value Bytes.
  * @return {string} e.g. '1.5 MB'.

@@ -8,13 +8,10 @@ import {
 import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons';
-import {
-	apiCall,
-	patchSettingsCache,
-	getErrorLogMessage,
-} from '../lib/apiRequest';
+import { getWppoSettings } from '../lib/apiRequest';
 import { useIsMounted } from '../lib/useAbortableFetch';
 import useNotice from '../lib/useNotice';
+import useSaveSettings from '../lib/useSaveSettings';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
@@ -38,10 +35,7 @@ const EdgeCachePanel = () => {
 	const cfZoneDescId = `${ uid }-wppoEdgeCfZone-desc`;
 	const bunnyZoneDescId = `${ uid }-wppoEdgeBunnyZone-desc`;
 
-	const initial =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.edge_cache || {}
-			: {};
+	const initial = getWppoSettings( 'settings.edge_cache', {} );
 
 	const [ enabled, setEnabled ] = useState( !! initial.enabled );
 	const [ provider, setProvider ] = useState(
@@ -55,16 +49,36 @@ const EdgeCachePanel = () => {
 	const [ bunnyZone, setBunnyZone ] = useState(
 		initial.bunnyPullZoneId || ''
 	);
-	const [ saving, setSaving ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	// Audit #1420: mounted guard so unmount mid-save cannot setState.
+	const isMountedRef = useIsMounted();
+	const safeNotify = ( payload ) => {
+		if ( isMountedRef.current && typeof notify === 'function' ) {
+			notify( payload );
+		}
+	};
+	const safeDismiss = () => {
+		if ( isMountedRef.current && typeof dismiss === 'function' ) {
+			dismiss();
+		}
+	};
+	const { saving, save } = useSaveSettings( 'edge_cache', {
+		notify: safeNotify,
+		dismiss: safeDismiss,
+		successMessage: __(
+			'Edge cache settings saved.',
+			'performance-optimisation'
+		),
+		errorMessage: __(
+			'Failed to save edge cache settings.',
+			'performance-optimisation'
+		),
+	} );
 
 	// Resync when the global settings arrive late or change after a save
 	// elsewhere. The global is not reactive, so derive a snapshot key that
 	// changes whenever the parent re-renders with fresh globals.
-	const edgeCacheSlice =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.edge_cache ?? null
-			: null;
+	const edgeCacheSlice = getWppoSettings( 'settings.edge_cache', null );
 	const edgeCacheKey = useMemo(
 		() => JSON.stringify( edgeCacheSlice ),
 		[ edgeCacheSlice ]
@@ -73,10 +87,7 @@ const EdgeCachePanel = () => {
 		if ( saving ) {
 			return;
 		}
-		const s =
-			typeof wppoSettings !== 'undefined'
-				? wppoSettings?.settings?.edge_cache || {}
-				: {};
+		const s = getWppoSettings( 'settings.edge_cache', {} );
 		setEnabled( !! s.enabled );
 		setProvider( s.provider || 'cloudflare' );
 		setTtl( String( s.ttl ?? 300 ) );
@@ -86,10 +97,7 @@ const EdgeCachePanel = () => {
 	}, [ edgeCacheKey, saving ] );
 
 	// Audit #1420: mounted guard so unmount mid-save cannot setState.
-	const isMountedRef = useIsMounted();
 	const handleSave = useCallback( async () => {
-		setSaving( true );
-		dismiss();
 		const parsedTtl = parseInt( ttl, 10 );
 		const clampedTtl = Number.isFinite( parsedTtl )
 			? Math.max( 60, parsedTtl )
@@ -99,77 +107,18 @@ const EdgeCachePanel = () => {
 			? Math.max( 0, parsedSwr )
 			: 86400;
 		try {
-			const response = await apiCall( 'update_settings', {
-				tab: 'edge_cache',
-				settings: {
-					enabled,
-					provider,
-					ttl: clampedTtl,
-					staleWhileRevalidate: clampedSwr,
-					cloudflareZoneId: cfZone,
-					bunnyPullZoneId: bunnyZone,
-				},
+			await save( {
+				enabled,
+				provider,
+				ttl: clampedTtl,
+				staleWhileRevalidate: clampedSwr,
+				cloudflareZoneId: cfZone,
+				bunnyPullZoneId: bunnyZone,
 			} );
-			if ( response.success ) {
-				patchSettingsCache( 'edge_cache', {
-					enabled,
-					provider,
-					ttl: clampedTtl,
-					staleWhileRevalidate: clampedSwr,
-					cloudflareZoneId: cfZone,
-					bunnyPullZoneId: bunnyZone,
-				} );
-				if ( isMountedRef.current ) {
-					notify( {
-						type: 'success',
-						message: __(
-							'Edge cache settings saved.',
-							'performance-optimisation'
-						),
-						durationMs: 3000,
-					} );
-				}
-			} else if ( isMountedRef.current ) {
-				notify( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save edge cache settings.',
-							'performance-optimisation'
-						),
-				} );
-			}
-		} catch ( saveError ) {
-			console.error(
-				'Save edge cache failed:',
-				getErrorLogMessage( saveError )
-			);
-			if ( isMountedRef.current ) {
-				notify( {
-					type: 'error',
-					message: __(
-						'Failed to save edge cache settings.',
-						'performance-optimisation'
-					),
-				} );
-			}
-		} finally {
-			if ( isMountedRef.current ) {
-				setSaving( false );
-			}
+		} catch {
+			// Notify already handled inside useSaveSettings.
 		}
-	}, [
-		enabled,
-		provider,
-		ttl,
-		swr,
-		cfZone,
-		bunnyZone,
-		notify,
-		dismiss,
-		isMountedRef,
-	] );
+	}, [ enabled, provider, ttl, swr, cfZone, bunnyZone, save ] );
 
 	return (
 		<FeatureCard
