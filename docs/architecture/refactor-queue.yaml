@@ -276,13 +276,16 @@ phase2_items:
       - 'Line counts re-canonicalized to wc -l semantics by the generator; isolated ±1 corrections vs hand-maintained values (e.g. Cache 7305→7304). Hooks keep occurrence order; static_state = static-property declarations only.'
   - id: ARCH-002
     title: 'Canonical includes/ hierarchy design decision'
-    status: issue-created
+    status: analysis-approved
     github_issue: 1530
     priority: high
     responsibility: 'Decide final directory tree from ARCH-001 evidence (Core/Cache/Settings/Assets/Images/CSS/Database/REST/Admin/CLI/Scheduler/Integrations/Compatibility/Support or evidence-better variant).'
     dependencies: [ARCH-001]
     risk: low
     expected_change: 'docs/architecture/INCLUDE-HIERARCHY.md canonical tree + per-class target mapping; no code.'
+    target_tree: 'docs/architecture/INCLUDE-HIERARCHY.md#canonical-tree-decided-arch-002'
+    notes:
+      - '2026-09-23: canonical 14-directory tree decided from ARCH-001 evidence (ARCHITECTURE.md system map + 322 graph edges + LOAD-ORDER.md loader paths); 57-file target mapping + open-points resolutions recorded in INCLUDE-HIERARCHY.md. Util stays at root until ARCH-014; minify/ as-is; flat one-level rule; protected ESI/drop-in handlers unchanged by construction. Docs-only, no runtime change.'
   - id: ARCH-003
     title: 'Loader centralization: single Loader_Map boundary, no file moves'
     status: queued
