@@ -170,7 +170,7 @@ items:
     priority: low
     status: autofix-running
     github_issue: 1518
-    github_pr: null
+    github_pr: 1519
     source: AUDIT/FINAL-REVIEW/architecture.md R-11
 
   - id: REF-012
