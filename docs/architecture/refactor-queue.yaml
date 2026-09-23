@@ -195,7 +195,7 @@ items:
     priority: medium
     status: autofix-running
     github_issue: 1524
-    github_pr: null
+    github_pr: 1525
     source: BOUNDARIES.md Scheduler
 
   - id: REF-015
