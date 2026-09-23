@@ -156,7 +156,9 @@ items:
     title: 'Extract App.js data-fetch hooks (useServerRules/useCcssStatus, memo component map)'
     type: architecture
     priority: low
-    status: queued
+    status: autofix-running
+    github_issue: 1514
+    github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-08
 
   - id: REF-010
