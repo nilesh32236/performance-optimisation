@@ -418,8 +418,9 @@ phase2_items:
       - '2026-09-23: implemented in working tree — new Ai_Anomaly (includes/class-ai-anomaly.php, Insight domain, @since NEXT) owns the anomaly cluster verbatim (43 methods: thresholds/bands, breach/alarm state ops, RUM digest + blog-aware memos, trend sampling, detect_anomalies(), CSS-refresh-on-anomaly set, deploy notes; 20 consts; memo statics + reset/blog-id helper); AI_Adaptive keeps 21 same-signature static proxies (facade rule, privates moved without proxies); eager load via Loader_Map + generator known-classes; inventory/graph regen (AI_Adaptive 98→76 methods, Ai_Anomaly 43); hierarchy mapping row; new AiAnomalyTest parity suite. No caller, hook, option, or threshold changes.'
   - id: ARCH-011
     title: 'REST cache+settings handler extraction (Rest_Cache, Rest_Settings)'
-    status: issue-created
+    status: pr-created
     github_issue: 1548
+    pull_request: 1549
     priority: low
     source_files:
       - includes/class-rest.php
