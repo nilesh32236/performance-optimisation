@@ -3323,37 +3323,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return bool True when the `$unique` parameter may be passed.
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function supports_action_scheduler_unique(): bool {
-			if ( null !== self::$as_unique_support ) {
-				return self::$as_unique_support;
-			}
-			self::$as_unique_support = self::probe_action_scheduler_unique();
-			return self::$as_unique_support;
+			return Scheduler::supports_action_scheduler_unique();
 		}
 
 		/**
-		 * Memoized probe result for {@see supports_action_scheduler_unique()}.
-		 *
-		 * Null until the first probe runs; afterwards true/false for the
-		 * remainder of the request.
-		 *
-		 * @var bool|null
-		 */
-		private static ?bool $as_unique_support = null;
-
-		/**
-		 * Memoized per-function `$unique`-parameter arity probes.
-		 *
-		 * Maps function name => bool so the single/recurring helpers do not
-		 * repeat reflection on every call.
-		 *
-		 * @var array<string, bool>
-		 */
-		private static array $as_unique_arity = array();
-
-		/**
 		 * Reset the memoized Action Scheduler unique-support probes.
+		 *
+		 * Facade proxy: scheduler ownership lives in {@see \PerformanceOptimise\Inc\Scheduler}.
 		 *
 		 * Test-only seam: production code never needs to re-probe within a
 		 * request, but unit tests that swap scheduler stubs between cases
@@ -3361,134 +3340,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return void
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function reset_action_scheduler_unique_cache(): void {
-			self::$as_unique_support = null;
-			self::$as_unique_arity   = array();
-		}
-
-		/**
-		 * Unmemoized Action Scheduler unique-support probe.
-		 *
-		 * @since 2.2.0
-		 * @return bool True when the `$unique` parameter may be passed.
-		 */
-		private static function probe_action_scheduler_unique(): bool {
-			try {
-				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
-					return false;
-				}
-				if ( class_exists( 'ActionScheduler_Versions' ) && method_exists( 'ActionScheduler_Versions', 'instance' ) ) {
-					try {
-						$versions = \ActionScheduler_Versions::instance();
-						if ( is_object( $versions ) && method_exists( $versions, 'latest_version' ) ) {
-							$latest = $versions->latest_version();
-							if ( is_string( $latest ) && '' !== $latest && version_compare( $latest, '4.0', '<' ) ) {
-								return false;
-							}
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				return self::function_has_unique_param( 'as_enqueue_async_action', 4 );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-		}
-
-		/**
-		 * Whether a scheduler function accepts the AS 4.x `$unique` parameter.
-		 *
-		 * Memoized per function name: repeated reflection is paid once per
-		 * request no matter how many jobs a bulk path enqueues.
-		 *
-		 * @since 2.2.0
-		 * @param string $function_name Function name to inspect.
-		 * @param int    $min_params    Minimum parameter count that implies `$unique` support.
-		 * @return bool True when the function exists and declares at least `$min_params` parameters.
-		 */
-		private static function function_has_unique_param( string $function_name, int $min_params ): bool {
-			if ( array_key_exists( $function_name, self::$as_unique_arity ) ) {
-				return self::$as_unique_arity[ $function_name ];
-			}
-			try {
-				if ( ! function_exists( $function_name ) ) {
-					self::$as_unique_arity[ $function_name ] = false;
-					return false;
-				}
-				$ref                                     = new \ReflectionFunction( $function_name );
-				self::$as_unique_arity[ $function_name ] = $ref->getNumberOfParameters() >= $min_params;
-				return self::$as_unique_arity[ $function_name ];
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				self::$as_unique_arity[ $function_name ] = false;
-				return false;
-			}
-		}
-
-		/**
-		 * Fail-open "already scheduled" guard shared by the unique helpers.
-		 *
-		 * Single home for the legacy `as_has_scheduled_action()` check so
-		 * future guard fixes land on all three helpers at once (issue #1310
-		 * review). A missing or throwing guard degrades to "not scheduled"
-		 * rather than failing the enqueue.
-		 *
-		 * @since 2.2.0
-		 * @param string $hook  Action hook.
-		 * @param array  $args  Action arguments.
-		 * @param string $group Action group.
-		 * @return bool True when a matching action is already scheduled.
-		 */
-		private static function as_already_scheduled( string $hook, array $args, string $group ): bool {
-			if ( ! function_exists( 'as_has_scheduled_action' ) ) {
-				return false;
-			}
-			try {
-				return (bool) as_has_scheduled_action( $hook, $args, $group );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-		}
-
-		/**
-		 * Fail-open "already scheduled" check across several AS groups.
-		 *
-		 * The CCSS pipeline schedules on the dedicated `wppo-ccss` group but
-		 * must still dedupe against pre-split jobs in the legacy
-		 * `performance_optimisation` group; a guard that only probes the
-		 * passed group would double-schedule on pre-4.x schedulers when a
-		 * legacy-group job lands between checks (issue #1310 review).
-		 * Callers pass the extra groups so every legacy fallback below
-		 * probes the same disjunction the atomic path dedupes.
-		 *
-		 * @since 2.2.0
-		 * @param string   $hook         Action hook.
-		 * @param array    $args         Action arguments.
-		 * @param string   $group        Primary action group.
-		 * @param string[] $extra_groups Additional groups to probe.
-		 * @return bool True when a matching action is already scheduled in any of the groups.
-		 */
-		private static function as_already_scheduled_in_any_group( string $hook, array $args, string $group, array $extra_groups = array() ): bool {
-			if ( self::as_already_scheduled( $hook, $args, $group ) ) {
-				return true;
-			}
-			foreach ( $extra_groups as $extra_group ) {
-				if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
-					continue;
-				}
-				if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
-					return true;
-				}
-			}
-			return false;
+			Scheduler::reset_action_scheduler_unique_cache();
 		}
 
 		/**
 		 * Enqueue an async Action Scheduler job with atomic dedup when available.
+		 *
+		 * Facade proxy: scheduler ownership lives in {@see \PerformanceOptimise\Inc\Scheduler}.
 		 *
 		 * Tries `as_enqueue_async_action( $hook, $args, $group, true )` first so
 		 * concurrent processes cannot double-insert the same hook+args+group;
@@ -3502,47 +3363,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string   $group        Action group.
 		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard (e.g. the CCSS legacy group).
 		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function enqueue_unique_async_action( string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
-			try {
-				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
-					return 0;
-				}
-				if ( self::supports_action_scheduler_unique() ) {
-					// Cross-group dedupe (issue #1310 review): the AS 4.x
-					// `$unique` flag dedupes per-group only, so a pending
-					// job in an extra (legacy) group would not block the
-					// insert below. Probe the extra groups up front; the
-					// both-group re-check on a 0 return stays as the
-					// race backstop.
-					foreach ( $extra_groups as $extra_group ) {
-						if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
-							continue;
-						}
-						if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
-							return 0;
-						}
-					}
-					try {
-						$result = as_enqueue_async_action( $hook, $args, $group, true );
-						return (int) $result;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				// Legacy guard (fail-open — see as_already_scheduled()).
-				if ( self::as_already_scheduled_in_any_group( $hook, $args, $group, $extra_groups ) ) {
-					return 0;
-				}
-				return (int) as_enqueue_async_action( $hook, $args, $group );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 0;
-			}
+			return Scheduler::enqueue_unique_async_action( $hook, $args, $group, $extra_groups );
 		}
 
 		/**
 		 * Schedule a one-off Action Scheduler job with atomic dedup when available.
+		 *
+		 * Facade proxy: scheduler ownership lives in {@see \PerformanceOptimise\Inc\Scheduler}.
 		 *
 		 * Same fail-open contract as {@see enqueue_unique_async_action()} but
 		 * for delayed single actions.
@@ -3554,45 +3384,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string   $group        Action group.
 		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard (e.g. the CCSS legacy group).
 		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function schedule_unique_single_action( int $timestamp, string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
-			try {
-				if ( ! function_exists( 'as_schedule_single_action' ) ) {
-					return 0;
-				}
-				if ( self::supports_action_scheduler_unique() ) {
-					// Cross-group dedupe (issue #1310 review): see
-					// enqueue_unique_async_action() — probe extra groups
-					// before the per-group atomic insert.
-					foreach ( $extra_groups as $extra_group ) {
-						if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
-							continue;
-						}
-						if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
-							return 0;
-						}
-					}
-					try {
-						if ( self::function_has_unique_param( 'as_schedule_single_action', 5 ) ) {
-							return (int) as_schedule_single_action( $timestamp, $hook, $args, $group, true );
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				// Legacy guard (fail-open — see as_already_scheduled()).
-				if ( self::as_already_scheduled_in_any_group( $hook, $args, $group, $extra_groups ) ) {
-					return 0;
-				}
-				return (int) as_schedule_single_action( $timestamp, $hook, $args, $group );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 0;
-			}
+			return Scheduler::schedule_unique_single_action( $timestamp, $hook, $args, $group, $extra_groups );
 		}
 
 		/**
 		 * Whether the stampede guard is enabled.
+		 *
+		 * Facade proxy: scheduler ownership lives in {@see \PerformanceOptimise\Inc\Scheduler}.
 		 *
 		 * Operator opt-out via `wppo_settings['cache_settings']['stampedeGuard']`
 		 * (default true, additive key) or the `wppo_stampede_guard_enabled`
@@ -3601,25 +3402,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return bool True when coalescing is active.
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function is_stampede_guard_enabled(): bool {
-			try {
-				$settings = self::get_settings();
-				$guard    = $settings['cache_settings']['stampedeGuard'] ?? true;
-			} catch ( \Throwable $e ) {
-				$guard = true;
-			}
-			/**
-			 * Filters whether the stampede guard coalesces hot-key rebuilds.
-			 *
-			 * @since 2.2.0
-			 * @param bool $enabled Whether the guard is enabled.
-			 */
-			return (bool) apply_filters( 'wppo_stampede_guard_enabled', (bool) $guard );
+			return Scheduler::is_stampede_guard_enabled();
 		}
 
 		/**
 		 * Effective stampede lock TTL in seconds, clamped to 2-5s.
+		 *
+		 * Facade proxy: scheduler ownership lives in {@see \PerformanceOptimise\Inc\Scheduler}.
 		 *
 		 * Reads `wppo_settings['cache_settings']['stampedeLockTtl']` (default 5,
 		 * additive key) with the `wppo_stampede_lock_ttl` filter applied last.
@@ -3630,65 +3422,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return int Lock TTL clamped to 2-5 seconds.
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function stampede_lock_ttl(): int {
-			$ttl = 5;
-			try {
-				$settings = self::get_settings();
-				$raw      = $settings['cache_settings']['stampedeLockTtl'] ?? 5;
-				$ttl      = (int) $raw;
-			} catch ( \Throwable $e ) {
-				$ttl = 5;
-			}
-			/**
-			 * Filters the stampede lock TTL in seconds (clamped to 2-5s after filtering).
-			 *
-			 * @since 2.2.0
-			 * @param int $ttl Lock TTL in seconds.
-			 */
-			$ttl = (int) apply_filters( 'wppo_stampede_lock_ttl', $ttl );
-			if ( $ttl < 2 ) {
-				return 2;
-			}
-			if ( $ttl > 5 ) {
-				return 5;
-			}
-			return $ttl;
+			return Scheduler::stampede_lock_ttl();
 		}
 
 		/**
 		 * Generate a unique stampede lock owner token.
+		 *
+		 * Facade proxy: scheduler ownership lives in {@see \PerformanceOptimise\Inc\Scheduler}.
 		 *
 		 * Prefers `wp_generate_uuid4()` with a `uniqid() + mt_rand()` fallback
 		 * so concurrent workers never share an owner (release is owner-checked).
 		 *
 		 * @since 2.2.0
 		 * @return string Unique owner token (never empty).
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function generate_stampede_owner(): string {
-			try {
-				if ( function_exists( 'wp_generate_uuid4' ) ) {
-					$uuid = (string) wp_generate_uuid4();
-					if ( '' !== $uuid ) {
-						return $uuid;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			try {
-				if ( function_exists( 'wp_rand' ) ) {
-					return uniqid( 'wppo-', true ) . '-' . wp_rand( 1, PHP_INT_MAX );
-				}
-				return uniqid( 'wppo-', true ) . '-' . random_int( 1, PHP_INT_MAX );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 'wppo-' . microtime( true ) . '-' . uniqid();
-			}
+			return Scheduler::generate_stampede_owner();
 		}
 
 		/**
 		 * Atomically acquire a named stampede lock.
+		 *
+		 * Facade proxy: scheduler ownership lives in {@see \PerformanceOptimise\Inc\Scheduler}.
 		 *
 		 * Uses `wp_cache_add()` (atomic `SET NX EX` on Redis/Memcached) with a
 		 * unique owner so only one worker wins — but only when a persistent
@@ -3710,44 +3469,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *                         mid-rebuild and duplicate work).
 		 * @param string $group    Object-cache group for the lock.
 		 * @return bool True when this worker owns the lock.
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function acquire_stampede_lock( string $lock_key, string $owner, int $ttl = 5, string $group = 'wppo' ): bool {
-			if ( '' === $lock_key || '' === $owner ) {
-				return false;
-			}
-			if ( $ttl < 2 ) {
-				$ttl = 2;
-			} elseif ( $ttl > 5 ) {
-				$ttl = 5;
-			}
-			try {
-				$has_ext_cache = false;
-				if ( function_exists( 'wp_using_ext_object_cache' ) ) {
-					try {
-						$has_ext_cache = (bool) wp_using_ext_object_cache();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$has_ext_cache = false;
-					}
-				}
-				if ( $has_ext_cache && function_exists( 'wp_cache_add' ) ) {
-					return (bool) wp_cache_add( $lock_key, $owner, $group, $ttl );
-				}
-				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
-					if ( false !== get_transient( $lock_key ) ) {
-						return false;
-					}
-					return (bool) set_transient( $lock_key, $owner, $ttl );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-			return false;
+			return Scheduler::acquire_stampede_lock( $lock_key, $owner, $ttl, $group );
 		}
 
 		/**
 		 * Release a stampede lock only when this worker still owns it.
+		 *
+		 * Facade proxy: scheduler ownership lives in {@see \PerformanceOptimise\Inc\Scheduler}.
 		 *
 		 * Owner-checked so a slow worker never deletes a successor's lock after
 		 * its own TTL expired. Fail-open: throwables are swallowed (never fatal).
@@ -3757,41 +3488,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $owner    Owner token that acquired the lock.
 		 * @param string $group    Object-cache group for the lock.
 		 * @return void
+		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function release_stampede_lock( string $lock_key, string $owner, string $group = 'wppo' ): void {
-			if ( '' === $lock_key || '' === $owner ) {
-				return;
-			}
-			try {
-				$current = null;
-				$found   = false;
-				if ( function_exists( 'wp_cache_get' ) ) {
-					$current = wp_cache_get( $lock_key, $group );
-					$found   = ( $current === $owner );
-				} elseif ( function_exists( 'get_transient' ) ) {
-					$current = get_transient( $lock_key );
-					$found   = ( $current === $owner );
-				}
-				if ( ! $found ) {
-					// Fall back to the transient namespace: the lock may have
-					// been stored there when wp_cache_add() was unavailable.
-					if ( function_exists( 'get_transient' ) && $current !== $owner ) {
-						$transient_current = get_transient( $lock_key );
-						$found             = ( $transient_current === $owner );
-					}
-				}
-				if ( ! $found ) {
-					return;
-				}
-				if ( function_exists( 'wp_cache_delete' ) ) {
-					wp_cache_delete( $lock_key, $group );
-				}
-				if ( function_exists( 'delete_transient' ) ) {
-					delete_transient( $lock_key );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			Scheduler::release_stampede_lock( $lock_key, $owner, $group );
 		}
 
 		/**
@@ -3804,7 +3504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * still qualified via {@see transient_key()} so they stay isolated.
 		 *
 		 * Facade proxy: key construction lives in {@see \PerformanceOptimise\Inc\Cache_Key}.
-		 * Lock acquire/release stays here for a later Scheduler extraction.
+		 * Lock acquire/release lives in {@see \PerformanceOptimise\Inc\Scheduler} (REF-014).
 		 *
 		 * @since 2.2.0
 		 * @param string $key Value cache key as passed to get_with_stampede_lock().
@@ -3816,6 +3516,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 		/**
 		 * Best-effort registration of a stale-copy key in `wppo_transient_index`.
+		 *
+		 * Stays in `Util`: transient-index ownership, not scheduler/lock
+		 * ownership (REF-014) — the guarded cache-read paths below call it
+		 * directly after writing stale copies.
 		 *
 		 * The index lets purge paths (`invalidate_audit_cache()`,
 		 * `invalidate_counts_cache()`, `bump_stats_cache()`) find and delete
@@ -3850,6 +3554,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 		/**
 		 * Get a cached value or rebuild it under an atomic owner lock.
+		 *
+		 * Stays in `Util`: cache-read path that merely USES locks (REF-014) —
+		 * the guard/TTL/owner/acquire/release verbs live in
+		 * {@see \PerformanceOptimise\Inc\Scheduler} and are called below.
 		 *
 		 * Herd immunity for hot keys: on a cache miss exactly one worker
 		 * acquires the owner lock and rebuilds while the rest bounded-retry
@@ -3890,7 +3598,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$defaults = array(
 				'ttl'            => 5 * MINUTE_IN_SECONDS,
 				'stale_ttl'      => defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400,
-				'lock_ttl'       => self::stampede_lock_ttl(),
+				'lock_ttl'       => Scheduler::stampede_lock_ttl(),
 				'retries'        => 4,
 				'retry_delay_us' => 50000,
 				'group'          => 'wppo',
@@ -3994,7 +3702,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Guard disabled: plain rebuild without coalescing (fail-open).
 			$guard_enabled = true;
 			try {
-				$guard_enabled = self::is_stampede_guard_enabled();
+				$guard_enabled = Scheduler::is_stampede_guard_enabled();
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				$guard_enabled = true;
@@ -4019,26 +3727,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Contended path helpers.
 			$stale = $read_stale( $stale_key );
 
-			$owner    = self::generate_stampede_owner();
-			$acquired = self::acquire_stampede_lock( $lock_key, $owner, $lock_ttl, $group );
+			$owner    = Scheduler::generate_stampede_owner();
+			$acquired = Scheduler::acquire_stampede_lock( $lock_key, $owner, $lock_ttl, $group );
 
 			if ( $acquired ) {
 				try {
 					$fresh = $rebuild();
 				} catch ( \Throwable $e ) {
 					unset( $e );
-					self::release_stampede_lock( $lock_key, $owner, $group );
+					Scheduler::release_stampede_lock( $lock_key, $owner, $group );
 					$stale_now = $read_stale( $stale_key );
 					return false !== $stale_now ? $stale_now : false;
 				}
 				if ( $fresh instanceof \WP_Error || false === $fresh ) {
-					self::release_stampede_lock( $lock_key, $owner, $group );
+					Scheduler::release_stampede_lock( $lock_key, $owner, $group );
 					$stale_now = $read_stale( $stale_key );
 					return false !== $stale_now ? $stale_now : $fresh;
 				}
 				$write_cached( $key, $fresh, $ttl );
 				$write_stale( $stale_key, $fresh, $stale_ttl );
-				self::release_stampede_lock( $lock_key, $owner, $group );
+				Scheduler::release_stampede_lock( $lock_key, $owner, $group );
 				return $fresh;
 			}
 
