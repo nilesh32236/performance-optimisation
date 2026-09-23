@@ -234,7 +234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 			}
 
 			global $wp_styles;
-			$styles = $wp_styles->queue;
+			$styles = ( isset( $wp_styles ) && is_object( $wp_styles ) && isset( $wp_styles->queue ) && is_array( $wp_styles->queue ) ) ? $wp_styles->queue : array();
 
 			if ( empty( $styles ) ) {
 				return;
@@ -1114,7 +1114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 
 			// The combined handle now carries `path` data, so the size map cached
 			// for the inline-budget simulation is stale; rebuild it on the next call.
-			$size_map       = null;
+			$size_map         = null;
 			$will_inline_memo = array();
 		}
 
@@ -1149,7 +1149,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 				if ( array_key_exists( $memo_key, $mode_memo ) ) {
 					return $mode_memo[ $memo_key ];
 				}
-				$bypass                                   = (bool) Main::is_safe_mode_active( $file_opt );
+				$bypass                 = (bool) Main::is_safe_mode_active( $file_opt );
 				$mode_memo[ $memo_key ] = $bypass;
 				return $bypass;
 			} catch ( \Throwable $e ) {
@@ -1294,8 +1294,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 			if ( isset( $stat_cache[ $path ] ) ) {
 				return $stat_cache[ $path ];
 			}
-			$readable = is_readable( $path );
-			$size     = $readable ? filesize( $path ) : false;
+			// Prefer the WP_Filesystem abstraction (consistent with the rest of
+			// the pipeline) so hosts with direct-filesystem restrictions do not
+			// disagree with raw is_readable()/filesize(). Fall back to raw stats
+			// when the filesystem is unavailable.
+			$readable = false;
+			$size     = false;
+			$used_fs  = false;
+			try {
+				$fs = $this->cache->combine_filesystem();
+				if ( is_object( $fs ) && method_exists( $fs, 'exists' ) && method_exists( $fs, 'size' ) ) {
+					$readable = (bool) $fs->exists( $path );
+					$size     = $readable ? $fs->size( $path ) : false;
+					$used_fs  = true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$used_fs = false;
+			}
+			if ( ! $used_fs ) {
+				$readable = is_readable( $path );
+				$size     = $readable ? filesize( $path ) : false;
+			}
 			if ( count( $stat_cache ) >= self::SRC_STAT_CACHE_LIMIT ) {
 				array_shift( $stat_cache );
 			}
