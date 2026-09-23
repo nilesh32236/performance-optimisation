@@ -19,8 +19,9 @@
  * `get_post_field()` (all probed via `function_exists()`), `wp_parse_url()`,
  * `sanitize_text_field()`, `wp_unslash()`, `has_filter()` /
  * `apply_filters()` (faceted params), plus the cross-boundary
- * `Util::get_settings()` (safe-mode toggle), `Util::cached_home_url()`
- * (self-test URLs), `Util::has_uncacheable_query()` (generic query guard)
+ * `Settings_Store::get_settings()` (safe-mode toggle),
+ * `Url::cached_home_url()` (self-test URLs) and the Util-canonical
+ * `Util::has_uncacheable_query()` (generic query guard)
  * and `Util::is_editor_preview_url()` (self-test editor probes), resolved
  * at call time via the spl autoloader so there is no load-time cycle.
  *
@@ -46,8 +47,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 	 *
 	 * Static WooCommerce-detection boundary. Depends only on the minimal
 	 * WordPress/Woo APIs required to preserve the existing implementation
-	 * verbatim (see file docblock) plus the `Util` settings/URL/query
-	 * helpers listed above. `Util` proxies back at call time only
+	 * verbatim (see file docblock) plus the `Settings_Store` / `Url`
+	 * boundary helpers and the Util-canonical query/editor helpers listed
+	 * above. `Util` proxies back at call time only
 	 * (autoloader, no load-time cycle).
 	 *
 	 * @since NEXT
@@ -67,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 		public static function is_woo_safe_mode_enabled( ?array $settings = null ): bool {
 			try {
 				if ( null === $settings ) {
-					$settings = Util::get_settings();
+					$settings = Settings_Store::get_settings();
 				}
 				if ( ! isset( $settings['cache_settings']['wooSafeMode'] ) ) {
 					return true;
@@ -550,6 +552,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 					return true;
 				}
 				// Unconditional: any other functional query is dynamic.
+				// Util-canonical: generic query policy lives in Util (no boundary owns it).
 				if ( '' !== $query && method_exists( Util::class, 'has_uncacheable_query' ) && Util::has_uncacheable_query( $query ) ) {
 					return true;
 				}
@@ -652,7 +655,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 						$cacheable     = ! $excluded_flag;
 						$pass          = $is_dynamic && ! $cacheable;
 						try {
-							$url = Util::cached_home_url( '/' . $path . '/' );
+							$url = Url::cached_home_url( '/' . $path . '/' );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 							$url = '/' . $path . '/';
@@ -716,7 +719,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 						$cacheable = ! $uncacheable;
 						$pass      = $is_dynamic && ! $cacheable;
 						try {
-							$url = Util::cached_home_url( (string) $probe_url );
+							$url = Url::cached_home_url( (string) $probe_url );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 							$url = (string) $probe_url;
@@ -760,7 +763,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 				foreach ( $editor_probes as $probe_url => $expected_bypass ) {
 					try {
 						try {
-							$probe_full = Util::cached_home_url( (string) $probe_url );
+							$probe_full = Url::cached_home_url( (string) $probe_url );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 							$probe_full = (string) $probe_url;
@@ -768,6 +771,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 						if ( ! is_string( $probe_full ) || '' === $probe_full ) {
 							$probe_full = (string) $probe_url;
 						}
+						// Util-canonical: editor/admin policy lives in Util.
 						$bypass          = Util::is_editor_preview_url( $probe_full );
 						$pass            = ( $bypass === $expected_bypass );
 						$editor_checks[] = array(
@@ -810,7 +814,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 					try {
 						$probe_full_probe = $probe_url;
 						try {
-							$candidate = Util::cached_home_url( (string) $probe_url );
+							$candidate = Url::cached_home_url( (string) $probe_url );
 							if ( is_string( $candidate ) && '' !== $candidate ) {
 								$probe_full_probe = $candidate;
 							}
@@ -847,6 +851,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 							} elseif ( '' !== $probe_query && self::is_woo_faceted_query( $probe_query ) ) {
 								$skipped = true;
 							} elseif ( '' !== $probe_query && Util::has_uncacheable_query( $probe_query ) ) {
+								// Util-canonical: generic query policy lives in Util (no boundary owns it).
 								$skipped = true;
 							} elseif ( $safe_mode && self::is_woo_dynamic_path( $probe_path ) ) {
 								$skipped = true;
@@ -856,7 +861,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 						}
 						$pass = ( $skipped === $expected_skip );
 						try {
-							$probe_full = Util::cached_home_url( (string) $probe_url );
+							$probe_full = Url::cached_home_url( (string) $probe_url );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 							$probe_full = (string) $probe_url;
@@ -906,7 +911,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 						// survival proof fails and force_exclude trips.
 						$pass = $bypass;
 						try {
-							$cart_url = Util::cached_home_url( '/' );
+							$cart_url = Url::cached_home_url( '/' );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 							$cart_url = '/';

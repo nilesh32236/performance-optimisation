@@ -13,8 +13,9 @@
  * Minimal WordPress APIs only: `wp_normalize_path()`, `WP_Filesystem()`,
  * `wp_mkdir_p()` (via callers), `home_url()`, `wp_upload_dir()`, plus the
  * `wppo_minify_allowed_roots` / `wppo_allow_php_lint` filters where already
- * used. Cross-plugin calls are limited to `Util::get_settings()`,
- * `Util::transient_key()` and `Util::compute_css_checksum()` (REF-012 slot
+ * used. Cross-boundary calls go direct to the owning boundary
+ * (`Settings_Store::get_settings()`, `Cache_Key::transient_key()`) and to
+ * the Util-canonical `Util::compute_css_checksum()` (REF-012 slot
  * helpers) with a fail-open `Log` guard in `log_css_fallback()` plus
  * guarded `sanitize_key()` / `__()` / `get_transient()` / `set_transient()`
  * (`DAY_IN_SECONDS` with an 86400 fallback); `Util`
@@ -43,8 +44,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 	 *
 	 * Static filesystem boundary. Depends only on the minimal WordPress
 	 * APIs required to preserve the existing implementation verbatim
-	 * (see file docblock) plus the `Util` settings/transient/checksum
-	 * helpers for the REF-012 slot lifecycle (`Log` guarded fail-open).
+	 * (see file docblock) plus the `Settings_Store` / `Cache_Key`
+	 * settings/transient helpers and the Util-canonical checksum helper
+	 * for the REF-012 slot lifecycle (`Log` guarded fail-open).
 	 * `Util` proxies back at call time only (autoloader, no load-time
 	 * cycle).
 	 *
@@ -1658,7 +1660,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 						return true;
 					}
 				}
-				$settings = Util::get_settings();
+				$settings = Settings_Store::get_settings();
 				$raw      = $settings['file_optimisation']['purgeFallbackEnabled'] ?? false;
 				$enabled  = filter_var( $raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 				$enabled  = true === $enabled;
@@ -2191,7 +2193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 							if ( $size <= 0 ) {
 								return array( 0, '' );
 							}
-							return array( $size, Util::compute_css_checksum( is_string( $body ) ? $body : '' ) );
+							return array( $size, Util::compute_css_checksum( is_string( $body ) ? $body : '' ) ); // Util-canonical: checksum body lives in Util.
 						}
 						if ( $size <= 0 ) {
 							return array( 0, '' );
@@ -2204,7 +2206,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 							try {
 								$body = $fs->get_contents( $path );
 								if ( is_string( $body ) && '' !== $body ) {
-									$checksum = Util::compute_css_checksum( strlen( $body ) > 262144 ? substr( $body, 0, 262144 ) : $body );
+									$checksum = Util::compute_css_checksum( strlen( $body ) > 262144 ? substr( $body, 0, 262144 ) : $body ); // Util-canonical: checksum body lives in Util.
 								}
 							} catch ( \Throwable $e ) {
 								unset( $e );
@@ -2256,7 +2258,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 */
 		public static function purge_fallback_should_log(): bool {
 			try {
-				$key = Util::transient_key( 'wppo_purge_fallback_served' );
+				$key = Cache_Key::transient_key( 'wppo_purge_fallback_served' );
 				if ( function_exists( 'get_transient' ) && get_transient( $key ) ) {
 					return false;
 				}
@@ -2324,7 +2326,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				$reason = 'unknown';
 			}
 
-			$log_key = Util::transient_key( 'wppo_' . $context . '_fallback_' . md5( $reason . '|' . implode( ',', $handles ) ) );
+			$log_key = Cache_Key::transient_key( 'wppo_' . $context . '_fallback_' . md5( $reason . '|' . implode( ',', $handles ) ) );
 			if ( function_exists( 'get_transient' ) && get_transient( $log_key ) ) {
 				return;
 			}
