@@ -8,11 +8,12 @@ campaign: incremental-architecture-refactor
 created: 2026-09-22
 baseline:
   Main_methods_max: 232
-  Util_methods_max: 166
+  Util_methods_max: 159
   Util_facade_proxies: 33
   Cache_Key_methods: 4
   Settings_Store_methods: 13
   Filesystem_methods: 40
+  Url_methods: 24
   Cache_methods_max: 135
   Image_Optimisation_methods_max: 165
   Critical_CSS_methods_max: 137
@@ -86,6 +87,9 @@ items:
     status: autofix-running
     github_issue: 1504
     github_pr: 1505
+    merge_commit: 65f1ffc2
+    notes:
+      - 'Merged 2026-09-22. Util 166→159. Loop needed 3 iterations + manual review: fixed missing Main fallback-map entry (caught by review), added UrlBoundaryTest, typed static. No manual code edits needed — iteration-3 already fixed the blog-keyed exclusion memo + reset coverage.'
     source: AUDIT/FINAL-REVIEW/architecture.md R-02 (.jules/bolt.md cache lessons)
     notes:
       - 'Keep has_filter guards + blog-ID keying; hot-path memo behavior unchanged.'
