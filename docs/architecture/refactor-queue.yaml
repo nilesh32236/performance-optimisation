@@ -247,9 +247,11 @@ phase2:
 phase2_items:
   - id: ARCH-001
     title: 'Architecture baseline: inventory tooling + dependency graph + load-order + hierarchy docs'
-    status: pr-created
+    status: merged
     github_issue: 1528
     pull_request: 1529
+    merge_commit: 927931ef
+    post_merge_result: 'wp wppo verify 6/7 identical to pre-change baseline (same environmental cache_dirs CLI-writability warn). uninstall check passes; option census 29->30 is live-site environmental drift (PR ships zero runtime code). rest_api_init hook present.'
     priority: high
     source_files:
       - includes/
