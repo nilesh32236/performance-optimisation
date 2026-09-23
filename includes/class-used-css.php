@@ -3675,6 +3675,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Builder-template post types excluded from used-CSS generation (issue #1274).
 		 *
+		 * Thin delegator: Critical_CSS owns the exclusion semantics
+		 * (ARCH-009 — parser, post-type list + memo + filter, defaults).
 		 * Shares the additive `file_optimisation.ccssExcludedPostTypes`
 		 * setting (and the `wppo_ccss_excluded_post_types` filter) with
 		 * Critical_CSS so both pipelines skip the same non-renderable
@@ -3693,18 +3695,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_excluded_post_types' ) ) {
 					return Critical_CSS::get_excluded_post_types();
 				}
-				$defaults = array( 'fl-builder-template', 'elementor_library' );
-				$options  = Util::get_settings();
-				$raw      = $options['file_optimisation']['ccssExcludedPostTypes'] ?? null;
-				// Thin delegation to the shared parser so validation rules
-				// live in exactly one place (issue #1274 review). Raw is
-				// passed through so array values are preserved, not dropped.
-				$parsed = ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'parse_excluded_slugs' ) )
-					? Critical_CSS::parse_excluded_slugs( $raw )
-					: array();
-				// Additive merge with empty-fallback, mirroring
-				// Critical_CSS::get_excluded_post_types().
-				return array() !== $parsed ? array_values( array_unique( array_merge( $defaults, $parsed ) ) ) : $defaults;
+				// ARCH-009 fallback (Critical_CSS unavailable — mixed-version
+				// edge only): Critical_CSS is the canonical owner of the
+				// exclusion semantics, so return the built-in builder
+				// defaults only. Custom `ccssExcludedPostTypes` settings
+				// and the filter are honoured on the live delegation path
+				// above; this fallback stays fail-open equivalent.
+				return array( 'fl-builder-template', 'elementor_library' );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array( 'fl-builder-template', 'elementor_library' );
@@ -3714,8 +3711,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Whether a post ID belongs to an excluded builder-template type (issue #1274).
 		 *
-		 * Single delegation point so REST and worker call sites never
-		 * hand-roll their own strtolower/in_array copies.
+		 * Thin delegator to Critical_CSS::is_excluded_post() (ARCH-009 —
+		 * Critical_CSS owns the exclusion semantics). Single delegation
+		 * point so REST and worker call sites never hand-roll their own
+		 * strtolower/in_array copies.
 		 *
 		 * Fail-open: unknown posts, missing APIs, or any error returns
 		 * false (generate as before).
@@ -3729,6 +3728,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_excluded_post' ) ) {
 					return Critical_CSS::is_excluded_post( $post_id );
 				}
+				// ARCH-009 fallback (Critical_CSS unavailable): minimal
+				// get_post_type check against the defaults-only list above.
 				if ( $post_id <= 0 || ! function_exists( 'get_post_type' ) ) {
 					return false;
 				}
