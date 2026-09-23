@@ -27,7 +27,6 @@ import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
-import CheckboxOption from './common/CheckboxOption';
 import NoticeBanner from './common/NoticeBanner';
 import PerformanceAudit from './PerformanceAudit';
 import PageSpeedPanel from './PageSpeedPanel';
@@ -43,6 +42,7 @@ import AiPanel from './AiPanel';
 import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
+import LoggedInCacheCard from './dashboard/LoggedInCacheCard';
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
 import { __, sprintf, _n } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
@@ -57,7 +57,6 @@ import {
 	faBroom,
 	faBolt,
 	faGlobe,
-	faUserCheck,
 } from '@fortawesome/free-solid-svg-icons';
 
 /**
@@ -2143,70 +2142,15 @@ const Dashboard = ( {
 			</FeatureCard>
 
 			{ /* Logged-in user cache settings */ }
-			<FeatureCard
-				title={ __(
-					'Cache for Logged-in Users',
-					'performance-optimisation'
-				) }
-				icon={
-					<FontAwesomeIcon icon={ faUserCheck } aria-hidden="true" />
-				}
-			>
-				<SwitchField
-					label={ __( 'Enable', 'performance-optimisation' ) }
-					description={ __(
-						'Serve cached pages to logged-in users based on their role(s). The admin bar and user-specific content are preserved per role group.',
-						'performance-optimisation'
-					) }
-					name="enableLoggedInCache"
-					checked={ loggedInCacheEnabled }
-					onChange={ handleLoggedInCacheToggle }
-				/>
-				{ loggedInCacheEnabled && (
-					<div className="wppo-logged-in-cache-roles">
-						<p className="wppo-text-muted">
-							{ __(
-								'Select which user roles should receive cached pages:',
-								'performance-optimisation'
-							) }
-						</p>
-						{ Object.entries( userRoles ).map(
-							( [ slug, name ] ) => (
-								<CheckboxOption
-									key={ slug }
-									label={ name }
-									name={ slug }
-									checked={ loggedInCacheRoles.includes(
-										slug
-									) }
-									onChange={ handleRoleCheckbox }
-								/>
-							)
-						) }
-						<p className="wppo-text-muted wppo-mt-10">
-							{ __(
-								'When no roles are selected, caching applies to all logged-in users.',
-								'performance-optimisation'
-							) }
-						</p>
-					</div>
-				) }
-				<div className="wppo-feature-card__footer">
-					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary"
-						onClick={ saveLoggedInCacheSettings }
-						isLoading={ savingLoggedInCache }
-						label={ __(
-							'Save Settings',
-							'performance-optimisation'
-						) }
-						loadingLabel={ __(
-							'Saving…',
-							'performance-optimisation'
-						) }
-					/>
-				</div>
-			</FeatureCard>
+			<LoggedInCacheCard
+				enabled={ loggedInCacheEnabled }
+				selectedRoles={ loggedInCacheRoles }
+				saving={ savingLoggedInCache }
+				userRoles={ userRoles }
+				onToggle={ handleLoggedInCacheToggle }
+				onRoleChange={ handleRoleCheckbox }
+				onSave={ saveLoggedInCacheSettings }
+			/>
 
 			{ /* Phase 1 — Performance Audit & System Info (v1.5.0) */ }
 			<div className="wppo-stacked-cards">
