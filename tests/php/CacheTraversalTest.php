@@ -313,7 +313,7 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 		$_SERVER['HTTP_HOST']   = 'example.com';
 		$_SERVER['REQUEST_URI'] = $request_uri;
 		unset( $_SERVER['QUERY_STRING'] );
-		return new Cache();
+		return $this->make_injected_cache();
 	}
 
 	/**

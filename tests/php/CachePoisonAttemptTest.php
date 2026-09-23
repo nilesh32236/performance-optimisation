@@ -131,7 +131,7 @@ class CachePoisonAttemptTest extends \PHPUnit\Framework\TestCase {
 		$_COOKIE                 = array();
 		$this->stub_read_path();
 
-		$tracked = new Cache();
+		$tracked = $this->make_injected_cache();
 		$clean   = null;
 		try {
 			// Same path-only key as the clean URL: no fragmentation.
@@ -142,7 +142,7 @@ class CachePoisonAttemptTest extends \PHPUnit\Framework\TestCase {
 			// Clean-URL fetch maps to the identical key and stays storable.
 			$_SERVER['REQUEST_URI']  = '/poison-page/';
 			$_SERVER['QUERY_STRING'] = '';
-			$clean                   = new Cache();
+			$clean                   = $this->make_injected_cache();
 			$this->assertSame( $clean->cache_key(), $tracked->cache_key() );
 			$this->assertTrue( $this->can_store( $clean ) );
 
@@ -173,7 +173,7 @@ class CachePoisonAttemptTest extends \PHPUnit\Framework\TestCase {
 			Functions\when( 'get_option' )->justReturn( array() );
 			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-			$cache = new Cache();
+			$cache = $this->make_injected_cache();
 
 			// Key stays pinned to the canonical home host.
 			$this->assertSame( 'example.com/poison-page', $cache->cache_key() );
@@ -212,7 +212,7 @@ class CachePoisonAttemptTest extends \PHPUnit\Framework\TestCase {
 			Functions\when( 'get_option' )->justReturn( array() );
 			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-			$cache = new Cache();
+			$cache = $this->make_injected_cache();
 			$root  = '/tmp/wordpress/wp-content/cache/wppo';
 
 			foreach ( array( '/%2e%2e/%2e%2e/etc/passwd', '/%252e%252e/evil', "/about/\0../../x", '..\\..\\windows' ) as $payload ) {

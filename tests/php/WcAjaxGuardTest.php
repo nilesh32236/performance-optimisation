@@ -231,7 +231,7 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 		$_SERVER['HTTP_HOST']   = 'example.com';
 		$_SERVER['REQUEST_URI'] = '/wc%2Dajax/get_refreshed_fragments/';
 
-		$via_constructor = new Cache();
+		$via_constructor = $this->make_injected_cache();
 		$seeded          = $this->make_cache( array(), '/wc%2Dajax/get_refreshed_fragments/' );
 
 		$this->assertTrue( $this->invoke_private( $via_constructor, 'is_not_cacheable' ) );

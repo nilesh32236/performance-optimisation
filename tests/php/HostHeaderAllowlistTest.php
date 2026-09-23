@@ -98,7 +98,7 @@ class HostHeaderAllowlistTest extends \PHPUnit\Framework\TestCase {
 			Functions\when( 'get_option' )->justReturn( array() );
 			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-			$cache = new Cache();
+			$cache = $this->make_injected_cache();
 
 			// Key pinned to the canonical home host, never the forged host.
 			$this->assertSame( 'example.com/test-page', $cache->cache_key() );
@@ -128,7 +128,7 @@ class HostHeaderAllowlistTest extends \PHPUnit\Framework\TestCase {
 			Functions\when( 'get_option' )->justReturn( array() );
 			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-			$cache = new Cache();
+			$cache = $this->make_injected_cache();
 			$url   = $cache->get_cache_file_url();
 
 			$this->assertStringContainsString( '/cache/wppo/example.com/test-page/index.html', $url );
@@ -154,7 +154,7 @@ class HostHeaderAllowlistTest extends \PHPUnit\Framework\TestCase {
 		$_COOKIE                 = array();
 		$this->stub_read_path();
 
-		$tracked = new Cache();
+		$tracked = $this->make_injected_cache();
 		$this->assertSame( 'example.com/test-page', $tracked->cache_key() );
 
 		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
@@ -166,7 +166,7 @@ class HostHeaderAllowlistTest extends \PHPUnit\Framework\TestCase {
 		// Clean URL maps to the identical key and stays storable.
 		$_SERVER['REQUEST_URI']  = '/test-page/';
 		$_SERVER['QUERY_STRING'] = '';
-		$clean                   = new Cache();
+		$clean                   = $this->make_injected_cache();
 		$this->assertSame( $clean->cache_key(), $tracked->cache_key() );
 		$this->assertTrue( $store->invoke( $clean ) );
 	}

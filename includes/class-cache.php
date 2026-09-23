@@ -350,13 +350,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Constructor to initialize cache settings and configurations.
 		 *
-		 * @param array $options Plugin options (optional). When empty, loaded from DB.
+		 * Collaborators are constructor-injected (REF-006): the instance is
+		 * fully initialized on return — there is no partially-initialized
+		 * state between construction and setter calls. Callers that only
+		 * need purge/read-only paths and hold no live collaborators should
+		 * build through {@see Main::create_cache()}, which supplies
+		 * equivalents built from the same options snapshot.
+		 *
+		 * @param array              $options            Plugin options. When empty, loaded from DB.
+		 * @param Image_Optimisation $image_optimisation Live image-optimisation collaborator (identity shared with Main).
+		 * @param Google_Fonts       $google_fonts       Live Google-Fonts collaborator (identity shared with Main).
 		 * @since 1.0.0
 		 */
-		public function __construct( array $options = array() ) {
-			$raw_host     = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
-			$request_host = Util::normalize_cache_host( $raw_host );
-			$canonical    = Util::get_canonical_host();
+		public function __construct( array $options, Image_Optimisation $image_optimisation, Google_Fonts $google_fonts ) {
+			$this->image_optimisation = $image_optimisation;
+			$this->google_fonts       = $google_fonts;
+			$raw_host                 = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$request_host             = Util::normalize_cache_host( $raw_host );
+			$canonical                = Util::get_canonical_host();
 
 			if ( '' !== $canonical ) {
 				// Pin the cache key to the canonical home host by construction:
@@ -552,6 +563,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Set the Image_Optimisation instance to reuse instead of creating a new one.
 		 *
+		 * Deprecated thin proxy (REF-006): collaborators are constructor-injected,
+		 * so this only re-points the already-initialized property for legacy
+		 * callers. New code must pass the instance to the constructor.
+		 *
+		 * @deprecated NEXT Use constructor injection instead.
 		 * @param Image_Optimisation $image_optimisation The existing instance.
 		 * @return void
 		 * @since 2.0.0
@@ -563,6 +579,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Set the Google_Fonts instance to reuse instead of creating a new one.
 		 *
+		 * Deprecated thin proxy (REF-006): collaborators are constructor-injected,
+		 * so this only re-points the already-initialized property for legacy
+		 * callers. New code must pass the instance to the constructor.
+		 *
+		 * @deprecated NEXT Use constructor injection instead.
 		 * @param Google_Fonts $google_fonts The existing instance.
 		 * @return void
 		 * @since 2.0.0
@@ -2761,7 +2782,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// the post-hoisting HTML with the core cascade intact.
 			$buffer = $this->hoist_late_block_styles( $buffer );
 
-			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
+			// Buffer collaborators are constructor-injected (REF-006): reuse the
+			// live instances shared with Main. No fallback `new` here — the
+			// constructor guarantees both are set, so the buffer pipeline can
+			// never diverge onto a stale options snapshot.
+			$image_optimisation = $this->image_optimisation;
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
 			$buffer = $image_optimisation->add_delay_load_img( $buffer );
@@ -2771,13 +2796,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Host Google Fonts locally via buffer-level interception.
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
-				$google_fonts = $this->google_fonts ? $this->google_fonts : new Google_Fonts( $this->options );
+				$google_fonts = $this->google_fonts;
 				$buffer       = $google_fonts->process_buffer( $buffer );
 			}
 
 			// Inject metric-matched font fallback when enabled (OMGF Pro parity).
 			if ( ! empty( $this->options['file_optimisation']['fontMetricFallback'] ?? false ) ) {
-				$google_fonts = $this->google_fonts ? $this->google_fonts : new Google_Fonts( $this->options );
+				$google_fonts = $this->google_fonts;
 				$buffer       = $google_fonts->inject_metric_fallback( $buffer );
 			}
 

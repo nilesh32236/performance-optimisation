@@ -454,15 +454,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Create the static-cache collaborator with a test seam.
 		 *
 		 * Applies the `wppo_cache_instance` filter so tests (and advanced
-		 * integrations) can stub the Cache collaborator; defaults to
-		 * `new Cache( $options )` preserving current behavior.
+		 * integrations) can stub the Cache collaborator. Collaborators are
+		 * constructor-injected (REF-006): when live instances are supplied
+		 * they are shared by identity; when omitted (purge/read-only callers
+		 * holding no live instances) equivalents are built eagerly from the
+		 * same options snapshot so the Cache is still fully initialized on
+		 * return — the single fallback site for the whole plugin.
 		 *
 		 * @since 2.2.0
-		 * @param array $options Plugin options passed to Cache.
+		 * @since NEXT Accepts optional collaborator overrides for constructor injection.
+		 * @param array                   $options            Plugin options passed to Cache.
+		 * @param Image_Optimisation|null $image_optimisation Live collaborator, or null to build an equivalent from $options.
+		 * @param Google_Fonts|null       $google_fonts       Live collaborator, or null to build an equivalent from $options.
 		 * @return mixed Cache instance (or filtered stub).
 		 */
-		public static function create_cache( array $options ) {
-			$cache = new Cache( $options );
+		public static function create_cache( array $options, ?Image_Optimisation $image_optimisation = null, ?Google_Fonts $google_fonts = null ) {
+			$cache = new Cache(
+				$options,
+				$image_optimisation ?? new Image_Optimisation( $options ),
+				$google_fonts ?? new Google_Fonts( $options )
+			);
 			/**
 			 * Filter the Cache collaborator instance.
 			 *
@@ -1262,13 +1273,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function ensure_hook_cache_for_registry( bool $force = false ): mixed {
 			if ( $force || ! $this->cache ) {
-				$this->cache = self::create_cache( $this->options );
-				if ( is_object( $this->cache ) && method_exists( $this->cache, 'set_image_optimisation' ) ) {
-					$this->cache->set_image_optimisation( $this->image_optimisation );
-				}
-				if ( is_object( $this->cache ) && method_exists( $this->cache, 'set_google_fonts' ) ) {
-					$this->cache->set_google_fonts( $this->google_fonts );
-				}
+				// Constructor injection (REF-006): share the live collaborator
+				// instances by identity so the buffer pipeline can never
+				// diverge onto a stale options snapshot.
+				$this->cache = self::create_cache( $this->options, $this->image_optimisation, $this->google_fonts );
 			}
 			return $this->cache;
 		}
