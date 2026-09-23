@@ -98,7 +98,9 @@ items:
     title: 'Extract Hook_Registry from Main::setup_hooks (McCabe >30, ~59 hooks)'
     type: architecture
     priority: medium
-    status: queued
+    status: autofix-running
+    github_issue: 1506
+    github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-01/R-05
     notes:
       - 'Registry pattern only; no hook add/remove/reorder. CronHookParityTest pins registration.'
