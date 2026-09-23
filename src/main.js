@@ -338,6 +338,41 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		task().then( release, release );
 	};
 
+	// Audit #1515: shared clear-cache flow — both admin-bar buttons repeat
+	// postJsonRequest + success/error showNotice + catch-console.error and
+	// differ only in payload and copy keys. Callers keep payload building
+	// (including path sanitisation) and pass copy keys here.
+	const clearCacheAction = ( {
+		payload,
+		logLabel,
+		successKey,
+		successFallback,
+		failKey,
+		failFallback,
+		retryKey,
+		retryFallback,
+	} ) =>
+		postJsonRequest( '/clear_cache', payload )
+			.then( ( res ) => {
+				if ( res.success ) {
+					showNotice(
+						getNoticeString( successKey, successFallback )
+					);
+				} else {
+					showNotice(
+						res.message || getNoticeString( failKey, failFallback ),
+						'error'
+					);
+				}
+			} )
+			.catch( ( error ) => {
+				console.error( logLabel, getErrorLogMessage( error ) );
+				showNotice(
+					getNoticeString( retryKey, retryFallback ),
+					'error'
+				);
+			} );
+
 	const clearAllCacheBtn = document.querySelector(
 		'#wp-admin-bar-wppo_clear_all .ab-item'
 	);
@@ -347,39 +382,16 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			event.preventDefault();
 			const item = this;
 			withBusyItem( item, () =>
-				postJsonRequest( '/clear_cache', { action: 'clear_cache' } )
-					.then( ( res ) => {
-						if ( res.success ) {
-							showNotice(
-								getNoticeString(
-									'cacheCleared',
-									'Cache cleared successfully.'
-								)
-							);
-						} else {
-							showNotice(
-								res.message ||
-									getNoticeString(
-										'clearFailed',
-										'Failed to clear cache.'
-									),
-								'error'
-							);
-						}
-					} )
-					.catch( ( error ) => {
-						console.error(
-							'Cache clear failed: ',
-							getErrorLogMessage( error )
-						);
-						showNotice(
-							getNoticeString(
-								'clearRetry',
-								'Failed to clear cache. Please try again.'
-							),
-							'error'
-						);
-					} )
+				clearCacheAction( {
+					payload: { action: 'clear_cache' },
+					logLabel: 'Cache clear failed: ',
+					successKey: 'cacheCleared',
+					successFallback: 'Cache cleared successfully.',
+					failKey: 'clearFailed',
+					failFallback: 'Failed to clear cache.',
+					retryKey: 'clearRetry',
+					retryFallback: 'Failed to clear cache. Please try again.',
+				} )
 			);
 		} );
 	}
@@ -409,42 +421,20 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				path = '/';
 			}
 			withBusyItem( item, () =>
-				postJsonRequest( '/clear_cache', {
-					action: 'clear_single_page_cache',
-					path,
+				clearCacheAction( {
+					payload: {
+						action: 'clear_single_page_cache',
+						path,
+					},
+					logLabel: 'Page cache clear failed: ',
+					successKey: 'pageCleared',
+					successFallback: 'Page cache cleared successfully.',
+					failKey: 'pageFailed',
+					failFallback: 'Failed to clear page cache.',
+					retryKey: 'pageRetry',
+					retryFallback:
+						'Failed to clear page cache. Please try again.',
 				} )
-					.then( ( res ) => {
-						if ( res.success ) {
-							showNotice(
-								getNoticeString(
-									'pageCleared',
-									'Page cache cleared successfully.'
-								)
-							);
-						} else {
-							showNotice(
-								res.message ||
-									getNoticeString(
-										'pageFailed',
-										'Failed to clear page cache.'
-									),
-								'error'
-							);
-						}
-					} )
-					.catch( ( error ) => {
-						console.error(
-							'Page cache clear failed: ',
-							getErrorLogMessage( error )
-						);
-						showNotice(
-							getNoticeString(
-								'pageRetry',
-								'Failed to clear page cache. Please try again.'
-							),
-							'error'
-						);
-					} )
 			);
 		} );
 	}

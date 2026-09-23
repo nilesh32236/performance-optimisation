@@ -2,9 +2,10 @@ import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRobot } from '@fortawesome/free-solid-svg-icons';
-import { apiCall, patchSettingsCache } from '../lib/apiRequest';
+import { getWppoSettings } from '../lib/apiRequest';
 import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
+import useSaveSettings from '../lib/useSaveSettings';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
@@ -16,22 +17,28 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
  * @since 2.0.0
  */
 const LlmsPanel = () => {
-	const initial =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.llms_txt || {}
-			: {};
+	const initial = getWppoSettings( 'settings.llms_txt', {} );
 
 	const [ enabled, setEnabled ] = useState( !! initial.enabled );
 	const [ source, setSource ] = useState( initial.source || 'both' );
-	const [ saving, setSaving ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const { saving, save } = useSaveSettings( 'llms_txt', {
+		notify,
+		dismiss,
+		successMessage: __(
+			'LLMs.txt settings saved.',
+			'performance-optimisation'
+		),
+		errorMessage: __(
+			'Failed to save LLMs.txt settings.',
+			'performance-optimisation'
+		),
+	} );
 
 	// Resync when the global settings arrive late or change after a save
 	// elsewhere (see EdgeCachePanel for the snapshot-key pattern).
 	const llmsKey = JSON.stringify(
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.llms_txt ?? null
-			: null
+		getWppoSettings( 'settings.llms_txt', null )
 	);
 	useEffect( () => {
 		// Audit #1354: skip resync while saving (EdgeCachePanel pattern)
@@ -39,61 +46,21 @@ const LlmsPanel = () => {
 		if ( saving ) {
 			return;
 		}
-		const s =
-			typeof wppoSettings !== 'undefined'
-				? wppoSettings?.settings?.llms_txt || {}
-				: {};
+		const s = getWppoSettings( 'settings.llms_txt', {} );
 		setEnabled( !! s.enabled );
 		setSource( s.source || 'both' );
 	}, [ llmsKey, saving ] );
 
-	const homeUrl =
-		typeof wppoSettings !== 'undefined' ? wppoSettings?.homeUrl || '' : '';
+	const homeUrl = getWppoSettings( 'homeUrl', '' );
 	const llmsUrl = homeUrl
 		? `${ homeUrl.replace( /\/$/, '' ) }/llms.txt`
 		: '/llms.txt';
 
 	const handleSave = async () => {
-		setSaving( true );
-		// Audit #1354: clear stale notices first like sibling panels.
-		dismiss();
 		try {
-			const response = await apiCall( 'update_settings', {
-				tab: 'llms_txt',
-				settings: { enabled, source },
-			} );
-			if ( response.success ) {
-				// Mutate global for next mount.
-				patchSettingsCache( 'llms_txt', { enabled, source } );
-				notify( {
-					type: 'success',
-					message: __(
-						'LLMs.txt settings saved.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
-			} else {
-				notify( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save LLMs.txt settings.',
-							'performance-optimisation'
-						),
-				} );
-			}
+			await save( { enabled, source } );
 		} catch {
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to save LLMs.txt settings.',
-					'performance-optimisation'
-				),
-			} );
-		} finally {
-			setSaving( false );
+			// Notify already handled inside useSaveSettings.
 		}
 	};
 

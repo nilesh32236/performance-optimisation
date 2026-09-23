@@ -40,6 +40,48 @@ export const SECRET_KEY_PATTERN =
 	/(?:[_-]keys?|api[_-]?keys?|(?:private|secret|public|client|consumer)keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
 
 /**
+ * Shared walker for secret-key redaction.
+ *
+ * Single traversal home for the pollution guard + SECRET_KEY_PATTERN check
+ * previously duplicated between PluginSetting.js (mask-with-'REDACTED') and
+ * this module (delete). `mask` selects the mode: null deletes matching keys,
+ * a string masks them (only non-empty string values are masked; non-string
+ * secrets are still deleted so a future non-string credential cannot leak).
+ *
+ * @since NEXT
+ * @param {*}           value Value to walk.
+ * @param {string|null} mask  Mask string or null for delete mode.
+ * @return {*} Walked clone.
+ */
+const walkSensitiveKeys = ( value, mask ) => {
+	if ( Array.isArray( value ) ) {
+		return value.map( ( item ) => walkSensitiveKeys( item, mask ) );
+	}
+	if ( value && typeof value === 'object' ) {
+		const out = {};
+		Object.entries( value ).forEach( ( [ key, val ] ) => {
+			if ( isSensitivePollutionKey( key ) ) {
+				return;
+			}
+			if ( SECRET_KEY_PATTERN.test( key ) ) {
+				if (
+					typeof mask === 'string' &&
+					typeof val === 'string' &&
+					val
+				) {
+					out[ key ] = mask;
+					return;
+				}
+				return;
+			}
+			out[ key ] = walkSensitiveKeys( val, mask );
+		} );
+		return out;
+	}
+	return value;
+};
+
+/**
  * Deep-clone a value while deleting every nested key matching
  * SECRET_KEY_PATTERN. Non-string or empty-string secrets are deleted as
  * well so a future non-string credential shape cannot leak either.
@@ -49,22 +91,21 @@ export const SECRET_KEY_PATTERN =
  * @param {*} value Value to strip.
  * @return {*} Stripped clone.
  */
-export const stripSensitiveKeys = ( value ) => {
-	if ( Array.isArray( value ) ) {
-		return value.map( stripSensitiveKeys );
-	}
-	if ( value && typeof value === 'object' ) {
-		const out = {};
-		Object.entries( value ).forEach( ( [ key, val ] ) => {
-			if ( isSensitivePollutionKey( key ) ) {
-				return;
-			}
-			if ( SECRET_KEY_PATTERN.test( key ) ) {
-				return;
-			}
-			out[ key ] = stripSensitiveKeys( val );
-		} );
-		return out;
-	}
-	return value;
-};
+export const stripSensitiveKeys = ( value ) => walkSensitiveKeys( value, null );
+
+/**
+ * Deep-clone a value while masking every nested non-empty string key
+ * matching SECRET_KEY_PATTERN with `mask` (default 'REDACTED').
+ * Non-string secrets are deleted, matching the delete-mode contract.
+ * Pollution-vector keys are never copied.
+ *
+ * Shared with PluginSetting.js so the export-redaction path and the
+ * preset-strip path share one walker and one pattern.
+ *
+ * @since NEXT
+ * @param {*}      value  Value to redact.
+ * @param {string} [mask] Mask string.
+ * @return {*} Redacted clone.
+ */
+export const redactSecrets = ( value, mask = 'REDACTED' ) =>
+	walkSensitiveKeys( value, mask );

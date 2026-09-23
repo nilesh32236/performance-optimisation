@@ -5,10 +5,12 @@ import { faBrain } from '@fortawesome/free-solid-svg-icons';
 import {
 	apiCall,
 	getErrorLogMessage,
+	getWppoSettings,
 	patchSettingsCache,
 } from '../lib/apiRequest';
 import { suggestionKey, formatValue } from './SuggestionsPanel';
 import useNotice from '../lib/useNotice';
+import useSaveSettings from '../lib/useSaveSettings';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 import SwitchField from './common/SwitchField';
@@ -23,10 +25,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
  * @since 2.0.0
  */
 const AiPanel = () => {
-	const initial =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.ai_adaptive || {}
-			: {};
+	const initial = getWppoSettings( 'settings.ai_adaptive', {} );
 
 	const [ enabled, setEnabled ] = useState( !! initial.enabled );
 	const [ useWpAiClient, setUseWpAiClient ] = useState(
@@ -34,12 +33,23 @@ const AiPanel = () => {
 	);
 	const [ cssRefreshOnLcpRegression, setCssRefreshOnLcpRegression ] =
 		useState( !! initial.css_refresh_on_lcp_regression );
-	const [ saving, setSaving ] = useState( false );
 	const suggestRunRef = useRef( null );
 	const [ learning, setLearning ] = useState( false );
 	const [ model, setModel ] = useState( null );
 	const [ suggestions, setSuggestions ] = useState( [] );
 	const { notice, notify, dismiss } = useNotice();
+	const { saving, save } = useSaveSettings( 'ai_adaptive', {
+		notify,
+		dismiss,
+		successMessage: __(
+			'AI Adaptive settings saved.',
+			'performance-optimisation'
+		),
+		errorMessage: __(
+			'Failed to save AI settings.',
+			'performance-optimisation'
+		),
+	} );
 
 	const fetchModel = useCallback(
 		async ( signal ) => {
@@ -118,40 +128,19 @@ const AiPanel = () => {
 	}, [ fetchModel, fetchSuggestions ] );
 
 	const handleSave = async () => {
-		setSaving( true );
-		dismiss();
+		const dismissed = getWppoSettings(
+			'settings.ai_adaptive.dismissed_suggestions',
+			[]
+		);
+		const dismissedList = Array.isArray( dismissed ) ? dismissed : [];
 		try {
-			const dismissed =
-				typeof wppoSettings !== 'undefined' &&
-				Array.isArray(
-					wppoSettings.settings?.ai_adaptive?.dismissed_suggestions
-				)
-					? wppoSettings.settings.ai_adaptive.dismissed_suggestions
-					: [];
-			const response = await apiCall( 'update_settings', {
-				tab: 'ai_adaptive',
-				settings: {
-					enabled,
-					use_wp_ai_client: useWpAiClient,
-					css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
-					dismissed_suggestions: dismissed,
-				},
+			const response = await save( {
+				enabled,
+				use_wp_ai_client: useWpAiClient,
+				css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
+				dismissed_suggestions: dismissedList,
 			} );
-			if ( response.success ) {
-				patchSettingsCache( 'ai_adaptive', {
-					enabled,
-					use_wp_ai_client: useWpAiClient,
-					css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
-					dismissed_suggestions: dismissed,
-				} );
-				notify( {
-					type: 'success',
-					message: __(
-						'AI Adaptive settings saved.',
-						'performance-optimisation'
-					),
-					durationMs: 3000,
-				} );
+			if ( response && response.success ) {
 				// Audit #1420: abort the previous post-save refresh so a
 				// stale response cannot overwrite newer state after rapid saves.
 				if ( suggestRunRef.current ) {
@@ -161,31 +150,9 @@ const AiPanel = () => {
 				fetchSuggestions( suggestRunRef.current.signal ).catch(
 					() => {}
 				);
-			} else {
-				notify( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save AI settings.',
-							'performance-optimisation'
-						),
-				} );
 			}
-		} catch ( saveError ) {
-			console.error(
-				'Save AI settings failed:',
-				getErrorLogMessage( saveError )
-			);
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to save AI settings.',
-					'performance-optimisation'
-				),
-			} );
-		} finally {
-			setSaving( false );
+		} catch {
+			// Notify already handled inside useSaveSettings.
 		}
 	};
 
@@ -245,10 +212,10 @@ const AiPanel = () => {
 		}
 		setApplyingMetrics( ( prev ) => [ ...prev, applyKey ] );
 		try {
-			const currentTabSettings =
-				typeof wppoSettings !== 'undefined'
-					? wppoSettings.settings?.[ payload.tab ] || {}
-					: {};
+			const currentTabSettings = getWppoSettings(
+				`settings.${ payload.tab }`,
+				{}
+			);
 			const merged = { ...currentTabSettings, ...payload.settings };
 			const res = await apiCall( 'update_settings', {
 				tab: payload.tab,
@@ -295,13 +262,11 @@ const AiPanel = () => {
 		if ( ! metric ) {
 			return;
 		}
-		const current =
-			typeof wppoSettings !== 'undefined' &&
-			Array.isArray(
-				wppoSettings.settings?.ai_adaptive?.dismissed_suggestions
-			)
-				? [ ...wppoSettings.settings.ai_adaptive.dismissed_suggestions ]
-				: [];
+		const stored = getWppoSettings(
+			'settings.ai_adaptive.dismissed_suggestions',
+			[]
+		);
+		const current = Array.isArray( stored ) ? [ ...stored ] : [];
 		if ( ! current.includes( metric ) ) {
 			current.push( metric );
 		}
