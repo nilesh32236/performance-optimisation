@@ -113,7 +113,9 @@ items:
     title: 'Constructor injection for Cache (remove setter injection, single construction path)'
     type: architecture
     priority: medium
-    status: queued
+    status: autofix-running
+    github_issue: 1508
+    github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-05
     notes:
       - 'Blocked until REF-002 clarifies options ownership (stale-snapshot risk). Do not start before REF-002 merges.'
