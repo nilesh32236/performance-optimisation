@@ -8,6 +8,7 @@ campaign: incremental-architecture-refactor
 created: 2026-09-22
 baseline:
   Main_methods_max: 232
+  Wp_Version_methods: 4
   Hook_Registry_methods: 7
   Util_methods_max: 159
   Util_facade_proxies: 33
@@ -158,14 +159,22 @@ items:
     priority: low
     status: autofix-running
     github_issue: 1514
-    github_pr: null
+    github_pr: 1516
+    merge_commit: 49a28489
+    notes:
+      - 'Merged 2026-09-23. useServerRules extracted (App -77 lines); 7 hook tests; parallelism + abort semantics preserved; build committed.'
     source: AUDIT/FINAL-REVIEW/architecture.md R-08
 
   - id: REF-010
     title: 'Central Wp_Version gate (replace scattered version_compare + TODOs)'
     type: architecture
     priority: low
-    status: queued
+    status: autofix-running
+    github_issue: 1518
+    github_pr: 1519
+    merge_commit: 5181c71c
+    notes:
+      - 'Merged 2026-09-23. Two-read boundary (canonical fail-false + global-only assume-newest); 48-test parity matrix. Accepted documented edge: explicit empty-string wp_version now canonicalizes via get_bloginfo (core never emits empty). get_bloginfo memoized + reset-wired.'
     source: AUDIT/FINAL-REVIEW/architecture.md R-11
 
   - id: REF-012
@@ -214,7 +223,9 @@ items:
     title: 'Move ALLOWED_SETTINGS_KEYS + sanitizer-map ownership into Settings_Store'
     type: architecture
     priority: medium
-    status: queued
+    status: autofix-running
+    github_issue: 1520
+    github_pr: null
     source: REF-002
     discoveries:
       - 'Split out of REF-002 during planning: constant ownership touches Rest/CLI/Main consumers, so it ships as its own focused item after Settings_Store merges.'
