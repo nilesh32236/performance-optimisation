@@ -23,7 +23,7 @@
  * `wp_generate_uuid4()`, `wp_rand()`, `wp_using_ext_object_cache()`,
  * `wp_cache_add()` / `wp_cache_get()` / `wp_cache_delete()`,
  * `get_transient()` / `set_transient()` / `delete_transient()`, plus the
- * cross-boundary `Util::get_settings()` (guard toggle + TTL policy),
+ * cross-boundary `Settings_Store::get_settings()` (guard toggle + TTL policy),
  * resolved at call time via the spl autoloader so there is no load-time
  * cycle.
  *
@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 	 *
 	 * Static scheduler boundary. Depends only on the minimal WordPress /
 	 * Action Scheduler APIs required to preserve the existing implementation
-	 * verbatim (see file docblock) plus the single `Util::get_settings()`
+	 * verbatim (see file docblock) plus the single `Settings_Store::get_settings()`
 	 * call for the guard toggle and TTL policy. `Util` proxies back at call
 	 * time only (autoloader, no load-time cycle).
 	 *
@@ -443,7 +443,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 		 */
 		public static function is_stampede_guard_enabled(): bool {
 			try {
-				$settings = Util::get_settings();
+				$settings = Settings_Store::get_settings();
 				$guard    = $settings['cache_settings']['stampedeGuard'] ?? true;
 			} catch ( \Throwable $e ) {
 				$guard = true;
@@ -473,7 +473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 		public static function stampede_lock_ttl(): int {
 			$ttl = 5;
 			try {
-				$settings = Util::get_settings();
+				$settings = Settings_Store::get_settings();
 				$raw      = $settings['cache_settings']['stampedeLockTtl'] ?? 5;
 				$ttl      = (int) $raw;
 			} catch ( \Throwable $e ) {
