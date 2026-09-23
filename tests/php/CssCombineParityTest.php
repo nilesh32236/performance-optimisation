@@ -996,7 +996,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 						),
 					);
 				}
-				return array();
+				return $fallback;
 			}
 		);
 
