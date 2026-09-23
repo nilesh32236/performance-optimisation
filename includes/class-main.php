@@ -1157,6 +1157,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Google_Fonts'           => 'class-google-fonts.php',
 				'Hook_Registry'          => 'class-hook-registry.php',
 				'Htaccess_Handler'       => 'class-htaccess-handler.php',
+				'Http'                   => 'class-http.php',
 				'Image_Optimisation'     => 'class-image-optimisation.php',
 				'Img_Converter'          => 'class-img-converter.php',
 				'LiteSpeed_Crawler'      => 'class-litespeed-crawler.php',
