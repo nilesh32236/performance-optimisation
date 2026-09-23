@@ -558,7 +558,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			'wppo_web_vitals_last_rescan',
 			'wppo_preload_cron_last_id',
 			'wppo_preload_cron_migrated',
-			// Image library scan cursors (class-img-converter.php) — previously
+			// Image library scan cursors (includes/Images/class-img-converter.php) — previously
 			// only removed on deactivation, never on uninstall (audit #899).
 			'wppo_img_scan_cursor',
 			'wppo_img_scan_cursor_max',
@@ -575,8 +575,8 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			// written by the plugin but were previously absent from the list.
 			'wppo_ccss_salt',                          // Critical_CSS::SALT_KEY.
 			'wppo_sysinfo_salt',                       // System_Info::DROPIN_SALT_KEY.
-			'wppo_rum_top_url_gen',                    // RUM top-URL generation counter (class-rum.php).
-			'wppo_remove_query_strings_deprecated_logged', // Legacy removal marker from the retired #925 feature (class-main.php).
+			'wppo_rum_top_url_gen',                    // RUM top-URL generation counter (includes/Insight/class-rum.php).
+			'wppo_remove_query_strings_deprecated_logged', // Legacy removal marker from the retired #925 feature (includes/Core/class-main.php).
 			'wppo_ai_anomaly_last_alarm',              // AI_Adaptive::ANOMALY_COOLDOWN_KEY.
 			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
