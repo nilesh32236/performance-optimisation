@@ -167,8 +167,8 @@
     {
         "file": "includes/class-cache.php",
         "class": null,
-        "lines": 7304,
-        "methods": 137,
+        "lines": 6867,
+        "methods": 152,
         "hooks": [
             "shutdown"
         ],
@@ -176,7 +176,7 @@
         "refs": [
             "CDN",
             "Critical_CSS",
-            "Google_Fonts",
+            "Css_Combine",
             "Hook_Registry",
             "LiteSpeed_ESI",
             "LiteSpeed_Integration",
@@ -323,6 +323,23 @@
             "Pagespeed",
             "RUM",
             "Util"
+        ]
+    },
+    {
+        "file": "includes/class-css-combine.php",
+        "class": null,
+        "lines": 1533,
+        "methods": 30,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "CDN",
+            "Cache",
+            "Google_Fonts",
+            "Log",
+            "Main",
+            "Util",
+            "Wp_Version"
         ]
     },
     {
@@ -656,7 +673,7 @@
     {
         "file": "includes/class-loader-map.php",
         "class": null,
-        "lines": 235,
+        "lines": 236,
         "methods": 7,
         "hooks": [],
         "static_state": false,

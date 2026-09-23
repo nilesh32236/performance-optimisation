@@ -76,7 +76,7 @@
     "includes/class-cache.php": [
         "CDN",
         "Critical_CSS",
-        "Google_Fonts",
+        "Css_Combine",
         "Hook_Registry",
         "LiteSpeed_ESI",
         "LiteSpeed_Integration",
@@ -129,6 +129,15 @@
         "Pagespeed",
         "RUM",
         "Util"
+    ],
+    "includes/class-css-combine.php": [
+        "CDN",
+        "Cache",
+        "Google_Fonts",
+        "Log",
+        "Main",
+        "Util",
+        "Wp_Version"
     ],
     "includes/class-database-cleanup.php": [
         "Log",

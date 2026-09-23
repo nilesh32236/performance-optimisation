@@ -13,10 +13,8 @@
 
 namespace PerformanceOptimise\Inc;
 
-use PerformanceOptimise\Inc\Minify;
 use PerformanceOptimise\Inc\Minify\CSS;
 use PerformanceOptimise\Inc\Google_Fonts;
-use MatthiasMullie\Minify\CSS as CSSMinifier;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -246,13 +244,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private array $core_will_inline_memo = array();
 
 		/**
-		 * Max entries for the src stat LRU.
-		 *
-		 * @since 2.0.0
-		 */
-		private const SRC_STAT_CACHE_LIMIT = 500;
-
-		/**
 		 * Per-request LRU cache for src file stat (is_readable + filesize).
 		 *
 		 * @since 2.0.0
@@ -346,6 +337,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		private string $combine_css_preload_url = '';
+
+		/**
+		 * Lazily-created CSS-combine runner (ARCH-006).
+		 *
+		 * Single owner for the fetch/minify/write/journal/preload/budget/
+		 * fallback cluster; every combine proxy delegates here so
+		 * `Hook_Registry` callback identity is unchanged.
+		 *
+		 * @since NEXT
+		 * @var Css_Combine|null
+		 */
+		private ?Css_Combine $css_combine = null;
 
 		/**
 		 * Constructor to initialize cache settings and configurations.
@@ -1044,26 +1047,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param array $file_opt Production `file_optimisation` slice.
 		 * @return array Effective slice (staged values merged in preview).
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::get_sandbox_effective_file_opt}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function get_sandbox_effective_file_opt( array $file_opt ): array {
-			try {
-				$memo_key = md5( serialize( $file_opt ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
-				if ( array_key_exists( $memo_key, $this->sandbox_effective_file_opt_memo ) ) {
-					return $this->sandbox_effective_file_opt_memo[ $memo_key ];
-				}
-				$effective = $file_opt;
-				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'get_effective_file_optimisation' ) ) {
-					$resolved = Main::get_effective_file_optimisation( $file_opt );
-					if ( is_array( $resolved ) ) {
-						$effective = $resolved;
-					}
-				}
-				$this->sandbox_effective_file_opt_memo[ $memo_key ] = $effective;
-				return $effective;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return $file_opt;
+			return $this->css_combine()->get_sandbox_effective_file_opt( $file_opt );
 		}
 
 		/**
@@ -1085,36 +1073,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *                              so will_combine_css_inline() evaluates the
 		 *                              pre-gate once instead of twice per request.
 		 * @return bool True when combine/inline must be skipped.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::should_bypass_combine_for_elementor}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function should_bypass_combine_for_elementor( array $file_opt, ?bool $looks_like = null ): bool {
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) ) {
-					return false;
-				}
-				// Centralized native pre-gate (class/constant/query var
-				// only — zero WP calls) so non-Elementor sites, and unit
-				// tests with strict function_exists() expectations, pay
-				// nothing; the full guarded detection (memoized per request
-				// in Main::is_elementor_built_page()) runs only when
-				// Elementor looks present.
-				if ( null === $looks_like ) {
-					$looks_like = Main::looks_like_elementor_request();
-				}
-				if ( ! $looks_like ) {
-					return false;
-				}
-				return Main::should_skip_combine_for_elementor( $file_opt );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_elementor_safe_mode_active' ) ) {
-						return Main::is_elementor_safe_mode_active( $file_opt );
-					}
-				} catch ( \Throwable $e2 ) {
-					unset( $e2 );
-				}
-				return true;
+			return $this->css_combine()->should_bypass_combine_for_elementor( $file_opt, $looks_like );
+		}
+
+		/**
+		 * Lazily-created CSS-combine runner (ARCH-006).
+		 *
+		 * Single owner for the fetch/minify/write/journal/preload/budget/
+		 * fallback cluster; every combine proxy delegates here (instance
+		 * methods) so `Hook_Registry` callback identity is unchanged.
+		 *
+		 * @since NEXT
+		 * @return Css_Combine Combine runner bound to this instance.
+		 */
+		private function css_combine(): Css_Combine {
+			if ( null === $this->css_combine ) {
+				$this->css_combine = new Css_Combine( $this );
 			}
+			return $this->css_combine;
 		}
 
 		/**
@@ -1122,221 +1102,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return void
 		 * @since 1.0.0
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::combine_css}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		public function combine_css() {
-			if ( $this->should_bypass_for_litespeed() ) {
-				return;
-			}
-			// Note (see #624): when core removes script/style concatenation in favour
-			// of core preload emission, reassess whether this concat pipeline should
-			// be dropped / relegated to an opt-in legacy toggle in favour of core
-			// preloads (wp_resource_hints). No runtime change until the core API lands.
-			// Sandbox preview (issue #1163): the preview admin renders staged
-			// combineCSS even without logged-in cache enabled. is_not_cacheable()
-			// is also bypassed: the preview defines DONOTCACHEPAGE and carries a
-			// query string by design, both of which force that gate. Visitors
-			// keep the production gates. 404s never combine.
-			$is_preview = false;
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_sandbox_preview_active' ) ) {
-					$is_preview = Main::is_sandbox_preview_active();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			if ( ( ! $this->is_cache_allowed_for_current_user() && ! $is_preview ) || is_404() || ( $this->is_not_cacheable() && ! $is_preview ) ) {
-				return;
-			}
-
-			global $wp_styles;
-			$styles = $wp_styles->queue;
-
-			if ( empty( $styles ) ) {
-				return;
-			}
-
-			$fs = $this->get_filesystem();
-			if ( ! $fs ) {
-				return;
-			}
-
-			$exclude_combine_css = array();
-			// Sandbox preview (issue #1163): staged excludeCombineCSS lines
-			// also exclude in preview only. Util::process_urls() is
-			// array-safe (string or array payload).
-			$file_opt_for_combine = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
-			if ( $is_preview ) {
-				$file_opt_for_combine = $this->get_sandbox_effective_file_opt( $file_opt_for_combine );
-			}
-			if ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
-				$exclude_combine_css = Util::process_urls( $file_opt_for_combine['excludeCombineCSS'] );
-			}
-			// Sandbox preview (issue #1163): a staged combineCSS=off must disable
-			// combining in preview (mirror minify_queued_styles logic), otherwise
-			// staged-disable can never be previewed.
-			if ( $is_preview && empty( $file_opt_for_combine['combineCSS'] ) ) {
-				return;
-			}
-			// Elementor-safe mode (issue #1259): default-off combine/inline for
-			// builder-built pages. Uses the sandbox-effective slice so a staged
-			// elementorSafeMode=off can be previewed before promote. Single
-			// choke point (should_bypass_combine_for_elementor()) shared with
-			// will_combine_css_inline() so the two call sites cannot drift.
-			if ( $this->should_bypass_combine_for_elementor( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
-				return;
-			}
-			// Unified safe-mode kill switch (issue #1465): safe mode disables
-			// combine in one click. Preview admins still render staged output
-			// (per-tag widening above); visitors and normal requests bail out
-			// here. Fail-open: predicate failure means combine proceeds.
-			if ( ! $is_preview ) {
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_safe_mode_active' ) ) {
-						if ( Main::is_safe_mode_active( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
-							return;
-						}
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			// On WP 6.9+ with separate (on-demand) core block assets active, never
-			// fold any core block-asset stylesheet into the combined file — doing so
-			// would force the wp-block-library monolith (or per-block styles for
-			// blocks not even on the page) back into the head and fight core's
-			// conditional loading. Belt-and-suspenders: these handles are normally
-			// not in the queue on 6.9 anyway. The pipeline still minifies eligible
-			// non-block handles below but lets core hoist block styles (yield where
-			// core wins; combine is the fallback, not a competitor). The
-			// `should_load_separate_core_block_assets` opt-out filter is honoured
-			// via block_assets_are_separate(): an explicit opt-out restores the
-			// legacy monolith path. The operator escape hatch
-			// (`blockAssetsOnDemand` off / `loadAllCoreBlockAssets` on) is applied
-			// explicitly via get_effective_separate_block_assets() so Cache never
-			// depends on Main's filter side effect.
-			$separate_block_assets = $this->get_effective_separate_block_assets();
-
-			// The effective separate-assets state is baked into the combined-CSS
-			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
-			// assets on by default for classic themes) cannot keep serving a stale
-			// combined monolith built while wp-block-library was still in the queue.
-			// Sandbox preview (issue #1163) gets its own `-preview` variant so
-			// staged combine output can never overwrite the production file.
-			$css_variant = $separate_block_assets ? 'separate' : '';
-			if ( $is_preview ) {
-				$css_variant .= '' === $css_variant ? 'preview' : '-preview';
-			}
-
-			// The set of handles this request would pull into the combined file. The
-			// same skip rules are applied below during generation so the two branches
-			// stay consistent about which styles belong in the file.
-			$eligible_handles = $this->resolve_eligible_handles( $styles, $exclude_combine_css );
-
-			// On small block-theme bundles core's 40KB inline budget (WP 6.9+)
-			// already inlines the eligible styles cheaply — skip creating the
-			// combined file and let core inline instead (one fewer request).
-			if ( $this->should_skip_combine_for_inline_budget( $eligible_handles ) ) {
-				return;
-			}
-
-			// Reuse cached CSS only if it is still fresh (no source file is newer and
-			// the set of combined handles is unchanged).
-			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
-
-			if ( $fs->exists( $css_file_path ) ) {
-				// Strict guard: stale/missing/empty/unreadable cached file must
-				// never be served — fall through to regeneration.
-				if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
-					// Treat as stale so regeneration path runs; log once per window.
-					$this->log_combine_fallback( 'stale_cached_file', $eligible_handles );
-				} else {
-					$cache_mtime  = (int) $fs->mtime( $css_file_path );
-					$source_newer = false;
-
-					// Reuse the pre-classified eligible handles to avoid re-running
-					// core_will_inline / block-asset / exclusion checks (triple classify).
-					foreach ( $eligible_handles as $handle ) {
-						if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-							continue;
-						}
-						$src      = $wp_styles->registered[ $handle ]->src;
-						$src_path = Util::get_local_path( (string) $src );
-						if ( '' !== $src_path && $fs->exists( $src_path ) && $fs->mtime( $src_path ) > $cache_mtime ) {
-							$source_newer = true;
-							break;
-						}
-					}
-
-					// A combined file built before this inline-CSS support may embed styles
-					// that core now inlines, or the set of handles may have changed; such a
-					// file would duplicate inlined rules, so regenerate instead of reusing.
-					if ( ! $source_newer && ! $this->combined_handles_match( $css_file_path, $eligible_handles ) ) {
-						$source_newer = true;
-					}
-
-					if ( ! $source_newer ) {
-						// Final valid check before enqueueing cached file.
-						if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
-							$this->log_combine_fallback( 'invalid_cached_file', $eligible_handles );
-						} else {
-							$css_url = $this->get_cache_file_url( 'css', $css_variant );
-							$version = (string) $cache_mtime;
-							wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
-							$this->register_combine_css_path( $css_file_path );
-							$this->emit_combined_preload_hint( $css_url, $version, $css_file_path );
-							return;
-						}
-					}
-				}
-			}
-
-			// Generate from the pre-classified eligible handles to avoid
-			// re-classifying each handle (triple classify -> single classify).
-			// Dequeue is deferred until the combined payload is verified and
-			// written (safe fallback: never strip originals until replacement
-			// is confirmed present).
-			$fetch_result       = $this->fetch_and_minify_css( $eligible_handles );
-			$combined_css       = $fetch_result['css'];
-			$successful_handles = $fetch_result['handles'];
-			if ( '' !== $fetch_result['error'] ) {
-				if ( $this->is_safe_css_combine_fallback_enabled() ) {
-					$log_handles = in_array( $fetch_result['error'], array( 'preg_error', 'empty_after_minify' ), true ) ? $successful_handles : $eligible_handles;
-					$this->log_combine_fallback( $fetch_result['error'], $log_handles );
-				}
-				return;
-			}
-
-			$write_result  = $this->write_combined_file( $combined_css, $css_variant );
-			$css_file_path = $write_result['path'];
-
-			if ( '' === $css_file_path ) {
-				if ( $this->is_safe_css_combine_fallback_enabled() ) {
-					$this->log_combine_fallback( $write_result['error'], $successful_handles );
-				}
-				return;
-			}
-
-			// Fresh combined CSS changes the total-asset stats — do not let
-			// the dashboard show stale numbers until the TTL expires (audit
-			// #874 finding 6). Skipped in sandbox preview: preview output must
-			// not invalidate production stats.
-			if ( ! $is_preview ) {
-				self::bump_stats_cache();
-			}
-
-			foreach ( $successful_handles as $handle ) {
-				wp_dequeue_style( $handle );
-			}
-
-			$css_url = $this->get_cache_file_url( 'css', $css_variant );
-
-			$version = $fs->mtime( $css_file_path );
-			wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
-			$this->register_combine_css_path( $css_file_path );
-			$this->write_combined_handles( $css_file_path, $eligible_handles );
-
-			$this->emit_combined_preload_hint( $css_url, $version, $css_file_path );
+			$this->css_combine()->combine_css();
 		}
 
 		/**
@@ -1350,9 +1120,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array $styles     Queued handles.
 		 * @param array $exclusions Excluded handles/patterns.
 		 * @return array Eligible handles.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::resolve_eligible_handles}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function resolve_eligible_handles( array $styles, array $exclusions ): array {
-			return $this->get_combined_handles( $styles, $exclusions );
+			return $this->css_combine()->resolve_eligible_handles( $styles, $exclusions );
 		}
 
 		/**
@@ -1364,73 +1136,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.2.0
 		 * @param array $eligible_handles Eligible handles.
 		 * @return array{css:string,handles:array,error:string} Combined CSS + successful handles + error stage ('' on success).
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::fetch_and_minify_css}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function fetch_and_minify_css( array $eligible_handles ): array {
-			global $wp_styles;
-			$combined_css       = '';
-			$successful_handles = array();
-			foreach ( $eligible_handles as $handle ) {
-				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-					continue;
-				}
-				$style_data  = $wp_styles->registered[ $handle ];
-				$src         = $wp_styles->registered[ $handle ]->src;
-				$css_content = $this->fetch_remote_css( $src );
-				if ( false === $css_content ) {
-					continue;
-				}
-				if ( ! empty( $style_data->extra['before'] ) ) {
-					$combined_css .= implode( "\n", $style_data->extra['before'] ) . "\n";
-				}
-				if ( ! empty( $css_content ) ) {
-					$combined_css .= $css_content . "\n";
-				}
-				if ( ! empty( $style_data->extra['after'] ) ) {
-					$combined_css .= implode( "\n", $style_data->extra['after'] ) . "\n";
-				}
-				$successful_handles[] = $handle;
-			}
-			if ( empty( $successful_handles ) || '' === trim( $combined_css ) ) {
-				return array(
-					'css'     => '',
-					'handles' => $successful_handles,
-					'error'   => 'empty_payload',
-				);
-			}
-			$font_display = 'swap';
-			if ( class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) && method_exists( 'PerformanceOptimise\Inc\Google_Fonts', 'get_font_display' ) ) {
-				try {
-					$font_display = Google_Fonts::get_font_display();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$font_display = 'swap';
-				}
-			}
-			if ( '' !== $font_display ) {
-				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/i', 'font-display: ' . $font_display . ';', $combined_css );
-				if ( null === $combined_css ) {
-					return array(
-						'css'     => '',
-						'handles' => $successful_handles,
-						'error'   => 'preg_error',
-					);
-				}
-				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css, $font_display );
-			}
-			$css_minifier = new CSSMinifier( $combined_css );
-			$combined_css = $css_minifier->minify();
-			if ( '' === trim( (string) $combined_css ) ) {
-				return array(
-					'css'     => '',
-					'handles' => $successful_handles,
-					'error'   => 'empty_after_minify',
-				);
-			}
-			return array(
-				'css'     => (string) $combined_css,
-				'handles' => $successful_handles,
-				'error'   => '',
-			);
+			return $this->css_combine()->fetch_and_minify_css( $eligible_handles );
 		}
 
 		/**
@@ -1443,26 +1153,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $combined_css Combined CSS.
 		 * @param string $css_variant  Cache variant suffix.
 		 * @return array{path:string,error:string} File path ('' on failure) + error stage.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::write_combined_file}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function write_combined_file( string $combined_css, string $css_variant ): array {
-			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
-			if ( ! $this->prepare_cache_dir() ) {
-				return array(
-					'path'  => '',
-					'error' => 'prepare_dir_failed',
-				);
-			}
-			$this->save_cache_files( $combined_css, $css_file_path, 'css' );
-			if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
-				return array(
-					'path'  => '',
-					'error' => 'write_failure',
-				);
-			}
-			return array(
-				'path'  => $css_file_path,
-				'error' => '',
-			);
+			return $this->css_combine()->write_combined_file( $combined_css, $css_variant );
 		}
 
 		/**
@@ -1476,9 +1171,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param int|string $version       Cache-busting version suffix.
 		 * @param string     $css_file_path Absolute path to the combined CSS file.
 		 * @return void
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::emit_combined_preload_hint}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function emit_combined_preload_hint( $css_url, $version, string $css_file_path ): void {
-			$this->set_combine_css_preload( $css_url, $version, $css_file_path );
+			$this->css_combine()->emit_combined_preload_hint( $css_url, $version, $css_file_path );
 		}
 
 		/**
@@ -1495,12 +1192,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string     $css_file_path Absolute path to the combined CSS file.
 		 * @return void
 		 * @since 2.0.0
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::set_combine_css_preload}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function set_combine_css_preload( $css_url, $version, $css_file_path ): void {
-			if ( $this->will_combine_css_inline( $css_file_path ) ) {
-				return;
-			}
-			$this->combine_css_preload_url = $css_url . '?ver=' . $version;
+			$this->css_combine()->set_combine_css_preload( $css_url, $version, $css_file_path );
 		}
 
 		/**
@@ -1513,34 +1209,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return void
 		 * @since 2.0.0
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::maybe_preload_combine_css}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		public function maybe_preload_combine_css(): void {
-			// Note (see #553, #829): once core removes concatenation in favour of preloads,
-			// reassess whether this plugin-emitted preload should defer to core
-			// preload emission (wp_resource_hints) instead. No runtime change.
-			if ( '' === $this->combine_css_preload_url ) {
-				return;
-			}
-			/**
-			 * Filters the fetchpriority for the combined-CSS preload link.
-			 *
-			 * Default 'high' for external preload (LCP). Return falsy to suppress.
-			 *
-			 * @since 2.0.0
-			 *
-			 * @param string $fetchpriority Fetchpriority value ('high'|'low'|'auto').
-			 * @param string $url           Preload URL.
-			 */
-			$fetchpriority = apply_filters( 'wppo_combine_preload_fetchpriority', 'high', $this->combine_css_preload_url );
-			if ( ! is_string( $fetchpriority ) ) {
-				$fetchpriority = '';
-			}
-			$fetchpriority = strtolower( trim( $fetchpriority ) );
-			if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
-				$fetchpriority = '';
-			}
-			Util::generate_preload_link( $this->combine_css_preload_url, 'preload', 'style', false, '', '', $fetchpriority );
-			$this->combine_css_preload_url = '';
+			$this->css_combine()->maybe_preload_combine_css();
 		}
 
 		/**
@@ -1553,49 +1226,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $src                 Style src URL.
 		 * @param array  $exclude_combine_css Exclusion list.
 		 * @return bool True if excluded.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::is_excluded_from_combine}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function is_excluded_from_combine( $handle, $src, array $exclude_combine_css ): bool {
-			// Preserve auto-sizes containment fix (WP 6.9+) — must not be combined.
-			if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
-				return true;
-			}
-			// Disk-safe guard (issue #1428): randomized per-request query
-			// values (?ver=<timestamp|uniqid|rand>) churn the combined
-			// output and can blow the file-count cap — exclude them from
-			// combining. Guarded by the additive cacheRandomizedQueryGuard
-			// setting (default on) and filterable via
-			// wppo_exclude_randomized_from_combine. Fail-open: guard
-			// failures fall through to the explicit exclusion list.
-			try {
-				$guard_on = true;
-				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_cap_settings' ) ) {
-					$cap      = self::get_cache_cap_settings();
-					$guard_on = ! empty( $cap['randomized_guard'] );
-				}
-				if ( $guard_on && is_string( $src ) && '' !== $src && self::is_randomized_query_asset( $src ) ) {
-					$excluded = true;
-					if ( function_exists( 'apply_filters' ) ) {
-						$excluded = (bool) apply_filters( 'wppo_exclude_randomized_from_combine', true, $handle, $src );
-					}
-					if ( $excluded ) {
-						return true;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			if ( empty( $exclude_combine_css ) ) {
-				return false;
-			}
-			if ( in_array( $handle, $exclude_combine_css, true ) ) {
-				return true;
-			}
-			foreach ( $exclude_combine_css as $exclude_css ) {
-				if ( '' !== $exclude_css && false !== strpos( $src, $exclude_css ) ) {
-					return true;
-				}
-			}
-			return false;
+			return $this->css_combine()->is_excluded_from_combine( $handle, $src, $exclude_combine_css );
 		}
 
 		/**
@@ -1616,38 +1251,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array $styles             The enqueued style handles.
 		 * @param array $exclude_combine_css Handles/URL fragments excluded from combining.
 		 * @return array The handles that would be combined.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::get_combined_handles}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function get_combined_handles( $styles, $exclude_combine_css ): array {
-			global $wp_styles;
-
-				$separate_block_assets = $this->get_effective_separate_block_assets();
-
-			$handles = array();
-			foreach ( $styles as $handle ) {
-				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-					continue;
-				}
-				$style_data = $wp_styles->registered[ $handle ];
-
-				// Single dedupe assertion: never emit combined output for a
-				// handle core already hoisted/inlined (block hoisting + the
-				// cumulative styles_inline_size_limit budget).
-				if ( $this->is_duplicate_of_core_output( $handle, $separate_block_assets ) ) {
-					continue;
-				}
-
-				if ( $this->is_excluded_from_combine( $handle, (string) $style_data->src, $exclude_combine_css ) ) {
-					continue;
-				}
-
-				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
-					continue;
-				}
-
-				$handles[] = $handle;
-			}
-
-			return $handles;
+			return $this->css_combine()->get_combined_handles( $styles, $exclude_combine_css );
 		}
 
 		/**
@@ -1661,22 +1269,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $css_file_path  Absolute path to the combined CSS file.
 		 * @param array  $eligible_handles The handles expected in the combined file.
 		 * @return bool True if the cached file matches the current handle set.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::combined_handles_match}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function combined_handles_match( $css_file_path, array $eligible_handles ): bool {
-			$fs     = $this->get_filesystem();
-			$handle = $css_file_path . '.handles';
-
-			if ( ! $fs || ! $fs->exists( $handle ) ) {
-				return false;
-			}
-
-			$contents = $fs->get_contents( $handle );
-			if ( false === $contents ) {
-				return false;
-			}
-
-			$stored = json_decode( $contents, true );
-			return is_array( $stored ) && $stored === $eligible_handles;
+			return $this->css_combine()->combined_handles_match( $css_file_path, $eligible_handles );
 		}
 
 		/**
@@ -1687,15 +1284,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $css_file_path  Absolute path to the combined CSS file.
 		 * @param array  $eligible_handles The handles combined into the file.
 		 * @return void
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::write_combined_handles}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function write_combined_handles( $css_file_path, array $eligible_handles ): void {
-			$fs = $this->get_filesystem();
-			if ( ! $fs ) {
-				return;
-			}
-
-			$handle_path = $css_file_path . '.handles';
-			$fs->put_contents( $handle_path, wp_json_encode( $eligible_handles ), FS_CHMOD_FILE );
+			$this->css_combine()->write_combined_handles( $css_file_path, $eligible_handles );
 		}
 
 		/**
@@ -1716,57 +1309,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $handle The registered style handle.
 		 * @return bool True if core will inline the style, false otherwise.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::core_will_inline}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function core_will_inline( $handle ): bool {
-			if ( isset( $this->core_will_inline_memo[ $handle ] ) ) {
-				return $this->core_will_inline_memo[ $handle ];
-			}
-
-			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
-				$this->core_will_inline_memo[ $handle ] = false;
-				return false;
-			}
-
-			global $wp_styles;
-			if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-				$this->core_will_inline_memo[ $handle ] = false;
-				return false;
-			}
-
-			// Since WP 6.3 core only inlines styles that carry a `src`; on 5.8-6.2
-			// any queued style with `path` data was a candidate, so a src-less
-			// handle can still be inlined there.
-			if ( $this->inline_candidates_require_src() && empty( $wp_styles->registered[ $handle ]->src ) ) {
-				$this->core_will_inline_memo[ $handle ] = false;
-				return false;
-			}
-
-			$limit = $this->get_styles_inline_limit();
-
-			// Prediction using the plugin's long-standing budget accounting.
-			$prediction = $this->core_inline_budget_will_inline( $handle, $limit, false );
-
-			// Re-derivation of core's own candidate collection and budget pass. Any
-			// divergence (a queued path-data style without a `src`, an over-budget
-			// sibling, or tie-order differences) means the prediction is unreliable,
-			// so the request degrades to the safe outcome below instead.
-			$reference = $this->core_inline_budget_will_inline( $handle, $limit, true );
-
-			if ( $prediction !== $reference ) {
-				$this->inline_drift_detected = true;
-				$this->log_inline_budget_drift( $handle, $limit );
-
-				// Conservative downgrade: assume core WILL inline the style. Leaving it
-				// out of the combined file is safe in every direction — either core
-				// inlines it (correct), or it is served as its own external <link>
-				// (a minor perf loss, never duplicated rules). Returning false here
-				// would risk pulling an inlined style into the combined file.
-				$this->core_will_inline_memo[ $handle ] = true;
-				return true;
-			}
-
-			$this->core_will_inline_memo[ $handle ] = $prediction;
-			return $prediction;
+			return $this->css_combine()->core_will_inline( $handle );
 		}
 
 		/**
@@ -1793,85 +1340,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param int    $limit        The inline size limit in bytes.
 		 * @param bool   $core_faithful Whether to mirror core's candidate collection.
 		 * @return bool True if core's budget pass would inline the style.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::core_inline_budget_will_inline}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function core_inline_budget_will_inline( $handle, $limit, $core_faithful ): bool {
-			global $wp_styles;
-
-			if ( null === $this->inline_size_map ) {
-				$this->inline_size_map = array();
-				foreach ( $wp_styles->queue as $queued_handle ) {
-					$path = $wp_styles->get_data( $queued_handle, 'path' );
-					if ( empty( $path ) || ! is_file( $path ) ) {
-						continue;
-					}
-					$size = (int) filesize( $path );
-					if ( $size > 0 ) {
-						$this->inline_size_map[ $queued_handle ] = array(
-							'size'     => $size,
-							'readable' => is_readable( $path ),
-						);
-					}
-				}
-			}
-
-			$entries = array();
-			foreach ( $this->inline_size_map as $queued_handle => $entry ) {
-				if ( $core_faithful ) {
-					// Core skips handles that are not registered.
-					if ( ! isset( $wp_styles->registered[ $queued_handle ] ) ) {
-						continue;
-					}
-					$registered = $wp_styles->registered[ $queued_handle ];
-					// Core only considers a queued style a candidate when it carries
-					// a `src` (the `path && src` gate landed in 6.3) and is found on
-					// disk; on 5.8-6.2 path data alone was sufficient. Styles over
-					// the limit are excluded up-front — they sort last and would only
-					// ever trigger the loop's overflow `break`, which stops nothing
-					// that fits the budget.
-					if ( ( $this->inline_candidates_require_src() && empty( $registered->src ) ) || $entry['size'] > $limit ) {
-						continue;
-					}
-				}
-
-				$entries[ $queued_handle ] = $entry;
-			}
-
-			// Replicate core's greedy smallest-first cumulative budget. Core uses an
-			// unstable usort; the stable uasort is retained here because the drift
-			// check + conservative downgrade neutralize the residual tie-order
-			// ambiguity.
-			uasort(
-				$entries,
-				static function ( $a, $b ) {
-					return $a['size'] <=> $b['size'];
-				}
-			);
-
-			$total = 0;
-			foreach ( $entries as $queued_handle => $entry ) {
-				$size = $entry['size'];
-
-				// Overflow check first, exactly as core orders it: an unreadable
-				// but in-budget file is skipped below without charging its size, but
-				// one that would push the running total over the limit still stops
-				// the pass.
-				if ( $total + $size > $limit ) {
-					return false;
-				}
-
-				// WP 7.0+ core skips unreadable styles in its budget loop without
-				// charging their size; earlier core versions charged them regardless.
-				if ( $core_faithful && $this->inline_candidates_require_readable() && ! $entry['readable'] ) {
-					continue;
-				}
-
-				$total += $size;
-				if ( $queued_handle === $handle ) {
-					return true;
-				}
-			}
-
-			return false;
+			return $this->css_combine()->core_inline_budget_will_inline( $handle, $limit, $core_faithful );
 		}
 
 		/**
@@ -1891,38 +1364,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $handle The handle whose prediction drifted.
 		 * @param int    $limit  The inline size limit in bytes.
 		 * @return void
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::log_inline_budget_drift}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function log_inline_budget_drift( $handle, $limit ): void {
-			if ( self::$inline_drift_logged ) {
-				return;
-			}
-			self::$inline_drift_logged = true;
-
-			if ( ! class_exists( Log::class ) ) {
-				return;
-			}
-
-			// The same drift condition is reproduced on every pageview, so a once
-			// per-process flag alone would still append one row per request. Key a
-			// transient by the condition (handle + core version) and skip repeats
-			// within the rolling window; a change in WP or an operator theme fix
-			// re-arms the notice.
-			$version = isset( $GLOBALS['wp_version'] ) ? $GLOBALS['wp_version'] : 'unknown';
-			$log_key = Util::transient_key( 'wppo_inline_drift_' . md5( $handle . '|' . $version ) );
-			// Best-effort throttle (see is_throttled()): a throwing transient
-			// transport counts as a miss so the drift notice is still logged.
-			if ( $this->is_throttled( $log_key, DAY_IN_SECONDS ) ) {
-				return;
-			}
-
-			Log::add(
-				sprintf(
-					/* translators: %1$s: style handle, %2$d: inline size limit in bytes. */
-					__( 'Inline-CSS budget prediction drifted from core for %1$s (limit %2$d); degraded to safe fallback.', 'performance-optimisation' ),
-					$handle,
-					$limit
-				)
-			);
+			$this->css_combine()->log_inline_budget_drift( $handle, $limit );
 		}
 
 		/**
@@ -1933,9 +1379,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.0.0
 		 * @return bool True when fallback guards are active.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::is_safe_css_combine_fallback_enabled}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function is_safe_css_combine_fallback_enabled(): bool {
-			return Util::safe_css_fallback_enabled();
+			return $this->css_combine()->is_safe_css_combine_fallback_enabled();
 		}
 
 		/**
@@ -1944,9 +1392,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 * @param string $path Absolute path to the combined CSS file.
 		 * @return bool True when the file is usable.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::is_combined_css_valid}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function is_combined_css_valid( string $path ): bool {
-			return Util::css_file_valid( $path );
+			return $this->css_combine()->is_combined_css_valid( $path );
 		}
 
 		/**
@@ -1960,9 +1410,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $reason  Machine-readable reason (empty_payload, fetch_failure, write_failure, head_match_failure).
 		 * @param array  $handles Handles preserved by the fallback.
 		 * @return void
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::log_combine_fallback}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function log_combine_fallback( string $reason, array $handles ): void {
-			Util::log_css_fallback( $reason, $handles, 'combine' );
+			$this->css_combine()->log_combine_fallback( $reason, $handles );
 		}
 
 		/**
@@ -1972,40 +1424,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $css_file_path Absolute path to the combined CSS file.
 		 * @return void
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::register_combine_css_path}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function register_combine_css_path( $css_file_path ): void {
-			if ( ! function_exists( 'wp_maybe_inline_styles' ) || empty( $css_file_path ) || ! is_file( $css_file_path ) ) {
-				return;
-			}
-
-			// Inlining is disabled while removeUnusedCSS is active because used-CSS
-			// reads the combined stylesheet via its `src`; once core inlines a handle
-			// it clears `src`, which would silently skip the combined file and ship the
-			// full (unpurged) CSS instead.
-			if ( ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
-				return;
-			}
-
-			// Site operators can opt out of inlining entirely (e.g. when serving the
-			// combined file from a CDN, since inlined CSS bypasses the CDN).
-			if ( ! apply_filters( 'wppo_inline_combined_css', true ) ) {
-				return;
-			}
-
-			// When the inline-CSS budget prediction drifted from core this request,
-			// serve the combined file externally rather than register `path` data: a
-			// wrongly-registered file would either be unexpectedly inlined or left
-			// external despite the preload decision made earlier.
-			if ( $this->inline_drift_detected ) {
-				return;
-			}
-
-			wp_style_add_data( 'wppo-combine-css', 'path', $css_file_path );
-
-			// The combined handle now carries `path` data, so the size map cached
-			// for the inline-budget simulation is stale; rebuild it on the next call.
-			$this->inline_size_map       = null;
-			$this->core_will_inline_memo = array();
+			$this->css_combine()->register_combine_css_path( $css_file_path );
 		}
 
 		/**
@@ -2020,29 +1443,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param array $file_opt Production `file_optimisation` slice.
 		 * @return bool True when inlining must be skipped.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::should_bypass_inline_for_safe_mode}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function should_bypass_inline_for_safe_mode( array $file_opt ): bool {
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'is_safe_mode_active' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'is_sandbox_preview_active' ) ) {
-					return false;
-				}
-				if ( null === $this->sandbox_preview_memo ) {
-					$this->sandbox_preview_memo = (bool) Main::is_sandbox_preview_active();
-				}
-				if ( $this->sandbox_preview_memo ) {
-					return false;
-				}
-				$memo_key = md5( serialize( $file_opt ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
-				if ( array_key_exists( $memo_key, $this->safe_mode_inline_memo ) ) {
-					return $this->safe_mode_inline_memo[ $memo_key ];
-				}
-				$bypass                                   = (bool) Main::is_safe_mode_active( $file_opt );
-				$this->safe_mode_inline_memo[ $memo_key ] = $bypass;
-				return $bypass;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->css_combine()->should_bypass_inline_for_safe_mode( $file_opt );
 		}
 
 		/**
@@ -2057,53 +1462,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $css_file_path Absolute path to the combined CSS file.
 		 * @return bool True if core will inline the combined file, false otherwise.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::will_combine_css_inline}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function will_combine_css_inline( $css_file_path ): bool {
-			if ( empty( $css_file_path ) ) {
-				return false;
-			}
-
-			// Elementor-safe mode (issue #1259): never inline the combined
-			// file on builder-built pages. Single choke point shared with
-			// combine_css() (see should_bypass_combine_for_elementor()).
-			// Cheap native pre-gate first so the sandbox-effective slice
-			// is resolved only when Elementor looks present — this is the
-			// hottest frontend path for non-Elementor visitors. The pre-gate
-			// verdict is threaded into the choke point so it is evaluated
-			// exactly once per call instead of twice.
-			try {
-				$looks_like = class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) ? Main::looks_like_elementor_request() : false;
-				if ( $looks_like ) {
-					$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
-					$file_opt = $this->get_sandbox_effective_file_opt( $file_opt );
-					if ( $this->should_bypass_combine_for_elementor( $file_opt, $looks_like ) ) {
-						return false;
-					}
-				}
-				// Unified safe-mode kill switch (issue #1465): never inline
-				// the combined file while safe mode is on (defense-in-depth
-				// for combine_css()). Preview admins are exempt so staged
-				// output can still be verified. Fail-open on any error.
-				// Hoisted into a per-request memoized helper so the
-				// preview + safe-mode predicates run once per options slice
-				// instead of once per CSS file.
-				$file_opt_safe = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
-				if ( $this->should_bypass_inline_for_safe_mode( $file_opt_safe ) ) {
-					return false;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			// When the budget prediction drifted this request the combined file is
-			// served externally (see register_combine_css_path()), so keep the
-			// preload hint for the now-external stylesheet instead of delegating.
-			if ( $this->inline_drift_detected ) {
-				return false;
-			}
-
-			// core_will_inline() performs the function_exists() gate itself.
-			return $this->core_will_inline( 'wppo-combine-css' );
+			return $this->css_combine()->will_combine_css_inline( $css_file_path );
 		}
 
 		/**
@@ -2116,9 +1479,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 *
 		 * @return int The inline size limit in bytes.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::get_styles_inline_limit}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function get_styles_inline_limit(): int {
-			return Util::get_styles_inline_limit();
+			return $this->css_combine()->get_styles_inline_limit();
 		}
 
 		/**
@@ -2132,11 +1497,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 *
 		 * @return bool True when inline candidates must carry a `src`.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::inline_candidates_require_src}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function inline_candidates_require_src(): bool {
-			// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
-			// read: unknown assumes newest, matching the historic spelling).
-			return Wp_Version::is_global_at_least( '6.3' );
+			return $this->css_combine()->inline_candidates_require_src();
 		}
 
 		/**
@@ -2152,11 +1517,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 *
 		 * @return bool True when the core-faithful pass must skip unreadable styles.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::inline_candidates_require_readable}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function inline_candidates_require_readable(): bool {
-			// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
-			// read: unknown assumes newest, matching the historic spelling).
-			return Wp_Version::is_global_at_least( '7.0' );
+			return $this->css_combine()->inline_candidates_require_readable();
 		}
 
 		/**
@@ -2169,21 +1534,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 * @param string $path Absolute filesystem path.
 		 * @return array{readable:bool,size:int|false}
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::get_cached_src_stat}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function get_cached_src_stat( string $path ): array {
-			if ( isset( $this->src_stat_cache[ $path ] ) ) {
-				return $this->src_stat_cache[ $path ];
-			}
-			$readable = is_readable( $path );
-			$size     = $readable ? filesize( $path ) : false;
-			if ( count( $this->src_stat_cache ) >= self::SRC_STAT_CACHE_LIMIT ) {
-				array_shift( $this->src_stat_cache );
-			}
-			$this->src_stat_cache[ $path ] = array(
-				'readable' => $readable,
-				'size'     => $size,
-			);
-			return $this->src_stat_cache[ $path ];
+			return $this->css_combine()->get_cached_src_stat( $path );
 		}
 
 		/**
@@ -2216,79 +1571,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string[] $eligible_handles Handles that would be combined.
 		 * @return bool True when combining should be skipped.
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::should_skip_combine_for_inline_budget}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function should_skip_combine_for_inline_budget( array $eligible_handles ): bool {
-			if ( empty( $eligible_handles ) ) {
-				return false;
-			}
-
-			// The 40KB inline budget that makes the skip worthwhile is a WP 6.9+
-			// default; on older cores the plugin keeps its always-combine
-			// behavior. An absent $wp_version assumes the newest core, matching
-			// get_styles_inline_limit() — both floors live in Wp_Version
-			// (REF-010, $GLOBALS-only read).
-			if ( ! Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
-				return false;
-			}
-
-			// A configured CDN serves the combined file — never redundant.
-			// Covers both the legacy cdnURL field and the per-mapping
-			// cdnMapping config (plus wppo_cdn_mapping filters) resolved by
-			// the CDN class (issue #880 review).
-			$cdn_mappings = class_exists( 'PerformanceOptimise\Inc\CDN' ) ? CDN::get_mappings( $this->options ) : array();
-			if ( ! empty( $this->options['file_optimisation']['cdnURL'] ) || ! empty( $cdn_mappings ) ) {
-				return false;
-			}
-
-			// Operators who disabled inlining of the combined CSS still expect
-			// the combined file (e.g. served externally from a CDN), so the
-			// budget skip must not remove it.
-			if ( ! apply_filters( 'wppo_inline_combined_css', true ) ) {
-				return false;
-			}
-
-			if ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) {
-				// Classic themes intentionally stay on the combine path: core
-				// 6.9 on-demand hoisting owns only `wp-block-*` handles (excluded
-				// from $eligible_handles via the dedupe above), while the
-				// remaining theme CSS still benefits from combining. No FOUC:
-				// the combined file holds only non-block handles core never emits.
-				return false;
-			}
-			$limit = $this->get_styles_inline_limit();
-			/**
-			 * Filter whether to skip the combined-CSS file on small block-theme bundles.
-			 *
-			 * @since 2.0.0
-			 *
-			 * @param bool     $skip             Whether to skip combining (default true on block themes with small bundles).
-			 * @param string[] $eligible_handles The handles that would be combined.
-			 * @param int      $limit            The current styles_inline_size_limit in bytes.
-			 */
-			if ( ! apply_filters( 'wppo_skip_combine_on_small_block_theme', true, $eligible_handles, $limit ) ) {
-				return false;
-			}
-			global $wp_styles;
-			$total = 0;
-			foreach ( $eligible_handles as $handle ) {
-				$size = $this->measure_style_byte_size( $handle );
-				if ( false === $size ) {
-					// Unreadable/remote styles cannot be measured — do not skip.
-					return false;
-				}
-				if ( 0 === $size ) {
-					continue;
-				}
-				if ( $size > $limit ) {
-					// A single handle exceeds the inline limit — core cannot inline it, so combine remains useful.
-					return false;
-				}
-				$total += (int) $size;
-				if ( $total > $limit ) {
-					return false;
-				}
-			}
-			return $total > 0 && $total <= $limit;
+			return $this->css_combine()->should_skip_combine_for_inline_budget( $eligible_handles );
 		}
 
 		/**
@@ -2305,50 +1592,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $handle The registered style handle.
 		 * @return int|false Byte size, 0 when the handle contributes nothing, false when unmeasurable.
 		 * @since 2.2.0
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::measure_style_byte_size}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function measure_style_byte_size( $handle ) {
-			global $wp_styles;
-			try {
-				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-					return 0;
-				}
-				$path_data = null;
-				if ( is_object( $wp_styles ) && method_exists( $wp_styles, 'get_data' ) ) {
-					try {
-						$path_data = $wp_styles->get_data( $handle, 'path' );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$path_data = null;
-					}
-				}
-				if ( is_string( $path_data ) && '' !== $path_data && is_file( $path_data ) ) {
-					$stat = $this->get_cached_src_stat( $path_data );
-					if ( ! $stat['readable'] || false === $stat['size'] ) {
-						return false;
-					}
-					return (int) $stat['size'];
-				}
-				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
-				if ( '' === $src ) {
-					return 0;
-				}
-				$path = Util::get_local_path( $src );
-				if ( '' === $path ) {
-					return false;
-				}
-				$stat = $this->get_cached_src_stat( $path );
-				if ( ! $stat['readable'] ) {
-					return false;
-				}
-				$size = $stat['size'];
-				if ( false === $size ) {
-					return false;
-				}
-				return (int) $size;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->css_combine()->measure_style_byte_size( $handle );
 		}
 
 		/**
@@ -2358,53 +1606,368 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return string|false The CSS content or false if fetching fails.
 		 *
 		 * @since 1.0.0
+		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::fetch_remote_css}.
+		 * @since NEXT Proxied to Css_Combine (ARCH-006).
 		 */
 		private function fetch_remote_css( $url ) {
-			if ( empty( $url ) ) {
-				return '';
-			}
+			return $this->css_combine()->fetch_remote_css( $url );
+		}
 
-			$css_file = Util::get_local_path( $url );
-			if ( '' === $css_file ) {
-				return false;
-			}
+		/**
+		 * Plugin options snapshot for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same options read the relocated bodies
+		 * had on `Cache`. Read-only: the service never writes options.
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array Plugin options snapshot.
+		 */
+		public function combine_options(): array {
+			return $this->options;
+		}
 
-			// Second containment check after URL->path mapping (issue #1179):
-			// resolve symlinks via realpath() and require containment in an
-			// allow-listed root; reject wrappers and .php targets. Fail
-			// closed (no bytes) so the combine loop skips the handle and
-			// serves the original uncombined stylesheet.
-			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'validate_minify_path' ) ) {
-				$validated = Util::validate_minify_path( $css_file );
-				if ( '' === $validated ) {
-					return false;
-				}
-				$css_file = $validated;
-			}
-			$fs = $this->get_filesystem();
-			if ( $fs ) {
-				// Stat first so a single huge theme CSS file is not fully
-				// buffered per handle in the combine loop.
-				$max_bytes = (int) apply_filters( 'wppo_max_css_bytes', 2 * 1024 * 1024 );
-				if ( $max_bytes > 0 ) {
-					try {
-						$size = $fs->size( $css_file );
-						if ( false !== $size && (int) $size > $max_bytes ) {
-							return false;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				$css_content = $fs->get_contents( $css_file );
+		/**
+		 * Filesystem for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return object|false|null The filesystem object, or false on init failure.
+		 */
+		public function combine_filesystem(): object|false|null {
+			return $this->get_filesystem();
+		}
 
-				if ( false !== $css_content ) {
-					$rewritten = CSS::update_image_paths( $css_content, $css_file );
-					return null !== $rewritten ? $rewritten : $css_content;
-				}
-			}
+		/**
+		 * Combined-CSS file path for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @param string $variant Cache variant suffix.
+		 * @return string Absolute path to the combined CSS file.
+		 */
+		public function combine_cache_file_path( string $variant ): string {
+			return $this->get_cache_file_path( 'css', '', $variant );
+		}
 
-			return false;
+		/**
+		 * Cache-directory preparation for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool True when the cache directory is writable.
+		 */
+		public function combine_prepare_cache_dir(): bool {
+			return $this->prepare_cache_dir();
+		}
+
+		/**
+		 * Persist the combined CSS for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @param string $css  Combined CSS payload.
+		 * @param string $path Absolute path to the combined CSS file.
+		 * @return void
+		 */
+		public function combine_save_css( string $css, string $path ): void {
+			$this->save_cache_files( $css, $path, 'css' );
+		}
+
+		/**
+		 * LiteSpeed bypass verdict for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool True when the current request must bypass WPPO optimisation.
+		 */
+		public function combine_should_bypass_for_litespeed(): bool {
+			return $this->should_bypass_for_litespeed();
+		}
+
+		/**
+		 * Logged-in cache gate for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool True when page output may be cached for the current user.
+		 */
+		public function combine_is_cache_allowed_for_current_user(): bool {
+			return $this->is_cache_allowed_for_current_user();
+		}
+
+		/**
+		 * Cacheability gate for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool True when the current request must not be cached.
+		 */
+		public function combine_is_not_cacheable(): bool {
+			return $this->is_not_cacheable();
+		}
+
+		/**
+		 * Effective separate block-assets state for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool True when core owns on-demand block styles on this request.
+		 */
+		public function combine_get_effective_separate_block_assets(): bool {
+			return $this->get_effective_separate_block_assets();
+		}
+
+		/**
+		 * Core-output dedupe verdict for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @param string $handle                The registered style handle.
+		 * @param bool   $separate_block_assets Whether core loads separate block assets.
+		 * @return bool True when the handle must stay out of the combined file.
+		 */
+		public function combine_is_duplicate_of_core_output( string $handle, bool $separate_block_assets ): bool {
+			return $this->is_duplicate_of_core_output( $handle, $separate_block_assets );
+		}
+
+		/**
+		 * Log throttle for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @param string $throttle_key Transient key guarding the throttle window.
+		 * @param int    $ttl          Throttle window in seconds.
+		 * @return bool True when the key was already seen inside the window.
+		 */
+		public function combine_is_throttled( string $throttle_key, int $ttl ): bool {
+			return $this->is_throttled( $throttle_key, $ttl );
+		}
+
+		/**
+		 * Inline-drift flag read for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool True when the inline-budget prediction drifted from core this request.
+		 */
+		public function combine_inline_drift_detected(): bool {
+			return $this->inline_drift_detected;
+		}
+
+		/**
+		 * Drift-log process gate read for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool True when the drift notice was already logged this PHP process.
+		 */
+		public static function combine_inline_drift_already_logged(): bool {
+			return self::$inline_drift_logged;
+		}
+
+		/**
+		 * Drift-log process gate write for the CSS-combine service (ARCH-006 internal bridge).
+		 *
+		 * Audit note: only `Css_Combine` calls this (no other runtime or test
+		 * caller exists). Do not call from new code; the public visibility
+		 * exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function combine_mark_inline_drift_logged(): void {
+			self::$inline_drift_logged = true;
+		}
+
+		/**
+		 * Direct reference to the combine preload URL (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same live request-state access the
+		 * relocated bodies had on `Cache`. Audit note: only `Css_Combine`
+		 * calls this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return string Reference to the live preload URL state.
+		 */
+		public function &combine_state_preload_url(): string {
+			return $this->combine_css_preload_url;
+		}
+
+		/**
+		 * Direct reference to the inline-budget size map (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same live request-state access the
+		 * relocated bodies had on `Cache`. Audit note: only `Css_Combine`
+		 * calls this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array<string,array{size:int,readable:bool}>|null Reference to the live size-map state.
+		 */
+		public function &combine_state_inline_size_map(): ?array {
+			return $this->inline_size_map;
+		}
+
+		/**
+		 * Direct reference to the core-will-inline memo (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same live request-state access the
+		 * relocated bodies had on `Cache`. Audit note: only `Css_Combine`
+		 * calls this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array<string,bool> Reference to the live will-inline memo.
+		 */
+		public function &combine_state_core_will_inline_memo(): array {
+			return $this->core_will_inline_memo;
+		}
+
+		/**
+		 * Direct reference to the src stat LRU (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same live request-state access the
+		 * relocated bodies had on `Cache`. Audit note: only `Css_Combine`
+		 * calls this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array<string,array{readable:bool,size:int|false}> Reference to the live stat cache.
+		 */
+		public function &combine_state_src_stat_cache(): array {
+			return $this->src_stat_cache;
+		}
+
+		/**
+		 * Direct reference to the sandbox-effective slice memo (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same live request-state access the
+		 * relocated bodies had on `Cache`. Per-request lifetime keyed by the
+		 * production slice hash, so staged preview output and production
+		 * output never share a verdict. Audit note: only `Css_Combine` calls
+		 * this (no other runtime or test caller exists). Do not call from new
+		 * code; the public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array<string,array> Reference to the live sandbox-slice memo.
+		 */
+		public function &combine_state_sandbox_effective_file_opt_memo(): array {
+			return $this->sandbox_effective_file_opt_memo;
+		}
+
+		/**
+		 * Direct reference to the sandbox preview-flag memo (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same live request-state access the
+		 * relocated bodies had on `Cache`. Audit note: only `Css_Combine`
+		 * calls this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool|null Reference to the live preview-flag memo (null = unresolved).
+		 */
+		public function &combine_state_sandbox_preview_memo() {
+			return $this->sandbox_preview_memo;
+		}
+
+		/**
+		 * Direct reference to the safe-mode inline-bypass memo (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same live request-state access the
+		 * relocated bodies had on `Cache`. Per-request lifetime keyed by the
+		 * production slice hash. Audit note: only `Css_Combine` calls this
+		 * (no other runtime or test caller exists). Do not call from new code;
+		 * the public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array<string,bool> Reference to the live safe-mode memo.
+		 */
+		public function &combine_state_safe_mode_inline_memo(): array {
+			return $this->safe_mode_inline_memo;
+		}
+
+		/**
+		 * Direct reference to the inline-drift flag (ARCH-006 internal bridge).
+		 *
+		 * Gives {@see Css_Combine} the same live request-state access the
+		 * relocated bodies had on `Cache`. Audit note: only `Css_Combine`
+		 * calls this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool Reference to the live drift flag.
+		 */
+		public function &combine_state_inline_drift_detected(): bool {
+			return $this->inline_drift_detected;
 		}
 
 		/**
