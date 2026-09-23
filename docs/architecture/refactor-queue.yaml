@@ -9,6 +9,9 @@
 campaign: incremental-architecture-refactor
 created: 2026-09-22
 baseline:
+  # Historical snapshot taken 2026-09-22 at Phase 1 start; superseded by
+  # phase2.baseline_metrics (re-baselined 2026-09-23 by ARCH-001 generator).
+  # Values below are preserved as history, not corrected in place.
   Main_methods_max: 232
   Wp_Version_methods: 4
   Hook_Registry_methods: 7
@@ -214,6 +217,204 @@ items:
     source: BOUNDARIES.md Http
     notes:
       - 'Merged 2026-09-23. 7/7 teardown methods byte-identical; hygiene scanner extended to new owner with fixtures. Final Util split.'
+
+phase2:
+  goal: 'Responsibility-oriented includes/ hierarchy; god-class decomposition; loader safety; behavior-preserving.'
+  baselined: '2026-09-23'
+  baseline_metrics:
+    Main_lines: 14173
+    Main_methods: 232
+    Image_Optimisation_lines: 10966
+    Image_Optimisation_methods: 165
+    Critical_CSS_lines: 7594
+    Critical_CSS_methods: 137
+    Cache_lines: 7304
+    Cache_methods: 137
+    AI_Adaptive_lines: 6322
+    AI_Adaptive_methods: 98
+    Util_lines: 4986
+    Util_methods: 155
+    Used_CSS_lines: 4960
+    Used_CSS_methods: 94
+    Rest_lines: 4494
+    Rest_methods: 73
+    includes_root_files: 56
+    dependency_edges: 322
+    FileOptimization_lines: 6201
+    Dashboard_lines: 2168
+  autoload finding: 'Composer classmap covers includes/ recursively; Main::includes() hardcodes flat includes/ paths + fallback_map. Directory moves REQUIRE loader updates (ARCH-003 first). No PSR-4 migration (watchdog forbids).'
+
+phase2_items:
+  - id: ARCH-001
+    title: 'Architecture baseline: inventory tooling + dependency graph + load-order + hierarchy docs'
+    status: pr-created
+    github_issue: 1528
+    pull_request: 1529
+    priority: high
+    source_files:
+      - includes/
+      - performance-optimisation.php
+      - composer.json
+      - tests/php/bootstrap.php
+    target_paths:
+      - scripts/generate-class-inventory.php
+      - docs/architecture/ARCHITECTURE.md
+      - docs/architecture/LOAD-ORDER.md
+      - docs/architecture/DEPENDENCY-GRAPH.json
+      - docs/architecture/INCLUDE-HIERARCHY.md
+      - docs/architecture/class-inventory.json
+    responsibility: 'Evidence baseline for the whole Phase 2 campaign. Docs + generator script only; no runtime code moves.'
+    dependencies: []
+    risk: low
+    expected_change: 'New docs + inventory script; inventory JSON extended with refs field; zero PHP runtime changes.'
+    tests: 'Generator output validated against manual counts; existing suites green.'
+    verification: 'npm run lint:js, composer lint, composer test, npm test'
+    wordpress_verification: 'wp wppo verify baseline recorded (no behavior change expected)'
+    notes:
+      - 'Line counts re-canonicalized to wc -l semantics by the generator; isolated ±1 corrections vs hand-maintained values (e.g. Cache 7305→7304). Hooks keep occurrence order; static_state = static-property declarations only.'
+  - id: ARCH-002
+    title: 'Canonical includes/ hierarchy design decision'
+    status: queued
+    priority: high
+    responsibility: 'Decide final directory tree from ARCH-001 evidence (Core/Cache/Settings/Assets/Images/CSS/Database/REST/Admin/CLI/Scheduler/Integrations/Compatibility/Support or evidence-better variant).'
+    dependencies: [ARCH-001]
+    risk: low
+    expected_change: 'docs/architecture/INCLUDE-HIERARCHY.md canonical tree + per-class target mapping; no code.'
+  - id: ARCH-003
+    title: 'Loader centralization: single Loader_Map boundary, no file moves'
+    status: queued
+    priority: high
+    source_files:
+      - includes/class-main.php
+    responsibility: 'Extract fallback_map + eager-load path list into one tested loader map so future directory moves touch one file.'
+    dependencies: [ARCH-002]
+    risk: medium
+    expected_change: 'Main::includes() delegates to loader map; byte-identical load behavior; new regression tests for every mapped class + CLI + LiteSpeed-conditional paths.'
+  - id: ARCH-004
+    title: 'Main settings-migration cluster extraction (maybe_migrate_*)'
+    status: queued
+    priority: medium
+    source_files:
+      - includes/class-main.php
+    responsibility: 'Cohesive ~15-method migration cluster (maybe_migrate_block_assets_setting, maybe_migrate_ccss_*, maybe_migrate_speculation_*, maybe_migrate_rum_sample_rate, elementor/object-cache/AI/builder/third-party migrations) into a Migrations runner owned by Settings domain.'
+    dependencies: [ARCH-003]
+    risk: medium
+    expected_change: 'Main -15 methods; facade proxies retained; migration order preserved.'
+  - id: ARCH-005
+    title: 'Main script defer/delay cluster extraction'
+    status: queued
+    priority: medium
+    source_files:
+      - includes/class-main.php
+    responsibility: 'Defer-strategy + delay-pattern + exclusion-context clusters (add_defer_attribute*, matches_delay_pattern*, is_delay_excluded_*, delay_context_* memo) into a Script_Strategy boundary.'
+    dependencies: [ARCH-004]
+    risk: medium
+    expected_change: 'Main smaller; multisite-safe memo ownership moves with the methods.'
+  - id: ARCH-006
+    title: 'Cache CSS-combine cluster extraction'
+    status: queued
+    priority: medium
+    source_files:
+      - includes/class-cache.php
+    responsibility: 'combine_css, resolve_eligible_handles, fetch_and_minify_css, write_combined_file, inline-budget + safe-mode fallback cluster into a Css_Combine service under Assets domain.'
+    dependencies: [ARCH-003]
+    risk: high
+    expected_change: 'Cache -~25 methods; byte-identical combine output; regression tests on combine/inline budget paths.'
+  - id: ARCH-007
+    title: 'Cache invalidation/purge cluster consolidation'
+    status: queued
+    priority: medium
+    source_files:
+      - includes/class-cache.php
+    responsibility: 'invalidate_*, delete_cache_files, clear_cache, purge-fallback remainder consolidated with Filesystem boundary ownership.'
+    dependencies: [ARCH-006]
+    risk: high
+    expected_change: 'Single ownership for invalidation; Cache left with policy + buffer orchestration.'
+  - id: ARCH-008
+    title: 'Image_Optimisation hero-preload/lazy cluster extraction'
+    status: queued
+    priority: medium
+    source_files:
+      - includes/class-image-optimisation.php
+    responsibility: 'Hero-preload claim/dedup slot + occlusion/fetchpriority + lazy-conflict sweep clusters into focused image services.'
+    dependencies: [ARCH-003]
+    risk: medium
+    expected_change: 'Image_Optimisation -~20 methods; preload dedup semantics preserved.'
+  - id: ARCH-009
+    title: 'Critical_CSS + Used_CSS shared CSS-storage helper consolidation'
+    status: queued
+    priority: medium
+    source_files:
+      - includes/class-critical-css.php
+      - includes/class-used-css.php
+    responsibility: 'Shared checksum/safelist/exclusion helpers (already cross-referenced via class_exists guards) into one CSS Storage owner; both features keep facades.'
+    dependencies: [ARCH-003]
+    risk: medium
+    expected_change: 'One owner for CSS storage semantics; cross-feature class_exists guards simplified, behavior identical.'
+  - id: ARCH-010
+    title: 'AI_Adaptive decomposition'
+    status: queued
+    priority: low
+    source_files:
+      - includes/class-ai-adaptive.php
+    responsibility: 'Split speculation-autotune vs anomaly-detection vs RUM-scoring clusters by evidence from ARCH-001 graph.'
+    dependencies: [ARCH-003]
+    risk: medium
+    expected_change: 'AI_Adaptive 98 methods reduced along cluster lines; read-only suggestion contract preserved.'
+  - id: ARCH-011
+    title: 'REST route-group split by domain'
+    status: queued
+    priority: low
+    source_files:
+      - includes/class-rest.php
+    responsibility: '73-method 40-route Rest split into domain registrars (cache/settings, images, CSS, database, telemetry/pagespeed, RUM, sandbox/preload) behind the existing namespace + capability gate.'
+    dependencies: [ARCH-003]
+    risk: medium
+    expected_change: 'Route table byte-identical; permission callbacks shared, not duplicated.'
+  - id: ARCH-012
+    title: 'Cron/Scheduler consolidation'
+    status: queued
+    priority: low
+    source_files:
+      - includes/class-cron.php
+    responsibility: 'Move remaining Cron scheduling payloads onto Scheduler boundary primitives; Cron keeps hook registration only.'
+    dependencies: [ARCH-003]
+    risk: low
+    expected_change: 'All enqueue paths via Scheduler; hook names unchanged.'
+  - id: ARCH-013
+    title: 'Physical directory moves per canonical hierarchy'
+    status: queued
+    priority: medium
+    responsibility: 'Move class files into ARCH-002 directories with loader-map updates only; no method moves bundled.'
+    dependencies: [ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007, ARCH-008, ARCH-009, ARCH-010, ARCH-011, ARCH-012]
+    risk: high
+    expected_change: 'Paths change, class names + behavior identical; full loader/reference sweep per REFACTORING-RULES directory-move safety.'
+  - id: ARCH-014
+    title: 'Util caller migration where justified'
+    status: queued
+    priority: low
+    responsibility: 'Migrate internal callers from Util:: proxies to owning boundaries where the call site is inside the owning domain; leave external/compat callers.'
+    dependencies: [ARCH-013]
+    risk: low
+    expected_change: 'Fewer Util:: call edges; no proxy removals.'
+  - id: ARCH-015
+    title: 'FileOptimization.js card split (one card)'
+    status: queued
+    priority: low
+    source_files:
+      - src/components/FileOptimization.js
+    responsibility: 'Extract one presentational card (6201-line god component), same pattern as REF-008.'
+    dependencies: [ARCH-001]
+    risk: low
+    expected_change: 'One card extracted with tests; build/ committed.'
+  - id: ARCH-016
+    title: 'Final architecture audit + leftover triage'
+    status: queued
+    priority: medium
+    responsibility: 'BEFORE/AFTER comparison per campaign section 36; classify remainders as resolved/intentional/future/protected/acceptable.'
+    dependencies: [ARCH-013, ARCH-014, ARCH-015]
+    risk: low
+    expected_change: 'Audit report + future queue items if justified; no code.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
