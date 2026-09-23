@@ -196,7 +196,9 @@ items:
     title: 'Extract Woo_Detect boundary from Util (is_woo_* + excluded paths + self-test)'
     type: architecture
     priority: medium
-    status: queued
+    status: autofix-running
+    github_issue: 1522
+    github_pr: null
     source: BOUNDARIES.md Woo_Detect
     notes:
       - 'Discovered during campaign: Woo detection cluster never queued. Keepwoo-safe-mode semantics byte-identical; WooSafeModeTest pins behavior.'
