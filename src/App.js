@@ -26,10 +26,10 @@ import {
 import {
 	apiCall,
 	fetchRecentActivities,
-	fetchServerRules,
 	getErrorLogMessage,
 	getWppoSettings,
 } from './lib/apiRequest';
+import useServerRules from './lib/useServerRules';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 import { __ } from '@wordpress/i18n';
@@ -101,9 +101,6 @@ const App = () => {
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const [ activitiesError, setActivitiesError ] = useState( false );
-	const [ serverRules, setServerRules ] = useState( null );
-	const [ serverRulesError, setServerRulesError ] = useState( false );
-	const [ rulesRetryTrigger, setRulesRetryTrigger ] = useState( 0 );
 	const [ ccssStatus, setCcssStatus ] = useState( {} );
 	const [ ccssError, setCcssError ] = useState( false );
 	const [ ccssRefreshTrigger, setCcssRefreshTrigger ] = useState( 0 );
@@ -111,12 +108,18 @@ const App = () => {
 	const [ pendingTab, setPendingTab ] = useState( null );
 	const [ showGuard, setShowGuard ] = useState( false );
 	const hasFetchedActivities = useRef( false );
-	const hasFetchedRules = useRef( false );
 	const hasFetchedCcss = useRef( false );
 
 	const activitiesControllerRef = useRef( null );
-	const rulesControllerRef = useRef( null );
 	const ccssControllerRef = useRef( null );
+
+	// REF-009: server-rules fetcher lives in its own hook; App only
+	// consumes { serverRules, serverRulesError, retry }.
+	const {
+		serverRules,
+		serverRulesError,
+		retry: handleRetryRules,
+	} = useServerRules();
 
 	const sidebarRef = useRef( null );
 	const toggleBtnRef = useRef( null );
@@ -205,12 +208,6 @@ const App = () => {
 
 	// Audit #1354 review: stable callbacks so heavy tabs keep prop
 	// identity across App renders.
-	const handleRetryRules = useCallback( () => {
-		hasFetchedRules.current = false;
-		setServerRulesError( false );
-		setServerRules( null );
-		setRulesRetryTrigger( ( c ) => c + 1 );
-	}, [] );
 	const handleCcssRefresh = useCallback( () => {
 		hasFetchedCcss.current = false;
 		setCcssError( false );
@@ -380,15 +377,14 @@ const App = () => {
 
 	useEffect( () => {
 		// Audit #1354: only (re)create a controller for a fetch that will
-		// actually run — the hasFetched guards below make the other two
-		// no-ops, and aborting their controllers would kill unrelated
+		// actually run — the hasFetched guards below make the other one
+		// a no-op, and aborting its controller would kill unrelated
 		// in-flight requests on every tab change.
 		const wantActivities =
 			( activeTab === 'overview' ||
 				activeTab === 'dashboard' ||
 				recentActivities.length === 0 ) &&
 			! hasFetchedActivities.current;
-		const wantRules = ! serverRules && ! hasFetchedRules.current;
 		const wantCcss = ! hasFetchedCcss.current || 0 !== ccssRefreshTrigger;
 		const refreshController = ( ref ) => {
 			if ( ref.current ) {
@@ -400,9 +396,6 @@ const App = () => {
 		const activitiesController = wantActivities
 			? refreshController( activitiesControllerRef )
 			: activitiesControllerRef.current;
-		const rulesController = wantRules
-			? refreshController( rulesControllerRef )
-			: rulesControllerRef.current;
 		const ccssController = wantCcss
 			? refreshController( ccssControllerRef )
 			: ccssControllerRef.current;
@@ -442,36 +435,6 @@ const App = () => {
 			}
 		};
 
-		const fetchRules = async () => {
-			if ( serverRules || hasFetchedRules.current ) {
-				return;
-			}
-			hasFetchedRules.current = true;
-			try {
-				const res = await fetchServerRules( rulesController.signal );
-				if ( ! rulesController.signal.aborted ) {
-					if ( res.success ) {
-						setServerRules( res.data );
-						setServerRulesError( false );
-					} else {
-						hasFetchedRules.current = false;
-						setServerRulesError( true );
-					}
-				} else {
-					hasFetchedRules.current = false;
-				}
-			} catch ( rulesError ) {
-				hasFetchedRules.current = false;
-				if ( ! rulesController.signal.aborted ) {
-					console.error(
-						'Failed fetching server rules',
-						getErrorLogMessage( rulesError )
-					);
-					setServerRulesError( true );
-				}
-			}
-		};
-
 		const fetchCcssStatus = async () => {
 			if ( hasFetchedCcss.current && 0 === ccssRefreshTrigger ) {
 				return;
@@ -507,31 +470,25 @@ const App = () => {
 			}
 		};
 
-		void Promise.allSettled( [
-			fetchActivities(),
-			fetchRules(),
-			fetchCcssStatus(),
-		] );
+		void Promise.allSettled( [ fetchActivities(), fetchCcssStatus() ] );
 
 		// Audit #1354 review: locals may be null when their want* flag
 		// was false. Snapshot the live controllers so cleanup never
 		// dereferences a null local or a stale ref.
 		const liveActivities = activitiesControllerRef.current;
-		const liveRules = rulesControllerRef.current;
 		const liveCcss = ccssControllerRef.current;
 		return () => {
 			liveActivities?.abort();
-			liveRules?.abort();
 			liveCcss?.abort();
 		};
 		// Intentionally minimal deps: hasFetched* refs (not state) gate
-		// re-fetches, so effect-written state (recentActivities, serverRules)
-		// is read but not depended on — depending on it would cause an extra
+		// re-fetches, so effect-written state (recentActivities) is read
+		// but not depended on — depending on it would cause an extra
 		// effect run plus AbortController teardown/recreation after each
-		// fetch and could abort the parallel CCSS request when serverRules
-		// resolves first.
+		// fetch and could abort the parallel CCSS request when sibling
+		// state resolves first.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ activeTab, rulesRetryTrigger, ccssRefreshTrigger ] );
+	}, [ activeTab, ccssRefreshTrigger ] );
 
 	useEffect( () => {
 		setTransition( true );
