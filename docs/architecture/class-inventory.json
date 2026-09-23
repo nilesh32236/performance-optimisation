@@ -2,7 +2,7 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14158,
+        "lines": 14159,
         "methods": 230,
         "hooks": [
             "update_option_wppo_settings",
@@ -42,8 +42,8 @@
     {
         "file": "includes/class-cache.php",
         "class": null,
-        "lines": 7252,
-        "methods": 135,
+        "lines": 7296,
+        "methods": 137,
         "hooks": [
             "shutdown"
         ],
@@ -128,7 +128,7 @@
     {
         "file": "includes/class-litespeed-integration.php",
         "class": null,
-        "lines": 2797,
+        "lines": 2798,
         "methods": 58,
         "hooks": [
             "shutdown",
@@ -164,7 +164,7 @@
     {
         "file": "includes/class-builder-purge-watcher.php",
         "class": null,
-        "lines": 2110,
+        "lines": 2111,
         "methods": 45,
         "hooks": [],
         "static_state": true
