@@ -374,26 +374,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 		 * Schedule a recurring WP-Cron event once (idempotent).
 		 *
 		 * Next-scheduled guard + schedule in one choke point: when the hook
-		 * is already scheduled the call is a no-op returning true; otherwise
-		 * `wp_schedule_event()` runs. Fail-open false when the WP-Cron API
-		 * is missing or throws. Hook name, timestamp, and recurrence pass
-		 * through unchanged.
+		 * +args set is already scheduled the call is a no-op returning true;
+		 * otherwise `wp_schedule_event()` runs. Fail-open false when the
+		 * WP-Cron API is missing or throws. Hook name, timestamp,
+		 * recurrence, and args pass through unchanged.
 		 *
 		 * @since NEXT
 		 * @param string $hook       Cron hook name.
 		 * @param int    $timestamp  First run timestamp (e.g. `time()`).
 		 * @param string $recurrence Schedule recurrence (e.g. `daily`).
+		 * @param array  $args       Optional event args (dedup is per args-set).
 		 * @return bool True when already scheduled or newly scheduled, false when unavailable/failed.
 		 */
-		public static function schedule_recurring_event( string $hook, int $timestamp, string $recurrence ): bool {
+		public static function schedule_recurring_event( string $hook, int $timestamp, string $recurrence, array $args = array() ): bool {
 			try {
 				if ( ! function_exists( 'wp_next_scheduled' ) || ! function_exists( 'wp_schedule_event' ) ) {
 					return false;
 				}
-				if ( self::next_scheduled( $hook ) ) {
+				if ( self::next_scheduled( $hook, $args ) ) {
 					return true;
 				}
-				return (bool) wp_schedule_event( $timestamp, $recurrence, $hook );
+				return (bool) wp_schedule_event( $timestamp, $recurrence, $hook, $args );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
