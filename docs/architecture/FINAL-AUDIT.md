@@ -76,7 +76,7 @@ they measure coupling surface honestly but over-approximate true cycles
   doubles where `method_exists` guards apply. PASS.
 - Maintainability: hierarchy doc + per-class mapping rows maintained per item.
   PASS.
-- Ratchet: −8.7k lines across the four decomposed god classes. PASS.
+- Ratchet: −9.0k lines across the four decomposed god classes (3082 + 1968 + 1662 + 2334). PASS.
 - Runtime: installed-WordPress verification after all 15 merges, no
   regressions (two scares — CLI purge perms, option-census drift — both
   proven environmental). PASS.
