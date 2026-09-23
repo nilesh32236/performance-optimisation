@@ -1176,6 +1176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Used_CSS'               => 'class-used-css.php',
 				'Url'                    => 'class-url.php',
 				'Util'                   => 'class-util.php',
+				'Woo_Detect'             => 'class-woo-detect.php',
 				'Wp_Version'             => 'class-wp-version.php',
 			);
 			spl_autoload_register(
