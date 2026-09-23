@@ -646,7 +646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * `loadAllCoreBlockAssets` is on, core block styles (`wp-block-*`)
 		 * stay combinable even if `wp_should_load_separate_core_block_assets()`
 		 * reports separate loading. Mirrors the opt-out registered by
-		 * `Main::register_block_assets_filters()` so `Cache` never depends on
+		 * `Hook_Registry::register_block_assets_filters()` so `Cache` never depends on
 		 * that filter's side effect (which is skipped on block themes and
 		 * never runs in unit-test isolation). Any throwable or missing
 		 * options structure returns false (legacy separate-assets path).
@@ -697,7 +697,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * file either. Positive runtime evidence only: the core function wins
 		 * when present, then a `has_filter`-guarded
 		 * `should_load_block_assets_on_demand` read (which reflects the opt-in
-		 * registered by `Main::register_block_assets_filters()` on real
+		 * registered by `Hook_Registry::register_block_assets_filters()` on real
 		 * requests). The per-site `blockAssetsOnDemand` option alone is never
 		 * sufficient here — in unit-test isolation (or when Main never ran) it
 		 * would flip legacy combines without core actually loading on demand.

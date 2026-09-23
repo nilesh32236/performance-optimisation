@@ -1,11 +1,16 @@
 <?php
 /**
- * Tests for Main::register_block_assets_filters().
+ * Tests for Hook_Registry::register_block_assets_filters().
+ *
+ * Relocated from Main in REF-005 without behavior change.
  *
  * @package PerformanceOptimise\Tests
  */
 
 use PerformanceOptimise\Inc\Main;
+use PerformanceOptimise\Inc\Hook_Registry;
+use PerformanceOptimise\Inc\Image_Optimisation;
+use PerformanceOptimise\Inc\Google_Fonts;
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 
@@ -27,16 +32,19 @@ class BlockAssetsFiltersTest extends \PHPUnit\Framework\TestCase {
 	private function register_filters( bool $loads_on_demand, array $options = array() ): void {
 		$main = ( new ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 
-		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		$options_prop->setValue(
-			$main,
-			array(
-				'file_optimisation' => array_merge( array( 'blockAssetsOnDemand' => false ), $options ),
-			)
+		$file_options = array(
+			'file_optimisation' => array_merge( array( 'blockAssetsOnDemand' => false ), $options ),
 		);
+		$options_prop = new ReflectionProperty( Main::class, 'options' );
+		$options_prop->setValue( $main, $file_options );
 
-		$method = new ReflectionMethod( Main::class, 'register_block_assets_filters' );
-		$method->invoke( $main, $loads_on_demand );
+		$registry = new Hook_Registry(
+			$main,
+			$file_options,
+			new Image_Optimisation( $file_options ),
+			new Google_Fonts( $file_options )
+		);
+		$registry->register_block_assets_filters( $loads_on_demand );
 	}
 
 	/**
