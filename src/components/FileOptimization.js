@@ -1804,68 +1804,74 @@ const FileOptimization = ( {
 		notify: notifyPreset,
 		dismiss: dismissPreset,
 	} = useNotice();
-	const applyPresetBundle = async ( bundle, successMessage ) => {
-		if ( isApplyingPreset ) {
-			return;
-		}
-		setIsApplyingPreset( true );
-		dismissPreset();
-		const next = normalizeFileOpt( { ...settings, ...bundle } );
-		try {
-			const res = await apiCall( 'update_settings', {
-				tab: 'file_optimisation',
-				settings: stripCdnRowIds( { ...next } ),
-			} );
-			if ( res && res.success ) {
-				next.cdnMapping = withCdnRowIds( next.cdnMapping );
-				setSettings( next );
-				setBaseline( stripCdnRowIds( { ...next } ) );
-				setIsDirty( false );
-				if ( res.data ) {
-					commitSettingsCache( res.data );
-				}
-				notifyPreset( {
-					type: 'success',
-					message: successMessage,
-					durationMs: 5000,
+	const applyPresetBundle = useCallback(
+		async ( bundle, successMessage ) => {
+			if ( isApplyingPreset ) {
+				return;
+			}
+			setIsApplyingPreset( true );
+			dismissPreset();
+			const next = normalizeFileOpt( { ...settings, ...bundle } );
+			try {
+				const res = await apiCall( 'update_settings', {
+					tab: 'file_optimisation',
+					settings: stripCdnRowIds( { ...next } ),
 				} );
-			} else {
+				if ( res && res.success ) {
+					next.cdnMapping = withCdnRowIds( next.cdnMapping );
+					setSettings( next );
+					setBaseline( stripCdnRowIds( { ...next } ) );
+					setIsDirty( false );
+					if ( res.data ) {
+						commitSettingsCache( res.data );
+					}
+					notifyPreset( {
+						type: 'success',
+						message: successMessage,
+						durationMs: 5000,
+					} );
+				} else {
+					notifyPreset( {
+						type: 'error',
+						message:
+							res?.message ||
+							__(
+								'Preset could not be applied — settings left unchanged.',
+								'performance-optimisation'
+							),
+						durationMs: 5000,
+					} );
+				}
+			} catch ( err ) {
+				console.error(
+					'Failed applying preset.',
+					getErrorLogMessage( err )
+				);
 				notifyPreset( {
 					type: 'error',
-					message:
-						res?.message ||
-						__(
-							'Preset could not be applied — settings left unchanged.',
-							'performance-optimisation'
-						),
+					message: __(
+						'Preset could not be applied — settings left unchanged.',
+						'performance-optimisation'
+					),
 					durationMs: 5000,
 				} );
+			} finally {
+				setIsApplyingPreset( false );
 			}
-		} catch ( err ) {
-			console.error(
-				'Failed applying preset.',
-				getErrorLogMessage( err )
-			);
-			notifyPreset( {
-				type: 'error',
-				message: __(
-					'Preset could not be applied — settings left unchanged.',
+		},
+		[ isApplyingPreset, settings, dismissPreset, notifyPreset, setIsDirty ]
+	);
+	const handleSafePreset = useCallback(
+		() =>
+			applyPresetBundle(
+				resolvePresetBundle( 'safe' ),
+				__(
+					'Safe preset applied: minify + defer + delay with builder, jQuery and WooCommerce exclusions.',
 					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-		} finally {
-			setIsApplyingPreset( false );
-		}
-	};
-	const handleSafePreset = () =>
-		applyPresetBundle(
-			resolvePresetBundle( 'safe' ),
-			__(
-				'Safe preset applied: minify + defer + delay with builder, jQuery and WooCommerce exclusions.',
-				'performance-optimisation'
-			)
-		);
+				)
+			),
+		[ applyPresetBundle ]
+	);
 	// Aggressive mode drops the safe exclusions and combines CSS, so it is
 	// gated behind an explicit ConfirmDialog (issue #1442 review) — the
 	// same shared component used for other destructive actions. The
@@ -1881,7 +1887,7 @@ const FileOptimization = ( {
 		() => setShowAggressiveConfirm( false ),
 		[]
 	);
-	const confirmAggressivePreset = () => {
+	const confirmAggressivePreset = useCallback( () => {
 		setShowAggressiveConfirm( false );
 		return applyPresetBundle(
 			resolvePresetBundle( 'aggressive' ),
@@ -1890,8 +1896,8 @@ const FileOptimization = ( {
 				'performance-optimisation'
 			)
 		);
-	};
-	const handleRevertPreset = async () => {
+	}, [ applyPresetBundle ] );
+	const handleRevertPreset = useCallback( async () => {
 		setIsRestoring( true );
 		dismissPreset();
 		try {
@@ -1971,7 +1977,7 @@ const FileOptimization = ( {
 		} finally {
 			setIsRestoring( false );
 		}
-	};
+	}, [ defaultSettings, dismissPreset, notifyPreset, setIsDirty ] );
 
 	// One-click Delay-JS Safe/Balanced/Aggressive presets (#1385): maps to
 	// the existing exclusion-getter toggles only. Builder plus commerce stay
