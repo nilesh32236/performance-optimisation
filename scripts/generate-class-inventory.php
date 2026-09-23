@@ -53,6 +53,7 @@ function wppo_known_classes(): array {
 		'Cloudflare_Purger',
 		'Core_Tweaks',
 		'Critical_CSS',
+		'Css_Combine',
 		'Css_Safelist',
 		'Cron',
 		'Database_Cleanup',
