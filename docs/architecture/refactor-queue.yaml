@@ -324,7 +324,8 @@ phase2_items:
       - '2026-09-23: implemented in working tree — new PerformanceOptimise\Inc\Settings_Migrations (includes/class-settings-migrations.php) owns all 17 migration bodies + block-assets helper verbatim (memo sync via Main::migration_options_ref bridge); Main keeps 17 thin maybe_migrate_*() proxies + private migrate_block_assets_setting() BC shim + lazy migrations() getter so Hook_Registry registrations stay byte-identical; Loader_Map fallback + inventory known-classes registered, class-inventory.json + DEPENDENCY-GRAPH.json regenerated; new SettingsMigrationsTest regression suite; SettingsReadGuardTest allowlist moved Main(17) → Settings_Migrations(17).'
   - id: ARCH-005
     title: 'Main script defer/delay cluster extraction'
-    status: queued
+    status: issue-created
+    github_issue: 1536
     priority: medium
     source_files:
       - includes/class-main.php
