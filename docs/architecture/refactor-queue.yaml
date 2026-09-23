@@ -385,9 +385,11 @@ phase2_items:
     expected_change: 'Image_Optimisation -~35-40 methods; preload output + dedup + resolution precedence preserved.'
   - id: ARCH-009
     title: 'CSS exclusion ownership consolidation (Critical_CSS owns, Used_CSS delegates)'
-    status: pr-created
+    status: merged
     github_issue: 1544
     pull_request: 1545
+    merge_commit: 8c577383
+    post_merge_result: 'wp wppo verify 6/7 identical. All 3 reviews merge-ready. Exclusion parity 6/6 local green. Fallback delta confined to unreachable-in-practice edge (documented). No loader/inventory churn (no new class).'
     priority: medium
     source_files:
       - includes/class-critical-css.php
