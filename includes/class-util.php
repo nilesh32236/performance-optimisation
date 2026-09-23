@@ -38,6 +38,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * The JS copy in `src/components/PluginSetting.js` is kept in sync via `wppoSettings.allowedSettingsKeys`
 		 * (see Main::enqueue_admin_scripts()) and a build-time comment.
 		 *
+		 * Load order: evaluating this alias autoloads Settings_Store via
+		 * Main's spl_autoload fallback (or the Composer classmap), so
+		 * class-util.php must not be required standalone without the plugin
+		 * bootstrap/autoloader registered.
+		 *
 		 * @since 2.0.0
 		 * @since NEXT Facade alias of Settings_Store::ALLOWED_SETTINGS_KEYS (REF-011).
 		 * @var string[]
@@ -49,6 +54,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Facade alias: canonical owner is {@see \PerformanceOptimise\Inc\Settings_Store::ALLOWED_SETTINGS_TABS};
 		 * kept here for backward compatibility. Identical to ALLOWED_SETTINGS_KEYS.
+		 *
+		 * Load order: as with ALLOWED_SETTINGS_KEYS above, evaluating this
+		 * alias autoloads Settings_Store — do not require class-util.php
+		 * standalone without the plugin bootstrap/autoloader.
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Facade alias of Settings_Store::ALLOWED_SETTINGS_TABS (REF-011).

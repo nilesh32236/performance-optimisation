@@ -123,7 +123,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}
 		 * so the allowlist lives in one place with its own unit test.
 		 *
-		 * @since 2.2.0
 		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
 		 * @param mixed $value Raw value.
 		 * @return string Allowlisted mode ('auto' fallback).
@@ -138,7 +137,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 *
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
-		 * @since 2.2.0
 		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
 		 * @param array $value Raw overrides.
 		 * @return array Sanitized overrides.
@@ -175,7 +173,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 *
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
-		 * @since 2.2.0
 		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
 		 * @param array $value Raw mapping entries.
 		 * @return array Sanitized mapping.
@@ -268,7 +265,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * key-name heuristic (exclude/preload/delay/url/cdn) is unit-testable
 		 * in isolation and the main loop stays a readable dispatcher.
 		 *
-		 * @since 2.2.0
 		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
 		 * @param string $safe_key Sanitized key.
 		 * @param mixed  $value    Raw value.
@@ -304,7 +300,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * {@see get_default_settings()} must appear here so a new tab key
 		 * can never be silently dropped or stored unsanitized.
 		 *
-		 * @since 2.2.0
 		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
 		 * @return array<string,string> Tab slug => sanitizer method name.
 		 */
@@ -334,7 +329,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * exists so the sanitizer map covers every schema tab with a named,
 		 * testable method.
 		 *
-		 * @since 2.2.0
 		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
@@ -350,7 +344,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * exists so the sanitizer map covers every schema tab with a named,
 		 * testable method.
 		 *
-		 * @since 2.2.0
 		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
