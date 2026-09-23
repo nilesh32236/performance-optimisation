@@ -164,7 +164,7 @@ class ScriptStrategyParityTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_loader_map_resolves_script_strategy(): void {
 		$map = Loader_Map::fallback_map();
-		$this->assertSame( 'class-script-strategy.php', $map['Script_Strategy'] );
+		$this->assertSame( 'Assets/class-script-strategy.php', $map['Script_Strategy'] );
 		$this->assertFileExists( (string) Loader_Map::path_for( 'Script_Strategy' ) );
 		$this->assertFileExists( (string) Loader_Map::path_for( 'PerformanceOptimise\Inc\Script_Strategy' ) );
 	}
