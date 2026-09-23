@@ -370,15 +370,16 @@ phase2_items:
     notes:
       - '2026-09-23: implemented in working tree — new PerformanceOptimise\Inc\Cache_Invalidator (includes/class-cache-invalidator.php) owns the invalidate trio, clear_cache body (instance method; Cache keeps same-signature static delegate), purge-fallback serving set, all delete_* helpers + swap purge, and the PURGE_FALLBACK_* bounds (logic verbatim; instance state stays on Cache via @internal invalidator_*() bridges, Option A per ARCH-004/005/006 precedent); Cache keeps 33 thin proxies (visibility preserved so method_exists guards + Hook_Registry callback identity unchanged) + lazy invalidator() getter + 8 bridges; safe_path/get_file_path/is_path_contained/log probes stay on Cache, Filesystem primitives untouched (no double-ownership); Loader_Map fallback + inventory known-classes registered, class-inventory.json + DEPENDENCY-GRAPH.json regenerated (Cache 6867→5294 lines); new CacheInvalidatorTest regression suite.'
   - id: ARCH-008
-    title: 'Image_Optimisation hero-preload/lazy cluster extraction'
-    status: queued
+    title: 'Image_Optimisation LCP/hero-preload cluster extraction (Lcp_Preload)'
+    status: issue-created
+    github_issue: 1542
     priority: medium
     source_files:
       - includes/class-image-optimisation.php
-    responsibility: 'Hero-preload claim/dedup slot + occlusion/fetchpriority + lazy-conflict sweep clusters into focused image services.'
+    responsibility: 'LCP resolution + hero-preload emission + dedup/slot state into Lcp_Preload (Images domain). Re-scoped 2026-09-23 re-audit: class is 10966 lines/165 methods dominated by LCP/preload; lazy/picture/video/alt/dimension clusters stay for ARCH-017 follow-up. Critical_CSS static callers (has_emitted_preload, get_lcp_responsive_data_for_url) keep proxies.'
     dependencies: [ARCH-003]
     risk: medium
-    expected_change: 'Image_Optimisation -~20 methods; preload dedup semantics preserved.'
+    expected_change: 'Image_Optimisation -~35-40 methods; preload output + dedup + resolution precedence preserved.'
   - id: ARCH-009
     title: 'Critical_CSS + Used_CSS shared CSS-storage helper consolidation'
     status: queued
