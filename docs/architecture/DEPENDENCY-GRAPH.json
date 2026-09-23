@@ -235,6 +235,9 @@
         "Log",
         "Util"
     ],
+    "includes/class-loader-map.php": [
+        "Main"
+    ],
     "includes/class-log.php": [
         "Util"
     ],
@@ -252,6 +255,7 @@
         "Image_Optimisation",
         "Img_Converter",
         "LiteSpeed_Integration",
+        "Loader_Map",
         "Log",
         "RUM",
         "Sandbox_Preview",
