@@ -2,7 +2,7 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14173,
+        "lines": 14172,
         "methods": 232,
         "hooks": [
             "update_option_wppo_settings",
@@ -62,8 +62,8 @@
     {
         "file": "includes/class-util.php",
         "class": null,
-        "lines": 5159,
-        "methods": 155,
+        "lines": 5451,
+        "methods": 159,
         "hooks": [
             "switch_blog"
         ],
@@ -446,14 +446,6 @@
         "class": null,
         "lines": 553,
         "methods": 8,
-        "hooks": [],
-        "static_state": false
-    },
-    {
-        "file": "includes/class-scheduler.php",
-        "class": null,
-        "lines": 550,
-        "methods": 13,
         "hooks": [],
         "static_state": false
     },

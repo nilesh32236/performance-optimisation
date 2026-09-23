@@ -196,7 +196,6 @@ items:
     status: autofix-running
     github_issue: 1524
     github_pr: 1525
-    merge_notes: 'Loop iteration-2 condensed historic notes; master version kept as authoritative on conflict resolve.'
     source: BOUNDARIES.md Scheduler
 
   - id: REF-015
