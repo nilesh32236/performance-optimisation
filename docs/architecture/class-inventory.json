@@ -656,7 +656,7 @@
     {
         "file": "includes/class-loader-map.php",
         "class": null,
-        "lines": 234,
+        "lines": 235,
         "methods": 7,
         "hooks": [],
         "static_state": false,
@@ -678,8 +678,8 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 13404,
-        "methods": 233,
+        "lines": 11091,
+        "methods": 235,
         "hooks": [
             "update_option_wppo_settings",
             "admin_notices",
@@ -708,6 +708,7 @@
             "Log",
             "RUM",
             "Sandbox_Preview",
+            "Script_Strategy",
             "Server_Rules",
             "Settings_Migrations",
             "System_Info",
@@ -870,6 +871,21 @@
         ]
     },
     {
+        "file": "includes/class-script-strategy.php",
+        "class": null,
+        "lines": 3859,
+        "methods": 56,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "LiteSpeed_Integration",
+            "Main",
+            "Util",
+            "Wp_Version"
+        ]
+    },
+    {
         "file": "includes/class-server-rules.php",
         "class": null,
         "lines": 328,
@@ -886,7 +902,7 @@
     {
         "file": "includes/class-settings-migrations.php",
         "class": null,
-        "lines": 1080,
+        "lines": 1160,
         "methods": 18,
         "hooks": [],
         "static_state": false,

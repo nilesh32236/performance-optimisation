@@ -1,6 +1,6 @@
 # Include Hierarchy — current state (ARCH-001)
 
-Evidence baseline: 2026-09-23. 58 files flat in `includes/` (57 class/trait
+Evidence baseline: 2026-09-23. 60 files flat in `includes/` (59 class/trait
 files + `redis-connect-helper.php`, plus `minify/` wrappers). Counts/methods/refs:
 `class-inventory.json`; edges: `DEPENDENCY-GRAPH.json`. Canonical redesign: ARCH-002.
 
@@ -10,7 +10,7 @@ files + `redis-connect-helper.php`, plus `minify/` wrappers). Counts/methods/ref
 - **Cache:** `Cache`, `Cache_Key`, `Advanced_Cache_Handler`, `Bfcache`
 - **Settings:** `Settings_Store`, `Sandbox_Preview`, `Settings_Migrations`
 - **Filesystem/URL/HTTP:** `Filesystem`, `Url`, `Http`, `Scheduler`
-- **Assets:** `Asset_Manager`, `Css_Safelist`, `Google_Fonts`
+- **Assets:** `Asset_Manager`, `Css_Safelist`, `Google_Fonts`, `Script_Strategy` (ARCH-005 defer/delay cluster from `Main`)
 - **Images:** `Image_Optimisation`, `Img_Converter`
 - **CSS:** `Critical_CSS`, `Used_CSS`
 - **Database/insight:** `Database_Cleanup`, `Telemetry`, `Pagespeed`,
@@ -89,7 +89,7 @@ against current load references (`Main::includes()` eager list + fallback map,
 drop-in contracts, test bootstrap); moves in ARCH-013 update the loader map
 (ARCH-003) in the same change per the move-safety constraints above.
 
-### Per-class target mapping (58 files, evidence per row)
+### Per-class target mapping (59 files, evidence per row)
 
 Evidence keys: `[sysmap:<cluster>]` = `ARCHITECTURE.md` system-map cluster;
 `[hotspot]` = `ARCHITECTURE.md` coupling hotspot; `[dir]` = dependency-direction
@@ -122,6 +122,7 @@ edge/cluster evidence; `[load]` = `LOAD-ORDER.md` loader/drop-in evidence.
 | `class-asset-manager.php` | `Assets/` | [sysmap:Surface/Asset_Manager] per-page script/style manager; asset-pipeline owner |
 | `class-css-safelist.php` | `Assets/` | [sysmap:Asset pipeline] `Css_Safelist`; shared CSS exclusion owner alongside Used/Critical CSS |
 | `class-google-fonts.php` | `Assets/` | [sysmap:Asset pipeline] `Google_Fonts` self-host; asset-pipeline owner |
+| `class-script-strategy.php` | `Assets/` | [sysmap:Asset pipeline] `Script_Strategy` defer rendering + delay-JS decisions/data relocated from `Main` (ARCH-005); `Main` keeps facade proxies so hook-callback identity is unchanged; [load] lazy via `Loader_Map` fallback map |
 | `class-image-optimisation.php` | `Images/` | [sysmap:Asset pipeline] image serving/lazy/hero-preload; [hotspot] ARCH-008 extraction source; [graph] dense hub |
 | `class-img-converter.php` | `Images/` | [sysmap:Asset pipeline] `Img_Converter` (WebP/AVIF); image-domain service |
 | `class-critical-css.php` | `CSS/` | [sysmap:Asset pipeline] per-template critical CSS; [hotspot] ARCH-009 shared-storage owner candidate |
