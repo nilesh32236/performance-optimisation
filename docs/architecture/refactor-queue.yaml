@@ -355,9 +355,11 @@ phase2_items:
     expected_change: 'Cache -~25 methods; byte-identical combine output; regression tests on combine/inline budget paths.'
   - id: ARCH-007
     title: 'Cache invalidation/purge cluster consolidation'
-    status: pr-created
+    status: merged
     github_issue: 1540
     pull_request: 1541
+    merge_commit: e34144a6
+    post_merge_result: 'wp wppo verify 6/7 identical; front 200. CLI purge fails on nobody-owned dirs (proven environmental: touch probe fails identically; graceful false, no fatal; suite pins deletes on writable trees). CacheInvalidatorTest 11/11 local green. Accepted: 33 proxies + 8 @internal bridges (precedent, revisit ARCH-014/019).'
     priority: medium
     source_files:
       - includes/class-cache.php
