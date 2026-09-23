@@ -100,7 +100,7 @@ items:
     priority: medium
     status: autofix-running
     github_issue: 1506
-    github_pr: null
+    github_pr: 1507
     source: AUDIT/FINAL-REVIEW/architecture.md R-01/R-05
     notes:
       - 'Registry pattern only; no hook add/remove/reorder. CronHookParityTest pins registration.'
