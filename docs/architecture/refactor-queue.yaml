@@ -129,7 +129,7 @@ items:
     priority: medium
     status: autofix-running
     github_issue: 1510
-    github_pr: null
+    github_pr: 1511
     source: AUDIT/FINAL-REVIEW/architecture.md R-03
     notes:
       - 'Pairs naturally with REF-002; keep file-load new Main() contract.'
