@@ -1125,6 +1125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'System_Info'            => 'class-system-info.php',
 				'Telemetry'              => 'class-telemetry.php',
 				'Used_CSS'               => 'class-used-css.php',
+				'Url'                    => 'class-url.php',
 				'Util'                   => 'class-util.php',
 			);
 			spl_autoload_register(
