@@ -127,7 +127,9 @@ items:
     title: 'Main private const DEFAULTS + lazy get_options() (constructor I/O)'
     type: architecture
     priority: medium
-    status: queued
+    status: autofix-running
+    github_issue: 1510
+    github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-03
     notes:
       - 'Pairs naturally with REF-002; keep file-load new Main() contract.'
