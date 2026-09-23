@@ -165,6 +165,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			// Settings writes must not re-create the advanced-cache drop-in or
 			// update .htaccess while the plugin is tearing itself down.
 			remove_action( 'update_option_wppo_settings', array( Main::class, 'on_settings_update' ), 10 );
+			remove_action( 'add_option_wppo_settings', array( Main::class, 'on_settings_add' ), 10 );
 
 			// Cache-clear fan-out on structural changes is redundant after
 			// Deactivate::init() has cleared the cache itself.

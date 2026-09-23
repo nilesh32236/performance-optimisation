@@ -2,10 +2,11 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14159,
-        "methods": 230,
+        "lines": 14183,
+        "methods": 232,
         "hooks": [
             "update_option_wppo_settings",
+            "add_option_wppo_settings",
             "admin_notices",
             "script_module_data_wppo-lazyload",
             "wp_speculation_rules_href_exclude_paths",
@@ -329,7 +330,7 @@
     {
         "file": "includes/class-hook-registry.php",
         "class": null,
-        "lines": 689,
+        "lines": 691,
         "methods": 7,
         "hooks": [
             "admin_menu",
@@ -368,6 +369,7 @@
             "query_vars",
             "send_headers",
             "update_option_wppo_settings",
+            "add_option_wppo_settings",
             "style_loader_tag",
             "wppo_generate_ccss",
             "wp_ajax_wppo_get_nonce",
