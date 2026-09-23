@@ -35,8 +35,9 @@ block via `Loader_Map::cli_file()`. Future directory moves (ARCH-013) touch
 exactly `Loader_Map` (+ the entry-point chain below).
 
 Eager `require_once` (each guarded by `file_exists`):
-`Wp_Version` → Action Scheduler vendor lib (not under `includes/`, still wired
-directly in `Main`) → `Server_Rules` → `Header_Emitter` →
+`Loader_Map` (when not already autoloaded) → Action Scheduler vendor lib
+(not under `includes/`, still wired directly in `Main`) → `Wp_Version` →
+`Server_Rules` → `Header_Emitter` →
 `LiteSpeed_Integration` → conditionally `LiteSpeed_Crawler` + `LiteSpeed_ESI`
 (only when `should_load_litespeed_stack()`; non-LiteSpeed frontends skip parse
 cost, fail-open) → `Llms` → `OD_Bridge` → `Bfcache` → `Perf_Translations` →
