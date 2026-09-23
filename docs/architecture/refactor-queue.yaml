@@ -205,7 +205,9 @@ items:
     title: 'Extract Http boundary from Util (curl/finfo/xml/gd teardown + last-response headers)'
     type: architecture
     priority: low
-    status: queued
+    status: autofix-running
+    github_issue: 1526
+    github_pr: null
     source: BOUNDARIES.md Http
     notes:
       - 'Mechanical move of close_*/destroy_*/free_* helpers + get_last_response_headers. Keeps PHP 8.5-compat scanner green.'
