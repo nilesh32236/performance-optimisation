@@ -70,12 +70,21 @@
         "Used_CSS",
         "Util"
     ],
+    "includes/class-cache-invalidator.php": [
+        "Cache",
+        "Critical_CSS",
+        "LiteSpeed_Integration",
+        "Log",
+        "Server_Rules",
+        "Used_CSS",
+        "Util"
+    ],
     "includes/class-cache-key.php": [
         "Util"
     ],
     "includes/class-cache.php": [
         "CDN",
-        "Critical_CSS",
+        "Cache_Invalidator",
         "Css_Combine",
         "Hook_Registry",
         "LiteSpeed_ESI",
@@ -83,8 +92,6 @@
         "Log",
         "Main",
         "Sandbox_Preview",
-        "Server_Rules",
-        "Used_CSS",
         "Util",
         "Wp_Version"
     ],
