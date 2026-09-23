@@ -291,9 +291,11 @@ phase2_items:
       - '2026-09-23: canonical 14-directory tree decided from ARCH-001 evidence (ARCHITECTURE.md system map + 322 graph edges + LOAD-ORDER.md loader paths); 57-file target mapping + open-points resolutions recorded in INCLUDE-HIERARCHY.md. Util stays at root until ARCH-014; minify/ as-is; flat one-level rule; protected ESI/drop-in handlers unchanged by construction. Docs-only, no runtime change.'
   - id: ARCH-003
     title: 'Loader centralization: single Loader_Map boundary, no file moves'
-    status: pr-created
+    status: merged
     github_issue: 1532
     pull_request: 1533
+    merge_commit: b3bc98cb
+    post_merge_result: 'wp wppo verify 6/7 identical to baseline. Loader smoke: 45 map entries, 15 eager, Cache autoloads, wp wppo registered, front 200 / admin 302 (login redirect, no fatal). needs-manual-review cleared by full manual diff review (crawler/ESI eager-order shift verified safe: no cross-file extends, no file-scope execution).'
     priority: high
     source_files:
       - includes/class-main.php
