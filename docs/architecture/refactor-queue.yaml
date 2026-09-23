@@ -3,6 +3,8 @@
 # Statuses: queued|planning|issue-created|analysis-running|analysis-question|
 #   analysis-approved|autofix-running|pr-created|pr-review-running|
 #   human-verification|changes-requested|merged|blocked|cancelled
+# NOTE 2026-09-23: rewritten clean after scripted edits left stale statuses
+# and duplicate keys. All states below verified against gh issue/pr list.
 
 campaign: incremental-architecture-refactor
 created: 2026-09-22
@@ -38,21 +40,8 @@ items:
     github_issue: 1496
     github_pr: 1497
     merge_commit: cb08369a
-    rationale: >
-      Smallest safe first extraction (3 methods + stampede key helper) with the
-      widest fan-in (~23 consumers of transient_key). Establishes the
-      boundary-class + Util-facade pattern every later Util split reuses, without
-      touching behavior, storage I/O, or hot paths.
-    scope:
-      - includes/class-util.php transient_key/option_key/cache_salt/stampede_stale_key
-      - new includes/class-cache-key.php behind Util:: proxies
-    non_goals:
-      - No storage I/O or TTL policy changes; no multisite prefix change ({blog_id}_ stays).
-      - No other Util splits bundled in.
     notes:
-      - 'Merged 2026-09-22. Util methods stayed 170 (4 proxies kept); lines 8746→8712.
-        Real count ratchet happens when proxies are removed or logic moves (REF-002+).'
-    discoveries: []
+      - 'Merged 2026-09-22. First extraction; established boundary+facade pattern. Util 8746→8712 lines (4 proxies kept).'
 
   - id: REF-002
     title: 'Extract Settings_Store from Util (settings memo, save, hook coherence, snapshots)'
@@ -62,11 +51,9 @@ items:
     github_issue: 1498
     github_pr: 1499
     merge_commit: 71d2523c
-    notes:
-      - 'Merged 2026-09-22. Util methods stayed 170 (11 proxies); lines 8712→8626. Iteration-1 fixed WPCS alignment + hook-guard order + redundant memo write. switch_blog stays in Util by design (clears Util-owned memos).'
     source: AUDIT/FINAL-REVIEW/architecture.md R-02/R-03 (A-02/A-03)
     notes:
-      - 'Depends on REF-001 facade pattern (merged). Covers get/set/clear_settings_cache, save_settings, hook registration, snapshots. ALLOWED_SETTINGS_KEYS + sanitizer ownership deferred to REF-011 to keep the diff focused.'
+      - 'Merged 2026-09-22. Util 8712→8626 lines (11 proxies). switch_blog stays in Util by design (clears Util-owned memos).'
 
   - id: REF-003
     title: 'Extract Filesystem boundary core from Util (dirs, local path, atomic writes, containment)'
@@ -76,130 +63,150 @@ items:
     github_issue: 1500
     github_pr: 1501
     merge_commit: e41523ef
-    notes:
-      - 'Merged 2026-09-22. Manual control taken after loop 3/3 (needs-manual-review): fixed 7 WPCS test nits, restored blog-keyed home_url memo parity in Filesystem (master used memoized cached_home_url), kept the loop-added minify-roots memo (sound, has_filter-guarded) as a noted exception to no-perf-in-refactor.'
-      - 'Scope note: normalize_cache_host + sanitize_cache_url_path moved with Filesystem as cache-path-adjacent (REF-004 keeps the rest of URL helpers). Inventory JSON update missed by loop — backfill on next queue commit.'
     source: AUDIT/FINAL-REVIEW/architecture.md R-07
     notes:
-      - 'Security-sensitive: keep is_link/realpath/prefix guards byte-identical; CacheSafePathTest + traversal battery must pin behavior first.'
-      - 'Rollout/purge-fallback slot helpers split out to REF-012 to keep the diff focused.'
-
-  - id: REF-004
-    title: 'Extract Url boundary from Util (cached_home_url/content_url, normalize, same-site)'
-    type: architecture
-    priority: medium
-    status: autofix-running
-    github_issue: 1504
-    github_pr: 1505
-    merge_commit: 65f1ffc2
-    notes:
-      - 'Merged 2026-09-22. Util 166→159. Loop needed 3 iterations + manual review: fixed missing Main fallback-map entry (caught by review), added UrlBoundaryTest, typed static. No manual code edits needed — iteration-3 already fixed the blog-keyed exclusion memo + reset coverage.'
-    source: AUDIT/FINAL-REVIEW/architecture.md R-02 (.jules/bolt.md cache lessons)
-    notes:
-      - 'Keep has_filter guards + blog-ID keying; hot-path memo behavior unchanged.'
-
-  - id: REF-005
-    title: 'Extract Hook_Registry from Main::setup_hooks (McCabe >30, ~59 hooks)'
-    type: architecture
-    priority: medium
-    status: autofix-running
-    github_issue: 1506
-    github_pr: 1507
-    merge_commit: 9d932632
-    notes:
-      - 'Merged 2026-09-23. Main 232→230; setup_hooks 581 lines → 3-line delegate. Manual control: fixed trait-tearDown shadowing fatal + discovery-time require_once breaking function mocking (both in HookRegistryParityTest). Verified options-snapshot safety (zero writes during registration; migrations admin_init-deferred on master too).'
-    source: AUDIT/FINAL-REVIEW/architecture.md R-01/R-05
-    notes:
-      - 'Registry pattern only; no hook add/remove/reorder. CronHookParityTest pins registration.'
-
-  - id: REF-006
-    title: 'Constructor injection for Cache (remove setter injection, single construction path)'
-    type: architecture
-    priority: medium
-    status: autofix-running
-    github_issue: 1508
-    github_pr: 1509
-    merge_commit: 21060784
-    notes:
-      - 'Merged 2026-09-23. Design pivoted by loop from required-collaborators to optional-nullable + lazy memoized getters (better BC: new Cache($options) and static clear_cache keep working; no Cache→Main coupling). Setters deprecated. Identity sharing when live instances passed.'
-    source: AUDIT/FINAL-REVIEW/architecture.md R-05
-    notes:
-      - 'Blocked until REF-002 clarifies options ownership (stale-snapshot risk). Do not start before REF-002 merges.'
-
-  - id: REF-007
-    title: 'Main private const DEFAULTS + lazy get_options() (constructor I/O)'
-    type: architecture
-    priority: medium
-    status: autofix-running
-    github_issue: 1510
-    github_pr: 1511
-    merge_commit: 1d0cfc5e
-    notes:
-      - 'Merged 2026-09-23. Main 230→232 (+get_options/+resolve_options accessors). Answered Q1/Q2 (runtime overlay; Option A), re-triggered via /fix. Manual control: dropped const DEFAULTS for canonical Util::get_default_settings() (repo guard DefaultsParityTest), fixed 3 strict function_exists tests (#1465 alias pattern). Reverted nothing; kept incidental private is_css_minified removal (dead, zero callers).'
-    source: AUDIT/FINAL-REVIEW/architecture.md R-03
-    notes:
-      - 'Pairs naturally with REF-002; keep file-load new Main() contract.'
-
-  - id: REF-008
-    title: 'Decompose Dashboard.js god component (2296 lines) into cards'
-    type: architecture
-    priority: medium
-    status: autofix-running
-    github_issue: 1512
-    github_pr: 1513
-    merge_commit: 21ad238d
-    notes:
-      - 'Merged 2026-09-23. Dashboard 2296→2240 (-56): LoggedInCacheCard extracted presentational-only (handlers/fetch stay). 4 card tests. Only nit: pre-selected role assertion gap (test-only, non-blocking).'
-    source: AUDIT/FINAL-REVIEW/architecture.md R-09
-    notes:
-      - 'One card per PR; keep wppoSettings/apiCall/useNotice patterns.'
-
-  - id: REF-009
-    title: 'Extract App.js data-fetch hooks (useServerRules/useCcssStatus, memo component map)'
-    type: architecture
-    priority: low
-    status: autofix-running
-    github_issue: 1514
-    github_pr: 1516
-    merge_commit: 49a28489
-    notes:
-      - 'Merged 2026-09-23. useServerRules extracted (App -77 lines); 7 hook tests; parallelism + abort semantics preserved; build committed.'
-    source: AUDIT/FINAL-REVIEW/architecture.md R-08
-
-  - id: REF-010
-    title: 'Central Wp_Version gate (replace scattered version_compare + TODOs)'
-    type: architecture
-    priority: low
-    status: autofix-running
-    github_issue: 1518
-    github_pr: 1519
-    merge_commit: 5181c71c
-    notes:
-      - 'Merged 2026-09-23. Two-read boundary (canonical fail-false + global-only assume-newest); 48-test parity matrix. Accepted documented edge: explicit empty-string wp_version now canonicalizes via get_bloginfo (core never emits empty). get_bloginfo memoized + reset-wired.'
-    source: AUDIT/FINAL-REVIEW/architecture.md R-11
+      - 'Merged 2026-09-22. Util 170→166 methods (privates moved without proxies). Manual control after loop 3/3: fixed 7 WPCS test nits, restored blog-keyed home_url memo parity; kept loop-added minify-roots memo (sound, has_filter-guarded) as noted exception.'
+      - 'normalize_cache_host + sanitize_cache_url_path moved as cache-path-adjacent.'
 
   - id: REF-012
     title: 'Move rollout/purge-fallback slot helpers from Util into Filesystem boundary'
     type: architecture
     priority: medium
-    status: autofix-running
+    status: merged
     github_issue: 1502
     github_pr: 1503
     merge_commit: d76295a0
-    notes:
-      - 'Merged 2026-09-22. Util stayed 166 (11 public proxies kept). Loop iterations added two reviewed hardenings (slash-less-dir guard, fail-open WP-fn guards in log_css_fallback) — accepted as safe edge fixes, not reverted.'
     source: REF-003
     order_note: 'Processed right after REF-003 (direct continuation of its split) ahead of REF-004.'
     notes:
-      - 'Split out of REF-003 during planning. Covers get_staged_path_for/promote/restore_fallback/describe_rollout_slot + purge-fallback path/payload/log helpers + $purge_fallback_memo state. Ships after Filesystem merges.'
+      - 'Merged 2026-09-22. Filesystem 28→40 methods. Loop added two reviewed hardenings (slash-less-dir guard, fail-open guards in log_css_fallback) — accepted as safe edge fixes.'
+
+  - id: REF-004
+    title: 'Extract Url boundary from Util (home/content URL memos, same-site, normalize, exclusion)'
+    type: architecture
+    priority: medium
+    status: merged
+    github_issue: 1504
+    github_pr: 1505
+    merge_commit: 65f1ffc2
+    source: AUDIT/FINAL-REVIEW/architecture.md R-02 (.jules/bolt.md cache lessons)
+    notes:
+      - 'Merged 2026-09-22. Util 166→159. Review caught missing Main fallback-map entry; iteration-3 fixed blog-keyed exclusion memo + reset coverage. No manual code edits needed.'
+
+  - id: REF-005
+    title: 'Extract Hook_Registry from Main::setup_hooks (hook registration ownership)'
+    type: architecture
+    priority: medium
+    status: merged
+    github_issue: 1506
+    github_pr: 1507
+    merge_commit: 9d932632
+    source: AUDIT/FINAL-REVIEW/architecture.md R-01/R-05
+    notes:
+      - 'Merged 2026-09-23. Main 232→230; setup_hooks 581 lines → 3-line delegate. Manual control: fixed trait-tearDown shadowing fatal + discovery-time require_once breaking function mocking. Verified options-snapshot safety (zero writes during registration).'
+
+  - id: REF-006
+    title: 'Constructor injection for Cache (optional-nullable + lazy getters)'
+    type: architecture
+    priority: medium
+    status: merged
+    github_issue: 1508
+    github_pr: 1509
+    merge_commit: 21060784
+    source: AUDIT/FINAL-REVIEW/architecture.md R-05
+    notes:
+      - 'Merged 2026-09-23. Loop pivoted design to optional-nullable + lazy memoized getters (better BC than required collaborators; no Cache→Main coupling). Setters deprecated. Identity sharing when live instances passed.'
+
+  - id: REF-007
+    title: 'Main lazy get_options() via canonical Util::get_default_settings()'
+    type: architecture
+    priority: medium
+    status: merged
+    github_issue: 1510
+    github_pr: 1511
+    merge_commit: 1d0cfc5e
+    source: AUDIT/FINAL-REVIEW/architecture.md R-03
+    notes:
+      - 'Merged 2026-09-23. Main 230→232 (+get_options/+resolve_options). Answered Q1/Q2, re-triggered via /fix. Manual control: dropped const DEFAULTS for canonical source (DefaultsParityTest guard), fixed 3 strict function_exists tests (#1465 alias pattern).'
+
+  - id: REF-008
+    title: 'Dashboard.js: extract LoggedInCacheCard (one card)'
+    type: architecture
+    priority: medium
+    status: merged
+    github_issue: 1512
+    github_pr: 1513
+    merge_commit: 21ad238d
+    source: AUDIT/FINAL-REVIEW/architecture.md R-09
+    notes:
+      - 'Merged 2026-09-23. Dashboard 2296→2240. Presentational-only extraction; 4 card tests.'
+
+  - id: REF-009
+    title: 'App.js: extract useServerRules hook (one hook)'
+    type: architecture
+    priority: low
+    status: merged
+    github_issue: 1514
+    github_pr: 1516
+    merge_commit: 49a28489
+    source: AUDIT/FINAL-REVIEW/architecture.md R-08
+    notes:
+      - 'Merged 2026-09-23. App -77 lines; 7 hook tests; parallelism + abort semantics preserved; build committed.'
+
+  - id: REF-010
+    title: 'Central Wp_Version gate (canonical + global-only reads)'
+    type: architecture
+    priority: low
+    status: merged
+    github_issue: 1518
+    github_pr: 1519
+    merge_commit: 5181c71c
+    source: AUDIT/FINAL-REVIEW/architecture.md R-11
+    notes:
+      - 'Merged 2026-09-23. 48-test parity matrix. Accepted edge: explicit empty-string wp_version canonicalizes via get_bloginfo (core never emits empty). get_bloginfo memoized + reset-wired.'
+
+  - id: REF-011
+    title: 'Move ALLOWED_SETTINGS_KEYS + sanitizer-map ownership into Settings_Store'
+    type: architecture
+    priority: medium
+    status: merged
+    github_issue: 1520
+    github_pr: 1521
+    merge_commit: c09f5b94
+    source: REF-002
+    notes:
+      - 'Merged 2026-09-23. Store 13→22; consts aliased via class-const expressions; 8/8 sanitizers byte-identical; loop iterations doc-only.'
 
   - id: REF-013
     title: 'Extract Woo_Detect boundary from Util (is_woo_* + excluded paths + self-test)'
     type: architecture
     priority: medium
-    status: autofix-running
+    status: merged
     github_issue: 1522
     github_pr: 1523
     merge_commit: 79455745
+    source: BOUNDARIES.md Woo_Detect
     notes:
-      - 'Merged 2026-09-23. Editor/admin path helpers correctly stayed in Util; has_uncacheable_query correctly targets Util. method_exists(self::class) guards now tautological but outcome-identical (documented, follow-up simplification deferred).'
+      - 'Merged 2026-09-23. Editor/admin path helpers correctly stayed in Util; has_uncacheable_query targets Util. method_exists(self::class) guards tautological but outcome-identical (follow-up simplification deferred).'
+
+  - id: REF-014
+    title: 'Extract Scheduler boundary from Util (Action-Scheduler unique + stampede locks)'
+    type: architecture
+    priority: medium
+    status: autofix-running
+    github_issue: 1524
+    github_pr: null
+    source: BOUNDARIES.md Scheduler
+
+  - id: REF-015
+    title: 'Extract Http boundary from Util (curl/finfo/xml/gd teardown + last-response headers)'
+    type: architecture
+    priority: low
+    status: queued
+    source: BOUNDARIES.md Http
+    notes:
+      - 'Mechanical move of close_*/destroy_*/free_* helpers + get_last_response_headers. Keeps PHP 8.5-compat scanner green.'
+
+notes:
+  - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
+  - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'
