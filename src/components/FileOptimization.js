@@ -35,7 +35,6 @@ import {
 	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
 import Tooltip from './common/Tooltip';
-import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -43,6 +42,7 @@ import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 
 import CriticalCssPanel from './CriticalCssPanel';
+import PresetsCard from './file-optimization/PresetsCard';
 
 // Per-instance row ids (issue #1274 review): a module counter + Date.now()
 // leaks across mounts/tests and is non-deterministic, so each component
@@ -2802,122 +2802,24 @@ const FileOptimization = ( {
 						role="tabpanel"
 						aria-labelledby="tab-assets"
 					>
-						<FeatureCard
-							title={ __(
-								'Optimisation Presets',
-								'performance-optimisation'
-							) }
-							icon={ <FontAwesomeIcon icon={ faRocket } /> }
-						>
-							{ presetNotice && (
-								<NoticeBanner
-									type={ presetNotice.type }
-									message={ presetNotice.message }
-									className="wppo-mb-12"
-									onDismiss={ dismissPreset }
-								/>
-							) }
-							<p className="wppo-text-muted wppo-text-small wppo-mb-12">
-								{ __(
-									'Safe enables minify + defer + delay with page-builder, jQuery and WooCommerce exclusions pre-applied (about 200ms render-block win without breakage). Aggressive drops the safe exclusions and combines CSS — only for sites with manual exclusions. Every apply snapshots your current settings first; Revert restores them in one click. Export/import and the Scripts-tab sandbox preview remain as extra safety nets.',
-									'performance-optimisation'
-								) }
-							</p>
-							<div className="wppo-field-group wppo-flex wppo-gap-12 wppo-flex-wrap">
-								<button
-									type="button"
-									className="wppo-button wppo-button--primary"
-									onClick={ handleSafePreset }
-									disabled={
-										isApplyingPreset ||
-										isSaving ||
-										optimizerDisabled
-									}
-								>
-									{ isApplyingPreset
-										? __(
-												'Applying…',
-												'performance-optimisation'
-										  )
-										: __(
-												'Apply Safe Preset',
-												'performance-optimisation'
-										  ) }
-								</button>
-								<button
-									type="button"
-									className="wppo-button wppo-button--secondary"
-									onClick={ handleAggressivePreset }
-									disabled={
-										isApplyingPreset ||
-										isSaving ||
-										optimizerDisabled
-									}
-								>
-									{ __(
-										'Enable Aggressive Mode',
-										'performance-optimisation'
-									) }
-								</button>
-								<button
-									type="button"
-									className="wppo-button wppo-button--secondary"
-									onClick={ handleRevertPreset }
-									disabled={ isRestoring || isApplyingPreset }
-								>
-									{ isRestoring
-										? __(
-												'Reverting…',
-												'performance-optimisation'
-										  )
-										: __(
-												'Revert to Previous',
-												'performance-optimisation'
-										  ) }
-								</button>
-							</div>
-							<ConfirmDialog
-								isOpen={ showAggressiveConfirm }
-								onConfirm={ confirmAggressivePreset }
-								onCancel={ () =>
-									setShowAggressiveConfirm( false )
-								}
-								title={ __(
-									'Enable Aggressive Mode?',
-									'performance-optimisation'
-								) }
-								message={ __(
-									'Aggressive mode drops the builder, jQuery and WooCommerce exclusions and combines CSS — this can break layouts or checkout. Your current settings are snapshotted first, so you can revert in one click. Proceed?',
-									'performance-optimisation'
-								) }
-								confirmLabel={ __(
-									'Enable Anyway',
-									'performance-optimisation'
-								) }
-								variant="danger"
-								isBusy={ isApplyingPreset }
-							/>
-							{ isAggressiveDelay( settings ) && (
-								<NoticeBanner
-									type="warning"
-									message={ __(
-										'Aggressive mode is on: builder, jQuery or WooCommerce scripts may be delayed. Re-enable the safe presets — or press Revert to Previous to restore your last settings in one click.',
-										'performance-optimisation'
-									) }
-									className="wppo-mt-12"
-								/>
-							) }
-							{ isSafePresetActive( settings ) && (
-								<NoticeBanner
-									type="success"
-									message={ __(
-										'Safe preset is active: minify + defer + delay with builder, jQuery and WooCommerce exclusions.',
-										'performance-optimisation'
-									) }
-									className="wppo-mt-12"
-								/>
-							) }
-						</FeatureCard>
+						<PresetsCard
+							presetNotice={ presetNotice }
+							onDismissPreset={ dismissPreset }
+							onSafe={ handleSafePreset }
+							onAggressive={ handleAggressivePreset }
+							onConfirmAggressive={ confirmAggressivePreset }
+							onCancelAggressive={ () =>
+								setShowAggressiveConfirm( false )
+							}
+							onRevert={ handleRevertPreset }
+							isApplyingPreset={ isApplyingPreset }
+							isRestoring={ isRestoring }
+							isSaving={ isSaving }
+							optimizerDisabled={ optimizerDisabled }
+							showAggressiveConfirm={ showAggressiveConfirm }
+							isAggressiveActive={ isAggressiveDelay( settings ) }
+							isSafeActive={ isSafePresetActive( settings ) }
+						/>
 						<FeatureCard
 							title={ __(
 								'CSS Optimisation',

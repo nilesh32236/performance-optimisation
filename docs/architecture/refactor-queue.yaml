@@ -477,7 +477,7 @@ phase2_items:
       - '2026-09-23: implemented in working tree — issue census corrected (43 claimed, ~17 executable; 4 of 7 files docblock-only): Filesystem 3 rewrites (get_settings→Settings_Store, 2× transient_key→Cache_Key; 2× compute_css_checksum STAY Util-canonical), Woo_Detect 7 rewrites (get_settings→Settings_Store, 6× cached_home_url→Url; 2× has_uncacheable_query + is_editor_preview_url STAY Util-canonical), Scheduler 2 rewrites (get_settings→Settings_Store); Cache_Key/Settings_Store/Url/Http zero executable edges (verify-only); new Arch14BoundaryDelegationTest (7 tests); Util untouched, no loader/inventory churn.'
   - id: ARCH-015
     title: 'FileOptimization: extract PresetsCard (one presentational card)'
-    status: issue-created
+    status: pr-created
     github_issue: 1556
     priority: low
     source_files:
@@ -486,6 +486,8 @@ phase2_items:
     dependencies: [ARCH-001]
     risk: low
     expected_change: 'One card extracted with tests; build/ committed.'
+    notes:
+      - '2026-09-23: implemented — src/components/file-optimization/PresetsCard.js (presentational, computed booleans) + PresetsCard.test.js; FileOptimization renders <PresetsCard/> in place of inline JSX; build/ rebuilt.'
   - id: ARCH-016
     title: 'Final architecture audit + leftover triage'
     status: queued
