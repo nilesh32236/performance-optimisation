@@ -156,7 +156,7 @@
     {
         "file": "includes/class-cache-invalidator.php",
         "class": null,
-        "lines": 2122,
+        "lines": 2204,
         "methods": 34,
         "hooks": [],
         "static_state": false,
@@ -184,7 +184,7 @@
     {
         "file": "includes/class-cache.php",
         "class": null,
-        "lines": 5294,
+        "lines": 5643,
         "methods": 161,
         "hooks": [
             "shutdown"
@@ -200,6 +200,8 @@
             "Log",
             "Main",
             "Sandbox_Preview",
+            "Server_Rules",
+            "Used_CSS",
             "Util",
             "Wp_Version"
         ]
@@ -571,8 +573,8 @@
     {
         "file": "includes/class-image-optimisation.php",
         "class": null,
-        "lines": 10966,
-        "methods": 165,
+        "lines": 8999,
+        "methods": 183,
         "hooks": [
             "wp_generate_attachment_metadata",
             "wp_get_attachment_image_src",
@@ -586,6 +588,7 @@
         "refs": [
             "CDN",
             "Img_Converter",
+            "Lcp_Preload",
             "OD_Bridge",
             "RUM",
             "Util"
@@ -602,6 +605,21 @@
         "static_state": true,
         "refs": [
             "Log",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/class-lcp-preload.php",
+        "class": null,
+        "lines": 4435,
+        "methods": 74,
+        "hooks": [],
+        "static_state": true,
+        "refs": [
+            "CDN",
+            "Image_Optimisation",
+            "OD_Bridge",
+            "RUM",
             "Util"
         ]
     },
@@ -688,7 +706,7 @@
     {
         "file": "includes/class-loader-map.php",
         "class": null,
-        "lines": 237,
+        "lines": 238,
         "methods": 7,
         "hooks": [],
         "static_state": false,

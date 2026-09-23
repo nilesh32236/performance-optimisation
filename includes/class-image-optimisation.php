@@ -26,12 +26,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 	 */
 	class Image_Optimisation {
 
-		/**
-		 * Default maximum width for preloading images.
-		 *
-		 * @since 1.5.1
-		 */
-		private const MAX_PRELOAD_WIDTH = 1478;
 
 		/**
 		 * Maximum dimension (px) for the generated SVG placeholder.
@@ -50,16 +44,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private const IMG_SIZE_CACHE_LIMIT = 100;
 
-		/**
-		 * Maximum image preload hints emitted per page (manual wins on conflict).
-		 *
-		 * Manual lists are ordered first in `get_all_preload_data()` so the
-		 * slice keeps pinned heroes when auto + manual overlap. Competitor
-		 * parity (one hero preload) with a hard cap against preload waste.
-		 *
-		 * @since 2.2.0
-		 */
-		private const MAX_LCP_PRELOADS = 2;
 
 		/**
 		 * Tags visited by the comment-image hardening passes.
@@ -197,39 +181,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private const FILE_EXISTS_CACHE_LIMIT = 500;
 
-		/**
-		 * Per-request record of emitted preload links (normalized URL + query + media).
-		 *
-		 * `get_all_preload_data()` dedups within one call, but `wp_head` may
-		 * invoke `preload_images()` more than once per request; this guard
-		 * keeps the single `<link rel="preload" as="image"
-		 * fetchpriority="high">` per LCP URL invariant (issue #991) across
-		 * repeated calls. Reset with {@see clear_runtime_caches()} (e.g. on
-		 * switch_blog) and in tests. Long-lived processes (CLI/cron) that
-		 * generate multiple pages in one process must call
-		 * {@see clear_runtime_caches()} between pages, otherwise a hero URL
-		 * repeated on a later page is skipped as already emitted.
-		 *
-		 * @var array<string,bool>
-		 * @since 2.0.0
-		 */
-		private static array $preload_emitted = array();
 
-		/**
-		 * Per-request raw URLs emitted directly via `generate_img_preload()`.
-		 *
-		 * The direct path bypasses `get_all_preload_data()`, so its hero is
-		 * recorded here (bounded, unique) so `add_delay_load_img()` can
-		 * exempt it from lazy-load in the same response.
-		 * `preload_images()` URLs are intentionally NOT recorded here — they
-		 * already flow through `get_all_preload_data()` into the lazy
-		 * exclusion list. Reset with {@see clear_runtime_caches()}.
-		 * In-memory only, multisite-safe by construction.
-		 *
-		 * @var array<string,bool>
-		 * @since 2.2.0
-		 */
-		private static array $preload_emitted_urls = array();
 
 		/**
 		 * In-request LRU map for getimagesize results (see
@@ -414,31 +366,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private ?string $stable_signal_lcp_url_key = null;
 
-		/**
-		 * Per-request heuristic LCP memo keyed by buffer hash (issue #1216).
-		 *
-		 * The P2 DOM-first heuristic re-scans full HTML with
-		 * `WP_HTML_Tag_Processor` on each caller (preload data, lazy
-		 * exclusion, hero inject); this static memo resolves each distinct
-		 * buffer once per request. Bounded: reset once past 30 entries.
-		 *
-		 * @var array<string, string>
-		 * @since 2.2.0
-		 */
-		private static $heuristic_lcp_memo = array();
 
-		/**
-		 * Whether a responsive LCP preload already emitted this response.
-		 *
-		 * Single-high invariant (issue #1429): `emit_responsive_lcp_preload()`
-		 * sets this once a `<link ... fetchpriority="high">` is produced so
-		 * a second call in the same response degrades to '' instead of a
-		 * second high hint. Reset via `clear_runtime_caches()`.
-		 *
-		 * @since 2.3.0
-		 * @var bool
-		 */
-		private static $responsive_lcp_preload_emitted = false;
 
 		/**
 		 * Deferred alt-map entries buffered for the shutdown commit,
@@ -505,12 +433,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public static function clear_runtime_caches(): void {
 			self::$file_exists_cache              = array();
 			self::$img_size_cache                 = array();
-			self::$preload_emitted                = array();
-			self::$preload_emitted_urls           = array();
+			\PerformanceOptimise\Inc\Lcp_Preload::clear_lcp_preload_caches();
 			self::$placeholder_info_cache         = null;
 			self::$placeholder_path_cache         = array();
-			self::$heuristic_lcp_memo             = array();
-			self::$responsive_lcp_preload_emitted = false;
 			// Commit-then-clear (audit #1338 review): long-lived processes
 			// that clear between pages must not silently drop buffered alts.
 			// Memo resets to array() (never null): get_derived_alt_map()
@@ -544,14 +469,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
 		 * @return bool True when the URL + media pair already emitted.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::has_emitted_preload}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public static function has_emitted_preload( string $url, string $media = '' ): bool {
-			try {
-				return isset( self::$preload_emitted[ self::build_preload_dedup_key( $url, $media ) ] );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return Lcp_Preload::has_emitted_preload( $url, $media );
 		}
 
 		/**
@@ -566,13 +489,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
 		 * @return void
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::mark_preload_emitted}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public static function mark_preload_emitted( string $url, string $media = '' ): void {
-			try {
-				self::$preload_emitted[ self::build_preload_dedup_key( $url, $media ) ] = true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			Lcp_Preload::mark_preload_emitted( $url, $media );
 		}
 
 		/**
@@ -587,20 +509,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $url The raw preload URL.
 		 * @return void
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::record_direct_preload_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function record_direct_preload_url( string $url ): void {
-			try {
-				$raw = trim( $url );
-				if ( '' === $raw ) {
-					return;
-				}
-				self::$preload_emitted_urls[ substr( $raw, 0, 2048 ) ] = true;
-				if ( count( self::$preload_emitted_urls ) > 30 ) {
-					self::$preload_emitted_urls = array_slice( self::$preload_emitted_urls, -30, null, true );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			Lcp_Preload::record_direct_preload_url( $url );
 		}
 
 		/**
@@ -617,29 +531,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return string[] Normalized direct-preload URLs.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_direct_preload_normalized_urls}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function get_direct_preload_normalized_urls(): array {
-			$normalized = array();
-			try {
-				if ( array() === self::$preload_emitted_urls ) {
-					return array();
-				}
-				foreach ( array_keys( self::$preload_emitted_urls ) as $url ) {
-					try {
-						$norm = Util::normalize_url( (string) $url );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						continue;
-					}
-					if ( '' !== $norm ) {
-						$normalized[] = $norm;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
-			return array_values( array_unique( $normalized ) );
+			return Lcp_Preload::get_direct_preload_normalized_urls();
 		}
 
 		/**
@@ -654,27 +551,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
 		 * @return string The dedup key.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::build_preload_dedup_key}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function build_preload_dedup_key( string $url, string $media ): string {
-			$normalized = '';
-			try {
-				$normalized = self::normalize_image_url_static( $url );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			$base  = ( '' !== $normalized ) ? $normalized : $url;
-			$query = '';
-			try {
-				if ( function_exists( 'wp_parse_url' ) ) {
-					$parsed = wp_parse_url( $url, PHP_URL_QUERY );
-					if ( is_string( $parsed ) && '' !== $parsed ) {
-						$query = '?' . substr( $parsed, 0, 512 );
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return $base . $query . '|' . $media;
+			return Lcp_Preload::build_preload_dedup_key( $url, $media );
 		}
 
 		/**
@@ -693,26 +575,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $url The raw hero URL.
 		 * @return bool True when the URL already emitted with any media.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_hero_preload_claimed}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function is_hero_preload_claimed( string $url ): bool {
-			try {
-				$prefix = self::build_preload_dedup_key( $url, '' );
-				if ( '' === $prefix ) {
-					return false;
-				}
-				foreach ( array_keys( self::$preload_emitted ) as $key ) {
-					if ( ! is_string( $key ) ) {
-						continue;
-					}
-					if ( 0 === strpos( $key, $prefix ) ) {
-						return true;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-			return false;
+			return Lcp_Preload::is_hero_preload_claimed( $url );
 		}
 
 		/**
@@ -736,25 +604,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string      $media  The preload media attribute ('' for buffer companions).
 		 * @param string|null $buffer Optional HTML buffer to scan for an existing hint.
 		 * @return bool True when the caller may emit (slot claimed), false to skip.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::claim_hero_preload_slot}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function claim_hero_preload_slot( string $url, string $media = '', ?string $buffer = null ): bool {
-			try {
-				$url = trim( $url );
-				if ( '' === $url ) {
-					return false;
-				}
-				if ( self::has_emitted_preload( $url, $media ) || self::is_hero_preload_claimed( $url ) ) {
-					return false;
-				}
-				if ( is_string( $buffer ) && '' !== $buffer && $this->buffer_has_image_preload( $buffer, $url ) ) {
-					return false;
-				}
-				self::mark_preload_emitted( $url, $media );
-				return true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return true;
-			}
+			return $this->lcp_preload()->claim_hero_preload_slot( $url, $media, $buffer );
 		}
 
 		/**
@@ -769,13 +624,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $url   The raw hero URL.
 		 * @param string $media The preload media attribute ('' for buffer companions).
 		 * @return void
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::release_hero_preload_slot}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function release_hero_preload_slot( string $url, string $media = '' ): void {
-			try {
-				unset( self::$preload_emitted[ self::build_preload_dedup_key( $url, $media ) ] );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			Lcp_Preload::release_hero_preload_slot( $url, $media );
 		}
 
 		/**
@@ -792,49 +646,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL host matches a configured CDN host.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_cdn_preload_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_cdn_preload_url( string $url ): bool {
-			try {
-				$url = trim( $url );
-				if ( '' === $url || ! function_exists( 'wp_parse_url' ) ) {
-					return false;
-				}
-				if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) || ! method_exists( 'PerformanceOptimise\Inc\CDN', 'get_mappings' ) ) {
-					return false;
-				}
-				$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
-				if ( '' === $host ) {
-					return false;
-				}
-				$mappings = \PerformanceOptimise\Inc\CDN::get_mappings();
-				if ( ! is_array( $mappings ) || array() === $mappings ) {
-					return false;
-				}
-				foreach ( $mappings as $mapping ) {
-					if ( ! is_array( $mapping ) ) {
-						continue;
-					}
-					$cdn_urls = array();
-					if ( isset( $mapping['cdn_urls'] ) && is_array( $mapping['cdn_urls'] ) ) {
-						$cdn_urls = $mapping['cdn_urls'];
-					} elseif ( isset( $mapping['cdn_url'] ) && is_string( $mapping['cdn_url'] ) && '' !== $mapping['cdn_url'] ) {
-						$cdn_urls = array( $mapping['cdn_url'] );
-					}
-					foreach ( $cdn_urls as $cdn_url ) {
-						if ( ! is_string( $cdn_url ) || '' === $cdn_url ) {
-							continue;
-						}
-						$cdn_host = strtolower( (string) wp_parse_url( $cdn_url, PHP_URL_HOST ) );
-						if ( '' !== $cdn_host && $cdn_host === $host ) {
-							return true;
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-			return false;
+			return $this->lcp_preload()->is_cdn_preload_url( $url );
 		}
 
 		/**
@@ -849,17 +666,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_allowed_hero_preload_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_allowed_hero_preload_url( string $url ): bool {
-			try {
-				if ( $this->is_same_origin_preload_url( $url ) ) {
-					return true;
-				}
-				return $this->is_cdn_preload_url( $url );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->lcp_preload()->is_allowed_hero_preload_url( $url );
 		}
 
 		/**
@@ -873,29 +685,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return bool True when the HTML API may be used.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_html_api_available}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_html_api_available(): bool {
-			try {
-				if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
-					return false;
-				}
-				if ( ! function_exists( 'get_bloginfo' ) && ! isset( $GLOBALS['wp_version'] ) ) {
-					return true;
-				}
-				$wp_version = '';
-				if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
-					$wp_version = $GLOBALS['wp_version'];
-				} elseif ( function_exists( 'get_bloginfo' ) ) {
-					$wp_version = (string) get_bloginfo( 'version' );
-				}
-				if ( '' === $wp_version ) {
-					return true;
-				}
-				return version_compare( $wp_version, '6.2', '>=' );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->lcp_preload()->is_html_api_available();
 		}
 
 		/**
@@ -913,28 +708,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string|null $buffer Optional HTML buffer passed to the filter for context.
 		 * @return string The computed hero URL, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_computed_css_hero_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_computed_css_hero_url( ?string $buffer = null ): string {
-			try {
-				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) ) {
-					return '';
-				}
-				if ( ! has_filter( 'wppo_computed_css_hero_url' ) ) {
-					return '';
-				}
-				$raw = apply_filters( 'wppo_computed_css_hero_url', '', $buffer );
-				if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
-					return '';
-				}
-				$url = trim( substr( trim( $raw ), 0, 2048 ) );
-				if ( ! $this->is_image_lcp_url( $url ) || ! $this->is_allowed_hero_preload_url( $url ) ) {
-					return '';
-				}
-				return $url;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
+			return $this->lcp_preload()->get_computed_css_hero_url( $buffer );
 		}
 
 		/**
@@ -951,64 +730,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $buffer The HTML buffer.
 		 * @return string The buffer with high-priority nodes forced eager.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::sweep_lazy_high_conflicts}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function sweep_lazy_high_conflicts( string $buffer ): string {
-			try {
-				if ( '' === $buffer || false === stripos( $buffer, 'fetchpriority' ) ) {
-					return $buffer;
-				}
-				if ( ! $this->is_html_api_available() ) {
-					$result = preg_replace_callback(
-						'#<(?:img|iframe)\b[^>]*>#i',
-						function ( $matches ) {
-							$tag = $matches[0];
-							if ( false === stripos( $tag, 'fetchpriority' ) ) {
-								return $tag;
-							}
-							if ( 1 !== preg_match( '#fetchpriority\s*=\s*["\']?high["\']?#i', $tag ) ) {
-								return $tag;
-							}
-							if ( 1 !== preg_match( '#loading\s*=\s*["\']?lazy["\']?#i', $tag ) ) {
-								return $tag;
-							}
-							$fixed = (string) preg_replace( '#loading\s*=\s*["\']?lazy["\']?#i', 'loading="eager"', $tag, 1 );
-							return $fixed;
-						},
-						$buffer
-					);
-					return is_string( $result ) ? $result : $buffer;
-				}
-				$tags    = new \WP_HTML_Tag_Processor( $buffer );
-				$changed = false;
-				while ( $tags->next_tag() ) {
-					$tag_name = $tags->get_tag();
-					if ( ! is_string( $tag_name ) ) {
-						continue;
-					}
-					$tag_name = strtoupper( $tag_name );
-					if ( 'IMG' !== $tag_name && 'IFRAME' !== $tag_name ) {
-						continue;
-					}
-					$priority = $tags->get_attribute( 'fetchpriority' );
-					if ( ! is_string( $priority ) || 'high' !== strtolower( trim( $priority ) ) ) {
-						continue;
-					}
-					$loading = $tags->get_attribute( 'loading' );
-					if ( ! is_string( $loading ) || 'lazy' !== strtolower( trim( $loading ) ) ) {
-						continue;
-					}
-					$tags->set_attribute( 'loading', 'eager' );
-					$changed = true;
-				}
-				if ( ! $changed ) {
-					return $buffer;
-				}
-				$updated = $tags->get_updated_html();
-				return is_string( $updated ) ? $updated : $buffer;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $buffer;
-			}
+			return $this->lcp_preload()->sweep_lazy_high_conflicts( $buffer );
 		}
 
 		/**
@@ -1021,25 +748,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.3.0
 		 * @return bool True when occluded nodes should be demoted to low.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_occlusion_fetchpriority_low_enabled}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_occlusion_fetchpriority_low_enabled(): bool {
-			try {
-				$image_optimisation = $this->options['image_optimisation'] ?? array();
-				$enabled            = ! empty( $image_optimisation['occlusionFetchpriorityLow'] );
-				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_occlusion_fetchpriority_low_enabled' ) ) {
-					/**
-					 * Filters whether OD-occluded images are demoted to fetchpriority low.
-					 *
-					 * @since 2.3.0
-					 * @param bool $enabled Whether occlusion demotion is enabled.
-					 */
-					$enabled = (bool) apply_filters( 'wppo_occlusion_fetchpriority_low_enabled', $enabled );
-				}
-				return $enabled;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->lcp_preload()->is_occlusion_fetchpriority_low_enabled();
 		}
 
 		/**
@@ -1052,18 +766,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.3.0
 		 * @return string[] Occluded image URLs (may be empty).
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_occluded_image_urls_for_request}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_occluded_image_urls_for_request(): array {
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) || ! method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_occluded_image_urls' ) ) {
-					return array();
-				}
-				$urls = \PerformanceOptimise\Inc\OD_Bridge::get_occluded_image_urls();
-				return is_array( $urls ) ? $urls : array();
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
+			return $this->lcp_preload()->get_occluded_image_urls_for_request();
 		}
 
 		/**
@@ -1087,169 +795,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string[]    $occluded_urls Raw occluded image URLs.
 		 * @param string|null $lcp_url       Optional true-LCP URL to protect.
 		 * @return string The buffer with occluded nodes demoted to low.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::apply_occlusion_fetchpriority_low}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function apply_occlusion_fetchpriority_low( string $buffer, array $occluded_urls, ?string $lcp_url = null ): string {
-			try {
-				if ( '' === $buffer || empty( $occluded_urls ) || false === stripos( $buffer, '<img' ) ) {
-					return $buffer;
-				}
-				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_occlusion_fetchpriority_low_urls' ) ) {
-					/**
-					 * Filters the occluded image URL list before fetchpriority demotion.
-					 *
-					 * @since 2.3.0
-					 * @param string[] $occluded_urls Occluded image URLs.
-					 * @param string   $buffer        The HTML buffer being processed.
-					 */
-					$filtered = apply_filters( 'wppo_occlusion_fetchpriority_low_urls', $occluded_urls, $buffer );
-					if ( is_array( $filtered ) ) {
-						$occluded_urls = $filtered;
-					}
-				}
-				$occluded_set = array();
-				foreach ( $occluded_urls as $u ) {
-					if ( ! is_string( $u ) || '' === trim( $u ) ) {
-						continue;
-					}
-					// Parity with OD_Bridge::get_occluded_image_urls(): reject
-					// non-http(s) schemes before normalization resolves them
-					// against the home URL into a host+path key that could
-					// coincidentally match a real <img>.
-					$trimmed = trim( $u );
-					$scheme  = function_exists( 'wp_parse_url' ) ? wp_parse_url( $trimmed, PHP_URL_SCHEME ) : parse_url( $trimmed, PHP_URL_SCHEME ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
-					if ( is_string( $scheme ) && '' !== $scheme && ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
-						continue;
-					}
-					$norm = $this->normalize_image_url( $u );
-					if ( '' !== $norm ) {
-						$occluded_set[ $norm ] = true;
-					}
-				}
-				if ( empty( $occluded_set ) ) {
-					return $buffer;
-				}
-				$normalized_lcp = '';
-				if ( is_string( $lcp_url ) && '' !== $lcp_url ) {
-					$normalized_lcp = $this->normalize_image_url( $lcp_url );
-				}
-				// Per-buffer memo of normalized candidate URLs: the closures
-				// below run once per <img> tag, so identical src/srcset values
-				// across image-heavy pages normalize once instead of N times.
-				$norm_cache           = array();
-				$tag_is_protected_lcp = function ( array $candidates ) use ( $normalized_lcp, &$norm_cache ): bool {
-					if ( '' === $normalized_lcp ) {
-						return false;
-					}
-					foreach ( $candidates as $candidate ) {
-						if ( '' === $candidate ) {
-							continue;
-						}
-						if ( ! array_key_exists( $candidate, $norm_cache ) ) {
-							$norm_cache[ $candidate ] = $this->normalize_image_url( $candidate );
-						}
-						if ( $norm_cache[ $candidate ] === $normalized_lcp ) {
-							return true;
-						}
-					}
-					return false;
-				};
-				$tag_is_occluded      = function ( array $candidates ) use ( $occluded_set, &$norm_cache ): bool {
-					foreach ( $candidates as $candidate ) {
-						if ( '' === $candidate ) {
-							continue;
-						}
-						if ( ! array_key_exists( $candidate, $norm_cache ) ) {
-							$norm_cache[ $candidate ] = $this->normalize_image_url( $candidate );
-						}
-						if ( isset( $occluded_set[ $norm_cache[ $candidate ] ] ) ) {
-							return true;
-						}
-					}
-					return false;
-				};
-				if ( ! $this->is_html_api_available() ) {
-					$result = preg_replace_callback(
-						'#<img\b[^>]*>#i',
-						function ( $matches ) use ( $tag_is_protected_lcp, $tag_is_occluded ) {
-							$tag = $matches[0];
-							if ( 1 === preg_match( '#\sfetchpriority\s*=#i', $tag ) ) {
-								return $tag;
-							}
-							$candidates = array();
-							if ( 1 === preg_match_all( '#\s(?:src|data-src)\s*=\s*["\']?([^"\'\s>]+)#i', $tag, $m ) && isset( $m[1] ) && is_array( $m[1] ) ) {
-								foreach ( $m[1] as $v ) {
-									$candidates[] = (string) $v;
-								}
-							}
-							if ( 1 === preg_match_all( '#\ssrcset\s*=\s*["\']([^"\']+)["\']#i', $tag, $sm ) && isset( $sm[1] ) && is_array( $sm[1] ) ) {
-								foreach ( $sm[1] as $srcset ) {
-									foreach ( $this->split_srcset_candidates( (string) $srcset ) as $part ) {
-										$url = $this->split_srcset_item( $part )[0];
-										if ( '' !== $url ) {
-											$candidates[] = $url;
-										}
-									}
-								}
-							}
-							if ( empty( $candidates ) ) {
-								return $tag;
-							}
-							if ( $tag_is_protected_lcp( $candidates ) ) {
-								return $tag;
-							}
-							if ( ! $tag_is_occluded( $candidates ) ) {
-								return $tag;
-							}
-							return (string) preg_replace( '#<img\b#i', '<img fetchpriority="low"', $tag, 1 );
-						},
-						$buffer
-					);
-					return is_string( $result ) ? $result : $buffer;
-				}
-				$tags    = new \WP_HTML_Tag_Processor( $buffer );
-				$changed = false;
-				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-					$existing = $tags->get_attribute( 'fetchpriority' );
-					if ( null !== $existing ) {
-						continue;
-					}
-					$candidates = array();
-					foreach ( array( 'src', 'data-src' ) as $attribute ) {
-						$value = $tags->get_attribute( $attribute );
-						if ( is_string( $value ) && '' !== $value ) {
-							$candidates[] = $value;
-						}
-					}
-					$srcset = $tags->get_attribute( 'srcset' );
-					if ( is_string( $srcset ) && '' !== $srcset ) {
-						foreach ( $this->split_srcset_candidates( $srcset ) as $part ) {
-							$url = $this->split_srcset_item( $part )[0];
-							if ( '' !== $url ) {
-								$candidates[] = $url;
-							}
-						}
-					}
-					if ( empty( $candidates ) ) {
-						continue;
-					}
-					if ( $tag_is_protected_lcp( $candidates ) ) {
-						continue;
-					}
-					if ( ! $tag_is_occluded( $candidates ) ) {
-						continue;
-					}
-					$tags->set_attribute( 'fetchpriority', 'low' );
-					$changed = true;
-				}
-				if ( ! $changed ) {
-					return $buffer;
-				}
-				$updated = $tags->get_updated_html();
-				return is_string( $updated ) ? $updated : $buffer;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $buffer;
-			}
+			return $this->lcp_preload()->apply_occlusion_fetchpriority_low( $buffer, $occluded_urls, $lcp_url );
 		}
 
 		/**
@@ -1282,7 +833,540 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->auto_lcp_disabled_key      = null;
 			$this->stable_signal_lcp_url      = null;
 			$this->stable_signal_lcp_url_key  = null;
-			self::$heuristic_lcp_memo         = array();
+			\PerformanceOptimise\Inc\Lcp_Preload::clear_heuristic_lcp_memo();
+		}
+		/**
+		 * LCP/preload service runner (ARCH-008 extraction).
+		 *
+		 * Owns LCP resolution, hero-preload emission, and preload
+		 * dedup/slot state; constructed with this instance so options
+		 * reads, LCP memos, and lazy/media collaborators keep the exact
+		 * semantics the bodies had here (instance state stays on this
+		 * class as the single source of truth, reached through the
+		 * `@internal` `lcp_*()` bridges below — never a new write path).
+		 *
+		 * @since NEXT
+		 * @var Lcp_Preload|null
+		 */
+		private ?Lcp_Preload $lcp_preload = null;
+
+		/**
+		 * Get (and lazily create) the LCP/preload service bound to this instance.
+		 *
+		 * @since NEXT
+		 * @return Lcp_Preload Service bound to this instance.
+		 */
+		private function lcp_preload(): Lcp_Preload {
+			if ( null === $this->lcp_preload ) {
+				$this->lcp_preload = new Lcp_Preload( $this );
+			}
+			return $this->lcp_preload;
+		}
+
+		/**
+		 * Configuration options snapshot (read-only; written only by the constructor). (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same read access the moved
+		 * bodies had via `$this->options`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array
+		 */
+		public function lcp_get_options(): array {
+			return $this->options;
+		}
+
+		/**
+		 * Front-page preload URL list derived at construction. (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same read access the moved
+		 * bodies had via `$this->preload_front_page_urls`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array
+		 */
+		public function lcp_get_preload_front_page_urls(): array {
+			return $this->preload_front_page_urls;
+		}
+
+		/**
+		 * Post-type preload exclusion list derived at construction. (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same read access the moved
+		 * bodies had via `$this->exclude_post_type_imgs`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array
+		 */
+		public function lcp_get_exclude_post_type_imgs(): array {
+			return $this->exclude_post_type_imgs;
+		}
+
+		/**
+		 * Excluded image widths derived at construction. (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same read access the moved
+		 * bodies had via `$this->exclude_sizes`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array
+		 */
+		public function lcp_get_exclude_sizes(): array {
+			return $this->exclude_sizes;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$current_lcp_url` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->current_lcp_url`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_current_lcp_url(): ?string {
+			return $this->current_lcp_url;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$current_lcp_url_key` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->current_lcp_url_key`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_current_lcp_url_key(): ?string {
+			return $this->current_lcp_url_key;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$lazy_lcp_exclusion_url` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->lazy_lcp_exclusion_url`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_lazy_lcp_exclusion_url(): ?string {
+			return $this->lazy_lcp_exclusion_url;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$lazy_lcp_exclusion_url_key` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->lazy_lcp_exclusion_url_key`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_lazy_lcp_exclusion_url_key(): ?string {
+			return $this->lazy_lcp_exclusion_url_key;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$fetchpriority_lcp_url` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->fetchpriority_lcp_url`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_fetchpriority_lcp_url(): ?string {
+			return $this->fetchpriority_lcp_url;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$fetchpriority_lcp_key` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->fetchpriority_lcp_key`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_fetchpriority_lcp_key(): ?string {
+			return $this->fetchpriority_lcp_key;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$manual_lcp_url` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->manual_lcp_url`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_manual_lcp_url(): ?string {
+			return $this->manual_lcp_url;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$manual_lcp_url_key` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->manual_lcp_url_key`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?int Reference to the live memo.
+		 */
+		public function &lcp_state_manual_lcp_url_key(): ?int {
+			return $this->manual_lcp_url_key;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$auto_lcp_disabled` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->auto_lcp_disabled`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?bool Reference to the live memo.
+		 */
+		public function &lcp_state_auto_lcp_disabled(): ?bool {
+			return $this->auto_lcp_disabled;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$auto_lcp_disabled_key` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->auto_lcp_disabled_key`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?int Reference to the live memo.
+		 */
+		public function &lcp_state_auto_lcp_disabled_key(): ?int {
+			return $this->auto_lcp_disabled_key;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$stable_signal_lcp_url` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->stable_signal_lcp_url`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_stable_signal_lcp_url(): ?string {
+			return $this->stable_signal_lcp_url;
+		}
+
+		/**
+		 * Direct reference to LCP memo `$stable_signal_lcp_url_key` (ARCH-008 internal bridge).
+		 *
+		 * Gives {@see Lcp_Preload} the same live memo access the moved
+		 * bodies had via `$this->stable_signal_lcp_url_key`. Only `Lcp_Preload` calls
+		 * this (no other runtime or test caller exists). Do not call
+		 * from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return ?string Reference to the live memo.
+		 */
+		public function &lcp_state_stable_signal_lcp_url_key(): ?string {
+			return $this->stable_signal_lcp_url_key;
+		}
+
+		/**
+		 * Lazy/media collaborator `normalize_url()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $url The URL to normalize.
+		 		 * @return string Normalized URL.
+		 */
+		public function lcp_normalize_url( string $url ): string {
+			return $this->normalize_url( $url );
+		}
+
+		/**
+		 * Lazy/media collaborator `unlazyload_first_images()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $buffer             HTML buffer.
+		 		 * @param array  $image_optimisation Image settings.
+		 		 * @return string Buffer with first images un-lazy-loaded.
+		 */
+		public function lcp_unlazyload_first_images( string $buffer, array $image_optimisation ): string {
+			return $this->unlazyload_first_images( $buffer, $image_optimisation );
+		}
+
+		/**
+		 * Lazy/media collaborator `sanitize_loading_triple()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param array $attrs Loading attributes.
+		 		 * @return array Sanitized attributes.
+		 */
+		public function lcp_sanitize_loading_triple( array $attrs ): array {
+			return $this->sanitize_loading_triple( $attrs );
+		}
+
+		/**
+		 * Lazy/media collaborator `promote_eager_picture_sources()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $buffer HTML buffer.
+		 		 * @return string Buffer with eager picture sources promoted.
+		 */
+		public function lcp_promote_eager_picture_sources( string $buffer ): string {
+			return $this->promote_eager_picture_sources( $buffer );
+		}
+
+		/**
+		 * Lazy/media collaborator `remove_lazy_classes()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param mixed $tags Tag processor.
+		 		 * @return bool Whether any class was removed.
+		 */
+		public function lcp_remove_lazy_classes( $tags ): bool {
+			return $this->remove_lazy_classes( $tags );
+		}
+
+		/**
+		 * Lazy/media collaborator `restore_js_lazy_placeholders()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param mixed $tags Tag processor.
+		 		 * @return bool Whether any placeholder was restored.
+		 */
+		public function lcp_restore_js_lazy_placeholders( $tags ): bool {
+			return $this->restore_js_lazy_placeholders( $tags );
+		}
+
+		/**
+		 * Lazy/media collaborator `should_use_html_processor()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @return bool True when the HTML processor path may be used.
+		 */
+		public function lcp_should_use_html_processor(): bool {
+			return $this->should_use_html_processor();
+		}
+
+		/**
+		 * Lazy/media collaborator `cached_file_exists()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $path Absolute path.
+		 		 * @return bool Whether the file exists.
+		 */
+		public function lcp_cached_file_exists( string $path ): bool {
+			return $this->cached_file_exists( $path );
+		}
+
+		/**
+		 * Lazy/media collaborator `get_cached_image_size()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $local_path Absolute path.
+		 		 * @return array|false Image size or false.
+		 */
+		public function lcp_get_cached_image_size( string $local_path ): array|false {
+			return $this->get_cached_image_size( $local_path );
+		}
+
+		/**
+		 * Lazy/media collaborator `is_dimension_lookup_allowed()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $url Image URL.
+		 		 * @return bool Whether dimension lookup is allowed.
+		 */
+		public function lcp_is_dimension_lookup_allowed( string $url ): bool {
+			return $this->is_dimension_lookup_allowed( $url );
+		}
+
+		/**
+		 * Lazy/media collaborator `get_css_hero_url_from_buffer()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $buffer HTML buffer.
+		 		 * @return string CSS hero URL or empty string.
+		 */
+		public function lcp_get_css_hero_url_from_buffer( string $buffer ): string {
+			return $this->get_css_hero_url_from_buffer( $buffer );
+		}
+
+		/**
+		 * Lazy/media collaborator `split_srcset_candidates()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $raw Raw srcset attribute.
+		 		 * @return array Candidate strings.
+		 */
+		public function lcp_split_srcset_candidates( string $raw ): array {
+			return $this->split_srcset_candidates( $raw );
+		}
+
+		/**
+		 * Lazy/media collaborator `split_srcset_item()` for the LCP service (ARCH-008 internal bridge).
+		 *
+		 * The moved LCP bodies called this private helper via `$this`;
+		 * the logic stays here (lazy/media ownership) and is reached
+		 * through this bridge. Only `Lcp_Preload` calls this (no other
+		 * runtime or test caller exists). Do not call from new code; the
+		 * public visibility exists solely for the extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 @param string $item Single srcset candidate.
+		 		 * @return array URL plus descriptor parts.
+		 */
+		public function lcp_split_srcset_item( string $item ): array {
+			return $this->split_srcset_item( $item );
 		}
 
 		/**
@@ -1440,31 +1524,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * node stamp coexist without fighting.
 		 *
 		 * @since 1.0.0
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::preload_images}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function preload_images() {
-			$preload_data = $this->get_all_preload_data();
-
-			foreach ( $preload_data as $data ) {
-				if ( ! is_array( $data ) || empty( $data['url'] ) || ! is_string( $data['url'] ) ) {
-					continue;
-				}
-				$media = (string) ( $data['media'] ?? '' );
-				if ( self::has_emitted_preload( $data['url'], $media ) ) {
-					continue;
-				}
-				self::mark_preload_emitted( $data['url'], $media );
-				Util::generate_preload_link(
-					$data['url'],
-					'preload',
-					'image',
-					false,
-					Util::get_image_mime_type( $data['url'] ),
-					$data['media'] ?? '',
-					$data['priority'] ?? 'high',
-					(string) ( $data['imagesrcset'] ?? '' ),
-					(string) ( $data['imagesizes'] ?? '' )
-				);
-			}
+			return $this->lcp_preload()->preload_images();
 		}
 
 		/**
@@ -3742,60 +3807,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.5.1
 		 * @return array List of preload data items.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_all_preload_data}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_all_preload_data(): array {
-			$image_optimisation = $this->options['image_optimisation'] ?? array();
-
-			$manual = array_merge(
-				$this->get_manual_lcp_preload_data(),
-				$this->get_front_page_preload_data( $image_optimisation ),
-				$this->get_meta_preload_data(),
-				$this->get_post_type_preload_data( $image_optimisation )
-			);
-			$auto   = $this->get_auto_lcp_preload_data();
-
-			// Deduplicate by normalized URL + query + media (issue #935): the
-			// field-measured LCP URL may equal a manually configured preload
-			// as an absolute URL vs a relative URL (or http vs https), but
-			// exactly one link tag must be emitted per resource (query-string
-			// versions still count as distinct resources). Manual items are
-			// ordered first so they win the dedup. MAX_LCP_PRELOADS is
-			// intentionally an auto-tail-only cap (issue #1216): manual/meta
-			// preloads are explicit opt-in and are never dropped, while the
-			// auto srcset expansion is bounded so one hero cannot fan out to N
-			// high-priority hints and contend with the hero fetch.
-			$seen   = array();
-			$unique = array();
-			foreach ( $manual as $item ) {
-				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
-					continue;
-				}
-				$key = $this->get_preload_dedup_key( (string) $item['url'], (string) ( $item['media'] ?? '' ) );
-				if ( isset( $seen[ $key ] ) ) {
-					continue;
-				}
-				$seen[ $key ] = true;
-				$unique[]     = $item;
-			}
-
-			$auto_unique = array();
-			foreach ( $auto as $item ) {
-				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
-					continue;
-				}
-				$key = $this->get_preload_dedup_key( (string) $item['url'], (string) ( $item['media'] ?? '' ) );
-				if ( isset( $seen[ $key ] ) ) {
-					continue;
-				}
-				$seen[ $key ]  = true;
-				$auto_unique[] = $item;
-			}
-
-			if ( count( $auto_unique ) > self::MAX_LCP_PRELOADS ) {
-				$auto_unique = array_slice( $auto_unique, 0, self::MAX_LCP_PRELOADS );
-			}
-
-			return array_merge( $unique, $auto_unique );
+			return $this->lcp_preload()->get_all_preload_data();
 		}
 
 		/**
@@ -3812,43 +3829,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded as an image.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_image_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_image_lcp_url( string $url ): bool {
-			try {
-				$url = trim( $url );
-				if ( '' === $url ) {
-					return false;
-				}
-				$lower = strtolower( ltrim( $url ) );
-				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
-					return false;
-				}
-				if ( '' !== Util::get_image_mime_type( $url ) ) {
-					return true;
-				}
-				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
-				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)$/i', $path ) ) {
-					return true;
-				}
-				// Extensionless image-CDN URLs (Cloudinary fetch, Photon,
-				// signed asset URLs): accept when the query carries image-ish
-				// params or an image extension so measured OD/PageSpeed heroes
-				// are not silently discarded. Generic keys (ssl, url, src,
-				// strip) also appear on non-image URLs and must not qualify.
-				$query = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_QUERY ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
-				if ( is_string( $query ) && '' !== $query ) {
-					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)/i', $query ) ) {
-						return true;
-					}
-					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
-						return true;
-					}
-				}
-				return false;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->lcp_preload()->is_image_lcp_url( $url );
 		}
 
 		/**
@@ -3863,43 +3849,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return string The manual LCP image URL, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_manual_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_manual_lcp_url(): string {
-			try {
-				if ( ! function_exists( 'is_singular' ) || ! function_exists( 'get_the_ID' ) || ! function_exists( 'get_post_meta' ) ) {
-					return '';
-				}
-				if ( ! is_singular() ) {
-					return '';
-				}
-				$post_id = (int) get_the_ID();
-				if ( null !== $this->manual_lcp_url && $this->manual_lcp_url_key === $post_id ) {
-					return $this->manual_lcp_url;
-				}
-				if ( empty( $post_id ) ) {
-					$this->manual_lcp_url     = '';
-					$this->manual_lcp_url_key = $post_id;
-					return '';
-				}
-				$raw = get_post_meta( $post_id, '_wppo_lcp_preload_url', true );
-				if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
-					$this->manual_lcp_url     = '';
-					$this->manual_lcp_url_key = $post_id;
-					return '';
-				}
-				$url = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( substr( $raw, 0, 2048 ) ) ) : trim( substr( $raw, 0, 2048 ) );
-				if ( '' === $url || ! $this->is_image_lcp_url( $url ) ) {
-					$this->manual_lcp_url     = '';
-					$this->manual_lcp_url_key = $post_id;
-					return '';
-				}
-				$this->manual_lcp_url     = $url;
-				$this->manual_lcp_url_key = $post_id;
-				return $url;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
+			return $this->lcp_preload()->get_manual_lcp_url();
 		}
 
 		/**
@@ -3921,49 +3876,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_same_origin_preload_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_same_origin_preload_url( string $url ): bool {
-			try {
-				$url = trim( $url );
-				if ( '' === $url ) {
-					return false;
-				}
-				$lower = strtolower( ltrim( $url ) );
-				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
-					return false;
-				}
-				// Root-relative paths are same-origin by construction.
-				if ( 0 === strpos( $url, '/' ) && 0 !== strpos( $url, '//' ) ) {
-					return true;
-				}
-				// Bare relative paths (no scheme, no leading slash) resolve
-				// against the home URL — same-origin — unless scheme-like.
-				if ( false === strpos( $url, '://' ) && 0 !== strpos( $url, '//' ) ) {
-					$before_slash = strtok( $url, '/\\?#' );
-					if ( is_string( $before_slash ) && false !== strpos( $before_slash, ':' ) ) {
-						return false;
-					}
-					return true;
-				}
-				// RUM unavailable: fail closed (reject the absolute URL) so a
-				// possibly cross-origin candidate is never preloaded. The
-				// caller (`resolve_auto_lcp_url()`) falls through to the next
-				// tier, preserving fail-open page behaviour.
-				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
-					return \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( $url );
-				}
-				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
-					return \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url );
-				}
-				// RUM unavailable: fail closed (reject the absolute URL) so a
-				// possibly cross-origin candidate is never preloaded. The
-				// caller (`resolve_auto_lcp_url()`) falls through to the next
-				// tier, preserving fail-open page behaviour.
-				return false;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->lcp_preload()->is_same_origin_preload_url( $url );
 		}
 
 		/**
@@ -3981,28 +3899,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return bool True when core may be consulted for a node verdict.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_core_loading_optimization_available}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_core_loading_optimization_available(): bool {
-			try {
-				if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
-					return false;
-				}
-				$wp_version = '';
-				if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
-					$wp_version = $GLOBALS['wp_version'];
-				} elseif ( function_exists( 'get_bloginfo' ) ) {
-					$wp_version = (string) get_bloginfo( 'version' );
-				}
-				if ( '' === $wp_version ) {
-					// Function presence alone implies availability when the
-					// version string is unreachable (e.g. unit contexts).
-					return true;
-				}
-				return version_compare( $wp_version, '6.2', '>=' );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->lcp_preload()->is_core_loading_optimization_available();
 		}
 
 		/**
@@ -4032,41 +3934,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param mixed $tags Tag processor positioned on an `<img>` node.
 		 * @return array{decoding?:string}|null Core's verdict, or null.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_core_loading_verdict_for_tag}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_core_loading_verdict_for_tag( $tags ): ?array {
-			if ( ! $this->is_core_loading_optimization_available() ) {
-				return null;
-			}
-			if ( ! function_exists( 'apply_filters' ) ) {
-				return null;
-			}
-			try {
-				if ( ! is_object( $tags ) || ! method_exists( $tags, 'get_attribute' ) ) {
-					return null;
-				}
-				$tag_attr = array();
-				foreach ( array( 'src', 'width', 'height', 'loading', 'decoding', 'fetchpriority' ) as $attr ) {
-					$value = $tags->get_attribute( $attr );
-					if ( is_string( $value ) && '' !== $value ) {
-						$tag_attr[ $attr ] = ( 'width' === $attr || 'height' === $attr ) && is_numeric( $value ) ? (int) $value : $value;
-					}
-				}
-				$loading_attrs = apply_filters( 'wp_loading_optimization_attributes', array(), 'img', $tag_attr, 'performance_optimisation_lcp' );
-				if ( ! is_array( $loading_attrs ) ) {
-					return null;
-				}
-				$verdict = array();
-				if ( isset( $loading_attrs['decoding'] ) && is_string( $loading_attrs['decoding'] ) ) {
-					$candidate = strtolower( trim( $loading_attrs['decoding'] ) );
-					if ( in_array( $candidate, array( 'async', 'sync', 'auto' ), true ) ) {
-						$verdict['decoding'] = $candidate;
-					}
-				}
-				return ( array() === $verdict ) ? null : $verdict;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return null;
+			return $this->lcp_preload()->get_core_loading_verdict_for_tag( $tags );
 		}
 
 		/**
@@ -4080,32 +3953,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return bool True when auto-LCP must be skipped for this post.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_auto_lcp_disabled_for_post}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_auto_lcp_disabled_for_post(): bool {
-			try {
-				if ( ! function_exists( 'is_singular' ) || ! function_exists( 'get_the_ID' ) || ! function_exists( 'get_post_meta' ) ) {
-					return false;
-				}
-				if ( ! is_singular() ) {
-					return false;
-				}
-				$post_id = (int) get_the_ID();
-				if ( null !== $this->auto_lcp_disabled && $this->auto_lcp_disabled_key === $post_id ) {
-					return $this->auto_lcp_disabled;
-				}
-				if ( empty( $post_id ) ) {
-					$this->auto_lcp_disabled     = false;
-					$this->auto_lcp_disabled_key = $post_id;
-					return false;
-				}
-				$disabled                    = ! empty( get_post_meta( $post_id, '_wppo_disable_auto_lcp', true ) );
-				$this->auto_lcp_disabled     = $disabled;
-				$this->auto_lcp_disabled_key = $post_id;
-				return $disabled;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->lcp_preload()->is_auto_lcp_disabled_for_post();
 		}
 
 		/**
@@ -4127,65 +3980,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return string The stable signal LCP image URL, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_stable_signal_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_stable_signal_lcp_url(): string {
-			$memo_key = $this->get_lcp_memo_key();
-			if ( null !== $this->stable_signal_lcp_url && $this->stable_signal_lcp_url_key === $memo_key ) {
-				return $this->stable_signal_lcp_url;
-			}
-			$resolved = '';
-			try {
-				if ( $this->is_auto_lcp_disabled_for_post() ) {
-					$this->stable_signal_lcp_url     = '';
-					$this->stable_signal_lcp_url_key = $memo_key;
-					return '';
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
-					// Same explicit path derivation as get_current_lcp_url()
-					// so both tiers bucket identically behind
-					// proxies/subdirectories.
-					$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( Util::get_current_url(), PHP_URL_PATH ) : '/';
-					$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
-					$field_path  = Util::normalize_rum_path( $raw_path );
-					$field       = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
-					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
-						$candidate = trim( $field['url'] );
-						if ( '' !== $candidate && $this->is_image_lcp_url( $candidate ) && $this->is_allowed_hero_preload_url( $candidate ) ) {
-							$resolved = $candidate;
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			if ( '' === $resolved && class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
-				try {
-					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
-					if ( $od_available ) {
-						$od_url = '';
-						if ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_stable_lcp_url' ) ) {
-							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_stable_lcp_url();
-						} elseif ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
-							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-						}
-						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_allowed_hero_preload_url( $od_url ) ) {
-							$resolved = $od_url;
-						}
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			$this->stable_signal_lcp_url     = $resolved;
-			$this->stable_signal_lcp_url_key = $memo_key;
-			return $resolved;
+			return $this->lcp_preload()->get_stable_signal_lcp_url();
 		}
 
 		/**
@@ -4211,42 +4011,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return string The OD-only LCP image URL, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::resolve_od_only_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function resolve_od_only_lcp_url(): string {
-			try {
-				$manual = $this->get_manual_lcp_url();
-				if ( '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_allowed_hero_preload_url( $manual ) ) {
-					return $manual;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			try {
-				if ( $this->is_auto_lcp_disabled_for_post() ) {
-					return '';
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
-				try {
-					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
-					if ( $od_available ) {
-						$od_url = '';
-						if ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_stable_lcp_url' ) ) {
-							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_stable_lcp_url();
-						} elseif ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
-							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-						}
-						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_allowed_hero_preload_url( $od_url ) ) {
-							return $od_url;
-						}
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			return '';
+			return $this->lcp_preload()->resolve_od_only_lcp_url();
 		}
 
 		/**
@@ -4280,79 +4050,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string|null $buffer Optional HTML buffer for the heuristic fallback.
 		 * @return string The LCP image URL, or empty string when none resolves.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::resolve_auto_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function resolve_auto_lcp_url( ?string $buffer = null ): string {
-			// Manual picker + P0 stability-gated Optimization Detective via
-			// the shared OD-only helper (issues #1216, #1273) so the
-			// emission, lazy-exclusion, and RUM-unsatisfied fallback paths
-			// cannot drift apart. The OD tier fires the
-			// `wppo_od_should_optimize` filter inside
-			// `OD_Bridge::get_stable_lcp_url()` via `is_enabled()`
-			// (current-URL context, memoized per request); no separate
-			// pre-check exists here.
-			try {
-				$od_only = $this->resolve_od_only_lcp_url();
-				if ( '' !== $od_only ) {
-					return $od_only;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			// Per-post kill switch (issue #1273): the manual picker above
-			// already returned when pinned, so everything below is
-			// automatic and stays suppressed on disabled posts. Gating
-			// here (not just in get_auto_lcp_preload_data() /
-			// get_lazy_lcp_exclusion_url()) keeps the buffer/filter
-			// callers (prioritize_buffer(), prioritize_lcp_image(),
-			// maybe_preload_hero_image(), maybe_inject_css_hero_preload(),
-			// resolve_fetchpriority_lcp_url()) consistent.
-			try {
-				if ( $this->is_auto_lcp_disabled_for_post() ) {
-					return '';
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			// P1: Stored PageSpeed (+ RUM-field override) chain.
-			try {
-				$stored = $this->get_current_lcp_url();
-				if ( is_string( $stored ) && '' !== $stored && $this->is_image_lcp_url( $stored ) && $this->is_allowed_hero_preload_url( $stored ) ) {
-					return $stored;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			// P1b: Stable signal-only tier (issue #1273) — RUM field +
-			// stability-gated OD, without the manual/stored/heuristic tiers.
-			// This is the internal caller that makes the signal path
-			// automatic: `get_auto_lcp_preload_data()`, the buffer hero
-			// path, and the lazy-exclusion path all resolve through here.
-			// Already validated + per-post-disable gated inside.
-			try {
-				$signal = $this->get_stable_signal_lcp_url();
-				if ( is_string( $signal ) && '' !== $signal ) {
-					return $signal;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			// P2: DOM-first heuristic — first non-trivial image in the buffer.
-			if ( is_string( $buffer ) && '' !== $buffer && false !== strpos( $buffer, '<img' ) ) {
-				try {
-					$heuristic = $this->get_heuristic_lcp_url( $buffer );
-					if ( '' !== $heuristic && $this->is_image_lcp_url( $heuristic ) && $this->is_allowed_hero_preload_url( $heuristic ) ) {
-						return $heuristic;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			return '';
+			return $this->lcp_preload()->resolve_auto_lcp_url( $buffer );
 		}
 
 		/**
@@ -4371,46 +4074,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $lcp_url The resolved LCP image URL.
 		 * @return array{srcset: string, sizes: string} Responsive data (empty strings when unavailable).
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lcp_responsive_data_for_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public static function get_lcp_responsive_data_for_url( string $lcp_url ): array {
-			$empty = array(
-				'srcset' => '',
-				'sizes'  => '',
-			);
-			try {
-				$lcp_url = trim( $lcp_url );
-				if ( '' === $lcp_url ) {
-					return $empty;
-				}
-				$lower = strtolower( ltrim( $lcp_url ) );
-				if ( 0 === strpos( $lower, 'data:' ) || 0 === strpos( $lower, 'blob:' ) || 0 === strpos( $lower, 'javascript:' ) || 0 === strpos( $lower, 'vbscript:' ) ) {
-					return $empty;
-				}
-				if ( ! function_exists( 'attachment_url_to_postid' ) || ! function_exists( 'wp_get_attachment_image_srcset' ) || ! function_exists( 'wp_get_attachment_image_sizes' ) ) {
-					return $empty;
-				}
-				$attachment_id = (int) attachment_url_to_postid( $lcp_url );
-				if ( $attachment_id <= 0 ) {
-					return $empty;
-				}
-				$srcset = wp_get_attachment_image_srcset( $attachment_id, 'full' );
-				$sizes  = wp_get_attachment_image_sizes( $attachment_id, 'full' );
-				if ( ! is_string( $srcset ) || ! is_string( $sizes ) ) {
-					return $empty;
-				}
-				$srcset = trim( substr( $srcset, 0, 4096 ) );
-				$sizes  = trim( substr( $sizes, 0, 1024 ) );
-				if ( '' === $srcset || '' === $sizes ) {
-					return $empty;
-				}
-				return array(
-					'srcset' => $srcset,
-					'sizes'  => $sizes,
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $empty;
-			}
+			return Lcp_Preload::get_lcp_responsive_data_for_url( $lcp_url );
 		}
 
 		/**
@@ -4428,41 +4097,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string      $lcp_url The resolved LCP image URL.
 		 * @param string|null $buffer  Optional HTML buffer to scan.
 		 * @return string The srcset value, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lcp_srcset_for_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_lcp_srcset_for_url( string $lcp_url, ?string $buffer = null ): string {
-			if ( '' === $lcp_url || ! is_string( $buffer ) || '' === $buffer || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
-				return '';
-			}
-			try {
-				$needle = $this->normalize_image_url( $lcp_url );
-				if ( '' === $needle ) {
-					return '';
-				}
-				$tags = new \WP_HTML_Tag_Processor( $buffer );
-				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-					$src      = $tags->get_attribute( 'src' );
-					$data_src = $tags->get_attribute( 'data-src' );
-					$match    = ( is_string( $src ) && '' !== $src ) ? $src : ( is_string( $data_src ) ? $data_src : '' );
-					if ( '' === $match ) {
-						continue;
-					}
-					if ( $this->normalize_image_url( (string) $match ) !== $needle ) {
-						continue;
-					}
-					$srcset = $tags->get_attribute( 'srcset' );
-					if ( is_string( $srcset ) && '' !== trim( $srcset ) ) {
-						return trim( substr( $srcset, 0, 4096 ) );
-					}
-					$data_srcset = $tags->get_attribute( 'data-srcset' );
-					if ( is_string( $data_srcset ) && '' !== trim( $data_srcset ) ) {
-						return trim( substr( $data_srcset, 0, 4096 ) );
-					}
-					return '';
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return '';
+			return $this->lcp_preload()->get_lcp_srcset_for_url( $lcp_url, $buffer );
 		}
 
 		/**
@@ -4477,41 +4117,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string      $lcp_url The resolved LCP image URL.
 		 * @param string|null $buffer  Optional HTML buffer to scan.
 		 * @return string The sizes value, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lcp_sizes_for_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_lcp_sizes_for_url( string $lcp_url, ?string $buffer = null ): string {
-			if ( '' === $lcp_url || ! is_string( $buffer ) || '' === $buffer || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
-				return '';
-			}
-			try {
-				$needle = $this->normalize_image_url( $lcp_url );
-				if ( '' === $needle ) {
-					return '';
-				}
-				$tags = new \WP_HTML_Tag_Processor( $buffer );
-				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-					$src      = $tags->get_attribute( 'src' );
-					$data_src = $tags->get_attribute( 'data-src' );
-					$match    = ( is_string( $src ) && '' !== $src ) ? $src : ( is_string( $data_src ) ? $data_src : '' );
-					if ( '' === $match ) {
-						continue;
-					}
-					if ( $this->normalize_image_url( (string) $match ) !== $needle ) {
-						continue;
-					}
-					$sizes = $tags->get_attribute( 'sizes' );
-					if ( is_string( $sizes ) && '' !== trim( $sizes ) ) {
-						return trim( substr( $sizes, 0, 1024 ) );
-					}
-					$data_sizes = $tags->get_attribute( 'data-sizes' );
-					if ( is_string( $data_sizes ) && '' !== trim( $data_sizes ) ) {
-						return trim( substr( $data_sizes, 0, 1024 ) );
-					}
-					return '';
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return '';
+			return $this->lcp_preload()->get_lcp_sizes_for_url( $lcp_url, $buffer );
 		}
 
 		/**
@@ -4548,72 +4159,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer for responsive fallback scans.
 		 * @return string The preload `<link>` tag, or empty string when skipped.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::emit_responsive_lcp_preload}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function emit_responsive_lcp_preload( ?string $buffer = null ): string {
-			try {
-				if ( self::$responsive_lcp_preload_emitted ) {
-					return '';
-				}
-				try {
-					if ( $this->is_auto_lcp_disabled_for_post() ) {
-						return '';
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				if ( $this->response_already_has_high_preload( $buffer ) ) {
-					return '';
-				}
-				$candidate = $this->get_responsive_lcp_candidate( $buffer );
-				if ( array() === $candidate || '' === trim( (string) ( $candidate['url'] ?? '' ) ) ) {
-					return '';
-				}
-				$url = trim( (string) $candidate['url'] );
-				if ( ! $this->is_image_lcp_url( $url ) || ! $this->is_allowed_hero_preload_url( $url ) ) {
-					return '';
-				}
-				if ( ! $this->claim_hero_preload_slot( $url, '', is_string( $buffer ) ? $buffer : null ) ) {
-					return '';
-				}
-				$srcset = is_string( $candidate['srcset'] ?? '' ) ? trim( (string) $candidate['srcset'] ) : '';
-				$sizes  = is_string( $candidate['sizes'] ?? '' ) ? trim( (string) $candidate['sizes'] ) : '';
-				if ( '' === $srcset || '' === $sizes ) {
-					$srcset = '';
-					$sizes  = '';
-				}
-				$link_tag = '';
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_preload_link' ) ) {
-						$link_tag = Util::get_preload_link(
-							$url,
-							'preload',
-							'image',
-							false,
-							Util::get_image_mime_type( $url ),
-							'',
-							'high',
-							$srcset,
-							$sizes
-						);
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$link_tag = '';
-				}
-				if ( ! is_string( $link_tag ) || '' === trim( $link_tag ) ) {
-					self::release_hero_preload_slot( $url, '' );
-					return '';
-				}
-				if ( false === strpos( $link_tag, 'fetchpriority="high"' ) && false === strpos( $link_tag, "fetchpriority='high'" ) ) {
-					self::release_hero_preload_slot( $url, '' );
-					return '';
-				}
-				self::$responsive_lcp_preload_emitted = true;
-				return $link_tag;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
+			return $this->lcp_preload()->emit_responsive_lcp_preload( $buffer );
 		}
 
 		/**
@@ -4629,34 +4180,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer for fallback scans.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Empty when unresolved.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_responsive_lcp_candidate}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_responsive_lcp_candidate( ?string $buffer = null ): array {
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_breakpoint_lcp_elements' ) ) {
-					try {
-						$entries = \PerformanceOptimise\Inc\OD_Bridge::get_breakpoint_lcp_elements();
-						if ( is_array( $entries ) && array() !== $entries ) {
-							$winner = $this->pick_breakpoint_winner( $entries, $buffer );
-							if ( array() !== $winner && '' !== trim( (string) ( $winner['url'] ?? '' ) ) ) {
-								return $winner;
-							}
-							// OD measured but unusable (e.g. art-directed):
-							// fall through to the RUM tier rather than the
-							// legacy single URL so a breakpoint-correct hint
-							// still wins when field data agrees.
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				$rum = $this->resolve_rum_fallback_candidate( $buffer );
-				if ( array() !== $rum ) {
-					return $rum;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return array();
+			return $this->lcp_preload()->get_responsive_lcp_candidate( $buffer );
 		}
 
 		/**
@@ -4679,120 +4208,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param array       $entries OD breakpoint entries.
 		 * @param string|null $buffer  Optional HTML buffer for gap-fill.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Winner or empty.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::pick_breakpoint_winner}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function pick_breakpoint_winner( array $entries, ?string $buffer = null ): array {
-			try {
-				$usable = array();
-				foreach ( $entries as $entry ) {
-					if ( ! is_array( $entry ) ) {
-						continue;
-					}
-					$url = isset( $entry['url'] ) && is_string( $entry['url'] ) ? trim( $entry['url'] ) : '';
-					if ( '' === $url ) {
-						continue;
-					}
-					$usable[] = array(
-						'url'    => substr( $url, 0, 2048 ),
-						'srcset' => isset( $entry['srcset'] ) && is_string( $entry['srcset'] ) ? trim( substr( $entry['srcset'], 0, 4096 ) ) : '',
-						'sizes'  => isset( $entry['sizes'] ) && is_string( $entry['sizes'] ) ? trim( substr( $entry['sizes'], 0, 1024 ) ) : '',
-						'media'  => isset( $entry['media'] ) && is_string( $entry['media'] ) ? trim( substr( $entry['media'], 0, 1024 ) ) : '',
-						'type'   => isset( $entry['type'] ) && is_string( $entry['type'] ) && '' !== trim( $entry['type'] ) ? strtolower( trim( $entry['type'] ) ) : 'img',
-					);
-				}
-				if ( array() === $usable ) {
-					return array();
-				}
-				// Art-direction skip: distinct viewport URLs with media-gated
-				// sources cannot be represented by one imagesrcset preload.
-				$norms = array();
-				foreach ( $usable as $item ) {
-					try {
-						$norm = $this->normalize_image_url( $item['url'] );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$norm = '';
-					}
-					$norms[] = '' !== $norm ? $norm : $item['url'];
-				}
-				$distinct  = array_values( array_unique( $norms ) );
-				$has_media = false;
-				foreach ( $usable as $item ) {
-					if ( '' !== $item['media'] ) {
-						$has_media = true;
-						break;
-					}
-				}
-				if ( $has_media && count( $distinct ) > 1 ) {
-					return array();
-				}
-				$counts = array_count_values( $norms );
-				if ( empty( $counts ) ) {
-					return array();
-				}
-				arsort( $counts );
-				$ordered_norms = array_keys( $counts );
-				foreach ( $ordered_norms as $norm ) {
-					$winner = null;
-					foreach ( $usable as $idx => $item ) {
-						if ( $norms[ $idx ] === $norm ) {
-							$winner = $item;
-							break;
-						}
-					}
-					if ( null === $winner ) {
-						continue;
-					}
-					// A lone art-directed picture source is still a
-					// mispredict risk: skip instead of emitting.
-					if ( 'picture' === $winner['type'] && '' !== $winner['media'] ) {
-						continue;
-					}
-					if ( ! $this->is_image_lcp_url( $winner['url'] ) || ! $this->is_allowed_hero_preload_url( $winner['url'] ) ) {
-						continue;
-					}
-					$srcset = $winner['srcset'];
-					$sizes  = $winner['sizes'];
-					if ( '' === $srcset || '' === $sizes ) {
-						$srcset = '';
-						$sizes  = '';
-						try {
-							$responsive = self::get_lcp_responsive_data_for_url( $winner['url'] );
-							if ( '' !== trim( (string) ( $responsive['srcset'] ?? '' ) ) && '' !== trim( (string) ( $responsive['sizes'] ?? '' ) ) ) {
-								$srcset = trim( (string) $responsive['srcset'] );
-								$sizes  = trim( (string) $responsive['sizes'] );
-							}
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
-						if ( ( '' === $srcset || '' === $sizes ) && is_string( $buffer ) && '' !== $buffer ) {
-							try {
-								$buf_srcset = $this->get_lcp_srcset_for_url( $winner['url'], $buffer );
-								$buf_sizes  = '' !== $buf_srcset ? $this->get_lcp_sizes_for_url( $winner['url'], $buffer ) : '';
-								if ( '' !== $buf_srcset && '' !== $buf_sizes ) {
-									$srcset = $buf_srcset;
-									$sizes  = $buf_sizes;
-								}
-							} catch ( \Throwable $e ) {
-								unset( $e );
-							}
-						}
-						if ( '' === $srcset || '' === $sizes ) {
-							$srcset = '';
-							$sizes  = '';
-						}
-					}
-					return array(
-						'url'    => $winner['url'],
-						'srcset' => $srcset,
-						'sizes'  => $sizes,
-						'type'   => $winner['type'],
-						'media'  => $winner['media'],
-					);
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return array();
+			return $this->lcp_preload()->pick_breakpoint_winner( $entries, $buffer );
 		}
 
 		/**
@@ -4808,74 +4229,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer for gap-fill.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Candidate or empty.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::resolve_rum_fallback_candidate}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function resolve_rum_fallback_candidate( ?string $buffer = null ): array {
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
-					return array();
-				}
-				$path = '/';
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_current_url' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_rum_path' ) ) {
-						$current     = Util::get_current_url();
-						$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $current, PHP_URL_PATH ) : '/';
-						$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
-						$path        = Util::normalize_rum_path( $raw_path );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				try {
-					$field = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $path );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return array();
-				}
-				if ( ! is_array( $field ) || empty( $field['url'] ) || ! is_string( $field['url'] ) ) {
-					return array();
-				}
-				$url = trim( $field['url'] );
-				if ( '' === $url || ! $this->is_image_lcp_url( $url ) || ! $this->is_allowed_hero_preload_url( $url ) ) {
-					return array();
-				}
-				$srcset = '';
-				$sizes  = '';
-				try {
-					$responsive = self::get_lcp_responsive_data_for_url( $url );
-					if ( '' !== trim( (string) ( $responsive['srcset'] ?? '' ) ) && '' !== trim( (string) ( $responsive['sizes'] ?? '' ) ) ) {
-						$srcset = trim( (string) $responsive['srcset'] );
-						$sizes  = trim( (string) $responsive['sizes'] );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				if ( ( '' === $srcset || '' === $sizes ) && is_string( $buffer ) && '' !== $buffer ) {
-					try {
-						$buf_srcset = $this->get_lcp_srcset_for_url( $url, $buffer );
-						$buf_sizes  = '' !== $buf_srcset ? $this->get_lcp_sizes_for_url( $url, $buffer ) : '';
-						if ( '' !== $buf_srcset && '' !== $buf_sizes ) {
-							$srcset = $buf_srcset;
-							$sizes  = $buf_sizes;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( '' === $srcset || '' === $sizes ) {
-					$srcset = '';
-					$sizes  = '';
-				}
-				return array(
-					'url'    => $url,
-					'srcset' => $srcset,
-					'sizes'  => $sizes,
-					'type'   => 'img',
-					'media'  => '',
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
+			return $this->lcp_preload()->resolve_rum_fallback_candidate( $buffer );
 		}
 
 		/**
@@ -4892,22 +4251,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer to inspect.
 		 * @return bool True when a high hint already exists.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::response_already_has_high_preload}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function response_already_has_high_preload( ?string $buffer = null ): bool {
-			try {
-				if ( self::$responsive_lcp_preload_emitted ) {
-					return true;
-				}
-				if ( is_string( $buffer ) && '' !== $buffer && false !== stripos( $buffer, 'fetchpriority' ) ) {
-					if ( 1 === preg_match( '/fetchpriority\s*=\s*["\']?high(?=["\'\s>\/]|$)/i', $buffer ) ) {
-						return true;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-			return false;
+			return $this->lcp_preload()->response_already_has_high_preload( $buffer );
 		}
 
 		/**
@@ -4923,19 +4272,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return array List of preload items (zero or one item).
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_manual_lcp_preload_data}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_manual_lcp_preload_data(): array {
-			try {
-				$manual = $this->get_manual_lcp_url();
-				if ( '' === $manual ) {
-					return array();
-				}
-				$responsive = self::get_lcp_responsive_data_for_url( $manual );
-				return array( $this->prepare_preload_item( $manual, $responsive['srcset'], $responsive['sizes'] ) );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
+			return $this->lcp_preload()->get_manual_lcp_preload_data();
 		}
 
 		/**
@@ -4970,45 +4312,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0 RUM gates only the RUM-dependent tiers: with RUM
 		 * unsatisfied the OD-only subset still resolves.
 		 * @return array List of preload items (zero or one item).
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_auto_lcp_preload_data}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_auto_lcp_preload_data(): array {
-			try {
-				if ( $this->is_auto_lcp_disabled_for_post() ) {
-					return array();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			$image_optimisation = $this->options['image_optimisation'] ?? array();
-			$preload_settings   = $this->options['preload_settings'] ?? array();
-			$legacy_on          = ! empty( $image_optimisation['autoPreloadLCP'] );
-			$new_on             = ! empty( $preload_settings['autoLcpPreload'] );
-			if ( ! $legacy_on && ! $new_on ) {
-				return array();
-			}
-
-			if ( $new_on && ! $legacy_on && ! $this->is_auto_lcp_rum_satisfied() ) {
-				$lcp_url = $this->resolve_od_only_lcp_url();
-				if ( '' === $lcp_url ) {
-					return array();
-				}
-				$responsive = $this->get_breakpoint_srcset_for_url( $lcp_url, null );
-				if ( '' === $responsive['srcset'] || '' === $responsive['sizes'] ) {
-					$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
-				}
-				return array( $this->prepare_preload_item( $lcp_url, $responsive['srcset'], $responsive['sizes'] ) );
-			}
-
-			$lcp_url = $this->resolve_auto_lcp_url();
-			if ( '' === $lcp_url ) {
-				return array();
-			}
-
-			$responsive = $this->get_breakpoint_srcset_for_url( $lcp_url, null );
-			if ( '' === $responsive['srcset'] || '' === $responsive['sizes'] ) {
-				$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
-			}
-			return array( $this->prepare_preload_item( $lcp_url, $responsive['srcset'], $responsive['sizes'] ) );
+			return $this->lcp_preload()->get_auto_lcp_preload_data();
 		}
 
 		/**
@@ -5025,43 +4334,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string      $lcp_url The resolved LCP image URL.
 		 * @param string|null $buffer  Optional HTML buffer for gap-fill.
 		 * @return array{srcset: string, sizes: string} Responsive pair.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_breakpoint_srcset_for_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_breakpoint_srcset_for_url( string $lcp_url, ?string $buffer = null ): array {
-			$empty = array(
-				'srcset' => '',
-				'sizes'  => '',
-			);
-			try {
-				if ( '' === trim( $lcp_url ) ) {
-					return $empty;
-				}
-				$candidate = $this->get_responsive_lcp_candidate( $buffer );
-				if ( array() === $candidate || '' === trim( (string) ( $candidate['url'] ?? '' ) ) ) {
-					return $empty;
-				}
-				try {
-					$needle = $this->normalize_image_url( $lcp_url );
-					$got    = $this->normalize_image_url( (string) $candidate['url'] );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $empty;
-				}
-				if ( '' === $needle || $needle !== $got ) {
-					return $empty;
-				}
-				$srcset = is_string( $candidate['srcset'] ?? '' ) ? trim( (string) $candidate['srcset'] ) : '';
-				$sizes  = is_string( $candidate['sizes'] ?? '' ) ? trim( (string) $candidate['sizes'] ) : '';
-				if ( '' === $srcset || '' === $sizes ) {
-					return $empty;
-				}
-				return array(
-					'srcset' => $srcset,
-					'sizes'  => $sizes,
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $empty;
-			}
+			return $this->lcp_preload()->get_breakpoint_srcset_for_url( $lcp_url, $buffer );
 		}
 
 		/**
@@ -5076,17 +4354,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return bool True when RUM gating passes.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_auto_lcp_rum_satisfied}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_auto_lcp_rum_satisfied(): bool {
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'is_enabled' ) ) {
-					return false;
-				}
-				return (bool) \PerformanceOptimise\Inc\RUM::is_enabled();
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return $this->lcp_preload()->is_auto_lcp_rum_satisfied();
 		}
 
 		/**
@@ -5110,94 +4383,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.0.0
 		 * @return string The LCP image URL, or empty string when none is stored.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_current_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_current_lcp_url(): string {
-			$memo_key = $this->get_lcp_memo_key();
-			if ( null !== $this->current_lcp_url && $this->current_lcp_url_key === $memo_key ) {
-				return $this->current_lcp_url;
-			}
-			$this->current_lcp_url     = '';
-			$this->current_lcp_url_key = $memo_key;
-			// Per-post kill switch (issue #1273): the stored chain is
-			// automatic detection, so it stays suppressed on disabled
-			// posts (the manual picker lives outside this chain).
-			try {
-				if ( $this->is_auto_lcp_disabled_for_post() ) {
-					return $this->current_lcp_url;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			// Priority 0: Optimization Detective — stability-gated LCP
-			// (issue #1273: `get_stable_lcp_url()` returns '' on viewport
-			// disagreement instead of the wrong hero).
-			// The `wppo_od_should_optimize` opt-out (issue #1216) is honoured
-			// inside the stable accessor via `is_enabled()` (memoized per
-			// request, current-URL context) — so a false filter
-			// yields '' here exactly as in `resolve_auto_lcp_url()`; no
-			// separate pre-check exists (a second firing with a different
-			// context arg would give URL-inspecting filters inconsistent
-			// inputs). The stored OD URL is validated like every other
-			// emission tier (image + same-origin) so a cross-origin OD value
-			// never resolves.
-			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
-				try {
-					$od_url = '';
-					if ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_stable_lcp_url' ) ) {
-						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_stable_lcp_url();
-					} elseif ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
-						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-					}
-					if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_allowed_hero_preload_url( $od_url ) ) {
-						$this->current_lcp_url = $od_url;
-						return $this->current_lcp_url;
-					}
-				} catch ( \Throwable $e ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( 'WPPO Image optimisation OD error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					}
-				}
-			}
-			// Priority 0b: Field-measured LCP (issue #935) - real-user LCP element
-			// URLs collected by the RUM beacon override the PageSpeed heuristic
-			// only after enough samples (default 20); a stale override (>24h)
-			// self-corrects back to the heuristic inside RUM::get_field_lcp_url().
-			if ( ! empty( ( $this->options['image_optimisation'] ?? array() )['fieldLcpOverride'] ) ) {
-				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
-					try {
-						$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( Util::get_current_url(), PHP_URL_PATH ) : '/';
-						$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
-						// Normalized identically to the RUM store side so
-						// '/hero-page' matches a stored '/hero-page/' bucket.
-						$field_path = Util::normalize_rum_path( $raw_path );
-						$field      = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
-						if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
-							$this->current_lcp_url = $field['url'];
-							return $this->current_lcp_url;
-						}
-					} catch ( \Throwable $e ) {
-						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							error_log( 'WPPO Image optimisation field LCP error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						}
-					}
-				}
-			}
-
-			// Priorities 1-3: delegate to the shared read-only PageSpeed
-			// lookup so this chain and the preload candidate path cannot
-			// drift apart. Fail-open: any failure inside returns ''.
-			if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
-				try {
-					$this->current_lcp_url = \PerformanceOptimise\Inc\RUM::get_stored_pagespeed_lcp_url();
-					return $this->current_lcp_url;
-				} catch ( \Throwable $e ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( 'WPPO Image optimisation PageSpeed LCP error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					}
-				}
-			}
-
-			return $this->current_lcp_url;
+			return $this->lcp_preload()->get_current_lcp_url();
 		}
 
 		/**
@@ -5212,16 +4403,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return string Memo key (possibly empty).
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lcp_memo_key}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_lcp_memo_key(): string {
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_current_url' ) ) {
-					return Util::get_current_url();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return '';
+			return $this->lcp_preload()->get_lcp_memo_key();
 		}
 
 		/**
@@ -5241,26 +4428,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.2.0
 		 * @param string $buffer HTML buffer to scan.
 		 * @return string Heuristic LCP URL, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_heuristic_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_heuristic_lcp_url( string $buffer ): string {
-			try {
-				if ( '' === $buffer ) {
-					return '';
-				}
-				$hash = md5( $buffer );
-				if ( isset( self::$heuristic_lcp_memo[ $hash ] ) ) {
-					return self::$heuristic_lcp_memo[ $hash ];
-				}
-				$resolved                          = $this->get_first_image_src_in_buffer( $buffer );
-				self::$heuristic_lcp_memo[ $hash ] = $resolved;
-				if ( count( self::$heuristic_lcp_memo ) > 30 ) {
-					self::$heuristic_lcp_memo = array();
-				}
-				return $resolved;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
+			return $this->lcp_preload()->get_heuristic_lcp_url( $buffer );
 		}
 
 		/**
@@ -5286,64 +4459,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param array       $image_optimisation Image optimisation settings.
 		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
 		 * @return string The candidate URL, or empty string when none applies.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lazy_lcp_exclusion_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_lazy_lcp_exclusion_url( array $image_optimisation, ?string $buffer = null ): string {
-			$memo_key = null === $buffer ? $this->get_lcp_memo_key() : null;
-			if ( null === $buffer && null !== $this->lazy_lcp_exclusion_url && $this->lazy_lcp_exclusion_url_key === $memo_key ) {
-				return $this->lazy_lcp_exclusion_url;
-			}
-			$resolved_url = '';
-			try {
-				// Manual picker bypasses the toggle gate (explicit opt-in).
-				try {
-					$manual = $this->get_manual_lcp_url();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$manual = '';
-				}
-				if ( '' !== $manual ) {
-					if ( null === $buffer ) {
-						$this->lazy_lcp_exclusion_url     = $manual;
-						$this->lazy_lcp_exclusion_url_key = $memo_key;
-					}
-					return $manual;
-				}
-				try {
-					if ( $this->is_auto_lcp_disabled_for_post() ) {
-						if ( null === $buffer ) {
-							$this->lazy_lcp_exclusion_url     = '';
-							$this->lazy_lcp_exclusion_url_key = $memo_key;
-						}
-						return '';
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				$auto_lcp_on = ! empty( ( $this->options['preload_settings'] ?? array() )['autoLcpPreload'] ) && $this->is_auto_lcp_rum_satisfied();
-				$gated       = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) || $auto_lcp_on;
-				if ( ! $gated ) {
-					if ( null === $buffer ) {
-						$this->lazy_lcp_exclusion_url     = '';
-						$this->lazy_lcp_exclusion_url_key = $memo_key;
-					}
-					return '';
-				}
-				$resolved = $this->resolve_auto_lcp_url( $buffer );
-				if ( '' !== $resolved ) {
-					$resolved_url = $resolved;
-					if ( null === $buffer ) {
-						$this->lazy_lcp_exclusion_url     = $resolved;
-						$this->lazy_lcp_exclusion_url_key = $memo_key;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			if ( null === $buffer && '' === $resolved_url ) {
-				$this->lazy_lcp_exclusion_url     = '';
-				$this->lazy_lcp_exclusion_url_key = $memo_key;
-			}
-			return $resolved_url;
+			return $this->lcp_preload()->get_lazy_lcp_exclusion_url( $image_optimisation, $buffer );
 		}
 
 		/**
@@ -5362,62 +4483,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 2.0.0
 		 * @param array $image_optimisation Image optimisation settings.
 		 * @return int Exclude count.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_effective_exclude_first_images_count}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_effective_exclude_first_images_count( array $image_optimisation ): int {
-			if ( array_key_exists( 'lcp_guardrails', $image_optimisation ) && empty( $image_optimisation['lcp_guardrails'] ) ) {
-				return 0;
-			}
-			// An explicit `lcp_first_n = 0` is an intentional disable and wins
-			// over OD measurements (OD never returns 0 — stored 0 clamps to 1).
-			// Disabling while OD is active otherwise requires
-			// `lcp_guardrails = false` or a `wppo_lcp_first_n` filter returning 0.
-			if ( array_key_exists( 'lcp_first_n', $image_optimisation ) && 0 === (int) $image_optimisation['lcp_first_n'] ) {
-				return 0;
-			}
-			$count = null;
-			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
-				try {
-					if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
-						$count = \PerformanceOptimise\Inc\OD_Bridge::get_exclude_first_images_count();
-					}
-				} catch ( \Throwable $e ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( 'WPPO Image optimisation OD error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					}
-				}
-			}
-			if ( null === $count ) {
-				// No OD measurement: prefer the additive `lcp_first_n` key,
-				// fall back to the legacy `excludeFirstImages` key, and
-				// finally to 0 (disabled) so option arrays predating the
-				// guardrails keep their legacy behaviour. Fresh installs get
-				// the default 3 via Util::get_default_settings() and existing
-				// installs via the Main migration.
-				if ( isset( $image_optimisation['lcp_first_n'] ) ) {
-					$count = (int) $image_optimisation['lcp_first_n'];
-				} elseif ( isset( $image_optimisation['excludeFirstImages'] ) ) {
-					$count = (int) $image_optimisation['excludeFirstImages'];
-				} else {
-					$count = 0;
-				}
-			}
-			if ( function_exists( 'apply_filters' ) ) {
-				try {
-					$filtered = apply_filters( 'wppo_lcp_first_n', $count, $image_optimisation );
-					if ( is_numeric( $filtered ) ) {
-						$count = (int) $filtered;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			if ( $count < 0 ) {
-				return 0;
-			}
-			if ( $count > 10 ) {
-				return 10;
-			}
-			return $count;
+			return $this->lcp_preload()->get_effective_exclude_first_images_count( $image_optimisation );
 		}
 
 		/**
@@ -5426,14 +4497,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.5.1
 		 * @param array $image_optimisation Image optimization configuration.
 		 * @return array List of preload items for the front page.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_front_page_preload_data}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_front_page_preload_data( array $image_optimisation ): array {
-			if ( empty( $image_optimisation['preloadFrontPageImages'] ) || ! is_front_page() ) {
-				return array();
-			}
-
-			$urls = $this->preload_front_page_urls;
-			return array_map( array( $this, 'prepare_preload_item' ), $urls );
+			return $this->lcp_preload()->get_front_page_preload_data( $image_optimisation );
 		}
 
 		/**
@@ -5441,22 +4510,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.5.1
 		 * @return array List of preload items from meta.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_meta_preload_data}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_meta_preload_data(): array {
-			// Skip the post-meta lookup outside singular views (issue #1216):
-			// get_the_ID() is meaningless on archives and the meta query
-			// would run on every wp_head without this guard.
-			if ( function_exists( 'is_singular' ) && ! is_singular() ) {
-				return array();
-			}
-			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
-
-			if ( empty( $page_img_urls ) ) {
-				return array();
-			}
-
-			$urls = Util::process_urls( $page_img_urls );
-			return array_map( array( $this, 'prepare_preload_item' ), $urls );
+			return $this->lcp_preload()->get_meta_preload_data();
 		}
 
 		/**
@@ -5465,33 +4524,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.5.1
 		 * @param array $image_optimisation Image optimization configuration.
 		 * @return array List of preload items for the post type.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_post_type_preload_data}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_post_type_preload_data( array $image_optimisation ): array {
-			if ( empty( $image_optimisation['preloadPostTypeImage'] ) ) {
-				return array();
-			}
-
-			$selected_post_types = (array) ( $image_optimisation['selectedPostType'] ?? array() );
-
-			// P1 Fix: Only proceed if post types are explicitly selected.
-			if ( empty( $selected_post_types ) || ! is_singular( $selected_post_types ) || ! has_post_thumbnail() ) {
-				return array();
-			}
-
-			$thumbnail_id = get_post_thumbnail_id();
-			if ( ! $thumbnail_id ) {
-				return array();
-			}
-
-			$exclude_img_urls = $this->exclude_post_type_imgs;
-			$image_url        = $this->get_image_url_by_post_type( $thumbnail_id );
-
-			if ( $this->should_exclude_image( $image_url, $exclude_img_urls ) ) {
-				return array();
-			}
-
-			$srcset = wp_get_attachment_image_srcset( $thumbnail_id );
-			return $this->get_srcset_preload_items( $srcset, $image_url, $image_optimisation );
+			return $this->lcp_preload()->get_post_type_preload_data( $image_optimisation );
 		}
 
 		/**
@@ -5501,14 +4539,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param int $thumbnail_id The ID of the thumbnail image.
 		 * @return string The URL of the image.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_image_url_by_post_type}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_image_url_by_post_type( int $thumbnail_id ): string {
-			if ( 'product' === get_post_type() && class_exists( 'WooCommerce' ) ) {
-				$image_size = apply_filters( 'woocommerce_gallery_image_size', 'woocommerce_single' );
-				return wp_get_attachment_image_url( $thumbnail_id, $image_size ) ?? '';
-			}
-
-			return wp_get_attachment_image_url( $thumbnail_id, 'blog-single-image' ) ?? '';
+			return $this->lcp_preload()->get_image_url_by_post_type( $thumbnail_id );
 		}
 
 		/**
@@ -5519,14 +4555,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $image_url The URL of the image.
 		 * @param array  $exclude_img_urls Array of URLs to exclude.
 		 * @return bool True if the image should be excluded, false otherwise.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::should_exclude_image}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function should_exclude_image( string $image_url, array $exclude_img_urls ): bool {
-			foreach ( $exclude_img_urls as $url ) {
-				if ( str_contains( $image_url, $url ) ) {
-					return true;
-				}
-			}
-			return false;
+			return $this->lcp_preload()->should_exclude_image( $image_url, $exclude_img_urls );
 		}
 
 		/**
@@ -5536,34 +4570,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $srcset             The srcset string from the image tag.
 		 * @param array  $image_optimisation Image optimization configuration array.
 		 * @return array Array of parsed sources: array( 'url' => string, 'width' => int ).
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::parse_srcset_data}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function parse_srcset_data( $srcset, $image_optimisation ): array {
-			if ( ! $srcset ) {
-				return array();
-			}
-
-			$sources       = array_map( 'trim', explode( ',', $srcset ) );
-			$max_width     = (int) ( $image_optimisation['maxWidthImgSize'] ?? self::MAX_PRELOAD_WIDTH );
-			$exclude_sizes = $this->exclude_sizes;
-
-			$parsed_sources = array();
-
-			foreach ( $sources as $source ) {
-				list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', trim( $source ), 2 ), 2, '' );
-				$width                    = (int) rtrim( $descriptor, 'w' );
-
-				if ( in_array( $width, $exclude_sizes, true ) || $width > $max_width ) {
-					continue;
-				}
-
-				$parsed_sources[] = array(
-					'url'   => $url,
-					'width' => $width,
-				);
-			}
-
-			usort( $parsed_sources, fn( $a, $b ) => $a['width'] - $b['width'] );
-			return $parsed_sources;
+			return $this->lcp_preload()->parse_srcset_data( $srcset, $image_optimisation );
 		}
 
 		/**
@@ -5580,51 +4592,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $default_image      The fallback image URL.
 		 * @param array  $image_optimisation Image optimization configuration array.
 		 * @return array List of preload items.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_srcset_preload_items}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_srcset_preload_items( $srcset, $default_image, $image_optimisation ): array {
-			if ( ! $srcset ) {
-				return array( $this->prepare_preload_item( $default_image ) );
-			}
-
-			$parsed_sources = $this->parse_srcset_data( $srcset, $image_optimisation );
-			if ( empty( $parsed_sources ) ) {
-				return array( $this->prepare_preload_item( $default_image ) );
-			}
-
-			// Slice parsed sources before generating media ranges so the
-			// surviving items keep gapless viewport coverage (issue #1216):
-			// slicing after media generation would leave the last kept
-			// item's max-width bound computed against a removed variant.
-			// `parse_srcset_data()` sorts ascending, so the negative offset
-			// keeps the largest widths — the likely hero — instead of
-			// thumbnails. The first survivor still opens at min-width 0, so
-			// no viewport gap is left below it.
-			if ( count( $parsed_sources ) > self::MAX_LCP_PRELOADS ) {
-				$parsed_sources = array_values( array_slice( $parsed_sources, -self::MAX_LCP_PRELOADS ) );
-			}
-
-			$max_width      = (int) ( $image_optimisation['maxWidthImgSize'] ?? self::MAX_PRELOAD_WIDTH );
-			$items          = array();
-			$previous_width = 0;
-
-			foreach ( $parsed_sources as $index => $source ) {
-				$current_width = $source['width'];
-				$next_width    = $parsed_sources[ $index + 1 ]['width'] ?? null;
-
-				$media = "(min-width: {$previous_width}px)";
-				if ( $next_width && $next_width <= $max_width ) {
-					$media .= " and (max-width: {$current_width}px)";
-				}
-
-				$items[]        = array(
-					'url'      => $source['url'],
-					'media'    => $media,
-					'priority' => 'high',
-				);
-				$previous_width = $current_width + 1;
-			}
-
-			return $items;
+			return $this->lcp_preload()->get_srcset_preload_items( $srcset, $default_image, $image_optimisation );
 		}
 
 		/**
@@ -5636,63 +4609,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $imagesrcset Optional responsive srcset for the preload link.
 		 * @param string $imagesizes Optional sizes for the preload link.
 		 * @return array Structured preload item.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::prepare_preload_item}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function prepare_preload_item( string $img_url, string $imagesrcset = '', string $imagesizes = '' ): array {
-			$img_url = trim( $img_url );
-			$media   = '';
-
-			// Non-absolute hero URLs resolve via the request-aware base
-			// (issue #1216): root-relative (/uploads/hero.jpg) appends to the
-			// home URL while page-relative (images/hero.jpg, ../img.jpg)
-			// resolves against the current request path with dot-segment
-			// normalization — the same base the browser uses for the emitted
-			// <img src> — so the preload href never 404s from a wrong base.
-			$resolve_relative = function ( string $url ): string {
-				$url = trim( $url );
-				if ( '' === $url || 0 === strpos( $url, 'http' ) || 0 === strpos( $url, '//' ) || 0 === strpos( $url, 'data:' ) || 0 === strpos( $url, 'blob:' ) ) {
-					return $url;
-				}
-				try {
-					return $this->normalize_url( $url );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				if ( function_exists( 'home_url' ) ) {
-					$home = rtrim( (string) home_url(), '/' );
-					if ( 0 === strpos( $url, '/' ) ) {
-						return $home . $url;
-					}
-					return $home . '/' . ltrim( $url, '/' );
-				}
-				return Util::cached_content_url( $url );
-			};
-
-			if ( 0 === strpos( $img_url, 'mobile:' ) ) {
-				$img_url = trim( str_replace( 'mobile:', '', $img_url ) );
-				$img_url = $resolve_relative( $img_url );
-				$media   = '(max-width: 768px)';
-			} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
-				$img_url = trim( str_replace( 'desktop:', '', $img_url ) );
-				$img_url = $resolve_relative( $img_url );
-				$media   = '(min-width: 768px)';
-			} else {
-				$img_url = $resolve_relative( $img_url );
-			}
-
-			// Never emit srcset without sizes (preload spec): a half pair
-			// degrades to a plain href preload (fail-open).
-			if ( '' === trim( $imagesrcset ) || '' === trim( $imagesizes ) ) {
-				$imagesrcset = '';
-				$imagesizes  = '';
-			}
-
-			return array(
-				'url'         => $img_url,
-				'media'       => $media,
-				'priority'    => 'high',
-				'imagesrcset' => $imagesrcset,
-				'imagesizes'  => $imagesizes,
-			);
+			return $this->lcp_preload()->prepare_preload_item( $img_url, $imagesrcset, $imagesizes );
 		}
 
 		/**
@@ -5721,59 +4643,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param string $img_url The URL of the image to preload. Empty resolves the stable signal candidate.
 		 * @return void
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::generate_img_preload}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function generate_img_preload( $img_url = '' ) {
-			try {
-				$img_url = is_string( $img_url ) ? trim( $img_url ) : '';
-				if ( '' === $img_url ) {
-					// Empty input resolves the stable signal candidate;
-					// get_stable_signal_lcp_url() already honours the
-					// per-post disable. An explicit URL is explicit
-					// opt-in and is unaffected by the disable.
-					$img_url = $this->get_stable_signal_lcp_url();
-				}
-				if ( '' === $img_url ) {
-					return;
-				}
-				if ( ! $this->is_image_lcp_url( $img_url ) || ! $this->is_allowed_hero_preload_url( $img_url ) ) {
-					return;
-				}
-				if ( self::has_emitted_preload( $img_url ) ) {
-					return;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return;
-			}
-			$data = $this->prepare_preload_item( $img_url );
-			if ( ! is_array( $data ) || empty( $data['url'] ) || ! is_string( $data['url'] ) ) {
-				return;
-			}
-			// Cross-emitter invariant: the prepared (resolved) URL claims
-			// the dedup slot too, so a relative-vs-absolute alias of the
-			// same hero cannot emit a second tag.
-			try {
-				if ( self::has_emitted_preload( $data['url'], (string) ( $data['media'] ?? '' ) ) ) {
-					return;
-				}
-				self::mark_preload_emitted( $img_url );
-				self::mark_preload_emitted( $data['url'], (string) ( $data['media'] ?? '' ) );
-				self::record_direct_preload_url( $img_url );
-				self::record_direct_preload_url( $data['url'] );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			Util::generate_preload_link(
-				$data['url'],
-				'preload',
-				'image',
-				false,
-				Util::get_image_mime_type( $data['url'] ),
-				$data['media'] ?? '',
-				is_string( $data['priority'] ?? null ) && '' !== ( $data['priority'] ?? '' ) ? (string) $data['priority'] : 'high',
-				(string) ( $data['imagesrcset'] ?? '' ),
-				(string) ( $data['imagesizes'] ?? '' )
-			);
+			return $this->lcp_preload()->generate_img_preload( $img_url );
 		}
 
 		/**
@@ -7738,19 +6613,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
-		/**
-		 * Whether LCP prioritization already ran on this instance's buffer.
-		 *
-		 * One-shot per instance (issue #881 review): the 6.9+ enhancement
-		 * filter and the legacy fallback buffer share this instance via Main;
-		 * a mid-request flip of the enhancement check could otherwise run LCP
-		 * prioritization twice. The attribute set is idempotent, the scan is
-		 * not — the second pass is skipped.
-		 *
-		 * @since 2.0.0
-		 * @var bool
-		 */
-		private bool $lcp_priority_applied = false;
 
 		/**
 		 * Post-render LCP image prioritization (optional enhancement).
@@ -7784,164 +6646,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *                                for parity with the 6.9 filter signature and
 		 *                                safe when used as an ob_start callback).
 		 * @return string The processed buffer.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::prioritize_lcp_in_buffer}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function prioritize_lcp_in_buffer( $filtered_output, $output = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			// Mid-template cancel safety (issue #1386): a cancelled core
-			// buffer can deliver a non-string (false/null) into the filter.
-			// An output-buffer callback must always return a string — fail
-			// open to the raw $output when it carries page HTML (priority 30
-			// runs after cache/used-CSS, so collapsing to '' would wipe
-			// output earlier filters already processed), else to '' without
-			// consuming the one-shot so a later real pass can still run.
-			if ( ! is_string( $filtered_output ) ) {
-				if ( is_string( $output ) && '' !== $output ) {
-					return $output;
-				}
-				return '';
-			}
-			// One-shot per instance (issue #881 review): the 6.9+ enhancement
-			// filter and the legacy fallback buffer both call this method on
-			// the shared Main instance; a mid-request flip of the enhancement
-			// check could otherwise run LCP prioritization twice.
-			if ( $this->lcp_priority_applied ) {
-				return $filtered_output;
-			}
-			$this->lcp_priority_applied = true;
-
-			$image_optimisation  = $this->options['image_optimisation'] ?? array();
-			$prioritize_enabled  = ! empty( $image_optimisation['prioritizeLCPImages'] );
-			$css_preload_enabled = ! empty( $image_optimisation['cssHeroPreload'] );
-			$occlusion_enabled   = $this->is_occlusion_fetchpriority_low_enabled();
-			if ( ! $prioritize_enabled && ! $css_preload_enabled && ! $occlusion_enabled ) {
-				return $filtered_output;
-			}
-			if ( is_admin() || empty( $filtered_output ) || ! is_string( $filtered_output ) ) {
-				return $filtered_output;
-			}
-			// Same logged-in eligibility guard as the legacy buffer path so both
-			// pipelines behave identically for the current user.
-			if ( ! Util::is_cache_eligible_for_current_user( $this->options['cache_settings'] ?? array() ) ) {
-				return $filtered_output;
-			}
-			// CSS-hero pages may contain no <img> tags at all; let those through
-			// to Pass C when the CSS hero preload is enabled.
-			$css_hero_eligible    = $css_preload_enabled && false !== stripos( $filtered_output, 'background' );
-			$has_img              = false !== stripos( $filtered_output, '<img' );
-			$tag_processor_exists = class_exists( 'WP_HTML_Tag_Processor' );
-			if ( ! $tag_processor_exists ) {
-				// Occlusion demotion (Pass B2) and the final lazy/high sweep
-				// both ship regex fallbacks, so occlusion-only mode can
-				// still run on pre-6.2 cores without the HTML API.
-				if ( ! $occlusion_enabled || ! $has_img ) {
-					return $filtered_output;
-				}
-			} elseif ( ! $has_img && ! $css_hero_eligible ) {
-				return $filtered_output;
-			}
-
-			// Throwable-safe: this method runs as an output-buffer callback (legacy
-			// path) and as the wp_template_enhancement_output_buffer filter (WP 6.9+).
-			// It must always return a string or the page output would be lost/corrupted
-			// (audit #888 finding 12 — balanced buffer lifecycle).
-			try {
-				$buffer = $filtered_output;
-
-				// Resolve the LCP URL once per buffer so Pass B and Pass C
-				// share it instead of re-reading options and the RUM
-				// aggregate option on every request. Uses the unified
-				// chain (OD → stored PageSpeed → DOM-first heuristic) so a
-				// detectable hero still preloads when stored data is absent.
-				// Fail-open: detection failure leaves $lcp_url empty and the
-				// markup unmodified, never fatal. When only the occlusion
-				// flag is on, the occluded list is fetched first and LCP
-				// resolution is skipped when it is empty (no markup change
-				// possible, so the OD/RUM/DOM scan cost is avoided).
-				//
-				// @since 2.2.0 Unified resolution via resolve_auto_lcp_url().
-				$lcp_url             = '';
-				$occluded_urls_early = null;
-				if ( $occlusion_enabled && ! $prioritize_enabled ) {
-					try {
-						$occluded_urls_early = $this->get_occluded_image_urls_for_request();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$occluded_urls_early = array();
-					}
-					if ( ! is_array( $occluded_urls_early ) ) {
-						$occluded_urls_early = array();
-					}
-				}
-				if ( $prioritize_enabled || ( is_array( $occluded_urls_early ) && ! empty( $occluded_urls_early ) ) ) {
-					try {
-						if ( method_exists( $this, 'resolve_auto_lcp_url' ) ) {
-							$lcp_url = $this->resolve_auto_lcp_url( $filtered_output );
-						} else {
-							$lcp_url = $this->get_current_lcp_url();
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$lcp_url = '';
-					}
-					if ( ! is_string( $lcp_url ) ) {
-						$lcp_url = '';
-					}
-				}
-				if ( $prioritize_enabled ) {
-					// Pass A: un-lazy-load the first N above-the-fold images.
-					$buffer = $this->unlazyload_first_images( $buffer, $image_optimisation );
-
-					// Pass B: stamp fetchpriority="high" on the detected LCP image.
-					// The stamp always removes loading="lazy" from the same node,
-					// so fetchpriority="high" and loading="lazy" never combine.
-					$buffer = $this->prioritize_lcp_image( $buffer, $lcp_url );
-				}
-
-				// Pass C: CSS background hero (issue #935) — exactly one preload
-				// link when the hero is a CSS background; no-ops unless the
-				// cssHeroPreload toggle is enabled. Shares the unified $lcp_url
-				// so all passes stamp/preload the same target.
-				$buffer = $this->maybe_inject_css_hero_preload( $buffer, ( $prioritize_enabled ? $lcp_url : null ) );
-
-				// Pass C: hero fallback + companion preload link (fail-open, never lazy).
-				// Shares the unified $lcp_url; falls back to buffer resolution
-				// when prioritization is off but the hero preload is enabled.
-				// Both Pass C emitters share the centralised hero slot so the
-				// hero keeps exactly one preload with eager plus high
-				// (issue #1312); manual lists already claimed the slot first.
-				$buffer = $this->maybe_preload_hero_image( $buffer, $image_optimisation, ( $prioritize_enabled ? $lcp_url : null ) );
-
-				// Pass B2: occlusion-aware demotion (issue #1426) — OD-measured
-				// occluded (CSS-hidden but in-viewport) nodes get
-				// fetchpriority="low" without any loading change, skipping
-				// the true-LCP node so the single-high invariant holds.
-				if ( $occlusion_enabled ) {
-					try {
-						$occluded_urls = is_array( $occluded_urls_early ) ? $occluded_urls_early : $this->get_occluded_image_urls_for_request();
-						if ( ! empty( $occluded_urls ) ) {
-							$buffer = $this->apply_occlusion_fetchpriority_low( $buffer, $occluded_urls, $lcp_url );
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-
-				// Pass D: final lazy/high invariant sweep (issue #1312) — any
-				// element marked fetchpriority high is forced eager so lazy
-				// plus high pairs are never emitted together. Attribute-only
-				// rewrite, no layout change (no CLS).
-				$buffer = $this->sweep_lazy_high_conflicts( $buffer );
-
-				return $buffer;
-			} catch ( \Throwable $e ) {
-				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed.', array( 'exception' => $e ) );
-				if ( is_string( $filtered_output ) && '' !== $filtered_output ) {
-					return $filtered_output;
-				}
-				if ( is_string( $output ) && '' !== $output ) {
-					return $output;
-				}
-				return '';
-			}
+			return $this->lcp_preload()->prioritize_lcp_in_buffer( $filtered_output, $output );
 		}
 
 		/**
@@ -7987,125 +6697,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param mixed $attachment Attachment post object, ID, or array with ID.
 		 * @param mixed $size       Requested image size.
 		 * @return mixed The (possibly stamped) attributes, unchanged on miss.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::wppo_add_fetchpriority}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function wppo_add_fetchpriority( $attr, $attachment = null, $size = null ) {
-			try {
-				if ( ! is_array( $attr ) ) {
-					return $attr;
-				}
-				$image_optimisation = $this->options['image_optimisation'] ?? array();
-				if ( empty( $image_optimisation['prioritizeLCPImages'] ) ) {
-					return $attr;
-				}
-				if ( function_exists( 'is_admin' ) ) {
-					try {
-						if ( is_admin() ) {
-							return $attr;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return $attr;
-					}
-				}
-				$lcp_url = '';
-				try {
-					$lcp_url = $this->resolve_fetchpriority_lcp_url();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$lcp_url = '';
-				}
-				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
-					return $attr;
-				}
-				try {
-					if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
-						return $attr;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $attr;
-				}
-				$normalized_lcp = $this->normalize_image_url( $lcp_url );
-				if ( '' === $normalized_lcp ) {
-					return $attr;
-				}
-				$exact_lcp = $this->normalize_image_url( $lcp_url, false );
-				if ( '' === $exact_lcp ) {
-					return $attr;
-				}
-				$size_is_full  = ( 'full' === $size );
-				$is_lcp        = false;
-				$attachment_id = 0;
-				if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
-					$attachment_id = (int) $attachment->ID;
-				} elseif ( is_numeric( $attachment ) ) {
-					$attachment_id = (int) $attachment;
-				} elseif ( is_array( $attachment ) && isset( $attachment['ID'] ) && is_numeric( $attachment['ID'] ) ) {
-					$attachment_id = (int) $attachment['ID'];
-				}
-				if ( $attachment_id > 0 && function_exists( 'wp_get_attachment_image_src' ) ) {
-					try {
-						$lookup_size = ( null === $size || '' === $size ) ? 'thumbnail' : $size;
-						$src_data    = wp_get_attachment_image_src( $attachment_id, $lookup_size );
-						$candidate   = '';
-						if ( is_array( $src_data ) && isset( $src_data[0] ) && is_string( $src_data[0] ) ) {
-							$candidate = $src_data[0];
-						} elseif ( is_string( $src_data ) ) {
-							$candidate = $src_data;
-						}
-						if ( '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full ) ) {
-							$is_lcp = true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ! $is_lcp ) {
-					// Fallback when the attachment ID is unresolvable (bare
-					// array context): compare the built src/srcset against
-					// the candidate with normalized-URL equality only (no
-					// substring fallback, mirroring tag_matches_lcp_url()).
-					// The src/data-src entries use the same size-aware rule
-					// as the ID path; srcset entries require an exact match
-					// (a srcset inherently lists sized variants, so a
-					// suffix-insensitive fallback would stamp every image
-					// whose srcset merely contains a thumbnail of the hero).
-					foreach ( array( 'src', 'data-src' ) as $key ) {
-						if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
-							$is_lcp = true;
-							break;
-						}
-					}
-					if ( ! $is_lcp && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
-						$candidates = preg_split( '/\s*,\s*/', trim( $attr['srcset'] ) );
-						if ( is_array( $candidates ) ) {
-							foreach ( $candidates as $candidate ) {
-								$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
-								$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
-								if ( '' !== $candidate_url && $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
-									$is_lcp = true;
-									break;
-								}
-							}
-						}
-					}
-				}
-				if ( ! $is_lcp ) {
-					return $attr;
-				}
-				// Stamp the hero triple: eager first so the core-parity
-				// invariant (never lazy + high) always holds, then high,
-				// then the decoding default when absent.
-				$attr['loading']       = 'eager';
-				$attr['fetchpriority'] = 'high';
-				if ( ! isset( $attr['decoding'] ) || ! is_string( $attr['decoding'] ) || '' === $attr['decoding'] ) {
-					$attr['decoding'] = 'async';
-				}
-				return $this->sanitize_loading_triple( $attr );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $attr;
-			}
+			return $this->lcp_preload()->wppo_add_fetchpriority( $attr, $attachment, $size );
 		}
 
 		/**
@@ -8122,31 +6719,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return string The validated LCP image URL, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::resolve_fetchpriority_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function resolve_fetchpriority_lcp_url(): string {
-			$memo_key = $this->get_lcp_memo_key();
-			if ( null !== $this->fetchpriority_lcp_url && $this->fetchpriority_lcp_key === $memo_key ) {
-				return $this->fetchpriority_lcp_url;
-			}
-			$this->fetchpriority_lcp_url = '';
-			$this->fetchpriority_lcp_key = $memo_key;
-			try {
-				$lcp_url = $this->resolve_od_only_lcp_url();
-				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
-					$lcp_url = $this->get_current_lcp_url();
-				}
-				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
-					return $this->fetchpriority_lcp_url;
-				}
-				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
-					return $this->fetchpriority_lcp_url;
-				}
-				$this->fetchpriority_lcp_url = $lcp_url;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$this->fetchpriority_lcp_url = '';
-			}
-			return $this->fetchpriority_lcp_url;
+			return $this->lcp_preload()->resolve_fetchpriority_lcp_url();
 		}
 
 		/**
@@ -8165,22 +6743,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $exact_lcp      Normalized LCP URL (size suffix preserved).
 		 * @param bool   $size_is_full   Whether the requested image size is 'full'.
 		 * @return bool True when the candidate corresponds to the LCP image.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::fetchpriority_candidate_matches}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function fetchpriority_candidate_matches( string $candidate, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
-			try {
-				if ( '' === $candidate || '' === $normalized_lcp || '' === $exact_lcp ) {
-					return false;
-				}
-				if ( $this->normalize_image_url( $candidate, false ) === $exact_lcp ) {
-					return true;
-				}
-				if ( $size_is_full && $this->normalize_image_url( $candidate ) === $normalized_lcp ) {
-					return true;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return false;
+			return $this->lcp_preload()->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full );
 		}
 
 		/**
@@ -8581,115 +7149,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *                             chain; the stored tier internally reads
 		 *                             get_current_lcp_url()).
 		 * @return string The buffer with fetchpriority="high" on the LCP image.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::prioritize_lcp_image}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function prioritize_lcp_image( string $buffer, ?string $lcp_url = null ): string {
-			if ( null === $lcp_url ) {
-				$lcp_url = $this->resolve_auto_lcp_url( $buffer );
-			}
-			if ( empty( $lcp_url ) || false === stripos( $buffer, '<img' ) ) {
-				return $buffer;
-			}
-
-			// WP 6.9+: stream tokens via the shared guarded factory and rebuild
-			// with the serialize_token() builder. Falls back to the Tag Processor
-			// path below when the serializer is unavailable (WP <6.9) or the
-			// parse fails, preserving byte-identical legacy output.
-			if ( $this->should_use_html_processor() ) {
-				$processor = Util::create_html_processor( $buffer );
-				if ( null !== $processor ) {
-					try {
-						$new_html = '';
-						$stamped  = false;
-						while ( $processor->next_token() ) {
-							if (
-							'#tag' === $processor->get_token_type() &&
-							'IMG' === $processor->get_tag() &&
-							! $processor->is_tag_closer() &&
-							! $stamped &&
-							$this->tag_matches_lcp_url( $processor, $lcp_url )
-							) {
-								$this->restore_js_lazy_placeholders( $processor );
-								$this->remove_lazy_classes( $processor );
-								// Explicit core-stamp guard (issue #1180): an
-								// already-stamped fetchpriority (core, theme,
-								// or prior pass) is never overridden. When
-								// absent the measured hero keeps `high`
-								// (field truth beats the core heuristic).
-								$core_verdict = $this->get_core_loading_verdict_for_tag( $processor );
-								if ( null === $processor->get_attribute( 'fetchpriority' ) ) {
-									$processor->set_attribute( 'fetchpriority', 'high' );
-								}
-								if ( 'lazy' === $processor->get_attribute( 'loading' ) ) {
-									$processor->remove_attribute( 'loading' );
-								}
-								if ( null === $processor->get_attribute( 'loading' ) ) {
-									$processor->set_attribute( 'loading', 'eager' );
-								}
-								if ( null === $processor->get_attribute( 'decoding' ) ) {
-									$core_decoding = is_array( $core_verdict ) ? ( $core_verdict['decoding'] ?? null ) : null;
-									$processor->set_attribute( 'decoding', is_string( $core_decoding ) && '' !== $core_decoding ? $core_decoding : 'async' );
-								}
-								$stamped = true;
-							}
-							$new_html .= (string) $processor->serialize_token();
-						}
-
-						// Parser bailed on unsupported markup; fall through to the
-						// Tag Processor fallback instead of returning corrupt HTML.
-						$parse_ok = ! method_exists( $processor, 'get_last_error' ) || null === $processor->get_last_error();
-						if ( $parse_ok ) {
-							return $stamped ? $this->promote_eager_picture_sources( $new_html ) : $buffer;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-			}
-
-			// Fallback: WP_HTML_Tag_Processor on all supported versions; fail-open
-			// to the unmodified buffer when the Tag Processor is unavailable.
-			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
-				return $buffer;
-			}
-			try {
-				$tags    = new \WP_HTML_Tag_Processor( $buffer );
-				$stamped = false;
-				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
-						$this->restore_js_lazy_placeholders( $tags );
-						$this->remove_lazy_classes( $tags );
-						// Explicit core-stamp guard (issue #1180): never
-						// override an already-stamped fetchpriority; when
-						// absent the measured hero keeps `high`
-						// (field truth beats the core heuristic).
-						$core_verdict = $this->get_core_loading_verdict_for_tag( $tags );
-						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
-							$tags->set_attribute( 'fetchpriority', 'high' );
-						}
-						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
-							$tags->remove_attribute( 'loading' );
-						}
-						if ( null === $tags->get_attribute( 'loading' ) ) {
-							$tags->set_attribute( 'loading', 'eager' );
-						}
-						if ( null === $tags->get_attribute( 'decoding' ) ) {
-							$core_decoding = is_array( $core_verdict ) ? ( $core_verdict['decoding'] ?? null ) : null;
-							$tags->set_attribute( 'decoding', is_string( $core_decoding ) && '' !== $core_decoding ? $core_decoding : 'async' );
-						}
-						$stamped = true;
-						break;
-					}
-				}
-
-				$updated = $tags->get_updated_html();
-				if ( ! is_string( $updated ) ) {
-					return $buffer;
-				}
-				return $stamped ? $this->promote_eager_picture_sources( $updated ) : $buffer;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $buffer;
-			}
+			return $this->lcp_preload()->prioritize_lcp_image( $buffer, $lcp_url );
 		}
 
 		/**
@@ -8712,159 +7177,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string|null $lcp_url            Optional pre-resolved LCP URL. When null
 		 *                                        the URL is resolved via resolve_auto_lcp_url().
 		 * @return string The buffer with hero preload link injected.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::maybe_preload_hero_image}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function maybe_preload_hero_image( string $buffer, array $image_optimisation, ?string $lcp_url = null ): string {
-			try {
-				if ( isset( $image_optimisation['lcpHeroPreload'] ) && empty( $image_optimisation['lcpHeroPreload'] ) ) {
-					return $buffer;
-				}
-				if ( false === strpos( $buffer, '<img' ) ) {
-					return $buffer;
-				}
-
-				if ( null === $lcp_url ) {
-					$lcp_url = $this->resolve_auto_lcp_url( $buffer );
-				}
-				if ( '' === $lcp_url ) {
-					return $buffer;
-				}
-
-				// Never lazy: strip loading=lazy + stamp fetchpriority high on the hero tag only when absent.
-				// Guarded Tag Processor use (WP 6.2+): fail-open to the
-				// unmodified buffer when the HTML API is unavailable, so the
-				// OD-stamped LCP node is never double-stamped or corrupted.
-				if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
-					return $buffer;
-				}
-				$tags    = new \WP_HTML_Tag_Processor( $buffer );
-				$changed = false;
-				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
-						if ( $this->restore_js_lazy_placeholders( $tags ) ) {
-							$changed = true;
-						}
-						if ( $this->remove_lazy_classes( $tags ) ) {
-							$changed = true;
-						}
-						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
-							$tags->remove_attribute( 'loading' );
-							$changed = true;
-						}
-						if ( null === $tags->get_attribute( 'loading' ) ) {
-							$tags->set_attribute( 'loading', 'eager' );
-							$changed = true;
-						}
-						// Explicit core-stamp guard (issue #1180): never
-						// override an already-stamped fetchpriority; when
-						// absent the measured hero keeps `high`
-						// (field truth beats the core heuristic).
-						$core_verdict = $this->get_core_loading_verdict_for_tag( $tags );
-						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
-							$tags->set_attribute( 'fetchpriority', 'high' );
-							$changed = true;
-						}
-						if ( null === $tags->get_attribute( 'decoding' ) ) {
-							$core_decoding = is_array( $core_verdict ) ? ( $core_verdict['decoding'] ?? null ) : null;
-							$tags->set_attribute( 'decoding', is_string( $core_decoding ) && '' !== $core_decoding ? $core_decoding : 'async' );
-							$changed = true;
-						}
-						if ( null === $tags->get_attribute( 'data-wppo-hero' ) ) {
-							$tags->set_attribute( 'data-wppo-hero', '1' );
-							$changed = true;
-						}
-						// Stable dimensions for the eager hero (issue #1467):
-						// a dimension-less hero causes CLS, so backfill any
-						// missing width/height from the local file when the
-						// tag carries no numeric value. Resolve from the
-						// matched tag's own src (the file actually rendered)
-						// first — the LCP URL may be a size-variant alias
-						// (size suffix stripped by tag_matches_lcp_url()), so
-						// stamping alias dimensions onto a crop distorts it.
-						// Fail-open: unknown paths leave the tag untouched.
-						try {
-							$has_w = is_numeric( $tags->get_attribute( 'width' ) );
-							$has_h = is_numeric( $tags->get_attribute( 'height' ) );
-							if ( ! $has_w || ! $has_h ) {
-								$tag_src = $tags->get_attribute( 'src' );
-								if ( ! is_string( $tag_src ) || '' === trim( $tag_src ) || ! $this->is_dimension_lookup_allowed( (string) $tag_src ) ) {
-									$tag_src = $tags->get_attribute( 'data-src' );
-								}
-								if ( ! is_string( $tag_src ) || '' === trim( $tag_src ) || ! $this->is_dimension_lookup_allowed( (string) $tag_src ) ) {
-									$tag_src = $lcp_url;
-								}
-								$hero_src = (string) $tag_src;
-								if ( '' !== trim( $hero_src ) && $this->is_dimension_lookup_allowed( $hero_src ) ) {
-									$hero_path = Util::get_local_path( $hero_src );
-									if ( '' !== $hero_path && $this->cached_file_exists( $hero_path ) && is_readable( $hero_path ) && is_file( $hero_path ) ) {
-										$hero_size = $this->get_cached_image_size( $hero_path );
-										if ( is_array( $hero_size ) && isset( $hero_size[0], $hero_size[1] ) && (int) $hero_size[0] > 0 && (int) $hero_size[1] > 0 ) {
-											if ( ! $has_w ) {
-												$tags->set_attribute( 'width', (string) (int) $hero_size[0] );
-												$changed = true;
-											}
-											if ( ! $has_h ) {
-												$tags->set_attribute( 'height', (string) (int) $hero_size[1] );
-												$changed = true;
-											}
-										}
-									}
-								}
-							}
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
-						break;
-					}
-				}
-				if ( $changed ) {
-					$buffer = $this->promote_eager_picture_sources( $tags->get_updated_html() );
-				}
-
-				// Companion preload link (fetchpriority=high, exactly one). The
-				// centralised slot consults the buffer plus every media
-				// variant already emitted this request (wp_head manual +
-				// auto, CSS-hero companion), then records this emission so a
-				// later pass cannot double-emit the same hero (issue #1312).
-				// Manual lists stay authoritative: they claim the slot first
-				// in get_all_preload_data(), so automation only fills gaps.
-				if ( ! $this->claim_hero_preload_slot( $lcp_url, '', $buffer ) ) {
-					return $buffer;
-				}
-				// Breakpoint-first srcset (issue #1429): OD per-viewport
-				// elements (or RUM field data) for the same hero win over
-				// the buffer scan so mobile/desktop fetch the right
-				// candidate; the buffer scan stays as the legacy fallback.
-				$breakpoint  = $this->get_breakpoint_srcset_for_url( $lcp_url, $buffer );
-				$imagesrcset = '' !== $breakpoint['srcset'] ? $breakpoint['srcset'] : $this->get_lcp_srcset_for_url( $lcp_url, $buffer );
-				$imagesizes  = '' !== $breakpoint['sizes'] ? $breakpoint['sizes'] : ( '' !== $imagesrcset ? $this->get_lcp_sizes_for_url( $lcp_url, $buffer ) : '' );
-				$link_tag    = Util::get_preload_link(
-					$lcp_url,
-					'preload',
-					'image',
-					false,
-					Util::get_image_mime_type( $lcp_url ),
-					'',
-					'high',
-					$imagesrcset,
-					$imagesizes
-				);
-				if ( '' === $link_tag ) {
-					// Link generation failed after the slot claim: release the
-					// claim so the sibling emitter may still emit (issue #1312
-					// review — claim-before-emit would otherwise suppress the
-					// sibling into zero preloads instead of one).
-					self::release_hero_preload_slot( $lcp_url, '' );
-					return $buffer;
-				}
-				if ( false !== stripos( $buffer, '</head>' ) ) {
-					$buffer = (string) preg_replace( '#</head>#i', $link_tag . "\n</head>", $buffer, 1 );
-				} else {
-					$buffer = $link_tag . "\n" . $buffer;
-				}
-				return $buffer;
-			} catch ( \Throwable $e ) {
-				return $buffer;
-			}
+			return $this->lcp_preload()->maybe_preload_hero_image( $buffer, $image_optimisation, $lcp_url );
 		}
 
 		/**
@@ -8879,35 +7197,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string First image src, or empty string when none found.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_first_image_src_in_buffer}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_first_image_src_in_buffer( string $buffer ): string {
-			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
-				return '';
-			}
-			try {
-				$tags     = new \WP_HTML_Tag_Processor( $buffer );
-				$fallback = '';
-				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-					$src = $tags->get_attribute( 'src' );
-					if ( ! is_string( $src ) || '' === $src ) {
-						$data_src = $tags->get_attribute( 'data-src' );
-						$src      = is_string( $data_src ) ? $data_src : '';
-					}
-					if ( ! is_string( $src ) || '' === trim( $src ) ) {
-						continue;
-					}
-					if ( '' === $fallback ) {
-						$fallback = $src;
-					}
-					if ( $this->is_trivial_heuristic_image( $tags, (string) $src ) ) {
-						continue;
-					}
-					return $src;
-				}
-				return $fallback;
-			} catch ( \Throwable $e ) {
-				return '';
-			}
+			return $this->lcp_preload()->get_first_image_src_in_buffer( $buffer );
 		}
 
 		/**
@@ -8922,30 +7217,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param \WP_HTML_Tag_Processor $tags The tag processor on the candidate `<img>`.
 		 * @param string                 $src  The candidate src URL.
 		 * @return bool True when the candidate should be skipped.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_trivial_heuristic_image}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_trivial_heuristic_image( $tags, string $src ): bool {
-			try {
-				if ( 1 === preg_match( '/pixel|tracking|spacer|transparent|1x1|beacon/i', $src ) ) {
-					return true;
-				}
-				if ( null !== $tags->get_attribute( 'hidden' ) ) {
-					return true;
-				}
-				$style = $tags->get_attribute( 'style' );
-				if ( is_string( $style ) && 1 === preg_match( '/display\s*:\s*none|visibility\s*:\s*hidden/i', $style ) ) {
-					return true;
-				}
-				foreach ( array( 'width', 'height' ) as $dim ) {
-					$val = $tags->get_attribute( $dim );
-					if ( ( is_string( $val ) || is_int( $val ) ) && is_numeric( $val ) && (int) $val > 0 && (int) $val <= 10 ) {
-						return true;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-			return false;
+			return $this->lcp_preload()->is_trivial_heuristic_image( $tags, $src );
 		}
 
 		/**
@@ -8966,54 +7243,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $buffer The HTML buffer.
 		 * @param string $url    The image URL to look for.
 		 * @return bool True when a matching preload link exists.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::buffer_has_image_preload}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function buffer_has_image_preload( string $buffer, string $url ): bool {
-			try {
-				$needle = $this->normalize_image_url( $url );
-				if ( '' === $needle ) {
-					return false;
-				}
-				$needle_exact     = $this->normalize_image_url( $url, false );
-				$needle_has_sizes = ( '' !== $needle_exact && $needle_exact !== $needle );
-				$needle_query     = $this->get_url_query( $url );
-				if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
-					$found = $this->buffer_has_image_preload_with_tag_processor( $buffer, $needle, $needle_exact, $needle_has_sizes, $needle_query );
-					if ( null !== $found ) {
-						return $found;
-					}
-				}
-				if ( ! preg_match_all( '#<link\b[^>]*>#i', $buffer, $links ) ) {
-					return false;
-				}
-				foreach ( $links[0] as $link ) {
-					if ( ! preg_match( '#rel=["\']([^"\']*)["\']#i', $link, $rm ) ) {
-						continue;
-					}
-					$rel_tokens = preg_split( '/\s+/', strtolower( trim( $rm[1] ) ), -1, PREG_SPLIT_NO_EMPTY );
-					if ( ! is_array( $rel_tokens ) || ! in_array( 'preload', $rel_tokens, true ) ) {
-						continue;
-					}
-					if ( preg_match( '#\bas\s*=\s*["\']([^"\']*)["\']#i', $link, $am ) && 'image' !== strtolower( trim( $am[1] ) ) ) {
-						continue;
-					}
-					if ( ! preg_match( '#href=["\']([^"\']+)["\']#i', $link, $hm ) ) {
-						continue;
-					}
-					if ( $this->normalize_image_url( $hm[1] ) !== $needle ) {
-						continue;
-					}
-					if ( ! $needle_has_sizes && $this->normalize_image_url( $hm[1], false ) !== $needle_exact ) {
-						continue;
-					}
-					if ( $this->get_url_query( $hm[1] ) !== $needle_query ) {
-						continue;
-					}
-					return true;
-				}
-			} catch ( \Throwable $e ) {
-				return false;
-			}
-			return false;
+			return $this->lcp_preload()->buffer_has_image_preload( $buffer, $url );
 		}
 
 		/**
@@ -9037,52 +7272,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param bool   $needle_has_sizes Whether the target itself carries a size suffix.
 		 * @param string $needle_query     Raw query string of the target URL.
 		 * @return bool|null True/false on success, null on failure (fallback).
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::buffer_has_image_preload_with_tag_processor}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function buffer_has_image_preload_with_tag_processor( string $buffer, string $needle, string $needle_exact, bool $needle_has_sizes, string $needle_query ): ?bool {
-			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
-				return null;
-			}
-			try {
-				if ( false === stripos( $buffer, '<link' ) ) {
-					return false;
-				}
-				$tags = new \WP_HTML_Tag_Processor( $buffer );
-				while ( $tags->next_tag( array( 'tag_name' => 'link' ) ) ) {
-					$rel = $tags->get_attribute( 'rel' );
-					if ( ! is_string( $rel ) || '' === trim( $rel ) ) {
-						continue;
-					}
-					$rel_tokens = preg_split( '/\s+/', strtolower( trim( $rel ) ), -1, PREG_SPLIT_NO_EMPTY );
-					if ( ! is_array( $rel_tokens ) || ! in_array( 'preload', $rel_tokens, true ) ) {
-						continue;
-					}
-					$as = $tags->get_attribute( 'as' );
-					// Mirror the regex fallback exactly: any present quoted value
-					// (including an empty string) must equal 'image', while an
-					// absent or boolean `as` counts as image-eligible.
-					if ( is_string( $as ) && 'image' !== strtolower( trim( $as ) ) ) {
-						continue;
-					}
-					$href = $tags->get_attribute( 'href' );
-					if ( ! is_string( $href ) || '' === $href ) {
-						continue;
-					}
-					if ( $this->normalize_image_url( $href ) !== $needle ) {
-						continue;
-					}
-					if ( ! $needle_has_sizes && $this->normalize_image_url( $href, false ) !== $needle_exact ) {
-						continue;
-					}
-					if ( $this->get_url_query( $href ) !== $needle_query ) {
-						continue;
-					}
-					return true;
-				}
-				return false;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return null;
-			}
+			return $this->lcp_preload()->buffer_has_image_preload_with_tag_processor( $buffer, $needle, $needle_exact, $needle_has_sizes, $needle_query );
 		}
 
 		/**
@@ -9097,19 +7292,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param string $url The URL to inspect.
 		 * @return string The query string without the leading `?`, or empty.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_url_query}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_url_query( string $url ): string {
-			try {
-				if ( function_exists( 'wp_parse_url' ) ) {
-					$parsed = wp_parse_url( $url, PHP_URL_QUERY );
-					if ( is_string( $parsed ) && '' !== $parsed ) {
-						return $parsed;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return '';
+			return $this->lcp_preload()->get_url_query( $url );
 		}
 
 		/**
@@ -9125,35 +7313,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param \WP_HTML_Tag_Processor $tags    The tag processor matched on an <img>.
 		 * @param string                 $lcp_url The detected LCP image URL.
 		 * @return bool True if the image references the LCP URL.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::tag_matches_lcp_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function tag_matches_lcp_url( $tags, string $lcp_url ): bool {
-			$normalized_lcp = $this->normalize_image_url( $lcp_url );
-			if ( '' === $normalized_lcp ) {
-				return false;
-			}
-
-			foreach ( array( 'src', 'data-src', 'srcset' ) as $attribute ) {
-				$value = $tags->get_attribute( $attribute );
-				if ( ! is_string( $value ) || '' === $value ) {
-					continue;
-				}
-
-				if ( 'srcset' === $attribute ) {
-					foreach ( preg_split( '/\s*,\s*/', trim( $value ) ) as $candidate ) {
-						$candidate_url = preg_split( '/\s+/', trim( $candidate ), 2 )[0];
-						if ( '' !== $candidate_url && $this->normalize_image_url( $candidate_url ) === $normalized_lcp ) {
-							return true;
-						}
-					}
-					continue;
-				}
-
-				if ( $this->normalize_image_url( $value ) === $normalized_lcp ) {
-					return true;
-				}
-			}
-
-			return false;
+			return $this->lcp_preload()->tag_matches_lcp_url( $tags, $lcp_url );
 		}
 
 		/**
@@ -9172,9 +7337,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $url               The raw URL to normalize.
 		 * @param bool   $strip_size_suffix Whether to strip WordPress size suffixes. Default true.
 		 * @return string Normalized host + path, or an empty string when unparseable.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::normalize_image_url}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function normalize_image_url( string $url, bool $strip_size_suffix = true ): string {
-			return self::normalize_image_url_static( $url, $strip_size_suffix );
+			return $this->lcp_preload()->normalize_image_url( $url, $strip_size_suffix );
 		}
 
 		/**
@@ -9190,50 +7358,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $url The image URL to normalize.
 		 * @param bool   $strip_size_suffix Whether to strip WP size suffixes.
 		 * @return string Normalized host + path, or empty string.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::normalize_image_url_static}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function normalize_image_url_static( string $url, bool $strip_size_suffix = true ): string {
-			if ( $strip_size_suffix && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
-				// Canonical key derivation lives in Util::normalize_image_key()
-				// so image and CSS pipelines share one implementation.
-				try {
-					return Util::normalize_image_key( $url );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			$url = trim( $url );
-
-			if ( '' === $url ) {
-				return '';
-			}
-
-			// Protocol-relative URL.
-			if ( 0 === strpos( $url, '//' ) ) {
-				$url = 'https:' . $url;
-			}
-
-			// Root-relative or bare path — resolve against the site URL.
-			if ( 0 === strpos( $url, '/' ) || false === strpos( $url, '://' ) ) {
-				$url = Util::cached_home_url() . '/' . ltrim( $url, '/' );
-			}
-
-			$parts = wp_parse_url( $url );
-			if ( empty( $parts['path'] ) ) {
-				return '';
-			}
-
-			$host = strtolower( $parts['host'] ?? '' );
-			$path = $parts['path'];
-
-			// Strip WordPress size suffixes, e.g. -1024x1024, -scaled, -e1234567890123.
-			// The `$` anchor lives inside the lookahead so the suffix only
-			// strips immediately before the file extension at end of path
-			// (a trailing `$` outside the lookahead could never match).
-			if ( $strip_size_suffix ) {
-				$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)#', '', $path );
-			}
-
-			return $host . $path;
+			return Lcp_Preload::normalize_image_url_static( $url, $strip_size_suffix );
 		}
 
 		/**
@@ -9256,9 +7386,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
 		 * @return string The dedup key.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_preload_dedup_key}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_preload_dedup_key( string $url, string $media ): string {
-			return self::build_preload_dedup_key( $url, $media );
+			return $this->lcp_preload()->get_preload_dedup_key( $url, $media );
 		}
 
 		/**
@@ -9394,22 +7527,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $buffer  The HTML buffer.
 		 * @param string $lcp_url The detected LCP image URL.
 		 * @return bool True when an img matches the LCP URL.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::buffer_has_matching_img}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function buffer_has_matching_img( string $buffer, string $lcp_url ): bool {
-			if ( '' === $lcp_url || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
-				return false;
-			}
-			try {
-				$tags = new \WP_HTML_Tag_Processor( $buffer );
-				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
-						return true;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				return false;
-			}
-			return false;
+			return $this->lcp_preload()->buffer_has_matching_img( $buffer, $lcp_url );
 		}
 
 		/**
@@ -9439,102 +7562,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *                             (same-origin guarded OD/stored/heuristic
 		 *                             chain), matching every other emission path.
 		 * @return string The buffer with at most one added preload link.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::maybe_inject_css_hero_preload}.
+		 *
+		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function maybe_inject_css_hero_preload( string $buffer, ?string $lcp_url = null ): string {
-			$image_optimisation = $this->options['image_optimisation'] ?? array();
-			if ( empty( $image_optimisation['cssHeroPreload'] ) ) {
-				return $buffer;
-			}
-			if ( null === $lcp_url ) {
-				try {
-					if ( method_exists( $this, 'resolve_auto_lcp_url' ) ) {
-						$lcp_url = $this->resolve_auto_lcp_url( $buffer );
-					} else {
-						$lcp_url = $this->get_current_lcp_url();
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $buffer;
-				}
-			}
-			if ( empty( $lcp_url ) ) {
-				return $buffer;
-			}
-			// Allowed-origin parity (issue #1312): a caller-passed legacy URL
-			// that bypassed resolve_auto_lcp_url() must still prove itself an
-			// image on an allowed origin (same-origin or configured CDN).
-			try {
-				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
-					return $buffer;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $buffer;
-			}
-			if ( $this->buffer_has_matching_img( $buffer, $lcp_url ) ) {
-				return $buffer;
-			}
-			$hero_url = $this->get_css_hero_url_from_buffer( $buffer );
-			// Hoisted computed-URL fetch (issue #1312 review): the filter fires
-			// at most once per call — reused for both the empty-scan fallback
-			// and the mismatch-override check below instead of invoking
-			// side-effecting callbacks twice.
-			$computed_url = null;
-			if ( '' === $hero_url ) {
-				try {
-					$computed_url = $this->get_computed_css_hero_url( $buffer );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$computed_url = '';
-				}
-				if ( is_string( $computed_url ) ) {
-					$hero_url = $computed_url;
-				}
-			}
-			if ( '' === $hero_url ) {
-				return $buffer;
-			}
-			if ( $this->normalize_image_url( $hero_url ) !== $this->normalize_image_url( $lcp_url ) ) {
-				// Computed server-side context wins when it is itself an allowed
-				// hero: prefer it over a mismatched buffer scan so stylesheet
-				// heroes missed by the scan still preload exactly once.
-				if ( null === $computed_url ) {
-					try {
-						$computed_url = $this->get_computed_css_hero_url( $buffer );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$computed_url = '';
-					}
-				}
-				$computed = is_string( $computed_url ) ? $computed_url : '';
-				if ( '' === $computed || $this->normalize_image_url( $computed ) !== $this->normalize_image_url( $lcp_url ) ) {
-					return $buffer;
-				}
-			}
-			// Centralised single-preload guard: skip when any emitter already
-			// claimed this hero (any media) or the buffer already carries it.
-			// The claim also records this emission so the img companion path
-			// cannot double-emit for the same hero.
-			if ( ! $this->claim_hero_preload_slot( $lcp_url, '', $buffer ) ) {
-				return $buffer;
-			}
-			// Breakpoint-first srcset (issue #1429): CSS-background heroes
-			// share the OD/RUM responsive candidate so the preload carries
-			// matching imagesrcset+imagesizes when the measured element
-			// provides them; otherwise a plain href preload emits.
-			$breakpoint_css = $this->get_breakpoint_srcset_for_url( $lcp_url, $buffer );
-			$link_tag       = Util::get_preload_link( $lcp_url, 'preload', 'image', false, Util::get_image_mime_type( $lcp_url ), '', 'high', $breakpoint_css['srcset'], $breakpoint_css['sizes'] );
-			if ( '' === $link_tag ) {
-				// Link generation failed after the slot claim: release the claim
-				// so the sibling emitter may still emit (issue #1312 review).
-				self::release_hero_preload_slot( $lcp_url, '' );
-				return $buffer;
-			}
-			$head_pos = stripos( $buffer, '</head>' );
-			if ( false !== $head_pos ) {
-				return substr( $buffer, 0, $head_pos ) . $link_tag . chr( 10 ) . substr( $buffer, $head_pos );
-			}
-			return $link_tag . chr( 10 ) . $buffer;
+			return $this->lcp_preload()->maybe_inject_css_hero_preload( $buffer, $lcp_url );
 		}
 
 		/**

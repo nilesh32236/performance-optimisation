@@ -140,6 +140,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Http'                   => 'class-http.php',
 				'Image_Optimisation'     => 'class-image-optimisation.php',
 				'Img_Converter'          => 'class-img-converter.php',
+				'Lcp_Preload'            => 'class-lcp-preload.php',
 				'LiteSpeed_Crawler'      => 'class-litespeed-crawler.php',
 				'LiteSpeed_ESI'          => 'class-litespeed-esi.php',
 				'Loader_Map'             => 'class-loader-map.php',

@@ -69,6 +69,7 @@ function wppo_known_classes(): array {
 		'Http',
 		'Image_Optimisation',
 		'Img_Converter',
+		'Lcp_Preload',
 		'LiteSpeed_Crawler',
 		'LiteSpeed_ESI',
 		'LiteSpeed_Integration',
