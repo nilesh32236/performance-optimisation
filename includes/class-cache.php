@@ -1983,9 +1983,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Audit note: only `Cache_Invalidator` calls this (no other runtime or test
 		 * caller exists). Do not call from new code; the public visibility
-		 * exists solely for the extraction bridge.
+		 * exists solely for the extraction bridge. A `_doing_it_wrong()` guard
+		 * is deliberately omitted: it would fire on the legitimate internal
+		 * caller every request.
 		 *
 		 * @internal
+		 * @access private
 		 * @since NEXT
 		 * @return object|false|null The filesystem object, or false on init failure.
 		 */
@@ -1998,9 +2001,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Audit note: only `Cache_Invalidator` calls this (no other runtime or test
 		 * caller exists). Do not call from new code; the public visibility
-		 * exists solely for the extraction bridge.
+		 * exists solely for the extraction bridge. A `_doing_it_wrong()` guard
+		 * is deliberately omitted: it would fire on the legitimate internal
+		 * caller every request.
 		 *
 		 * @internal
+		 * @access private
 		 * @since NEXT
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
@@ -2014,9 +2020,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Audit note: only `Cache_Invalidator` calls this (no other runtime or test
 		 * caller exists). Do not call from new code; the public visibility
-		 * exists solely for the extraction bridge.
+		 * exists solely for the extraction bridge. A `_doing_it_wrong()` guard
+		 * is deliberately omitted: it would fire on the legitimate internal
+		 * caller every request.
 		 *
 		 * @internal
+		 * @access private
 		 * @since NEXT
 		 * @param string|null $url_path The URL path (optional).
 		 * @param string      $type     The file type (default: 'html').
@@ -2031,9 +2040,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Audit note: only `Cache_Invalidator` calls this (no other runtime or test
 		 * caller exists). Do not call from new code; the public visibility
-		 * exists solely for the extraction bridge.
+		 * exists solely for the extraction bridge. A `_doing_it_wrong()` guard
+		 * is deliberately omitted: it would fire on the legitimate internal
+		 * caller every request.
 		 *
 		 * @internal
+		 * @access private
 		 * @since NEXT
 		 * @param string $raw_input The hostile input that was rejected.
 		 * @return void
@@ -2045,11 +2057,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Cache root directory for the invalidation/purge service (ARCH-007 internal bridge).
 		 *
+		 * Direct raw read is intentional: no accessor exists for this property,
+		 * so the bridge returns the canonical single-source-of-truth value.
+		 * If an accessor is introduced later, route this bridge through it.
 		 * Audit note: only `Cache_Invalidator` calls this (no other runtime or test
 		 * caller exists). Do not call from new code; the public visibility
-		 * exists solely for the extraction bridge.
+		 * exists solely for the extraction bridge. A `_doing_it_wrong()` guard
+		 * is deliberately omitted: it would fire on the legitimate internal
+		 * caller every request.
 		 *
 		 * @internal
+		 * @access private
 		 * @since NEXT
 		 * @return string Cache root directory.
 		 */
@@ -2060,11 +2078,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Cache domain for the invalidation/purge service (ARCH-007 internal bridge).
 		 *
+		 * Direct raw read is intentional: no accessor exists for this property,
+		 * so the bridge returns the canonical single-source-of-truth value.
+		 * If an accessor is introduced later, route this bridge through it.
 		 * Audit note: only `Cache_Invalidator` calls this (no other runtime or test
 		 * caller exists). Do not call from new code; the public visibility
-		 * exists solely for the extraction bridge.
+		 * exists solely for the extraction bridge. A `_doing_it_wrong()` guard
+		 * is deliberately omitted: it would fire on the legitimate internal
+		 * caller every request.
 		 *
 		 * @internal
+		 * @access private
 		 * @since NEXT
 		 * @return string Cache domain.
 		 */
@@ -2075,11 +2099,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Cache root URL for the invalidation/purge service (ARCH-007 internal bridge).
 		 *
+		 * Direct raw read is intentional: no accessor exists for this property,
+		 * so the bridge returns the canonical single-source-of-truth value.
+		 * If an accessor is introduced later, route this bridge through it.
 		 * Audit note: only `Cache_Invalidator` calls this (no other runtime or test
 		 * caller exists). Do not call from new code; the public visibility
-		 * exists solely for the extraction bridge.
+		 * exists solely for the extraction bridge. A `_doing_it_wrong()` guard
+		 * is deliberately omitted: it would fire on the legitimate internal
+		 * caller every request.
 		 *
 		 * @internal
+		 * @access private
 		 * @since NEXT
 		 * @return string Cache root URL.
 		 */
@@ -2092,9 +2122,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Audit note: only `Cache_Invalidator` calls this (no other runtime or test
 		 * caller exists). Do not call from new code; the public visibility
-		 * exists solely for the extraction bridge.
+		 * exists solely for the extraction bridge. A `_doing_it_wrong()` guard
+		 * is deliberately omitted: it would fire on the legitimate internal
+		 * caller every request.
 		 *
 		 * @internal
+		 * @access private
 		 * @since NEXT
 		 * @return string Cache directory slug (`CACHE_DIR`).
 		 */

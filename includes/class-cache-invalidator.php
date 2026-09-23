@@ -21,7 +21,10 @@
  * `template_redirect`/1) stays byte-identical with zero caller migration.
  * Service methods are public (widened from private, ARCH-005/006 precedent)
  * so the private `Cache` proxies can delegate; `Cache` keeps the original
- * visibility contract.
+ * visibility contract. The class is final and the widened helpers
+ * (`delete_*`, `retain_*`, `restore_*`, `snapshot_*`, `stage_*`,
+ * `is_min_*`, `log_*`) are `@internal` — not public API. Always call via
+ * the `Cache` facade proxies, never directly on this service.
  * Collaboration: buffer/storage policy (`is_path_contained()`,
  * `safe_path_for_url()` via `get_file_path()`, directory/file primitives,
  * stats) stays on `Cache` and is reached through the `@internal`
@@ -661,6 +664,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * non CSS/JS paths, on containment failure, or when the base file
 		 * is missing/empty. Never throws.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string $file_path The derived file about to be deleted.
 		 * @return void
 		 *
@@ -978,6 +985,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * miss storm writes one activity-log row per day total (not one per
 		 * directory). Fail-open: logging failures never affect serving.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @return void
 		 *
 		 * @since 2.2.0
@@ -1000,6 +1011,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		/**
 		 * Delete used-CSS file for a specific file path.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string $file_path The used-css file path.
 		 * @return bool True if successful (or not exists), false otherwise.
 		 *
@@ -1012,6 +1027,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		/**
 		 * Delete the DONOTCACHEPAGE marker that lives beside a cached HTML file.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string $html_file_path The HTML cache file path whose directory holds the marker.
 		 * @return void
 		 *
@@ -1033,6 +1052,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * base plus `.gz`/`.br` sibling containment checks below are
 		 * defense-in-depth on resolved paths.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string $file_path The file path.
 		 * @return bool True if successful (or not exists), false otherwise.
 		 *
@@ -1075,6 +1098,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * path (e.g. `dirname()` of a choke-point result); the directory and
 		 * per-file containment checks below are defense-in-depth.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string $dir Directory to scan.
 		 * @return void
 		 * @since 1.9.0
@@ -1994,6 +2021,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		/**
 		 * Delete all cache files.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @return bool True if successful, false otherwise.
 		 *
 		 * @since 1.0.0
