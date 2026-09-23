@@ -37,8 +37,8 @@ class SettingsReadGuardTest extends \PHPUnit\Framework\TestCase {
 			'reason' => 'Null-distinguishing fresh-install check in maybe_seed_settings().',
 		),
 		'includes/class-settings-migrations.php' => array(
-			'count'  => 17,
-			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), migrate_ccss_max_size(), migrate_ccss_safelist(), migrate_safe_mode(), migrate_elementor_safe_mode(), migrate_image_alt_edge_defaults(), migrate_css_queue_defaults(), migrate_speculation_top_urls(), migrate_speculation_prerender_list(), migrate_preload_auto_defaults(), migrate_rum_sample_rate(), migrate_object_cache_outage_flag(), migrate_ai_speculation_autotune(), migrate_comment_image_hardening(), migrate_builder_watcher(), migrate_third_party_auto(), and migrate_ai_anomaly_v2() (ARCH-004 relocation from Main).',
+			'count'  => 19,
+			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), migrate_ccss_max_size(), migrate_ccss_safelist(), migrate_safe_mode(), migrate_elementor_safe_mode(), migrate_image_alt_edge_defaults(), migrate_css_queue_defaults(), migrate_speculation_top_urls(), migrate_speculation_prerender_list(), migrate_preload_auto_defaults(), migrate_rum_sample_rate(), migrate_object_cache_outage_flag(), migrate_ai_speculation_autotune(), migrate_comment_image_hardening(), migrate_builder_watcher(), migrate_third_party_auto(), and migrate_ai_anomaly_v2() (ARCH-004 relocation from Main), plus the save-failure verification re-reads in migrate_builder_watcher() and migrate_third_party_auto() (concurrent-backfill vs write-failure).',
 		),
 		'includes/class-sandbox-preview.php'     => array(
 			'count'  => 6,

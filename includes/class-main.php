@@ -1455,6 +1455,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `switch_to_blog()` re-resolution still applies because migrations only
 		 * ever sync the live request memo.
 		 *
+		 * Audit note: only `Settings_Migrations` calls this (verified by
+		 * searching callers — no other runtime or test caller exists). Do not
+		 * call from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
 		 * @internal
 		 * @since NEXT
 		 * @return array|null Reference to the options memo (null until resolved).
@@ -1498,6 +1503,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Backward-compatibility shim (ARCH-004): delegates to
 		 * {@see Settings_Migrations::migrate_block_assets_setting()} so reflective
 		 * callers observe identical behavior.
+		 *
+		 * Retention note: intentionally kept despite looking unreachable —
+		 * `tests/php/BlockAssetsMigrationTest.php` invokes it via reflection
+		 * and external reflective callers may do the same. Do not remove in
+		 * dead-code sweeps.
 		 *
 		 * @since NEXT Delegates to Settings_Migrations (ARCH-004).
 		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active.
