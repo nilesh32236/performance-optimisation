@@ -373,13 +373,274 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private Google_Fonts $google_fonts;
 
-		/**
-		 * Options for performance optimisation settings.
-		 *
-		 * @var   array
-		 * @since 1.0.0
-		 */
-		private array $options = array();
+	/**
+	 * Static default options, verbatim mirror of Util::get_default_settings().
+	 *
+	 * REF-007: the constructor used to resolve `Util::get_default_settings()`
+	 * eagerly at file load (`new Main()` runs before `plugins_loaded`). The
+	 * static portion of the defaults lives here so
+	 * {@see self::get_options()} can resolve lazily on first use without a
+	 * dependency cycle. Keep in sync with
+	 * {@see \PerformanceOptimise\Inc\Util::get_default_settings()} (the
+	 * canonical source of truth, #901) — any key added there must be added
+	 * here with the identical value.
+	 *
+	 * Two keys are dynamic and cannot live in a constant: they are stored
+	 * below with placeholder values and overlaid at runtime inside
+	 * {@see self::get_options()} with the exact expressions from
+	 * `Util::get_default_settings()`:
+	 * `file_optimisation.blockAssetsOnDemand` (`function_exists(
+	 * 'wp_load_classic_theme_block_styles_on_demand' )`) and
+	 * `od_integration.enabled` (`class_exists( 'OD_URL_Metric' ) ||
+	 * function_exists( 'od_get_url_metrics' )`).
+	 *
+	 * @since NEXT
+	 * @var   array
+	 */
+	private const DEFAULTS = array(
+		'cache_settings'        => array(
+			'enableLoggedInCache'       => false,
+			'loggedInCacheRoles'        => array(),
+			'enableCache'               => true,
+			'cacheLife'                 => 0,
+			'ttlOverrides'              => array(),
+			'wooSafeMode'               => true,
+			'stampedeGuard'             => true,
+			'stampedeLockTtl'           => 5,
+			'cacheMaxSizeMB'            => 512,
+			'cacheSizeWarnRatio'        => 0.8,
+			'cacheSizeEnforce'          => true,
+			'cacheMaxFiles'             => 5000,
+			'cacheRandomizedQueryGuard' => true,
+		),
+		'file_optimisation'     => array(
+			'enableServerRules'            => false,
+			'cdnURL'                       => '',
+			'cdnMapping'                   => array(),
+			'removeUnusedCSS'              => false,
+			'excludeUnusedCSS'             => '',
+			'unusedCSSSafelistExtra'       => '',
+			'unusedCSSRegressionGuard'     => true,
+			'unusedCSSRegressionThreshold' => 20,
+			'criticalCSS'                  => false,
+			'ccssMaxSize'                  => 20480,
+			'ccssSafelistExtra'            => '',
+			'ccssRumPriority'              => true,
+			'usedCssRumPriority'           => true,
+			'ccssQueueCap'                 => 5,
+			'ccssGenTimeout'               => 25,
+			'ccssInlineBudgetKb'           => 14,
+			'ccssCommerceExclude'          => true,
+			'ccssChecksumRegen'            => true,
+			'ccssExcludedPostTypes'        => "fl-builder-template\nelementor_library",
+			'ccssMaxRetries'               => 5,
+			'usedCssQueueCap'              => 50,
+			'ccssViewportVariants'         => false,
+			'usedCSSDeliveryMode'          => 'file',
+			'hostGoogleFontsLocally'       => false,
+			'blockAssetsOnDemand'          => false,
+			'loadAllCoreBlockAssets'       => false,
+			'delayJSDefaultStrategy'       => 'interaction',
+			'delayJSPreset'                => 'safe',
+			'delayJSINPPreset'             => false,
+			'delayJSExternalOnly'          => false,
+			'delayJSThirdParty'            => false,
+			'delayJSThirdPartyAuto'        => false,
+			'delayJSThirdPartyDenylist'    => '',
+			'delayJSThirdPartyAllowlist'   => '',
+			'delayJSBuilderPreset'         => true,
+			'delayJSCommercePreset'        => true,
+			'delayJSInteractionPreset'     => true,
+			'delayJSConsentPreset'         => false,
+			'delayJSAnalyticsPreset'       => false,
+			'delayJSGalleryPreset'         => false,
+			'delayJSJqueryPreset'          => false,
+			'delayJSExcludeUrls'           => '',
+			'usedCSSExcludeUrls'           => '',
+			'delayJSIdleList'              => '',
+			'delayJSViewportList'          => '',
+			'delayJSPriority'              => '',
+			'delayJSIdleTimeout'           => 3000,
+			'minifyHTML'                   => false,
+			'minifyJS'                     => false,
+			'minifyCSS'                    => false,
+			'deferJS'                      => false,
+			'delayJS'                      => false,
+			'delayJSSafeMode'              => true,
+			'safeMode'                     => false,
+			'elementorSafeMode'            => true,
+			'sandboxStaged'                => array(),
+			'combineCSS'                   => false,
+			'excludeJS'                    => '',
+			'excludeCSS'                   => '',
+			'excludeDeferJS'               => '',
+			'excludeDelayJS'               => '',
+			'excludeCombineCSS'            => '',
+			'minifyInlineCSS'              => false,
+			'minifyInlineJS'               => false,
+			'removeHTMLComments'           => true,
+			'disableRestApiLinks'          => false,
+			'disableRssFeeds'              => false,
+			'disableShortlinks'            => false,
+			'disableGeneratorTag'          => false,
+			'disableJQueryMigrate'         => false,
+			'disablePasswordStrength'      => false,
+			'disableSelfPingbacks'         => false,
+			'disableRSD'                   => false,
+			'disableWLWManifest'           => false,
+			'disableGlobalStyles'          => false,
+			'disableClassicThemeStyles'    => false,
+			'disableWooCartFragments'      => false,
+			'disableRecentCommentsStyle'   => false,
+			'disableCommentReply'          => false,
+			'disableOEmbedDiscovery'       => false,
+			'disableBlockWidgets'          => false,
+			'fontMetricFallback'           => false,
+			'fontSubset'                   => false,
+			'fontSubsetSubsets'            => 'latin',
+			'purgeFallbackEnabled'         => false,
+			'builderPurgeWatcher'          => true,
+			'builderPurgeDriftLog'         => true,
+		),
+		'preload_settings'      => array(
+			'enablePreloadCache'       => false,
+			'excludePreloadCache'      => "my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
+			'enableSpeculationRules'   => false,
+			'speculationMode'          => 'prefetch',
+			'speculationEagerness'     => 'conservative',
+			'speculationRumGating'     => true,
+			'speculationTopUrlsLimit'  => 2,
+			'speculationPrerenderList' => false,
+			'speculationExcludeUrls'   => '',
+			'speculationDocumentRules' => true,
+			'preloadSitemap'           => false,
+			'autoLcpPreload'           => false,
+			'autoDiscoverFonts'        => false,
+		),
+		'image_optimisation'    => array(
+			'lazyLoadImages'             => false,
+			'lazyLoadNative'             => true,
+			'placeholderType'            => 'svg',
+			'autoPreloadLCP'             => false,
+			'prioritizeLCPImages'        => false,
+			'lcpHeroPreload'             => true,
+			'lcp_guardrails'             => true,
+			'lcp_first_n'                => 3,
+			'clientSideMimeTypeOverride' => false,
+			'clientSideMimeTypes'        => array(),
+			'lazyLoadBackgroundImages'   => false,
+			'avifFirst'                  => true,
+			'smartQuality'               => true,
+			'skipSmallThresholdBytes'    => 5120,
+			'discardOversizedSibling'    => true,
+			'fieldLcpOverride'           => false,
+			'fieldLcpMinSamples'         => 20,
+			'cssHeroPreload'             => false,
+			'autoAltText'                => false,
+			'maxLongestEdgePx'           => 2560,
+			'lazyRenderBelowFold'        => false,
+			'lazyRenderExcludeBuilders'  => true,
+			'hardenCommentImages'        => true,
+			'occlusionFetchpriorityLow'  => false,
+		),
+		'performance_audit'     => array(
+			'pagespeed_api_key'     => '',
+			'high_value_urls'       => array(),
+			'auto_fix_enabled'      => false,
+			'server_timing_enabled' => false,
+			'auto_rescan'           => '',
+			'rum_enabled'           => false,
+			'rum_sample_rate'       => 100,
+		),
+		'database_cleanup'      => array(
+			'autoloadThreshold'  => 1024,
+			'purgeFailedActions' => false,
+		),
+		'object_cache'          => array(),
+		'litespeed_integration' => array(
+			'mode'                 => 'auto',
+			'enableNextGenRewrite' => false,
+			'enableBrotli'         => false,
+			'purgeSync'            => true,
+			'varyGroups'           => array(
+				'guest'  => false,
+				'mobile' => false,
+				'webp'   => false,
+			),
+			'crawler'              => array(
+				'concurrency'        => 2,
+				'loadLimit'          => 0,
+				'blacklistThreshold' => 3,
+			),
+			'esi'                  => array(
+				'enabled' => false,
+			),
+		),
+		'llms_txt'              => array(
+			'enabled' => false,
+			'source'  => 'both',
+		),
+		'od_integration'        => array(
+			'enabled' => false,
+		),
+		'bfcache'               => array(
+			'enabled' => false,
+		),
+		'perf_translations'     => array(
+			'enabled' => false,
+		),
+		'ai_adaptive'           => array(
+			'enabled'                       => false,
+			'use_wp_ai_client'              => false,
+			'field_lcp_min_samples'         => 20,
+			'dismissed_suggestions'         => array(),
+			'anomaly_cooldown_days'         => 7,
+			'anomaly_min_samples'           => 10,
+			'css_refresh_on_lcp_regression' => false,
+			'css_refresh_cooldown_days'     => 7,
+			'speculation_autotune_enabled'  => false,
+			'speculation_min_samples'       => 20,
+			'speculation_max_urls'          => 5,
+			'anomaly_tolerance_pct'         => 5.0,
+			'anomaly_tolerance_abs'         => 0.01,
+			'anomaly_persistence_windows'   => 3,
+			'anomaly_p75_min_samples'       => 10,
+			'anomaly_band_window'           => 10,
+			'anomaly_recovery_days'         => 3,
+			'deploy_notes'                  => array(),
+		),
+		'edge_cache'            => array(
+			'enabled' => false,
+		),
+	);
+
+	/**
+	 * Options for performance optimisation settings.
+	 *
+	 * REF-007: lazily resolved by {@see self::get_options()} on first use
+	 * instead of eagerly in the constructor. Null until the first read;
+	 * direct reads remain valid once resolved (the constructor resolves
+	 * once for its collaborators), but new code should prefer the accessor
+	 * so `switch_to_blog()` re-resolution stays automatic.
+	 *
+	 * @var   array|null
+	 * @since 1.0.0
+	 */
+	private ?array $options = null;
+
+	/**
+	 * Blog ID the memoized `$options` were resolved for.
+	 *
+	 * Null until the first resolution (or when `$options` was injected
+	 * directly, e.g. in tests — adopted on the next accessor read). A
+	 * mismatch triggers re-resolution so multisite `switch_to_blog()`
+	 * contexts never reuse another site's snapshot; the underlying
+	 * `Settings_Store` memo is blog-keyed for the same reason.
+	 *
+	 * @var   int|null
+	 * @since NEXT
+	 */
+	private ?int $options_blog_id = null;
 
 		/**
 		 * Timestamp (microtime) when the front-end template render started.
@@ -446,9 +707,333 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return void
 		 */
-		public static function reset_instance(): void {
-			self::$instance = null;
+	public static function reset_instance(): void {
+		self::$instance = null;
+	}
+
+	/**
+	 * Get the resolved plugin options (lazy).
+	 *
+	 * REF-007: resolution (stored `wppo_settings` merged over
+	 * {@see self::DEFAULTS} plus the historical in-memory backfills) runs
+	 * here on first use instead of in the constructor, so requests that
+	 * never read options (e.g. `DONOTCACHEPAGE`/REST/CLI paths reaching
+	 * only hook registration) skip the `get_option()` round-trip and the
+	 * multi-pass backfill. The result is memoized per blog ID: a
+	 * `switch_to_blog()` mismatch re-resolves automatically. Byte-identical
+	 * to the former eager constructor snapshot on every path (defaults,
+	 * backfills, `wppo_settings` filter flow, multisite).
+	 *
+	 * The constructor calls this once for its collaborators
+	 * (`Image_Optimisation`, `Google_Fonts`, `Hook_Registry`,
+	 * `Core_Tweaks`), which provably need a resolved snapshot at
+	 * registration time — that single call is the only eager resolution
+	 * left, and `new Main()` at file load is unchanged (no lifecycle
+	 * change).
+	 *
+	 * @since NEXT
+	 * @return array Resolved plugin options.
+	 */
+	public function get_options(): array {
+		try {
+			$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			$blog_id = 0;
 		}
+		if ( null !== $this->options && null === $this->options_blog_id ) {
+			// Resolved snapshot injected directly (tests/back-compat):
+			// adopt the current blog tag instead of re-resolving.
+			$this->options_blog_id = $blog_id;
+			return $this->options;
+		}
+		if ( null === $this->options || $blog_id !== $this->options_blog_id ) {
+			$options = self::DEFAULTS;
+			// Runtime overlay for the dynamic defaults that cannot live in
+			// a constant — verbatim expressions from
+			// Util::get_default_settings().
+			$options['file_optimisation']['blockAssetsOnDemand'] = function_exists( 'wp_load_classic_theme_block_styles_on_demand' );
+			$options['od_integration']['enabled']                = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+			$stored = Util::get_settings();
+			if ( ! empty( $stored ) ) {
+				$options = $stored;
+			}
+			// In-memory backfills below: verbatim relocation of the former
+			// constructor block. Existing installs whose stored settings
+			// predate a key inherit the default in-memory here (no database
+			// write on front-end requests); persisted values are backfilled
+			// once by the maybe_migrate_*() routines on admin_init.
+			// WooCommerce safe mode (issue #1383): defensive in-memory parity
+			// with Util::get_default_settings() (wooSafeMode defaults to on).
+			if ( ! isset( $options['cache_settings'] ) || ! is_array( $options['cache_settings'] ) ) {
+				$options['cache_settings'] = array();
+			}
+			if ( ! isset( $options['cache_settings']['wooSafeMode'] ) ) {
+				$options['cache_settings']['wooSafeMode'] = true;
+			}
+			// WP 6.9+ loads core block assets on demand in classic themes by default.
+			if ( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) ) {
+				if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
+					$options['file_optimisation'] = array();
+				}
+				if ( ! isset( $options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+					$options['file_optimisation']['blockAssetsOnDemand'] = true;
+				}
+			}
+			// Native lazy loading is the default path.
+			if ( ! isset( $options['image_optimisation'] ) || ! is_array( $options['image_optimisation'] ) ) {
+				$options['image_optimisation'] = array();
+			}
+			if ( ! isset( $options['image_optimisation']['lazyLoadNative'] ) ) {
+				$options['image_optimisation']['lazyLoadNative'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['lazyLoadImages'] ) ) {
+				$options['image_optimisation']['lazyLoadImages'] = false;
+			}
+			if ( ! isset( $options['image_optimisation']['avifFirst'] ) ) {
+				$options['image_optimisation']['avifFirst'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['smartQuality'] ) ) {
+				$options['image_optimisation']['smartQuality'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['skipSmallThresholdBytes'] ) ) {
+				$options['image_optimisation']['skipSmallThresholdBytes'] = 5120;
+			}
+			if ( ! isset( $options['image_optimisation']['discardOversizedSibling'] ) ) {
+				$options['image_optimisation']['discardOversizedSibling'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['lcpHeroPreload'] ) ) {
+				$options['image_optimisation']['lcpHeroPreload'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['lcp_guardrails'] ) ) {
+				$options['image_optimisation']['lcp_guardrails'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['lcp_first_n'] ) ) {
+				$options['image_optimisation']['lcp_first_n'] = 3;
+			}
+			if ( ! isset( $options['image_optimisation']['autoAltText'] ) ) {
+				$options['image_optimisation']['autoAltText'] = false;
+			}
+			if ( ! isset( $options['image_optimisation']['maxLongestEdgePx'] ) ) {
+				$options['image_optimisation']['maxLongestEdgePx'] = 2560;
+			}
+			if ( ! isset( $options['image_optimisation']['lazyRenderBelowFold'] ) ) {
+				$options['image_optimisation']['lazyRenderBelowFold'] = false;
+			}
+			if ( ! isset( $options['image_optimisation']['lazyRenderExcludeBuilders'] ) ) {
+				$options['image_optimisation']['lazyRenderExcludeBuilders'] = true;
+			}
+			// Comment-image hardening (issue #1271).
+			if ( ! isset( $options['image_optimisation']['hardenCommentImages'] ) ) {
+				$options['image_optimisation']['hardenCommentImages'] = true;
+			}
+			// Occlusion-aware fetchpriority=low (issue #1426).
+			if ( ! isset( $options['image_optimisation']['occlusionFetchpriorityLow'] ) ) {
+				$options['image_optimisation']['occlusionFetchpriorityLow'] = false;
+			}
+			if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
+				$options['file_optimisation'] = array();
+			}
+			if ( ! isset( $options['file_optimisation']['delayJSSafeMode'] ) ) {
+				$options['file_optimisation']['delayJSSafeMode'] = true;
+			}
+			// Auto third-party delay (issue #1314).
+			if ( ! isset( $options['file_optimisation']['delayJSThirdPartyAuto'] ) ) {
+				$options['file_optimisation']['delayJSThirdPartyAuto'] = false;
+			}
+			// One-click Delay-JS preset level (issue #1385).
+			if ( ! isset( $options['file_optimisation']['delayJSPreset'] ) || ! in_array( strtolower( trim( (string) $options['file_optimisation']['delayJSPreset'] ) ), array( 'safe', 'balanced', 'aggressive' ), true ) ) {
+				$options['file_optimisation']['delayJSPreset'] = 'safe';
+			}
+			// Unified safe-mode kill switch (issue #1098).
+			if ( ! isset( $options['file_optimisation']['safeMode'] ) ) {
+				$options['file_optimisation']['safeMode'] = false;
+			}
+			// Elementor-safe mode (issue #1259).
+			if ( ! isset( $options['file_optimisation']['elementorSafeMode'] ) ) {
+				$options['file_optimisation']['elementorSafeMode'] = true;
+			}
+			// Sandbox preview staged values (issue #1163).
+			if ( ! isset( $options['file_optimisation']['sandboxStaged'] ) || ! is_array( $options['file_optimisation']['sandboxStaged'] ) ) {
+				$options['file_optimisation']['sandboxStaged'] = array();
+			}
+			// Font subsetting opt-in (issue #1145).
+			if ( ! isset( $options['file_optimisation']['fontSubset'] ) ) {
+				$options['file_optimisation']['fontSubset'] = false;
+			}
+			if ( ! isset( $options['file_optimisation']['fontSubsetSubsets'] ) ) {
+				$options['file_optimisation']['fontSubsetSubsets'] = 'latin';
+			}
+			// Builder CSS drift purge watcher (issue #1288).
+			if ( ! isset( $options['file_optimisation']['builderPurgeWatcher'] ) ) {
+				$options['file_optimisation']['builderPurgeWatcher'] = true;
+			}
+			if ( ! isset( $options['file_optimisation']['builderPurgeDriftLog'] ) ) {
+				$options['file_optimisation']['builderPurgeDriftLog'] = true;
+			}
+			// Speculation-rules backfills (issues #1061, #1183, #1237, #1215).
+			if ( ! isset( $options['preload_settings'] ) || ! is_array( $options['preload_settings'] ) ) {
+				$options['preload_settings'] = array();
+			}
+			if ( ! isset( $options['preload_settings']['speculationRumGating'] ) ) {
+				$options['preload_settings']['speculationRumGating'] = true;
+			}
+			if ( ! isset( $options['preload_settings']['speculationTopUrlsLimit'] ) ) {
+				$options['preload_settings']['speculationTopUrlsLimit'] = 2;
+			}
+			if ( ! isset( $options['preload_settings']['speculationPrerenderList'] ) ) {
+				$options['preload_settings']['speculationPrerenderList'] = false;
+			}
+			if ( ! isset( $options['preload_settings']['enableSpeculationRules'] ) ) {
+				$options['preload_settings']['enableSpeculationRules'] = false;
+			}
+			if ( ! isset( $options['preload_settings']['speculationMode'] ) ) {
+				$options['preload_settings']['speculationMode'] = 'prefetch';
+			}
+			if ( ! isset( $options['preload_settings']['speculationEagerness'] ) ) {
+				$options['preload_settings']['speculationEagerness'] = 'conservative';
+			}
+			if ( ! isset( $options['preload_settings']['speculationExcludeUrls'] ) ) {
+				$options['preload_settings']['speculationExcludeUrls'] = '';
+			}
+			if ( ! isset( $options['preload_settings']['speculationDocumentRules'] ) ) {
+				$options['preload_settings']['speculationDocumentRules'] = true;
+			}
+			// Automatic LCP hero preload + automatic font discovery (issue #1216).
+			if ( ! isset( $options['preload_settings']['autoLcpPreload'] ) ) {
+				$options['preload_settings']['autoLcpPreload'] = false;
+			}
+			if ( ! isset( $options['preload_settings']['autoDiscoverFonts'] ) ) {
+				$options['preload_settings']['autoDiscoverFonts'] = false;
+			}
+			if ( ! isset( $options['llms_txt'] ) || ! is_array( $options['llms_txt'] ) ) {
+				$options['llms_txt'] = array();
+			}
+			if ( ! isset( $options['llms_txt']['enabled'] ) ) {
+				$options['llms_txt']['enabled'] = false;
+			}
+			if ( ! isset( $options['llms_txt']['source'] ) ) {
+				$options['llms_txt']['source'] = 'both';
+			}
+			if ( ! isset( $options['od_integration'] ) || ! is_array( $options['od_integration'] ) ) {
+				$options['od_integration'] = array();
+			}
+			if ( ! isset( $options['od_integration']['enabled'] ) ) {
+				$options['od_integration']['enabled'] = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+			}
+			if ( ! isset( $options['bfcache'] ) || ! is_array( $options['bfcache'] ) ) {
+				$options['bfcache'] = array();
+			}
+			if ( ! isset( $options['bfcache']['enabled'] ) ) {
+				$options['bfcache']['enabled'] = false;
+			}
+			if ( ! isset( $options['perf_translations'] ) || ! is_array( $options['perf_translations'] ) ) {
+				$options['perf_translations'] = array();
+			}
+			if ( ! isset( $options['perf_translations']['enabled'] ) ) {
+				$options['perf_translations']['enabled'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive'] ) || ! is_array( $options['ai_adaptive'] ) ) {
+				$options['ai_adaptive'] = array();
+			}
+			if ( ! isset( $options['ai_adaptive']['enabled'] ) ) {
+				$options['ai_adaptive']['enabled'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive']['use_wp_ai_client'] ) ) {
+				$options['ai_adaptive']['use_wp_ai_client'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+				$options['ai_adaptive']['field_lcp_min_samples'] = 20;
+			}
+			if ( ! isset( $options['ai_adaptive']['dismissed_suggestions'] ) || ! is_array( $options['ai_adaptive']['dismissed_suggestions'] ) ) {
+				$options['ai_adaptive']['dismissed_suggestions'] = array();
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_cooldown_days'] ) ) {
+				$options['ai_adaptive']['anomaly_cooldown_days'] = 7;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_min_samples'] ) ) {
+				$options['ai_adaptive']['anomaly_min_samples'] = 10;
+			}
+			if ( ! isset( $options['ai_adaptive']['css_refresh_on_lcp_regression'] ) ) {
+				$options['ai_adaptive']['css_refresh_on_lcp_regression'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
+				$options['ai_adaptive']['css_refresh_cooldown_days'] = 7;
+			}
+			// RUM-segmented speculation auto-tune keys (issue #1425).
+			if ( ! isset( $options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
+				$options['ai_adaptive']['speculation_autotune_enabled'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive']['speculation_min_samples'] ) ) {
+				$options['ai_adaptive']['speculation_min_samples'] = 20;
+			}
+			if ( ! isset( $options['ai_adaptive']['speculation_max_urls'] ) ) {
+				$options['ai_adaptive']['speculation_max_urls'] = 5;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_tolerance_pct'] ) ) {
+				$options['ai_adaptive']['anomaly_tolerance_pct'] = 5.0;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_tolerance_abs'] ) ) {
+				$options['ai_adaptive']['anomaly_tolerance_abs'] = 0.01;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_persistence_windows'] ) ) {
+				$options['ai_adaptive']['anomaly_persistence_windows'] = 3;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_p75_min_samples'] ) ) {
+				$options['ai_adaptive']['anomaly_p75_min_samples'] = 10;
+			}
+			// Anomaly detector v2 keys (issue #1313).
+			if ( ! isset( $options['ai_adaptive']['anomaly_band_window'] ) ) {
+				$options['ai_adaptive']['anomaly_band_window'] = 10;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_recovery_days'] ) ) {
+				$options['ai_adaptive']['anomaly_recovery_days'] = 3;
+			}
+			if ( ! isset( $options['ai_adaptive']['deploy_notes'] ) || ! is_array( $options['ai_adaptive']['deploy_notes'] ) ) {
+				$options['ai_adaptive']['deploy_notes'] = array();
+			}
+			if ( ! isset( $options['edge_cache'] ) || ! is_array( $options['edge_cache'] ) ) {
+				$options['edge_cache'] = array();
+			}
+			if ( ! isset( $options['edge_cache']['enabled'] ) ) {
+				$options['edge_cache']['enabled'] = false;
+			}
+			// CCSS/used-CSS queue keys (issues #1038, #1164, #1235, #1388).
+			if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
+				$options['file_optimisation'] = array();
+			}
+			if ( ! isset( $options['file_optimisation']['ccssMaxSize'] ) ) {
+				$options['file_optimisation']['ccssMaxSize'] = 20480;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssSafelistExtra'] ) ) {
+				$options['file_optimisation']['ccssSafelistExtra'] = '';
+			}
+			if ( ! isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
+				$options['file_optimisation']['ccssQueueCap'] = 5;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssGenTimeout'] ) ) {
+				$options['file_optimisation']['ccssGenTimeout'] = 25;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssInlineBudgetKb'] ) ) {
+				$options['file_optimisation']['ccssInlineBudgetKb'] = 14;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssCommerceExclude'] ) ) {
+				$options['file_optimisation']['ccssCommerceExclude'] = true;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssChecksumRegen'] ) ) {
+				$options['file_optimisation']['ccssChecksumRegen'] = true;
+			}
+			if ( ! isset( $options['file_optimisation']['usedCssQueueCap'] ) ) {
+				$options['file_optimisation']['usedCssQueueCap'] = 50;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssViewportVariants'] ) ) {
+				$options['file_optimisation']['ccssViewportVariants'] = false;
+			}
+			$this->options         = $options;
+			$this->options_blog_id = $blog_id;
+		}
+		return $this->options ?? array();
+	}
 
 		/**
 		 * Create the static-cache collaborator with a test seam.
@@ -503,390 +1088,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// finding 4). get_settings() keeps a lazy backstop registration.
 			Util::register_settings_cache_hooks();
 
-			// Canonical defaults live in Util::get_default_settings() (single source of
-			// truth, #901). Previously duplicated here; kept in sync via this call.
-			$defaults      = Util::get_default_settings();
-			$stored        = Util::get_settings();
-			$this->options = ! empty( $stored ) ? $stored : $defaults;
-
-			// WooCommerce safe mode (issue #1383): defensive in-memory parity
-			// with Util::get_default_settings() (wooSafeMode defaults to on).
-			// No behavioral effect on its own — all safe-mode reads go through
-			// Util::is_woo_safe_mode_enabled() (absent=ON, fresh get_settings())
-			// and Cache keeps its own options copy; this only keeps direct
-			// $this->options['cache_settings'] reads consistent. In-memory only
-			// here (no front-end DB write); persisted via update_settings/REST.
-			// Multisite-safe: per-site wppo_settings only.
-			if ( ! isset( $this->options['cache_settings'] ) || ! is_array( $this->options['cache_settings'] ) ) {
-				$this->options['cache_settings'] = array();
-			}
-			if ( ! isset( $this->options['cache_settings']['wooSafeMode'] ) ) {
-				$this->options['cache_settings']['wooSafeMode'] = true;
-			}
-
-			// WP 6.9+ loads core block assets on demand in classic themes by default. Existing
-			// installs whose stored settings predate the `blockAssetsOnDemand` key inherit that
-			// default in-memory here (no database write on front-end requests); the persisted
-			// value is backfilled once by maybe_migrate_block_assets_setting() on admin_init.
-			if ( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) ) {
-				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-					$this->options['file_optimisation'] = array();
-				}
-				if ( ! isset( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
-					$this->options['file_optimisation']['blockAssetsOnDemand'] = true;
-				}
-			}
-
-			// Native lazy loading is the default path (loading="lazy" + decoding="async"
-			// emitted directly, core attributes respected). Existing installs whose stored
-			// settings predate the `lazyLoadNative` key inherit the native default in-memory
-			// here so the JS data-src swap never runs for them; an explicit stored `false`
-			// (user revert to the legacy IntersectionObserver path) is preserved untouched.
-			if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
-				$this->options['image_optimisation'] = array();
-			}
-			if ( ! isset( $this->options['image_optimisation']['lazyLoadNative'] ) ) {
-				$this->options['image_optimisation']['lazyLoadNative'] = true;
-			}
-			if ( ! isset( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
-				$this->options['image_optimisation']['lazyLoadImages'] = false;
-			}
-			if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
-				$this->options['image_optimisation']['avifFirst'] = true;
-			}
-			if ( ! isset( $this->options['image_optimisation']['smartQuality'] ) ) {
-				$this->options['image_optimisation']['smartQuality'] = true;
-			}
-			if ( ! isset( $this->options['image_optimisation']['skipSmallThresholdBytes'] ) ) {
-				$this->options['image_optimisation']['skipSmallThresholdBytes'] = 5120;
-			}
-			if ( ! isset( $this->options['image_optimisation']['discardOversizedSibling'] ) ) {
-				$this->options['image_optimisation']['discardOversizedSibling'] = true;
-			}
-			if ( ! isset( $this->options['image_optimisation']['lcpHeroPreload'] ) ) {
-				$this->options['image_optimisation']['lcpHeroPreload'] = true;
-			}
-			if ( ! isset( $this->options['image_optimisation']['lcp_guardrails'] ) ) {
-				$this->options['image_optimisation']['lcp_guardrails'] = true;
-			}
-			if ( ! isset( $this->options['image_optimisation']['lcp_first_n'] ) ) {
-				$this->options['image_optimisation']['lcp_first_n'] = 3;
-			}
-			if ( ! isset( $this->options['image_optimisation']['autoAltText'] ) ) {
-				$this->options['image_optimisation']['autoAltText'] = false;
-			}
-			if ( ! isset( $this->options['image_optimisation']['maxLongestEdgePx'] ) ) {
-				$this->options['image_optimisation']['maxLongestEdgePx'] = 2560;
-			}
-			if ( ! isset( $this->options['image_optimisation']['lazyRenderBelowFold'] ) ) {
-				$this->options['image_optimisation']['lazyRenderBelowFold'] = false;
-			}
-			if ( ! isset( $this->options['image_optimisation']['lazyRenderExcludeBuilders'] ) ) {
-				$this->options['image_optimisation']['lazyRenderExcludeBuilders'] = true;
-			}
-			// Comment-image hardening (issue #1271): additive key, defaults to
-			// on so hostile comment markup (img onerror, picture source,
-			// inline on* handlers, scriptable URLs) is stripped before
-			// next-gen/lazy rewriting. In-memory only here (no front-end DB
-			// write); persisted via maybe_migrate_comment_image_hardening().
-			if ( ! isset( $this->options['image_optimisation']['hardenCommentImages'] ) ) {
-				$this->options['image_optimisation']['hardenCommentImages'] = true;
-			}
-			// Occlusion-aware fetchpriority=low (issue #1426): additive key,
-			// defaults to off so existing installs keep current behaviour.
-			// In-memory only here (no front-end DB write); persisted via
-			// update_settings/REST. Multisite-safe: per-site wppo_settings.
-			if ( ! isset( $this->options['image_optimisation']['occlusionFetchpriorityLow'] ) ) {
-				$this->options['image_optimisation']['occlusionFetchpriorityLow'] = false;
-			}
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			if ( ! isset( $this->options['file_optimisation']['delayJSSafeMode'] ) ) {
-				$this->options['file_optimisation']['delayJSSafeMode'] = true;
-			}
-			// Auto third-party delay (issue #1314): additive key, defaults to
-			// off so existing installs keep current behaviour. In-memory only
-			// here (no front-end DB write); persisted via update_settings/REST
-			// and backfilled once by maybe_migrate_third_party_auto().
-			// Multisite-safe: per-site wppo_settings only.
-			if ( ! isset( $this->options['file_optimisation']['delayJSThirdPartyAuto'] ) ) {
-				$this->options['file_optimisation']['delayJSThirdPartyAuto'] = false;
-			}
-			// One-click Delay-JS preset level (issue #1385): additive key,
-			// defaults to safe (maximum exclusions) so existing installs keep
-			// the safest behaviour. In-memory only here (no front-end DB
-			// write); persisted via update_settings/REST and backfilled once
-			// by maybe_migrate_third_party_auto(). Multisite-safe: per-site
-			// wppo_settings only.
-			if ( ! isset( $this->options['file_optimisation']['delayJSPreset'] ) || ! in_array( strtolower( trim( (string) $this->options['file_optimisation']['delayJSPreset'] ) ), array( 'safe', 'balanced', 'aggressive' ), true ) ) {
-				$this->options['file_optimisation']['delayJSPreset'] = 'safe';
-			}
-			// Unified safe-mode kill switch (issue #1098): additive key, defaults
-			// to off so existing installs keep current behaviour. In-memory only
-			// here (no front-end DB write); persisted via update_settings/REST.
-			if ( ! isset( $this->options['file_optimisation']['safeMode'] ) ) {
-				$this->options['file_optimisation']['safeMode'] = false;
-			}
-			// Elementor-safe mode (issue #1259): additive key, defaults to on
-			// (builder-proof by default) so combine/inline step aside on
-			// Elementor-built pages. In-memory only here (no front-end DB
-			// write); persisted via update_settings/REST. Multisite-safe:
-			// per-site wppo_settings only.
-			if ( ! isset( $this->options['file_optimisation']['elementorSafeMode'] ) ) {
-				$this->options['file_optimisation']['elementorSafeMode'] = true;
-			}
-			// Sandbox preview staged values (issue #1163): additive key,
-			// defaults to empty so existing installs keep current behaviour.
-			// In-memory only here (no front-end DB write).
-			if ( ! isset( $this->options['file_optimisation']['sandboxStaged'] ) || ! is_array( $this->options['file_optimisation']['sandboxStaged'] ) ) {
-				$this->options['file_optimisation']['sandboxStaged'] = array();
-			}
-			// Font subsetting opt-in (issue #1145): additive keys, off by
-			// default so existing installs keep full-unicode behavior.
-			// In-memory only here (no front-end DB write).
-			if ( ! isset( $this->options['file_optimisation']['fontSubset'] ) ) {
-				$this->options['file_optimisation']['fontSubset'] = false;
-			}
-			if ( ! isset( $this->options['file_optimisation']['fontSubsetSubsets'] ) ) {
-				$this->options['file_optimisation']['fontSubsetSubsets'] = 'latin';
-			}
-			// Builder CSS drift purge watcher (issue #1288): additive keys,
-			// default on so existing installs keep the current self-heal
-			// behaviour. In-memory only here (no front-end DB write);
-			// persisted by maybe_migrate_builder_watcher() on admin_init.
-			if ( ! isset( $this->options['file_optimisation']['builderPurgeWatcher'] ) ) {
-				$this->options['file_optimisation']['builderPurgeWatcher'] = true;
-			}
-			if ( ! isset( $this->options['file_optimisation']['builderPurgeDriftLog'] ) ) {
-				$this->options['file_optimisation']['builderPurgeDriftLog'] = true;
-			}
-
-			// Existing installs whose stored settings predate the
-			// speculationRumGating key (issue #1061) inherit the enabled
-			// default in-memory here (no database write on front-end
-			// requests). Multisite-safe: per-site wppo_settings only.
-			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
-				$this->options['preload_settings'] = array();
-			}
-			if ( ! isset( $this->options['preload_settings']['speculationRumGating'] ) ) {
-				$this->options['preload_settings']['speculationRumGating'] = true;
-			}
-			// Existing installs whose stored settings predate the
-			// RUM-weighted top-URL cap (issue #1183) inherit the 2-URL
-			// default in-memory here (no database write on front-end
-			// requests). Multisite-safe: per-site wppo_settings only.
-			if ( ! isset( $this->options['preload_settings']['speculationTopUrlsLimit'] ) ) {
-				$this->options['preload_settings']['speculationTopUrlsLimit'] = 2;
-			}
-			// Existing installs whose stored settings predate the
-			// high-value prerender list toggle (issue #1237) inherit the
-			// off default in-memory here (no database write on front-end
-			// requests). Multisite-safe: per-site wppo_settings only.
-			if ( ! isset( $this->options['preload_settings']['speculationPrerenderList'] ) ) {
-				$this->options['preload_settings']['speculationPrerenderList'] = false;
-			}
-			// Existing installs whose stored settings predate the
-			// speculation-rules eagerness upgrade (issue #1215) inherit the
-			// conservative defaults in-memory here (prefetch + conservative,
-			// prerender stays opt-in; no database write on front-end
-			// requests). Multisite-safe: per-site wppo_settings only.
-			if ( ! isset( $this->options['preload_settings']['enableSpeculationRules'] ) ) {
-				$this->options['preload_settings']['enableSpeculationRules'] = false;
-			}
-			if ( ! isset( $this->options['preload_settings']['speculationMode'] ) ) {
-				$this->options['preload_settings']['speculationMode'] = 'prefetch';
-			}
-			if ( ! isset( $this->options['preload_settings']['speculationEagerness'] ) ) {
-				$this->options['preload_settings']['speculationEagerness'] = 'conservative';
-			}
-			if ( ! isset( $this->options['preload_settings']['speculationExcludeUrls'] ) ) {
-				$this->options['preload_settings']['speculationExcludeUrls'] = '';
-			}
-			if ( ! isset( $this->options['preload_settings']['speculationDocumentRules'] ) ) {
-				$this->options['preload_settings']['speculationDocumentRules'] = true;
-			}
-			// Automatic LCP hero preload + automatic font discovery
-			// (issue #1216): additive keys, off by default so existing
-			// installs keep manual-only behaviour. In-memory only here
-			// (no front-end DB write); persisted via update_settings/REST
-			// and backfilled once by maybe_migrate_preload_auto_defaults().
-			if ( ! isset( $this->options['preload_settings']['autoLcpPreload'] ) ) {
-				$this->options['preload_settings']['autoLcpPreload'] = false;
-			}
-			if ( ! isset( $this->options['preload_settings']['autoDiscoverFonts'] ) ) {
-				$this->options['preload_settings']['autoDiscoverFonts'] = false;
-			}
-
-			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
-				$this->options['llms_txt'] = array();
-			}
-			if ( ! isset( $this->options['llms_txt']['enabled'] ) ) {
-				$this->options['llms_txt']['enabled'] = false;
-			}
-			if ( ! isset( $this->options['llms_txt']['source'] ) ) {
-				$this->options['llms_txt']['source'] = 'both';
-			}
-
-			if ( ! isset( $this->options['od_integration'] ) || ! is_array( $this->options['od_integration'] ) ) {
-				$this->options['od_integration'] = array();
-			}
-			if ( ! isset( $this->options['od_integration']['enabled'] ) ) {
-				$this->options['od_integration']['enabled'] = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
-			}
-
-			if ( ! isset( $this->options['bfcache'] ) || ! is_array( $this->options['bfcache'] ) ) {
-				$this->options['bfcache'] = array();
-			}
-			if ( ! isset( $this->options['bfcache']['enabled'] ) ) {
-				$this->options['bfcache']['enabled'] = false;
-			}
-
-			if ( ! isset( $this->options['perf_translations'] ) || ! is_array( $this->options['perf_translations'] ) ) {
-				$this->options['perf_translations'] = array();
-			}
-			if ( ! isset( $this->options['perf_translations']['enabled'] ) ) {
-				$this->options['perf_translations']['enabled'] = false;
-			}
-
-			if ( ! isset( $this->options['ai_adaptive'] ) || ! is_array( $this->options['ai_adaptive'] ) ) {
-				$this->options['ai_adaptive'] = array();
-			}
-			if ( ! isset( $this->options['ai_adaptive']['enabled'] ) ) {
-				$this->options['ai_adaptive']['enabled'] = false;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['use_wp_ai_client'] ) ) {
-				$this->options['ai_adaptive']['use_wp_ai_client'] = false;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['field_lcp_min_samples'] ) ) {
-				$this->options['ai_adaptive']['field_lcp_min_samples'] = 20;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['dismissed_suggestions'] ) || ! is_array( $this->options['ai_adaptive']['dismissed_suggestions'] ) ) {
-				$this->options['ai_adaptive']['dismissed_suggestions'] = array();
-			}
-			if ( ! isset( $this->options['ai_adaptive']['anomaly_cooldown_days'] ) ) {
-				$this->options['ai_adaptive']['anomaly_cooldown_days'] = 7;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['anomaly_min_samples'] ) ) {
-				$this->options['ai_adaptive']['anomaly_min_samples'] = 10;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['css_refresh_on_lcp_regression'] ) ) {
-				$this->options['ai_adaptive']['css_refresh_on_lcp_regression'] = false;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
-				$this->options['ai_adaptive']['css_refresh_cooldown_days'] = 7;
-			}
-			// Existing installs whose stored settings predate the RUM-segmented
-			// speculation auto-tune keys (issue #1425) inherit the opt-in-off
-			// defaults in-memory here (no database write on front-end requests);
-			// the persisted values are backfilled once by
-			// maybe_migrate_ai_speculation_autotune() on admin_init. Defaults
-			// keep current behaviour verbatim (auto-tune off, legacy
-			// conservative emission) until explicitly opted in.
-			if ( ! isset( $this->options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
-				$this->options['ai_adaptive']['speculation_autotune_enabled'] = false;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['speculation_min_samples'] ) ) {
-				$this->options['ai_adaptive']['speculation_min_samples'] = 20;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['speculation_max_urls'] ) ) {
-				$this->options['ai_adaptive']['speculation_max_urls'] = 5;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['anomaly_tolerance_pct'] ) ) {
-				$this->options['ai_adaptive']['anomaly_tolerance_pct'] = 5.0;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['anomaly_tolerance_abs'] ) ) {
-				$this->options['ai_adaptive']['anomaly_tolerance_abs'] = 0.01;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['anomaly_persistence_windows'] ) ) {
-				$this->options['ai_adaptive']['anomaly_persistence_windows'] = 3;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['anomaly_p75_min_samples'] ) ) {
-				$this->options['ai_adaptive']['anomaly_p75_min_samples'] = 10;
-			}
-			// Existing installs whose stored settings predate the anomaly
-			// detector v2 keys (issue #1313) inherit the defaults in-memory
-			// here (no database write on front-end requests); the persisted
-			// values are backfilled once by
-			// maybe_migrate_ai_anomaly_v2() on admin_init.
-			if ( ! isset( $this->options['ai_adaptive']['anomaly_band_window'] ) ) {
-				$this->options['ai_adaptive']['anomaly_band_window'] = 10;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['anomaly_recovery_days'] ) ) {
-				$this->options['ai_adaptive']['anomaly_recovery_days'] = 3;
-			}
-			if ( ! isset( $this->options['ai_adaptive']['deploy_notes'] ) || ! is_array( $this->options['ai_adaptive']['deploy_notes'] ) ) {
-				$this->options['ai_adaptive']['deploy_notes'] = array();
-			}
-
-			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
-				$this->options['edge_cache'] = array();
-			}
-			if ( ! isset( $this->options['edge_cache']['enabled'] ) ) {
-				$this->options['edge_cache']['enabled'] = false;
-			}
-
-			// Existing installs whose stored settings predate the ccssMaxSize
-			// key inherit the 20 KB default in-memory here (no database write
-			// on front-end requests); the persisted value is backfilled once
-			// by maybe_migrate_ccss_max_size() on admin_init.
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			if ( ! isset( $this->options['file_optimisation']['ccssMaxSize'] ) ) {
-				$this->options['file_optimisation']['ccssMaxSize'] = 20480;
-			}
-			// Existing installs whose stored settings predate the
-			// ccssSafelistExtra key (issue #1038) inherit the empty default
-			// in-memory here (no database write on front-end requests); the
-			// persisted value is backfilled once by
-			// maybe_migrate_ccss_safelist() on admin_init. Empty keeps the
-			// current extraction behaviour verbatim (fail-open).
-			if ( ! isset( $this->options['file_optimisation']['ccssSafelistExtra'] ) ) {
-				$this->options['file_optimisation']['ccssSafelistExtra'] = '';
-			}
-			// Existing installs whose stored settings predate the RUM-weighted
-			// CSS queue keys (issue #1164) inherit the defaults in-memory here
-			// (no database write on front-end requests); the persisted values
-			// are backfilled once by maybe_migrate_css_queue_defaults() on
-			// admin_init. Defaults keep current behaviour verbatim except the
-			// bounded per-run caps (fail-open to uncapped on invalid values).
-			if ( ! isset( $this->options['file_optimisation']['ccssQueueCap'] ) ) {
-				$this->options['file_optimisation']['ccssQueueCap'] = 5;
-			}
-			// Existing installs whose stored settings predate the CCSS
-			// generation timeout key (issue #1235) inherit the 25s default
-			// in-memory here (no database write on front-end requests); the
-			// persisted value is backfilled once by
-			// maybe_migrate_css_queue_defaults() on admin_init.
-			if ( ! isset( $this->options['file_optimisation']['ccssGenTimeout'] ) ) {
-				$this->options['file_optimisation']['ccssGenTimeout'] = 25;
-			}
-			// Existing installs whose stored settings predate the 14 KB
-			// gzipped inline-budget guard, the cart/checkout inline
-			// exclusion, and the checksum-triggered regen keys (issue #1388)
-			// inherit the defaults in-memory here (no database write on
-			// front-end requests); the persisted values are backfilled once
-			// by maybe_migrate_css_queue_defaults() on admin_init.
-			if ( ! isset( $this->options['file_optimisation']['ccssInlineBudgetKb'] ) ) {
-				$this->options['file_optimisation']['ccssInlineBudgetKb'] = 14;
-			}
-			if ( ! isset( $this->options['file_optimisation']['ccssCommerceExclude'] ) ) {
-				$this->options['file_optimisation']['ccssCommerceExclude'] = true;
-			}
-			if ( ! isset( $this->options['file_optimisation']['ccssChecksumRegen'] ) ) {
-				$this->options['file_optimisation']['ccssChecksumRegen'] = true;
-			}
-			if ( ! isset( $this->options['file_optimisation']['usedCssQueueCap'] ) ) {
-				$this->options['file_optimisation']['usedCssQueueCap'] = 50;
-			}
-			if ( ! isset( $this->options['file_optimisation']['ccssViewportVariants'] ) ) {
-				$this->options['file_optimisation']['ccssViewportVariants'] = false;
-			}
+			// REF-007: resolved options come from get_options() (lazy,
+			// memoized per blog ID; resolution + backfills moved there verbatim).
+			// This single eager call stays because the constructor sub-steps
+			// below provably need a resolved snapshot at registration time:
+			// Image_Optimisation/Google_Fonts (option-gated hook setup),
+			// Hook_Registry (registration gates via setup_hooks()), and
+			// Core_Tweaks. Deferring those collaborators would change the
+			// hook-registration lifecycle and is out of scope.
+			$this->get_options();
 
 			$this->includes();
-			$this->image_optimisation = new Image_Optimisation( $this->options );
-			$this->google_fonts       = new Google_Fonts( $this->options );
+			$this->image_optimisation = new Image_Optimisation( $this->get_options() );
+			$this->google_fonts       = new Google_Fonts( $this->get_options() );
 			$this->setup_hooks();
 			$this->filesystem = Util::init_filesystem();
 			if ( ! $this->filesystem ) {
@@ -927,8 +1141,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True if optimisations may run for the current user.
 		 */
 		private function should_optimise_for_logged_in(): bool {
+			$options = $this->get_options();
 			return Util::is_cache_eligible_for_current_user(
-				$this->options['cache_settings'] ?? array()
+				$options['cache_settings'] ?? array()
 			);
 		}
 
@@ -1253,7 +1468,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since  1.0.0
 		 */
 		private function setup_hooks(): void {
-			( new Hook_Registry( $this, $this->options, $this->image_optimisation, $this->google_fonts ) )->register();
+			( new Hook_Registry( $this, $this->get_options(), $this->image_optimisation, $this->google_fonts ) )->register();
 		}
 
 		/**
@@ -1276,7 +1491,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Constructor injection (REF-006): share the live collaborator
 				// instances by identity so the buffer pipeline can never
 				// diverge onto a stale options snapshot.
-				$this->cache = self::create_cache( $this->options, $this->image_optimisation, $this->google_fonts );
+				$this->cache = self::create_cache( $this->get_options(), $this->image_optimisation, $this->google_fonts );
 			}
 			return $this->cache;
 		}
@@ -13715,7 +13930,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 
-			if ( $this->is_css_minified( $local_path ) ) {
+			if ( $this->is_file_minified( $local_path, 'css' ) ) {
 				return false;
 			}
 
@@ -14000,18 +14215,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			wp_cache_set( $cache_key, (int) $is_minified, $cache_group, HOUR_IN_SECONDS );
 
 			return $is_minified;
-		}
-
-		/**
-		 * Checks if a CSS file is already minified.
-		 *
-		 * @since 1.0.0
-		 *
-		 * @param  string $file_path Path to the CSS file.
-		 * @return bool True if the file is minified, false otherwise.
-		 */
-		private function is_css_minified( $file_path ) {
-			return $this->is_file_minified( $file_path, 'css' );
 		}
 
 		/**
