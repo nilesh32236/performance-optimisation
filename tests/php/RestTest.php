@@ -1913,6 +1913,13 @@ if ( ! class_exists( 'WP_REST_Response' ) ) {
 		private $status;
 
 		/**
+		 * Response headers.
+		 *
+		 * @var array
+		 */
+		private $headers = array();
+
+		/**
 		 * Constructor.
 		 *
 		 * @param array $data   Response data.
@@ -1939,6 +1946,26 @@ if ( ! class_exists( 'WP_REST_Response' ) ) {
 		 */
 		public function get_status() {
 			return $this->status;
+		}
+
+		/**
+		 * Set a response header (e.g. Retry-After on throttled endpoints).
+		 *
+		 * @param string $key   Header name.
+		 * @param string $value Header value.
+		 * @return void
+		 */
+		public function header( $key, $value ) {
+			$this->headers[ $key ] = $value;
+		}
+
+		/**
+		 * Get the response headers.
+		 *
+		 * @return array Response headers.
+		 */
+		public function get_headers() {
+			return $this->headers;
 		}
 	}
 }
