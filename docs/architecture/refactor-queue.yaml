@@ -463,8 +463,9 @@ phase2_items:
     expected_change: 'Paths change, class names + behavior identical; full loader/reference sweep per REFACTORING-RULES directory-move safety.'
   - id: ARCH-014
     title: 'Boundary-internal Util:: caller migration (proxies stay)'
-    status: issue-created
+    status: pr-created
     github_issue: 1554
+    pull_request: 1555
     priority: low
     responsibility: 'Migrate internal callers from Util:: proxies to owning boundaries where the call site is inside the owning domain; leave external/compat callers.'
     dependencies: [ARCH-013]
