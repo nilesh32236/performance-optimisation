@@ -225,7 +225,7 @@ items:
     priority: medium
     status: autofix-running
     github_issue: 1520
-    github_pr: null
+    github_pr: 1521
     source: REF-002
     discoveries:
       - 'Split out of REF-002 during planning: constant ownership touches Rest/CLI/Main consumers, so it ships as its own focused item after Settings_Store merges.'
