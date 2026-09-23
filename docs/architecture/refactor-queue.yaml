@@ -158,7 +158,7 @@ items:
     priority: low
     status: autofix-running
     github_issue: 1514
-    github_pr: null
+    github_pr: 1516
     source: AUDIT/FINAL-REVIEW/architecture.md R-08
 
   - id: REF-010
