@@ -28,11 +28,10 @@
  * copies of the pre-extraction `Rest` methods (only `$this->` shared-infra
  * accesses re-pointed to `$this->owner->rest_*()`). The two private helpers
  * (`sanitize_settings_recursively()`,
- * `remove_sensitive_settings_from_response()`) are intentionally duplicated
- * from `Rest`, which keeps its own verbatim copies for the remaining
- * handlers (`apply_optimization_preset()`, `handle_safe_mode()`); both
- * copies delegate to the same canonical logic (`Util` sanitizer, unset of
- * the same sensitive keys) so they cannot diverge in behavior.
+ * `remove_sensitive_settings_from_response()`) are thin delegates to the
+ * canonical logic on `Util` (same delegates `Rest` keeps for its remaining
+ * handlers), so the sanitizer semantics and the redacted key list have a
+ * single source of truth and cannot diverge.
  *
  * @package PerformanceOptimise\Inc
  * @since   NEXT
@@ -616,9 +615,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Settings' ) ) {
 		 *
 		 * Delegates to Util::sanitize_settings_recursively() so that all
 		 * settings entry points (REST API, WP-CLI import/update) share
-		 * identical sanitization semantics. Intentionally mirrors the
-		 * `Rest::sanitize_settings_recursively()` copy kept for the
-		 * remaining handlers; both delegate to the same canonical logic.
+		 * identical sanitization semantics.
 		 *
 		 * @param array $settings The settings array.
 		 * @return array The sanitized settings array.
@@ -632,19 +629,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Settings' ) ) {
 		/**
 		 * Removes sensitive settings from the response array.
 		 *
-		 * Intentionally mirrors the `Rest::remove_sensitive_settings_from_response()`
-		 * copy kept for the remaining handlers; both unset the same keys.
+		 * Delegates to Util::remove_sensitive_settings_from_response() so
+		 * every REST read path redacts the same keys.
 		 *
 		 * @param array $settings The settings array passed by reference.
 		 * @return void
+		 * @since 1.1.1
 		 */
 		private function remove_sensitive_settings_from_response( array &$settings ): void {
-			if ( isset( $settings['performance_audit'] ) ) {
-				unset( $settings['performance_audit']['pagespeed_api_key'] );
-			}
-			if ( isset( $settings['object_cache'] ) && isset( $settings['object_cache']['password'] ) ) {
-				unset( $settings['object_cache']['password'] );
-			}
+			Util::remove_sensitive_settings_from_response( $settings );
 		}
 	}
 }

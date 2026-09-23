@@ -569,4 +569,33 @@ class RestCacheSettingsParityTest extends \PHPUnit\Framework\TestCase {
 		$via_service = $settings_service->get_sandbox_preview( new WP_REST_Request() );
 		$this->assertSame( $via_service->get_data(), $via_proxy->get_data() );
 	}
+
+	/**
+	 * The canonical redaction helper strips both secrets and preserves the rest.
+	 *
+	 * `Rest` and `Rest_Settings` both delegate here, so this pins the single
+	 * source of truth for response redaction.
+	 *
+	 * @return void
+	 */
+	public function test_canonical_redaction_helper_strips_both_secrets(): void {
+		$settings = array(
+			'performance_audit' => array(
+				'pagespeed_api_key' => 'live-secret',
+				'auto_rescan'       => 'daily',
+			),
+			'object_cache'      => array(
+				'password' => 's3cret',
+				'host'     => '127.0.0.1',
+			),
+			'file_optimisation' => array( 'minifyHtml' => true ),
+		);
+		\PerformanceOptimise\Inc\Util::remove_sensitive_settings_from_response( $settings );
+
+		$this->assertArrayNotHasKey( 'pagespeed_api_key', $settings['performance_audit'], 'API key must be redacted' );
+		$this->assertArrayNotHasKey( 'password', $settings['object_cache'], 'Redis password must be redacted' );
+		$this->assertSame( 'daily', $settings['performance_audit']['auto_rescan'], 'Sibling keys must survive redaction' );
+		$this->assertSame( '127.0.0.1', $settings['object_cache']['host'], 'Sibling keys must survive redaction' );
+		$this->assertTrue( $settings['file_optimisation']['minifyHtml'], 'Unrelated tabs must survive redaction' );
+	}
 }

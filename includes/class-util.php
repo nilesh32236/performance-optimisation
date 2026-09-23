@@ -4175,6 +4175,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Strips sensitive values from a settings array before it leaves the server.
+		 *
+		 * Single source of truth for response redaction: every REST read path
+		 * (`Rest`, `Rest_Settings`) delegates here so the redacted key list
+		 * can never diverge between copies.
+		 *
+		 * @param array $settings The settings array passed by reference.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function remove_sensitive_settings_from_response( array &$settings ): void {
+			if ( isset( $settings['performance_audit'] ) ) {
+				unset( $settings['performance_audit']['pagespeed_api_key'] );
+			}
+			if ( isset( $settings['object_cache'] ) && isset( $settings['object_cache']['password'] ) ) {
+				unset( $settings['object_cache']['password'] );
+			}
+		}
+
+		/**
 		 * Current value of a salted-cache salt (option-backed).
 		 *
 		 * The WP 6.9+ salted cache family compares the salt VALUE passed at

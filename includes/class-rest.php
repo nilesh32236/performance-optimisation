@@ -610,7 +610,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Cache::get_preload_status}.
-		 * @since NEXT Proxied to Rest_Cache (ARCH-011).
 		 */
 		public function get_preload_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return $this->rest_cache->get_preload_status( $request );
@@ -761,7 +760,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Cache::resume_preload}.
-		 * @since NEXT Proxied to Rest_Cache (ARCH-011).
 		 */
 		public function resume_preload( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return $this->rest_cache->resume_preload( $request );
@@ -1074,7 +1072,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Cache::clear_cache}.
-		 * @since NEXT Proxied to Rest_Cache (ARCH-011).
 		 */
 		public function clear_cache( \WP_REST_Request $request ) {
 			return $this->rest_cache->clear_cache( $request );
@@ -1087,7 +1084,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::update_settings}.
-		 * @since NEXT Proxied to Rest_Settings (ARCH-011).
 		 */
 		public function update_settings( \WP_REST_Request $request ) {
 			return $this->rest_settings->update_settings( $request );
@@ -1112,16 +1108,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Removes sensitive settings from the response array.
 		 *
+		 * Delegates to Util::remove_sensitive_settings_from_response() so
+		 * every REST read path redacts the same keys.
+		 *
 		 * @param array $settings The settings array passed by reference.
 		 * @return void
 		 */
 		private function remove_sensitive_settings_from_response( array &$settings ): void {
-			if ( isset( $settings['performance_audit'] ) ) {
-				unset( $settings['performance_audit']['pagespeed_api_key'] );
-			}
-			if ( isset( $settings['object_cache'] ) && isset( $settings['object_cache']['password'] ) ) {
-				unset( $settings['object_cache']['password'] );
-			}
+			Util::remove_sensitive_settings_from_response( $settings );
 		}
 
 		/**
@@ -1550,7 +1544,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::import_settings}.
-		 * @since NEXT Proxied to Rest_Settings (ARCH-011).
 		 */
 		public function import_settings( \WP_REST_Request $request ) {
 			return $this->rest_settings->import_settings( $request );
@@ -1566,7 +1559,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::get_settings_snapshot}.
-		 * @since NEXT Proxied to Rest_Settings (ARCH-011).
 		 */
 		public function get_settings_snapshot( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
 			return $this->rest_settings->get_settings_snapshot( $request );
@@ -1583,7 +1575,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::restore_settings}.
-		 * @since NEXT Proxied to Rest_Settings (ARCH-011).
 		 */
 		public function restore_settings( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
 			return $this->rest_settings->restore_settings( $request );
@@ -3106,7 +3097,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.0.0
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Cache::purge_used_css_cache}.
-		 * @since NEXT Proxied to Rest_Cache (ARCH-011).
 		 */
 		public function purge_used_css_cache( \WP_REST_Request $request ): \WP_REST_Response {
 			return $this->rest_cache->purge_used_css_cache( $request );
@@ -3540,7 +3530,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::get_sandbox_preview}.
-		 * @since NEXT Proxied to Rest_Settings (ARCH-011).
 		 */
 		public function get_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return $this->rest_settings->get_sandbox_preview( $_request );
@@ -3556,7 +3545,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::save_sandbox_preview}.
-		 * @since NEXT Proxied to Rest_Settings (ARCH-011).
 		 */
 		public function save_sandbox_preview( \WP_REST_Request $request ): \WP_REST_Response {
 			return $this->rest_settings->save_sandbox_preview( $request );
@@ -3569,7 +3557,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::promote_sandbox_preview}.
-		 * @since NEXT Proxied to Rest_Settings (ARCH-011).
 		 */
 		public function promote_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return $this->rest_settings->promote_sandbox_preview( $_request );
@@ -3582,7 +3569,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::discard_sandbox_preview}.
-		 * @since NEXT Proxied to Rest_Settings (ARCH-011).
 		 */
 		public function discard_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return $this->rest_settings->discard_sandbox_preview( $_request );
