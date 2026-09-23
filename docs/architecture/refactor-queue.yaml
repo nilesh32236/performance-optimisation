@@ -355,7 +355,8 @@ phase2_items:
     expected_change: 'Cache -~25 methods; byte-identical combine output; regression tests on combine/inline budget paths.'
   - id: ARCH-007
     title: 'Cache invalidation/purge cluster consolidation'
-    status: queued
+    status: issue-created
+    github_issue: 1540
     priority: medium
     source_files:
       - includes/class-cache.php
