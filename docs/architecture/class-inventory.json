@@ -50,22 +50,22 @@
         "static_state": false
     },
     {
-        "file": "includes/class-util.php",
-        "class": null,
-        "lines": 6144,
-        "methods": 159,
-        "hooks": [
-            "switch_blog"
-        ],
-        "static_state": false
-    },
-    {
         "file": "includes/class-ai-adaptive.php",
         "class": null,
         "lines": 6323,
         "methods": 98,
         "hooks": [
             "wp_speculation_rules"
+        ],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-util.php",
+        "class": null,
+        "lines": 6145,
+        "methods": 159,
+        "hooks": [
+            "switch_blog"
         ],
         "static_state": false
     },
@@ -254,6 +254,18 @@
         "lines": 1158,
         "methods": 21,
         "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-settings-store.php",
+        "class": null,
+        "lines": 1098,
+        "methods": 22,
+        "hooks": [
+            "update_option_wppo_settings",
+            "add_option_wppo_settings",
+            "delete_option_wppo_settings"
+        ],
         "static_state": false
     },
     {
@@ -488,18 +500,6 @@
         "hooks": [
             "wp_footer",
             "wp_enqueue_scripts"
-        ],
-        "static_state": false
-    },
-    {
-        "file": "includes/class-settings-store.php",
-        "class": null,
-        "lines": 1097,
-        "methods": 22,
-        "hooks": [
-            "update_option_wppo_settings",
-            "add_option_wppo_settings",
-            "delete_option_wppo_settings"
         ],
         "static_state": false
     },
