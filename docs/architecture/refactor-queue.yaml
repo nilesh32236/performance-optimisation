@@ -463,9 +463,11 @@ phase2_items:
     expected_change: 'Paths change, class names + behavior identical; full loader/reference sweep per REFACTORING-RULES directory-move safety.'
   - id: ARCH-014
     title: 'Boundary-internal Util:: caller migration (proxies stay)'
-    status: pr-created
+    status: merged
     github_issue: 1554
     pull_request: 1555
+    merge_commit: ea8108d8
+    post_merge_result: 'wp wppo verify 6/7 identical. Triple-Yes reviews (5/5 once). 7 delegation tests local green. All real internal edges migrated; Util-canonical callees kept with comments. No proxy removals.'
     priority: low
     responsibility: 'Migrate internal callers from Util:: proxies to owning boundaries where the call site is inside the owning domain; leave external/compat callers.'
     dependencies: [ARCH-013]
