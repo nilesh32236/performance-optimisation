@@ -307,9 +307,11 @@ phase2_items:
       - '2026-09-23: implemented — new PerformanceOptimise\Inc\Loader_Map (includes/class-loader-map.php) owns eager list (15 always + 2 LiteSpeed-conditional), 45-entry fallback map (+Loader_Map/Main/WPPO_CLI_Command), and CLI path; Main::includes() is a thin delegate (LiteSpeed decision stays in Main); entry-point stale-classmap chain requires Loader_Map alongside Main; new LoaderMapTest (10 tests); inventory regenerated with Loader_Map.'
   - id: ARCH-004
     title: 'Main settings-migration cluster extraction (maybe_migrate_*)'
-    status: pr-created
+    status: merged
     github_issue: 1534
     pull_request: 1535
+    merge_commit: 4c1ed01f
+    post_merge_result: 'wp wppo verify 6/7 identical. Local targeted suites 89 OK after composer dump-autoload (local-only stale classmap; CI fresh-install green, runtime spl fallback covers). front 200. Accepted: iteration-2 failure-path healing + Util memo syncs (redundant-on-success, reviewed hardening precedent); Main<->Settings_Migrations ref-bridge via @internal migration_options_ref() noted for ARCH-014/019 revisit.'
     priority: medium
     source_files:
       - includes/class-main.php
