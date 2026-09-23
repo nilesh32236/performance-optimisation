@@ -319,7 +319,7 @@
     {
         "file": "includes/class-cron.php",
         "class": null,
-        "lines": 1846,
+        "lines": 1830,
         "methods": 37,
         "hooks": [
             "init",
@@ -354,6 +354,7 @@
             "Object_Cache",
             "Pagespeed",
             "RUM",
+            "Scheduler",
             "Util"
         ]
     },
@@ -881,7 +882,7 @@
     {
         "file": "includes/class-rest-settings.php",
         "class": null,
-        "lines": 650,
+        "lines": 643,
         "methods": 11,
         "hooks": [],
         "static_state": false,
@@ -895,7 +896,7 @@
     {
         "file": "includes/class-rest.php",
         "class": null,
-        "lines": 3891,
+        "lines": 3877,
         "methods": 76,
         "hooks": [],
         "static_state": false,
@@ -957,8 +958,8 @@
     {
         "file": "includes/class-scheduler.php",
         "class": null,
-        "lines": 549,
-        "methods": 13,
+        "lines": 635,
+        "methods": 16,
         "hooks": [],
         "static_state": false,
         "refs": [
@@ -1103,8 +1104,8 @@
     {
         "file": "includes/class-util.php",
         "class": null,
-        "lines": 4986,
-        "methods": 155,
+        "lines": 5006,
+        "methods": 156,
         "hooks": [
             "switch_blog"
         ],

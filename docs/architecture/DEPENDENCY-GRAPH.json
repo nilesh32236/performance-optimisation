@@ -144,6 +144,7 @@
         "Object_Cache",
         "Pagespeed",
         "RUM",
+        "Scheduler",
         "Util"
     ],
     "includes/class-css-combine.php": [
