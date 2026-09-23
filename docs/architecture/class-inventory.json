@@ -656,7 +656,7 @@
     {
         "file": "includes/class-loader-map.php",
         "class": null,
-        "lines": 222,
+        "lines": 233,
         "methods": 7,
         "hooks": [],
         "static_state": false,
