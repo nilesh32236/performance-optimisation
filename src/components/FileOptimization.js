@@ -1873,7 +1873,14 @@ const FileOptimization = ( {
 	// as the safety net after confirming.
 	const [ showAggressiveConfirm, setShowAggressiveConfirm ] =
 		useState( false );
-	const handleAggressivePreset = () => setShowAggressiveConfirm( true );
+	const handleAggressivePreset = useCallback(
+		() => setShowAggressiveConfirm( true ),
+		[]
+	);
+	const cancelAggressivePreset = useCallback(
+		() => setShowAggressiveConfirm( false ),
+		[]
+	);
 	const confirmAggressivePreset = () => {
 		setShowAggressiveConfirm( false );
 		return applyPresetBundle(
@@ -2808,9 +2815,7 @@ const FileOptimization = ( {
 							onSafe={ handleSafePreset }
 							onAggressive={ handleAggressivePreset }
 							onConfirmAggressive={ confirmAggressivePreset }
-							onCancelAggressive={ () =>
-								setShowAggressiveConfirm( false )
-							}
+							onCancelAggressive={ cancelAggressivePreset }
 							onRevert={ handleRevertPreset }
 							isApplyingPreset={ isApplyingPreset }
 							isRestoring={ isRestoring }
