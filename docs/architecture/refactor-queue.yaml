@@ -244,8 +244,9 @@ phase2:
 phase2_items:
   - id: ARCH-001
     title: 'Architecture baseline: inventory tooling + dependency graph + load-order + hierarchy docs'
-    status: issue-created
+    status: pr-created
     github_issue: 1528
+    pull_request: 1529
     priority: high
     source_files:
       - includes/
