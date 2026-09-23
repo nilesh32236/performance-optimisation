@@ -1387,6 +1387,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * realpath must stay under the resolved base (a symlinked min dir
 		 * pointing outside fails closed). Fail closed on any anomaly.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @since 2.2.0
 		 * @param string $dir Absolute directory candidate.
 		 * @return bool True when the recursive delete may proceed.
@@ -1430,6 +1434,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * it; this routes min-tree misses through {@see is_min_dir_allowed()}
 		 * on the parent dir instead. Fail-closed. Never throws.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @since 2.2.0
 		 * @param string $path Absolute file candidate.
 		 * @return bool True when the path is min-tree-contained.
@@ -1527,6 +1535,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * would silently lose fallbacks. Reuses the per-day transient
 		 * throttle so a wipe storm writes a single row. Never throws.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @since 2.2.0
 		 * @return void
 		 */
@@ -1555,6 +1567,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 *
 		 * Domain-tree entry point over {@see snapshot_purge_fallbacks_worker()}.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string $dir Absolute domain directory about to be deleted.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
@@ -1574,6 +1590,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 *
 		 * Min-tree entry point over {@see snapshot_purge_fallbacks_worker()}.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string $dir Absolute min directory about to be deleted.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
@@ -1591,6 +1611,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		/**
 		 * Shared snapshot worker behind the domain/min entry points.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string   $dir        Absolute directory about to be deleted.
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return array<string, string> Fallback path => file contents.
@@ -1711,6 +1735,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * {@see snapshot_min_purge_fallbacks()} based on $min_tree.
 		 * Never throws.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string $dir      Absolute directory about to be deleted.
 		 * @param bool   $min_tree Whether $dir lives under the min tree.
 		 * @return array<string, string> Fallback path => file contents.
@@ -1735,6 +1763,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * that follows captures the current generation. Uses the same
 		 * limits (max_dirs walk budget) and never throws.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param string   $dir        Absolute directory about to be deleted.
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
@@ -1802,6 +1834,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		/**
 		 * Restore domain-tree fallbacks after a full-cache wipe.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param array<string, string> $snapshot Path => contents from {@see snapshot_purge_fallbacks()}.
 		 * @return void
 		 *
@@ -1819,6 +1855,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		/**
 		 * Restore min-tree fallbacks after a full-cache wipe.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param array<string, string> $snapshot Path => contents from {@see snapshot_purge_fallbacks()}.
 		 * @return void
 		 *
@@ -1841,6 +1881,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * basename allowlist or the caller-supplied containment check so a
 		 * snapshot can never plant files outside its tree. Never throws.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param array<string, string> $snapshot   Path => contents.
 		 * @param callable              $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
@@ -1908,6 +1952,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * temp files are always cleaned up after a successful restore).
 		 * Returns original-path => temp-path. Never throws.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param array<string, string> $snapshot Path => contents.
 		 * @return array<string, string> Original path => staged temp path.
 		 *
@@ -1970,6 +2018,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * the in-memory snapshot when staging produced nothing. Never
 		 * throws.
 		 *
+		 * Widened from private on `Cache` for delegation; `@internal`, not
+		 * public API — call via the `Cache` proxy.
+		 *
+		 * @internal
 		 * @param array<string, string> $staged     Original path => staged temp path.
 		 * @param callable              $is_allowed Containment validator: fn( string $path ): bool.
 		 * @return void
