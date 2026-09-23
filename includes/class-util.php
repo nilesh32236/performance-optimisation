@@ -3959,14 +3959,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return bool True on WP 6.3+.
 		 */
 		public static function supports_script_strategy(): bool {
-			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
-				$wp_version = $GLOBALS['wp_version'];
-			} elseif ( function_exists( 'get_bloginfo' ) ) {
-				$wp_version = (string) get_bloginfo( 'version' );
-			} else {
-				$wp_version = '';
-			}
-			return version_compare( $wp_version, '6.3-alpha', '>=' );
+			// Version floor lives in Wp_Version (REF-010, canonical read:
+			// $GLOBALS, then get_bloginfo(), then fail-false).
+			return Wp_Version::is_at_least( '6.3-alpha' );
 		}
 
 		/**
@@ -6378,8 +6373,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return int The inline size limit in bytes.
 		 */
 		public static function get_styles_inline_limit(): int {
+			// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
+			// read: unknown assumes newest, matching the historic spelling).
 			$default = 40000;
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+			if ( ! Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
 				$default = 20000;
 			}
 			return (int) apply_filters( 'styles_inline_size_limit', $default );
@@ -6396,8 +6393,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.3.0
 		 */
 		public static function get_styles_inline_default(): int {
+			// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
+			// read: unknown assumes newest, matching the historic spelling).
 			$default = 40000;
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+			if ( ! Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
 				$default = 20000;
 			}
 			return $default;

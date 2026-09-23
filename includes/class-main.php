@@ -1052,6 +1052,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since  1.0.0
 		 */
 		private function includes(): void {
+			// WP version gate (REF-010): no dependencies, loaded first so
+			// every version-gated class below can use it.
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-wp-version.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-wp-version.php';
+			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
 			}
@@ -1171,6 +1176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Used_CSS'               => 'class-used-css.php',
 				'Url'                    => 'class-url.php',
 				'Util'                   => 'class-util.php',
+				'Wp_Version'             => 'class-wp-version.php',
 			);
 			spl_autoload_register(
 				static function ( $class_name ) use ( $fallback_map ): void {
@@ -4968,14 +4974,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when the native defer strategy path is allowed.
 		 */
 		public static function supports_native_defer_strategy(): bool {
-			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
-				$wp_version = $GLOBALS['wp_version'];
-			} elseif ( function_exists( 'get_bloginfo' ) ) {
-				$wp_version = (string) get_bloginfo( 'version' );
-			} else {
-				return false;
-			}
-			if ( version_compare( $wp_version, '6.3-alpha', '<' ) ) {
+			// Version floor lives in Wp_Version (REF-010); the API probes
+			// below stay byte-identical.
+			if ( ! Wp_Version::is_at_least( '6.3-alpha' ) ) {
 				return false;
 			}
 			if ( ! function_exists( 'wp_script_add_data' ) ) {
@@ -5007,14 +5008,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when the native fetchpriority path is allowed.
 		 */
 		public static function supports_native_script_fetchpriority(): bool {
-			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
-				$wp_version = $GLOBALS['wp_version'];
-			} elseif ( function_exists( 'get_bloginfo' ) ) {
-				$wp_version = (string) get_bloginfo( 'version' );
-			} else {
-				return false;
-			}
-			if ( version_compare( $wp_version, '6.9-alpha', '<' ) ) {
+			// Version floor lives in Wp_Version (REF-010); the API probes
+			// below stay byte-identical.
+			if ( ! Wp_Version::is_at_least( '6.9-alpha' ) ) {
 				return false;
 			}
 			if ( class_exists( 'WP_Script_Modules' ) ) {
@@ -5188,14 +5184,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function should_use_core_template_buffer(): bool {
 			try {
-				if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
-					$wp_version = $GLOBALS['wp_version'];
-				} elseif ( function_exists( 'get_bloginfo' ) ) {
-					$wp_version = (string) get_bloginfo( 'version' );
-				} else {
-					return false;
-				}
-				if ( '' === $wp_version || version_compare( $wp_version, '6.9-alpha', '<' ) ) {
+				// Version floor lives in Wp_Version (REF-010); the API
+				// probe below stays byte-identical.
+				if ( ! Wp_Version::is_at_least( '6.9-alpha' ) ) {
 					return false;
 				}
 				return function_exists( 'wp_should_output_buffer_template_for_enhancement' );
@@ -10665,20 +10656,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Belt-and-braces version guard so WP 6.2-6.7 never registers core
 			// filters even if a backported helper exists. Fail-open: read-only,
-			// never fatal.
-			try {
-				if ( isset( $GLOBALS['wp_version'] ) ) {
-					$wp_version = (string) $GLOBALS['wp_version'];
-				} elseif ( function_exists( 'get_bloginfo' ) ) {
-					$wp_version = (string) get_bloginfo( 'version' );
-				} else {
-					$wp_version = '6.8';
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$wp_version = '6.8';
-			}
-			if ( version_compare( $wp_version, '6.8', '<' ) ) {
+			// never fatal. An unknown version assumes the newest core (the
+			// historic '6.8' fallback, now the Wp_Version default) so managed
+			// installs keep speculating.
+			if ( ! Wp_Version::is_at_least( '6.8', true ) ) {
 				return;
 			}
 
@@ -12366,19 +12347,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( ! function_exists( 'wp_get_speculation_rules_configuration' ) && ! function_exists( 'wp_get_speculation_rules' ) ) {
 						return $rules;
 					}
-					try {
-						if ( isset( $GLOBALS['wp_version'] ) ) {
-							$wp_version = (string) $GLOBALS['wp_version'];
-						} elseif ( function_exists( 'get_bloginfo' ) ) {
-							$wp_version = (string) get_bloginfo( 'version' );
-						} else {
-							$wp_version = '6.8';
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$wp_version = '6.8';
-					}
-					if ( version_compare( $wp_version, '6.8', '<' ) ) {
+					// Belt-and-braces version guard (same newest-on-unknown
+					// default as the registration site above, via Wp_Version).
+					if ( ! Wp_Version::is_at_least( '6.8', true ) ) {
 						return $rules;
 					}
 					// Per-request backstop: core 6.8+ exposes has_rule(), but
@@ -13124,7 +13095,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// convention) the separate-assets path owns `wp-block-*`.
 				// Gating on version first also keeps this probe-free on 6.9+
 				// so exact-count `function_exists` unit expectations stay stable.
-				if ( ! isset( $GLOBALS['wp_version'] ) || version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '>=' ) ) {
+				// Version floor lives in Wp_Version (REF-010, $GLOBALS-only read:
+				// unknown still assumes newest, no get_bloginfo() fallback).
+				if ( Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
 					return false;
 				}
 				if ( ! $this->is_hidden_block_asset_omission_enabled() ) {
@@ -13155,7 +13128,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when core loads separate core block assets on demand.
 		 */
 		private function is_core_separate_block_assets_active(): bool {
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+			// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
+			// read: unknown assumes newest, matching the historic isset()
+			// spelling). Version-first keeps this probe-free on pre-6.9.
+			if ( ! Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
 				return false;
 			}
 			if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) ) {
@@ -13376,7 +13352,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function should_keep_empty_block_asset_via_core_filter( $block_name ): bool {
 			try {
-				if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
+				// read: unknown assumes newest, matching the historic isset()
+				// spelling verbatim).
+				if ( ! Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
 					return false;
 				}
 				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) ) {

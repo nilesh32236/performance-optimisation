@@ -665,7 +665,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		private function block_assets_are_separate(): bool {
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+			// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
+			// read: unknown assumes newest, matching the historic isset()
+			// spelling). Version-first keeps this probe-free on pre-6.9.
+			if ( ! Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
 				return false;
 			}
 			if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) ) {
@@ -778,7 +781,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// convention) the separate-assets path owns `wp-block-*`.
 				// Gating on version first also keeps this probe-free on 6.9+
 				// so exact-count `function_exists` unit expectations stay stable.
-				if ( ! isset( $GLOBALS['wp_version'] ) || version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '>=' ) ) {
+				// Version floor lives in Wp_Version (REF-010, $GLOBALS-only read).
+				if ( Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
 					return false;
 				}
 				if ( $this->is_combined_core_block_monolith_forced() ) {
@@ -2130,7 +2134,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when inline candidates must carry a `src`.
 		 */
 		private function inline_candidates_require_src(): bool {
-			return ! isset( $GLOBALS['wp_version'] ) || version_compare( $GLOBALS['wp_version'], '6.3', '>=' );
+			// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
+			// read: unknown assumes newest, matching the historic spelling).
+			return Wp_Version::is_global_at_least( '6.3' );
 		}
 
 		/**
@@ -2148,7 +2154,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when the core-faithful pass must skip unreadable styles.
 		 */
 		private function inline_candidates_require_readable(): bool {
-			return ! isset( $GLOBALS['wp_version'] ) || version_compare( $GLOBALS['wp_version'], '7.0', '>=' );
+			// Version floor lives in Wp_Version (REF-010, $GLOBALS-only
+			// read: unknown assumes newest, matching the historic spelling).
+			return Wp_Version::is_global_at_least( '7.0' );
 		}
 
 		/**
@@ -2217,8 +2225,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// The 40KB inline budget that makes the skip worthwhile is a WP 6.9+
 			// default; on older cores the plugin keeps its always-combine
 			// behavior. An absent $wp_version assumes the newest core, matching
-			// get_styles_inline_limit().
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+			// get_styles_inline_limit() — both floors live in Wp_Version
+			// (REF-010, $GLOBALS-only read).
+			if ( ! Wp_Version::is_global_at_least( '6.9-alpha' ) ) {
 				return false;
 			}
 

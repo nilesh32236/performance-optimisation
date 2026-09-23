@@ -2,7 +2,7 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14184,
+        "lines": 14162,
         "methods": 232,
         "hooks": [
             "update_option_wppo_settings",
@@ -42,7 +42,7 @@
     {
         "file": "includes/class-cache.php",
         "class": null,
-        "lines": 7296,
+        "lines": 7304,
         "methods": 137,
         "hooks": [
             "shutdown"
@@ -52,7 +52,7 @@
     {
         "file": "includes/class-util.php",
         "class": null,
-        "lines": 6665,
+        "lines": 6663,
         "methods": 159,
         "hooks": [
             "switch_blog"
@@ -585,6 +585,14 @@
         "class": null,
         "lines": 143,
         "methods": 4,
+        "hooks": [],
+        "static_state": false
+    },
+    {
+        "file": "includes/class-wp-version.php",
+        "class": null,
+        "lines": 121,
+        "methods": 3,
         "hooks": [],
         "static_state": false
     },
