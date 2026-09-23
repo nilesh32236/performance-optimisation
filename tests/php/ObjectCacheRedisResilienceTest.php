@@ -148,7 +148,7 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 		};
 		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
 
-		require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/Support/redis-connect-helper.php';
 	}
 
 	/**

@@ -9,7 +9,7 @@ Companion docs: `LOAD-ORDER.md`, `INCLUDE-HIERARCHY.md`, `DEPENDENCY-GRAPH.json`
 
 ```text
 performance-optimisation.php          plugin entry: constants, guards, Composer autoload, Main boot
-  └─ includes/class-main.php         orchestration: collaborators, Hook_Registry, migrations, admin, CLI
+  └─ includes/Core/class-main.php    orchestration: collaborators, Hook_Registry, migrations, admin, CLI
        ├─ includes/Cache domain      Cache (buffer+policy), Cache_Key, Filesystem, Url, Woo_Detect,
        │                             Scheduler, Http, Wp_Version (Phase 1 boundaries + facades in Util)
        ├─ Asset pipeline            Main (defer/delay), Cache (CSS combine), Image_Optimisation,

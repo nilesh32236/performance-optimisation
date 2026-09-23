@@ -193,7 +193,7 @@ class SafePresetBundleTest extends \PHPUnit\Framework\TestCase {
 	 * @phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 	 */
 	public function test_preset_bundles_localised_to_spa(): void {
-		$source = (string) file_get_contents( dirname( __DIR__, 2 ) . '/includes/class-main.php' );
+		$source = (string) file_get_contents( dirname( __DIR__, 2 ) . '/includes/Core/class-main.php' );
 		$this->assertStringContainsString( "'presetBundles'", $source, 'wppoSettings must localise presetBundles.' );
 		$this->assertStringContainsString( 'get_safe_preset_bundle()', $source );
 		$this->assertStringContainsString( 'get_aggressive_preset_bundle()', $source );

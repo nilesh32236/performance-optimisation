@@ -730,7 +730,7 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 			$this->assertTrue( method_exists( Settings_Migrations::class, $delegate ), "Settings_Migrations::{$delegate} must own the logic" );
 		}
 
-		$registry = file_get_contents( dirname( __DIR__, 2 ) . '/includes/class-hook-registry.php' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local file scan (no remote URL, no WP_Filesystem in unit tests).
+		$registry = file_get_contents( dirname( __DIR__, 2 ) . '/includes/Core/class-hook-registry.php' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local file scan (no remote URL, no WP_Filesystem in unit tests).
 		$this->assertNotFalse( $registry );
 		foreach ( $proxies as $proxy ) {
 			$this->assertStringContainsString(

@@ -32,7 +32,7 @@ class MainFilesystemPropertyTypeTest extends \PHPUnit\Framework\TestCase {
 		// classmap can point at the primary checkout when tests run from a git
 		// worktree). Required here rather than at file scope so test discovery
 		// does not force-load Main for every other suite.
-		require_once __DIR__ . '/../../includes/class-main.php';
+		require_once __DIR__ . '/../../includes/Core/class-main.php';
 
 		$property = new \ReflectionProperty( Main::class, 'filesystem' );
 

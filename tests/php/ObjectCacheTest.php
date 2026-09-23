@@ -482,7 +482,7 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 			// Scenario 2: helper found via the WP_CONTENT_DIR-derived plugins dir.
 			// A stand-in helper is used so no real Redis connection is attempted and
 			// no WP_Error (absent from this test env) is constructed.
-			$helper_dest = WP_CONTENT_DIR . '/plugins/performance-optimisation/includes/redis-connect-helper.php';
+			$helper_dest = WP_CONTENT_DIR . '/plugins/performance-optimisation/includes/Support/redis-connect-helper.php';
 			$helper_dir  = dirname( $helper_dest );
 			$helper_base = WP_CONTENT_DIR . '/plugins/performance-optimisation';
 			$plugins_dir = WP_CONTENT_DIR . '/plugins';

@@ -1595,7 +1595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( function_exists( $helper_function ) ) {
 				return true;
 			}
-			$helper = defined( 'WPPO_PLUGIN_PATH' ) ? WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php' : '';
+			$helper = defined( 'WPPO_PLUGIN_PATH' ) ? WPPO_PLUGIN_PATH . 'includes/Support/redis-connect-helper.php' : '';
 			if ( '' !== $helper && is_readable( $helper ) ) {
 				require_once $helper;
 			}

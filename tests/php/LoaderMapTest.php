@@ -30,7 +30,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function load_loader_map(): void {
 		if ( ! class_exists( Loader_Map::class, false ) ) {
-			require_once WPPO_PLUGIN_PATH . 'includes/class-loader-map.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/Core/class-loader-map.php';
 		}
 	}
 
@@ -41,22 +41,22 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function expected_eager_files(): array {
 		return array(
-			'class-wp-version.php',
-			'class-server-rules.php',
-			'class-header-emitter.php',
-			'class-litespeed-integration.php',
-			'class-llms.php',
-			'class-od-bridge.php',
-			'class-bfcache.php',
-			'class-perf-translations.php',
-			'class-ai-adaptive.php',
-			'class-ai-anomaly.php',
-			'class-edge-cache.php',
-			'trait-purge-logger.php',
-			'class-edge-purger.php',
-			'class-cdn.php',
-			'class-builder-purge-watcher.php',
-			'class-hook-registry.php',
+			'Core/class-wp-version.php',
+			'Edge/class-server-rules.php',
+			'Edge/class-header-emitter.php',
+			'Integrations/class-litespeed-integration.php',
+			'Compatibility/class-llms.php',
+			'Insight/class-od-bridge.php',
+			'Cache/class-bfcache.php',
+			'Admin/class-perf-translations.php',
+			'Insight/class-ai-adaptive.php',
+			'Insight/class-ai-anomaly.php',
+			'Edge/class-edge-cache.php',
+			'Support/trait-purge-logger.php',
+			'Edge/class-edge-purger.php',
+			'Edge/class-cdn.php',
+			'Integrations/class-builder-purge-watcher.php',
+			'Core/class-hook-registry.php',
 		);
 	}
 
@@ -79,8 +79,8 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 		$this->load_loader_map();
 		$this->assertSame(
 			array(
-				'class-litespeed-crawler.php',
-				'class-litespeed-esi.php',
+				'Integrations/class-litespeed-crawler.php',
+				'Integrations/class-litespeed-esi.php',
 			),
 			Loader_Map::litespeed_stack_files()
 		);
@@ -140,14 +140,51 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Every inventory class resolves through `Loader_Map::path_for()`.
+	 *
+	 * ARCH-013 smoke gate: scans the class inventory JSON and asserts each
+	 * listed class short name resolves via `path_for()` to an existing file,
+	 * so a missed mapping in the directory move fails the suite.
+	 *
+	 * @return void
+	 */
+	public function test_every_inventory_class_resolves_via_path_for(): void {
+		$this->load_loader_map();
+		$inv_path = dirname( __DIR__, 2 ) . '/docs/architecture/class-inventory.json';
+		$this->assertFileExists( $inv_path, 'Class inventory JSON must exist for the loader smoke gate.' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local file scan (no remote URL, no WP_Filesystem in unit tests).
+		$raw = file_get_contents( $inv_path );
+		$this->assertNotFalse( $raw, "Cannot read {$inv_path}" );
+		$inventory = json_decode( (string) $raw, true );
+		$this->assertIsArray( $inventory, 'Class inventory JSON must decode to an array.' );
+		$this->assertNotEmpty( $inventory );
+		foreach ( $inventory as $entry ) {
+			$file = isset( $entry['file'] ) ? (string) $entry['file'] : '';
+			$this->assertNotSame( '', $file, 'Inventory entry must carry a file path.' );
+			$abs = dirname( __DIR__, 2 ) . '/' . $file;
+			$this->assertFileExists( $abs, "Inventory file missing: {$file}" );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local file scan (no remote URL, no WP_Filesystem in unit tests).
+			$src = file_get_contents( $abs );
+			$this->assertNotFalse( $src, "Cannot read {$file}" );
+			if ( ! preg_match( '/^\s*(?:abstract\s+|final\s+)?(?:class|trait)\s+([A-Za-z_][A-Za-z0-9_]*)/m', (string) $src, $m ) ) {
+				continue;
+			}
+			$short = $m[1];
+			$path  = Loader_Map::path_for( $short );
+			$this->assertNotNull( $path, "Inventory class {$short} ({$file}) does not resolve via Loader_Map::path_for()." );
+			$this->assertFileExists( (string) $path, "Inventory class {$short} resolves to a missing file." );
+		}
+	}
+
+	/**
 	 * The loader resolves itself and the orchestrator everywhere Main resolves.
 	 *
 	 * @return void
 	 */
 	public function test_loader_map_and_main_self_registered(): void {
 		$this->load_loader_map();
-		$this->assertSame( 'class-loader-map.php', Loader_Map::fallback_map()['Loader_Map'] );
-		$this->assertSame( 'class-main.php', Loader_Map::fallback_map()['Main'] );
+		$this->assertSame( 'Core/class-loader-map.php', Loader_Map::fallback_map()['Loader_Map'] );
+		$this->assertSame( 'Core/class-main.php', Loader_Map::fallback_map()['Main'] );
 		$this->assertFileExists( (string) Loader_Map::path_for( 'Loader_Map' ) );
 		$this->assertFileExists( (string) Loader_Map::path_for( 'Main' ) );
 	}
@@ -166,8 +203,18 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 		$map         = Loader_Map::fallback_map();
 		$load_always = array_merge( Loader_Map::eager_files(), Loader_Map::litespeed_stack_files() );
 		$files       = array_merge(
-			(array) glob( WPPO_PLUGIN_PATH . 'includes/class-*.php' ),
-			(array) glob( WPPO_PLUGIN_PATH . 'includes/trait-*.php' )
+			(array) glob( WPPO_PLUGIN_PATH . 'includes/*/class-*.php' ),
+			(array) glob( WPPO_PLUGIN_PATH . 'includes/*/trait-*.php' ),
+			(array) glob( WPPO_PLUGIN_PATH . 'includes/class-*.php' )
+		);
+		// minify/ wrappers are third-party-adjacent and out of the loader scope.
+		$files = array_values(
+			array_filter(
+				(array) $files,
+				static function ( $file_path ) {
+					return false === strpos( (string) $file_path, '/includes/minify/' );
+				}
+			)
 		);
 		$this->assertNotEmpty( $files );
 		foreach ( $files as $file_path ) {
@@ -224,11 +271,11 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_path_for_resolves_lazy_class(): void {
 		$this->load_loader_map();
-		$this->assertNotContains( 'class-cache.php', Loader_Map::eager_files() );
-		$this->assertNotContains( 'class-cache.php', Loader_Map::litespeed_stack_files() );
+		$this->assertNotContains( 'Cache/class-cache.php', Loader_Map::eager_files() );
+		$this->assertNotContains( 'Cache/class-cache.php', Loader_Map::litespeed_stack_files() );
 		$path = Loader_Map::path_for( 'Cache' );
 		$this->assertNotNull( $path );
-		$this->assertStringEndsWith( 'includes/class-cache.php', (string) $path );
+		$this->assertStringEndsWith( 'includes/Cache/class-cache.php', (string) $path );
 		$this->assertFileExists( (string) $path );
 		// Fully-qualified name resolves identically (autoloader passes FQCNs).
 		$this->assertSame( $path, Loader_Map::path_for( 'PerformanceOptimise\\Inc\\Cache' ) );
@@ -253,8 +300,8 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	public function test_cli_file_present_and_exists(): void {
 		$this->load_loader_map();
 		$cli = Loader_Map::cli_file();
-		$this->assertStringEndsWith( 'includes/class-wppo-cli-command.php', $cli );
+		$this->assertStringEndsWith( 'includes/Admin/class-wppo-cli-command.php', $cli );
 		$this->assertFileExists( $cli );
-		$this->assertSame( 'class-wppo-cli-command.php', Loader_Map::fallback_map()['WPPO_CLI_Command'] );
+		$this->assertSame( 'Admin/class-wppo-cli-command.php', Loader_Map::fallback_map()['WPPO_CLI_Command'] );
 	}
 }
