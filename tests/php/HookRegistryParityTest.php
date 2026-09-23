@@ -19,16 +19,15 @@ use PerformanceOptimise\Inc\LiteSpeed_Integration;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
-require_once __DIR__ . '/../../includes/class-main.php';
-require_once __DIR__ . '/../../includes/class-hook-registry.php';
-
 /**
  * Hook-registry parity tests.
  *
  * @package PerformanceOptimise\Tests
  */
 class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
-	use WPPO_Test_Bootstrap;
+	use WPPO_Test_Bootstrap {
+		WPPO_Test_Bootstrap::tearDown as bootstrap_teardown;
+	}
 
 	/**
 	 * Shared registration log: each entry is
@@ -47,7 +46,7 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 	protected function tearDown(): void {
 		unset( $GLOBALS['wp_version'] );
 		unset( $_SERVER['HTTP_HOST'], $_SERVER['REQUEST_URI'] );
-		parent::tearDown();
+		$this->bootstrap_teardown();
 	}
 
 	/**
