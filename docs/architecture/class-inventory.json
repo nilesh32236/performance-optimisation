@@ -87,19 +87,34 @@
     {
         "file": "includes/class-ai-adaptive.php",
         "class": null,
-        "lines": 6322,
-        "methods": 98,
+        "lines": 3989,
+        "methods": 76,
         "hooks": [
             "wp_speculation_rules"
         ],
         "static_state": false,
         "refs": [
-            "Cron",
+            "Ai_Anomaly",
             "LiteSpeed_ESI",
             "Main",
             "Pagespeed",
             "RUM",
             "Suggestion_Engine",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/class-ai-anomaly.php",
+        "class": null,
+        "lines": 2619,
+        "methods": 43,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cron",
+            "Main",
+            "Pagespeed",
+            "RUM",
             "Used_CSS",
             "Util"
         ]
@@ -611,7 +626,7 @@
     {
         "file": "includes/class-lcp-preload.php",
         "class": null,
-        "lines": 4435,
+        "lines": 4434,
         "methods": 74,
         "hooks": [],
         "static_state": true,
@@ -706,7 +721,7 @@
     {
         "file": "includes/class-loader-map.php",
         "class": null,
-        "lines": 238,
+        "lines": 239,
         "methods": 7,
         "hooks": [],
         "static_state": false,
@@ -1041,7 +1056,7 @@
     {
         "file": "includes/class-used-css.php",
         "class": null,
-        "lines": 4960,
+        "lines": 4961,
         "methods": 94,
         "hooks": [],
         "static_state": false,

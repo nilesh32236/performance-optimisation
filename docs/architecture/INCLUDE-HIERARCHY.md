@@ -14,7 +14,7 @@ files + `redis-connect-helper.php`, plus `minify/` wrappers). Counts/methods/ref
 - **Images:** `Image_Optimisation`, `Img_Converter`
 - **CSS:** `Critical_CSS`, `Used_CSS`
 - **Database/insight:** `Database_Cleanup`, `Telemetry`, `Pagespeed`,
-  `Suggestion_Engine`, `System_Info`, `RUM`, `AI_Adaptive`, `OD_Bridge`
+  `Suggestion_Engine`, `System_Info`, `RUM`, `AI_Adaptive`, `Ai_Anomaly`, `OD_Bridge`
 - **Edge/delivery:** `CDN`, `CDN_Purger`, `Edge_Cache`, `Edge_Purger`,
   `Cloudflare_Purger`, `Server_Rules`, `Htaccess_Handler`, `Header_Emitter`
 - **LiteSpeed:** `LiteSpeed_Integration`, `LiteSpeed_Crawler`, `LiteSpeed_ESI`
@@ -69,7 +69,8 @@ includes/
   Database/       class-database-cleanup.php
   Insight/        class-telemetry.php, class-pagespeed.php,
                   class-suggestion-engine.php, class-system-info.php,
-                  class-rum.php, class-ai-adaptive.php, class-od-bridge.php
+                  class-rum.php, class-ai-adaptive.php,
+                  class-ai-anomaly.php, class-od-bridge.php
   Edge/           class-cdn.php, class-cdn-purger.php, class-edge-cache.php,
                   class-edge-purger.php, class-cloudflare-purger.php,
                   class-server-rules.php, class-htaccess-handler.php,
@@ -136,7 +137,8 @@ edge/cluster evidence; `[load]` = `LOAD-ORDER.md` loader/drop-in evidence.
 | `class-suggestion-engine.php` | `Insight/` | [sysmap:Data/insight] suggestions from telemetry + PageSpeed; insight consumer |
 | `class-system-info.php` | `Insight/` | [sysmap:Data/insight] environment facts; insight source |
 | `class-rum.php` | `Insight/` | [sysmap:Data/insight] real-user Web Vitals beacon; insight source |
-| `class-ai-adaptive.php` | `Insight/` | [sysmap:Data/insight] heuristic auto-tune; [hotspot] ARCH-010 decomposition source |
+| `class-ai-adaptive.php` | `Insight/` | [sysmap:Data/insight] heuristic auto-tune; [hotspot] ARCH-010 decomposition source (98→76 methods; speculation + model/learn + anomaly facades) |
+| `class-ai-anomaly.php` | `Insight/` | Anomaly detection (thresholds, breach/alarm state, RUM digest, CSS-refresh reactions, deploy notes) extracted from `AI_Adaptive` (ARCH-010); `AI_Adaptive` keeps facade proxies so caller identity is unchanged; [load] eager in `Main::includes()` via `Loader_Map` |
 | `class-od-bridge.php` | `Insight/` | [sysmap:Data/insight] Optimization Detective bridge (real-visit LCP); insight source |
 | `class-cdn.php` | `Edge/` | [sysmap:Delivery/edge] CDN mapping + URL rewrite; [graph] `CDN::` edges from cache/edge paths |
 | `class-cdn-purger.php` | `Edge/` | [sysmap:Delivery/edge] CDN purge fan-out; edge-purge owner |
