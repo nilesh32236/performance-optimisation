@@ -403,6 +403,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private ?int $options_blog_id = null;
 
 		/**
+		 * Lazily-created settings-migration runner (ARCH-004).
+		 *
+		 * Owns the 17 `maybe_migrate_*()` backfill bodies (see
+		 * {@see Settings_Migrations}); `Main` keeps thin proxies so
+		 * `Hook_Registry` hook registrations stay byte-identical. Null
+		 * until the first migration proxy runs.
+		 *
+		 * @var   Settings_Migrations|null
+		 * @since NEXT
+		 */
+		private ?Settings_Migrations $settings_migrations = null;
+
+		/**
 		 * Timestamp (microtime) when the front-end template render started.
 		 *
 		 * @var   float
@@ -1433,460 +1446,188 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			new Abilities();
 		}
 		/**
+		 * Direct reference to the in-memory options memo (ARCH-004 internal bridge).
+		 *
+		 * Gives {@see Settings_Migrations} the same same-blog direct memo touch
+		 * the `maybe_migrate_*()` bodies had on `Main`: reads stay per-site via
+		 * `get_option()`, persists via `Util::save_settings()`, and this memo
+		 * syncs the current request only — never a new write path. Multisite
+		 * `switch_to_blog()` re-resolution still applies because migrations only
+		 * ever sync the live request memo.
+		 *
+		 * Audit note: only `Settings_Migrations` calls this (verified by
+		 * searching callers — no other runtime or test caller exists). Do not
+		 * call from new code; the public visibility exists solely for the
+		 * extraction bridge.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array|null Reference to the options memo (null until resolved).
+		 */
+		public function &migration_options_ref(): ?array {
+			return $this->options;
+		}
+
+		/**
+		 * Lazily-created settings-migration runner (ARCH-004).
+		 *
+		 * Single owner for the 17 migration backfills; every
+		 * `maybe_migrate_*()` proxy delegates here so `Hook_Registry`
+		 * callback identity is unchanged.
+		 *
+		 * @since NEXT
+		 * @return Settings_Migrations Migration runner bound to this instance.
+		 */
+		private function migrations(): Settings_Migrations {
+			if ( null === $this->settings_migrations ) {
+				$this->settings_migrations = new Settings_Migrations( $this );
+			}
+			return $this->settings_migrations;
+		}
+		/**
 		 * One-time upgrade for the block-assets toggle on WP 6.9+.
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end request never
-		 * triggers a settings write. See {@see migrate_block_assets_setting()} for the logic.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_block_assets_setting(): void {
-			$this->migrate_block_assets_setting( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) );
+			$this->migrations()->migrate_block_assets_setting( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) );
 		}
 
 		/**
 		 * One-time upgrade core for the block-assets toggle on WP 6.9+.
 		 *
-		 * WP 6.9+ loads core block assets on demand in classic themes by default, but older
-		 * installs may store a `wppo_settings` array that predates the `blockAssetsOnDemand`
-		 * key (the pre-6.9 default was OFF). Without an upgrade those installs would silently
-		 * register the opt-out (forcing the combined `wp-block-library` stylesheet) once they
-		 * reach WP 6.9+.
+		 * Backward-compatibility shim (ARCH-004): delegates to
+		 * {@see Settings_Migrations::migrate_block_assets_setting()} so reflective
+		 * callers observe identical behavior.
 		 *
-		 * Only installs that never configured the toggle (key absent) are defaulted to `true`
-		 * so they inherit core's new default; any stored explicit value (true or false) is
-		 * preserved verbatim, and fresh installs with no stored option are skipped because the
-		 * constructor defaults already match. The check is idempotent (key presence is the
-		 * marker), so no extra option row is ever allocated — fresh installs create zero
-		 * migration rows and steady-state requests perform zero migration writes.
+		 * Retention note: intentionally kept despite looking unreachable —
+		 * `tests/php/BlockAssetsMigrationTest.php` invokes it via reflection
+		 * and external reflective callers may do the same. Do not remove in
+		 * dead-code sweeps.
 		 *
-		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
-		 *                                                        (core loads separate core
-		 *                                                        block assets on demand).
+		 * @since NEXT Delegates to Settings_Migrations (ARCH-004).
+		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active.
 		 * @return void
 		 */
 		private function migrate_block_assets_setting( bool $loads_separate_core_block_assets_on_demand ): void {
-			if ( ! $loads_separate_core_block_assets_on_demand ) {
-				return;
-			}
-
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				// Fresh install (or no stored settings): constructor defaults already match
-				// WP 6.9+ behavior, so there is nothing to migrate and nothing to record.
-				return;
-			}
-
-			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-
-			if ( ! array_key_exists( 'blockAssetsOnDemand', $file ) ) {
-				$stored['file_optimisation'] = $file + array( 'blockAssetsOnDemand' => true );
-				Util::save_settings( $stored );
-
-				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-					$this->options['file_optimisation'] = array();
-				}
-				$this->options['file_optimisation']['blockAssetsOnDemand'] = true;
-
-				Log::add( __( 'Enabled on-demand block asset loading to match the WordPress 6.9 default.', 'performance-optimisation' ) );
-			}
+			$this->migrations()->migrate_block_assets_setting( $loads_separate_core_block_assets_on_demand );
 		}
 
 		/**
 		 * One-time backfill for the CCSS inline size cap.
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate the `ccssMaxSize` key (key absent) are backfilled
-		 * with the 20 KB default; any stored explicit value is preserved
-		 * verbatim, and fresh installs with no stored option are skipped
-		 * because the constructor defaults already match. The check is
-		 * idempotent (key presence is the marker), so no extra option row is
-		 * needed. In-memory options are synced too so the current request
-		 * observes the backfilled value.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.0.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_ccss_max_size(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-
-			if ( array_key_exists( 'ccssMaxSize', $file ) ) {
-				return;
-			}
-
-			$stored['file_optimisation'] = $file + array( 'ccssMaxSize' => 20480 );
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			$this->options['file_optimisation']['ccssMaxSize'] = 20480;
-
-			Log::add( __( 'Added default Critical CSS size cap (20 KB).', 'performance-optimisation' ) );
+			$this->migrations()->migrate_ccss_max_size();
 		}
 
 		/**
 		 * One-time backfill for the Critical CSS user safelist (issue #1038).
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate the `ccssSafelistExtra` key (key absent) are
-		 * backfilled with the empty default; any stored explicit value is
-		 * preserved verbatim, and fresh installs with no stored option are
-		 * skipped because the constructor defaults already match. The check is
-		 * idempotent (key presence is the marker), so no extra option row is
-		 * needed. In-memory options are synced too so the current request
-		 * observes the backfilled value. Uses per-site `get_option()` so
-		 * multisite sites migrate independently with no cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.0.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_ccss_safelist(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-
-			if ( array_key_exists( 'ccssSafelistExtra', $file ) ) {
-				return;
-			}
-
-			$stored['file_optimisation'] = $file + array( 'ccssSafelistExtra' => '' );
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			$this->options['file_optimisation']['ccssSafelistExtra'] = '';
-
-			Log::add( __( 'Added default Critical CSS safelist (empty, current behaviour kept).', 'performance-optimisation' ) );
+			$this->migrations()->migrate_ccss_safelist();
 		}
 
 		/**
 		 * One-time backfill for the RUM-weighted CSS queue keys (issue #1164).
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate any of the `ccssQueueCap` / `usedCssQueueCap` /
-		 * `ccssViewportVariants` / `usedCSSDeliveryMode` / `ccssGenTimeout` keys
-		 * (key absent) are backfilled with the fail-open defaults; any stored
-		 * explicit value is preserved verbatim, and fresh installs with no
-		 * stored option are skipped because the constructor defaults already
-		 * match. The check is idempotent (key presence is the marker), so no
-		 * extra option row is needed. In-memory options are synced too so the
-		 * current request observes the backfilled values. Uses per-site
-		 * `get_option()` so multisite sites migrate independently with no
-		 * cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0 Also backfills the 25s `ccssGenTimeout` generation budget.
-		 * @since 2.3.0 Also backfills the #1388 keys (`ccssInlineBudgetKb`,
-		 *        `ccssCommerceExclude`, `ccssChecksumRegen`).
+		 * @since 2.3.0 Also backfills the #1388 keys (`ccssInlineBudgetKb`, `ccssCommerceExclude`, `ccssChecksumRegen`).
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_css_queue_defaults(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-
-			$defaults = array(
-				'ccssQueueCap'         => 5,
-				'usedCssQueueCap'      => 50,
-				'ccssViewportVariants' => false,
-				'usedCSSDeliveryMode'  => 'file',
-				'ccssGenTimeout'       => 25,
-				'ccssInlineBudgetKb'   => 14,
-				'ccssCommerceExclude'  => true,
-				'ccssChecksumRegen'    => true,
-			);
-			$changed  = false;
-			foreach ( $defaults as $key => $default ) {
-				if ( ! array_key_exists( $key, $file ) ) {
-					$file[ $key ] = $default;
-					$changed      = true;
-				}
-			}
-			if ( ! $changed ) {
-				return;
-			}
-
-			$stored['file_optimisation'] = $file;
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			foreach ( $defaults as $key => $default ) {
-				if ( ! array_key_exists( $key, $this->options['file_optimisation'] ) ) {
-					$this->options['file_optimisation'][ $key ] = $default;
-				}
-			}
-
-			Log::add( __( 'Added default RUM-weighted CSS queue settings, CCSS generation timeout (25s, single-variant behaviour kept), 14 KB inline budget, commerce exclusion, and checksum regen.', 'performance-optimisation' ) );
+			$this->migrations()->migrate_css_queue_defaults();
 		}
 
 		/**
 		 * One-time backfill for the RUM-weighted top-URL prefetch cap (issue #1183).
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate the `speculationTopUrlsLimit` key (key absent) are
-		 * backfilled with the 2-URL default; any stored explicit value is
-		 * preserved verbatim, and fresh installs with no stored option are
-		 * skipped because the constructor defaults already match. The check is
-		 * idempotent (key presence is the marker), so no extra option row is
-		 * needed. In-memory options are synced too so the current request
-		 * observes the backfilled value. Uses per-site `get_option()` so
-		 * multisite sites migrate independently with no cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_speculation_top_urls(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$preload = isset( $stored['preload_settings'] ) && is_array( $stored['preload_settings'] ) ? $stored['preload_settings'] : array();
-
-			if ( array_key_exists( 'speculationTopUrlsLimit', $preload ) ) {
-				return;
-			}
-
-			$preload['speculationTopUrlsLimit'] = 2;
-			$stored['preload_settings']         = $preload;
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
-				$this->options['preload_settings'] = array();
-			}
-			if ( ! array_key_exists( 'speculationTopUrlsLimit', $this->options['preload_settings'] ) ) {
-				$this->options['preload_settings']['speculationTopUrlsLimit'] = 2;
-			}
-
-			Log::add( __( 'Added default RUM-weighted top-URL prefetch limit (2 URLs, prerender stays guarded).', 'performance-optimisation' ) );
+			$this->migrations()->migrate_speculation_top_urls();
 		}
 
 		/**
 		 * One-time backfill for the high-value prerender list toggle (issue #1237).
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate the `speculationPrerenderList` key (key absent) are
-		 * backfilled with the off default; any stored explicit value is
-		 * preserved verbatim, and fresh installs with no stored option are
-		 * skipped because the constructor defaults already match. The check is
-		 * idempotent (key presence is the marker), so no extra option row is
-		 * needed. In-memory options are synced too so the current request
-		 * observes the backfilled value. Uses per-site `get_option()` so
-		 * multisite sites migrate independently with no cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_speculation_prerender_list(): void {
-			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
-				return;
-			}
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$preload = isset( $stored['preload_settings'] ) && is_array( $stored['preload_settings'] ) ? $stored['preload_settings'] : array();
-
-			if ( array_key_exists( 'speculationPrerenderList', $preload ) ) {
-				return;
-			}
-
-			$preload['speculationPrerenderList'] = false;
-			$stored['preload_settings']          = $preload;
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
-				$this->options['preload_settings'] = array();
-			}
-			if ( ! array_key_exists( 'speculationPrerenderList', $this->options['preload_settings'] ) ) {
-				$this->options['preload_settings']['speculationPrerenderList'] = false;
-			}
-
-			Log::add( __( 'Added default high-value prerender list toggle (off, current prefetch behavior kept).', 'performance-optimisation' ) );
+			$this->migrations()->migrate_speculation_prerender_list();
 		}
 
 		/**
 		 * One-time backfill for the RUM beacon sample rate (issue #1214).
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate the `rum_sample_rate` key (key absent) are
-		 * backfilled with the 100 default (unsampled current behavior); any
-		 * stored explicit value is preserved verbatim, and fresh installs with
-		 * no stored option are skipped because the constructor defaults already
-		 * match. The check is idempotent (key presence is the marker), so no
-		 * extra option row is needed. In-memory options are synced too so the
-		 * current request observes the backfilled value. Uses per-site
-		 * `get_option()` so multisite sites migrate independently with no
-		 * cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_rum_sample_rate(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$audit = isset( $stored['performance_audit'] ) && is_array( $stored['performance_audit'] ) ? $stored['performance_audit'] : array();
-
-			if ( array_key_exists( 'rum_sample_rate', $audit ) ) {
-				return;
-			}
-
-			$default_rate = class_exists( 'PerformanceOptimise\Inc\RUM' ) ? \PerformanceOptimise\Inc\RUM::RUM_SAMPLE_RATE_DEFAULT : 100;
-
-			$audit['rum_sample_rate']    = $default_rate;
-			$stored['performance_audit'] = $audit;
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['performance_audit'] ) || ! is_array( $this->options['performance_audit'] ) ) {
-				$this->options['performance_audit'] = array();
-			}
-			if ( ! array_key_exists( 'rum_sample_rate', $this->options['performance_audit'] ) ) {
-				$this->options['performance_audit']['rum_sample_rate'] = $default_rate;
-			}
-
-			Log::add( __( 'Added default RUM beacon sample rate (100 percent, unsampled current behavior kept).', 'performance-optimisation' ) );
+			$this->migrations()->migrate_rum_sample_rate();
 		}
 
 		/**
-		 * One-time backfill for the missing-alt autofill toggle and the
-		 * longest-edge downscale cap (issue #985).
+		 * One-time backfill for the missing-alt autofill toggle and the longest-edge downscale cap (issue #985).
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate the `autoAltText` / `maxLongestEdgePx` keys (key
-		 * absent) are backfilled with the fail-open defaults (`false` /
-		 * `2560`); any stored explicit value is preserved verbatim, and fresh
-		 * installs with no stored option are skipped because the constructor
-		 * defaults already match. The check is idempotent (key presence is
-		 * the marker), so no extra option row is needed. In-memory options
-		 * are synced too so the current request observes the backfilled
-		 * values. Uses per-site `get_option()` so multisite sites migrate
-		 * independently with no cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.0.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_image_alt_edge_defaults(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$image = isset( $stored['image_optimisation'] ) && is_array( $stored['image_optimisation'] ) ? $stored['image_optimisation'] : array();
-
-			$changed = false;
-			if ( ! array_key_exists( 'autoAltText', $image ) ) {
-				$image['autoAltText'] = false;
-				$changed              = true;
-			}
-			if ( ! array_key_exists( 'maxLongestEdgePx', $image ) ) {
-				$image['maxLongestEdgePx'] = 2560;
-				$changed                   = true;
-			}
-
-			if ( ! $changed ) {
-				return;
-			}
-
-			$stored['image_optimisation'] = $image;
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
-				$this->options['image_optimisation'] = array();
-			}
-			$this->options['image_optimisation'] = array_merge( $this->options['image_optimisation'], $image );
-
-			Log::add( __( 'Added default image alt autofill and longest-edge cap settings.', 'performance-optimisation' ) );
+			$this->migrations()->migrate_image_alt_edge_defaults();
 		}
 
 		/**
 		 * One-time backfill for the unified safe-mode kill switch (issue #1098).
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate the `safeMode` key (key absent) are backfilled with
-		 * the off default (`false`, current behaviour kept); any stored
-		 * explicit value is preserved verbatim, and fresh installs with no
-		 * stored option are skipped because the constructor defaults already
-		 * match. The check is idempotent (key presence is the marker), so no
-		 * extra option row is needed. In-memory options are synced too so the
-		 * current request observes the backfilled value. Uses per-site
-		 * `get_option()` so multisite sites migrate independently with no
-		 * cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_safe_mode(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-
-			if ( array_key_exists( 'safeMode', $file ) ) {
-				return;
-			}
-
-			$stored['file_optimisation'] = $file + array( 'safeMode' => false );
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			$this->options['file_optimisation']['safeMode'] = false;
+			$this->migrations()->migrate_safe_mode();
 		}
 
 		/**
@@ -1956,31 +1697,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Backfill the additive elementorSafeMode key (issue #1259).
 		 *
-		 * Runs on admin_init; in-memory default is applied in __construct so
-		 * front-end requests never pay for a DB write. Defaults to on
-		 * (builder-proof by default). Multisite-safe: per-site
-		 * get_option() so sites migrate independently.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_elementor_safe_mode(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array".
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-			if ( array_key_exists( 'elementorSafeMode', $file ) ) {
-				return;
-			}
-			$stored['file_optimisation'] = $file + array( 'elementorSafeMode' => true );
-			Util::save_settings( $stored );
-			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-				$this->options['file_optimisation'] = array();
-			}
-			$this->options['file_optimisation']['elementorSafeMode'] = true;
+			$this->migrations()->migrate_elementor_safe_mode();
 		}
 
 		/**
@@ -2294,501 +2019,99 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * One-time backfill for automatic LCP hero preload + font discovery (issue #1216).
 		 *
-		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
-		 * request never triggers a settings write. Only installs whose stored
-		 * settings predate the `autoLcpPreload` / `autoDiscoverFonts` keys
-		 * (key absent) are backfilled with the off defaults (`false`, manual
-		 * lists keep winning); any stored explicit value is preserved
-		 * verbatim, and fresh installs with no stored option are skipped
-		 * because the constructor defaults already match. Idempotent (key
-		 * presence is the marker). Uses per-site `get_option()` so multisite
-		 * sites migrate independently with no cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_preload_auto_defaults(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
-			}
-
-			$preload = isset( $stored['preload_settings'] ) && is_array( $stored['preload_settings'] ) ? $stored['preload_settings'] : array();
-
-			$changed = false;
-			if ( ! array_key_exists( 'autoLcpPreload', $preload ) ) {
-				$preload['autoLcpPreload'] = false;
-				$changed                   = true;
-			}
-			if ( ! array_key_exists( 'autoDiscoverFonts', $preload ) ) {
-				$preload['autoDiscoverFonts'] = false;
-				$changed                      = true;
-			}
-
-			if ( ! $changed ) {
-				return;
-			}
-
-			$stored['preload_settings'] = $preload;
-			Util::save_settings( $stored );
-
-			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
-				$this->options['preload_settings'] = array();
-			}
-			$this->options['preload_settings'] = array_merge( $this->options['preload_settings'], $preload );
-
-			Log::add( __( 'Added default automatic LCP preload and font discovery settings (both off; manual lists keep winning).', 'performance-optimisation' ) );
+			$this->migrations()->migrate_preload_auto_defaults();
 		}
 
 		/**
 		 * Backfill the additive Redis outage status flag (issue #1233).
 		 *
-		 * Adds `object_cache.outage_bypassed = false` to stored settings that
-		 * predate the key. Runs on `admin_init` (not the constructor) so a
-		 * cacheable front-end request never triggers a settings write. Fresh
-		 * installs with no stored option are skipped (absent key reads as
-		 * "not bypassed"). Idempotent (key presence is the marker). Uses
-		 * per-site `get_option()` so multisite sites migrate independently
-		 * with no cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_object_cache_outage_flag(): void {
-			try {
-				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
-					return;
-				}
-				// Cheap early-return through the already-loaded memo: after
-				// migration completes this avoids one extra option read per
-				// admin page.
-				if ( isset( $this->options['object_cache'] ) && is_array( $this->options['object_cache'] ) && array_key_exists( 'outage_bypassed', $this->options['object_cache'] ) ) {
-					return;
-				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				$stored = get_option( 'wppo_settings' );
-				if ( ! is_array( $stored ) ) {
-					return;
-				}
-
-				$oc = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
-
-				if ( array_key_exists( 'outage_bypassed', $oc ) ) {
-					return;
-				}
-
-				$stored['object_cache'] = $oc + array( 'outage_bypassed' => false );
-				Util::save_settings( $stored );
-
-				if ( ! isset( $this->options['object_cache'] ) || ! is_array( $this->options['object_cache'] ) ) {
-					$this->options['object_cache'] = array();
-				}
-				$this->options['object_cache']['outage_bypassed'] = false;
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
-					Util::set_settings_cache( $stored );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			$this->migrations()->migrate_object_cache_outage_flag();
 		}
 
 		/**
 		 * One-time backfill for RUM-segmented speculation auto-tune (issue #1425).
 		 *
-		 * Adds the additive `ai_adaptive.speculation_autotune_enabled`,
-		 * `ai_adaptive.speculation_min_samples`, and
-		 * `ai_adaptive.speculation_max_urls` keys to stored settings that
-		 * predate them. Runs on `admin_init` (not the constructor) so a
-		 * cacheable front-end request never triggers a settings write. Only
-		 * installs missing a key are backfilled (opt-in off, min 20, max 5);
-		 * any stored explicit value is preserved verbatim, and fresh installs
-		 * with no stored option are skipped because the constructor defaults
-		 * already match. Idempotent (key presence is the marker). Uses
-		 * per-site `get_option()` so multisite sites migrate independently
-		 * with no cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.3.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_ai_speculation_autotune(): void {
-			try {
-				if ( ! function_exists( 'get_option' ) ) {
-					return;
-				}
-				// Cheap early-return through the already-loaded memo: after
-				// migration completes this avoids one extra option read per
-				// admin page.
-				if ( isset( $this->options['ai_adaptive'] ) && is_array( $this->options['ai_adaptive'] )
-					&& array_key_exists( 'speculation_autotune_enabled', $this->options['ai_adaptive'] )
-					&& array_key_exists( 'speculation_min_samples', $this->options['ai_adaptive'] )
-					&& array_key_exists( 'speculation_max_urls', $this->options['ai_adaptive'] ) ) {
-					return;
-				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				$stored = get_option( 'wppo_settings' );
-				if ( ! is_array( $stored ) ) {
-					return;
-				}
-
-				$ai = isset( $stored['ai_adaptive'] ) && is_array( $stored['ai_adaptive'] ) ? $stored['ai_adaptive'] : array();
-
-				$changed = false;
-				if ( ! array_key_exists( 'speculation_autotune_enabled', $ai ) ) {
-					$ai['speculation_autotune_enabled'] = false;
-					$changed                            = true;
-				}
-				if ( ! array_key_exists( 'speculation_min_samples', $ai ) ) {
-					$ai['speculation_min_samples'] = 20;
-					$changed                       = true;
-				}
-				if ( ! array_key_exists( 'speculation_max_urls', $ai ) ) {
-					$ai['speculation_max_urls'] = 5;
-					$changed                    = true;
-				}
-				if ( ! $changed ) {
-					return;
-				}
-
-				$stored['ai_adaptive'] = $ai;
-				Util::save_settings( $stored );
-
-				if ( ! isset( $this->options['ai_adaptive'] ) || ! is_array( $this->options['ai_adaptive'] ) ) {
-					$this->options['ai_adaptive'] = array();
-				}
-				foreach ( array(
-					'speculation_autotune_enabled' => false,
-					'speculation_min_samples'      => 20,
-					'speculation_max_urls'         => 5,
-				) as $key => $default ) {
-					if ( ! array_key_exists( $key, $this->options['ai_adaptive'] ) ) {
-						$this->options['ai_adaptive'][ $key ] = $default;
-					}
-				}
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
-					Util::set_settings_cache( $stored );
-				}
-				Log::add( __( 'Added default RUM-segmented speculation auto-tune settings (off; manual speculation settings untouched).', 'performance-optimisation' ) );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			$this->migrations()->migrate_ai_speculation_autotune();
 		}
 
 		/**
 		 * One-time backfill for anomaly detector v2 keys (issue #1313).
 		 *
-		 * Adds the additive `ai_adaptive.anomaly_band_window`,
-		 * `ai_adaptive.anomaly_recovery_days`, and
-		 * `ai_adaptive.deploy_notes` keys to stored settings that predate
-		 * them. Runs on `admin_init` (not the constructor) so a cacheable
-		 * front-end request never triggers a settings write. Only installs
-		 * missing a key are backfilled; any stored explicit value is
-		 * preserved verbatim, and fresh installs with no stored option are
-		 * skipped because the constructor defaults already match.
-		 * Idempotent (key presence is the marker). Uses per-site
-		 * `get_option()` so multisite sites migrate independently with no
-		 * cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.3.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_ai_anomaly_v2(): void {
-			try {
-				if ( ! function_exists( 'get_option' ) ) {
-					return;
-				}
-				if ( isset( $this->options['ai_adaptive'] ) && is_array( $this->options['ai_adaptive'] )
-					&& array_key_exists( 'anomaly_band_window', $this->options['ai_adaptive'] )
-					&& array_key_exists( 'anomaly_recovery_days', $this->options['ai_adaptive'] )
-					&& array_key_exists( 'deploy_notes', $this->options['ai_adaptive'] ) ) {
-					return;
-				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				$stored = get_option( 'wppo_settings' );
-				if ( ! is_array( $stored ) ) {
-					return;
-				}
-
-				$ai = isset( $stored['ai_adaptive'] ) && is_array( $stored['ai_adaptive'] ) ? $stored['ai_adaptive'] : array();
-
-				$changed = false;
-				if ( ! array_key_exists( 'anomaly_band_window', $ai ) ) {
-					$ai['anomaly_band_window'] = 10;
-					$changed                   = true;
-				}
-				if ( ! array_key_exists( 'anomaly_recovery_days', $ai ) ) {
-					$ai['anomaly_recovery_days'] = 3;
-					$changed                     = true;
-				}
-				if ( ! array_key_exists( 'deploy_notes', $ai ) ) {
-					$ai['deploy_notes'] = array();
-					$changed            = true;
-				}
-				if ( ! $changed ) {
-					return;
-				}
-
-				$stored['ai_adaptive'] = $ai;
-				Util::save_settings( $stored );
-
-				if ( ! isset( $this->options['ai_adaptive'] ) || ! is_array( $this->options['ai_adaptive'] ) ) {
-					$this->options['ai_adaptive'] = array();
-				}
-				foreach ( array(
-					'anomaly_band_window'   => 10,
-					'anomaly_recovery_days' => 3,
-					'deploy_notes'          => array(),
-				) as $key => $default ) {
-					if ( ! array_key_exists( $key, $this->options['ai_adaptive'] ) ) {
-						$this->options['ai_adaptive'][ $key ] = $default;
-					}
-				}
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
-					Util::set_settings_cache( $stored );
-				}
-				Log::add( __( 'Added default anomaly detector v2 settings (band window, recovery days, deploy notes).', 'performance-optimisation' ) );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			$this->migrations()->migrate_ai_anomaly_v2();
 		}
 
 		/**
 		 * One-time backfill for comment-image hardening (issue #1271).
 		 *
-		 * Adds `image_optimisation.hardenCommentImages = true` to stored
-		 * settings that predate the key so hostile comment markup (img
-		 * onerror, picture source, inline on* handlers, scriptable URLs)
-		 * is stripped before next-gen/lazy rewriting. Runs on `admin_init`
-		 * (not the constructor) so a cacheable front-end request never
-		 * triggers a settings write. Fresh installs with no stored option
-		 * are skipped (absent key reads as enabled via the in-memory
-		 * default). Idempotent (key presence is the marker). Uses per-site
-		 * `get_option()` so multisite sites migrate independently with no
-		 * cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_comment_image_hardening(): void {
-			try {
-				// Capability-gated: the migration performs a settings
-				// write plus full local + edge cache purges, so it must
-				// only run for administrators (first admin_init by an
-				// editor must not trigger it).
-				if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
-					return;
-				}
-				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
-					return;
-				}
-				// NOTE: no in-memory `$this->options` early-return here —
-				// the constructor default (`hardenCommentImages => true`)
-				// would make such a guard always hit and the DB backfill
-				// dead code. The stored option is the only marker.
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				$stored = get_option( 'wppo_settings' );
-				if ( ! is_array( $stored ) ) {
-					return;
-				}
-				$image = isset( $stored['image_optimisation'] ) && is_array( $stored['image_optimisation'] ) ? $stored['image_optimisation'] : array();
-
-				if ( array_key_exists( 'hardenCommentImages', $image ) ) {
-					return;
-				}
-
-				$stored['image_optimisation'] = $image + array( 'hardenCommentImages' => true );
-				Util::save_settings( $stored );
-
-				// Keep the in-request settings memo in parity (sibling
-				// migration paths call set_settings_cache(); without it a
-				// get_settings() memo loaded earlier in this admin_init
-				// request would stay pre-migration).
-				try {
-					if ( class_exists( 'PerformanceOptimise\\Inc\\Util' ) ) {
-						\PerformanceOptimise\Inc\Util::set_settings_cache( $stored );
-					}
-				} catch ( \Throwable $cache_error ) {
-					unset( $cache_error );
-				}
-
-				// First migration only: purge the static HTML cache so
-				// pages poisoned before hardening (served verbatim by
-				// advanced-cache.php) are regenerated sanitized. Fan out
-				// to edge caches (Cloudflare/Bunny/Varnish) so poisoned
-				// edge copies do not survive the local purge.
-				try {
-					if ( class_exists( 'PerformanceOptimise\\Inc\\Cache' ) ) {
-						\PerformanceOptimise\Inc\Cache::clear_cache();
-					}
-				} catch ( \Throwable $purge_error ) {
-					unset( $purge_error );
-				}
-				try {
-					if ( class_exists( 'PerformanceOptimise\\Inc\\Edge_Purger' ) ) {
-						\PerformanceOptimise\Inc\Edge_Purger::purge_all();
-					}
-				} catch ( \Throwable $edge_error ) {
-					unset( $edge_error );
-				}
-
-				if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
-					$this->options['image_optimisation'] = array();
-				}
-				$this->options['image_optimisation']['hardenCommentImages'] = true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			$this->migrations()->migrate_comment_image_hardening();
 		}
 
 		/**
 		 * Backfill the additive builder purge watcher keys (issue #1288).
 		 *
-		 * Adds `file_optimisation.builderPurgeWatcher = true` and
-		 * `file_optimisation.builderPurgeDriftLog = true` to stored settings
-		 * that predate the keys. Runs on `admin_init` (not the constructor)
-		 * so a cacheable front-end request never triggers a settings write.
-		 * Fresh installs with no stored option are skipped (absent keys read
-		 * as enabled). Idempotent (key presence is the marker). Uses per-site
-		 * `get_option()` so multisite sites migrate independently with no
-		 * cross-site leakage.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_builder_watcher(): void {
-			try {
-				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
-					return;
-				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				// Gate on the persisted row (not the in-memory backfill) so the
-				// migration branch stays reachable and single-key rows heal.
-				$stored = get_option( 'wppo_settings' );
-				if ( ! is_array( $stored ) ) {
-					return;
-				}
-				$file_opts = $stored['file_optimisation'] ?? null;
-				if ( is_array( $file_opts ) && array_key_exists( 'builderPurgeWatcher', $file_opts ) && array_key_exists( 'builderPurgeDriftLog', $file_opts ) ) {
-					return;
-				}
-
-				$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-
-				$changed = false;
-				if ( ! array_key_exists( 'builderPurgeWatcher', $file ) ) {
-					$file['builderPurgeWatcher'] = true;
-					$changed                     = true;
-				}
-				if ( ! array_key_exists( 'builderPurgeDriftLog', $file ) ) {
-					$file['builderPurgeDriftLog'] = true;
-					$changed                      = true;
-				}
-
-				if ( ! $changed ) {
-					return;
-				}
-
-				$stored['file_optimisation'] = $file;
-				$updated                     = Util::save_settings( $stored );
-				if ( ! $updated ) {
-					return;
-				}
-
-				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-					$this->options['file_optimisation'] = array();
-				}
-				$this->options['file_optimisation'] = array_merge( $this->options['file_optimisation'], $file );
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
-					Util::set_settings_cache( $stored );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			$this->migrations()->migrate_builder_watcher();
 		}
 
 		/**
 		 * Backfill the additive auto third-party delay key (issue #1314).
 		 *
-		 * Runs on admin_init; in-memory default is applied in __construct so
-		 * front-end requests never pay for a DB write. Defaults to off so
-		 * upgraded installs keep current behaviour. Also backfills the
-		 * additive one-click preset level key (issue #1385, defaults to
-		 * safe). Multisite-safe: per-site get_option() so sites migrate
-		 * independently. Fail-open: never fatals.
+		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
+		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @return void
 		 * @since 2.2.0
+		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @return void
 		 */
 		public function maybe_migrate_third_party_auto(): void {
-			try {
-				// Capability-gated like sibling migrations: the migration
-				// performs a settings write, so it must only run for
-				// administrators (first admin_init by an editor must not
-				// trigger the DB-write path).
-				if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
-					return;
-				}
-				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
-					return;
-				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				// Gate on the persisted row (not the in-memory backfill) so the
-				// migration branch stays reachable and single-key rows heal.
-				$stored = get_option( 'wppo_settings' );
-				if ( ! is_array( $stored ) ) {
-					return;
-				}
-				$file_opts = $stored['file_optimisation'] ?? null;
-				$auto_ok   = is_array( $file_opts ) && isset( $file_opts['delayJSThirdPartyAuto'] ) && is_bool( $file_opts['delayJSThirdPartyAuto'] );
-				$preset_ok = is_array( $file_opts ) && isset( $file_opts['delayJSPreset'] ) && is_string( $file_opts['delayJSPreset'] ) && in_array( strtolower( trim( $file_opts['delayJSPreset'] ) ), array( 'safe', 'balanced', 'aggressive' ), true );
-				if ( $auto_ok && $preset_ok ) {
-					return;
-				}
-
-				$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
-
-				if ( ! $auto_ok ) {
-					$file['delayJSThirdPartyAuto'] = false;
-				}
-				if ( ! $preset_ok ) {
-					$file['delayJSPreset'] = 'safe';
-				}
-
-				$stored['file_optimisation'] = $file;
-				$updated                     = Util::save_settings( $stored );
-				if ( ! $updated ) {
-					return;
-				}
-
-				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
-					$this->options['file_optimisation'] = array();
-				}
-				if ( ! $auto_ok ) {
-					$this->options['file_optimisation']['delayJSThirdPartyAuto'] = false;
-				}
-				if ( ! $preset_ok ) {
-					$this->options['file_optimisation']['delayJSPreset'] = 'safe';
-				}
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
-					Util::set_settings_cache( $stored );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			$this->migrations()->migrate_third_party_auto();
 		}
 
 

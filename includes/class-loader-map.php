@@ -151,6 +151,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'RUM'                    => 'class-rum.php',
 				'Sandbox_Preview'        => 'class-sandbox-preview.php',
 				'Scheduler'              => 'class-scheduler.php',
+				'Settings_Migrations'    => 'class-settings-migrations.php',
 				'Settings_Store'         => 'class-settings-store.php',
 				'Suggestion_Engine'      => 'class-suggestion-engine.php',
 				'System_Info'            => 'class-system-info.php',

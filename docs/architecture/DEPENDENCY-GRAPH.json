@@ -260,6 +260,7 @@
         "RUM",
         "Sandbox_Preview",
         "Server_Rules",
+        "Settings_Migrations",
         "System_Info",
         "Telemetry",
         "Used_CSS",
@@ -336,6 +337,11 @@
         "Cache",
         "Htaccess_Handler",
         "LiteSpeed_Integration",
+        "Util"
+    ],
+    "includes/class-settings-migrations.php": [
+        "Log",
+        "Main",
         "Util"
     ],
     "includes/class-settings-store.php": [
