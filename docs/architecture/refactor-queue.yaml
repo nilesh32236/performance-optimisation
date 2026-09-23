@@ -168,7 +168,9 @@ items:
     title: 'Central Wp_Version gate (replace scattered version_compare + TODOs)'
     type: architecture
     priority: low
-    status: queued
+    status: autofix-running
+    github_issue: 1518
+    github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-11
 
   - id: REF-012
