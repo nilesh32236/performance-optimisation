@@ -143,7 +143,7 @@ items:
     priority: medium
     status: autofix-running
     github_issue: 1512
-    github_pr: null
+    github_pr: 1513
     source: AUDIT/FINAL-REVIEW/architecture.md R-09
     notes:
       - 'One card per PR; keep wppoSettings/apiCall/useNotice patterns.'
