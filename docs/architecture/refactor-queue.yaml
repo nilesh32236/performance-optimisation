@@ -385,8 +385,9 @@ phase2_items:
     expected_change: 'Image_Optimisation -~35-40 methods; preload output + dedup + resolution precedence preserved.'
   - id: ARCH-009
     title: 'CSS exclusion ownership consolidation (Critical_CSS owns, Used_CSS delegates)'
-    status: issue-created
+    status: pr-created
     github_issue: 1544
+    pull_request: 1545
     priority: medium
     source_files:
       - includes/class-critical-css.php
