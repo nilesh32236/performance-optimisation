@@ -434,7 +434,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * `Reflection::setAccessible()`, backtick shell execution,
 	 * implicitly-nullable `Type $x = null` signatures, and raw 8.5
 	 * resource-teardown calls outside the version-gated legacy branches
-	 * of `Util` — so PHP 8.5 stays clean without touching CI workflows.
+	 * of `Util`/`Http` — so PHP 8.5 stays clean without touching CI workflows.
 	 * Token-based (not regex) so docblock backticks, explicit-nullable
 	 * `?Type $x = null` signatures, and Redis `$manager->ping()` calls
 	 * cannot false-positive; the code-only raw-pattern checks additionally
@@ -555,6 +555,8 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotEmpty( $scan( "<?php\nimagedestroy( \$img );\n" ), 'Raw imagedestroy() outside Util must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\nfinfo_close( \$finfo );\n" ), 'Raw finfo_close() outside Util must be flagged.' );
 			$this->assertSame( array(), $scan( "<?php\nUtil::destroy_gd_image( \$img );\n" ), 'Util::destroy_gd_image() helper calls must pass.' );
+			$this->assertSame( array(), $scan( "<?php\nHttp::destroy_gd_image( \$img );\n" ), 'Http::destroy_gd_image() helper calls must pass.' );
+			$this->assertSame( array(), $scan( "<?php\nHttp::close_curl_handle( \$ch );\n" ), 'Http::close_curl_handle() helper calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$doc = \"escaped \\\" quote \$http_response_header stays clean\";\n" ), 'Escaped-quote string content must not leak into code_only.' );
 			$this->assertSame( array(), $scan( "<?php\n\$doc = \"interpolated {\$http_response_header} stays clean\";\n" ), 'Double-quoted $http_response_header interpolation must pass.' );
 
@@ -571,6 +573,20 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$stray_violations = array();
 			$method->invokeArgs( $this, array( $util_file, $dir, &$stray_violations ) );
 			$this->assertNotEmpty( $stray_violations, 'Raw teardown outside the Util legacy helpers must be flagged.' );
+
+			// REF-015: the Http boundary owns the same six legacy helpers —
+			// mirror the Util fixture so the exemption covers the new owner.
+			$http_file = $util_subdir . '/class-http.php';
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+			file_put_contents( $http_file, "<?php\nclass WPPO_Http_Fixture {\npublic static function destroy_gd_image( &\$image ) {\nif ( function_exists( 'imagedestroy' ) ) {\nimagedestroy( \$image );\n}\n}\n}\n" );
+			$http_allowed = array();
+			$method->invokeArgs( $this, array( $http_file, $dir, &$http_allowed ) );
+			$this->assertSame( array(), $http_allowed, 'Raw teardown inside the Http legacy helper must pass.' );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+			file_put_contents( $http_file, "<?php\nclass WPPO_Http_Fixture {\npublic static function some_other_method() {\nimagedestroy( \$image );\n}\n}\n" );
+			$http_stray = array();
+			$method->invokeArgs( $this, array( $http_file, $dir, &$http_stray ) );
+			$this->assertNotEmpty( $http_stray, 'Raw teardown outside the Http legacy helpers must be flagged.' );
 		} finally {
 			foreach ( (array) glob( $dir . '/*.php' ) as $file ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
@@ -579,6 +595,10 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			if ( is_readable( $dir . '/includes/class-util.php' ) ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 				unlink( $dir . '/includes/class-util.php' );
+			}
+			if ( is_readable( $dir . '/includes/class-http.php' ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $dir . '/includes/class-http.php' );
 			}
 			if ( is_dir( $dir . '/includes' ) ) {
 				rmdir( $dir . '/includes' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
@@ -601,7 +621,8 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * (typed without `?`, `|null`, or `mixed`), and raw `curl_close()` /
 	 * `curl_multi_close()` / `curl_share_close()` / `finfo_close()` /
 	 * `xml_parser_free()` / `imagedestroy()` calls outside the
-	 * version-gated legacy branches of `includes/class-util.php`.
+	 * version-gated legacy branches of `includes/class-util.php` and
+	 * `includes/class-http.php` (REF-015 owner).
 	 *
 	 * @since 2.2.0
 	 * @param string   $file       Absolute file path.
@@ -779,7 +800,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 					}
 					if ( ! in_array( $prev_id, $method_guards, true ) ) {
 						if ( ! $this->is_util_legacy_teardown_call( $tokens, $count, $i, $rel, $function_map ) ) {
-							$violations[] = sprintf( '%s:%d raw %s() outside the Util 8.5 helper', $rel, $token[2], $token[1] );
+							$violations[] = sprintf( '%s:%d raw %s() outside the Util/Http 8.5 helper', $rel, $token[2], $token[1] );
 						}
 					}
 				}
@@ -792,13 +813,15 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Whether a teardown call sits inside a version-gated Util legacy helper.
+	 * Whether a teardown call sits inside a version-gated legacy helper.
 	 *
-	 * Narrows the `includes/class-util.php` exemption to the six legacy
-	 * branches (`close_curl_handle`, `close_curl_multi_handle`,
-	 * `destroy_gd_image`, `close_curl_share_handle`, `close_finfo_handle`,
-	 * `free_xml_parser`) so a future raw `curl_close()` / `imagedestroy()`
-	 * added elsewhere in that file still fails the gate.
+	 * Narrows the `includes/class-util.php` + `includes/class-http.php`
+	 * exemption to the six legacy branches (`close_curl_handle`,
+	 * `close_curl_multi_handle`, `destroy_gd_image`,
+	 * `close_curl_share_handle`, `close_finfo_handle`, `free_xml_parser`)
+	 * so a future raw `curl_close()` / `imagedestroy()` added elsewhere in
+	 * those files still fails the gate. `Http` owns the bodies since
+	 * REF-015; `Util` keeps one-line proxies with no raw calls.
 	 *
 	 * @since 2.2.0
 	 * @param array      $tokens Full token stream of the file.
@@ -811,7 +834,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return bool True when the call is an allowed legacy branch.
 	 */
 	private function is_util_legacy_teardown_call( $tokens, $count, $index, $rel, $function_map = null ): bool {
-		if ( false === strpos( $rel, 'includes/class-util.php' ) ) {
+		if ( false === strpos( $rel, 'includes/class-util.php' ) && false === strpos( $rel, 'includes/class-http.php' ) ) {
 			return false;
 		}
 		$allowed = array(
