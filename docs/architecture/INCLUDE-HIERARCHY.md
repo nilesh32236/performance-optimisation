@@ -63,7 +63,8 @@ includes/
                   redis-connect-helper.php
   Assets/         class-asset-manager.php, class-css-safelist.php,
                   class-google-fonts.php
-  Images/         class-image-optimisation.php, class-img-converter.php
+  Images/         class-image-optimisation.php, class-img-converter.php,
+                  class-lcp-preload.php
   CSS/            class-critical-css.php, class-used-css.php
   Database/       class-database-cleanup.php
   Insight/        class-telemetry.php, class-pagespeed.php,
@@ -125,6 +126,7 @@ edge/cluster evidence; `[load]` = `LOAD-ORDER.md` loader/drop-in evidence.
 | `class-google-fonts.php` | `Assets/` | [sysmap:Asset pipeline] `Google_Fonts` self-host; asset-pipeline owner |
 | `class-script-strategy.php` | `Assets/` | [sysmap:Asset pipeline] `Script_Strategy` defer rendering + delay-JS decisions/data relocated from `Main` (ARCH-005); `Main` keeps facade proxies so hook-callback identity is unchanged; [load] lazy via `Loader_Map` fallback map |
 | `class-image-optimisation.php` | `Images/` | [sysmap:Asset pipeline] image serving/lazy/hero-preload; [hotspot] ARCH-008 extraction source; [graph] dense hub |
+| `class-lcp-preload.php` | `Images/` | LCP resolution + hero-preload emission + dedup/slot state extracted from `Image_Optimisation` (ARCH-008); `Image_Optimisation` keeps facades so hook/caller identity is unchanged; lazy via `Loader_Map` fallback map |
 | `class-img-converter.php` | `Images/` | [sysmap:Asset pipeline] `Img_Converter` (WebP/AVIF); image-domain service |
 | `class-critical-css.php` | `CSS/` | [sysmap:Asset pipeline] per-template critical CSS; [hotspot] ARCH-009 shared-storage owner candidate |
 | `class-used-css.php` | `CSS/` | [sysmap:Asset pipeline] per-URL used CSS; [hotspot] ARCH-009 (`class_exists` cross-refs with Critical_CSS) |

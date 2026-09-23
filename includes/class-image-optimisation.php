@@ -431,11 +431,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 */
 		public static function clear_runtime_caches(): void {
-			self::$file_exists_cache              = array();
-			self::$img_size_cache                 = array();
+			self::$file_exists_cache = array();
+			self::$img_size_cache    = array();
 			\PerformanceOptimise\Inc\Lcp_Preload::clear_lcp_preload_caches();
-			self::$placeholder_info_cache         = null;
-			self::$placeholder_path_cache         = array();
+			self::$placeholder_info_cache = null;
+			self::$placeholder_path_cache = array();
 			// Commit-then-clear (audit #1338 review): long-lived processes
 			// that clear between pages must not silently drop buffered alts.
 			// Memo resets to array() (never null): get_derived_alt_map()
@@ -1146,8 +1146,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $url The URL to normalize.
-		 		 * @return string Normalized URL.
+		@param string $url The URL to normalize.
+		 * @return string Normalized URL.
 		 */
 		public function lcp_normalize_url( string $url ): string {
 			return $this->normalize_url( $url );
@@ -1164,9 +1164,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $buffer             HTML buffer.
-		 		 * @param array  $image_optimisation Image settings.
-		 		 * @return string Buffer with first images un-lazy-loaded.
+		@param string $buffer             HTML buffer.
+		 * @param array  $image_optimisation Image settings.
+		 * @return string Buffer with first images un-lazy-loaded.
 		 */
 		public function lcp_unlazyload_first_images( string $buffer, array $image_optimisation ): string {
 			return $this->unlazyload_first_images( $buffer, $image_optimisation );
@@ -1183,8 +1183,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param array $attrs Loading attributes.
-		 		 * @return array Sanitized attributes.
+		@param array $attrs Loading attributes.
+		 * @return array Sanitized attributes.
 		 */
 		public function lcp_sanitize_loading_triple( array $attrs ): array {
 			return $this->sanitize_loading_triple( $attrs );
@@ -1201,8 +1201,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $buffer HTML buffer.
-		 		 * @return string Buffer with eager picture sources promoted.
+		@param string $buffer HTML buffer.
+		 * @return string Buffer with eager picture sources promoted.
 		 */
 		public function lcp_promote_eager_picture_sources( string $buffer ): string {
 			return $this->promote_eager_picture_sources( $buffer );
@@ -1219,8 +1219,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param mixed $tags Tag processor.
-		 		 * @return bool Whether any class was removed.
+		@param mixed $tags Tag processor.
+		 * @return bool Whether any class was removed.
 		 */
 		public function lcp_remove_lazy_classes( $tags ): bool {
 			return $this->remove_lazy_classes( $tags );
@@ -1237,8 +1237,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param mixed $tags Tag processor.
-		 		 * @return bool Whether any placeholder was restored.
+		@param mixed $tags Tag processor.
+		 * @return bool Whether any placeholder was restored.
 		 */
 		public function lcp_restore_js_lazy_placeholders( $tags ): bool {
 			return $this->restore_js_lazy_placeholders( $tags );
@@ -1255,7 +1255,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @return bool True when the HTML processor path may be used.
+		@return bool True when the HTML processor path may be used.
 		 */
 		public function lcp_should_use_html_processor(): bool {
 			return $this->should_use_html_processor();
@@ -1272,8 +1272,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $path Absolute path.
-		 		 * @return bool Whether the file exists.
+		@param string $path Absolute path.
+		 * @return bool Whether the file exists.
 		 */
 		public function lcp_cached_file_exists( string $path ): bool {
 			return $this->cached_file_exists( $path );
@@ -1290,8 +1290,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $local_path Absolute path.
-		 		 * @return array|false Image size or false.
+		@param string $local_path Absolute path.
+		 * @return array|false Image size or false.
 		 */
 		public function lcp_get_cached_image_size( string $local_path ): array|false {
 			return $this->get_cached_image_size( $local_path );
@@ -1308,8 +1308,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $url Image URL.
-		 		 * @return bool Whether dimension lookup is allowed.
+		@param string $url Image URL.
+		 * @return bool Whether dimension lookup is allowed.
 		 */
 		public function lcp_is_dimension_lookup_allowed( string $url ): bool {
 			return $this->is_dimension_lookup_allowed( $url );
@@ -1326,8 +1326,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $buffer HTML buffer.
-		 		 * @return string CSS hero URL or empty string.
+		@param string $buffer HTML buffer.
+		 * @return string CSS hero URL or empty string.
 		 */
 		public function lcp_get_css_hero_url_from_buffer( string $buffer ): string {
 			return $this->get_css_hero_url_from_buffer( $buffer );
@@ -1344,8 +1344,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $raw Raw srcset attribute.
-		 		 * @return array Candidate strings.
+		@param string $raw Raw srcset attribute.
+		 * @return array Candidate strings.
 		 */
 		public function lcp_split_srcset_candidates( string $raw ): array {
 			return $this->split_srcset_candidates( $raw );
@@ -1362,8 +1362,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @internal
 		 * @since NEXT
-		 @param string $item Single srcset candidate.
-		 		 * @return array URL plus descriptor parts.
+		@param string $item Single srcset candidate.
+		 * @return array URL plus descriptor parts.
 		 */
 		public function lcp_split_srcset_item( string $item ): array {
 			return $this->split_srcset_item( $item );

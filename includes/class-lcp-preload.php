@@ -308,7 +308,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $url The raw preload URL.
 		 * @return void
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public static function record_direct_preload_url( string $url ): void {
 			try {
 				$raw = trim( $url );
@@ -339,7 +339,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return string[] Normalized direct-preload URLs.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public static function get_direct_preload_normalized_urls(): array {
 			$normalized = array();
 			try {
@@ -377,7 +377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $media The preload media attribute.
 		 * @return string The dedup key.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public static function build_preload_dedup_key( string $url, string $media ): string {
 			$normalized = '';
 			try {
@@ -417,7 +417,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $url The raw hero URL.
 		 * @return bool True when the URL already emitted with any media.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public static function is_hero_preload_claimed( string $url ): bool {
 			try {
 				$prefix = self::build_preload_dedup_key( $url, '' );
@@ -461,7 +461,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer Optional HTML buffer to scan for an existing hint.
 		 * @return bool True when the caller may emit (slot claimed), false to skip.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function claim_hero_preload_slot( string $url, string $media = '', ?string $buffer = null ): bool {
 			try {
 				$url = trim( $url );
@@ -495,7 +495,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $media The preload media attribute ('' for buffer companions).
 		 * @return void
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public static function release_hero_preload_slot( string $url, string $media = '' ): void {
 			try {
 				unset( self::$preload_emitted[ self::build_preload_dedup_key( $url, $media ) ] );
@@ -519,7 +519,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL host matches a configured CDN host.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_cdn_preload_url( string $url ): bool {
 			try {
 				$url = trim( $url );
@@ -577,7 +577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_allowed_hero_preload_url( string $url ): bool {
 			try {
 				if ( $this->is_same_origin_preload_url( $url ) ) {
@@ -602,7 +602,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return bool True when the HTML API may be used.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_html_api_available(): bool {
 			try {
 				if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
@@ -643,7 +643,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer Optional HTML buffer passed to the filter for context.
 		 * @return string The computed hero URL, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_computed_css_hero_url( ?string $buffer = null ): string {
 			try {
 				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) ) {
@@ -682,7 +682,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $buffer The HTML buffer.
 		 * @return string The buffer with high-priority nodes forced eager.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function sweep_lazy_high_conflicts( string $buffer ): string {
 			try {
 				if ( '' === $buffer || false === stripos( $buffer, 'fetchpriority' ) ) {
@@ -753,9 +753,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.3.0
 		 * @return bool True when occluded nodes should be demoted to low.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_occlusion_fetchpriority_low_enabled(): bool {
-		$lcpown_options = $this->owner->lcp_get_options();
+			$lcpown_options = $this->owner->lcp_get_options();
 			try {
 				$image_optimisation = $lcpown_options['image_optimisation'] ?? array();
 				$enabled            = ! empty( $image_optimisation['occlusionFetchpriorityLow'] );
@@ -786,7 +786,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.3.0
 		 * @return string[] Occluded image URLs (may be empty).
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_occluded_image_urls_for_request(): array {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) || ! method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_occluded_image_urls' ) ) {
@@ -822,7 +822,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $lcp_url       Optional true-LCP URL to protect.
 		 * @return string The buffer with occluded nodes demoted to low.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function apply_occlusion_fetchpriority_low( string $buffer, array $occluded_urls, ?string $lcp_url = null ): string {
 			try {
 				if ( '' === $buffer || empty( $occluded_urls ) || false === stripos( $buffer, '<img' ) ) {
@@ -1040,9 +1040,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 1.5.1
 		 * @return array List of preload data items.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_all_preload_data(): array {
-		$lcpown_options = $this->owner->lcp_get_options();
+			$lcpown_options     = $this->owner->lcp_get_options();
 			$image_optimisation = $lcpown_options['image_optimisation'] ?? array();
 
 			$manual = array_merge(
@@ -1112,7 +1112,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded as an image.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_image_lcp_url( string $url ): bool {
 			try {
 				$url = trim( $url );
@@ -1164,10 +1164,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return string The manual LCP image URL, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_manual_lcp_url(): string {
-		$lcpown_manual_lcp_url =& $this->owner->lcp_state_manual_lcp_url();
-		$lcpown_manual_lcp_url_key =& $this->owner->lcp_state_manual_lcp_url_key();
+			$lcpown_manual_lcp_url     =& $this->owner->lcp_state_manual_lcp_url();
+			$lcpown_manual_lcp_url_key =& $this->owner->lcp_state_manual_lcp_url_key();
 			try {
 				if ( ! function_exists( 'is_singular' ) || ! function_exists( 'get_the_ID' ) || ! function_exists( 'get_post_meta' ) ) {
 					return '';
@@ -1225,7 +1225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_same_origin_preload_url( string $url ): bool {
 			try {
 				$url = trim( $url );
@@ -1286,7 +1286,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return bool True when core may be consulted for a node verdict.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_core_loading_optimization_available(): bool {
 			try {
 				if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
@@ -1338,7 +1338,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param mixed $tags Tag processor positioned on an `<img>` node.
 		 * @return array{decoding?:string}|null Core's verdict, or null.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_core_loading_verdict_for_tag( $tags ): ?array {
 			if ( ! $this->is_core_loading_optimization_available() ) {
 				return null;
@@ -1387,10 +1387,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return bool True when auto-LCP must be skipped for this post.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_auto_lcp_disabled_for_post(): bool {
-		$lcpown_auto_lcp_disabled =& $this->owner->lcp_state_auto_lcp_disabled();
-		$lcpown_auto_lcp_disabled_key =& $this->owner->lcp_state_auto_lcp_disabled_key();
+			$lcpown_auto_lcp_disabled     =& $this->owner->lcp_state_auto_lcp_disabled();
+			$lcpown_auto_lcp_disabled_key =& $this->owner->lcp_state_auto_lcp_disabled_key();
 			try {
 				if ( ! function_exists( 'is_singular' ) || ! function_exists( 'get_the_ID' ) || ! function_exists( 'get_post_meta' ) ) {
 					return false;
@@ -1407,7 +1407,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 					$lcpown_auto_lcp_disabled_key = $post_id;
 					return false;
 				}
-				$disabled                    = ! empty( get_post_meta( $post_id, '_wppo_disable_auto_lcp', true ) );
+				$disabled                     = ! empty( get_post_meta( $post_id, '_wppo_disable_auto_lcp', true ) );
 				$lcpown_auto_lcp_disabled     = $disabled;
 				$lcpown_auto_lcp_disabled_key = $post_id;
 				return $disabled;
@@ -1437,11 +1437,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return string The stable signal LCP image URL, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_stable_signal_lcp_url(): string {
-		$lcpown_stable_signal_lcp_url =& $this->owner->lcp_state_stable_signal_lcp_url();
-		$lcpown_stable_signal_lcp_url_key =& $this->owner->lcp_state_stable_signal_lcp_url_key();
-			$memo_key = $this->get_lcp_memo_key();
+			$lcpown_stable_signal_lcp_url     =& $this->owner->lcp_state_stable_signal_lcp_url();
+			$lcpown_stable_signal_lcp_url_key =& $this->owner->lcp_state_stable_signal_lcp_url_key();
+			$memo_key                         = $this->get_lcp_memo_key();
 			if ( null !== $lcpown_stable_signal_lcp_url && $lcpown_stable_signal_lcp_url_key === $memo_key ) {
 				return $lcpown_stable_signal_lcp_url;
 			}
@@ -1524,7 +1524,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return string The OD-only LCP image URL, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function resolve_od_only_lcp_url(): string {
 			try {
 				$manual = $this->get_manual_lcp_url();
@@ -1594,7 +1594,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer Optional HTML buffer for the heuristic fallback.
 		 * @return string The LCP image URL, or empty string when none resolves.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function resolve_auto_lcp_url( ?string $buffer = null ): string {
 			// Manual picker + P0 stability-gated Optimization Detective via
 			// the shared OD-only helper (issues #1216, #1273) so the
@@ -1743,7 +1743,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer  Optional HTML buffer to scan.
 		 * @return string The srcset value, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_lcp_srcset_for_url( string $lcp_url, ?string $buffer = null ): string {
 			if ( '' === $lcp_url || ! is_string( $buffer ) || '' === $buffer || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				return '';
@@ -1793,7 +1793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer  Optional HTML buffer to scan.
 		 * @return string The sizes value, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_lcp_sizes_for_url( string $lcp_url, ?string $buffer = null ): string {
 			if ( '' === $lcp_url || ! is_string( $buffer ) || '' === $buffer || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				return '';
@@ -1946,7 +1946,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer Optional HTML buffer for fallback scans.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Empty when unresolved.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_responsive_lcp_candidate( ?string $buffer = null ): array {
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_breakpoint_lcp_elements' ) ) {
@@ -1997,7 +1997,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer  Optional HTML buffer for gap-fill.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Winner or empty.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function pick_breakpoint_winner( array $entries, ?string $buffer = null ): array {
 			try {
 				$usable = array();
@@ -2127,7 +2127,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer Optional HTML buffer for gap-fill.
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Candidate or empty.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function resolve_rum_fallback_candidate( ?string $buffer = null ): array {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
@@ -2212,7 +2212,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer Optional HTML buffer to inspect.
 		 * @return bool True when a high hint already exists.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function response_already_has_high_preload( ?string $buffer = null ): bool {
 			try {
 				if ( self::$responsive_lcp_preload_emitted ) {
@@ -2244,7 +2244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return array List of preload items (zero or one item).
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_manual_lcp_preload_data(): array {
 			try {
 				$manual = $this->get_manual_lcp_url();
@@ -2292,9 +2292,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * unsatisfied the OD-only subset still resolves.
 		 * @return array List of preload items (zero or one item).
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_auto_lcp_preload_data(): array {
-		$lcpown_options = $this->owner->lcp_get_options();
+			$lcpown_options = $this->owner->lcp_get_options();
 			try {
 				if ( $this->is_auto_lcp_disabled_for_post() ) {
 					return array();
@@ -2349,7 +2349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer  Optional HTML buffer for gap-fill.
 		 * @return array{srcset: string, sizes: string} Responsive pair.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_breakpoint_srcset_for_url( string $lcp_url, ?string $buffer = null ): array {
 			$empty = array(
 				'srcset' => '',
@@ -2401,7 +2401,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return bool True when RUM gating passes.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_auto_lcp_rum_satisfied(): bool {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'is_enabled' ) ) {
@@ -2436,12 +2436,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.0.0
 		 * @return string The LCP image URL, or empty string when none is stored.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_current_lcp_url(): string {
-		$lcpown_current_lcp_url =& $this->owner->lcp_state_current_lcp_url();
-		$lcpown_current_lcp_url_key =& $this->owner->lcp_state_current_lcp_url_key();
-		$lcpown_options = $this->owner->lcp_get_options();
-			$memo_key = $this->get_lcp_memo_key();
+			$lcpown_current_lcp_url     =& $this->owner->lcp_state_current_lcp_url();
+			$lcpown_current_lcp_url_key =& $this->owner->lcp_state_current_lcp_url_key();
+			$lcpown_options             = $this->owner->lcp_get_options();
+			$memo_key                   = $this->get_lcp_memo_key();
 			if ( null !== $lcpown_current_lcp_url && $lcpown_current_lcp_url_key === $memo_key ) {
 				return $lcpown_current_lcp_url;
 			}
@@ -2542,7 +2542,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return string Memo key (possibly empty).
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_lcp_memo_key(): string {
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_current_url' ) ) {
@@ -2572,7 +2572,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $buffer HTML buffer to scan.
 		 * @return string Heuristic LCP URL, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_heuristic_lcp_url( string $buffer ): string {
 			try {
 				if ( '' === $buffer ) {
@@ -2618,12 +2618,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
 		 * @return string The candidate URL, or empty string when none applies.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_lazy_lcp_exclusion_url( array $image_optimisation, ?string $buffer = null ): string {
-		$lcpown_lazy_lcp_exclusion_url =& $this->owner->lcp_state_lazy_lcp_exclusion_url();
-		$lcpown_lazy_lcp_exclusion_url_key =& $this->owner->lcp_state_lazy_lcp_exclusion_url_key();
-		$lcpown_options = $this->owner->lcp_get_options();
-			$memo_key = null === $buffer ? $this->get_lcp_memo_key() : null;
+			$lcpown_lazy_lcp_exclusion_url     =& $this->owner->lcp_state_lazy_lcp_exclusion_url();
+			$lcpown_lazy_lcp_exclusion_url_key =& $this->owner->lcp_state_lazy_lcp_exclusion_url_key();
+			$lcpown_options                    = $this->owner->lcp_get_options();
+			$memo_key                          = null === $buffer ? $this->get_lcp_memo_key() : null;
 			if ( null === $buffer && null !== $lcpown_lazy_lcp_exclusion_url && $lcpown_lazy_lcp_exclusion_url_key === $memo_key ) {
 				return $lcpown_lazy_lcp_exclusion_url;
 			}
@@ -2698,7 +2698,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param array $image_optimisation Image optimisation settings.
 		 * @return int Exclude count.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_effective_exclude_first_images_count( array $image_optimisation ): int {
 			if ( array_key_exists( 'lcp_guardrails', $image_optimisation ) && empty( $image_optimisation['lcp_guardrails'] ) ) {
 				return 0;
@@ -2763,9 +2763,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param array $image_optimisation Image optimization configuration.
 		 * @return array List of preload items for the front page.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_front_page_preload_data( array $image_optimisation ): array {
-		$lcpown_preload_front_page_urls = $this->owner->lcp_get_preload_front_page_urls();
+			$lcpown_preload_front_page_urls = $this->owner->lcp_get_preload_front_page_urls();
 			if ( empty( $image_optimisation['preloadFrontPageImages'] ) || ! is_front_page() ) {
 				return array();
 			}
@@ -2780,7 +2780,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 1.5.1
 		 * @return array List of preload items from meta.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_meta_preload_data(): array {
 			// Skip the post-meta lookup outside singular views (issue #1216):
 			// get_the_ID() is meaningless on archives and the meta query
@@ -2805,9 +2805,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param array $image_optimisation Image optimization configuration.
 		 * @return array List of preload items for the post type.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_post_type_preload_data( array $image_optimisation ): array {
-		$lcpown_exclude_post_type_imgs = $this->owner->lcp_get_exclude_post_type_imgs();
+			$lcpown_exclude_post_type_imgs = $this->owner->lcp_get_exclude_post_type_imgs();
 			if ( empty( $image_optimisation['preloadPostTypeImage'] ) ) {
 				return array();
 			}
@@ -2843,7 +2843,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param int $thumbnail_id The ID of the thumbnail image.
 		 * @return string The URL of the image.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_image_url_by_post_type( int $thumbnail_id ): string {
 			if ( 'product' === get_post_type() && class_exists( 'WooCommerce' ) ) {
 				$image_size = apply_filters( 'woocommerce_gallery_image_size', 'woocommerce_single' );
@@ -2862,7 +2862,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param array  $exclude_img_urls Array of URLs to exclude.
 		 * @return bool True if the image should be excluded, false otherwise.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function should_exclude_image( string $image_url, array $exclude_img_urls ): bool {
 			foreach ( $exclude_img_urls as $url ) {
 				if ( str_contains( $image_url, $url ) ) {
@@ -2880,9 +2880,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param array  $image_optimisation Image optimization configuration array.
 		 * @return array Array of parsed sources: array( 'url' => string, 'width' => int ).
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function parse_srcset_data( $srcset, $image_optimisation ): array {
-		$lcpown_exclude_sizes = $this->owner->lcp_get_exclude_sizes();
+			$lcpown_exclude_sizes = $this->owner->lcp_get_exclude_sizes();
 			if ( ! $srcset ) {
 				return array();
 			}
@@ -2926,7 +2926,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param array  $image_optimisation Image optimization configuration array.
 		 * @return array List of preload items.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_srcset_preload_items( $srcset, $default_image, $image_optimisation ): array {
 			if ( ! $srcset ) {
 				return array( $this->prepare_preload_item( $default_image ) );
@@ -2983,7 +2983,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $imagesizes Optional sizes for the preload link.
 		 * @return array Structured preload item.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function prepare_preload_item( string $img_url, string $imagesrcset = '', string $imagesizes = '' ): array {
 			$img_url = trim( $img_url );
 			$media   = '';
@@ -3157,7 +3157,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @return string The processed buffer.
 		 */
 		public function prioritize_lcp_in_buffer( $filtered_output, $output = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$lcpown_options = $this->owner->lcp_get_options();
+			$lcpown_options = $this->owner->lcp_get_options();
 			// Mid-template cancel safety (issue #1386): a cancelled core
 			// buffer can deliver a non-string (false/null) into the filter.
 			// An output-buffer callback must always return a string — fail
@@ -3361,7 +3361,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @return mixed The (possibly stamped) attributes, unchanged on miss.
 		 */
 		public function wppo_add_fetchpriority( $attr, $attachment = null, $size = null ) {
-		$lcpown_options = $this->owner->lcp_get_options();
+			$lcpown_options = $this->owner->lcp_get_options();
 			try {
 				if ( ! is_array( $attr ) ) {
 					return $attr;
@@ -3496,11 +3496,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @since 2.2.0
 		 * @return string The validated LCP image URL, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function resolve_fetchpriority_lcp_url(): string {
-		$lcpown_fetchpriority_lcp_url =& $this->owner->lcp_state_fetchpriority_lcp_url();
-		$lcpown_fetchpriority_lcp_key =& $this->owner->lcp_state_fetchpriority_lcp_key();
-			$memo_key = $this->get_lcp_memo_key();
+			$lcpown_fetchpriority_lcp_url =& $this->owner->lcp_state_fetchpriority_lcp_url();
+			$lcpown_fetchpriority_lcp_key =& $this->owner->lcp_state_fetchpriority_lcp_key();
+			$memo_key                     = $this->get_lcp_memo_key();
 			if ( null !== $lcpown_fetchpriority_lcp_url && $lcpown_fetchpriority_lcp_key === $memo_key ) {
 				return $lcpown_fetchpriority_lcp_url;
 			}
@@ -3542,7 +3542,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param bool   $size_is_full   Whether the requested image size is 'full'.
 		 * @return bool True when the candidate corresponds to the LCP image.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function fetchpriority_candidate_matches( string $candidate, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
 			try {
 				if ( '' === $candidate || '' === $normalized_lcp || '' === $exact_lcp ) {
@@ -3584,7 +3584,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 *                             get_current_lcp_url()).
 		 * @return string The buffer with fetchpriority="high" on the LCP image.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function prioritize_lcp_image( string $buffer, ?string $lcp_url = null ): string {
 			if ( null === $lcp_url ) {
 				$lcp_url = $this->resolve_auto_lcp_url( $buffer );
@@ -3716,7 +3716,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 *                                        the URL is resolved via resolve_auto_lcp_url().
 		 * @return string The buffer with hero preload link injected.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function maybe_preload_hero_image( string $buffer, array $image_optimisation, ?string $lcp_url = null ): string {
 			try {
 				if ( isset( $image_optimisation['lcpHeroPreload'] ) && empty( $image_optimisation['lcpHeroPreload'] ) ) {
@@ -3884,7 +3884,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $buffer The HTML buffer.
 		 * @return string First image src, or empty string when none found.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_first_image_src_in_buffer( string $buffer ): string {
 			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				return '';
@@ -3928,7 +3928,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string                 $src  The candidate src URL.
 		 * @return bool True when the candidate should be skipped.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function is_trivial_heuristic_image( $tags, string $src ): bool {
 			try {
 				if ( 1 === preg_match( '/pixel|tracking|spacer|transparent|1x1|beacon/i', $src ) ) {
@@ -3973,7 +3973,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $url    The image URL to look for.
 		 * @return bool True when a matching preload link exists.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function buffer_has_image_preload( string $buffer, string $url ): bool {
 			try {
 				$needle = $this->normalize_image_url( $url );
@@ -4045,7 +4045,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $needle_query     Raw query string of the target URL.
 		 * @return bool|null True/false on success, null on failure (fallback).
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function buffer_has_image_preload_with_tag_processor( string $buffer, string $needle, string $needle_exact, bool $needle_has_sizes, string $needle_query ): ?bool {
 			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				return null;
@@ -4106,7 +4106,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $url The URL to inspect.
 		 * @return string The query string without the leading `?`, or empty.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_url_query( string $url ): string {
 			try {
 				if ( function_exists( 'wp_parse_url' ) ) {
@@ -4135,7 +4135,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string                 $lcp_url The detected LCP image URL.
 		 * @return bool True if the image references the LCP URL.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function tag_matches_lcp_url( $tags, string $lcp_url ): bool {
 			$normalized_lcp = $this->normalize_image_url( $lcp_url );
 			if ( '' === $normalized_lcp ) {
@@ -4183,7 +4183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param bool   $strip_size_suffix Whether to strip WordPress size suffixes. Default true.
 		 * @return string Normalized host + path, or an empty string when unparseable.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function normalize_image_url( string $url, bool $strip_size_suffix = true ): string {
 			return self::normalize_image_url_static( $url, $strip_size_suffix );
 		}
@@ -4202,7 +4202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param bool   $strip_size_suffix Whether to strip WP size suffixes.
 		 * @return string Normalized host + path, or empty string.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public static function normalize_image_url_static( string $url, bool $strip_size_suffix = true ): string {
 			if ( $strip_size_suffix && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Canonical key derivation lives in Util::normalize_image_key()
@@ -4269,7 +4269,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $media The preload media attribute.
 		 * @return string The dedup key.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function get_preload_dedup_key( string $url, string $media ): string {
 			return self::build_preload_dedup_key( $url, $media );
 		}
@@ -4286,7 +4286,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $lcp_url The detected LCP image URL.
 		 * @return bool True when an img matches the LCP URL.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function buffer_has_matching_img( string $buffer, string $lcp_url ): bool {
 			if ( '' === $lcp_url || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				return false;
@@ -4332,9 +4332,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 *                             chain), matching every other emission path.
 		 * @return string The buffer with at most one added preload link.
 		 * @internal Formerly private on Image_Optimisation (ARCH-008 extraction bridge). Call via the Image_Optimisation facade, never directly.
-	 */
+		 */
 		public function maybe_inject_css_hero_preload( string $buffer, ?string $lcp_url = null ): string {
-		$lcpown_options = $this->owner->lcp_get_options();
+			$lcpown_options     = $this->owner->lcp_get_options();
 			$image_optimisation = $lcpown_options['image_optimisation'] ?? array();
 			if ( empty( $image_optimisation['cssHeroPreload'] ) ) {
 				return $buffer;
@@ -4430,6 +4430,5 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 			}
 			return $link_tag . chr( 10 ) . $buffer;
 		}
-
 	}
 }

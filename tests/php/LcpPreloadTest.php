@@ -201,24 +201,24 @@ class LcpPreloadTest extends \PHPUnit\Framework\TestCase {
 	public function test_facade_proxy_signatures_match_service(): void {
 		$cases = array(
 			// method => array(owner visibility, is static).
-			'has_emitted_preload'            => array( 'public', true ),
-			'mark_preload_emitted'           => array( 'public', true ),
+			'has_emitted_preload'             => array( 'public', true ),
+			'mark_preload_emitted'            => array( 'public', true ),
 			'get_lcp_responsive_data_for_url' => array( 'public', true ),
-			'clear_runtime_caches'           => array( 'public', true ),
-			'preload_images'                 => array( 'public', false ),
-			'generate_img_preload'           => array( 'public', false ),
-			'emit_responsive_lcp_preload'    => array( 'public', false ),
-			'get_current_lcp_url'            => array( 'private', false ),
-			'maybe_preload_hero_image'       => array( 'private', false ),
-			'claim_hero_preload_slot'        => array( 'private', false ),
-			'release_hero_preload_slot'      => array( 'private', true ),
-			'get_all_preload_data'           => array( 'private', false ),
-			'resolve_auto_lcp_url'           => array( 'private', false ),
-			'get_heuristic_lcp_url'          => array( 'private', false ),
+			'clear_runtime_caches'            => array( 'public', true ),
+			'preload_images'                  => array( 'public', false ),
+			'generate_img_preload'            => array( 'public', false ),
+			'emit_responsive_lcp_preload'     => array( 'public', false ),
+			'get_current_lcp_url'             => array( 'private', false ),
+			'maybe_preload_hero_image'        => array( 'private', false ),
+			'claim_hero_preload_slot'         => array( 'private', false ),
+			'release_hero_preload_slot'       => array( 'private', true ),
+			'get_all_preload_data'            => array( 'private', false ),
+			'resolve_auto_lcp_url'            => array( 'private', false ),
+			'get_heuristic_lcp_url'           => array( 'private', false ),
 		);
 		foreach ( $cases as $method => $expect ) {
 			list( $visibility, $is_static ) = $expect;
-			$owner = new \ReflectionMethod( Image_Optimisation::class, $method );
+			$owner                          = new \ReflectionMethod( Image_Optimisation::class, $method );
 			$this->assertSame( $visibility, $owner->isPublic() ? 'public' : 'private', "Owner visibility for {$method}" );
 			$this->assertSame( $is_static, $owner->isStatic(), "Owner staticness for {$method}" );
 			// clear_runtime_caches stays on the owner by design (it
