@@ -721,7 +721,7 @@
     {
         "file": "includes/class-loader-map.php",
         "class": null,
-        "lines": 239,
+        "lines": 241,
         "methods": 7,
         "hooks": [],
         "static_state": false,
@@ -863,10 +863,40 @@
         ]
     },
     {
+        "file": "includes/class-rest-cache.php",
+        "class": null,
+        "lines": 391,
+        "methods": 5,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Cron",
+            "Log",
+            "Rest",
+            "Used_CSS",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/class-rest-settings.php",
+        "class": null,
+        "lines": 650,
+        "methods": 11,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Rest",
+            "Sandbox_Preview",
+            "Telemetry",
+            "Util"
+        ]
+    },
+    {
         "file": "includes/class-rest.php",
         "class": null,
-        "lines": 4494,
-        "methods": 73,
+        "lines": 3891,
+        "methods": 76,
         "hooks": [],
         "static_state": false,
         "refs": [
@@ -874,7 +904,6 @@
             "Builder_Purge_Watcher",
             "Cache",
             "Critical_CSS",
-            "Cron",
             "Database_Cleanup",
             "Img_Converter",
             "LiteSpeed_Integration",
@@ -884,7 +913,8 @@
             "Object_Cache",
             "Pagespeed",
             "RUM",
-            "Sandbox_Preview",
+            "Rest_Cache",
+            "Rest_Settings",
             "Server_Rules",
             "Suggestion_Engine",
             "System_Info",

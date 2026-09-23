@@ -152,6 +152,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Pagespeed'              => 'class-pagespeed.php',
 				'Purge_Logger'           => 'trait-purge-logger.php',
 				'Rest'                   => 'class-rest.php',
+				'Rest_Cache'             => 'class-rest-cache.php',
+				'Rest_Settings'          => 'class-rest-settings.php',
 				'RUM'                    => 'class-rum.php',
 				'Sandbox_Preview'        => 'class-sandbox-preview.php',
 				'Scheduler'              => 'class-scheduler.php',

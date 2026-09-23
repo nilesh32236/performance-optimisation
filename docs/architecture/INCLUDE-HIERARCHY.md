@@ -19,7 +19,7 @@ files + `redis-connect-helper.php`, plus `minify/` wrappers). Counts/methods/ref
   `Cloudflare_Purger`, `Server_Rules`, `Htaccess_Handler`, `Header_Emitter`
 - **LiteSpeed:** `LiteSpeed_Integration`, `LiteSpeed_Crawler`, `LiteSpeed_ESI`
 - **Compat/detect:** `Woo_Detect`, `Core_Tweaks`, `Builder_Purge_Watcher`, `Llms`
-- **Surface:** `Rest`, `Abilities`, `Metabox`, `Admin_Notices`,
+- **Surface:** `Rest`, `Rest_Cache`, `Rest_Settings`, `Abilities`, `Metabox`, `Admin_Notices`,
   `Perf_Translations`, `WPPO_CLI_Command`, `Object_Cache`
 - **Shared:** `Util` (facade), `Log`, `Purge_Logger` (trait)
 
@@ -78,7 +78,8 @@ includes/
   Integrations/   class-litespeed-integration.php, class-litespeed-crawler.php,
                   class-litespeed-esi.php, class-woo-detect.php,
                   class-builder-purge-watcher.php
-  Admin/          class-rest.php, class-abilities.php, class-metabox.php,
+  Admin/          class-rest.php, class-rest-cache.php,
+                  class-rest-settings.php, class-abilities.php, class-metabox.php,
                   class-admin-notices.php, class-perf-translations.php,
                   class-wppo-cli-command.php
   Compatibility/  class-core-tweaks.php, class-llms.php
@@ -153,7 +154,9 @@ edge/cluster evidence; `[load]` = `LOAD-ORDER.md` loader/drop-in evidence.
 | `class-litespeed-esi.php` | `Integrations/` | [sysmap:Delivery/edge] ESI bridge (LSWS Enterprise; OLS disabled); [load] conditional eager; protected (behavior + load order frozen) |
 | `class-woo-detect.php` | `Integrations/` | [sysmap:Cache-domain/Woo_Detect] Phase-1 boundary (REF-013); third-party detection integration |
 | `class-builder-purge-watcher.php` | `Integrations/` | [sysmap:Lifecycle] builder (Elementor etc.) purge watcher; [load] eager in `Main::includes()`; third-party integration |
-| `class-rest.php` | `Admin/` | [sysmap:Surface] 40-route registrar; [hotspot] ARCH-011 route-group split source; [dir] Presentation |
+| `class-rest.php` | `Admin/` | [sysmap:Surface] 40-route registrar + shared infra (permission, schema, throttle, response envelope); [hotspot] ARCH-011 route-group split source (12 cache/settings handlers proxied to services, +3 `@internal` bridges); [dir] Presentation |
+| `class-rest-cache.php` | `Admin/` | Cache administration (`clear_cache`, preload status/resume, coupled used-CSS purge) extracted from `Rest` (ARCH-011); `Rest` keeps facade proxies so route-callback identity is unchanged; [load] lazy via `Loader_Map` fallback map |
+| `class-rest-settings.php` | `Admin/` | Settings administration (save/import/snapshot/restore, sandbox stage/promote/discard) extracted from `Rest` (ARCH-011); `Rest` keeps facade proxies so route-callback identity is unchanged; [load] lazy via `Loader_Map` fallback map |
 | `class-abilities.php` | `Admin/` | [sysmap:Surface] `Abilities` API surface; [dir] Presentation |
 | `class-metabox.php` | `Admin/` | [sysmap:Surface] per-page preload + Asset Manager metabox; [dir] Presentation |
 | `class-admin-notices.php` | `Admin/` | Admin-surface notices (missing-deps fail-open notice per [load] bootstrap); [dir] Presentation |

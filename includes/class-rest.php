@@ -42,12 +42,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		private string $cache_dir; // Audit #1434: typed per docblock.
 
 		/**
+		 * Cache-administration service (ARCH-011 extraction owner).
+		 *
+		 * @since NEXT
+		 * @var Rest_Cache
+		 */
+		private Rest_Cache $rest_cache;
+
+		/**
+		 * Settings-administration service (ARCH-011 extraction owner).
+		 *
+		 * @since NEXT
+		 * @var Rest_Settings
+		 */
+		private Rest_Settings $rest_settings;
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 1.6.0
 		 */
 		public function __construct() {
-			$this->cache_dir = trailingslashit( WP_CONTENT_DIR ) . 'cache/wppo';
+			$this->cache_dir     = trailingslashit( WP_CONTENT_DIR ) . 'cache/wppo';
+			$this->rest_cache    = new Rest_Cache( $this );
+			$this->rest_settings = new Rest_Settings( $this );
+		}
+
+		/**
+		 * Per-endpoint throttle verdict for the ARCH-011 services.
+		 *
+		 * Single call path to the private is_endpoint_throttled() so the
+		 * transient/static-bucket semantics stay owned by Rest. Services
+		 * must use this bridge — never a new write path.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @param string $endpoint Endpoint slug.
+		 * @param int    $limit    Max hits per window.
+		 * @param int    $window   Window in seconds.
+		 * @return bool True when throttled.
+		 */
+		public function rest_throttle_hit( string $endpoint, int $limit, int $window ): bool {
+			return $this->is_endpoint_throttled( $endpoint, $limit, $window );
+		}
+
+		/**
+		 * Response envelope for the ARCH-011 services.
+		 *
+		 * Single call path to the private send_response() so the response
+		 * shape stays owned by Rest. Services must use this bridge — never
+		 * a new write path.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @param mixed       $data The data to return in the response.
+		 * @param bool        $success Indicates whether the request was successful.
+		 * @param int         $status_code The HTTP status code.
+		 * @param string|null $message The response message.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function rest_send_response( $data, $success = true, $status_code = 200, $message = null ) {
+			return $this->send_response( $data, $success, $status_code, $message );
+		}
+
+		/**
+		 * Cache directory for the ARCH-011 cache service.
+		 *
+		 * Single read path to the private $cache_dir so the traversal-guard
+		 * base stays owned by Rest.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return string Cache directory path.
+		 */
+		public function rest_cache_dir(): string {
+			return $this->cache_dir;
 		}
 
 		/**
@@ -77,13 +146,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			return array(
 				'clear_cache'               => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'clear_cache' ),
+					'callback'            => array( $this->rest_cache, 'clear_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
 				'update_settings'           => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'update_settings' ),
+					'callback'            => array( $this->rest_settings, 'update_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
@@ -107,19 +176,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				),
 				'import_settings'           => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'import_settings' ),
+					'callback'            => array( $this->rest_settings, 'import_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
 				'settings_snapshot'         => array(
 					'methods'             => 'GET',
-					'callback'            => array( $this, 'get_settings_snapshot' ),
+					'callback'            => array( $this->rest_settings, 'get_settings_snapshot' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
 				'restore_settings'          => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'restore_settings' ),
+					'callback'            => array( $this->rest_settings, 'restore_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
@@ -219,7 +288,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				),
 				'purge_used_css_cache'      => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'purge_used_css_cache' ),
+					'callback'            => array( $this->rest_cache, 'purge_used_css_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
@@ -307,13 +376,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				),
 				'preload_status'            => array(
 					'methods'             => 'GET',
-					'callback'            => array( $this, 'get_preload_status' ),
+					'callback'            => array( $this->rest_cache, 'get_preload_status' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
 				'preload_resume'            => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'resume_preload' ),
+					'callback'            => array( $this->rest_cache, 'resume_preload' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
@@ -337,25 +406,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				),
 				'sandbox_preview'           => array(
 					'methods'             => 'GET',
-					'callback'            => array( $this, 'get_sandbox_preview' ),
+					'callback'            => array( $this->rest_settings, 'get_sandbox_preview' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
 				'sandbox_save'              => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'save_sandbox_preview' ),
+					'callback'            => array( $this->rest_settings, 'save_sandbox_preview' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
 				'sandbox_promote'           => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'promote_sandbox_preview' ),
+					'callback'            => array( $this->rest_settings, 'promote_sandbox_preview' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
 				'sandbox_discard'           => array(
 					'methods'             => 'POST',
-					'callback'            => array( $this, 'discard_sandbox_preview' ),
+					'callback'            => array( $this->rest_settings, 'discard_sandbox_preview' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
@@ -540,49 +609,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 2.2.0
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Cache::get_preload_status}.
 		 */
 		public function get_preload_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			$preload = array(
-				'queued'      => 0,
-				'done'        => 0,
-				'failed'      => 0,
-				'total'       => 0,
-				'status'      => 'idle',
-				'failed_urls' => array(),
-				'cache_bytes' => 0,
-				'cache_files' => 0,
-				'stalled'     => false,
-			);
-			$cache   = array(
-				'bytes'      => 0,
-				'cap_bytes'  => 0,
-				'state'      => 'ok',
-				'enforce'    => true,
-				'max_mb'     => 0,
-				'files'      => 0,
-				'cap_files'  => 0,
-				'warn_files' => 0,
-			);
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'get_preload_status' ) ) {
-					$preload = Cron::get_preload_status();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_cap_status' ) ) {
-					$cache = Cache::get_cache_cap_status();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return $this->send_response(
-				array(
-					'preload' => $preload,
-					'cache'   => $cache,
-				)
-			);
+			return $this->rest_cache->get_preload_status( $request );
 		}
 
 		/**
@@ -729,38 +759,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 2.2.0
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Cache::resume_preload}.
 		 */
 		public function resume_preload( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			if ( $this->is_endpoint_throttled( 'resume_preload', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			$rescheduled = 0;
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'resume_preload_queue' ) ) {
-					$rescheduled = Cron::resume_preload_queue();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			$status = array();
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'get_preload_status' ) ) {
-					$status = Cron::get_preload_status();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return $this->send_response(
-				array(
-					'rescheduled' => $rescheduled,
-					'preload'     => $status,
-				),
-				true,
-				200,
-				$rescheduled > 0 ? __( 'Preload queue resumed.', 'performance-optimisation' ) : __( 'Nothing to resume.', 'performance-optimisation' )
-			);
+			return $this->rest_cache->resume_preload( $request );
 		}
 
 		/**
@@ -1069,130 +1071,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Cache::clear_cache}.
 		 */
 		public function clear_cache( \WP_REST_Request $request ) {
-			if ( $this->is_endpoint_throttled( 'clear_cache', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			$params = $request->get_params();
-			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
-			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
-			$group  = isset( $params['group'] ) ? sanitize_text_field( $params['group'] ) : '';
-
-			// Handle cache group flushing.
-			if ( ! empty( $group ) ) {
-				$flushed = Cache::flush_group( $group );
-
-				if ( ! $flushed ) {
-					if ( function_exists( 'wp_cache_supports' ) && ! wp_cache_supports( 'flush_group' ) ) {
-						Log::add(
-							sprintf(
-								/* translators: %s: The cache group name */
-								__( 'Object cache does not support flush_group for %s — no action taken', 'performance-optimisation' ),
-								$group
-							)
-						);
-						return $this->send_response( array( 'flushed' => false ), false, 400, __( 'Object cache does not support flush_group — no action taken', 'performance-optimisation' ) );
-					}
-
-					Log::add(
-						sprintf(
-							/* translators: %s: The cache group name */
-							__( 'Failed to flush cache group: %s', 'performance-optimisation' ),
-							$group
-						)
-					);
-					return $this->send_response( array( 'flushed' => $flushed ), false, 500, __( 'Failed to flush cache group.', 'performance-optimisation' ) );
-				}
-
-				Log::add(
-					sprintf(
-						/* translators: %s: The cache group name */
-						__( 'Flushed cache group: %s', 'performance-optimisation' ),
-						$group
-					)
-				);
-				return $this->send_response( array( 'flushed' => $flushed ) );
-			}
-
-			$path = wp_normalize_path( $path );
-
-			// Reject paths with directory traversal or outside the cache directory.
-			// Empty path (clear all) has no traversal risk; realpath() returns false
-			// when the cache directory does not exist yet, so it must not be validated.
-			if ( '' !== $path ) {
-				$normalized_cache_dir       = wp_normalize_path( $this->cache_dir );
-				$normalized_cache_dir_trail = trailingslashit( $normalized_cache_dir );
-				// Normalized candidate for fallback when realpath() fails (uncached page).
-				$candidate_path = wp_normalize_path( trailingslashit( $this->cache_dir ) . ltrim( $path, '/\\' ) );
-
-				$real_path = realpath( $this->cache_dir . $path );
-				if ( false !== $real_path ) {
-					$normalized_real_path = wp_normalize_path( $real_path );
-
-					$is_exact_match = ( $normalized_real_path === $normalized_cache_dir );
-					$is_under_dir   = ( 0 === strpos( $normalized_real_path, $normalized_cache_dir_trail ) );
-
-					if ( ! $is_exact_match && ! $is_under_dir ) {
-						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
-					}
-				} else {
-					// Fallback when realpath() returns false (uncached page or missing dir).
-					// Validates via normalized string prefix so "Clear This Page" works before caching.
-					// @since 2.0.0 Added wp_normalize_path fallback for uncached pages.
-					$is_exact_match = ( $candidate_path === $normalized_cache_dir );
-					$is_under_dir   = ( 0 === strpos( $candidate_path, $normalized_cache_dir_trail ) );
-
-					// Canonicalize percent-encoding with a bounded decode loop
-					// (max 5 passes until stable) so double-encoded traversal
-					// (e.g. %252e%252e) is exposed before the `..`-segment
-					// check instead of slipping through a single decode.
-					// @since 2.3.0 Added decode loop for double-encoded traversal.
-					$decoded = $candidate_path;
-					for ( $i = 0; $i < 5; $i++ ) {
-						$next = rawurldecode( $decoded );
-						if ( $next === $decoded ) {
-							break;
-						}
-						$decoded = $next;
-					}
-					// Normalize backslashes post-decode so %5c-encoded
-					// separators (..%5c) cannot evade the `/`-split check.
-					$decoded       = str_replace( '\\', '/', $decoded );
-					$has_traversal = false;
-					foreach ( explode( '/', $decoded ) as $segment ) {
-						if ( '..' === $segment ) {
-							$has_traversal = true;
-							break;
-						}
-					}
-					if ( ( ! $is_exact_match && ! $is_under_dir ) || $has_traversal ) {
-						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
-					}
-				}
-			}
-
-			if ( 'clear_single_page_cache' === $action ) {
-				$cleared = Cache::clear_cache( $path );
-				if ( ! $cleared ) {
-					return $this->send_response( null, false, 400, __( 'Failed to clear cache: Invalid path.', 'performance-optimisation' ) );
-				}
-				$url = Util::cached_home_url( $path );
-				Log::add(
-					sprintf(
-						/* translators: %s: The URL of the page */
-						__( 'Clear cache of <a href="%1$s">%2$s</a>', 'performance-optimisation' ),
-						esc_url( $url ),
-						esc_html( $url )
-					)
-				);
-			} else {
-				Cache::clear_cache();
-				Log::add( __( 'Clear all cache', 'performance-optimisation' ) );
-			}
-			return $this->send_response( true );
+			return $this->rest_cache->clear_cache( $request );
 		}
 
 		/**
@@ -1201,269 +1083,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::update_settings}.
 		 */
 		public function update_settings( \WP_REST_Request $request ) {
-			if ( $this->is_endpoint_throttled( 'update_settings', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			$params   = $request->get_params();
-			$tab      = isset( $params['tab'] ) ? sanitize_text_field( $params['tab'] ) : '';
-			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
-
-			// Validate tab against known whitelist (single source: Util::ALLOWED_SETTINGS_TABS).
-			$allowed_tabs = Util::ALLOWED_SETTINGS_TABS;
-			if ( empty( $tab ) || ! in_array( $tab, $allowed_tabs, true ) ) {
-				return $this->send_response( null, false, 400, __( 'Invalid settings tab.', 'performance-optimisation' ) );
-			}
-
-			// Sanitize settings array recursively.
-			$sanitized_settings = $this->sanitize_settings_recursively( $settings );
-
-			// Never store Redis password in the database. Store a boolean flag instead.
-			// The password must be provided via the WPPO_REDIS_PASSWORD constant in wp-config.php.
-			if ( 'object_cache' === $tab && isset( $sanitized_settings['password'] ) ) {
-				$password_provided = ! empty( $sanitized_settings['password'] );
-				unset( $sanitized_settings['password'] );
-				if ( $password_provided ) {
-					$sanitized_settings['password_set'] = true;
-				}
-			}
-
-			// Server-only outage status flag (issue #1233): clients must not
-			// pin spoofed degraded/healthy state via update_settings. Drop
-			// any client value so the array_merge below preserves the stored
-			// Removed (#925, pruned #1373): the legacy
-			// file_optimisation.removeQueryStrings key is dropped on save so it
-			// decays naturally. A legacy client that still posts the key is
-			// accepted silently (fail-open, never fatal); stored legacy values
-			// are ignored and `?ver` is always preserved.
-			if ( 'file_optimisation' === $tab && isset( $sanitized_settings['removeQueryStrings'] ) ) {
-				unset( $sanitized_settings['removeQueryStrings'] );
-			}
-
-			// server-written value, mirroring password handling.
-			if ( 'object_cache' === $tab && isset( $sanitized_settings['outage_bypassed'] ) ) {
-				unset( $sanitized_settings['outage_bypassed'] );
-			}
-
-			$options = Util::get_settings();
-
-			// Preserve the pagespeed_api_key when the request omits it.
-			if ( 'performance_audit' === $tab && ! isset( $params['settings']['pagespeed_api_key'] ) && isset( $options['performance_audit']['pagespeed_api_key'] ) ) {
-				$sanitized_settings['pagespeed_api_key'] = sanitize_text_field( $options['performance_audit']['pagespeed_api_key'] );
-			}
-
-			// Preserve the server_timing_enabled flag when the request omits it (no UI toggle exists yet).
-			if ( 'performance_audit' === $tab && ! isset( $params['settings']['server_timing_enabled'] ) && isset( $options['performance_audit']['server_timing_enabled'] ) ) {
-				$sanitized_settings['server_timing_enabled'] = (bool) $options['performance_audit']['server_timing_enabled'];
-			}
-
-			// Preserve the auto_rescan frequency when the request omits it.
-			if ( 'performance_audit' === $tab && ! isset( $params['settings']['auto_rescan'] ) && isset( $options['performance_audit']['auto_rescan'] ) ) {
-				$stored_rescan                     = $options['performance_audit']['auto_rescan'];
-				$stored_rescan                     = is_string( $stored_rescan ) ? sanitize_text_field( $stored_rescan ) : '';
-				$sanitized_settings['auto_rescan'] = in_array( $stored_rescan, array( '', 'daily', 'weekly' ), true ) ? $stored_rescan : '';
-			}
-
-			// Preserve the RUM beacon sample rate when the request omits it
-			// (issue #1214): a partial save must not wipe the rate. Clamped to
-			// 1-100 like the sanitizer so a legacy extreme stored value
-			// self-heals to unsampled instead of disabling beacons.
-			if ( 'performance_audit' === $tab && ! isset( $params['settings']['rum_sample_rate'] ) && isset( $options['performance_audit']['rum_sample_rate'] ) ) {
-				$rum_default                           = class_exists( 'PerformanceOptimise\Inc\RUM' ) ? \PerformanceOptimise\Inc\RUM::RUM_SAMPLE_RATE_DEFAULT : 100;
-				$stored_rate                           = $options['performance_audit']['rum_sample_rate'];
-				$stored_rate                           = is_numeric( $stored_rate ) ? (int) $stored_rate : $rum_default;
-				$sanitized_settings['rum_sample_rate'] = ( $stored_rate >= 1 && $stored_rate <= 100 ) ? $stored_rate : $rum_default;
-			}
-
-			// Preserve dismissed AI suggestions when the request omits them
-			// (issue #1036): AiPanel save posts only the toggles, while the
-			// dismiss action posts the full list — a toggle save must not
-			// wipe prior dismissals.
-			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['dismissed_suggestions'] ) && isset( $options['ai_adaptive']['dismissed_suggestions'] ) ) {
-				$dismissed = $options['ai_adaptive']['dismissed_suggestions'];
-				if ( is_array( $dismissed ) ) {
-					$sanitized_dismissed = array();
-					foreach ( $dismissed as $metric ) {
-						if ( ! is_string( $metric ) ) {
-							continue;
-						}
-						$m = sanitize_text_field( $metric );
-						if ( '' !== $m ) {
-							$sanitized_dismissed[] = substr( $m, 0, 64 );
-						}
-					}
-					$sanitized_settings['dismissed_suggestions'] = array_values( array_unique( $sanitized_dismissed ) );
-				}
-			}
-
-			// Preserve the field-LCP minimum-sample threshold when the request
-			// omits it (issue #1036): AiPanel save posts only the toggles, so
-			// a toggle save must not wipe a custom threshold. Clamped to
-			// 1-1000 like the sanitizer (issue #1200) so a legacy extreme
-			// stored value self-heals instead of pinning auto-tune.
-			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['field_lcp_min_samples'] ) && isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
-				$sanitized_settings['field_lcp_min_samples'] = min( 1000, max( 1, absint( $options['ai_adaptive']['field_lcp_min_samples'] ) ) );
-			}
-
-			// Preserve the RUM-segmented speculation auto-tune keys when the
-			// request omits them (issue #1425): same partial-save hazard as
-			// the field-LCP threshold above — an older client/partial save
-			// must not wipe the opt-in flag or the tuning thresholds.
-			// Normalized like Util::sanitize_settings_recursively() so stored
-			// extremes self-heal instead of persisting verbatim.
-			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_autotune_enabled'] ) && isset( $options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
-				$stored = $options['ai_adaptive']['speculation_autotune_enabled'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['speculation_autotune_enabled'] = $stored;
-				} else {
-					$bool = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['speculation_autotune_enabled'] = null === $bool ? false : $bool;
-				}
-			}
-			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_min_samples'] ) && isset( $options['ai_adaptive']['speculation_min_samples'] ) ) {
-				$sanitized_settings['speculation_min_samples'] = min( 1000, max( 1, absint( $options['ai_adaptive']['speculation_min_samples'] ) ) );
-			}
-			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['speculation_max_urls'] ) && isset( $options['ai_adaptive']['speculation_max_urls'] ) ) {
-				$stored_limit                               = is_numeric( $options['ai_adaptive']['speculation_max_urls'] ) ? (int) $options['ai_adaptive']['speculation_max_urls'] : 5;
-				$sanitized_settings['speculation_max_urls'] = min( 5, max( 1, $stored_limit ) );
-			}
-
-			// Preserve the RUM-priority ordering flags when the request omits
-			// them (issue #1059): FileOptimization UI saves post the full tab,
-			// but an older client/partial save must not wipe an opt-out set via
-			// WP-CLI/DB. Mirrors the server_timing_enabled/auto_rescan preserves.
-			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssRumPriority'] ) && isset( $options['file_optimisation']['ccssRumPriority'] ) ) {
-				$sanitized_settings['ccssRumPriority'] = (bool) $options['file_optimisation']['ccssRumPriority'];
-			}
-			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssRumPriority'] ) && isset( $options['file_optimisation']['usedCssRumPriority'] ) ) {
-				$sanitized_settings['usedCssRumPriority'] = (bool) $options['file_optimisation']['usedCssRumPriority'];
-			}
-
-			// Preserve the RUM-weighted CSS queue keys when the request omits
-			// them (issue #1164): same partial-save hazard as the RUM-priority
-			// flags above — an older client/partial save must not wipe a
-			// custom per-run cap or the viewport-variant toggle.
-			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssQueueCap'] ) && isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
-				$sanitized_settings['ccssQueueCap'] = absint( $options['file_optimisation']['ccssQueueCap'] );
-			}
-			// Preserve the CCSS generation timeout when the request omits it
-			// (issue #1235): same partial-save hazard as the queue caps above
-			// — an older client/partial save must not wipe a custom budget.
-			// $settings is the $params['settings'] copy (see above); isset()
-			// matches the sibling preserves (an explicit null counts as
-			// omitted and keeps the stored value); clamped to 1..120 at
-			// write time so 'not-a-number'/0/500 self-heal instead of
-			// persisting verbatim.
-			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssGenTimeout'] ) && isset( $options['file_optimisation']['ccssGenTimeout'] ) ) {
-				$stored                               = $options['file_optimisation']['ccssGenTimeout'];
-				$stored                               = is_numeric( $stored ) ? (int) $stored : 25;
-				$sanitized_settings['ccssGenTimeout'] = ( $stored >= 1 && $stored <= 120 ) ? $stored : 25;
-			}
-			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssQueueCap'] ) && isset( $options['file_optimisation']['usedCssQueueCap'] ) ) {
-				$sanitized_settings['usedCssQueueCap'] = absint( $options['file_optimisation']['usedCssQueueCap'] );
-			}
-			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssViewportVariants'] ) && isset( $options['file_optimisation']['ccssViewportVariants'] ) ) {
-				$stored_variants                            = $options['file_optimisation']['ccssViewportVariants'];
-				$sanitized_settings['ccssViewportVariants'] = is_array( $stored_variants ) ? array_values( array_filter( array_map( 'sanitize_text_field', $stored_variants ) ) ) : (bool) $stored_variants;
-			}
-
-			// Preserve the RUM-gated speculation toggle when the request
-			// omits it (issue #1061): PreloadSettings save posts only the
-			// toggles it renders, so a save must not wipe the gating flag.
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationRumGating', $settings ) && isset( $options['preload_settings']['speculationRumGating'] ) ) {
-				// Same filter_var() normalization as
-				// Util::sanitize_settings_recursively() so a stored string
-				// shape (e.g. 'false') does not diverge between the two paths.
-				$stored = $options['preload_settings']['speculationRumGating'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['speculationRumGating'] = $stored;
-				} else {
-					$bool                                       = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['speculationRumGating'] = null === $bool ? true : $bool;
-				}
-			}
-
-			// Preserve the RUM-weighted top-URL cap when the request omits
-			// it (issue #1183): same partial-save hazard as the gating flag
-			// above — an older client/partial save must not wipe the cap.
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationTopUrlsLimit', $settings ) && isset( $options['preload_settings']['speculationTopUrlsLimit'] ) ) {
-				$stored = $options['preload_settings']['speculationTopUrlsLimit'];
-				$limit  = is_numeric( $stored ) ? (int) $stored : 2;
-				$sanitized_settings['speculationTopUrlsLimit'] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
-			}
-
-			// Preserve the high-value prerender list toggle when the
-			// request omits it (issue #1237): same partial-save hazard —
-			// an older client/partial save must not wipe the off-by-default
-			// flag. Normalized like sanitize_settings_recursively().
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationPrerenderList', $settings ) && isset( $options['preload_settings']['speculationPrerenderList'] ) ) {
-				$stored = $options['preload_settings']['speculationPrerenderList'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['speculationPrerenderList'] = $stored;
-				} else {
-					$bool = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['speculationPrerenderList'] = null === $bool ? false : $bool;
-				}
-			}
-
-			// Preserve the automatic LCP + font-discovery toggles when the
-			// request omits them (issue #1216): same partial-save hazard —
-			// an older client/partial save must not wipe the off-by-default
-			// flags. Normalized like sanitize_settings_recursively().
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'autoLcpPreload', $settings ) && isset( $options['preload_settings']['autoLcpPreload'] ) ) {
-				$stored = $options['preload_settings']['autoLcpPreload'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['autoLcpPreload'] = $stored;
-				} else {
-					$bool                                 = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['autoLcpPreload'] = null === $bool ? false : $bool;
-				}
-			}
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'autoDiscoverFonts', $settings ) && isset( $options['preload_settings']['autoDiscoverFonts'] ) ) {
-				$stored = $options['preload_settings']['autoDiscoverFonts'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['autoDiscoverFonts'] = $stored;
-				} else {
-					$bool                                    = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['autoDiscoverFonts'] = null === $bool ? false : $bool;
-				}
-			}
-
-			$merged_options = $options;
-			// Merge into the existing tab (issue #1216): a partial POST (e.g.
-			// only autoLcpPreload from an older client) must not delete sibling
-			// keys like enablePreloadCache or preloadFontsUrls. The tab value is
-			// replaced only when no prior tab array exists.
-			$prior_tab              = ( isset( $options[ $tab ] ) && is_array( $options[ $tab ] ) ) ? $options[ $tab ] : array();
-			$merged_options[ $tab ] = array_merge( $prior_tab, is_array( $sanitized_settings ) ? $sanitized_settings : array() );
-
-			// One-click undo (issue #1144): snapshot the prior settings before
-			// overwriting, but skip no-op saves so an identical write does not
-			// churn the single-slot snapshot (mirrors import_settings). Fail-open:
-			// a snapshot failure must never block the save.
-			if ( $merged_options !== $options ) {
-				try {
-					Util::take_settings_snapshot( $options );
-				} catch ( \Throwable $snapshot_error ) {
-					unset( $snapshot_error );
-				}
-			}
-
-			$options = $merged_options;
-
-			// Audit #1325: never autoload the multi-tab settings array.
-			update_option( 'wppo_settings', $options, false );
-
-			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
-				Telemetry::invalidate_audit_cache();
-			}
-
-			$this->remove_sensitive_settings_from_response( $options );
-
-			return $this->send_response( $options );
+			return $this->rest_settings->update_settings( $request );
 		}
 
 		/**
@@ -1485,16 +1108,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Removes sensitive settings from the response array.
 		 *
+		 * Delegates to Util::remove_sensitive_settings_from_response() so
+		 * every REST read path redacts the same keys.
+		 *
 		 * @param array $settings The settings array passed by reference.
 		 * @return void
 		 */
 		private function remove_sensitive_settings_from_response( array &$settings ): void {
-			if ( isset( $settings['performance_audit'] ) ) {
-				unset( $settings['performance_audit']['pagespeed_api_key'] );
-			}
-			if ( isset( $settings['object_cache'] ) && isset( $settings['object_cache']['password'] ) ) {
-				unset( $settings['object_cache']['password'] );
-			}
+			Util::remove_sensitive_settings_from_response( $settings );
 		}
 
 		/**
@@ -1922,88 +1543,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::import_settings}.
 		 */
 		public function import_settings( \WP_REST_Request $request ) {
-			if ( $this->is_endpoint_throttled( 'import_settings', 10, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			$data = $request->get_json_params();
-
-			if ( ! is_array( $data ) ) {
-				return $this->send_response( null, false, 400, __( 'Invalid payload.', 'performance-optimisation' ) );
-			}
-
-			if ( ! isset( $data['action'] ) || 'import_settings' !== $data['action'] ) {
-				return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
-			}
-
-			if ( empty( $data['settings'] ) || ! is_array( $data['settings'] ) ) {
-				return $this->send_response( null, false, 400, __( 'Settings are missing or invalid.', 'performance-optimisation' ) );
-			}
-
-			// Validate that only known top-level setting keys are present (single source: Util::ALLOWED_SETTINGS_KEYS).
-			$allowed_keys = Util::ALLOWED_SETTINGS_KEYS;
-
-			foreach ( array_keys( $data['settings'] ) as $key ) {
-				if ( ! in_array( $key, $allowed_keys, true ) ) {
-					return $this->send_response( null, false, 400, __( 'Invalid setting key detected.', 'performance-optimisation' ) );
-				}
-			}
-
-			// Never store Redis password in the database. Store a boolean flag instead.
-			if ( isset( $data['settings']['object_cache'] ) && isset( $data['settings']['object_cache']['password'] ) ) {
-				$password_provided = ! empty( $data['settings']['object_cache']['password'] );
-				unset( $data['settings']['object_cache']['password'] );
-				if ( $password_provided ) {
-					$data['settings']['object_cache']['password_set'] = true;
-				}
-			}
-
-			// Server-only outage status flag (issue #1233): strip before
-			// sanitize/merge so imports cannot pin spoofed bypassed state,
-			// mirroring password handling. The stored server-written value
-			// survives via array_replace_recursive of the remaining keys.
-			if ( isset( $data['settings']['object_cache'] ) && is_array( $data['settings']['object_cache'] ) && array_key_exists( 'outage_bypassed', $data['settings']['object_cache'] ) ) {
-				unset( $data['settings']['object_cache']['outage_bypassed'] );
-			}
-
-			// Sanitize settings before saving.
-			$sanitized_settings = $this->sanitize_settings_recursively( $data['settings'] );
-
-			// Retrieve the existing settings and merge the imported settings on top,
-			// so newer setting keys from future plugin versions are preserved.
-			$existing_settings = Util::get_settings();
-			$merged_settings   = array_replace_recursive( $existing_settings, $sanitized_settings );
-
-			// Check if the settings are the same.
-			if ( $existing_settings === $merged_settings ) {
-				$response_settings = $existing_settings;
-				$this->remove_sensitive_settings_from_response( $response_settings );
-				return $this->send_response( $response_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
-			}
-
-			// One-click undo (issue #1144): snapshot the prior settings before
-			// overwriting. Fail-open: a snapshot failure must never block the save.
-			try {
-				Util::take_settings_snapshot( $existing_settings );
-			} catch ( \Throwable $snapshot_error ) {
-				unset( $snapshot_error );
-			}
-
-			if ( ! update_option( 'wppo_settings', $merged_settings, false ) ) {
-				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
-			}
-
-			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
-				Telemetry::invalidate_audit_cache();
-			}
-
-			$response_settings = $merged_settings;
-			$this->remove_sensitive_settings_from_response( $response_settings );
-
-			return $this->send_response( $response_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
+			return $this->rest_settings->import_settings( $request );
 		}
 
 		/**
@@ -2015,25 +1558,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::get_settings_snapshot}.
 		 */
 		public function get_settings_snapshot( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
-			$snapshot = Util::get_settings_snapshot();
-
-			if ( ! is_array( $snapshot ) ) {
-				return $this->send_response(
-					array(
-						'has_snapshot' => false,
-						'taken_at'     => null,
-					)
-				);
-			}
-
-			return $this->send_response(
-				array(
-					'has_snapshot' => true,
-					'taken_at'     => isset( $snapshot['taken_at'] ) ? absint( $snapshot['taken_at'] ) : null,
-				)
-			);
+			return $this->rest_settings->get_settings_snapshot( $request );
 		}
 
 		/**
@@ -2046,27 +1574,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::restore_settings}.
 		 */
 		public function restore_settings( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
-			if ( $this->is_endpoint_throttled( 'restore_settings', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			$restored = Util::restore_settings_snapshot();
-
-			if ( ! is_array( $restored ) ) {
-				return $this->send_response( null, false, 404, __( 'No settings snapshot available to restore.', 'performance-optimisation' ) );
-			}
-
-			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
-				Telemetry::invalidate_audit_cache();
-			}
-
-			$response_settings = $restored;
-			$this->remove_sensitive_settings_from_response( $response_settings );
-
-			return $this->send_response( $response_settings, true, 200, __( 'Settings restored successfully.', 'performance-optimisation' ) );
+			return $this->rest_settings->restore_settings( $request );
 		}
 
 		/**
@@ -3585,87 +3096,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.0.0
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Cache::purge_used_css_cache}.
 		 */
 		public function purge_used_css_cache( \WP_REST_Request $request ): \WP_REST_Response {
-			if ( $this->is_endpoint_throttled( 'purge_used_css_cache', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			$params = $request->get_params();
-			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : null;
-
-			$url_path = null;
-			if ( null !== $path && '' !== $path ) {
-				$canonical_host  = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_canonical_host' ) ? Util::get_canonical_host() : '';
-				$normalized_path = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $path ) : (string) $path;
-				if ( '' === $canonical_host ) {
-					// Fail closed when the canonical host is unresolvable
-					// (early boot/CLI/misconfigured home_url): refuse
-					// absolute-form inputs instead of degrading to legacy
-					// path-only extraction that would map a foreign host
-					// onto the local tree.
-					$target = ltrim( substr( ltrim( $normalized_path ), 0, strcspn( ltrim( $normalized_path ), '?#' ) ) );
-					if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $target ) || 0 === strpos( $target, '//' ) || (bool) preg_match( '#^[a-zA-Z]:#', $target ) || 0 === strpos( $target, '\\\\' ) ) {
-						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
-					}
-					$sanitized = Util::sanitize_cache_url_path( $normalized_path, null );
-				} else {
-					$sanitized = Util::sanitize_cache_url_path( $normalized_path, $canonical_host );
-				}
-				if ( '' === $sanitized ) {
-					// '' is both the benign homepage ('/') and hostile
-					// input: only 400 when the raw path component is
-					// non-blank. A benign '/' purges just the homepage
-					// ('/' stays non-empty so clear_cache() takes the
-					// single-page branch instead of purge-all).
-					$component = function_exists( 'wp_parse_url' ) ? wp_parse_url( (string) $path, PHP_URL_PATH ) : parse_url( (string) $path, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
-					if ( null === $component || false === $component ) {
-						$component = $path;
-					}
-					if ( '' !== trim( (string) $component, " \t\n\r\0\x0B/" ) ) {
-						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
-					}
-					$url_path = '/';
-				} else {
-					$url_path = $sanitized;
-				}
-			}
-
-			$result  = Used_CSS::purge_coupled( $url_path );
-			$page_ok = ! empty( $result['page_cache'] );
-			$css_ok  = ! empty( $result['used_css'] );
-			$data    = array(
-				'page_cache' => $page_ok,
-				'used_css'   => $css_ok,
-			);
-
-			if ( ! $page_ok && ! $css_ok ) {
-				Log::add( __( 'Coupled purge failed: page cache and used CSS not purged.', 'performance-optimisation' ) );
-				return $this->send_response( $data, false, 500, __( 'Failed to purge page cache and used CSS.', 'performance-optimisation' ) );
-			}
-
-			if ( $page_ok && $css_ok ) {
-				Log::add( __( 'Coupled purge: page cache and used CSS purged.', 'performance-optimisation' ) );
-				return $this->send_response(
-					$data,
-					true,
-					200,
-					__( 'Page cache and used CSS purged.', 'performance-optimisation' )
-				);
-			}
-
-			$message = $page_ok
-				? __( 'Page cache purged, but used CSS purge failed.', 'performance-optimisation' )
-				: __( 'Used CSS purged, but page cache purge failed.', 'performance-optimisation' );
-			Log::add( $message );
-
-			return $this->send_response(
-				$data,
-				true,
-				200,
-				$message
-			);
+			return $this->rest_cache->purge_used_css_cache( $request );
 		}
 
 		/**
@@ -4095,21 +3529,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::get_sandbox_preview}.
 		 */
 		public function get_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			$staged      = class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ? Sandbox_Preview::get_staged_settings() : array();
-			$preview_url = '';
-			if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_preview_url' ) ) {
-				$home        = function_exists( 'home_url' ) ? (string) home_url( '/' ) : '';
-				$preview_url = Sandbox_Preview::get_preview_url( $home );
-			}
-			return $this->send_response(
-				array(
-					'staged'      => $staged,
-					'has_staged'  => ! empty( $staged ),
-					'preview_url' => $preview_url,
-				)
-			);
+			return $this->rest_settings->get_sandbox_preview( $_request );
 		}
 
 		/**
@@ -4121,23 +3544,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::save_sandbox_preview}.
 		 */
 		public function save_sandbox_preview( \WP_REST_Request $request ): \WP_REST_Response {
-			if ( $this->is_endpoint_throttled( 'sandbox_save', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			$params   = $request->get_params();
-			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
-				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
-			}
-			$ok = Sandbox_Preview::save_staged( $settings );
-			if ( ! $ok ) {
-				return $this->send_response( null, false, 500, __( 'Could not save sandbox settings.', 'performance-optimisation' ) );
-			}
-			return $this->send_response( array( 'staged' => Sandbox_Preview::get_staged_settings() ) );
+			return $this->rest_settings->save_sandbox_preview( $request );
 		}
 
 		/**
@@ -4146,26 +3556,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::promote_sandbox_preview}.
 		 */
 		public function promote_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			if ( $this->is_endpoint_throttled( 'sandbox_promote', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
-				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
-			}
-			if ( ! Sandbox_Preview::is_staged_available() ) {
-				return $this->send_response( null, false, 400, __( 'No staged sandbox settings to promote.', 'performance-optimisation' ) );
-			}
-			$ok = Sandbox_Preview::promote_staged();
-			if ( ! $ok ) {
-				return $this->send_response( null, false, 500, __( 'Could not promote sandbox settings.', 'performance-optimisation' ) );
-			}
-			$options = Util::get_settings();
-			$this->remove_sensitive_settings_from_response( $options );
-			return $this->send_response( $options );
+			return $this->rest_settings->promote_sandbox_preview( $_request );
 		}
 
 		/**
@@ -4174,21 +3568,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
 		 * @since 2.2.0
+		 * Facade proxy (ARCH-011): logic lives in {@see Rest_Settings::discard_sandbox_preview}.
 		 */
 		public function discard_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			if ( $this->is_endpoint_throttled( 'sandbox_discard', 5, 60 ) ) {
-				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
-				$response->header( 'Retry-After', '60' );
-				return $response;
-			}
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
-				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
-			}
-			$ok = Sandbox_Preview::discard_staged();
-			if ( ! $ok ) {
-				return $this->send_response( null, false, 500, __( 'Could not discard sandbox settings.', 'performance-optimisation' ) );
-			}
-			return $this->send_response( array( 'staged' => array() ) );
+			return $this->rest_settings->discard_sandbox_preview( $_request );
 		}
 
 		/**

@@ -428,6 +428,8 @@ phase2_items:
     dependencies: [ARCH-003]
     risk: medium
     expected_change: 'Route table byte-identical; permission callbacks shared, not duplicated.'
+    notes:
+      - '2026-09-23: implemented in working tree — new Rest_Cache (includes/class-rest-cache.php, 4 handlers: clear_cache, get_preload_status, resume_preload, purge_used_css_cache) + Rest_Settings (includes/class-rest-settings.php, 8 handlers: update_settings, import_settings, snapshot/restore, sandbox x4, + 2 private helpers); all 14 bodies byte-identical (bridge-normalized diff clean). Rest keeps 12 thin proxies + 3 @internal bridges (rest_throttle_hit/rest_send_response/rest_cache_dir) + 12 re-pointed table callbacks; slugs/methods/permission/schema untouched; Rest 4494→3891 lines, 73→76 methods (+3 bridges, proxies retained per facade rule); Loader_Map fallback + inventory known-classes registered, class-inventory.json + DEPENDENCY-GRAPH.json regenerated; new RestCacheSettingsParityTest regression suite.'
   - id: ARCH-012
     title: 'Cron/Scheduler consolidation'
     status: queued

@@ -330,12 +330,25 @@
         "Llms",
         "Util"
     ],
+    "includes/class-rest-cache.php": [
+        "Cache",
+        "Cron",
+        "Log",
+        "Rest",
+        "Used_CSS",
+        "Util"
+    ],
+    "includes/class-rest-settings.php": [
+        "Rest",
+        "Sandbox_Preview",
+        "Telemetry",
+        "Util"
+    ],
     "includes/class-rest.php": [
         "AI_Adaptive",
         "Builder_Purge_Watcher",
         "Cache",
         "Critical_CSS",
-        "Cron",
         "Database_Cleanup",
         "Img_Converter",
         "LiteSpeed_Integration",
@@ -345,7 +358,8 @@
         "Object_Cache",
         "Pagespeed",
         "RUM",
-        "Sandbox_Preview",
+        "Rest_Cache",
+        "Rest_Settings",
         "Server_Rules",
         "Suggestion_Engine",
         "System_Info",

@@ -85,6 +85,8 @@ function wppo_known_classes(): array {
 		'Perf_Translations',
 		'Purge_Logger',
 		'Rest',
+		'Rest_Cache',
+		'Rest_Settings',
 		'RUM',
 		'Sandbox_Preview',
 		'Scheduler',
