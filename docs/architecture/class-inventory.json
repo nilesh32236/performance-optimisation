@@ -154,6 +154,23 @@
         ]
     },
     {
+        "file": "includes/class-cache-invalidator.php",
+        "class": null,
+        "lines": 2122,
+        "methods": 34,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Critical_CSS",
+            "LiteSpeed_Integration",
+            "Log",
+            "Server_Rules",
+            "Used_CSS",
+            "Util"
+        ]
+    },
+    {
         "file": "includes/class-cache-key.php",
         "class": null,
         "lines": 142,
@@ -167,15 +184,15 @@
     {
         "file": "includes/class-cache.php",
         "class": null,
-        "lines": 6867,
-        "methods": 152,
+        "lines": 5294,
+        "methods": 161,
         "hooks": [
             "shutdown"
         ],
         "static_state": false,
         "refs": [
             "CDN",
-            "Critical_CSS",
+            "Cache_Invalidator",
             "Css_Combine",
             "Hook_Registry",
             "LiteSpeed_ESI",
@@ -183,8 +200,6 @@
             "Log",
             "Main",
             "Sandbox_Preview",
-            "Server_Rules",
-            "Used_CSS",
             "Util",
             "Wp_Version"
         ]
@@ -328,7 +343,7 @@
     {
         "file": "includes/class-css-combine.php",
         "class": null,
-        "lines": 1533,
+        "lines": 1554,
         "methods": 30,
         "hooks": [],
         "static_state": false,
@@ -673,7 +688,7 @@
     {
         "file": "includes/class-loader-map.php",
         "class": null,
-        "lines": 236,
+        "lines": 237,
         "methods": 7,
         "hooks": [],
         "static_state": false,

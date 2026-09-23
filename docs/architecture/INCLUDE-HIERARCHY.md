@@ -103,7 +103,8 @@ edge/cluster evidence; `[load]` = `LOAD-ORDER.md` loader/drop-in evidence.
 | `class-wp-version.php` | `Core/` | [sysmap:Cache-domain/Wp_Version] Phase-1 boundary + REF-010 central gate; core-version guard belongs with bootstrap; [dir] Infrastructure |
 | `class-activate.php` | `Core/` | [sysmap:Lifecycle] activation; [load] `register_activation_hook → Activate::init()` |
 | `class-deactivate.php` | `Core/` | [sysmap:Lifecycle] deactivation; [load] `register_deactivation_hook → Deactivate::init()` |
-| `class-cache.php` | `Cache/` | [sysmap:Cache domain] buffer+policy; [hotspot] ARCH-006/007 extraction source; [graph] dense `Cache::` hub |
+| `class-cache.php` | `Cache/` | [sysmap:Cache domain] buffer+policy; [hotspot] ARCH-006/007 extraction source (ARCH-007 moved the invalidation/purge cluster to `Cache_Invalidator`, `Cache` keeps buffer/store/policy + facades); [graph] dense `Cache::` hub |
+| `class-cache-invalidator.php` | `Cache/` | [sysmap:Cache domain] invalidation/purge owner (ARCH-007 extraction from `Cache`: invalidate trio, `clear_cache` body, fallback serving, delete helpers, swap purge); `Cache` keeps thin proxies + `@internal` bridges |
 | `class-cache-key.php` | `Cache/` | [sysmap:Cache domain] Phase-1 boundary (REF-001 extraction from Util); [graph] `Cache_Key::` edges from cache paths |
 | `class-advanced-cache-handler.php` | `Cache/` | [sysmap:Delivery/edge] drop-in owner; [load] drop-in contract (`advanced-cache.php` create/detect/remove) — cache-serving policy |
 | `class-bfcache.php` | `Cache/` | [sysmap:Delivery/edge] bfcache (logged-in cache policy); cache-behavior owner |

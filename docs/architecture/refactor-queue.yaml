@@ -365,6 +365,8 @@ phase2_items:
     dependencies: [ARCH-006]
     risk: high
     expected_change: 'Single ownership for invalidation; Cache left with policy + buffer orchestration.'
+    notes:
+      - '2026-09-23: implemented in working tree — new PerformanceOptimise\Inc\Cache_Invalidator (includes/class-cache-invalidator.php) owns the invalidate trio, clear_cache body (instance method; Cache keeps same-signature static delegate), purge-fallback serving set, all delete_* helpers + swap purge, and the PURGE_FALLBACK_* bounds (logic verbatim; instance state stays on Cache via @internal invalidator_*() bridges, Option A per ARCH-004/005/006 precedent); Cache keeps 33 thin proxies (visibility preserved so method_exists guards + Hook_Registry callback identity unchanged) + lazy invalidator() getter + 8 bridges; safe_path/get_file_path/is_path_contained/log probes stay on Cache, Filesystem primitives untouched (no double-ownership); Loader_Map fallback + inventory known-classes registered, class-inventory.json + DEPENDENCY-GRAPH.json regenerated (Cache 6867→5294 lines); new CacheInvalidatorTest regression suite.'
   - id: ARCH-008
     title: 'Image_Optimisation hero-preload/lazy cluster extraction'
     status: queued

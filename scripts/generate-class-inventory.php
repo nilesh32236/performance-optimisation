@@ -47,6 +47,7 @@ function wppo_known_classes(): array {
 		'Bfcache',
 		'Builder_Purge_Watcher',
 		'Cache',
+		'Cache_Invalidator',
 		'Cache_Key',
 		'CDN',
 		'CDN_Purger',
