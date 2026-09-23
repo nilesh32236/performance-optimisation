@@ -456,23 +456,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Applies the `wppo_cache_instance` filter so tests (and advanced
 		 * integrations) can stub the Cache collaborator. Collaborators are
 		 * constructor-injected (REF-006): when live instances are supplied
-		 * they are shared by identity; when omitted (purge/read-only callers
-		 * holding no live instances) equivalents are built eagerly from the
-		 * same options snapshot so the Cache is still fully initialized on
-		 * return — the single fallback site for the whole plugin.
+		 * they are shared by identity; when omitted, the Cache builds the
+		 * equivalents lazily from the resolved options on first buffer use,
+		 * so purge/read-only callers holding no live instances pay no
+		 * construction cost for collaborators they never touch.
 		 *
 		 * @since 2.2.0
 		 * @since NEXT Accepts optional collaborator overrides for constructor injection.
 		 * @param array                   $options            Plugin options passed to Cache.
-		 * @param Image_Optimisation|null $image_optimisation Live collaborator, or null to build an equivalent from $options.
-		 * @param Google_Fonts|null       $google_fonts       Live collaborator, or null to build an equivalent from $options.
+		 * @param Image_Optimisation|null $image_optimisation Live collaborator, or null to build the equivalent lazily from the resolved options.
+		 * @param Google_Fonts|null       $google_fonts       Live collaborator, or null to build the equivalent lazily from the resolved options.
 		 * @return mixed Cache instance (or filtered stub).
 		 */
 		public static function create_cache( array $options, ?Image_Optimisation $image_optimisation = null, ?Google_Fonts $google_fonts = null ) {
 			$cache = new Cache(
 				$options,
-				$image_optimisation ?? new Image_Optimisation( $options ),
-				$google_fonts ?? new Google_Fonts( $options )
+				$image_optimisation,
+				$google_fonts
 			);
 			/**
 			 * Filter the Cache collaborator instance.

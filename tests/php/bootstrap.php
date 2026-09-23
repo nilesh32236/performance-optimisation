@@ -363,9 +363,10 @@ trait WPPO_Test_Bootstrap {
 	 * Build a fully-injected Cache instance (REF-006 constructor injection).
 	 *
 	 * Collaborators are built from the same options snapshot the Cache
-	 * receives, mirroring the equivalents Main::create_cache() supplies for
-	 * purge/read-only callers. Tests exercising the buffer pipeline should
-	 * prefer explicitly-built collaborators shared by identity instead.
+	 * receives and shared by identity, mirroring what Main::create_cache()
+	 * uses for callers holding live instances. Tests exercising the buffer
+	 * pipeline should prefer explicitly-built collaborators shared by
+	 * identity instead of relying on the lazy in-class fallback.
 	 *
 	 * @since NEXT
 	 * @param array $options Plugin options passed to Cache and collaborators.

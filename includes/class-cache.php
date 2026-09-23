@@ -350,19 +350,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Constructor to initialize cache settings and configurations.
 		 *
-		 * Collaborators are constructor-injected (REF-006): the instance is
-		 * fully initialized on return — there is no partially-initialized
-		 * state between construction and setter calls. Callers that only
-		 * need purge/read-only paths and hold no live collaborators should
-		 * build through {@see Main::create_cache()}, which supplies
-		 * equivalents built from the same options snapshot.
+		 * Collaborators are constructor-injected (REF-006): when live
+		 * instances are supplied they are shared by identity, so the
+		 * instance reuses them instead of diverging onto a stale options
+		 * snapshot. Callers that hold no live collaborators should build
+		 * through {@see Main::create_cache()}, the preferred path. The
+		 * collaborators are optional-nullable for backward compatibility
+		 * (direct `new Cache( $options )` keeps working, including
+		 * third-party code): omitted collaborators are built lazily from
+		 * the resolved options on first buffer use, so purge/read-only
+		 * paths never pay for construction they do not need.
 		 *
-		 * @param array              $options            Plugin options. When empty, loaded from DB.
-		 * @param Image_Optimisation $image_optimisation Live image-optimisation collaborator (identity shared with Main).
-		 * @param Google_Fonts       $google_fonts       Live Google-Fonts collaborator (identity shared with Main).
+		 * @param array                   $options            Plugin options. Callers pass Util::get_settings(); when empty, loaded from DB via Util::get_settings() for backward compatibility.
+		 * @param Image_Optimisation|null $image_optimisation Live image-optimisation collaborator (identity shared with Main), or null to build lazily from the resolved options.
+		 * @param Google_Fonts|null       $google_fonts       Live Google-Fonts collaborator (identity shared with Main), or null to build lazily from the resolved options.
 		 * @since 1.0.0
+		 * @since NEXT Constructor collaborators are optional-nullable with lazy in-class fallback.
 		 */
-		public function __construct( array $options, Image_Optimisation $image_optimisation, Google_Fonts $google_fonts ) {
+		public function __construct( array $options = array(), ?Image_Optimisation $image_optimisation = null, ?Google_Fonts $google_fonts = null ) {
 			$this->image_optimisation = $image_optimisation;
 			$this->google_fonts       = $google_fonts;
 			$raw_host                 = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
@@ -590,6 +595,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		public function set_google_fonts( Google_Fonts $google_fonts ): void {
 			$this->google_fonts = $google_fonts;
+		}
+
+		/**
+		 * Lazily resolve the Image_Optimisation buffer collaborator.
+		 *
+		 * Returns the constructor-injected live instance when present;
+		 * otherwise builds the equivalent from the resolved options on
+		 * first use (and memoizes it) so purge/read-only paths never pay
+		 * for construction, while a filtered stub, unserialization, or
+		 * reflection that left the property null degrades to the same
+		 * equivalent instead of fataling on the hot buffer path.
+		 *
+		 * @return Image_Optimisation Non-null collaborator.
+		 * @since NEXT
+		 */
+		private function get_image_optimisation(): Image_Optimisation {
+			if ( null === $this->image_optimisation ) {
+				$this->image_optimisation = new Image_Optimisation( $this->options );
+			}
+			return $this->image_optimisation;
+		}
+
+		/**
+		 * Lazily resolve the Google_Fonts buffer collaborator.
+		 *
+		 * Same contract as {@see get_image_optimisation()}: injected live
+		 * instance when present, equivalent built from the resolved
+		 * options on first use otherwise.
+		 *
+		 * @return Google_Fonts Non-null collaborator.
+		 * @since NEXT
+		 */
+		private function get_google_fonts(): Google_Fonts {
+			if ( null === $this->google_fonts ) {
+				$this->google_fonts = new Google_Fonts( $this->options );
+			}
+			return $this->google_fonts;
 		}
 
 		/**
@@ -2783,10 +2825,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$buffer = $this->hoist_late_block_styles( $buffer );
 
 			// Buffer collaborators are constructor-injected (REF-006): reuse the
-			// live instances shared with Main. No fallback `new` here — the
-			// constructor guarantees both are set, so the buffer pipeline can
-			// never diverge onto a stale options snapshot.
-			$image_optimisation = $this->image_optimisation;
+			// live instances shared with Main when present, building the
+			// equivalents from the resolved options on first use otherwise.
+			// The lazy getters guarantee non-null collaborators, so the
+			// buffer pipeline can never diverge onto a stale options
+			// snapshot nor fatal on a null left by a filtered stub,
+			// unserialization, or reflection.
+			$image_optimisation = $this->get_image_optimisation();
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
 			$buffer = $image_optimisation->add_delay_load_img( $buffer );
@@ -2796,14 +2841,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Host Google Fonts locally via buffer-level interception.
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
-				$google_fonts = $this->google_fonts;
-				$buffer       = $google_fonts->process_buffer( $buffer );
+				$buffer = $this->get_google_fonts()->process_buffer( $buffer );
 			}
 
 			// Inject metric-matched font fallback when enabled (OMGF Pro parity).
 			if ( ! empty( $this->options['file_optimisation']['fontMetricFallback'] ?? false ) ) {
-				$google_fonts = $this->google_fonts;
-				$buffer       = $google_fonts->inject_metric_fallback( $buffer );
+				$buffer = $this->get_google_fonts()->inject_metric_fallback( $buffer );
 			}
 
 			$file_opts         = $this->options['file_optimisation'] ?? array();

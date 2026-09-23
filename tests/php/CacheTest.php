@@ -212,6 +212,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	 * from a stale options snapshot.
 	 */
 	public function test_constructor_injects_collaborators_by_identity(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
 		$options = array();
 		$io      = new Image_Optimisation( $options );
 		$gf      = new Google_Fonts( $options );
@@ -226,21 +227,38 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that the constructor requires both collaborators (REF-006).
+	 * Test that the collaborators are optional-nullable with lazy fallback (REF-006).
 	 *
-	 * Omitting them must fail fast instead of producing a
-	 * partially-initialized instance.
+	 * Omitting them must preserve backward compatibility (direct
+	 * `new Cache( $options )`, including third-party code): the Cache
+	 * builds the equivalents from the resolved options on first buffer
+	 * use instead of throwing.
 	 */
-	public function test_constructor_requires_collaborators(): void {
-		$this->expectException( \TypeError::class );
+	public function test_constructor_collaborators_optional_with_lazy_fallback(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
+		$cache = new Cache( array() );
 
-		new Cache( array() );
+		$io_prop = new \ReflectionProperty( Cache::class, 'image_optimisation' );
+		$gf_prop = new \ReflectionProperty( Cache::class, 'google_fonts' );
+
+		$this->assertNull( $io_prop->getValue( $cache ) );
+		$this->assertNull( $gf_prop->getValue( $cache ) );
+
+		$get_io = new \ReflectionMethod( Cache::class, 'get_image_optimisation' );
+		$get_gf = new \ReflectionMethod( Cache::class, 'get_google_fonts' );
+
+		$this->assertInstanceOf( Image_Optimisation::class, $get_io->invoke( $cache ) );
+		$this->assertInstanceOf( Google_Fonts::class, $get_gf->invoke( $cache ) );
+		// Lazy collaborators are memoized for subsequent buffer passes.
+		$this->assertSame( $get_io->invoke( $cache ), $io_prop->getValue( $cache ) );
+		$this->assertSame( $get_gf->invoke( $cache ), $gf_prop->getValue( $cache ) );
 	}
 
 	/**
 	 * Test that the deprecated setters still forward as thin proxies (REF-006).
 	 */
 	public function test_deprecated_setters_forward_as_proxies(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
 		$options = array();
 		$cache   = new Cache(
 			$options,
