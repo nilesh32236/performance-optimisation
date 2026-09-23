@@ -45,11 +45,7 @@ export const useUpgradePurgeStatus = () => {
 		try {
 			const res = await apiCall( 'upgrade_purge_status', {}, 'GET' );
 			if ( res && res.success && res.data ) {
-				setUpgradePurge( ( prev ) => ( {
-					last_purge: res.data.last_purge || null,
-					safe_preview_url:
-						res.data.safe_preview_url || prev.safe_preview_url,
-				} ) );
+				setUpgradePurge( normalizeUpgradePurge( res.data ) );
 			}
 		} catch ( statusError ) {
 			// Fail-open: keep the seeded wppoSettings value.

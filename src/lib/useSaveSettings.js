@@ -82,7 +82,7 @@ export const useSaveSettings = ( tab, options = {} ) => {
 		[ tab, notify, dismiss, successMessage, errorMessage ]
 	);
 
-	return { saving, save, setSaving };
+	return { saving, save };
 };
 
 export default useSaveSettings;

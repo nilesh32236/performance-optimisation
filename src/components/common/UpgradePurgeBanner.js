@@ -52,18 +52,20 @@ const UpgradePurgeBanner = ( { upgradePurge } ) => {
 							'Updates auto-purge derived caches',
 							'performance-optimisation'
 					  ) }
-				{ ' — ' }
 				{ hasPreview && (
-					<a
-						href={ previewUrl }
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						{ __(
-							'Open safe preview (bypasses minify)',
-							'performance-optimisation'
-						) }
-					</a>
+					<>
+						{ ' — ' }
+						<a
+							href={ previewUrl }
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							{ __(
+								'Open safe preview (bypasses minify)',
+								'performance-optimisation'
+							) }
+						</a>
+					</>
 				) }
 			</span>
 		</div>
