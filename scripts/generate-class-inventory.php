@@ -85,6 +85,7 @@ function wppo_known_classes(): array {
 		'Sandbox_Preview',
 		'Scheduler',
 		'Server_Rules',
+		'Settings_Migrations',
 		'Settings_Store',
 		'Suggestion_Engine',
 		'System_Info',

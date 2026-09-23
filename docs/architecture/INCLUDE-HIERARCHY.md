@@ -1,6 +1,6 @@
 # Include Hierarchy — current state (ARCH-001)
 
-Evidence baseline: 2026-09-23. 57 files flat in `includes/` (56 class/trait
+Evidence baseline: 2026-09-23. 58 files flat in `includes/` (57 class/trait
 files + `redis-connect-helper.php`, plus `minify/` wrappers). Counts/methods/refs:
 `class-inventory.json`; edges: `DEPENDENCY-GRAPH.json`. Canonical redesign: ARCH-002.
 
@@ -8,7 +8,7 @@ files + `redis-connect-helper.php`, plus `minify/` wrappers). Counts/methods/ref
 
 - **Core/bootstrap:** `Main`, `Hook_Registry`, `Wp_Version`, `Activate`, `Deactivate`
 - **Cache:** `Cache`, `Cache_Key`, `Advanced_Cache_Handler`, `Bfcache`
-- **Settings:** `Settings_Store`, `Sandbox_Preview`
+- **Settings:** `Settings_Store`, `Sandbox_Preview`, `Settings_Migrations`
 - **Filesystem/URL/HTTP:** `Filesystem`, `Url`, `Http`, `Scheduler`
 - **Assets:** `Asset_Manager`, `Css_Safelist`, `Google_Fonts`
 - **Images:** `Image_Optimisation`, `Img_Converter`
@@ -55,7 +55,8 @@ includes/
   Cache/          class-cache.php, class-cache-key.php,
                   class-advanced-cache-handler.php, class-bfcache.php,
                   class-object-cache.php
-  Settings/       class-settings-store.php, class-sandbox-preview.php
+  Settings/       class-settings-store.php, class-sandbox-preview.php,
+                  class-settings-migrations.php
   Scheduler/      class-scheduler.php, class-cron.php
   Support/        class-filesystem.php, class-url.php, class-http.php,
                   class-log.php, trait-purge-logger.php,
@@ -88,7 +89,7 @@ against current load references (`Main::includes()` eager list + fallback map,
 drop-in contracts, test bootstrap); moves in ARCH-013 update the loader map
 (ARCH-003) in the same change per the move-safety constraints above.
 
-### Per-class target mapping (57 files, evidence per row)
+### Per-class target mapping (58 files, evidence per row)
 
 Evidence keys: `[sysmap:<cluster>]` = `ARCHITECTURE.md` system-map cluster;
 `[hotspot]` = `ARCHITECTURE.md` coupling hotspot; `[dir]` = dependency-direction
@@ -108,6 +109,7 @@ edge/cluster evidence; `[load]` = `LOAD-ORDER.md` loader/drop-in evidence.
 | `class-bfcache.php` | `Cache/` | [sysmap:Delivery/edge] bfcache (logged-in cache policy); cache-behavior owner |
 | `class-object-cache.php` | `Cache/` | [sysmap:Lifecycle/Object_Cache] Redis manager; [load] drop-in-adjacent (`templates/object-cache.php`, `wppo-redis-config.php`); cache backend |
 | `class-settings-store.php` | `Settings/` | [sysmap:Infrastructure] Phase-1 boundary (REF-002/REF-011); [dir] Infrastructure/Boundaries |
+| `class-settings-migrations.php` | `Settings/` | [sysmap:Lifecycle] one-time `maybe_migrate_*` backfills relocated verbatim from `Main` (ARCH-004); `Main` keeps facade proxies so hook-callback identity is unchanged; [load] lazy via `Loader_Map` fallback map |
 | `class-sandbox-preview.php` | `Settings/` | [sysmap:Surface] staged sandbox settings; settings-domain staging owner |
 | `class-scheduler.php` | `Scheduler/` | [sysmap:Cache-domain/Scheduler] Phase-1 boundary (REF-014 Action-Scheduler + stampede locks); [dir] Infrastructure |
 | `class-cron.php` | `Scheduler/` | [sysmap:Lifecycle/Cron] WP-Cron registration; ARCH-012 consolidates payloads onto `Scheduler` primitives |

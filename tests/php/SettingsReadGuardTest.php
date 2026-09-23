@@ -28,23 +28,23 @@ class SettingsReadGuardTest extends \PHPUnit\Framework\TestCase {
 	 * @var array<string, array{count: int, reason: string}>
 	 */
 	private const ALLOWLIST = array(
-		'includes/class-settings-store.php'  => array(
+		'includes/class-settings-store.php'      => array(
 			'count'  => 1,
 			'reason' => 'Canonical read inside Settings_Store::get_settings() (REF-002; Util::get_settings() proxies here).',
 		),
-		'includes/class-activate.php'        => array(
+		'includes/class-activate.php'            => array(
 			'count'  => 1,
 			'reason' => 'Null-distinguishing fresh-install check in maybe_seed_settings().',
 		),
-		'includes/class-main.php'            => array(
+		'includes/class-settings-migrations.php' => array(
 			'count'  => 17,
-			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), maybe_migrate_ccss_max_size(), maybe_migrate_ccss_safelist(), maybe_migrate_safe_mode(), maybe_migrate_elementor_safe_mode(), maybe_migrate_image_alt_edge_defaults(), maybe_migrate_css_queue_defaults(), maybe_migrate_speculation_top_urls(), maybe_migrate_speculation_prerender_list(), maybe_migrate_preload_auto_defaults(), maybe_migrate_rum_sample_rate(), maybe_migrate_object_cache_outage_flag(), maybe_migrate_ai_speculation_autotune(), maybe_migrate_comment_image_hardening(), maybe_migrate_builder_watcher(), maybe_migrate_third_party_auto(), and maybe_migrate_ai_anomaly_v2().',
+			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), migrate_ccss_max_size(), migrate_ccss_safelist(), migrate_safe_mode(), migrate_elementor_safe_mode(), migrate_image_alt_edge_defaults(), migrate_css_queue_defaults(), migrate_speculation_top_urls(), migrate_speculation_prerender_list(), migrate_preload_auto_defaults(), migrate_rum_sample_rate(), migrate_object_cache_outage_flag(), migrate_ai_speculation_autotune(), migrate_comment_image_hardening(), migrate_builder_watcher(), migrate_third_party_auto(), and migrate_ai_anomaly_v2() (ARCH-004 relocation from Main).',
 		),
-		'includes/class-sandbox-preview.php' => array(
+		'includes/class-sandbox-preview.php'     => array(
 			'count'  => 6,
 			'reason' => 'Bare reads distinguishing "no row" from "stored array" in save_staged() (persist plus write verification), promote_staged() (read plus write verification), and discard_staged() (read plus write verification).',
 		),
-		'includes/class-object-cache.php'    => array(
+		'includes/class-object-cache.php'        => array(
 			'count'  => 3,
 			'reason' => 'Outage-flag paths (issue #1233): fresh unmemoized reads in arm_outage_flag()/clear_outage_flag() so a stale memo can never clobber a concurrently saved tab (whole-option RMW), plus the legacy Util-unavailable fallback in is_outage_flagged().',
 		),
