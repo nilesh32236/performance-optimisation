@@ -71,6 +71,7 @@ function wppo_known_classes(): array {
 		'LiteSpeed_ESI',
 		'LiteSpeed_Integration',
 		'Llms',
+		'Loader_Map',
 		'Log',
 		'Main',
 		'Metabox',

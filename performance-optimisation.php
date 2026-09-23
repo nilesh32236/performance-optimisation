@@ -270,7 +270,15 @@ if ( $wppo_have_deps ) {
 // unoptimised (fail-open frontend).
 // The class_exists() fallback covers a stale Composer classmap: Main ships
 // in-repo, so require it directly when the autoloader cannot see it.
+// Loader_Map ships alongside it (ARCH-003: single owner of load paths) so
+// Main::includes() can delegate wherever Main resolves.
 if ( $wppo_have_deps && wppo_version_guard() ) {
+	if ( ! class_exists( 'PerformanceOptimise\\Inc\\Loader_Map' ) ) {
+		$wppo_loader_map = WPPO_PLUGIN_PATH . 'includes/class-loader-map.php';
+		if ( file_exists( $wppo_loader_map ) ) {
+			require_once $wppo_loader_map;
+		}
+	}
 	if ( ! class_exists( 'PerformanceOptimise\\Inc\\Main' ) ) {
 		$wppo_main = WPPO_PLUGIN_PATH . 'includes/class-main.php';
 		if ( file_exists( $wppo_main ) ) {

@@ -654,6 +654,17 @@
         ]
     },
     {
+        "file": "includes/class-loader-map.php",
+        "class": null,
+        "lines": 233,
+        "methods": 7,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Main"
+        ]
+    },
+    {
         "file": "includes/class-log.php",
         "class": null,
         "lines": 248,
@@ -667,7 +678,7 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14173,
+        "lines": 14091,
         "methods": 232,
         "hooks": [
             "update_option_wppo_settings",
@@ -693,6 +704,7 @@
             "Image_Optimisation",
             "Img_Converter",
             "LiteSpeed_Integration",
+            "Loader_Map",
             "Log",
             "RUM",
             "Sandbox_Preview",

@@ -1052,26 +1052,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since  1.0.0
 		 */
 		private function includes(): void {
-			// WP version gate (REF-010): no dependencies, loaded first so
-			// every version-gated class below can use it.
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-wp-version.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-wp-version.php';
+			// Loader map first (ARCH-003): the single owner of "which file
+			// provides which class". Every path below delegates to it so a
+			// future directory move touches exactly one file.
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map', false ) ) {
+				$loader_map_file = WPPO_PLUGIN_PATH . 'includes/class-loader-map.php';
+				if ( file_exists( $loader_map_file ) ) {
+					require_once $loader_map_file;
+				}
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
 			}
 
-			// LiteSpeed integration (Phase 1 — safe coexistence). Loaded after
-			// Server_Rules so is_litespeed() delegation is available.
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-server-rules.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
-			}
-			// Header emitter first: LiteSpeed_Integration + ESI delegate to it.
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-header-emitter.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-header-emitter.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php';
+			// Eager files in Loader_Map order, starting with the WP version
+			// gate (REF-010: no dependencies, so every version-gated class
+			// below can use it). The vendor Action Scheduler lib above is not
+			// under `includes/` so it stays wired here directly.
+			foreach ( Loader_Map::eager_files() as $eager_file ) {
+				$eager_path = Loader_Map::file_path( $eager_file );
+				if ( '' !== $eager_path && file_exists( $eager_path ) ) {
+					require_once $eager_path;
+				}
 			}
 			// Modularity (issue #1443): the LiteSpeed-only crawler + ESI stack
 			// is parsed only when it can act. Non-LiteSpeed frontend requests
@@ -1079,131 +1081,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// unavailable the stack still loads (today's behaviour). Method-level
 			// fail-closed checks (is_litespeed(), is_esi_available()) stay as
 			// defence in depth. Server-agnostic classes (AI_Adaptive,
-			// Edge_Cache, Edge_Purger, CDN, ...) are always loaded below.
+			// Edge_Cache, Edge_Purger, CDN, ...) are always loaded above.
+			// The decision stays here in Main; Loader_Map owns only the file list.
 			if ( self::should_load_litespeed_stack() ) {
-				if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php' ) ) {
-					require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php';
+				foreach ( Loader_Map::litespeed_stack_files() as $stack_file ) {
+					$stack_path = Loader_Map::file_path( $stack_file );
+					if ( '' !== $stack_path && file_exists( $stack_path ) ) {
+						require_once $stack_path;
+					}
 				}
-				if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php' ) ) {
-					require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php';
-				}
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-llms.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-llms.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-od-bridge.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-od-bridge.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-bfcache.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-bfcache.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-perf-translations.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-perf-translations.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-ai-adaptive.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-ai-adaptive.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-edge-cache.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-edge-cache.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/trait-purge-logger.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/trait-purge-logger.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-edge-purger.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-edge-purger.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-cdn.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-cdn.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php';
-			}
-			// Hook registry (REF-005): always loaded — Main::setup_hooks()
-			// delegates every hook registration to it.
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-hook-registry.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-hook-registry.php';
 			}
 
-			// Fallback loader for the remaining core classes when the Composer
+			// Fallback loader for lazily-loaded classes when the Composer
 			// classmap is stale or unavailable (partial release builds). Lazy:
 			// registered as an spl autoloader so healthy requests pay nothing on
 			// the hot path — a file is required only on an actual missing-class
-			// failure. Classes already required unconditionally above
-			// (Server_Rules, Header_Emitter, LiteSpeed_Integration,
-			// Llms, OD_Bridge, Bfcache,
-			// AI_Adaptive, Edge_Cache, Edge_Purger, CDN, Builder_Purge_Watcher,
-			// Perf_Translations) are intentionally omitted here to avoid
-			// duplicate probes. LiteSpeed_Crawler + LiteSpeed_ESI are included
-			// below so late callers (cron, abilities, integration info) still
+			// failure. Eager classes above are intentionally omitted from the
+			// map (except where Loader_Map already lists them) to avoid
+			// duplicate probes. LiteSpeed_Crawler + LiteSpeed_ESI stay in the
+			// map so late callers (cron, abilities, integration info) still
 			// resolve them via autoload when includes() skipped the eager load
 			// on non-LiteSpeed requests.
-			$fallback_map = array(
-				'Abilities'              => 'class-abilities.php',
-				'Activate'               => 'class-activate.php',
-				'Admin_Notices'          => 'class-admin-notices.php',
-				'Advanced_Cache_Handler' => 'class-advanced-cache-handler.php',
-				'Asset_Manager'          => 'class-asset-manager.php',
-				'Cache'                  => 'class-cache.php',
-				'Cache_Key'              => 'class-cache-key.php',
-				'CDN_Purger'             => 'class-cdn-purger.php',
-				'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
-				'Core_Tweaks'            => 'class-core-tweaks.php',
-				'Critical_CSS'           => 'class-critical-css.php',
-				'Css_Safelist'           => 'class-css-safelist.php',
-				'Cron'                   => 'class-cron.php',
-				'Database_Cleanup'       => 'class-database-cleanup.php',
-				'Deactivate'             => 'class-deactivate.php',
-				'Filesystem'             => 'class-filesystem.php',
-				'Google_Fonts'           => 'class-google-fonts.php',
-				'Hook_Registry'          => 'class-hook-registry.php',
-				'Htaccess_Handler'       => 'class-htaccess-handler.php',
-				'Http'                   => 'class-http.php',
-				'Image_Optimisation'     => 'class-image-optimisation.php',
-				'Img_Converter'          => 'class-img-converter.php',
-				'LiteSpeed_Crawler'      => 'class-litespeed-crawler.php',
-				'LiteSpeed_ESI'          => 'class-litespeed-esi.php',
-				'Log'                    => 'class-log.php',
-				'Metabox'                => 'class-metabox.php',
-				'Object_Cache'           => 'class-object-cache.php',
-				'Pagespeed'              => 'class-pagespeed.php',
-				'Purge_Logger'           => 'trait-purge-logger.php',
-				'Rest'                   => 'class-rest.php',
-				'RUM'                    => 'class-rum.php',
-				'Sandbox_Preview'        => 'class-sandbox-preview.php',
-				'Scheduler'              => 'class-scheduler.php',
-				'Settings_Store'         => 'class-settings-store.php',
-				'Suggestion_Engine'      => 'class-suggestion-engine.php',
-				'System_Info'            => 'class-system-info.php',
-				'Telemetry'              => 'class-telemetry.php',
-				'Used_CSS'               => 'class-used-css.php',
-				'Url'                    => 'class-url.php',
-				'Util'                   => 'class-util.php',
-				'Woo_Detect'             => 'class-woo-detect.php',
-				'Wp_Version'             => 'class-wp-version.php',
-			);
 			spl_autoload_register(
-				static function ( $class_name ) use ( $fallback_map ): void {
+				static function ( $class_name ): void {
 					$prefix = 'PerformanceOptimise\\Inc\\';
 					if ( 0 !== strpos( (string) $class_name, $prefix ) ) {
 						return;
 					}
 					$short = substr( (string) $class_name, strlen( $prefix ) );
-					if ( ! isset( $fallback_map[ $short ] ) ) {
-						return;
-					}
 					if ( class_exists( $class_name, false ) ) {
 						return;
 					}
-					$fallback_path = WPPO_PLUGIN_PATH . 'includes/' . $fallback_map[ $short ];
-					if ( file_exists( $fallback_path ) ) {
+					$fallback_path = Loader_Map::path_for( $short );
+					if ( null !== $fallback_path && file_exists( $fallback_path ) ) {
 						require_once $fallback_path;
 					}
 				}
 			);
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
-				$cli_file = WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
-				if ( file_exists( $cli_file ) ) {
+				$cli_file = Loader_Map::cli_file();
+				if ( '' !== $cli_file && file_exists( $cli_file ) ) {
 					require_once $cli_file;
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command', false ) ) {
