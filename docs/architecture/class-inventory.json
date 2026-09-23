@@ -988,13 +988,15 @@
     {
         "file": "includes/Integrations/class-woo-detect.php",
         "class": null,
-        "lines": 1011,
+        "lines": 1016,
         "methods": 11,
         "hooks": [],
         "static_state": false,
         "refs": [
             "Cache",
             "Cron",
+            "Settings_Store",
+            "Url",
             "Util"
         ]
     },
@@ -1048,6 +1050,7 @@
         "hooks": [],
         "static_state": false,
         "refs": [
+            "Settings_Store",
             "Util"
         ]
     },
@@ -1096,13 +1099,15 @@
     {
         "file": "includes/Support/class-filesystem.php",
         "class": null,
-        "lines": 2421,
+        "lines": 2423,
         "methods": 40,
         "hooks": [],
         "static_state": false,
         "refs": [
             "Cache",
+            "Cache_Key",
             "Log",
+            "Settings_Store",
             "Url",
             "Used_CSS",
             "Util"

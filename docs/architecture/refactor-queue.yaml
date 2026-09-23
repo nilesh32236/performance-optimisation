@@ -493,12 +493,51 @@ phase2_items:
       - '2026-09-23: implemented — src/components/file-optimization/PresetsCard.js (presentational, computed booleans) + PresetsCard.test.js; FileOptimization renders <PresetsCard/> in place of inline JSX; build/ rebuilt.'
   - id: ARCH-016
     title: 'Final architecture audit + leftover triage'
-    status: queued
+    status: issue-created
+    github_issue: 1558
     priority: medium
     responsibility: 'BEFORE/AFTER comparison per campaign section 36; classify remainders as resolved/intentional/future/protected/acceptable.'
     dependencies: [ARCH-013, ARCH-014, ARCH-015]
     risk: low
     expected_change: 'Audit report + future queue items if justified; no code.'
+
+future_items:
+  - id: FUT-001
+    title: 'Critical_CSS split (137 methods, untouched this campaign)'
+    status: queued
+    priority: medium
+    notes:
+      - 'Largest untouched god class (7595 lines). Split along evidence clusters when scheduled.'
+  - id: FUT-002
+    title: 'Bridge/cycle cleanup + Util external caller migration (~650 edges)'
+    status: queued
+    priority: low
+    notes:
+      - 'Collapse Main<->service reference bridges and migrate external Util:: callers to owning boundaries; method counts ratchet down as proxies go.'
+  - id: FUT-003
+    title: 'Used_CSS / Img_Converter / RUM / Database_Cleanup / Object_Cache / LiteSpeed remainder consolidation'
+    status: queued
+    priority: low
+    notes:
+      - 'Mid-size classes (54-94 methods) untouched or sliced this round; consolidate per evidence when scheduled.'
+  - id: FUT-004
+    title: 'AI speculation/model + image lazy/media leftovers'
+    status: queued
+    priority: low
+    notes:
+      - 'Remainder clusters of AI_Adaptive (76) and Image_Optimisation (183) after ARCH-008/010 slices.'
+  - id: FUT-005
+    title: 'React remainder: 13 FileOptimization cards + Dashboard/App'
+    status: queued
+    priority: low
+    notes:
+      - 'Continue one-card-per-PR pattern (ARCH-015 precedent).'
+  - id: FUT-006
+    title: 'Tokenizer-based dependency-cycle analysis'
+    status: queued
+    priority: low
+    notes:
+      - 'Static ClassName:: refs include docblocks (over-approximate SCC); build a tokenizer use-graph for true cycle detection.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
