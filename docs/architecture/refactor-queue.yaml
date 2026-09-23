@@ -384,13 +384,14 @@ phase2_items:
     risk: medium
     expected_change: 'Image_Optimisation -~35-40 methods; preload output + dedup + resolution precedence preserved.'
   - id: ARCH-009
-    title: 'Critical_CSS + Used_CSS shared CSS-storage helper consolidation'
-    status: queued
+    title: 'CSS exclusion ownership consolidation (Critical_CSS owns, Used_CSS delegates)'
+    status: issue-created
+    github_issue: 1544
     priority: medium
     source_files:
       - includes/class-critical-css.php
       - includes/class-used-css.php
-    responsibility: 'Shared checksum/safelist/exclusion helpers (already cross-referenced via class_exists guards) into one CSS Storage owner; both features keep facades.'
+    responsibility: 'Re-scoped from evidence: checksum/sanitize/bounds already single-owned in Util (proxies stay). Consolidate duplicated exclusion fallback bodies (~60 lines) in Used_CSS into minimal delegation to Critical_CSS owner; guards preserved for mixed-version safety.'
     dependencies: [ARCH-003]
     risk: medium
     expected_change: 'One owner for CSS storage semantics; cross-feature class_exists guards simplified, behavior identical.'
