@@ -259,6 +259,7 @@
         "Log",
         "RUM",
         "Sandbox_Preview",
+        "Script_Strategy",
         "Server_Rules",
         "Settings_Migrations",
         "System_Info",
@@ -332,6 +333,13 @@
     ],
     "includes/class-scheduler.php": [
         "Util"
+    ],
+    "includes/class-script-strategy.php": [
+        "Cache",
+        "LiteSpeed_Integration",
+        "Main",
+        "Util",
+        "Wp_Version"
     ],
     "includes/class-server-rules.php": [
         "Cache",

@@ -84,6 +84,7 @@ function wppo_known_classes(): array {
 		'RUM',
 		'Sandbox_Preview',
 		'Scheduler',
+		'Script_Strategy',
 		'Server_Rules',
 		'Settings_Migrations',
 		'Settings_Store',
