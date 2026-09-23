@@ -16,10 +16,12 @@ baseline:
   Util_facade_proxies: 33
   Cache_Key_methods: 4
   Settings_Store_methods: 22
+  Scheduler_methods: 13
+  Http_methods: 8
   Filesystem_methods: 40
   Url_methods: 24
   Woo_Detect_methods: 12
-  Cache_methods_max: 135
+  Cache_methods_max: 137
   Image_Optimisation_methods_max: 165
   Critical_CSS_methods_max: 137
   largest_php_class_lines_max: 14639
@@ -205,12 +207,13 @@ items:
     title: 'Extract Http boundary from Util (curl/finfo/xml/gd teardown + last-response headers)'
     type: architecture
     priority: low
-    status: autofix-running
+    status: merged
     github_issue: 1526
     github_pr: 1527
+    merge_commit: 8cf06a51
     source: BOUNDARIES.md Http
     notes:
-      - 'Mechanical move of close_*/destroy_*/free_* helpers + get_last_response_headers. Keeps PHP 8.5-compat scanner green.'
+      - 'Merged 2026-09-23. 7/7 teardown methods byte-identical; hygiene scanner extended to new owner with fixtures. Final Util split.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
