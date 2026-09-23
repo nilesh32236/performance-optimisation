@@ -15,8 +15,8 @@ use Brain\Monkey\Functions;
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 	require_once __DIR__ . '/../../includes/class-util.php';
-	require_once __DIR__ . '/../../includes/class-cron.php';
-	require_once __DIR__ . '/../../includes/class-litespeed-crawler.php';
+	require_once __DIR__ . '/../../includes/Scheduler/class-cron.php';
+	require_once __DIR__ . '/../../includes/Integrations/class-litespeed-crawler.php';
 }
 
 /**

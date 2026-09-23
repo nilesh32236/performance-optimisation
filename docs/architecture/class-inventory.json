@@ -1,6 +1,6 @@
 [
     {
-        "file": "includes/class-abilities.php",
+        "file": "includes/Admin/class-abilities.php",
         "class": null,
         "lines": 1459,
         "methods": 33,
@@ -31,26 +31,7 @@
         ]
     },
     {
-        "file": "includes/class-activate.php",
-        "class": null,
-        "lines": 552,
-        "methods": 8,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Advanced_Cache_Handler",
-            "Cache",
-            "Htaccess_Handler",
-            "Img_Converter",
-            "Log",
-            "Pagespeed",
-            "RUM",
-            "Server_Rules",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-admin-notices.php",
+        "file": "includes/Admin/class-admin-notices.php",
         "class": null,
         "lines": 784,
         "methods": 15,
@@ -71,56 +52,125 @@
         ]
     },
     {
-        "file": "includes/class-advanced-cache-handler.php",
+        "file": "includes/Admin/class-metabox.php",
         "class": null,
-        "lines": 948,
-        "methods": 13,
+        "lines": 1006,
+        "methods": 16,
+        "hooks": [
+            "add_meta_boxes",
+            "save_post"
+        ],
+        "static_state": false,
+        "refs": [
+            "Asset_Manager",
+            "Main",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Admin/class-perf-translations.php",
+        "class": null,
+        "lines": 296,
+        "methods": 7,
+        "hooks": [
+            "load_translation_file",
+            "load_textdomain_mofile",
+            "wppo_perf_translations_file_written",
+            "upgrader_process_complete"
+        ],
+        "static_state": false,
+        "refs": [
+            "Llms",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Admin/class-rest-cache.php",
+        "class": null,
+        "lines": 391,
+        "methods": 5,
         "hooks": [],
         "static_state": false,
         "refs": [
             "Cache",
-            "Log",
-            "System_Info",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-ai-adaptive.php",
-        "class": null,
-        "lines": 3989,
-        "methods": 76,
-        "hooks": [
-            "wp_speculation_rules"
-        ],
-        "static_state": false,
-        "refs": [
-            "Ai_Anomaly",
-            "LiteSpeed_ESI",
-            "Main",
-            "Pagespeed",
-            "RUM",
-            "Suggestion_Engine",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-ai-anomaly.php",
-        "class": null,
-        "lines": 2619,
-        "methods": 43,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
             "Cron",
-            "Main",
-            "Pagespeed",
-            "RUM",
+            "Log",
+            "Rest",
             "Used_CSS",
             "Util"
         ]
     },
     {
-        "file": "includes/class-asset-manager.php",
+        "file": "includes/Admin/class-rest-settings.php",
+        "class": null,
+        "lines": 643,
+        "methods": 11,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Rest",
+            "Sandbox_Preview",
+            "Telemetry",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Admin/class-rest.php",
+        "class": null,
+        "lines": 3877,
+        "methods": 76,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "AI_Adaptive",
+            "Builder_Purge_Watcher",
+            "Cache",
+            "Critical_CSS",
+            "Database_Cleanup",
+            "Img_Converter",
+            "LiteSpeed_Integration",
+            "Log",
+            "Main",
+            "OD_Bridge",
+            "Object_Cache",
+            "Pagespeed",
+            "RUM",
+            "Rest_Cache",
+            "Rest_Settings",
+            "Server_Rules",
+            "Suggestion_Engine",
+            "System_Info",
+            "Telemetry",
+            "Used_CSS",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Admin/class-wppo-cli-command.php",
+        "class": null,
+        "lines": 2372,
+        "methods": 27,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Advanced_Cache_Handler",
+            "Cache",
+            "Cron",
+            "Database_Cleanup",
+            "Img_Converter",
+            "LiteSpeed_ESI",
+            "LiteSpeed_Integration",
+            "Log",
+            "Main",
+            "Object_Cache",
+            "Pagespeed",
+            "Server_Rules",
+            "System_Info",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Assets/class-asset-manager.php",
         "class": null,
         "lines": 405,
         "methods": 8,
@@ -135,7 +185,110 @@
         ]
     },
     {
-        "file": "includes/class-bfcache.php",
+        "file": "includes/Assets/class-css-combine.php",
+        "class": null,
+        "lines": 1554,
+        "methods": 30,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "CDN",
+            "Cache",
+            "Google_Fonts",
+            "Log",
+            "Main",
+            "Util",
+            "Wp_Version"
+        ]
+    },
+    {
+        "file": "includes/Assets/class-css-safelist.php",
+        "class": null,
+        "lines": 83,
+        "methods": 2,
+        "hooks": [],
+        "static_state": false,
+        "refs": []
+    },
+    {
+        "file": "includes/Assets/class-google-fonts.php",
+        "class": null,
+        "lines": 1033,
+        "methods": 18,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Log",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Assets/class-script-strategy.php",
+        "class": null,
+        "lines": 3859,
+        "methods": 56,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "LiteSpeed_Integration",
+            "Main",
+            "Util",
+            "Wp_Version"
+        ]
+    },
+    {
+        "file": "includes/CSS/class-critical-css.php",
+        "class": null,
+        "lines": 7594,
+        "methods": 137,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "CDN",
+            "Cache",
+            "Css_Safelist",
+            "Image_Optimisation",
+            "Log",
+            "Main",
+            "RUM",
+            "Used_CSS",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/CSS/class-used-css.php",
+        "class": null,
+        "lines": 4961,
+        "methods": 94,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Critical_CSS",
+            "Css_Safelist",
+            "Log",
+            "Main",
+            "RUM",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Cache/class-advanced-cache-handler.php",
+        "class": null,
+        "lines": 948,
+        "methods": 13,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Log",
+            "System_Info",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Cache/class-bfcache.php",
         "class": null,
         "lines": 471,
         "methods": 14,
@@ -153,23 +306,7 @@
         ]
     },
     {
-        "file": "includes/class-builder-purge-watcher.php",
-        "class": null,
-        "lines": 2110,
-        "methods": 45,
-        "hooks": [],
-        "static_state": true,
-        "refs": [
-            "Cache",
-            "Critical_CSS",
-            "Log",
-            "Main",
-            "Used_CSS",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-cache-invalidator.php",
+        "file": "includes/Cache/class-cache-invalidator.php",
         "class": null,
         "lines": 2204,
         "methods": 34,
@@ -186,7 +323,7 @@
         ]
     },
     {
-        "file": "includes/class-cache-key.php",
+        "file": "includes/Cache/class-cache-key.php",
         "class": null,
         "lines": 142,
         "methods": 4,
@@ -197,7 +334,7 @@
         ]
     },
     {
-        "file": "includes/class-cache.php",
+        "file": "includes/Cache/class-cache.php",
         "class": null,
         "lines": 5643,
         "methods": 161,
@@ -222,44 +359,24 @@
         ]
     },
     {
-        "file": "includes/class-cdn-purger.php",
+        "file": "includes/Cache/class-object-cache.php",
         "class": null,
-        "lines": 262,
-        "methods": 6,
-        "hooks": [],
-        "static_state": false,
+        "lines": 3200,
+        "methods": 54,
+        "hooks": [
+            "object_cache_allow_flush_all"
+        ],
+        "static_state": true,
         "refs": [
-            "Cache",
-            "Cloudflare_Purger",
-            "LiteSpeed_Integration",
+            "Cron",
+            "Log",
+            "Server_Rules",
+            "System_Info",
             "Util"
         ]
     },
     {
-        "file": "includes/class-cdn.php",
-        "class": null,
-        "lines": 796,
-        "methods": 13,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "LiteSpeed_Integration",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-cloudflare-purger.php",
-        "class": null,
-        "lines": 173,
-        "methods": 3,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Edge_Purger"
-        ]
-    },
-    {
-        "file": "includes/class-core-tweaks.php",
+        "file": "includes/Compatibility/class-core-tweaks.php",
         "class": null,
         "lines": 537,
         "methods": 29,
@@ -298,107 +415,38 @@
         ]
     },
     {
-        "file": "includes/class-critical-css.php",
+        "file": "includes/Compatibility/class-llms.php",
         "class": null,
-        "lines": 7594,
-        "methods": 137,
+        "lines": 637,
+        "methods": 14,
         "hooks": [],
         "static_state": false,
         "refs": [
-            "CDN",
-            "Cache",
-            "Css_Safelist",
-            "Image_Optimisation",
             "Log",
-            "Main",
-            "RUM",
-            "Used_CSS",
             "Util"
         ]
     },
     {
-        "file": "includes/class-cron.php",
+        "file": "includes/Core/class-activate.php",
         "class": null,
-        "lines": 1830,
-        "methods": 37,
-        "hooks": [
-            "init",
-            "wppo_page_cron_hook",
-            "wppo_page_cron_batch",
-            "wppo_img_conversion",
-            "cron_schedules",
-            "wppo_generate_static_page",
-            "wppo_generate_static_url",
-            "wppo_preload_url_batch",
-            "wppo_litespeed_crawler_batch",
-            "wppo_crawler_warm",
-            "wppo_database_cleanup_cron",
-            "wppo_web_vitals_rescan",
-            "wppo_llms_txt_daily",
-            "wppo_used_css_cron",
-            "wppo_ccss_regeneration",
-            "wppo_rum_flush",
-            "wppo_object_cache_probe"
-        ],
+        "lines": 552,
+        "methods": 8,
+        "hooks": [],
         "static_state": false,
         "refs": [
+            "Advanced_Cache_Handler",
             "Cache",
-            "Critical_CSS",
-            "Database_Cleanup",
-            "Deactivate",
+            "Htaccess_Handler",
             "Img_Converter",
-            "LiteSpeed_Crawler",
-            "LiteSpeed_Integration",
-            "Llms",
             "Log",
-            "Object_Cache",
             "Pagespeed",
             "RUM",
-            "Scheduler",
+            "Server_Rules",
             "Util"
         ]
     },
     {
-        "file": "includes/class-css-combine.php",
-        "class": null,
-        "lines": 1554,
-        "methods": 30,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "CDN",
-            "Cache",
-            "Google_Fonts",
-            "Log",
-            "Main",
-            "Util",
-            "Wp_Version"
-        ]
-    },
-    {
-        "file": "includes/class-css-safelist.php",
-        "class": null,
-        "lines": 83,
-        "methods": 2,
-        "hooks": [],
-        "static_state": false,
-        "refs": []
-    },
-    {
-        "file": "includes/class-database-cleanup.php",
-        "class": null,
-        "lines": 3353,
-        "methods": 58,
-        "hooks": [],
-        "static_state": true,
-        "refs": [
-            "Log",
-            "Main",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-deactivate.php",
+        "file": "includes/Core/class-deactivate.php",
         "class": null,
         "lines": 368,
         "methods": 7,
@@ -420,71 +468,7 @@
         ]
     },
     {
-        "file": "includes/class-edge-cache.php",
-        "class": null,
-        "lines": 323,
-        "methods": 7,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-edge-purger.php",
-        "class": null,
-        "lines": 333,
-        "methods": 10,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Cache",
-            "Cloudflare_Purger",
-            "Edge_Cache",
-            "Log",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-filesystem.php",
-        "class": null,
-        "lines": 2421,
-        "methods": 40,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Cache",
-            "Log",
-            "Url",
-            "Used_CSS",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-google-fonts.php",
-        "class": null,
-        "lines": 1033,
-        "methods": 18,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Log",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-header-emitter.php",
-        "class": null,
-        "lines": 182,
-        "methods": 9,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "LiteSpeed_ESI"
-        ]
-    },
-    {
-        "file": "includes/class-hook-registry.php",
+        "file": "includes/Core/class-hook-registry.php",
         "class": null,
         "lines": 691,
         "methods": 7,
@@ -561,169 +545,10 @@
         ]
     },
     {
-        "file": "includes/class-htaccess-handler.php",
+        "file": "includes/Core/class-loader-map.php",
         "class": null,
-        "lines": 1326,
-        "methods": 20,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Advanced_Cache_Handler",
-            "LiteSpeed_Integration",
-            "Main",
-            "Server_Rules",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-http.php",
-        "class": null,
-        "lines": 351,
+        "lines": 312,
         "methods": 8,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-image-optimisation.php",
-        "class": null,
-        "lines": 8999,
-        "methods": 183,
-        "hooks": [
-            "wp_generate_attachment_metadata",
-            "wp_get_attachment_image_src",
-            "delete_attachment",
-            "wp_get_attachment_image_attributes",
-            "client_side_supported_mime_types",
-            "wp_client_side_media_processing_enabled",
-            "shutdown"
-        ],
-        "static_state": true,
-        "refs": [
-            "CDN",
-            "Img_Converter",
-            "Lcp_Preload",
-            "OD_Bridge",
-            "RUM",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-img-converter.php",
-        "class": null,
-        "lines": 4077,
-        "methods": 66,
-        "hooks": [
-            "shutdown"
-        ],
-        "static_state": true,
-        "refs": [
-            "Log",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-lcp-preload.php",
-        "class": null,
-        "lines": 4434,
-        "methods": 74,
-        "hooks": [],
-        "static_state": true,
-        "refs": [
-            "CDN",
-            "Image_Optimisation",
-            "OD_Bridge",
-            "RUM",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-litespeed-crawler.php",
-        "class": null,
-        "lines": 1160,
-        "methods": 18,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Cron",
-            "Log",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-litespeed-esi.php",
-        "class": null,
-        "lines": 1780,
-        "methods": 29,
-        "hooks": [
-            "wp_ajax_wppo_esi_fragment",
-            "wp_ajax_nopriv_wppo_esi_fragment",
-            "wp_enqueue_scripts",
-            "send_headers",
-            "litespeed_esi_nonces",
-            "litespeed_nonce",
-            "wppo_esi_fragment_html",
-            "wppo_litespeed_esi_fragment_html"
-        ],
-        "static_state": true,
-        "refs": [
-            "Header_Emitter",
-            "LiteSpeed_Integration",
-            "Log",
-            "Main",
-            "RUM",
-            "Rest",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-litespeed-integration.php",
-        "class": null,
-        "lines": 2797,
-        "methods": 58,
-        "hooks": [
-            "shutdown",
-            "litespeed_purged_all",
-            "litespeed_purged_post",
-            "litespeed_purge_finalize",
-            "send_headers",
-            "litespeed_vary",
-            "init",
-            "wp_logout",
-            "save_post",
-            "delete_post",
-            "permalink_structure_changed"
-        ],
-        "static_state": false,
-        "refs": [
-            "Cache",
-            "Header_Emitter",
-            "LiteSpeed_Crawler",
-            "LiteSpeed_ESI",
-            "Main",
-            "Server_Rules",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-llms.php",
-        "class": null,
-        "lines": 637,
-        "methods": 14,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Log",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-loader-map.php",
-        "class": null,
-        "lines": 241,
-        "methods": 7,
         "hooks": [],
         "static_state": false,
         "refs": [
@@ -731,18 +556,7 @@
         ]
     },
     {
-        "file": "includes/class-log.php",
-        "class": null,
-        "lines": 248,
-        "methods": 6,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-main.php",
+        "file": "includes/Core/class-main.php",
         "class": null,
         "lines": 11091,
         "methods": 235,
@@ -785,40 +599,220 @@
         ]
     },
     {
-        "file": "includes/class-metabox.php",
+        "file": "includes/Core/class-wp-version.php",
         "class": null,
-        "lines": 1006,
-        "methods": 16,
-        "hooks": [
-            "add_meta_boxes",
-            "save_post"
-        ],
+        "lines": 185,
+        "methods": 4,
+        "hooks": [],
         "static_state": false,
+        "refs": []
+    },
+    {
+        "file": "includes/Database/class-database-cleanup.php",
+        "class": null,
+        "lines": 3353,
+        "methods": 58,
+        "hooks": [],
+        "static_state": true,
         "refs": [
-            "Asset_Manager",
+            "Log",
             "Main",
             "Util"
         ]
     },
     {
-        "file": "includes/class-object-cache.php",
+        "file": "includes/Edge/class-cdn-purger.php",
         "class": null,
-        "lines": 3200,
-        "methods": 54,
-        "hooks": [
-            "object_cache_allow_flush_all"
-        ],
-        "static_state": true,
+        "lines": 262,
+        "methods": 6,
+        "hooks": [],
+        "static_state": false,
         "refs": [
-            "Cron",
-            "Log",
-            "Server_Rules",
-            "System_Info",
+            "Cache",
+            "Cloudflare_Purger",
+            "LiteSpeed_Integration",
             "Util"
         ]
     },
     {
-        "file": "includes/class-od-bridge.php",
+        "file": "includes/Edge/class-cdn.php",
+        "class": null,
+        "lines": 796,
+        "methods": 13,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "LiteSpeed_Integration",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Edge/class-cloudflare-purger.php",
+        "class": null,
+        "lines": 173,
+        "methods": 3,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Edge_Purger"
+        ]
+    },
+    {
+        "file": "includes/Edge/class-edge-cache.php",
+        "class": null,
+        "lines": 323,
+        "methods": 7,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Edge/class-edge-purger.php",
+        "class": null,
+        "lines": 333,
+        "methods": 10,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Cloudflare_Purger",
+            "Edge_Cache",
+            "Log",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Edge/class-header-emitter.php",
+        "class": null,
+        "lines": 182,
+        "methods": 9,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "LiteSpeed_ESI"
+        ]
+    },
+    {
+        "file": "includes/Edge/class-htaccess-handler.php",
+        "class": null,
+        "lines": 1326,
+        "methods": 20,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Advanced_Cache_Handler",
+            "LiteSpeed_Integration",
+            "Main",
+            "Server_Rules",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Edge/class-server-rules.php",
+        "class": null,
+        "lines": 328,
+        "methods": 6,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Htaccess_Handler",
+            "LiteSpeed_Integration",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Images/class-image-optimisation.php",
+        "class": null,
+        "lines": 8999,
+        "methods": 183,
+        "hooks": [
+            "wp_generate_attachment_metadata",
+            "wp_get_attachment_image_src",
+            "delete_attachment",
+            "wp_get_attachment_image_attributes",
+            "client_side_supported_mime_types",
+            "wp_client_side_media_processing_enabled",
+            "shutdown"
+        ],
+        "static_state": true,
+        "refs": [
+            "CDN",
+            "Img_Converter",
+            "Lcp_Preload",
+            "OD_Bridge",
+            "RUM",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Images/class-img-converter.php",
+        "class": null,
+        "lines": 4077,
+        "methods": 66,
+        "hooks": [
+            "shutdown"
+        ],
+        "static_state": true,
+        "refs": [
+            "Log",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Images/class-lcp-preload.php",
+        "class": null,
+        "lines": 4434,
+        "methods": 74,
+        "hooks": [],
+        "static_state": true,
+        "refs": [
+            "CDN",
+            "Image_Optimisation",
+            "OD_Bridge",
+            "RUM",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Insight/class-ai-adaptive.php",
+        "class": null,
+        "lines": 3989,
+        "methods": 76,
+        "hooks": [
+            "wp_speculation_rules"
+        ],
+        "static_state": false,
+        "refs": [
+            "Ai_Anomaly",
+            "LiteSpeed_ESI",
+            "Main",
+            "Pagespeed",
+            "RUM",
+            "Suggestion_Engine",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Insight/class-ai-anomaly.php",
+        "class": null,
+        "lines": 2619,
+        "methods": 43,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cron",
+            "Main",
+            "Pagespeed",
+            "RUM",
+            "Used_CSS",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Insight/class-od-bridge.php",
         "class": null,
         "lines": 1508,
         "methods": 25,
@@ -832,7 +826,7 @@
         ]
     },
     {
-        "file": "includes/class-pagespeed.php",
+        "file": "includes/Insight/class-pagespeed.php",
         "class": null,
         "lines": 988,
         "methods": 21,
@@ -847,85 +841,7 @@
         ]
     },
     {
-        "file": "includes/class-perf-translations.php",
-        "class": null,
-        "lines": 296,
-        "methods": 7,
-        "hooks": [
-            "load_translation_file",
-            "load_textdomain_mofile",
-            "wppo_perf_translations_file_written",
-            "upgrader_process_complete"
-        ],
-        "static_state": false,
-        "refs": [
-            "Llms",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-rest-cache.php",
-        "class": null,
-        "lines": 391,
-        "methods": 5,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Cache",
-            "Cron",
-            "Log",
-            "Rest",
-            "Used_CSS",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-rest-settings.php",
-        "class": null,
-        "lines": 643,
-        "methods": 11,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Rest",
-            "Sandbox_Preview",
-            "Telemetry",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-rest.php",
-        "class": null,
-        "lines": 3877,
-        "methods": 76,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "AI_Adaptive",
-            "Builder_Purge_Watcher",
-            "Cache",
-            "Critical_CSS",
-            "Database_Cleanup",
-            "Img_Converter",
-            "LiteSpeed_Integration",
-            "Log",
-            "Main",
-            "OD_Bridge",
-            "Object_Cache",
-            "Pagespeed",
-            "RUM",
-            "Rest_Cache",
-            "Rest_Settings",
-            "Server_Rules",
-            "Suggestion_Engine",
-            "System_Info",
-            "Telemetry",
-            "Used_CSS",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-rum.php",
+        "file": "includes/Insight/class-rum.php",
         "class": null,
         "lines": 3348,
         "methods": 63,
@@ -944,89 +860,7 @@
         ]
     },
     {
-        "file": "includes/class-sandbox-preview.php",
-        "class": null,
-        "lines": 588,
-        "methods": 11,
-        "hooks": [],
-        "static_state": true,
-        "refs": [
-            "Telemetry",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-scheduler.php",
-        "class": null,
-        "lines": 635,
-        "methods": 16,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-script-strategy.php",
-        "class": null,
-        "lines": 3859,
-        "methods": 56,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Cache",
-            "LiteSpeed_Integration",
-            "Main",
-            "Util",
-            "Wp_Version"
-        ]
-    },
-    {
-        "file": "includes/class-server-rules.php",
-        "class": null,
-        "lines": 328,
-        "methods": 6,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Cache",
-            "Htaccess_Handler",
-            "LiteSpeed_Integration",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-settings-migrations.php",
-        "class": null,
-        "lines": 1160,
-        "methods": 18,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Log",
-            "Main",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-settings-store.php",
-        "class": null,
-        "lines": 1097,
-        "methods": 22,
-        "hooks": [
-            "update_option_wppo_settings",
-            "add_option_wppo_settings",
-            "delete_option_wppo_settings"
-        ],
-        "static_state": false,
-        "refs": [
-            "Cache",
-            "Main",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-suggestion-engine.php",
+        "file": "includes/Insight/class-suggestion-engine.php",
         "class": null,
         "lines": 585,
         "methods": 11,
@@ -1040,7 +874,7 @@
         ]
     },
     {
-        "file": "includes/class-system-info.php",
+        "file": "includes/Insight/class-system-info.php",
         "class": null,
         "lines": 989,
         "methods": 23,
@@ -1057,7 +891,7 @@
         ]
     },
     {
-        "file": "includes/class-telemetry.php",
+        "file": "includes/Insight/class-telemetry.php",
         "class": null,
         "lines": 1157,
         "methods": 21,
@@ -1068,7 +902,236 @@
         ]
     },
     {
-        "file": "includes/class-url.php",
+        "file": "includes/Integrations/class-builder-purge-watcher.php",
+        "class": null,
+        "lines": 2110,
+        "methods": 45,
+        "hooks": [],
+        "static_state": true,
+        "refs": [
+            "Cache",
+            "Critical_CSS",
+            "Log",
+            "Main",
+            "Used_CSS",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Integrations/class-litespeed-crawler.php",
+        "class": null,
+        "lines": 1160,
+        "methods": 18,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cron",
+            "Log",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Integrations/class-litespeed-esi.php",
+        "class": null,
+        "lines": 1780,
+        "methods": 29,
+        "hooks": [
+            "wp_ajax_wppo_esi_fragment",
+            "wp_ajax_nopriv_wppo_esi_fragment",
+            "wp_enqueue_scripts",
+            "send_headers",
+            "litespeed_esi_nonces",
+            "litespeed_nonce",
+            "wppo_esi_fragment_html",
+            "wppo_litespeed_esi_fragment_html"
+        ],
+        "static_state": true,
+        "refs": [
+            "Header_Emitter",
+            "LiteSpeed_Integration",
+            "Log",
+            "Main",
+            "RUM",
+            "Rest",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Integrations/class-litespeed-integration.php",
+        "class": null,
+        "lines": 2797,
+        "methods": 58,
+        "hooks": [
+            "shutdown",
+            "litespeed_purged_all",
+            "litespeed_purged_post",
+            "litespeed_purge_finalize",
+            "send_headers",
+            "litespeed_vary",
+            "init",
+            "wp_logout",
+            "save_post",
+            "delete_post",
+            "permalink_structure_changed"
+        ],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Header_Emitter",
+            "LiteSpeed_Crawler",
+            "LiteSpeed_ESI",
+            "Main",
+            "Server_Rules",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Integrations/class-woo-detect.php",
+        "class": null,
+        "lines": 1011,
+        "methods": 11,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Cron",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Scheduler/class-cron.php",
+        "class": null,
+        "lines": 1830,
+        "methods": 37,
+        "hooks": [
+            "init",
+            "wppo_page_cron_hook",
+            "wppo_page_cron_batch",
+            "wppo_img_conversion",
+            "cron_schedules",
+            "wppo_generate_static_page",
+            "wppo_generate_static_url",
+            "wppo_preload_url_batch",
+            "wppo_litespeed_crawler_batch",
+            "wppo_crawler_warm",
+            "wppo_database_cleanup_cron",
+            "wppo_web_vitals_rescan",
+            "wppo_llms_txt_daily",
+            "wppo_used_css_cron",
+            "wppo_ccss_regeneration",
+            "wppo_rum_flush",
+            "wppo_object_cache_probe"
+        ],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Critical_CSS",
+            "Database_Cleanup",
+            "Deactivate",
+            "Img_Converter",
+            "LiteSpeed_Crawler",
+            "LiteSpeed_Integration",
+            "Llms",
+            "Log",
+            "Object_Cache",
+            "Pagespeed",
+            "RUM",
+            "Scheduler",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Scheduler/class-scheduler.php",
+        "class": null,
+        "lines": 636,
+        "methods": 16,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Settings/class-sandbox-preview.php",
+        "class": null,
+        "lines": 588,
+        "methods": 11,
+        "hooks": [],
+        "static_state": true,
+        "refs": [
+            "Telemetry",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Settings/class-settings-migrations.php",
+        "class": null,
+        "lines": 1160,
+        "methods": 18,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Log",
+            "Main",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Settings/class-settings-store.php",
+        "class": null,
+        "lines": 1097,
+        "methods": 22,
+        "hooks": [
+            "update_option_wppo_settings",
+            "add_option_wppo_settings",
+            "delete_option_wppo_settings"
+        ],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Main",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Support/class-filesystem.php",
+        "class": null,
+        "lines": 2421,
+        "methods": 40,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Cache",
+            "Log",
+            "Url",
+            "Used_CSS",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Support/class-http.php",
+        "class": null,
+        "lines": 351,
+        "methods": 8,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Support/class-log.php",
+        "class": null,
+        "lines": 248,
+        "methods": 6,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/Support/class-url.php",
         "class": null,
         "lines": 883,
         "methods": 24,
@@ -1085,19 +1148,25 @@
         ]
     },
     {
-        "file": "includes/class-used-css.php",
+        "file": "includes/Support/redis-connect-helper.php",
         "class": null,
-        "lines": 4961,
-        "methods": 94,
+        "lines": 623,
+        "methods": 0,
         "hooks": [],
         "static_state": false,
         "refs": [
-            "Cache",
-            "Critical_CSS",
-            "Css_Safelist",
+            "Log"
+        ]
+    },
+    {
+        "file": "includes/Support/trait-purge-logger.php",
+        "class": null,
+        "lines": 65,
+        "methods": 1,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
             "Log",
-            "Main",
-            "RUM",
             "Util"
         ]
     },
@@ -1137,75 +1206,6 @@
             "WPPO_CLI_Command",
             "Woo_Detect",
             "Wp_Version"
-        ]
-    },
-    {
-        "file": "includes/class-woo-detect.php",
-        "class": null,
-        "lines": 1011,
-        "methods": 11,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Cache",
-            "Cron",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/class-wp-version.php",
-        "class": null,
-        "lines": 185,
-        "methods": 4,
-        "hooks": [],
-        "static_state": false,
-        "refs": []
-    },
-    {
-        "file": "includes/class-wppo-cli-command.php",
-        "class": null,
-        "lines": 2372,
-        "methods": 27,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Advanced_Cache_Handler",
-            "Cache",
-            "Cron",
-            "Database_Cleanup",
-            "Img_Converter",
-            "LiteSpeed_ESI",
-            "LiteSpeed_Integration",
-            "Log",
-            "Main",
-            "Object_Cache",
-            "Pagespeed",
-            "Server_Rules",
-            "System_Info",
-            "Util"
-        ]
-    },
-    {
-        "file": "includes/redis-connect-helper.php",
-        "class": null,
-        "lines": 623,
-        "methods": 0,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Log"
-        ]
-    },
-    {
-        "file": "includes/trait-purge-logger.php",
-        "class": null,
-        "lines": 65,
-        "methods": 1,
-        "hooks": [],
-        "static_state": false,
-        "refs": [
-            "Log",
-            "Util"
         ]
     }
 ]

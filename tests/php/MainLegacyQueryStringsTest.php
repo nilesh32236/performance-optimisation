@@ -179,7 +179,7 @@ class MainLegacyQueryStringsTest extends \PHPUnit\Framework\TestCase {
 	 * register array-callback hooks).
 	 */
 	public function test_legacy_option_schedules_nothing(): void {
-		$source = (string) file_get_contents( dirname( __DIR__, 2 ) . '/includes/class-main.php' );
+		$source = (string) file_get_contents( dirname( __DIR__, 2 ) . '/includes/Core/class-main.php' );
 		$this->assertStringNotContainsString(
 			'maybe_notify_remove_query_strings_removal',
 			$source,

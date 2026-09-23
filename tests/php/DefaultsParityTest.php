@@ -135,7 +135,7 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 	 * Main::__construct() must consume the canonical defaults (no duplicate literal).
 	 */
 	public function test_main_consumes_canonical_defaults(): void {
-		$path = dirname( __DIR__, 2 ) . '/includes/class-main.php';
+		$path = dirname( __DIR__, 2 ) . '/includes/Core/class-main.php';
 		$this->assertFileExists( $path );
 		$source = file_get_contents( $path );
 		$this->assertIsString( $source );

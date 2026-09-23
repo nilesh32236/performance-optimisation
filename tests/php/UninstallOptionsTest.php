@@ -382,7 +382,7 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 	 * writes/reads elsewhere (Main::... show_welcome).
 	 */
 	public function test_uninstall_welcome_meta_key_matches_plugin_usage(): void {
-		$source = file_get_contents( WPPO_PLUGIN_PATH . 'includes/class-main.php' );
+		$source = file_get_contents( WPPO_PLUGIN_PATH . 'includes/Core/class-main.php' );
 		$this->assertNotFalse( $source );
 
 		$this->assertStringContainsString(

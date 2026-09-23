@@ -29,7 +29,7 @@ use PerformanceOptimise\Inc\Wp_Version;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
-	require_once __DIR__ . '/../../includes/class-wp-version.php';
+	require_once __DIR__ . '/../../includes/Core/class-wp-version.php';
 }
 
 /**

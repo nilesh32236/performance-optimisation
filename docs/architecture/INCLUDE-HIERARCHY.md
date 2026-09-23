@@ -1,8 +1,10 @@
-# Include Hierarchy — current state (ARCH-001)
+# Include Hierarchy — canonical tree live (ARCH-013)
 
-Evidence baseline: 2026-09-23. 60 files flat in `includes/` (59 class/trait
-files + `redis-connect-helper.php`, plus `minify/` wrappers). Counts/methods/refs:
-`class-inventory.json`; edges: `DEPENDENCY-GRAPH.json`. Canonical redesign: ARCH-002.
+Evidence baseline: 2026-09-23 (ARCH-001: 60+ files flat in `includes/`).
+ARCH-013 executed the ARCH-002 moves: 65 files now live under
+`includes/<Domain>/` (`Util` stays at root until ARCH-014; `minify/`
+wrappers untouched). Counts/methods/refs: `class-inventory.json`; edges:
+`DEPENDENCY-GRAPH.json`. Canonical redesign: ARCH-002.
 
 ## Current flat layout by responsibility (one-line owners)
 
@@ -51,10 +53,11 @@ namespaces, behavior, and load order are unchanged by construction.
 ```text
 includes/
   Core/           class-main.php, class-hook-registry.php, class-wp-version.php,
-                  class-activate.php, class-deactivate.php
+                  class-activate.php, class-deactivate.php,
+                  class-loader-map.php
   Cache/          class-cache.php, class-cache-key.php,
                   class-advanced-cache-handler.php, class-bfcache.php,
-                  class-object-cache.php
+                  class-object-cache.php, class-cache-invalidator.php
   Settings/       class-settings-store.php, class-sandbox-preview.php,
                   class-settings-migrations.php
   Scheduler/      class-scheduler.php, class-cron.php
@@ -62,7 +65,8 @@ includes/
                   class-log.php, trait-purge-logger.php,
                   redis-connect-helper.php
   Assets/         class-asset-manager.php, class-css-safelist.php,
-                  class-google-fonts.php
+                  class-google-fonts.php, class-script-strategy.php,
+                  class-css-combine.php
   Images/         class-image-optimisation.php, class-img-converter.php,
                   class-lcp-preload.php
   CSS/            class-critical-css.php, class-used-css.php
@@ -86,6 +90,10 @@ includes/
   class-util.php            (stays at root until ARCH-014 — see open points)
   minify/                   (unchanged — out of scope, see open points)
 ```
+
+Status: LIVE since ARCH-013 (pure `git mv`; class names, namespaces, load
+order, and behavior unchanged — only `Loader_Map` path data plus the
+entry/`Main` bootstrap requires moved with the files).
 
 Flat rule: no deeper nesting than one level. Every target below was checked
 against current load references (`Main::includes()` eager list + fallback map,

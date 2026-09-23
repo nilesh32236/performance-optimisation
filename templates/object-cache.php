@@ -222,13 +222,13 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				 * defined in wp-config.php are already defined by this point.
 				 */
 				$plugins_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : ( ( defined( 'WP_CONTENT_DIR' ) ? rtrim( WP_CONTENT_DIR, '/\\' ) : '' ) . '/plugins' );
-				$helper_file = $plugins_dir . '/performance-optimisation/includes/redis-connect-helper.php';
+				$helper_file = $plugins_dir . '/performance-optimisation/includes/Support/redis-connect-helper.php';
 				if ( ! file_exists( $helper_file ) ) {
 					// Fallback: the plugin directory may have been renamed
 					// (e.g. mu-plugins installs or custom slugs). Glob every
 					// plugin's helper and prefer a directory matching the
 					// performance-optimisation slug fragment.
-					$candidates = glob( $plugins_dir . '/*/includes/redis-connect-helper.php' );
+					$candidates = glob( $plugins_dir . '/*/includes/Support/redis-connect-helper.php' );
 					if ( is_array( $candidates ) ) {
 						foreach ( $candidates as $candidate ) {
 							if ( false !== strpos( $candidate, 'performance-optimisation' ) ) {

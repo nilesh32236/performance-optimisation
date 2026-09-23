@@ -2,7 +2,8 @@
 /**
  * Deterministic class-inventory + dependency-graph generator (ARCH-001).
  *
- * Scans includes/class-*.php + includes/trait-*.php and writes:
+ * Scans includes subdirectories (ARCH-013 canonical tree: includes/<Domain>/class-*.php
+ * + includes/<Domain>/trait-*.php, plus root includes/class-util.php) and writes:
  *   docs/architecture/class-inventory.json  (existing schema + additive `refs` field)
  *   docs/architecture/DEPENDENCY-GRAPH.json (file => [referenced plugin classes])
  *
@@ -109,10 +110,22 @@ function wppo_known_classes(): array {
 $known   = wppo_known_classes();
 $pattern = '/(?<![A-Za-z_\\\\])(' . implode( '|', $known ) . ')::/';
 $files   = array_merge(
-	(array) glob( $includes . '/class-*.php' ),
-	(array) glob( $includes . '/trait-*.php' ),
+	(array) glob( $includes . '/*/class-*.php' ),
+	(array) glob( $includes . '/*/trait-*.php' ),
+	// ARCH-014 owns the Util facade: stays at the includes/ root.
+	(array) glob( $includes . '/class-util.php' ),
 	// Procedural helper loaded outside the class map; tracked for completeness.
-	(array) glob( $includes . '/redis-connect-helper.php' )
+	(array) glob( $includes . '/Support/redis-connect-helper.php' )
+);
+$files = array_values( array_unique( $files ) );
+// minify/ wrappers stay out of scope (third-party-adjacent, untouched by ARCH-013).
+$files = array_values(
+	array_filter(
+		$files,
+		static function ( $file_path ) use ( $includes ) {
+			return 0 !== strpos( (string) $file_path, $includes . '/minify/' );
+		}
+	)
 );
 sort( $files );
 
@@ -125,7 +138,7 @@ foreach ( $files as $file_path ) {
 		fwrite( STDERR, "Cannot read {$file_path}\n" );
 		exit( 1 );
 	}
-	$rel = 'includes/' . basename( $file_path );
+	$rel = 'includes/' . substr( (string) $file_path, strlen( $includes ) + 1 );
 
 	preg_match_all( '/^\s*(?:public|protected|private)\s+(?:static\s+)?function\s+([a-zA-Z0-9_]+)/m', $src, $m );
 	$methods = $m[1];

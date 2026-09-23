@@ -124,7 +124,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_parse_nodes_is_null_safe(): void {
-		require_once dirname( __DIR__, 2 ) . '/includes/redis-connect-helper.php';
+		require_once dirname( __DIR__, 2 ) . '/includes/Support/redis-connect-helper.php';
 
 		$parsed = wppo_parse_nodes( array( ' 127.0.0.1:6379 ', null, '', 123 ) );
 
@@ -137,7 +137,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_parse_redis_node_is_null_safe(): void {
-		require_once dirname( __DIR__, 2 ) . '/includes/redis-connect-helper.php';
+		require_once dirname( __DIR__, 2 ) . '/includes/Support/redis-connect-helper.php';
 
 		$parsed = wppo_parse_redis_node( null );
 
@@ -157,7 +157,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_sentinel_connect_missing_class_returns_error_without_notice(): void {
-		require_once dirname( __DIR__, 2 ) . '/includes/redis-connect-helper.php';
+		require_once dirname( __DIR__, 2 ) . '/includes/Support/redis-connect-helper.php';
 
 		if ( class_exists( 'RedisSentinel' ) ) {
 			$this->markTestSkipped( 'Requires phpredis Sentinel to be absent.' );
@@ -621,8 +621,8 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * (typed without `?`, `|null`, or `mixed`), and raw `curl_close()` /
 	 * `curl_multi_close()` / `curl_share_close()` / `finfo_close()` /
 	 * `xml_parser_free()` / `imagedestroy()` calls outside the
-	 * version-gated legacy branches of `includes/class-util.php` and
-	 * `includes/class-http.php` (REF-015 owner).
+	 * version-gated legacy branches of `includes/class-util.php` (root,
+	 * ARCH-014) and `includes/Support/class-http.php` (REF-015 owner).
 	 *
 	 * @since 2.2.0
 	 * @param string   $file       Absolute file path.
@@ -815,7 +815,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Whether a teardown call sits inside a version-gated legacy helper.
 	 *
-	 * Narrows the `includes/class-util.php` + `includes/class-http.php`
+	 * Narrows the `includes/class-util.php` (root) + `includes/Support/class-http.php`
 	 * exemption to the six legacy branches (`close_curl_handle`,
 	 * `close_curl_multi_handle`, `destroy_gd_image`,
 	 * `close_curl_share_handle`, `close_finfo_handle`, `free_xml_parser`)
@@ -834,7 +834,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return bool True when the call is an allowed legacy branch.
 	 */
 	private function is_util_legacy_teardown_call( $tokens, $count, $index, $rel, $function_map = null ): bool {
-		if ( false === strpos( $rel, 'includes/class-util.php' ) && false === strpos( $rel, 'includes/class-http.php' ) ) {
+		if ( false === strpos( $rel, 'class-util.php' ) && false === strpos( $rel, 'class-http.php' ) ) {
 			return false;
 		}
 		$allowed = array(

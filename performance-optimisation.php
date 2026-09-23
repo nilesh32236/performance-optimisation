@@ -274,13 +274,13 @@ if ( $wppo_have_deps ) {
 // Main::includes() can delegate wherever Main resolves.
 if ( $wppo_have_deps && wppo_version_guard() ) {
 	if ( ! class_exists( 'PerformanceOptimise\\Inc\\Loader_Map' ) ) {
-		$wppo_loader_map = WPPO_PLUGIN_PATH . 'includes/class-loader-map.php';
+		$wppo_loader_map = WPPO_PLUGIN_PATH . 'includes/Core/class-loader-map.php';
 		if ( file_exists( $wppo_loader_map ) ) {
 			require_once $wppo_loader_map;
 		}
 	}
 	if ( ! class_exists( 'PerformanceOptimise\\Inc\\Main' ) ) {
-		$wppo_main = WPPO_PLUGIN_PATH . 'includes/class-main.php';
+		$wppo_main = WPPO_PLUGIN_PATH . 'includes/Core/class-main.php';
 		if ( file_exists( $wppo_main ) ) {
 			require_once $wppo_main;
 		}

@@ -1,8 +1,9 @@
 # Load Order — Performance Optimisation Plugin
 
-Evidence baseline: ARCH-001 (2026-09-23). Verified against
-`performance-optimisation.php`, `Main::includes()` (`includes/class-main.php`),
-`composer.json`, `tests/php/bootstrap.php`, `uninstall.php`, `templates/object-cache.php`.
+Evidence baseline: ARCH-001 (2026-09-23); directory moves live per ARCH-013.
+Verified against `performance-optimisation.php`, `Main::includes()`
+(`includes/Core/class-main.php`), `composer.json`, `tests/php/bootstrap.php`,
+`uninstall.php`, `templates/object-cache.php`.
 
 ## 1. Plugin bootstrap (every request with the plugin active)
 
@@ -13,9 +14,9 @@ Evidence baseline: ARCH-001 (2026-09-23). Verified against
    `admin_notices`/`network_admin_notices` notice and keeps the site running
    unoptimised (fail-open frontend, audit #1362).
 3. Stale-classmap fallback: if `PerformanceOptimise\Inc\Loader_Map` is still
-   unknown, requires `includes/class-loader-map.php` directly, then if
+   unknown, requires `includes/Core/class-loader-map.php` directly, then if
    `PerformanceOptimise\Inc\Main` is still unknown, requires
-   `includes/class-main.php` directly, then `new Main()` (only when
+   `includes/Core/class-main.php` directly, then `new Main()` (only when
    deps present and the version guard passes).
 4. `register_activation_hook` → `wppo_activate()` → `Activate::init()`.
    `register_deactivation_hook` → `wppo_deactivate()` → `Deactivate::init()`.
@@ -23,16 +24,17 @@ Evidence baseline: ARCH-001 (2026-09-23). Verified against
 ## 2. `Loader_Map` + `Main::includes()` (manual loading — no PSR-4, watchdog-protected)
 
 Single owner for "which file provides which class":
-`PerformanceOptimise\Inc\Loader_Map` (`includes/class-loader-map.php`,
-ARCH-003) owns the eager-load file list, the lazy fallback
-short-name-to-file map, and the WP-CLI file path — all built on
-`WPPO_PLUGIN_PATH . 'includes/'`. `Main::includes()` is a thin delegate:
-it requires `Loader_Map` first, loops `Loader_Map::eager_files()`, applies
-its own `should_load_litespeed_stack()` decision to
+`PerformanceOptimise\Inc\Loader_Map` (`includes/Core/class-loader-map.php`,
+ARCH-003, canonical subdirectories since ARCH-013) owns the eager-load file
+list, the lazy fallback short-name-to-file map, and the WP-CLI file path —
+all built on `WPPO_PLUGIN_PATH . 'includes/'`. `Main::includes()` is a thin
+delegate: it requires `Loader_Map` first, loops `Loader_Map::eager_files()`,
+applies its own `should_load_litespeed_stack()` decision to
 `Loader_Map::litespeed_stack_files()`, registers one `spl_autoload_register`
 closure that resolves via `Loader_Map::path_for()`, and wires the `WP_CLI`
-block via `Loader_Map::cli_file()`. Future directory moves (ARCH-013) touch
-exactly `Loader_Map` (+ the entry-point chain below).
+block via `Loader_Map::cli_file()`. Directory moves (ARCH-013, done) touch
+exactly `Loader_Map` (+ the entry-point chain below); `Util` stays at the
+`includes/` root until ARCH-014.
 
 Eager `require_once` (each guarded by `file_exists`):
 `Loader_Map` (when not already autoloaded) → Action Scheduler vendor lib
@@ -45,24 +47,22 @@ cost, fail-open) → `Llms` → `OD_Bridge` → `Bfcache` → `Perf_Translations
 `CDN` → `Builder_Purge_Watcher` → `Hook_Registry`.
 
 Lazy: one `spl_autoload_register` fallback map resolves the remaining
-`PerformanceOptimise\Inc\*` classes from `includes/<file>` on first
-missing-class use (covers stale/partial classmaps; eager classes omitted to
-avoid duplicate probes, except the map entries `Main` keeps for late
-callers: Crawler + ESI when the eager load was skipped, plus `Hook_Registry`,
-`Purge_Logger`, `Wp_Version`, and the self-entries `Loader_Map`, `Main`,
-`WPPO_CLI_Command` so every inventory class resolves through one map).
+`PerformanceOptimise\Inc\*` classes from `includes/<Domain>/<file>` on first
+missing-class use (covers stale/partial classmaps; every inventory class
+resolves through `Loader_Map::path_for()`, eager or lazy, so a missed mapping
+fails the `LoaderMapTest` smoke gate).
 
-`WP_CLI` only: requires `class-wppo-cli-command.php` and registers `wp wppo`
-(7 subcommands).
+`WP_CLI` only: requires `Admin/class-wppo-cli-command.php` and registers
+`wp wppo` (7 subcommands).
 
 ## 3. Composer classmap
 
-`composer.json` `autoload.classmap: ["includes/"]` — recursive, so future
-subdirectories resolve after a dump, BUT: `Loader_Map` hardcodes flat
-`includes/<file>` paths in both the eager list and the fallback map. Any file
-move MUST update the loader map in the same change (ARCH-003 centralised this
-into `includes/class-loader-map.php`; ARCH-013 performs moves). Release builds
-use `--optimize-autoloader`.
+`composer.json` `autoload.classmap: ["includes/"]` — recursive, so
+subdirectories resolve after a dump, BUT: `Loader_Map` hardcodes
+`includes/<Domain>/<file>` paths in both the eager list and the fallback map
+(ARCH-013, live). Any file move MUST update the loader map in the same change
+(ARCH-003 centralised this into `includes/Core/class-loader-map.php`).
+Release builds use `--optimize-autoloader`.
 
 ## 4. Hooks / runtime surfaces
 

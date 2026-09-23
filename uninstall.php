@@ -36,12 +36,12 @@ if ( ! function_exists( 'wppo_cleanup_network_files' ) ) {
 		$done = true;
 
 		// Remove cache directory.
-		// NOTE: This path must stay in sync with Cache::CACHE_DIR constant in includes/class-cache.php.
+		// NOTE: This path must stay in sync with Cache::CACHE_DIR constant in includes/Cache/class-cache.php.
 		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
 		wppo_delete_directory( $cache_dir );
 
 		// Remove converted images directory.
-		// NOTE: This path must stay in sync with Img_Converter class uploads paths in includes/class-img-converter.php.
+		// NOTE: This path must stay in sync with Img_Converter class uploads paths in includes/Images/class-img-converter.php.
 		$wppo_dir = WP_CONTENT_DIR . '/wppo/';
 		wppo_delete_directory( $wppo_dir );
 
@@ -403,7 +403,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 	 *
 	 * Standalone-safe: uninstall runs under WP_UNINSTALL_PLUGIN without the
 	 * plugin's classes autoloaded, so the hook lists below intentionally
-	 * mirror Cron::SCHEDULED_HOOKS + Cron::AS_HOOKS in includes/class-cron.php
+	 * mirror Cron::SCHEDULED_HOOKS + Cron::AS_HOOKS in includes/Scheduler/class-cron.php
 	 * (plus the legacy `wppo_img_conversation` misspelling and the
 	 * WP-Cron-fallback hooks `wppo_google_fonts_download` and
 	 * `wppo_builder_drift_purge`) instead of requiring the class. Runs
@@ -419,7 +419,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 		// back to wp_clear_scheduled_hook() and finally to a bounded
 		// wp_next_scheduled()/wp_unschedule_event() loop for legacy WP.
 		// NOTE: This list must stay in sync with Cron::SCHEDULED_HOOKS in
-		// includes/class-cron.php (plus legacy/fallback extras below).
+		// includes/Scheduler/class-cron.php (plus legacy/fallback extras below).
 		$hooks = array(
 			'wppo_page_cron_hook',
 			'wppo_page_cron_batch',
@@ -473,7 +473,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 		// Action Scheduler path: skip silently when AS is absent; each clear
 		// is individually guarded so one failure never aborts the rest.
 		// NOTE: This list must stay in sync with Cron::AS_HOOKS in
-		// includes/class-cron.php (plus the drift-purge hook below).
+		// includes/Scheduler/class-cron.php (plus the drift-purge hook below).
 		if ( ! function_exists( 'as_unschedule_all_actions' ) ) {
 			return;
 		}
@@ -558,7 +558,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			'wppo_web_vitals_last_rescan',
 			'wppo_preload_cron_last_id',
 			'wppo_preload_cron_migrated',
-			// Image library scan cursors (class-img-converter.php) — previously
+			// Image library scan cursors (includes/Images/class-img-converter.php) — previously
 			// only removed on deactivation, never on uninstall (audit #899).
 			'wppo_img_scan_cursor',
 			'wppo_img_scan_cursor_max',
@@ -575,8 +575,8 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			// written by the plugin but were previously absent from the list.
 			'wppo_ccss_salt',                          // Critical_CSS::SALT_KEY.
 			'wppo_sysinfo_salt',                       // System_Info::DROPIN_SALT_KEY.
-			'wppo_rum_top_url_gen',                    // RUM top-URL generation counter (class-rum.php).
-			'wppo_remove_query_strings_deprecated_logged', // Legacy removal marker from the retired #925 feature (class-main.php).
+			'wppo_rum_top_url_gen',                    // RUM top-URL generation counter (includes/Insight/class-rum.php).
+			'wppo_remove_query_strings_deprecated_logged', // Legacy removal marker from the retired #925 feature (includes/Core/class-main.php).
 			'wppo_ai_anomaly_last_alarm',              // AI_Adaptive::ANOMALY_COOLDOWN_KEY.
 			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.

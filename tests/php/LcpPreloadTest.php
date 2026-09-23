@@ -184,12 +184,12 @@ class LcpPreloadTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_loader_map_resolves_lcp_preload(): void {
-		require_once WPPO_PLUGIN_PATH . 'includes/class-loader-map.php';
-		$this->assertSame( 'class-lcp-preload.php', Loader_Map::fallback_map()['Lcp_Preload'] );
+		require_once WPPO_PLUGIN_PATH . 'includes/Core/class-loader-map.php';
+		$this->assertSame( 'Images/class-lcp-preload.php', Loader_Map::fallback_map()['Lcp_Preload'] );
 		$path = Loader_Map::path_for( 'Lcp_Preload' );
 		$this->assertNotNull( $path );
 		$this->assertFileExists( (string) $path );
-		$this->assertStringEndsWith( 'includes/class-lcp-preload.php', (string) $path );
+		$this->assertStringEndsWith( 'includes/Images/class-lcp-preload.php', (string) $path );
 	}
 
 	/**

@@ -963,7 +963,7 @@ class CacheInvalidatorTest extends \PHPUnit\Framework\TestCase {
 		$owner = new \ReflectionMethod( Cache_Invalidator::class, 'delete_cache_files' );
 		$this->assertTrue( $owner->isPublic() );
 
-		$this->assertSame( 'class-cache-invalidator.php', Loader_Map::fallback_map()['Cache_Invalidator'] );
+		$this->assertSame( 'Cache/class-cache-invalidator.php', Loader_Map::fallback_map()['Cache_Invalidator'] );
 		$path = Loader_Map::path_for( 'Cache_Invalidator' );
 		$this->assertNotNull( $path );
 		$this->assertFileExists( (string) $path );

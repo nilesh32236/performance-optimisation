@@ -120,8 +120,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// written by the plugin but were previously absent from the list.
 			'wppo_ccss_salt',                          // Critical_CSS::SALT_KEY.
 			'wppo_sysinfo_salt',                       // System_Info::DROPIN_SALT_KEY.
-			'wppo_rum_top_url_gen',                    // RUM top-URL generation counter (class-rum.php).
-			'wppo_remove_query_strings_deprecated_logged', // Legacy removal marker from the retired #925 feature (class-main.php).
+			'wppo_rum_top_url_gen',                    // RUM top-URL generation counter (includes/Insight/class-rum.php).
+			'wppo_remove_query_strings_deprecated_logged', // Legacy removal marker from the retired #925 feature (includes/Core/class-main.php).
 			'wppo_ai_anomaly_last_alarm',              // AI_Adaptive::ANOMALY_COOLDOWN_KEY.
 			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
@@ -2198,7 +2198,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Facade proxy: URL ownership lives in {@see \PerformanceOptimise\Inc\Url}.
 		 *
 		 * Centralizes the blog-ID-keyed static caching pattern used by the asset
-		 * minifiers. Mirrors the convention in `class-main.php`: when a
+		 * minifiers. Mirrors the convention in `includes/Core/class-main.php`: when a
 		 * `content_url` filter is registered the result is not cached (the filter
 		 * may return context-dependent output), otherwise the base URL is resolved
 		 * once per site per request and reused across all call sites.

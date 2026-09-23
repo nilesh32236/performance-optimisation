@@ -171,7 +171,7 @@ class TeardownCleanupTest extends \PHPUnit\Framework\TestCase {
 	 * Deactivate wires htaccess removal on teardown.
 	 */
 	public function test_deactivate_calls_htaccess_removal(): void {
-		$path   = WPPO_PLUGIN_PATH . 'includes/class-deactivate.php';
+		$path   = WPPO_PLUGIN_PATH . 'includes/Core/class-deactivate.php';
 		$source = file_get_contents( $path );
 		$this->assertNotFalse( $source );
 		$this->assertStringContainsString( 'remove_htaccess_rules', (string) $source );

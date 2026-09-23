@@ -36,7 +36,7 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 	 * The RUM class must carry a direct-access ABSPATH guard.
 	 */
 	public function test_rum_class_has_abspath_guard(): void {
-		$source = $this->read_plugin_file( 'includes/class-rum.php' );
+		$source = $this->read_plugin_file( 'includes/Insight/class-rum.php' );
 
 		$this->assertStringContainsString( "defined( 'ABSPATH' )", $source );
 		$this->assertMatchesRegularExpression(
@@ -119,9 +119,9 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public static function debug_log_provider(): array {
 		return array(
-			'redis-connect-helper' => array( 'includes/redis-connect-helper.php', 5 ),
-			'od-bridge'            => array( 'includes/class-od-bridge.php', 0 ), // Audit #1434: debug_log() now routes via Log::add().
-			'img-converter'        => array( 'includes/class-img-converter.php', 11 ),
+			'redis-connect-helper' => array( 'includes/Support/redis-connect-helper.php', 5 ),
+			'od-bridge'            => array( 'includes/Insight/class-od-bridge.php', 0 ), // Audit #1434: debug_log() now routes via Log::add().
+			'img-converter'        => array( 'includes/Images/class-img-converter.php', 11 ),
 		);
 	}
 
@@ -150,8 +150,8 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public static function invented_since_provider(): array {
 		return array(
-			'cache-2.22.0'             => array( 'includes/class-cache.php', '2.22.0' ),
-			'image-optimisation-1.2.4' => array( 'includes/class-image-optimisation.php', '1.2.4' ),
+			'cache-2.22.0'             => array( 'includes/Cache/class-cache.php', '2.22.0' ),
+			'image-optimisation-1.2.4' => array( 'includes/Images/class-image-optimisation.php', '1.2.4' ),
 			'minify-css-1.6.1'         => array( 'includes/minify/class-css.php', '1.6.1' ),
 		);
 	}
@@ -160,7 +160,7 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 	 * The review notice must only render on the plugin's own admin screen.
 	 */
 	public function test_review_notice_is_scoped_to_plugin_screen(): void {
-		$source = $this->read_plugin_file( 'includes/class-admin-notices.php' );
+		$source = $this->read_plugin_file( 'includes/Admin/class-admin-notices.php' );
 
 		$this->assertStringContainsString( 'get_current_screen()', $source );
 		$this->assertStringContainsString( "'toplevel_page_performance-optimisation' !== \$screen->base", $source );

@@ -10,7 +10,7 @@ use Brain\Monkey\Functions;
 
 // The dev classmap can lag behind new class files (vendor is built on demand);
 // require the class directly like LiteSpeedCrawlerTest does.
-require_once __DIR__ . '/../../includes/class-cdn.php';
+require_once __DIR__ . '/../../includes/Edge/class-cdn.php';
 
 /**
  * Tests that CDN attribute restrictions are resolved per mapping, not by a

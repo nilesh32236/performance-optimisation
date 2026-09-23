@@ -1043,7 +1043,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// provides which class". Every path below delegates to it so a
 			// future directory move touches exactly one file.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map', false ) ) {
-				$loader_map_file = WPPO_PLUGIN_PATH . 'includes/class-loader-map.php';
+				$loader_map_file = WPPO_PLUGIN_PATH . 'includes/Core/class-loader-map.php';
 				if ( file_exists( $loader_map_file ) ) {
 					require_once $loader_map_file;
 				}
