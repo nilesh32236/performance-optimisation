@@ -360,6 +360,27 @@ trait WPPO_Test_Bootstrap {
 	}
 
 	/**
+	 * Build a fully-injected Cache instance (REF-006 constructor injection).
+	 *
+	 * Collaborators are built from the same options snapshot the Cache
+	 * receives and shared by identity, mirroring what Main::create_cache()
+	 * uses for callers holding live instances. Tests exercising the buffer
+	 * pipeline should prefer explicitly-built collaborators shared by
+	 * identity instead of relying on the lazy in-class fallback.
+	 *
+	 * @since NEXT
+	 * @param array $options Plugin options passed to Cache and collaborators.
+	 * @return \PerformanceOptimise\Inc\Cache Fully-initialized Cache instance.
+	 */
+	protected function make_injected_cache( array $options = array() ): \PerformanceOptimise\Inc\Cache {
+		return new \PerformanceOptimise\Inc\Cache(
+			$options,
+			new \PerformanceOptimise\Inc\Image_Optimisation( $options ),
+			new \PerformanceOptimise\Inc\Google_Fonts( $options )
+		);
+	}
+
+	/**
 	 * Tear down BrainMonkey after each test.
 	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid

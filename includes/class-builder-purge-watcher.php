@@ -842,7 +842,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 							unset( $e );
 						}
 					}
-					$cache = new Cache( $settings );
+					// Constructor injection (REF-006): purge-only path holds no
+					// live collaborators, so build through Main::create_cache(),
+					// which supplies equivalents from the same options snapshot.
+					$cache = Main::create_cache( $settings );
 					if ( ! method_exists( $cache, 'invalidate_single_static_html' ) ) {
 						return;
 					}

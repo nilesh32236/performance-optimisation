@@ -185,7 +185,7 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 			Functions\when( 'get_option' )->justReturn( array() );
 			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-			$cache = new Cache();
+			$cache = $this->make_injected_cache();
 			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
 			$this->assertFalse( $store->invoke( $cache ) );
 		} finally {
@@ -207,7 +207,7 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 			Functions\when( 'get_option' )->justReturn( array() );
 			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-			$cache = new Cache();
+			$cache = $this->make_injected_cache();
 
 			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
 			$this->assertTrue( $not_cacheable->invoke( $cache ) );
@@ -245,7 +245,7 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_account_page' )->justReturn( false );
 		\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-		$cache = new Cache();
+		$cache = $this->make_injected_cache();
 
 		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
 		$this->assertFalse( $not_cacheable->invoke( $cache ) );
@@ -281,7 +281,7 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_account_page' )->justReturn( false );
 		\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-		$cache = new Cache();
+		$cache = $this->make_injected_cache();
 
 		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
 		$this->assertFalse( $not_cacheable->invoke( $cache ) );

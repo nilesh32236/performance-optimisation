@@ -6,6 +6,8 @@
  */
 
 use PerformanceOptimise\Inc\Cache;
+use PerformanceOptimise\Inc\Google_Fonts;
+use PerformanceOptimise\Inc\Image_Optimisation;
 use Brain\Monkey\Functions;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -39,7 +41,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'get_option' )->justReturn( array() );
 
-		$cache = new Cache();
+		$cache = $this->make_injected_cache();
 		$this->assertNotNull( $cache );
 	}
 
@@ -65,7 +67,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'get_option' )->justReturn( array() );
 
-		$cache = new Cache();
+		$cache = $this->make_injected_cache();
 		$this->assertNotNull( $cache );
 	}
 
@@ -84,7 +86,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 			unset( $_SERVER['QUERY_STRING'] );
 			Functions\when( 'get_option' )->justReturn( array() );
 
-			$cache = new Cache();
+			$cache = $this->make_injected_cache();
 
 			$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
 			$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
@@ -125,7 +127,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 			unset( $_SERVER['QUERY_STRING'] );
 			Functions\when( 'get_option' )->justReturn( array() );
 
-			$cache = new Cache();
+			$cache = $this->make_injected_cache();
 
 			$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
 			$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
@@ -188,7 +190,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		// LS-owns-cache bypass. Reset so this control is order-independent.
 		\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
 
-		$cache = new Cache();
+		$cache = $this->make_injected_cache();
 
 		$this->assertFalse( $cache->is_host_mismatched() );
 
@@ -200,6 +202,81 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 
 		$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
 		$this->assertTrue( $store->invoke( $cache ) );
+	}
+
+	/**
+	 * Test that the constructor injects collaborators by identity (REF-006).
+	 *
+	 * The Cache must reuse the exact Image_Optimisation/Google_Fonts
+	 * instances Main holds elsewhere — never fallback `new` instances built
+	 * from a stale options snapshot.
+	 */
+	public function test_constructor_injects_collaborators_by_identity(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
+		$options = array();
+		$io      = new Image_Optimisation( $options );
+		$gf      = new Google_Fonts( $options );
+
+		$cache = new Cache( $options, $io, $gf );
+
+		$io_prop = new \ReflectionProperty( Cache::class, 'image_optimisation' );
+		$gf_prop = new \ReflectionProperty( Cache::class, 'google_fonts' );
+
+		$this->assertSame( $io, $io_prop->getValue( $cache ) );
+		$this->assertSame( $gf, $gf_prop->getValue( $cache ) );
+	}
+
+	/**
+	 * Test that the collaborators are optional-nullable with lazy fallback (REF-006).
+	 *
+	 * Omitting them must preserve backward compatibility (direct
+	 * `new Cache( $options )`, including third-party code): the Cache
+	 * builds the equivalents from the resolved options on first buffer
+	 * use instead of throwing.
+	 */
+	public function test_constructor_collaborators_optional_with_lazy_fallback(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
+		$cache = new Cache( array() );
+
+		$io_prop = new \ReflectionProperty( Cache::class, 'image_optimisation' );
+		$gf_prop = new \ReflectionProperty( Cache::class, 'google_fonts' );
+
+		$this->assertNull( $io_prop->getValue( $cache ) );
+		$this->assertNull( $gf_prop->getValue( $cache ) );
+
+		$get_io = new \ReflectionMethod( Cache::class, 'get_image_optimisation' );
+		$get_gf = new \ReflectionMethod( Cache::class, 'get_google_fonts' );
+
+		$this->assertInstanceOf( Image_Optimisation::class, $get_io->invoke( $cache ) );
+		$this->assertInstanceOf( Google_Fonts::class, $get_gf->invoke( $cache ) );
+		// Lazy collaborators are memoized for subsequent buffer passes.
+		$this->assertSame( $get_io->invoke( $cache ), $io_prop->getValue( $cache ) );
+		$this->assertSame( $get_gf->invoke( $cache ), $gf_prop->getValue( $cache ) );
+	}
+
+	/**
+	 * Test that the deprecated setters still forward as thin proxies (REF-006).
+	 */
+	public function test_deprecated_setters_forward_as_proxies(): void {
+		Functions\when( 'get_option' )->justReturn( array() );
+		$options = array();
+		$cache   = new Cache(
+			$options,
+			new Image_Optimisation( $options ),
+			new Google_Fonts( $options )
+		);
+
+		$replacement_io = new Image_Optimisation( $options );
+		$replacement_gf = new Google_Fonts( $options );
+
+		$cache->set_image_optimisation( $replacement_io );
+		$cache->set_google_fonts( $replacement_gf );
+
+		$io_prop = new \ReflectionProperty( Cache::class, 'image_optimisation' );
+		$gf_prop = new \ReflectionProperty( Cache::class, 'google_fonts' );
+
+		$this->assertSame( $replacement_io, $io_prop->getValue( $cache ) );
+		$this->assertSame( $replacement_gf, $gf_prop->getValue( $cache ) );
 	}
 
 	/**

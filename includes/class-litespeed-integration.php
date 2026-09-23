@@ -1031,7 +1031,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 			self::set_purge_lock();
 			if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
-				$cache = new Cache();
+				// Constructor injection (REF-006): purge-only path holds no
+				// live collaborators, so build through Main::create_cache(),
+				// which supplies equivalents from the same options snapshot.
+				$cache = Main::create_cache( Util::get_settings() );
 				$cache->invalidate_dynamic_static_html( $post_id );
 			}
 		}
@@ -1385,9 +1388,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				// Prefer the public Cache::is_page_cacheable() API; when it
 				// is unavailable (older drop-in) leave the request
 				// non-cacheable instead of reaching into private methods
-				// via reflection.
+				// via reflection. Constructor injection (REF-006): this
+				// read-only path holds no live collaborators, so build
+				// through Main::create_cache() (equivalents, same snapshot).
 				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
-					$cache = new Cache();
+					$cache = Main::create_cache( Util::get_settings() );
 					if ( method_exists( $cache, 'is_page_cacheable' ) ) {
 						$cacheable = $cache->is_page_cacheable();
 					}
