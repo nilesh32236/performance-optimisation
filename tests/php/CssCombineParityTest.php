@@ -193,8 +193,8 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_is_block_theme' )->justReturn( false );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_option' )->alias(
-			static function ( $name, $default = false ) {
-				return 'wppo_settings' === $name ? array() : $default;
+			static function ( $name, $fallback = false ) {
+				return 'wppo_settings' === $name ? array() : $fallback;
 			}
 		);
 		Functions\when( 'get_site_option' )->justReturn( array() );
@@ -450,7 +450,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 			 */
 			public function get_contents( $path ) {
 				$this->test->record_read( $path );
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Test-only read.
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only read.
 				return file_exists( $path ) ? file_get_contents( $path ) : false;
 			}
 
@@ -610,7 +610,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayHasKey( $path, $this->written );
 		$this->assertStringContainsString( 'color:red', $this->written[ $path ] );
 		$this->assertStringContainsString( 'margin:0', $this->written[ $path ] );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Test-only read.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only read.
 		$this->assertSame( '["a","b"]', file_get_contents( $path . '.handles' ) );
 
 		// Preload state carries the versioned combined URL.
@@ -727,7 +727,9 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$path = $this->combined_path( $cache );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test-only fixture.
 		file_put_contents( $path . '.handles', '["a"]' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch -- Test-only mtime fixture.
 		touch( $path, time() + 60 );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch -- Test-only mtime fixture.
 		touch( $path . '.handles', time() + 60 );
 
 		$this->written  = array();
@@ -743,7 +745,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$cache_two->combine_css();
 
 		$this->assertArrayHasKey( $path, $this->written );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Test-only read.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only read.
 		$this->assertSame( '["a","b"]', file_get_contents( $path . '.handles' ) );
 		$this->assertSame( array( 'a', 'b' ), $this->dequeued );
 	}
@@ -773,7 +775,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( array( 'alpha' ), $this->dequeued );
 		$path = $this->combined_path( $cache );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Test-only read.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only read.
 		$this->assertSame( '["alpha"]', file_get_contents( $path . '.handles' ) );
 		$this->assertStringNotContainsString( 'margin:0', $this->written[ $path ] );
 	}
@@ -985,7 +987,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'current_user_can' )->justReturn( true );
 		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
 		Functions\when( 'get_option' )->alias(
-			static function ( $name, $default = false ) {
+			static function ( $name, $fallback = false ) {
 				if ( 'wppo_settings' === $name ) {
 					return array(
 						'file_optimisation' => array(
