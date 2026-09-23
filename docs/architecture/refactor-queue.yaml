@@ -7,7 +7,8 @@
 campaign: incremental-architecture-refactor
 created: 2026-09-22
 baseline:
-  Main_methods_max: 232
+  Main_methods_max: 230
+  Hook_Registry_methods: 7
   Util_methods_max: 159
   Util_facade_proxies: 33
   Cache_Key_methods: 4
@@ -101,6 +102,9 @@ items:
     status: autofix-running
     github_issue: 1506
     github_pr: 1507
+    merge_commit: 9d932632
+    notes:
+      - 'Merged 2026-09-23. Main 232→230; setup_hooks 581 lines → 3-line delegate. Manual control: fixed trait-tearDown shadowing fatal + discovery-time require_once breaking function mocking (both in HookRegistryParityTest). Verified options-snapshot safety (zero writes during registration; migrations admin_init-deferred on master too).'
     source: AUDIT/FINAL-REVIEW/architecture.md R-01/R-05
     notes:
       - 'Registry pattern only; no hook add/remove/reorder. CronHookParityTest pins registration.'
