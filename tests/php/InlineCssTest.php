@@ -352,7 +352,15 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * Test that minify_queued_styles is a no-op when core inlining is unavailable.
 	 */
 	public function test_minify_queued_styles_noop_when_core_inline_missing(): void {
-		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnFalse();
+		// REF-007: lazy get_options() adds function_exists probes (blog id,
+		// canonical defaults), so the strict once-expectation is replaced
+		// with an alias that answers false for the core inline gate and
+		// true otherwise (#1465 pattern).
+		Functions\when( 'function_exists' )->alias(
+			static function ( $func_name ) {
+				return 'wp_maybe_inline_styles' !== $func_name;
+			}
+		);
 
 		$main = $this->make_main();
 
@@ -363,7 +371,12 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * Test that minify_queued_styles is a no-op when combineCSS is enabled.
 	 */
 	public function test_minify_queued_styles_noop_when_combine_css_enabled(): void {
-		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
+		// REF-007: see above — alias instead of a strict once-expectation.
+		Functions\when( 'function_exists' )->alias(
+			static function ( $func_name ) {
+				return 'wp_maybe_inline_styles' === $func_name;
+			}
+		);
 
 		$main = $this->make_main();
 		$prop = new \ReflectionProperty( Main::class, 'options' );
@@ -383,11 +396,12 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * Test that a non-'all' media style is skipped by minify_queued_styles.
 	 */
 	public function test_minify_queued_styles_skips_non_all_media(): void {
-		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
-		// Issue #937: minify_queued_styles() now probes the separate-assets gate
-		// per handle; the gate reports off (setUp stub) so the print-media style
-		// still reaches the media check below.
-		Functions\expect( 'function_exists' )->with( 'wp_should_load_separate_core_block_assets' )->once()->andReturnTrue();
+		// REF-007: see above — one alias answering both gates.
+		Functions\when( 'function_exists' )->alias(
+			static function ( $func_name ) {
+				return in_array( $func_name, array( 'wp_maybe_inline_styles', 'wp_should_load_separate_core_block_assets' ), true );
+			}
+		);
 		Functions\expect( 'apply_filters' )->with( 'wppo_exclude_minification', \Mockery::type( 'bool' ), \Mockery::any(), \Mockery::any(), \Mockery::any() )->never();
 
 		global $wp_styles;
