@@ -8,9 +8,11 @@
 .phpunit.cache/
 .slim/deepwork/
 /vendor/
+/vendor
 app/
 coverage/
 node_modules/
+/node_modules
 reports/
 review-output.jsonl
 take_screenshot*.js
