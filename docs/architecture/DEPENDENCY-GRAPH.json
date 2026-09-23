@@ -46,12 +46,19 @@
         "Util"
     ],
     "includes/class-ai-adaptive.php": [
-        "Cron",
+        "Ai_Anomaly",
         "LiteSpeed_ESI",
         "Main",
         "Pagespeed",
         "RUM",
         "Suggestion_Engine",
+        "Util"
+    ],
+    "includes/class-ai-anomaly.php": [
+        "Cron",
+        "Main",
+        "Pagespeed",
+        "RUM",
         "Used_CSS",
         "Util"
     ],

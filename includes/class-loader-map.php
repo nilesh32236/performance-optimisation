@@ -72,6 +72,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'class-bfcache.php',
 				'class-perf-translations.php',
 				'class-ai-adaptive.php',
+				'class-ai-anomaly.php',
 				'class-edge-cache.php',
 				'trait-purge-logger.php',
 				'class-edge-purger.php',

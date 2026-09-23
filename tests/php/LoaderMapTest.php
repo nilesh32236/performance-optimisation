@@ -3,8 +3,9 @@
  * Regression tests for the ARCH-003 Loader_Map boundary (issue #1532).
  *
  * Pins the centralized loader data extracted from `Main::includes()`:
- * eager-load parity with the pre-change 17-file set (15 always + 2
- * LiteSpeed-conditional), fallback-map completeness (every
+ * eager-load parity with the 18-file set (16 always + 2
+ * LiteSpeed-conditional; ARCH-010 added `class-ai-anomaly.php` after
+ * `class-ai-adaptive.php`), fallback-map completeness (every
  * `PerformanceOptimise\Inc\*` class in `includes/` resolves to an existing
  * file), the LiteSpeed split contract both branches rely on (stack files
  * eager-skippable yet autoload-resolvable), and the WP-CLI file path.
@@ -34,7 +35,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Pre-change eager set: the 15 files always required by Main::includes().
+	 * Pre-change eager set plus ARCH-010: the 16 files always required by Main::includes().
 	 *
 	 * @return string[]
 	 */
@@ -49,6 +50,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 			'class-bfcache.php',
 			'class-perf-translations.php',
 			'class-ai-adaptive.php',
+			'class-ai-anomaly.php',
 			'class-edge-cache.php',
 			'trait-purge-logger.php',
 			'class-edge-purger.php',
@@ -85,7 +87,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Eager + stack combined equal the full pre-change 17-file eager set.
+	 * Eager + stack combined equal the full 18-file eager set.
 	 *
 	 * @return void
 	 */
@@ -95,7 +97,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 		$stack = Loader_Map::litespeed_stack_files();
 		$this->assertSame( array(), array_intersect( $eager, $stack ), 'Stack files must be skippable (not in the always list).' );
 		$combined = array_merge( $eager, $stack );
-		$this->assertCount( 17, $combined );
+		$this->assertCount( 18, $combined );
 		$this->assertSame( $combined, array_unique( $combined ) );
 		foreach ( $combined as $file ) {
 			$this->assertFileExists( Loader_Map::file_path( $file ), "Eager file missing: {$file}" );

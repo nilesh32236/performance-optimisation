@@ -43,6 +43,7 @@ function wppo_known_classes(): array {
 		'Admin_Notices',
 		'Advanced_Cache_Handler',
 		'AI_Adaptive',
+		'Ai_Anomaly',
 		'Asset_Manager',
 		'Bfcache',
 		'Builder_Purge_Watcher',

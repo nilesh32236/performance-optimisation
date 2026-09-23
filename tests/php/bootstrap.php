@@ -259,10 +259,10 @@ trait WPPO_Test_Bootstrap {
 			// test would otherwise shadow later fixtures.
 			\PerformanceOptimise\Inc\AI_Adaptive::reset_model_memo();
 		}
-		if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'reset_rum_anomaly_digest_memo' ) ) {
-			// RUM anomaly digest memoizes per process (live path): reset so
-			// each test scans its own RUM fixture.
-			\PerformanceOptimise\Inc\AI_Adaptive::reset_rum_anomaly_digest_memo();
+		if ( class_exists( 'PerformanceOptimise\Inc\Ai_Anomaly' ) && method_exists( 'PerformanceOptimise\Inc\Ai_Anomaly', 'reset_rum_anomaly_digest_memo' ) ) {
+			// RUM anomaly digest memoizes per process (live path, ARCH-010
+			// owner Ai_Anomaly): reset so each test scans its own RUM fixture.
+			\PerformanceOptimise\Inc\Ai_Anomaly::reset_rum_anomaly_digest_memo();
 		}
 		if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'clear_field_lcp_cache' ) ) {
 			// get_aggregate_readonly() memoizes per process: reset so each
