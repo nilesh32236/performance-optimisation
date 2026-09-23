@@ -85,7 +85,7 @@ items:
     priority: medium
     status: autofix-running
     github_issue: 1504
-    github_pr: null
+    github_pr: 1505
     source: AUDIT/FINAL-REVIEW/architecture.md R-02 (.jules/bolt.md cache lessons)
     notes:
       - 'Keep has_filter guards + blog-ID keying; hot-path memo behavior unchanged.'
