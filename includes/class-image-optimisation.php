@@ -4648,7 +4648,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function generate_img_preload( $img_url = '' ) {
-			return $this->lcp_preload()->generate_img_preload( $img_url );
+			$this->lcp_preload()->generate_img_preload( $img_url );
 		}
 
 		/**

@@ -31,6 +31,9 @@ use PerformanceOptimise\Inc\RUM;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
+/**
+ * LCP preload boundary tests (ARCH-008).
+ */
 class LcpPreloadTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
 
@@ -348,8 +351,8 @@ class LcpPreloadTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'has_filter' )->justReturn( false );
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook, $value ) {
-				$args = func_get_args();
-				return $args[1];
+				unset( $hook );
+				return $value;
 			}
 		);
 		$this->ensure_od_stubs();
@@ -425,6 +428,7 @@ class LcpPreloadTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_the_ID' )->justReturn( 42 );
 		Functions\when( 'get_post_meta' )->alias(
 			static function ( $post_id, $key, $single ) {
+				unset( $post_id, $single );
 				return '_wppo_lcp_preload_url' === $key ? 'https://example.com/wp-content/uploads/pinned.jpg' : '';
 			}
 		);
