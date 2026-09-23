@@ -528,6 +528,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 				// audit of the generic query guard below so intent is
 				// greppable and safe-mode independent, mirroring
 				// Cache::is_wc_ajax_request() and the pre-boot drop-in).
+				// Note: method_exists( self::class, ... ) guards below are
+				// retained verbatim from Util (REF-013 byte-parity) as
+				// mixed-version fail-open — a missing helper falls through
+				// to the fail-open true paths, never to a fatal.
 				if ( method_exists( self::class, 'is_woo_ajax_request' ) && self::is_woo_ajax_request( $path, $query ) ) {
 					return true;
 				}
