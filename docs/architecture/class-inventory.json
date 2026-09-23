@@ -530,7 +530,7 @@
     {
         "file": "includes/class-http.php",
         "class": null,
-        "lines": 343,
+        "lines": 351,
         "methods": 8,
         "hooks": [],
         "static_state": false
