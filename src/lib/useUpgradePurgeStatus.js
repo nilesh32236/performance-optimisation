@@ -34,7 +34,7 @@ export const normalizeUpgradePurge = ( raw ) => {
  * Upgrade-purge status state + manual refresh.
  *
  * @since NEXT
- * @return {{ upgradePurge: Object, refreshUpgradePurgeStatus: Function }} Status slice + refresh.
+ * @return {{ upgradePurge: Object, refreshUpgradePurgeStatus: Function, setUpgradePurge: Function }} Status slice + refresh + raw setter (for optimistic purge updates).
  */
 export const useUpgradePurgeStatus = () => {
 	const [ upgradePurge, setUpgradePurge ] = useState( () =>
