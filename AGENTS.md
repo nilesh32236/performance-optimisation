@@ -42,7 +42,7 @@ npm run start                # dev watch mode
 ## Architecture
 
 ### Plugin entry
-`performance-optimisation.php` → `includes/class-main.php` (orchestrator). Namespace `PerformanceOptimise\Inc`. Classes are **manually loaded** via `Main::includes()` + `vendor/autoload.php` (Composer for vendor packages only, no PSR-4 autoload for plugin classes).
+`performance-optimisation.php` → `includes/Core/class-main.php` (orchestrator). Namespace `PerformanceOptimise\Inc`. Classes are **manually loaded** via `Main::includes()` + `Loader_Map` (`includes/Core/class-loader-map.php`) + `vendor/autoload.php` (Composer for vendor packages only, no PSR-4 autoload for plugin classes).
 
 ### React SPA
 - Mounts at `<div id="performance-optimisation">` in WP admin
@@ -63,7 +63,7 @@ App.js
 ├── FileOptimization.js (minify, defer, delay, CDN, server rules)
 ├── PreloadSettings.js (cache warm-up, preconnect, preload fonts/CSS)
 ├── ImageOptimization.js (lazy load, <picture>, WebP/AVIF, responsive limits)
-├── DatabaseCleanup.js (9 types via CLEANUP_METHOD_MAP in class-database-cleanup.php)
+├── DatabaseCleanup.js (9 types via CLEANUP_METHOD_MAP in includes/Database/class-database-cleanup.php)
 ├── ObjectCache.js (Redis standalone/sentinel/cluster, TLS, compression)
 └── PluginSetting.js (activity log, PageSpeed API key, export/import)
 ```
@@ -77,7 +77,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (40 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 40-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
+Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.php` (40 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 40-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -116,43 +116,43 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (4
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-42 class files in `includes/` (+ `includes/minify/` wrappers and `includes/redis-connect-helper.php`). The authoritative per-class responsibility table lives in `.agents/AGENTS.md`; the summary table below covers the core classes:
+42 class files in `includes/<Domain>/` (+ `includes/minify/` wrappers and `includes/Support/redis-connect-helper.php`; `includes/class-util.php` stays at root). The authoritative per-class responsibility table lives in `.agents/AGENTS.md`; the summary table below covers the core classes:
 
 | Class | Responsibility |
 |-------|---------------|
-| `class-main.php` | Hooks, admin page, enqueue, minification, preload, WooCommerce cleanup |
-| `class-cache.php` | Static HTML cache (generate, invalidate, clear, CSS combine, CDN rewrite) |
-| `class-object-cache.php` | Redis Object Cache (standalone/sentinel/cluster, enable/disable/flush/status) |
-| `class-advanced-cache-handler.php` | `advanced-cache.php` drop-in (create/detect/remove) |
-| `class-htaccess-handler.php` | `.htaccess` Gzip + Expires rules via `insert_with_markers()` |
-| `class-server-rules.php` | Nginx rules (gzip, browser caching), server type detection |
-| `class-database-cleanup.php` | 9 cleanup operations (CLEANUP_METHOD_MAP, batched, $wpdb queries) |
-| `class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
-| `class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
-| `class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `class-rest.php` | All 40 REST API endpoints |
-| `class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
-| `class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
-| `class-telemetry.php` | Local cURL-based performance scanner |
-| `class-system-info.php` | PHP/DB/WP/Server/Cache/Infrastructure info |
-| `class-util.php` | Filesystem, URL processing, preload links, MIME types |
-| `class-log.php` | Activity logging to `wppo_activity_logs` table |
-| `class-metabox.php` | Per-page preload images + Asset Manager |
-| `class-core-tweaks.php` | Disable emojis/embeds/dashicons/XML-RPC, Heartbeat control |
-| `class-activate.php` / `class-deactivate.php` | Activation/deactivation hooks |
-| `class-litespeed-integration.php` | LiteSpeed/OLS coexistence modes (auto/wppo/litespeed/standalone), header protocol (X-LiteSpeed-*), TTL, purge sync |
-| `class-litespeed-crawler.php` | curl_multi cache preloader (variant matrix, concurrency, load-limit) |
-| `class-litespeed-esi.php` | ESI bridge (LSWS Enterprise only; OLS → disabled) |
-| `class-edge-cache.php` / `class-edge-purger.php` / `class-cloudflare-purger.php` / `class-cdn-purger.php` | Edge (Cloudflare/Bunny/Varnish) cache config + purge fan-out |
-| `class-cdn.php` | LiteSpeed CDN mapping + URL rewrite |
-| `class-llms.php` | /llms.txt + /llms-full.txt virtual files (daily cron) |
-| `class-rum.php` | Real-user Web Vitals beacon collection/aggregation |
-| `class-ai-adaptive.php` | Heuristic auto-tune from RUM/trends (read-only suggestions, speculation override) |
-| `class-od-bridge.php` | Optimization Detective bridge (real-visit LCP data) |
-| `class-bfcache.php` | bfcache for logged-in users (no-store removal + session invalidation) |
-| `class-google-fonts.php` | Self-host Google Fonts (download + local serving) |
-| `class-used-css.php` / `class-critical-css.php` | Per-URL used CSS + per-template critical CSS |
-| `class-wppo-cli-command.php` | `wp wppo` CLI (7 subcommands: cache, database, image, settings, object-cache, pagespeed, system-info) |
+| `Core/class-main.php` | Hooks, admin page, enqueue, minification, preload, WooCommerce cleanup |
+| `Cache/class-cache.php` | Static HTML cache (generate, invalidate, clear, CSS combine, CDN rewrite) |
+| `Cache/class-object-cache.php` | Redis Object Cache (standalone/sentinel/cluster, enable/disable/flush/status) |
+| `Cache/class-advanced-cache-handler.php` | `advanced-cache.php` drop-in (create/detect/remove) |
+| `Edge/class-htaccess-handler.php` | `.htaccess` Gzip + Expires rules via `insert_with_markers()` |
+| `Edge/class-server-rules.php` | Nginx rules (gzip, browser caching), server type detection |
+| `Database/class-database-cleanup.php` | 9 cleanup operations (CLEANUP_METHOD_MAP, batched, $wpdb queries) |
+| `Scheduler/class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
+| `Images/class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
+| `Images/class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
+| `Admin/class-rest.php` | All 40 REST API endpoints |
+| `Insight/class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
+| `Insight/class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
+| `Insight/class-telemetry.php` | Local cURL-based performance scanner |
+| `Insight/class-system-info.php` | PHP/DB/WP/Server/Cache/Infrastructure info |
+| `class-util.php` (root) | Filesystem, URL processing, preload links, MIME types |
+| `Support/class-log.php` | Activity logging to `wppo_activity_logs` table |
+| `Admin/class-metabox.php` | Per-page preload images + Asset Manager |
+| `Compatibility/class-core-tweaks.php` | Disable emojis/embeds/dashicons/XML-RPC, Heartbeat control |
+| `Core/class-activate.php` / `Core/class-deactivate.php` | Activation/deactivation hooks |
+| `Integrations/class-litespeed-integration.php` | LiteSpeed/OLS coexistence modes (auto/wppo/litespeed/standalone), header protocol (X-LiteSpeed-*), TTL, purge sync |
+| `Integrations/class-litespeed-crawler.php` | curl_multi cache preloader (variant matrix, concurrency, load-limit) |
+| `Integrations/class-litespeed-esi.php` | ESI bridge (LSWS Enterprise only; OLS → disabled) |
+| `Edge/class-edge-cache.php` / `Edge/class-edge-purger.php` / `Edge/class-cloudflare-purger.php` / `Edge/class-cdn-purger.php` | Edge (Cloudflare/Bunny/Varnish) cache config + purge fan-out |
+| `Edge/class-cdn.php` | LiteSpeed CDN mapping + URL rewrite |
+| `Compatibility/class-llms.php` | /llms.txt + /llms-full.txt virtual files (daily cron) |
+| `Insight/class-rum.php` | Real-user Web Vitals beacon collection/aggregation |
+| `Insight/class-ai-adaptive.php` | Heuristic auto-tune from RUM/trends (read-only suggestions, speculation override) |
+| `Insight/class-od-bridge.php` | Optimization Detective bridge (real-visit LCP data) |
+| `Cache/class-bfcache.php` | bfcache for logged-in users (no-store removal + session invalidation) |
+| `Assets/class-google-fonts.php` | Self-host Google Fonts (download + local serving) |
+| `CSS/class-used-css.php` / `CSS/class-critical-css.php` | Per-URL used CSS + per-template critical CSS |
+| `Admin/class-wppo-cli-command.php` | `wp wppo` CLI (7 subcommands: cache, database, image, settings, object-cache, pagespeed, system-info) |
 
 ### Caching stack
 1. **Static HTML cache** — `wp-content/cache/wppo/{domain}/{path}/index.html` (+ gzip variant). Generated via output buffer on `template_redirect`. Served via `advanced-cache.php` drop-in (skips WordPress entirely for cached pages).
@@ -201,7 +201,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (4
 - PHP 8.2 minimum
 - PHPCS excludes: `vendor/*`, `node_modules/*`, `build/*`
 - Composer deps (7 packages): `voku/html-min`, `voku/simple_html_dom`, `matthiasmullie/minify`, `matthiasmullie/path-converter`, `symfony/css-selector`, `tedivm/jshrink`, `woocommerce/action-scheduler`
-- `wp wppo` WP-CLI commands registered (7 subcommands — see `includes/class-wppo-cli-command.php`)
+- `wp wppo` WP-CLI commands registered (7 subcommands — see `includes/Admin/class-wppo-cli-command.php`)
 - All REST endpoints require `manage_options` + `X-WP-Nonce`
 - Settings stored as serialized array in single `wppo_settings` option
 - **PHP 8.5 compat**: never call `Reflection::{Method,Property}::setAccessible()` (deprecated on PHP 8.5, no-op since PHP 8.1 — reflection works without it on the PHP 8.2+ floor); route resource teardown (`curl_close`, `curl_multi_close`, `curl_share_close`, `finfo_close`, `xml_parser_free`, `imagedestroy`) through the `Util` helpers (`close_curl_handle()`, `close_curl_multi_handle()`, `close_curl_share_handle()`, `close_finfo_handle()`, `free_xml_parser()`, `destroy_gd_image()`). Both rules are pinned by `tests/php/PhpDeprecationHygieneTest.php` (13-pattern scanner). See `docs/php-84-85-compat.md`.
