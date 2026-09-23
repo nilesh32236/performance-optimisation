@@ -296,9 +296,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		/**
 		 * Map of setting-tab slugs to their dedicated sanitizer methods.
 		 *
-		 * Schema-driven dispatch table for {@see sanitize_settings_recursively()}:
-		 * every tab in {@see get_default_settings()} must appear here so a new
-		 * tab key can never be silently dropped or stored unsanitized.
+		 * Advisory schema inventory, not a directly dispatchable table:
+		 * entries naming sanitize_scalar_setting share signature
+		 * (string $safe_key, $value) and are NOT invocable per-tab as
+		 * (array $settings). sanitize_settings_recursively() uses hardcoded
+		 * branches rather than consulting this map. Every tab in
+		 * {@see get_default_settings()} must appear here so a new tab key
+		 * can never be silently dropped or stored unsanitized.
 		 *
 		 * @since 2.2.0
 		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
