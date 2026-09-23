@@ -307,8 +307,9 @@ phase2_items:
       - '2026-09-23: implemented — new PerformanceOptimise\Inc\Loader_Map (includes/class-loader-map.php) owns eager list (15 always + 2 LiteSpeed-conditional), 45-entry fallback map (+Loader_Map/Main/WPPO_CLI_Command), and CLI path; Main::includes() is a thin delegate (LiteSpeed decision stays in Main); entry-point stale-classmap chain requires Loader_Map alongside Main; new LoaderMapTest (10 tests); inventory regenerated with Loader_Map.'
   - id: ARCH-004
     title: 'Main settings-migration cluster extraction (maybe_migrate_*)'
-    status: issue-created
+    status: pr-created
     github_issue: 1534
+    pull_request: 1535
     priority: medium
     source_files:
       - includes/class-main.php
