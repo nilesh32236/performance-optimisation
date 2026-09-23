@@ -56,6 +56,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Http' ) ) {
 		 * can exercise both sides of the gate without redefining PHP_VERSION.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Moved from Util (REF-015); behavior unchanged.
 		 * @param string|null $php_version Optional version string for testing; defaults to PHP_VERSION.
 		 * @return bool True on PHP 8.5+, false below.
 		 */
@@ -86,6 +87,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Http' ) ) {
 		 * the caller scope on every supported runtime.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Moved from Util (REF-015); behavior unchanged.
 		 * @param mixed       $ch          cURL handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -115,6 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Http' ) ) {
 		 * every runtime. Multisite-safe: no option/cache changes.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Moved from Util (REF-015); behavior unchanged.
 		 * @param mixed       $mh          cURL multi handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -144,6 +147,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Http' ) ) {
 		 * option/cache changes.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Moved from Util (REF-015); behavior unchanged.
 		 * @param mixed       $image       GD image to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -177,6 +181,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Http' ) ) {
 		 * forward-compat API for future callers.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Moved from Util (REF-015); behavior unchanged.
 		 * @param mixed       $sh          cURL share handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -210,6 +215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Http' ) ) {
 		 * forward-compat API for future callers.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Moved from Util (REF-015); behavior unchanged.
 		 * @param mixed       $finfo       Finfo handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -243,6 +249,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Http' ) ) {
 		 * forward-compat API for future callers.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Moved from Util (REF-015); behavior unchanged.
 		 * @param mixed       $parser      XML parser to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -293,6 +300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Http' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @since 2.2.0 `$legacy_source` parameter for the scope-blind legacy path.
+		 * @since NEXT Moved from Util (REF-015); behavior unchanged.
 		 * @param array|null $legacy_source Optional explicit header lines for the
 		 *                                  legacy path (string-filtered).
 		 * @return string[] List of response header lines, or empty array when unavailable.
