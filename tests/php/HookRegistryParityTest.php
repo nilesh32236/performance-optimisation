@@ -19,6 +19,7 @@ use PerformanceOptimise\Inc\Hook_Registry;
 use PerformanceOptimise\Inc\Image_Optimisation;
 use PerformanceOptimise\Inc\Google_Fonts;
 use PerformanceOptimise\Inc\LiteSpeed_Integration;
+use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
 /**
@@ -345,5 +346,118 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function reset_litespeed_guard(): void {
 		LiteSpeed_Integration::reset_cache();
+	}
+
+	/**
+	 * Capture the hook manifest via both owners for one scenario and compare.
+	 *
+	 * Runs Main::setup_hooks() on a fresh Main instance, then resets the
+	 * in-test recorder plus the LiteSpeed static guard and runs the same
+	 * options through Hook_Registry directly. Two resets matter:
+	 * the purge-fallback branch self-gates on has_action() and
+	 * LiteSpeed_Integration::init() is idempotent per process, so a
+	 * back-to-back second capture without a reset would under-register.
+	 * The idempotent settings-cache hooks (Util/Settings_Store) are warmed
+	 * up before either capture — replicating Main::__construct()'s eager
+	 * registration — so the lazy backstop does not leak into only the
+	 * first capture.
+	 *
+	 * @param array $options Options snapshot (seeded on both Main instances).
+	 * @return void
+	 */
+	private function assert_manifest_matches_between_main_and_registry( array $options ): void {
+		Util::register_settings_cache_hooks();
+		$this->recorded = array();
+		$this->reset_litespeed_guard();
+		$main_via_main = $this->make_main( $options );
+		$via_main      = $this->capture_sequence(
+			function () use ( $main_via_main ): void {
+				$this->register_via_main( $main_via_main );
+			}
+		);
+		$this->assertNotEmpty( $via_main, 'Expected Main::setup_hooks() to register hooks.' );
+
+		$this->recorded = array();
+		$this->reset_litespeed_guard();
+		$main_via_registry = $this->make_main( $options );
+		$raw_registry      = $this->capture_raw(
+			function () use ( $main_via_registry, $options ): void {
+				$this->register_via_registry( $main_via_registry, $options );
+			}
+		);
+		$via_registry      = array();
+		foreach ( $raw_registry as $entry ) {
+			$via_registry[] = array( $entry[0], $entry[1], $this->normalize_callback( $entry[2] ), $entry[3], $entry[4] );
+		}
+
+		$this->assertSame( $via_main, $via_registry, 'Hook_Registry manifest must match Main::setup_hooks().' );
+
+		// Callback identity: object callbacks must still target the Main
+		// instance (Deactivate::unregister_runtime_hooks() symmetry).
+		$this->recorded = array();
+		$this->reset_litespeed_guard();
+		$found_main_callback = false;
+		foreach ( $raw_registry as $entry ) {
+			$callback = $entry[2];
+			if ( is_array( $callback ) && isset( $callback[0], $callback[1] ) && is_object( $callback[0] ) ) {
+				if ( $callback[0] instanceof Main && $callback[0] === $main_via_registry ) {
+					$found_main_callback = true;
+					break;
+				}
+			}
+		}
+		$this->assertTrue( $found_main_callback, 'Expected at least one callback targeting the Main instance.' );
+
+		// The collaborators are only callback targets when their gated
+		// features are on: Google_Fonts whenever locally-hosted fonts are
+		// enabled (no version gate), Image_Optimisation only on the WP 6.9+
+		// core-buffer LCP path (the legacy path targets Main instead).
+		// Assert identity where the scenario guarantees registration so
+		// the legacy scenario (no LCP toggles) stays valid.
+		$has_lcp_toggle = ! empty( $options['image_optimisation']['prioritizeLCPImages'] ) || ! empty( $options['image_optimisation']['cssHeroPreload'] ) || ! empty( $options['image_optimisation']['occlusionFetchpriorityLow'] );
+		if ( $has_lcp_toggle && Main::should_use_core_template_buffer() ) {
+			$found_image_callback = false;
+			$image_optimisation   = $this->read_main_prop( $main_via_registry, 'image_optimisation' );
+			foreach ( $raw_registry as $entry ) {
+				$callback = $entry[2];
+				if ( is_array( $callback ) && isset( $callback[0], $callback[1] ) && $callback[0] === $image_optimisation ) {
+					$found_image_callback = true;
+					break;
+				}
+			}
+			$this->assertTrue( $found_image_callback, 'Expected at least one callback targeting Image_Optimisation.' );
+		}
+		if ( ! empty( $options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
+			$google_fonts         = $this->read_main_prop( $main_via_registry, 'google_fonts' );
+			$found_fonts_callback = false;
+			foreach ( $raw_registry as $entry ) {
+				$callback = $entry[2];
+				if ( is_array( $callback ) && isset( $callback[0], $callback[1] ) && $callback[0] === $google_fonts ) {
+					$found_fonts_callback = true;
+					break;
+				}
+			}
+			$this->assertTrue( $found_fonts_callback, 'Expected at least one callback targeting Google_Fonts.' );
+		}
+	}
+
+	/**
+	 * Kitchen-sink manifest on WP 6.9 must match between both owners.
+	 *
+	 * @return void
+	 */
+	public function test_manifest_matches_between_main_and_registry_kitchen_sink(): void {
+		$this->install_stubs( true, '6.9', $this->wp69_probes() );
+		$this->assert_manifest_matches_between_main_and_registry( $this->kitchen_sink_options() );
+	}
+
+	/**
+	 * Legacy manifest (pre-6.9, page cache off) must match between both owners.
+	 *
+	 * @return void
+	 */
+	public function test_manifest_matches_between_main_and_registry_legacy(): void {
+		$this->install_stubs( false, '6.2', $this->legacy_probes() );
+		$this->assert_manifest_matches_between_main_and_registry( $this->legacy_options() );
 	}
 }

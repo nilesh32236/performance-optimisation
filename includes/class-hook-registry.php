@@ -188,7 +188,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 			if ( $staged_defer_js ) {
 				$has_defer_js = true;
 			}
-			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
+			// Version gating uses the canonical Main::supports_*() predicates below.
 			// The native 'strategy' script data added via wp_script_add_data() is only
 			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
 			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
@@ -659,6 +659,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * On pre-6.9 cores the toggle stays an opt-in via the legacy
 		 * `should_load_block_assets_on_demand` filter.
 		 *
+		 * @since NEXT Relocated from Main to Hook_Registry (REF-005).
 		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
 		 *                                                        (core loads separate core
 		 *                                                        block assets on demand).
