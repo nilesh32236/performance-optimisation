@@ -276,7 +276,8 @@ phase2_items:
       - 'Line counts re-canonicalized to wc -l semantics by the generator; isolated ±1 corrections vs hand-maintained values (e.g. Cache 7305→7304). Hooks keep occurrence order; static_state = static-property declarations only.'
   - id: ARCH-002
     title: 'Canonical includes/ hierarchy design decision'
-    status: queued
+    status: issue-created
+    github_issue: 1530
     priority: high
     responsibility: 'Decide final directory tree from ARCH-001 evidence (Core/Cache/Settings/Assets/Images/CSS/Database/REST/Admin/CLI/Scheduler/Integrations/Compatibility/Support or evidence-better variant).'
     dependencies: [ARCH-001]
