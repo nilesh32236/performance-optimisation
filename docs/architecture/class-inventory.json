@@ -2,7 +2,7 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14170,
+        "lines": 14171,
         "methods": 232,
         "hooks": [
             "update_option_wppo_settings",
@@ -42,7 +42,7 @@
     {
         "file": "includes/class-cache.php",
         "class": null,
-        "lines": 7304,
+        "lines": 7305,
         "methods": 137,
         "hooks": [
             "shutdown"
@@ -52,7 +52,7 @@
     {
         "file": "includes/class-util.php",
         "class": null,
-        "lines": 6663,
+        "lines": 6664,
         "methods": 159,
         "hooks": [
             "switch_blog"
@@ -565,6 +565,14 @@
         "static_state": false
     },
     {
+        "file": "includes/class-wp-version.php",
+        "class": null,
+        "lines": 186,
+        "methods": 4,
+        "hooks": [],
+        "static_state": false
+    },
+    {
         "file": "includes/class-header-emitter.php",
         "class": null,
         "lines": 183,
@@ -587,14 +595,6 @@
         "methods": 4,
         "hooks": [],
         "static_state": false
-    },
-    {
-        "file": "includes/class-wp-version.php",
-        "class": null,
-        "lines": 185,
-        "methods": 4,
-        "hooks": [],
-        "static_state": true
     },
     {
         "file": "includes/class-css-safelist.php",
