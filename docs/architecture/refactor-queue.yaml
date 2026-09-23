@@ -141,7 +141,9 @@ items:
     title: 'Decompose Dashboard.js god component (2296 lines) into cards'
     type: architecture
     priority: medium
-    status: queued
+    status: autofix-running
+    github_issue: 1512
+    github_pr: null
     source: AUDIT/FINAL-REVIEW/architecture.md R-09
     notes:
       - 'One card per PR; keep wppoSettings/apiCall/useNotice patterns.'
