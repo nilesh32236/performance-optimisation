@@ -31,42 +31,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Top-level settings keys allowlisted for import and update operations.
 		 *
+		 * Facade alias: canonical owner is {@see \PerformanceOptimise\Inc\Settings_Store::ALLOWED_SETTINGS_KEYS};
+		 * kept here for backward compatibility (same value, guarded by SettingsSchemaTest).
 		 * Single source of truth for REST (`update_settings`, `import_settings`),
 		 * WP-CLI (`settings` subcommand) and the JS `ALLOWED_IMPORT_KEYS` guard.
-		 * Changing this list requires a single edit; the JS copy in
-		 * `src/components/PluginSetting.js` is kept in sync via `wppoSettings.allowedSettingsKeys`
+		 * The JS copy in `src/components/PluginSetting.js` is kept in sync via `wppoSettings.allowedSettingsKeys`
 		 * (see Main::enqueue_admin_scripts()) and a build-time comment.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Facade alias of Settings_Store::ALLOWED_SETTINGS_KEYS (REF-011).
 		 * @var string[]
 		 */
-		public const ALLOWED_SETTINGS_KEYS = array(
-			'file_optimisation',
-			'preload_settings',
-			'image_optimisation',
-			'database_cleanup',
-			'object_cache',
-			'performance_audit',
-			'cache_settings',
-			'litespeed_integration',
-			'llms_txt',
-			'od_integration',
-			'bfcache',
-			'perf_translations',
-			'ai_adaptive',
-			'edge_cache',
-		);
+		public const ALLOWED_SETTINGS_KEYS = Settings_Store::ALLOWED_SETTINGS_KEYS;
 
 		/**
 		 * Allowed tab slugs for `update_settings`.
 		 *
-		 * Identical to ALLOWED_SETTINGS_KEYS — kept as an alias for semantic
-		 * clarity at call-sites that validate a single tab.
+		 * Facade alias: canonical owner is {@see \PerformanceOptimise\Inc\Settings_Store::ALLOWED_SETTINGS_TABS};
+		 * kept here for backward compatibility. Identical to ALLOWED_SETTINGS_KEYS.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Facade alias of Settings_Store::ALLOWED_SETTINGS_TABS (REF-011).
 		 * @var string[]
 		 */
-		public const ALLOWED_SETTINGS_TABS = self::ALLOWED_SETTINGS_KEYS;
+		public const ALLOWED_SETTINGS_TABS = Settings_Store::ALLOWED_SETTINGS_TABS;
 
 		/**
 		 * Fixed plugin option names removed per-site on uninstall.
@@ -180,10 +168,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Get the allowlisted top-level settings keys.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 * @return string[]
 		 */
 		public static function get_allowed_settings_keys(): array {
-			return self::ALLOWED_SETTINGS_KEYS;
+			return Settings_Store::get_allowed_settings_keys();
 		}
 
 		/**
@@ -5042,12 +5031,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * so the allowlist lives in one place with its own unit test.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 * @param mixed $value Raw value.
 		 * @return string Allowlisted mode ('auto' fallback).
 		 */
 		public static function sanitize_mode_value( $value ): string {
-			$raw = sanitize_text_field( (string) $value );
-			return in_array( $raw, array( 'auto', 'wppo', 'litespeed', 'standalone' ), true ) ? $raw : 'auto';
+			return Settings_Store::sanitize_mode_value( $value );
 		}
 
 		/**
@@ -5056,34 +5045,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 * @param array $value Raw overrides.
 		 * @return array Sanitized overrides.
 		 */
 		public static function sanitize_ttl_overrides( $value ): array {
-			$allowed_hours = array( 0, 1, 6, 12, 24, 48, 168 );
-			$allowed_types = array( 'post', 'page', 'product' );
-			$overrides     = array();
-			foreach ( (array) $value as $ptype => $hours ) {
-				$safe_ptype = preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $ptype );
-				if ( '' === $safe_ptype || ! in_array( $safe_ptype, $allowed_types, true ) ) {
-					continue;
-				}
-				if ( '' === $hours || null === $hours ) {
-					continue;
-				}
-				$int_hours = absint( $hours );
-				if ( ! in_array( $int_hours, $allowed_hours, true ) ) {
-					continue;
-				}
-				$overrides[ $safe_ptype ] = $int_hours;
-			}
-			/**
-			 * Filter sanitized TTL overrides.
-			 *
-			 * @since 2.0.0
-			 * @param array $overrides Sanitized overrides.
-			 */
-			return (array) apply_filters( 'wppo_cache_ttl_overrides', $overrides );
+			return Settings_Store::sanitize_ttl_overrides( $value );
 		}
 
 		/**
@@ -5092,88 +5059,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 * @param array $value Raw mapping entries.
 		 * @return array Sanitized mapping.
 		 */
 		public static function sanitize_cdn_mapping( $value ): array {
-			$max = (int) apply_filters( 'wppo_cdn_mapping_max', 5 );
-			if ( $max < 1 ) {
-				$max = 5;
-			}
-			$mapping = array();
-			$count   = 0;
-			foreach ( (array) $value as $entry ) {
-				if ( ! is_array( $entry ) || $count >= $max ) {
-					continue;
-				}
-				$cdn_url = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
-				if ( '' === $cdn_url ) {
-					continue;
-				}
-				$ori      = isset( $entry['ori'] ) ? esc_url_raw( (string) $entry['ori'] ) : '';
-				$ori_dir  = isset( $entry['ori_dir'] ) ? sanitize_text_field( (string) $entry['ori_dir'] ) : '';
-				$cdn_attr = isset( $entry['cdn_attr'] ) ? sanitize_text_field( (string) $entry['cdn_attr'] ) : '';
-				if ( '' !== $ori_dir ) {
-					$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
-					$valid = array();
-					foreach ( $parts as $p ) {
-						if ( preg_match( '/^[a-zA-Z0-9_\-\/\.\*]+$/', $p ) ) {
-							$valid[] = $p;
-						}
-					}
-					$ori_dir = implode( '|', $valid );
-				}
-				$include_dirs      = isset( $entry['include_dirs'] ) ? sanitize_text_field( (string) $entry['include_dirs'] ) : 'wp-content|wp-includes';
-				$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
-				if ( '' !== $include_filetypes ) {
-					$include_filetypes = strtolower( $include_filetypes );
-					$parts             = array_map( 'trim', explode( ',', $include_filetypes ) );
-					$parts             = array_filter( $parts );
-					$parts             = array_map( fn( $t ) => ltrim( $t, '.' ), $parts );
-					$include_filetypes = implode( ',', $parts );
-				}
-				$data = array(
-					'cdn_url'           => $cdn_url,
-					'include_dirs'      => $include_dirs,
-					'include_filetypes' => $include_filetypes,
-				);
-				if ( '' !== $ori ) {
-					$data['ori'] = $ori;
-				}
-				if ( '' !== $ori_dir ) {
-					$data['ori_dir'] = $ori_dir;
-				}
-				if ( '' !== $cdn_attr ) {
-					$data['cdn_attr'] = $cdn_attr;
-				}
-				if ( isset( $entry['cdn_urls'] ) && is_array( $entry['cdn_urls'] ) ) {
-					$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdn_urls'] ) ) );
-					if ( ! empty( $cdns ) ) {
-						$data['cdn_urls'] = $cdns;
-					}
-				} elseif ( isset( $entry['cdns'] ) && is_array( $entry['cdns'] ) ) {
-					$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdns'] ) ) );
-					if ( ! empty( $cdns ) ) {
-						$data['cdn_urls'] = $cdns;
-					}
-				}
-				/**
-				 * Filter single CDN mapping entry post-sanitize.
-				 *
-				 * @since 2.0.0
-				 * @param array $data Sanitized entry.
-				 */
-				$data      = (array) apply_filters( 'wppo_cdn_mapping_entry', $data );
-				$mapping[] = $data;
-				++$count;
-			}
-			/**
-			 * Filter CDN mapping array.
-			 *
-			 * @since 2.0.0
-			 * @param array $mapping Sanitized mapping.
-			 */
-			return (array) apply_filters( 'wppo_cdn_mapping', $mapping );
+			return Settings_Store::sanitize_cdn_mapping( $value );
 		}
 
 		/**
@@ -5184,27 +5075,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * in isolation and the main loop stays a readable dispatcher.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 * @param string $safe_key Sanitized key.
 		 * @param mixed  $value    Raw value.
 		 * @return mixed Sanitized value.
 		 */
 		public static function sanitize_scalar_setting( string $safe_key, $value ) {
-			if ( is_bool( $value ) ) {
-				return (bool) $value;
-			}
-			if ( is_numeric( $value ) ) {
-				return (int) $value;
-			}
-			if ( in_array( $safe_key, array( 'pagespeed_api_key', 'password' ), true ) ) {
-				return sanitize_text_field( $value );
-			}
-			if ( stripos( $safe_key, 'exclude' ) !== false || stripos( $safe_key, 'preload' ) !== false || stripos( $safe_key, 'delay' ) !== false || stripos( $safe_key, 'list' ) !== false ) {
-				return sanitize_textarea_field( $value );
-			}
-			if ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
-				return esc_url_raw( $value );
-			}
-			return sanitize_text_field( $value );
+			return Settings_Store::sanitize_scalar_setting( $safe_key, $value );
 		}
 
 		/**
@@ -5215,25 +5092,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * tab key can never be silently dropped or stored unsanitized.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 * @return array<string,string> Tab slug => sanitizer method name.
 		 */
 		public static function get_settings_sanitizer_map(): array {
-			return array(
-				'cache_settings'        => 'sanitize_cache_settings',
-				'file_optimisation'     => 'sanitize_file_optimisation',
-				'preload_settings'      => 'sanitize_scalar_setting',
-				'image_optimisation'    => 'sanitize_scalar_setting',
-				'performance_audit'     => 'sanitize_scalar_setting',
-				'database_cleanup'      => 'sanitize_scalar_setting',
-				'object_cache'          => 'sanitize_scalar_setting',
-				'litespeed_integration' => 'sanitize_mode_value',
-				'llms_txt'              => 'sanitize_scalar_setting',
-				'od_integration'        => 'sanitize_scalar_setting',
-				'bfcache'               => 'sanitize_scalar_setting',
-				'perf_translations'     => 'sanitize_scalar_setting',
-				'ai_adaptive'           => 'sanitize_scalar_setting',
-				'edge_cache'            => 'sanitize_scalar_setting',
-			);
+			return Settings_Store::get_settings_sanitizer_map();
 		}
 
 		/**
@@ -5244,11 +5107,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * testable method.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
 		 */
 		public static function sanitize_cache_settings( $settings ): array {
-			return self::sanitize_settings_recursively( (array) $settings );
+			return Settings_Store::sanitize_cache_settings( $settings );
 		}
 
 		/**
@@ -5259,11 +5123,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * testable method.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
 		 */
 		public static function sanitize_file_optimisation( $settings ): array {
-			return self::sanitize_settings_recursively( (array) $settings );
+			return Settings_Store::sanitize_file_optimisation( $settings );
 		}
 
 		/**
@@ -5276,407 +5141,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param array $settings The settings array.
 		 * @return array The sanitized settings array.
 		 * @since 2.0.0
+		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
 		 */
 		public static function sanitize_settings_recursively( $settings ) {
-			$sanitized = array();
-			foreach ( $settings as $key => $value ) {
-				$safe_key = preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $key );
-				if ( ! is_string( $safe_key ) ) {
-					continue;
-				}
-
-				// Skip keys that become empty after sanitization so that
-				// settings are never stored under an empty-string key.
-				if ( '' === $safe_key ) {
-					continue;
-				}
-
-				// LiteSpeed integration — allowlist mode values.
-				if ( 'mode' === $safe_key && ! is_array( $value ) ) {
-					$sanitized[ $safe_key ] = self::sanitize_mode_value( $value );
-					continue;
-				}
-
-				// Cache TTL overrides — per-post-type hours allowlist (0/1/6/12/24/48/168), absint.
-				if ( 'ttlOverrides' === $safe_key && is_array( $value ) ) {
-					$sanitized[ $safe_key ] = self::sanitize_ttl_overrides( $value );
-					continue;
-				}
-
-				// P1 CDN mapping — one-to-many (cdn.cls.php:48 parity).
-				if ( 'cdnMapping' === $safe_key && is_array( $value ) ) {
-					$sanitized[ $safe_key ] = self::sanitize_cdn_mapping( $value );
-					continue;
-				}
-
-				// Persistent Redis outage flag (issue #1233) — pinned boolean
-				// normalization before the generic branches: a JSON string
-				// "false" must sanitize to false (it would otherwise stay a
-				// truthy non-empty string and paradoxically read as armed).
-				// Server-only in practice (REST update/import strip client
-				// values); unrecognized values fail safe to false.
-				if ( 'outage_bypassed' === $safe_key && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						$sanitized[ $safe_key ] = true === $bool;
-					}
-					continue;
-				}
-
-				// RUM-gated speculation eagerness (issue #1061) — normalize
-				// malformed import shapes (0/1, '0'/'1', 'false'/'true') to
-				// bool. Unrecognized values fail open to true (gating on).
-				if ( 'speculationRumGating' === $safe_key && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
-					}
-					continue;
-				}
-
-				// Automatic LCP hero preload + font discovery toggles (issue
-				// #1216) plus the high-value prerender list toggle (issue
-				// #1237) and the opt-in failed-action purge toggle (issue
-				// #1310, `database_cleanup.purgeFailedActions`) — normalize
-				// malformed import shapes to bool so a
-				// string 'false' (textarea/text branches preserve strings, and
-				// !empty('false') is truthy at every read site) cannot silently
-				// enable the features. Unrecognized values fail safe to false
-				// (all four features default off). Pinned before the generic
-				// stripos 'list' branch so speculationPrerenderList never
-				// falls through to sanitize_textarea_field.
-				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList', 'purgeFailedActions', 'occlusionFetchpriorityLow', 'speculation_autotune_enabled' ), true ) && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
-					}
-					continue;
-				}
-
-				// Woo safe mode toggle (issue #922) — normalize malformed import
-				// shapes (0/1, '0'/'1', 'false'/'true') to bool so the toggle
-				// check in Cache::is_woo_excluded() is reliable. Unrecognized
-				// values fail safe to true (enabled).
-				if ( 'wooSafeMode' === $safe_key && ! is_array( $value ) ) {
-					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
-					continue;
-				}
-
-				// INP-first delay preset (issue #932) — normalize malformed import
-				// shapes (0/1, '0'/'1', 'false'/'true') to bool. Unrecognized
-				// values fail safe to false (preset off, existing behavior).
-				if ( 'delayJSINPPreset' === $safe_key && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
-					}
-					continue;
-				}
-
-				// One-click Delay-JS preset level (issue #1385) — safe|balanced|
-				// aggressive only. Unrecognized values fail safe to 'safe'
-				// (maximum exclusions, least delay).
-				if ( 'delayJSPreset' === $safe_key && ! is_array( $value ) ) {
-					$level = strtolower( trim( (string) $value ) );
-					if ( ! in_array( $level, array( 'safe', 'balanced', 'aggressive' ), true ) ) {
-						$level = 'safe';
-					}
-					$sanitized[ $safe_key ] = $level;
-					continue;
-				}
-
-				// Safe-default delay keys (issues #966, #1308, and #1314) —
-				// external-only defaults off (fail-safe: delay everything
-				// unless asked), builder preset defaults on (fail-safe: never
-				// delay builder runtimes), and the four #1308 opt-in compat
-				// presets (consent/analytics/gallery/jquery) default off so
-				// upgrades preserve manual exclusions.
-				if ( in_array(
-					$safe_key,
-					array(
-						'delayJSExternalOnly',
-						'delayJSThirdParty',
-						'delayJSThirdPartyAuto',
-						'delayJSConsentPreset',
-						'delayJSAnalyticsPreset',
-						'delayJSGalleryPreset',
-						'delayJSJqueryPreset',
-					),
-					true
-				) && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
-					}
-					continue;
-				}
-
-				$safe_on_keys = array(
-					'delayJSBuilderPreset',
-					'delayJSCommercePreset',
-					'delayJSInteractionPreset',
-					'unusedCSSRegressionGuard',
-				);
-				if ( in_array( $safe_key, $safe_on_keys, true ) && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						// Fail-safe: preset/guard default on; unrecognized values stay on.
-						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
-					}
-					continue;
-				}
-
-				// Lazy-render below-fold toggle — normalize malformed import
-				// shapes (0/1, '0'/'1', 'false'/'true') to bool. Fail-safe off.
-				if ( 'lazyRenderBelowFold' === $safe_key && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
-					}
-					continue;
-				}
-
-				// Lazy-render builder exclusion — pinned before the generic
-				// textarea branch (the key contains 'exclude'), so 'false'/0/1
-				// import shapes normalize to bool. Fail-safe on (never
-				// lazy-render builder runtimes on unrecognized values).
-				if ( 'lazyRenderExcludeBuilders' === $safe_key && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
-					}
-					continue;
-				}
-
-				// Unused-CSS regression threshold (issue #966) — int clamped to
-				// 5-50 (% retained). Unrecognized values fail safe to 20.
-				if ( 'unusedCSSRegressionThreshold' === $safe_key && ! is_array( $value ) ) {
-					$threshold              = is_numeric( $value ) ? (int) $value : 20;
-					$sanitized[ $safe_key ] = ( $threshold >= 5 && $threshold <= 50 ) ? $threshold : 20;
-					continue;
-				}
-
-				// Unused-CSS extra safelist (issue #966) — one selector per line.
-				// CCSS user safelist (issue #1038) shares the same textarea
-				// contract: selectors never pruned from Critical CSS inlining.
-				if ( in_array( $safe_key, array( 'unusedCSSSafelistExtra', 'ccssSafelistExtra' ), true ) && ! is_array( $value ) ) {
-					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
-					continue;
-				}
-
-				// Used-CSS delivery mode (issue #1220) — allowlist
-				// file/delay/async/remove. Unknown values fail open to file.
-				if ( 'usedCSSDeliveryMode' === $safe_key && ! is_array( $value ) ) {
-					$mode                   = strtolower( trim( (string) $value ) );
-					$sanitized[ $safe_key ] = in_array( $mode, array( 'file', 'delay', 'async', 'remove' ), true ) ? $mode : 'file';
-					continue;
-				}
-
-				// Max longest edge cap (issue #985 follow-up) — int >= 0.
-				// A cleared numeric field submits '' (or non-numeric text),
-				// which must fall back to the 2560 default rather than
-				// silently becoming 0/disabled at read time. Negatives clamp
-				// to 0 (disabled).
-				if ( 'maxLongestEdgePx' === $safe_key ) {
-					if ( is_array( $value ) || '' === $value || null === $value || ! is_numeric( $value ) ) {
-						$sanitized[ $safe_key ] = 2560;
-					} else {
-						$edge                   = (int) $value;
-						$sanitized[ $safe_key ] = $edge < 0 ? 0 : $edge;
-					}
-					continue;
-				}
-
-				// CCSS generation timeout (issue #1235) — int clamped to
-				// 1-120 (seconds). Unrecognized values fail open to 25 so
-				// generation is always bounded. Pinned before the generic
-				// is_numeric branch so 0/negative/huge values can never be
-				// stored; get_ccss_gen_timeout() still clamps at read time
-				// as defense-in-depth.
-				if ( 'ccssGenTimeout' === $safe_key ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 25;
-						continue;
-					}
-					$timeout                = is_numeric( $value ) ? (int) $value : 25;
-					$sanitized[ $safe_key ] = ( $timeout >= 1 && $timeout <= 120 ) ? $timeout : 25;
-					continue;
-				}
-
-				// CCSS gzipped inline budget (issue #1388) — int clamped to
-				// 1-100 (KB). Unrecognized values fail open to 14 so inline
-				// output stays bounded. Read-time clamping in
-				// get_ccss_inline_budget_bytes() is defense-in-depth.
-				if ( 'ccssInlineBudgetKb' === $safe_key ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 14;
-						continue;
-					}
-					$budget                 = is_numeric( $value ) ? (int) $value : 14;
-					$sanitized[ $safe_key ] = ( $budget >= 1 && $budget <= 100 ) ? $budget : 14;
-					continue;
-				}
-
-				// CCSS commerce exclusion + checksum regen toggles (issue
-				// #1388) — booleans via ! empty() so absent/unchecked stays
-				// false and any truthy input enables. Pinned before the
-				// generic scalar branch so '0'/'' can never enable them.
-				if ( in_array( $safe_key, array( 'ccssCommerceExclude', 'ccssChecksumRegen' ), true ) ) {
-					$sanitized[ $safe_key ] = ! empty( $value );
-					continue;
-				}
-
-				// RUM-weighted top-URL prefetch cap (issue #1183) — int clamped
-				// to 1-5 (footprint guard, ~0.15 KB per URL). Unrecognized
-				// values fail open to 2.
-				if ( 'speculationTopUrlsLimit' === $safe_key ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 2;
-						continue;
-					}
-					$limit                  = is_numeric( $value ) ? (int) $value : 2;
-					$sanitized[ $safe_key ] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
-					continue;
-				}
-
-				// RUM beacon sample rate (issue #1214) — int clamped to
-				// 1-100 (percent of page views sending the beacon).
-				// Unrecognized values fail open to 100 (unsampled current
-				// behavior). Pinned before the generic is_numeric branch so
-				// 0/negative/huge values can never be stored.
-				if ( 'rum_sample_rate' === $safe_key ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 100;
-						continue;
-					}
-					$rate                   = is_numeric( $value ) ? (int) $value : 100;
-					$sanitized[ $safe_key ] = ( $rate >= 1 && $rate <= 100 ) ? $rate : 100;
-					continue;
-				}
-
-				// Field-LCP minimum-sample threshold (issue #1200) — int
-				// clamped to 1-1000. Covers both the additive
-				// `ai_adaptive.field_lcp_min_samples` key and the legacy
-				// `image_optimisation.fieldLcpMinSamples` key so an extreme
-				// admin value cannot permanently pin auto-tune to provisional.
-				// Unrecognized values fail open to the 20 default.
-				// Also covers the additive RUM-segmented speculation auto-tune
-				// threshold (issue #1425,
-				// `ai_adaptive.speculation_min_samples`) so a rogue value
-				// cannot pin the auto-tune to always-undersampled or
-				// always-qualified.
-				if ( in_array( $safe_key, array( 'field_lcp_min_samples', 'fieldLcpMinSamples', 'speculation_min_samples' ), true ) ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 20;
-						continue;
-					}
-					$min                    = is_numeric( $value ) ? (int) $value : 20;
-					$sanitized[ $safe_key ] = min( 1000, max( 1, $min ) );
-					continue;
-				}
-
-				// RUM-segmented speculation auto-tune URL cap (issue #1425,
-				// `ai_adaptive.speculation_max_urls`) — int clamped to 1-5 so
-				// the speculation JSON delta stays under ~1KB. Unrecognized
-				// values fail open to the 5 default.
-				if ( 'speculation_max_urls' === $safe_key ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 5;
-						continue;
-					}
-					$max                    = is_numeric( $value ) ? (int) $value : 5;
-					$sanitized[ $safe_key ] = min( 5, max( 1, $max ) );
-					continue;
-				}
-				// RUM anomaly digest tolerance band (issue #1445) — floats so
-				// the CLS absolute band (0.01) survives the generic
-				// is_numeric-to-int cast below. Clamped to 0–50 (percent)
-				// and 0–1 (absolute); unrecognized values fail open to the
-				// 5.0 / 0.01 defaults.
-				if ( 'anomaly_tolerance_pct' === $safe_key ) {
-					if ( is_array( $value ) || ! is_numeric( $value ) ) {
-						$sanitized[ $safe_key ] = 5.0;
-						continue;
-					}
-					$tol                    = (float) $value;
-					$sanitized[ $safe_key ] = ( is_finite( $tol ) && $tol >= 0 ) ? min( 50.0, $tol ) : 5.0;
-					continue;
-				}
-				if ( 'anomaly_tolerance_abs' === $safe_key ) {
-					if ( is_array( $value ) || ! is_numeric( $value ) ) {
-						$sanitized[ $safe_key ] = 0.01;
-						continue;
-					}
-					$tol                    = (float) $value;
-					$sanitized[ $safe_key ] = ( is_finite( $tol ) && $tol >= 0 ) ? min( 1.0, $tol ) : 0.01;
-					continue;
-				}
-
-				// Newline/regex URL lists must use the textarea sanitizer, not
-				// the generic `url` branch (esc_url_raw would collapse the
-				// multiple lines). Pinned explicitly so a future reorder of the
-				// generic branches cannot corrupt these lists.
-				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls', 'delayJSThirdPartyDenylist', 'delayJSThirdPartyAllowlist', 'ccssExcludedPostTypes' ), true ) && ! is_array( $value ) ) {
-					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
-					continue;
-				}
-
-				if ( 'elementorSafeMode' === $safe_key && ! is_array( $value ) ) {
-					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
-					continue;
-				}
-				// Unified safe-mode + combineCSS (issue #1465): normalize
-				// malformed import shapes to bool so a string 'false' cannot
-				// silently enable the stack. Both fail safe to false so an
-				// upgrade or malformed import never auto-enables combine or
-				// safe mode (combine stays off unless explicitly enabled).
-				if ( in_array( $safe_key, array( 'safeMode', 'combineCSS' ), true ) && ! is_array( $value ) ) {
-					if ( is_bool( $value ) ) {
-						$sanitized[ $safe_key ] = $value;
-					} else {
-						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
-					}
-					continue;
-				}
-				// CCSS bounded-retry cap (issue #1274) — int clamped to
-				// 0..5 (0 = fail fast, no retries). Unrecognized values
-				// fail open to 5 so generation keeps its retry budget.
-				if ( 'ccssMaxRetries' === $safe_key ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 5;
-						continue;
-					}
-					$retries                = is_numeric( $value ) ? (int) $value : 5;
-					$sanitized[ $safe_key ] = min( 5, max( 0, $retries ) );
-					continue;
-				}
-
-				if ( is_array( $value ) ) {
-					$sanitized[ $safe_key ] = self::sanitize_settings_recursively( $value );
-				} else {
-					$sanitized[ $safe_key ] = self::sanitize_scalar_setting( $safe_key, $value );
-				}
-			}
-			return $sanitized;
+			return Settings_Store::sanitize_settings_recursively( $settings );
 		}
 
 		/**
