@@ -132,8 +132,10 @@ foreach ( $files as $file_path ) {
 	$refs = array_values( array_unique( $r[1] ) );
 	sort( $refs );
 
-	// Exclude the self-reference: every class mentions its own name.
-	$own_class = preg_match( '/(?:class|trait)\s+([A-Za-z0-9_]+)/', $src, $sm ) ? $sm[1] : null;
+	// Exclude the self-reference: every class mentions its own name. Anchor to
+	// a real declaration (line start + optional modifiers) so docblock prose
+	// such as "the main class for ..." cannot poison the match (ARCH-001 review).
+	$own_class = preg_match( '/^\s*(?:abstract\s+|final\s+)?(?:class|trait)\s+([A-Za-z_][A-Za-z0-9_]*)/m', $src, $sm ) ? $sm[1] : null;
 	if ( null !== $own_class ) {
 		$refs = array_values( array_diff( $refs, array( $own_class ) ) );
 	}

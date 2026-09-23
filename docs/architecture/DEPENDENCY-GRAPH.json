@@ -40,7 +40,6 @@
         "Util"
     ],
     "includes/class-advanced-cache-handler.php": [
-        "Advanced_Cache_Handler",
         "Cache",
         "Log",
         "System_Info",
@@ -76,7 +75,6 @@
     ],
     "includes/class-cache.php": [
         "CDN",
-        "Cache",
         "Critical_CSS",
         "Google_Fonts",
         "Hook_Registry",
@@ -120,7 +118,6 @@
     "includes/class-cron.php": [
         "Cache",
         "Critical_CSS",
-        "Cron",
         "Database_Cleanup",
         "Deactivate",
         "Img_Converter",
@@ -143,7 +140,6 @@
         "Advanced_Cache_Handler",
         "Cache",
         "Cron",
-        "Deactivate",
         "Htaccess_Handler",
         "Image_Optimisation",
         "LiteSpeed_Integration",
@@ -240,7 +236,6 @@
         "Util"
     ],
     "includes/class-log.php": [
-        "Log",
         "Util"
     ],
     "includes/class-main.php": [
@@ -258,7 +253,6 @@
         "Img_Converter",
         "LiteSpeed_Integration",
         "Log",
-        "Main",
         "RUM",
         "Sandbox_Preview",
         "Server_Rules",
@@ -405,7 +399,6 @@
         "System_Info",
         "Url",
         "Used_CSS",
-        "Util",
         "WPPO_CLI_Command",
         "Woo_Detect",
         "Wp_Version"

@@ -9,6 +9,9 @@
 campaign: incremental-architecture-refactor
 created: 2026-09-22
 baseline:
+  # Historical snapshot taken 2026-09-22 at Phase 1 start; superseded by
+  # phase2.baseline_metrics (re-baselined 2026-09-23 by ARCH-001 generator).
+  # Values below are preserved as history, not corrected in place.
   Main_methods_max: 232
   Wp_Version_methods: 4
   Hook_Registry_methods: 7
@@ -236,7 +239,7 @@ phase2:
     Rest_lines: 4494
     Rest_methods: 73
     includes_root_files: 56
-    dependency_edges: 329
+    dependency_edges: 322
     FileOptimization_lines: 6201
     Dashboard_lines: 2168
   autoload finding: 'Composer classmap covers includes/ recursively; Main::includes() hardcodes flat includes/ paths + fallback_map. Directory moves REQUIRE loader updates (ARCH-003 first). No PSR-4 migration (watchdog forbids).'

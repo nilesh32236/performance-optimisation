@@ -78,7 +78,6 @@
         "hooks": [],
         "static_state": false,
         "refs": [
-            "Advanced_Cache_Handler",
             "Cache",
             "Log",
             "System_Info",
@@ -176,7 +175,6 @@
         "static_state": false,
         "refs": [
             "CDN",
-            "Cache",
             "Critical_CSS",
             "Google_Fonts",
             "Hook_Registry",
@@ -314,7 +312,6 @@
         "refs": [
             "Cache",
             "Critical_CSS",
-            "Cron",
             "Database_Cleanup",
             "Deactivate",
             "Img_Converter",
@@ -362,7 +359,6 @@
             "Advanced_Cache_Handler",
             "Cache",
             "Cron",
-            "Deactivate",
             "Htaccess_Handler",
             "Image_Optimisation",
             "LiteSpeed_Integration",
@@ -665,7 +661,6 @@
         "hooks": [],
         "static_state": false,
         "refs": [
-            "Log",
             "Util"
         ]
     },
@@ -699,7 +694,6 @@
             "Img_Converter",
             "LiteSpeed_Integration",
             "Log",
-            "Main",
             "RUM",
             "Sandbox_Preview",
             "Server_Rules",
@@ -1002,7 +996,6 @@
             "System_Info",
             "Url",
             "Used_CSS",
-            "Util",
             "WPPO_CLI_Command",
             "Woo_Detect",
             "Wp_Version"

@@ -25,7 +25,7 @@ performance-optimisation.php          plugin entry: constants, guards, Composer 
                                      Llms, Perf_Translations, Log, Core_Tweaks, Object_Cache
 ```
 
-Static analysis counts 329 cross-class `ClassName::` edges across 54 of 57 files
+Static analysis counts 322 cross-class `ClassName::` edges across 54 of 57 files
 (`DEPENDENCY-GRAPH.json`). The densest hubs are `Util::` (settings, transient keys,
 filesystem, URL — now facades over Phase 1 boundaries) and `Main` (orchestration).
 
