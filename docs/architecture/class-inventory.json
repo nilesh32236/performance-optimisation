@@ -2,11 +2,10 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14183,
+        "lines": 14184,
         "methods": 232,
         "hooks": [
             "update_option_wppo_settings",
-            "add_option_wppo_settings",
             "admin_notices",
             "script_module_data_wppo-lazyload",
             "wp_speculation_rules_href_exclude_paths",
@@ -330,7 +329,7 @@
     {
         "file": "includes/class-hook-registry.php",
         "class": null,
-        "lines": 691,
+        "lines": 692,
         "methods": 7,
         "hooks": [
             "admin_menu",
@@ -369,7 +368,6 @@
             "query_vars",
             "send_headers",
             "update_option_wppo_settings",
-            "add_option_wppo_settings",
             "style_loader_tag",
             "wppo_generate_ccss",
             "wp_ajax_wppo_get_nonce",
@@ -381,6 +379,7 @@
             "wppo_google_fonts_download",
             "update_option_permalink_structure",
             "switch_theme",
+            "add_option_wppo_settings",
             "update_option_home",
             "update_option_siteurl",
             "activated_plugin",
@@ -507,7 +506,7 @@
     {
         "file": "includes/class-deactivate.php",
         "class": null,
-        "lines": 368,
+        "lines": 369,
         "methods": 7,
         "hooks": [],
         "static_state": false

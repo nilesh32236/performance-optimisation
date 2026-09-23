@@ -7,7 +7,7 @@
 campaign: incremental-architecture-refactor
 created: 2026-09-22
 baseline:
-  Main_methods_max: 230
+  Main_methods_max: 232
   Hook_Registry_methods: 7
   Util_methods_max: 159
   Util_facade_proxies: 33
@@ -130,6 +130,9 @@ items:
     status: autofix-running
     github_issue: 1510
     github_pr: 1511
+    merge_commit: 1d0cfc5e
+    notes:
+      - 'Merged 2026-09-23. Main 230→232 (+get_options/+resolve_options accessors). Answered Q1/Q2 (runtime overlay; Option A), re-triggered via /fix. Manual control: dropped const DEFAULTS for canonical Util::get_default_settings() (repo guard DefaultsParityTest), fixed 3 strict function_exists tests (#1465 alias pattern). Reverted nothing; kept incidental private is_css_minified removal (dead, zero callers).'
     source: AUDIT/FINAL-REVIEW/architecture.md R-03
     notes:
       - 'Pairs naturally with REF-002; keep file-load new Main() contract.'
