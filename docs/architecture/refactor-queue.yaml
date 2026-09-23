@@ -115,7 +115,7 @@ items:
     priority: medium
     status: autofix-running
     github_issue: 1508
-    github_pr: null
+    github_pr: 1509
     source: AUDIT/FINAL-REVIEW/architecture.md R-05
     notes:
       - 'Blocked until REF-002 clarifies options ownership (stale-snapshot risk). Do not start before REF-002 merges.'
