@@ -11,9 +11,6 @@
  * @package PerformanceOptimise\Tests
  */
 
-require_once __DIR__ . '/../../includes/class-main.php';
-require_once __DIR__ . '/../../includes/class-hook-registry.php';
-
 use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\Hook_Registry;
 use PerformanceOptimise\Inc\Image_Optimisation;
@@ -21,6 +18,9 @@ use PerformanceOptimise\Inc\Google_Fonts;
 use PerformanceOptimise\Inc\LiteSpeed_Integration;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
+
+require_once __DIR__ . '/../../includes/class-main.php';
+require_once __DIR__ . '/../../includes/class-hook-registry.php';
 
 /**
  * Hook-registry parity tests.
@@ -84,7 +84,7 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Install the hook recorder plus the WP environment a scenario needs.
 	 *
-	 * add_action()/add_filter() append to the in-test recorders while
+	 * Add_action()/add_filter() append to the in-test recorders while
 	 * has_action()/has_filter() consult them with WordPress semantics (first
 	 * matching priority or false), so the purge-fallback self-gating behaves
 	 * exactly like production. function_exists() probes for version-gated
@@ -117,7 +117,7 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'has_action' )->alias(
 			function ( $hook, $callback = false ) {
 				foreach ( $this->recorded as $entry ) {
-					if ( 'A' === $entry[0] && $entry[1] === $hook && ( false === $callback || $entry[2] == $callback ) ) { // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison -- Mirrors WP core callback matching.
+					if ( 'A' === $entry[0] && $entry[1] === $hook && ( false === $callback || $entry[2] == $callback ) ) { // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison,Universal.Operators.StrictComparisons.LooseEqual -- Mirrors WP core callback matching.
 						return $entry[3];
 					}
 				}
@@ -127,7 +127,7 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'has_filter' )->alias(
 			function ( $hook, $callback = false ) {
 				foreach ( $this->recorded as $entry ) {
-					if ( 'F' === $entry[0] && $entry[1] === $hook && ( false === $callback || $entry[2] == $callback ) ) { // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison -- Mirrors WP core callback matching.
+					if ( 'F' === $entry[0] && $entry[1] === $hook && ( false === $callback || $entry[2] == $callback ) ) { // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison,Universal.Operators.StrictComparisons.LooseEqual -- Mirrors WP core callback matching.
 						return $entry[3];
 					}
 				}
@@ -178,12 +178,12 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function wp69_probes(): array {
 		return array(
-			'wp_script_add_data'                             => true,
-			'wp_script_modules'                              => true,
-			'wp_enqueue_script_module'                       => true,
+			'wp_script_add_data'                           => true,
+			'wp_script_modules'                            => true,
+			'wp_enqueue_script_module'                     => true,
 			'wp_should_output_buffer_template_for_enhancement' => true,
-			'wp_load_classic_theme_block_styles_on_demand'   => true,
-			'wp_get_speculation_rules'                       => false,
+			'wp_load_classic_theme_block_styles_on_demand' => true,
+			'wp_get_speculation_rules'                     => false,
 		);
 	}
 
@@ -194,12 +194,12 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function legacy_probes(): array {
 		return array(
-			'wp_script_add_data'                             => false,
-			'wp_script_modules'                              => false,
-			'wp_enqueue_script_module'                       => false,
+			'wp_script_add_data'                           => false,
+			'wp_script_modules'                            => false,
+			'wp_enqueue_script_module'                     => false,
 			'wp_should_output_buffer_template_for_enhancement' => false,
-			'wp_load_classic_theme_block_styles_on_demand'   => false,
-			'wp_get_speculation_rules'                       => false,
+			'wp_load_classic_theme_block_styles_on_demand' => false,
+			'wp_get_speculation_rules'                     => false,
 		);
 	}
 
@@ -214,23 +214,23 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 				'enableCache' => true,
 			),
 			'file_optimisation'  => array(
-				'delayJS'              => true,
-				'deferJS'              => true,
-				'excludeDelayJS'       => 'my-delay-script',
-				'excludeDeferJS'       => 'my-deferred-script',
-				'delayJSIdleList'      => 'my-idle-script',
-				'delayJSViewportList'  => 'my-viewport-script',
-				'delayJSPriority'      => 'my-idle-script:high',
-				'delayJSIdleTimeout'   => '4500',
-				'minifyJS'             => true,
-				'minifyCSS'            => true,
-				'excludeJS'            => 'my-excluded.js',
-				'excludeCSS'           => 'my-excluded.css',
-				'combineCSS'           => true,
-				'criticalCSS'          => true,
+				'delayJS'                => true,
+				'deferJS'                => true,
+				'excludeDelayJS'         => 'my-delay-script',
+				'excludeDeferJS'         => 'my-deferred-script',
+				'delayJSIdleList'        => 'my-idle-script',
+				'delayJSViewportList'    => 'my-viewport-script',
+				'delayJSPriority'        => 'my-idle-script:high',
+				'delayJSIdleTimeout'     => '4500',
+				'minifyJS'               => true,
+				'minifyCSS'              => true,
+				'excludeJS'              => 'my-excluded.js',
+				'excludeCSS'             => 'my-excluded.css',
+				'combineCSS'             => true,
+				'criticalCSS'            => true,
 				'hostGoogleFontsLocally' => true,
-				'removeWooCSSJS'       => true,
-				'blockAssetsOnDemand'  => true,
+				'removeWooCSSJS'         => true,
+				'blockAssetsOnDemand'    => true,
 			),
 			'image_optimisation' => array(
 				'prioritizeLCPImages' => true,

@@ -1943,13 +1943,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static array $elementor_built_memo = array();
 
 		/**
-		 * Whether the hidden-block-asset omission pass may run.
+		 * Reset the Elementor-built memo (for tests).
 		 *
-		 * @internal Exposed for Hook_Registry (registration gate); not part
-		 *           of the public plugin API.
-		 *
-		 * @since 2.0.0
-		 * @return bool
+		 * @since 2.2.0
+		 * @return void
 		 */
 		public static function reset_elementor_memo(): void {
 			self::$elementor_built_memo = array();
