@@ -22,12 +22,23 @@ use PerformanceOptimise\Inc\Css_Combine;
 use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\Sandbox_Preview;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * ARCH-006 Css_Combine parity tests.
  *
+ * Each test runs in a separate PHP process (see ObjectCacheAtomicConfigWriteTest
+ * precedent): Brain Monkey/Patchwork mocked-function definitions persist for
+ * the whole suite-process lifetime, so an in-process run would leak stubs
+ * like `current_user_can`/`wp_verify_nonce`/`is_multisite` into later files
+ * that branch on `function_exists()` (ObjectCache flush scoping, delay-JS
+ * migration backfills). Isolation keeps this file order-independent.
+ *
  * @package PerformanceOptimise\Tests
  */
+#[RunTestsInSeparateProcesses]
+#[PreserveGlobalState( false )]
 class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap {
 		setUp as protected wppoSetUp;
@@ -98,18 +109,49 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 	private array $written = array();
 
 	/**
-	 * get_contents() call arguments recorded by the filesystem mock.
+	 * Get_contents() call arguments recorded by the filesystem mock.
 	 *
 	 * @var string[]
 	 */
 	private array $read_paths = array();
 
 	/**
-	 * exists() call arguments recorded by the filesystem mock.
+	 * Exists() call arguments recorded by the filesystem mock.
 	 *
 	 * @var string[]
 	 */
 	private array $stat_paths = array();
+
+	/**
+	 * Record a filesystem stat probe (called by the disk double).
+	 *
+	 * @param string $path Path.
+	 * @return void
+	 */
+	public function record_stat( $path ): void {
+		$this->stat_paths[] = $path;
+	}
+
+	/**
+	 * Record a filesystem read probe (called by the disk double).
+	 *
+	 * @param string $path Path.
+	 * @return void
+	 */
+	public function record_read( $path ): void {
+		$this->read_paths[] = $path;
+	}
+
+	/**
+	 * Record a finalized write payload (called by the disk double on move).
+	 *
+	 * @param string $path     Final path.
+	 * @param string $contents Bytes.
+	 * @return void
+	 */
+	public function record_write( $path, $contents ): void {
+		$this->written[ $path ] = $contents;
+	}
 
 	/**
 	 * Fresh stubs + isolated temp tree per test.
@@ -171,6 +213,9 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'set_transient' )->justReturn( true );
 		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'update_option' )->justReturn( true );
+		Functions\when( 'delete_option' )->justReturn( true );
+		Functions\when( 'wp_kses' )->returnArg();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'esc_attr' )->returnArg();
 		Functions\when( 'esc_url' )->returnArg();
@@ -182,6 +227,16 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_dequeue_style' )->alias(
 			function ( string $handle ) {
 				$this->dequeued[] = $handle;
+			}
+		);
+		// The shared bootstrap stubs trailingslashit() as returnArg (no slash
+		// appended). Cache::prepare_cache_dir() funnels through
+		// is_path_contained(trailingslashit($dir)), whose validator needs the
+		// trailing slash, so restore the real behavior here; the per-test
+		// Brain Monkey session re-registers the shared stub afterwards.
+		Functions\when( 'trailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' ) . '/';
 			}
 		);
 		Functions\when( 'wp_enqueue_style' )->alias(
@@ -297,66 +352,153 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Filesystem mock delegating to the real disk while capturing writes.
+	 * Filesystem double delegating to the real disk while capturing writes.
 	 *
-	 * @return object Mockery filesystem double.
+	 * A concrete anonymous class (not a Mockery mock): SUT guards call
+	 * `method_exists( $fs, ... )`, which returns false for Mockery `__call`
+	 * magic and would fail every atomic write closed. Real methods keep
+	 * those guards green while the temp tree keeps the disk writes isolated.
+	 *
+	 * @return object Disk-backed filesystem double.
 	 */
 	private function make_filesystem() {
 		$test = $this;
-		$fs   = \Mockery::mock();
-		$fs->shouldReceive( 'exists' )->andReturnUsing(
-			function ( $path ) use ( $test ) {
-				$test->stat_paths[] = $path;
+		return new class( $test ) {
+			/**
+			 * Owning test (captures stat/read/write observations).
+			 *
+			 * @var CssCombineParityTest
+			 */
+			private $test;
+
+			/**
+			 * Staged tmp payloads (tmp path => bytes) for write capture.
+			 *
+			 * @var array<string,string>
+			 */
+			private array $tmp_contents = array();
+
+			/**
+			 * Constructor.
+			 *
+			 * @param CssCombineParityTest $test Owning test.
+			 */
+			public function __construct( $test ) {
+				$this->test = $test;
+			}
+
+			/**
+			 * Check path existence (records stat probes).
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function exists( $path ) {
+				$this->test->record_stat( $path );
 				return file_exists( $path );
 			}
-		);
-		$fs->shouldReceive( 'mtime' )->andReturnUsing(
-			static function ( $path ) {
+
+			/**
+			 * Check directory existence.
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function is_dir( $path ) {
+				return is_dir( $path );
+			}
+
+			/**
+			 * Create a directory tree.
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function mkdir( $path ) {
+				if ( is_dir( $path ) ) {
+					return true;
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test-only fixture tree.
+				return mkdir( $path, 0777, true );
+			}
+
+			/**
+			 * File modification time.
+			 *
+			 * @param string $path Path.
+			 * @return int|false
+			 */
+			public function mtime( $path ) {
 				return file_exists( $path ) ? filemtime( $path ) : false;
 			}
-		);
-		$fs->shouldReceive( 'size' )->andReturnUsing(
-			static function ( $path ) {
+
+			/**
+			 * File size.
+			 *
+			 * @param string $path Path.
+			 * @return int|false
+			 */
+			public function size( $path ) {
 				return file_exists( $path ) ? filesize( $path ) : false;
 			}
-		);
-		$fs->shouldReceive( 'get_contents' )->andReturnUsing(
-			function ( $path ) use ( $test ) {
-				$test->read_paths[] = $path;
+
+			/**
+			 * Read a file (records read probes).
+			 *
+			 * @param string $path Path.
+			 * @return string|false
+			 */
+			public function get_contents( $path ) {
+				$this->test->record_read( $path );
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Test-only read.
 				return file_exists( $path ) ? file_get_contents( $path ) : false;
 			}
-		);
-		$tmp_contents = array();
-		$fs->shouldReceive( 'put_contents' )->andReturnUsing(
-			static function ( $path, $contents ) use ( &$tmp_contents ) {
-				$tmp_contents[ $path ] = $contents;
+
+			/**
+			 * Write a file (stages tmp payloads for write capture).
+			 *
+			 * @param string $path     Path.
+			 * @param string $contents Bytes.
+			 * @return bool
+			 */
+			public function put_contents( $path, $contents ) {
+				$this->tmp_contents[ $path ] = $contents;
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test-only write.
 				file_put_contents( $path, $contents );
 				return true;
 			}
-		);
-		$fs->shouldReceive( 'move' )->andReturnUsing(
-			function ( $from, $to ) use ( $test, &$tmp_contents ) {
-				if ( isset( $tmp_contents[ $from ] ) ) {
-					$test->written[ $to ] = $tmp_contents[ $from ];
-					unset( $tmp_contents[ $from ] );
+
+			/**
+			 * Move a file (captures staged payloads at their final path).
+			 *
+			 * @param string $from Source.
+			 * @param string $to   Destination.
+			 * @return bool
+			 */
+			public function move( $from, $to ) {
+				if ( isset( $this->tmp_contents[ $from ] ) ) {
+					$this->test->record_write( $to, $this->tmp_contents[ $from ] );
+					unset( $this->tmp_contents[ $from ] );
 				}
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Test-only atomic move.
 				rename( $from, $to );
 				return true;
 			}
-		);
-		$fs->shouldReceive( 'delete' )->andReturnUsing(
-			static function ( $path ) {
+
+			/**
+			 * Delete a file.
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function delete( $path ) {
 				if ( file_exists( $path ) ) {
 					// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test-only cleanup.
 					unlink( $path );
 				}
 				return true;
 			}
-		);
-		return $fs;
+		};
 	}
 
 	/**
@@ -450,7 +592,12 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 	public function test_combined_output_bytes_and_journal(): void {
 		$a = $this->write_source( 'a.css', 'body { color: red; }' );
 		$b = $this->write_source( 'b.css', 'h1 { margin: 0; }' );
-		$this->make_styles( array( 'a' => $a, 'b' => $b ) );
+		$this->make_styles(
+			array(
+				'a' => $a,
+				'b' => $b,
+			)
+		);
 		$cache = $this->make_cache( array(), $this->make_filesystem() );
 
 		$cache->combine_css();
@@ -480,17 +627,37 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$a = $this->write_source( 'a.css', 'body { color: red; }' );
 		$b = $this->write_source( 'b.css', 'h1 { margin: 0; }' );
 
-		$this->make_styles( array( 'a' => $a, 'b' => $b ) );
+		$this->make_styles(
+			array(
+				'a' => $a,
+				'b' => $b,
+			)
+		);
 		$cache_one = $this->make_cache( array(), $this->make_filesystem() );
 		$cache_one->combine_css();
 		$bytes_one = $this->written;
 
 		$this->written = array();
-		$this->make_styles( array( 'a' => $a, 'b' => $b ) );
+		$this->make_styles(
+			array(
+				'a' => $a,
+				'b' => $b,
+			)
+		);
+		// Force regeneration for run two: otherwise the journal match takes
+		// the reuse path (no writes) and there is nothing to compare.
+		$path_one = $this->combined_path( $cache_one );
+		if ( file_exists( $path_one ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test-only journal reset.
+			unlink( $path_one );
+		}
+		if ( file_exists( $path_one . '.handles' ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test-only journal reset.
+			unlink( $path_one . '.handles' );
+		}
 		$cache_two = $this->make_cache( array(), $this->make_filesystem() );
 		( new Css_Combine( $cache_two ) )->combine_css();
 
-		$path_one = $this->combined_path( $cache_one );
 		$path_two = $this->combined_path( $cache_two );
 		$this->assertArrayHasKey( $path_one, $bytes_one );
 		$this->assertArrayHasKey( $path_two, $this->written );
@@ -505,7 +672,12 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 	public function test_cached_reuse_skips_write_and_fetch(): void {
 		$a = $this->write_source( 'a.css', 'body { color: red; }' );
 		$b = $this->write_source( 'b.css', 'h1 { margin: 0; }' );
-		$this->make_styles( array( 'a' => $a, 'b' => $b ) );
+		$this->make_styles(
+			array(
+				'a' => $a,
+				'b' => $b,
+			)
+		);
 		$cache = $this->make_cache( array(), $this->make_filesystem() );
 		$cache->combine_css();
 		$this->assertNotEmpty( $this->written );
@@ -515,7 +687,12 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$this->read_paths = array();
 		$this->dequeued   = array();
 		$this->enqueued   = array();
-		$this->make_styles( array( 'a' => $a, 'b' => $b ) );
+		$this->make_styles(
+			array(
+				'a' => $a,
+				'b' => $b,
+			)
+		);
 		$cache_two = $this->make_cache( array(), $this->make_filesystem() );
 		$cache_two->combine_css();
 
@@ -537,7 +714,12 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 	public function test_journal_mismatch_regenerates(): void {
 		$a = $this->write_source( 'a.css', 'body { color: red; }' );
 		$b = $this->write_source( 'b.css', 'h1 { margin: 0; }' );
-		$this->make_styles( array( 'a' => $a, 'b' => $b ) );
+		$this->make_styles(
+			array(
+				'a' => $a,
+				'b' => $b,
+			)
+		);
 		$cache = $this->make_cache( array(), $this->make_filesystem() );
 		$cache->combine_css();
 
@@ -548,10 +730,15 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		touch( $path, time() + 60 );
 		touch( $path . '.handles', time() + 60 );
 
-		$this->written    = array();
-		$this->dequeued   = array();
-		$this->enqueued   = array();
-		$this->make_styles( array( 'a' => $a, 'b' => $b ) );
+		$this->written  = array();
+		$this->dequeued = array();
+		$this->enqueued = array();
+		$this->make_styles(
+			array(
+				'a' => $a,
+				'b' => $b,
+			)
+		);
 		$cache_two = $this->make_cache( array(), $this->make_filesystem() );
 		$cache_two->combine_css();
 
@@ -570,7 +757,13 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$a = $this->write_source( 'alpha.css', 'body { color: red; }' );
 		$b = $this->write_source( 'keepout-handle.css', 'h1 { margin: 0; }' );
 		$c = $this->write_source( 'zz-excluded-zz.css', 'p { padding: 0; }' );
-		$this->make_styles( array( 'alpha' => $a, 'keepout-handle' => $b, 'themer' => $c ) );
+		$this->make_styles(
+			array(
+				'alpha'          => $a,
+				'keepout-handle' => $b,
+				'themer'         => $c,
+			)
+		);
 		$cache = $this->make_cache(
 			array( 'excludeCombineCSS' => "keepout-handle\nzz-excluded-zz" ),
 			$this->make_filesystem()
@@ -594,7 +787,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$a = $this->write_source( 'a.css', 'body { color: red; }' );
 		$this->make_styles( array( 'a' => $a ) );
 		$this->filter_map['wppo_inline_combined_css'] = false;
-		$cache = $this->make_cache( array(), $this->make_filesystem() );
+		$cache                                        = $this->make_cache( array(), $this->make_filesystem() );
 
 		$cache->combine_css();
 
@@ -605,8 +798,8 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 
 		// Truthy control registers `path` data for core's inline pass.
 		$this->filter_map['wppo_inline_combined_css'] = true;
-		$this->written          = array();
-		$this->style_data_calls = array();
+		$this->written                                = array();
+		$this->style_data_calls                       = array();
 		$this->make_styles( array( 'a' => $a ) );
 		$cache_two = $this->make_cache( array(), $this->make_filesystem() );
 		$cache_two->combine_css();
@@ -712,8 +905,14 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$wp_styles             = \Mockery::mock();
 		$wp_styles->queue      = array( 'small', 'large' );
 		$wp_styles->registered = array(
-			'small' => (object) array( 'src' => $small, 'args' => 'all' ),
-			'large' => (object) array( 'src' => $large, 'args' => 'all' ),
+			'small' => (object) array(
+				'src'  => $small,
+				'args' => 'all',
+			),
+			'large' => (object) array(
+				'src'  => $large,
+				'args' => 'all',
+			),
 		);
 		$paths                 = array(
 			'small' => $this->src_dir . '/small.css',
@@ -761,8 +960,8 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 
 		// Fallback on: the empty file is invalid, so the pipeline regenerates.
 		$this->filter_map['wppo_safe_css_combine_fallback'] = true;
-		$this->enqueued = array();
-		$this->written  = array();
+		$this->enqueued                                     = array();
+		$this->written                                      = array();
 		$this->make_styles( array( 'a' => $a ) );
 		$cache_two = $this->make_cache( array(), $this->make_filesystem() );
 		$cache_two->combine_css();
@@ -790,7 +989,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 				if ( 'wppo_settings' === $name ) {
 					return array(
 						'file_optimisation' => array(
-							'combineCSS'     => true,
+							'combineCSS'    => true,
 							'sandboxStaged' => array( 'combineCSS' => false ),
 						),
 					);
@@ -847,8 +1046,8 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_elementor_bypass_skips_combine(): void {
 		Main::reset_elementor_memo();
-		$_GET['elementor-preview'] = '1';
-		$this->has_filters[]       = 'wppo_is_elementor_page';
+		$_GET['elementor-preview']                  = '1';
+		$this->has_filters[]                        = 'wppo_is_elementor_page';
 		$this->filter_map['wppo_is_elementor_page'] = true;
 
 		$a = $this->write_source( 'a.css', 'body { color: red; }' );
@@ -860,9 +1059,19 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( array(), $this->written );
 
 		// Explicit elementorSafeMode=off restores combining on the same page.
+		// A builder-built page VIEW (not the active editor preview: the
+		// preview query var independently forces the editor-preview
+		// exclusion) is simulated via the Elementor marker class, which
+		// looks_like_elementor_request() honors without implying an editing
+		// session. The isolated process contains the eval-defined class
+		// (ObjectCacheAtomicConfigWriteTest Redis-stub precedent).
+		unset( $_GET['elementor-preview'] );
+		if ( ! class_exists( 'Elementor\Plugin', false ) ) {
+			eval( 'namespace Elementor; class Plugin {}' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged,WordPress.PHP.DiscouragedPHPFunctions.runtime_eval -- Isolated-process Elementor presence stub.
+		}
 		Main::reset_elementor_memo();
-		$this->filter_map   = array();
-		$this->has_filters  = array();
+		$this->filter_map  = array();
+		$this->has_filters = array();
 		$this->make_styles( array( 'a' => $a ) );
 		$cache_two = $this->make_cache( array( 'elementorSafeMode' => false ), $this->make_filesystem() );
 		$cache_two->combine_css();
@@ -876,7 +1085,7 @@ class CssCombineParityTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_multisite_domain_isolation(): void {
-		$fs     = $this->make_filesystem();
+		$fs      = $this->make_filesystem();
 		$cache_a = $this->make_cache( array(), $fs, 'site-one.example.com' );
 		$cache_b = $this->make_cache( array(), $fs, 'site-two.example.com' );
 
