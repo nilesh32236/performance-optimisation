@@ -1169,6 +1169,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Rest'                   => 'class-rest.php',
 				'RUM'                    => 'class-rum.php',
 				'Sandbox_Preview'        => 'class-sandbox-preview.php',
+				'Scheduler'              => 'class-scheduler.php',
 				'Settings_Store'         => 'class-settings-store.php',
 				'Suggestion_Engine'      => 'class-suggestion-engine.php',
 				'System_Info'            => 'class-system-info.php',
