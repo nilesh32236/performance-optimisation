@@ -92,6 +92,8 @@
         "Log",
         "Main",
         "Sandbox_Preview",
+        "Server_Rules",
+        "Used_CSS",
         "Util",
         "Wp_Version"
     ],
@@ -216,12 +218,20 @@
     "includes/class-image-optimisation.php": [
         "CDN",
         "Img_Converter",
+        "Lcp_Preload",
         "OD_Bridge",
         "RUM",
         "Util"
     ],
     "includes/class-img-converter.php": [
         "Log",
+        "Util"
+    ],
+    "includes/class-lcp-preload.php": [
+        "CDN",
+        "Image_Optimisation",
+        "OD_Bridge",
+        "RUM",
         "Util"
     ],
     "includes/class-litespeed-crawler.php": [
