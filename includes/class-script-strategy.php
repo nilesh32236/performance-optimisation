@@ -1862,8 +1862,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 							$remove = array_values( array_diff( $remove, $protected ) );
 						}
 						if ( ! empty( $remove ) ) {
-							$exclude_delay_js_ref =& $this->main->script_state_exclude_delay_js();
-							$exclude_delay_js_ref = array_values( array_diff( $this->main->script_state_exclude_delay_js(), $remove ) );
+							$exclude_delay_js_ref          =& $this->main->script_state_exclude_delay_js();
+							$exclude_delay_js_ref          = array_values( array_diff( $this->main->script_state_exclude_delay_js(), $remove ) );
 							$resolved_delay_exclusions_ref =& $this->main->script_state_resolved_delay_exclusions();
 							$resolved_delay_exclusions_ref = null;
 							// Re-applied after the filter in get_delay_exclusions()
@@ -1890,8 +1890,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 							// and record the explicit per-page choice so the
 							// auto third-party idle upgrade (#1314) does not
 							// silently promote it back to idle.
-							$delay_js_idle_list_ref =& $this->main->script_state_delay_js_idle_list();
-							$delay_js_idle_list_ref = array_diff( $this->main->script_state_delay_js_idle_list(), array( $handle ) );
+							$delay_js_idle_list_ref     =& $this->main->script_state_delay_js_idle_list();
+							$delay_js_idle_list_ref     = array_diff( $this->main->script_state_delay_js_idle_list(), array( $handle ) );
 							$delay_js_viewport_list_ref =& $this->main->script_state_delay_js_viewport_list();
 							$delay_js_viewport_list_ref = array_diff( $this->main->script_state_delay_js_viewport_list(), array( $handle ) );
 							if ( ! in_array( $handle, $this->main->script_state_delay_js_per_page_interaction(), true ) ) {

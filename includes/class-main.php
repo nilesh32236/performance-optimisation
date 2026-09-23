@@ -4457,7 +4457,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function is_defer_eligible_for_handle( object $wp_scripts, string $handle, array $intended = array(), array &$checked = array() ): bool {
-			return $this->script_strategy()->is_defer_eligible_for_handle($wp_scripts, $handle, $intended, $checked);
+			return $this->script_strategy()->is_defer_eligible_for_handle( $wp_scripts, $handle, $intended, $checked );
 		}
 
 		/**
@@ -4509,7 +4509,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function get_filtered_deferred_fetchpriority( string $handle ): string {
-			return $this->script_strategy()->get_filtered_deferred_fetchpriority($handle);
+			return $this->script_strategy()->get_filtered_deferred_fetchpriority( $handle );
 		}
 
 		/**
@@ -4528,7 +4528,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function should_move_deferred_to_footer( string $handle ): bool {
-			return $this->script_strategy()->should_move_deferred_to_footer($handle);
+			return $this->script_strategy()->should_move_deferred_to_footer( $handle );
 		}
 
 		/**
@@ -4581,7 +4581,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function is_executable_script_type( string $tag ): bool {
-			return $this->script_strategy()->is_executable_script_type($tag);
+			return $this->script_strategy()->is_executable_script_type( $tag );
 		}
 
 		/**
@@ -4596,7 +4596,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function add_defer_attribute( $tag, $handle ): string {
-			return $this->script_strategy()->add_defer_attribute($tag, $handle);
+			return $this->script_strategy()->add_defer_attribute( $tag, $handle );
 		}
 
 		/**
@@ -4624,7 +4624,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function add_defer_attribute_legacy( $tag, $handle ): string {
-			return $this->script_strategy()->add_defer_attribute_legacy($tag, $handle);
+			return $this->script_strategy()->add_defer_attribute_legacy( $tag, $handle );
 		}
 
 		/**
@@ -4646,7 +4646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function matches_delay_pattern( string $handle, string $pattern ): bool {
-			return $this->script_strategy()->matches_delay_pattern($handle, $pattern);
+			return $this->script_strategy()->matches_delay_pattern( $handle, $pattern );
 		}
 
 		/**
@@ -4659,7 +4659,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function get_delay_patterns_regex( array $patterns ): string {
-			return Script_Strategy::get_delay_patterns_regex($patterns);
+			return Script_Strategy::get_delay_patterns_regex( $patterns );
 		}
 
 		/**
@@ -4676,7 +4676,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function matches_any_delay_pattern( string $handle, array $patterns ): bool {
-			return $this->script_strategy()->matches_any_delay_pattern($handle, $patterns);
+			return $this->script_strategy()->matches_any_delay_pattern( $handle, $patterns );
 		}
 
 		/**
@@ -4696,7 +4696,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function is_delay_excluded_handle( string $handle ): bool {
-			return $this->script_strategy()->is_delay_excluded_handle($handle);
+			return $this->script_strategy()->is_delay_excluded_handle( $handle );
 		}
 
 		/**
@@ -4813,7 +4813,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function matches_woo_page_path( string $local_path ): bool {
-			return Script_Strategy::matches_woo_page_path($local_path);
+			return Script_Strategy::matches_woo_page_path( $local_path );
 		}
 
 		/**
@@ -4837,7 +4837,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function get_delay_strategy_for_handle( string $handle, string $tag = '', ?bool $is_auto_matched = null ): string {
-			return $this->script_strategy()->get_delay_strategy_for_handle($handle, $tag, $is_auto_matched);
+			return $this->script_strategy()->get_delay_strategy_for_handle( $handle, $tag, $is_auto_matched );
 		}
 
 		/**
@@ -4851,7 +4851,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function get_delay_priority_for_handle( string $handle ): string {
-			return $this->script_strategy()->get_delay_priority_for_handle($handle);
+			return $this->script_strategy()->get_delay_priority_for_handle( $handle );
 		}
 
 		/**
@@ -4973,7 +4973,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_preset_level_settings( string $level ): array {
-			return Script_Strategy::get_delay_js_preset_level_settings($level);
+			return Script_Strategy::get_delay_js_preset_level_settings( $level );
 		}
 
 		/**
@@ -4995,7 +4995,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_preset_level_exclusions( string $level ): array {
-			return Script_Strategy::get_delay_js_preset_level_exclusions($level);
+			return Script_Strategy::get_delay_js_preset_level_exclusions( $level );
 		}
 
 		/**
@@ -5015,7 +5015,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function filter_compat_preset_list( string $filter, array $preset ): array {
-			return Script_Strategy::filter_compat_preset_list($filter, $preset);
+			return Script_Strategy::filter_compat_preset_list( $filter, $preset );
 		}
 
 		/**
@@ -5121,7 +5121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_compat_preset_exclusions( string $slug ): array {
-			return Script_Strategy::get_delay_js_compat_preset_exclusions($slug);
+			return Script_Strategy::get_delay_js_compat_preset_exclusions( $slug );
 		}
 
 		/**
@@ -6243,7 +6243,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_third_party_allowlist_for_slice( array $file_opt ): array {
-			return Script_Strategy::get_delay_js_third_party_allowlist_for_slice($file_opt);
+			return Script_Strategy::get_delay_js_third_party_allowlist_for_slice( $file_opt );
 		}
 
 		/**
@@ -6284,7 +6284,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function is_delay_third_party_candidate( string $tag, string $handle ): bool {
-			return $this->script_strategy()->is_delay_third_party_candidate($tag, $handle);
+			return $this->script_strategy()->is_delay_third_party_candidate( $tag, $handle );
 		}
 
 		/**
@@ -6309,7 +6309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function is_same_site_script_host( string $a, string $b ): bool {
-			return Script_Strategy::is_same_site_script_host($a, $b);
+			return Script_Strategy::is_same_site_script_host( $a, $b );
 		}
 
 		/**
@@ -6349,7 +6349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_third_party_auto_label( string $src_or_handle ): string {
-			return Script_Strategy::get_delay_js_third_party_auto_label($src_or_handle);
+			return Script_Strategy::get_delay_js_third_party_auto_label( $src_or_handle );
 		}
 
 		/**
@@ -6409,7 +6409,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function matches_third_party_auto_pattern( string $handle, string $tag ): bool {
-			return Script_Strategy::matches_third_party_auto_pattern($handle, $tag);
+			return Script_Strategy::matches_third_party_auto_pattern( $handle, $tag );
 		}
 
 		/**
@@ -6430,7 +6430,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function is_delay_third_party_auto_candidate( string $tag, string $handle ): bool {
-			return $this->script_strategy()->is_delay_third_party_auto_candidate($tag, $handle);
+			return $this->script_strategy()->is_delay_third_party_auto_candidate( $tag, $handle );
 		}
 
 		/**
@@ -6450,7 +6450,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function inject_delay_script_attr( string $tag, string $insert ): string {
-			return Script_Strategy::inject_delay_script_attr($tag, $insert);
+			return Script_Strategy::inject_delay_script_attr( $tag, $insert );
 		}
 
 		/**
@@ -6488,7 +6488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function get_delay_js_protected_exclusions( array $file_opt ): array {
-			return Script_Strategy::get_delay_js_protected_exclusions($file_opt);
+			return Script_Strategy::get_delay_js_protected_exclusions( $file_opt );
 		}
 
 		/**
@@ -6544,7 +6544,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function add_fetchpriority_to_deferred( $tag, $handle ): string {
-			return $this->script_strategy()->add_fetchpriority_to_deferred($tag, $handle);
+			return $this->script_strategy()->add_fetchpriority_to_deferred( $tag, $handle );
 		}
 
 		/**
