@@ -20,6 +20,7 @@ baseline:
   Critical_CSS_methods_max: 137
   largest_php_class_lines_max: 14639
   largest_react_component_lines_max: 6228
+  Dashboard_lines_max: 2240
   inventory: docs/architecture/class-inventory.json
 automation:
   trigger: 'label autofix-trigger on the issue, or /fix comment (fires fix-issue job in wppo-ai-review.yml)'
@@ -144,6 +145,9 @@ items:
     status: autofix-running
     github_issue: 1512
     github_pr: 1513
+    merge_commit: 21ad238d
+    notes:
+      - 'Merged 2026-09-23. Dashboard 2296→2240 (-56): LoggedInCacheCard extracted presentational-only (handlers/fetch stay). 4 card tests. Only nit: pre-selected role assertion gap (test-only, non-blocking).'
     source: AUDIT/FINAL-REVIEW/architecture.md R-09
     notes:
       - 'One card per PR; keep wppoSettings/apiCall/useNotice patterns.'
