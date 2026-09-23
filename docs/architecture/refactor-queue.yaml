@@ -279,7 +279,7 @@ phase2_items:
     status: analysis-approved
     github_issue: 1530
     priority: high
-    responsibility: 'Decide final directory tree from ARCH-001 evidence (Core/Cache/Settings/Assets/Images/CSS/Database/REST/Admin/CLI/Scheduler/Integrations/Compatibility/Support or evidence-better variant).'
+    responsibility: 'Decide final directory tree from ARCH-001 evidence. Decided: 14 directories (Core/Cache/Settings/Scheduler/Support/Assets/Images/CSS/Database/Insight/Edge/Integrations/Admin/Compatibility) + Util at root until ARCH-014 + minify/ as-is; see target_tree.'
     dependencies: [ARCH-001]
     risk: low
     expected_change: 'docs/architecture/INCLUDE-HIERARCHY.md canonical tree + per-class target mapping; no code.'
