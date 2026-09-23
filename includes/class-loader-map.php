@@ -167,11 +167,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		/**
 		 * Absolute path for a relative file under `includes/`.
 		 *
+		 * Only allowlisted bare filenames are accepted (no directory
+		 * separators); anything else returns '' so future callers cannot
+		 * traverse outside `includes/` via untrusted input.
+		 *
 		 * @since NEXT
 		 * @param string $relative_file Relative filename (e.g. `class-cache.php`).
-		 * @return string Absolute path, or '' when `WPPO_PLUGIN_PATH` is undefined.
+		 * @return string Absolute path, or '' when `WPPO_PLUGIN_PATH` is undefined or input is invalid.
 		 */
 		public static function file_path( string $relative_file ): string {
+			if ( '' === $relative_file || basename( $relative_file ) !== $relative_file ) {
+				return '';
+			}
 			$base = self::base_dir();
 			if ( '' === $base ) {
 				return '';
@@ -191,14 +198,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		 * @return string|null Absolute file path, or null when unmapped/undefined base.
 		 */
 		public static function path_for( string $class_name ): ?string {
-			$prefix = 'PerformanceOptimise\\Inc\\';
-			$short  = $class_name;
+			$class_name = ltrim( $class_name, '\\' );
+			$prefix     = 'PerformanceOptimise\\Inc\\';
+			$short      = $class_name;
 			if ( 0 === strpos( $class_name, $prefix ) ) {
 				$short = substr( $class_name, strlen( $prefix ) );
 			} elseif ( false !== strpos( $class_name, '\\' ) ) {
 				return null;
 			}
-			$map = self::fallback_map();
+			static $map = null;
+			if ( null === $map ) {
+				$map = self::fallback_map();
+			}
 			if ( ! isset( $map[ $short ] ) ) {
 				return null;
 			}
