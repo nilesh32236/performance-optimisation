@@ -439,10 +439,13 @@ phase2_items:
     priority: low
     source_files:
       - includes/class-cron.php
+      - includes/class-scheduler.php
     responsibility: 'Move remaining Cron scheduling payloads onto Scheduler boundary primitives; Cron keeps hook registration only.'
     dependencies: [ARCH-003]
     risk: low
     expected_change: 'All enqueue paths via Scheduler; hook names unchanged.'
+    notes:
+      - '2026-09-23: implemented in working tree — Scheduler gains 3 @since NEXT WP-Cron primitives (next_scheduled/schedule_recurring_event/schedule_single_event, fail-open); Cron matrix + preload/page/sitemap single-events delegate; Pagespeed queue_scan direct call kept with intentional-duplication comment; snapshot helpers untouched; new SchedulerCronPrimitivesTest; inventory regenerated (Scheduler 13 to 16 methods).'
   - id: ARCH-013
     title: 'Physical directory moves per canonical hierarchy'
     status: queued

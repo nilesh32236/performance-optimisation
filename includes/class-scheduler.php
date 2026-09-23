@@ -16,7 +16,9 @@
  * caller migration, no perf changes.
  *
  * Minimal WordPress APIs only: `as_enqueue_async_action()`,
- * `as_schedule_single_action()`, `as_has_scheduled_action()` (all probed
+ * `as_schedule_single_action()`, `as_has_scheduled_action()`,
+ * `wp_next_scheduled()`, `wp_schedule_event()`,
+ * `wp_schedule_single_event()` (all probed
  * via `function_exists()`, never required), `apply_filters()`,
  * `wp_generate_uuid4()`, `wp_rand()`, `wp_using_ext_object_cache()`,
  * `wp_cache_add()` / `wp_cache_get()` / `wp_cache_delete()`,
@@ -340,6 +342,90 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return 0;
+			}
+		}
+
+		/**
+		 * Probe when a WP-Cron event is next scheduled.
+		 *
+		 * Thin fail-open probe over `wp_next_scheduled()`: returns false when
+		 * the WP-Cron API is unavailable or the probe throws, so callers can
+		 * share one choke point instead of hand-rolling `function_exists()`
+		 * guards (ARCH-012). Read-only: never schedules.
+		 *
+		 * @since NEXT
+		 * @param string $hook Cron hook name.
+		 * @param array  $args Optional event args.
+		 * @return int|false Timestamp of the next run, or false when unscheduled/unavailable.
+		 */
+		public static function next_scheduled( string $hook, array $args = array() ) {
+			try {
+				if ( ! function_exists( 'wp_next_scheduled' ) ) {
+					return false;
+				}
+				return wp_next_scheduled( $hook, $args );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Schedule a recurring WP-Cron event once (idempotent).
+		 *
+		 * Next-scheduled guard + schedule in one choke point: when the hook
+		 * is already scheduled the call is a no-op returning true; otherwise
+		 * `wp_schedule_event()` runs. Fail-open false when the WP-Cron API
+		 * is missing or throws. Hook name, timestamp, and recurrence pass
+		 * through unchanged.
+		 *
+		 * @since NEXT
+		 * @param string $hook       Cron hook name.
+		 * @param int    $timestamp  First run timestamp (e.g. `time()`).
+		 * @param string $recurrence Schedule recurrence (e.g. `daily`).
+		 * @return bool True when already scheduled or newly scheduled, false when unavailable/failed.
+		 */
+		public static function schedule_recurring_event( string $hook, int $timestamp, string $recurrence ): bool {
+			try {
+				if ( ! function_exists( 'wp_next_scheduled' ) || ! function_exists( 'wp_schedule_event' ) ) {
+					return false;
+				}
+				if ( self::next_scheduled( $hook ) ) {
+					return true;
+				}
+				return (bool) wp_schedule_event( $timestamp, $recurrence, $hook );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Schedule a one-off WP-Cron event.
+		 *
+		 * Availability guard + schedule in one choke point. Unlike
+		 * {@see schedule_recurring_event()}, no next-scheduled dedup is
+		 * applied here: single events carry per-job args (page IDs, URLs,
+		 * batches) where a hook-level guard would collapse distinct jobs
+		 * into one. Callers that need hook-level dedup probe
+		 * {@see next_scheduled()} first (e.g. `wppo_page_cron_batch`).
+		 * Fail-open false when the WP-Cron API is missing or throws.
+		 *
+		 * @since NEXT
+		 * @param int    $timestamp When the event will run.
+		 * @param string $hook      Cron hook name.
+		 * @param array  $args      Optional event args.
+		 * @return bool True on schedule, false when unavailable/failed.
+		 */
+		public static function schedule_single_event( int $timestamp, string $hook, array $args = array() ): bool {
+			try {
+				if ( ! function_exists( 'wp_schedule_single_event' ) ) {
+					return false;
+				}
+				return (bool) wp_schedule_single_event( $timestamp, $hook, $args );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
 		}
 

@@ -287,9 +287,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		public static function resume_preload_queue(): int {
 			$rescheduled = 0;
 			try {
-				if ( ! function_exists( 'wp_schedule_single_event' ) ) {
-					return 0;
-				}
 				$queue   = self::get_preload_queue();
 				$pending = array_values( array_unique( array_merge( $queue['queued'], $queue['failed'] ) ) );
 				if ( empty( $pending ) ) {
@@ -301,7 +298,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						$delay = function_exists( 'wp_rand' ) ? wp_rand( 0, 300 ) : 60;
 						// Stagger chunks so batch events do not stampede the origin.
 						$at = time() + (int) $delay + ( (int) $index * 60 );
-						if ( wp_schedule_single_event( $at, 'wppo_preload_url_batch', array( $chunk ) ) ) {
+						if ( Scheduler::schedule_single_event( $at, 'wppo_preload_url_batch', array( $chunk ) ) ) {
 							$rescheduled += count( $chunk );
 						}
 					} catch ( \Throwable $e ) {
@@ -531,9 +528,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			// The preload toggle is the source of truth: when it is off, clear any
 			// leftover per-page preload events instead of warming the cache anyway.
 			if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) ) {
-				if ( ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
-					wp_schedule_event( time(), 'every_5_hours', 'wppo_page_cron_hook' );
-				}
+				Scheduler::schedule_recurring_event( 'wppo_page_cron_hook', time(), 'every_5_hours' );
 			} else {
 				wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 				wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
@@ -541,44 +536,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				wp_clear_scheduled_hook( 'wppo_generate_static_url' );
 			}
 
-			if ( ! wp_next_scheduled( 'wppo_img_conversion' ) ) {
-				wp_schedule_event( time(), 'hourly', 'wppo_img_conversion' );
-			}
+			Scheduler::schedule_recurring_event( 'wppo_img_conversion', time(), 'hourly' );
 
-			if ( ! wp_next_scheduled( 'wppo_database_cleanup_cron' ) ) {
-				wp_schedule_event( time(), 'daily', 'wppo_database_cleanup_cron' );
-			}
+			Scheduler::schedule_recurring_event( 'wppo_database_cleanup_cron', time(), 'daily' );
 
-			if ( ! wp_next_scheduled( 'wppo_web_vitals_rescan' ) ) {
-				wp_schedule_event( time(), 'daily', 'wppo_web_vitals_rescan' );
-			}
+			Scheduler::schedule_recurring_event( 'wppo_web_vitals_rescan', time(), 'daily' );
 
 			if ( ! empty( $options['llms_txt']['enabled'] ) ) {
-				if ( ! wp_next_scheduled( 'wppo_llms_txt_daily' ) ) {
-					wp_schedule_event( time(), 'daily', 'wppo_llms_txt_daily' );
-				}
+				Scheduler::schedule_recurring_event( 'wppo_llms_txt_daily', time(), 'daily' );
 			} else {
 				wp_clear_scheduled_hook( 'wppo_llms_txt_daily' );
 			}
 
 			if ( ! empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
-				if ( ! wp_next_scheduled( 'wppo_used_css_cron' ) ) {
-					wp_schedule_event( time(), 'every_5_hours', 'wppo_used_css_cron' );
-				}
+				Scheduler::schedule_recurring_event( 'wppo_used_css_cron', time(), 'every_5_hours' );
 			}
 
-			if ( ! wp_next_scheduled( 'wppo_ccss_regeneration' ) ) {
-				wp_schedule_event( time(), 'daily', 'wppo_ccss_regeneration' );
-			}
+			Scheduler::schedule_recurring_event( 'wppo_ccss_regeneration', time(), 'daily' );
 
 			// Object-cache recovery probe: scheduled only while the circuit
 			// is open (drop-in parked after repeated Redis failures) and
 			// cleared as soon as it closes, so healthy sites carry no extra
 			// cron event.
 			if ( $this->is_object_cache_circuit_open() ) {
-				if ( ! wp_next_scheduled( 'wppo_object_cache_probe' ) ) {
-					wp_schedule_event( time(), 'wppo_object_cache_probe', 'wppo_object_cache_probe' );
-				}
+				Scheduler::schedule_recurring_event( 'wppo_object_cache_probe', time(), 'wppo_object_cache_probe' );
 			} else {
 				wp_clear_scheduled_hook( 'wppo_object_cache_probe' );
 			}
@@ -724,7 +705,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					// as_has_scheduled_action() + as_get_scheduled_actions()
 					// (returning the existing job ID), so no outer pre-check
 					// here — it would only double the Action Scheduler store
-					// queries per URL x strategy. A non-zero return means
+					// queries per URL x strategy. Intentionally NOT routed via
+					// Scheduler::enqueue_unique_async_action() (ARCH-012): the
+					// call site relies on non-unique enqueue + internal dedup.
+					// A non-zero return means
 					// newly queued or already pending; 0 means enqueue failed
 					// or deduped without a retrievable job ID.
 					$job_id = Pagespeed::queue_scan( $scan_url, $scan_strategy );
@@ -909,7 +893,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					if ( $this->is_hook_arg_scheduled( 'wppo_generate_static_page', array( $page_id ), $scheduled_pages ) ) {
 						continue;
 					}
-					wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
+					Scheduler::schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
 					if ( is_array( $scheduled_pages ) ) {
 						$scheduled_pages[ wp_json_encode( array( $page_id ) ) ] = true;
 					}
@@ -922,8 +906,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 
 				// Schedule next batch if needed.
-				if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
-					wp_schedule_single_event( time() + 60, 'wppo_page_cron_batch' );
+				if ( ! Scheduler::next_scheduled( 'wppo_page_cron_batch' ) ) {
+					Scheduler::schedule_single_event( time() + 60, 'wppo_page_cron_batch' );
 				}
 			} finally {
 				delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
@@ -985,7 +969,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				if ( $this->is_hook_arg_scheduled( 'wppo_generate_static_url', array( $url ), $scheduled_urls ) ) {
 					continue;
 				}
-				wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $url ) );
+				Scheduler::schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $url ) );
 				if ( is_array( $scheduled_urls ) ) {
 					$scheduled_urls[ wp_json_encode( array( $url ) ) ] = true;
 				}
