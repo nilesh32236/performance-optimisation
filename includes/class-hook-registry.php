@@ -604,6 +604,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 			// bounded targeted requeue (issue #1220); fail-open inside.
 			add_action( 'switch_theme', array( Main::class, 'on_theme_switch_used_css' ), 20, 3 );
 			add_action( 'update_option_wppo_settings', array( Main::class, 'on_settings_update' ), 10, 2 );
+			// First-time seeds use add_option() (no update hook fires): drop the
+			// Main options memo too so the seed is visible this request.
+			add_action( 'add_option_wppo_settings', array( Main::class, 'on_settings_add' ), 10, 2 );
 			// The canonical host is baked into advanced-cache.php at create()
 			// time; re-bake it when the home/site URL changes (domain migration)
 			// so the drop-in does not silently run uncached on a stale host.

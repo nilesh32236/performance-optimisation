@@ -3,12 +3,19 @@
  * Tests for Main::get_options() lazy resolution (REF-007).
  *
  * Characterization suite for the constructor-I/O refactor: resolution
- * (stored `wppo_settings` over static DEFAULTS plus the historical
+ * (stored `wppo_settings` over the canonical
+ * `Util::get_default_settings()` defaults plus the historical
  * in-memory backfills) moved from `Main::__construct()` into the lazy
  * `get_options()` accessor verbatim. Asserts snapshot parity with
  * `Util::get_default_settings()`, backfill parity for legacy stored
- * settings, lazy-not-eager semantics (no `get_option()` before the first
+ * settings, accessor-lazy semantics (no `get_option()` before the first
  * read, memoized afterwards), and `switch_to_blog()` re-resolution.
+ *
+ * Scope note: the constructor still resolves exactly once eagerly for its
+ * collaborators (option-gated hook setup), so this suite characterizes the
+ * accessor contract only — it makes no boot-I/O perf claim. The
+ * accessor-lazy test below bypasses the constructor deliberately via
+ * `newInstanceWithoutConstructor()`.
  *
  * @package PerformanceOptimise\Tests
  */
@@ -130,9 +137,14 @@ class MainOptionsLazyTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * No I/O before the first read; the snapshot memoizes afterwards.
+	 * Accessor-lazy, not constructor-lazy: no I/O before the first read; the snapshot memoizes afterwards.
+	 *
+	 * Uses `newInstanceWithoutConstructor()` deliberately: the real
+	 * constructor still resolves exactly once eagerly for its collaborators
+	 * (see `Main::__construct()`), so this proves the accessor contract
+	 * only — no boot perf gain is implied.
 	 */
-	public function test_lazy_not_eager_and_memoized(): void {
+	public function test_accessor_lazy_not_eager_and_memoized(): void {
 		$calls = 0;
 		$this->stub_settings_by_blog( array( 1 => array() ), $calls );
 
@@ -177,6 +189,56 @@ class MainOptionsLazyTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		$back = $main->get_options();
 		$this->assertSame( false, $back['cache_settings']['enableCache'], 'Switching back must restore the original site snapshot.' );
+	}
+
+	/**
+	 * Main memo dropped by refresh_options() so post-save reads re-resolve.
+	 */
+	public function test_refresh_options_drops_memo_and_reresolves(): void {
+		$calls = 0;
+		$this->stub_settings_by_blog( array( 1 => array( 'cache_settings' => array( 'enableCache' => false ) ) ), $calls );
+
+		$main  = $this->make_main();
+		$first = $main->get_options();
+		$this->assertSame( false, $first['cache_settings']['enableCache'] );
+
+		// Simulate a same-request save: the update hook refreshes the
+		// Settings_Store memo in production; mirror that here, then drop
+		// the Main memo and re-read.
+		Util::set_settings_cache( array( 'cache_settings' => array( 'enableCache' => true ) ) );
+		$main->refresh_options();
+
+		$second = $main->get_options();
+		$this->assertSame( true, $second['cache_settings']['enableCache'], 'Post-save reads must observe the write.' );
+		$this->assertSame( true, $second['cache_settings']['wooSafeMode'], 'Backfills must apply on the re-resolved snapshot too.' );
+	}
+
+	/**
+	 * A settings write invalidates the singleton memo (same-request coherence).
+	 *
+	 * Old and new values are identical so no cache-clear/htaccess side
+	 * effects fire — only the memo invalidation at the top of
+	 * `Main::on_settings_update()` is exercised.
+	 */
+	public function test_on_settings_update_invalidates_singleton_memo(): void {
+		$calls = 0;
+		$this->stub_settings_by_blog( array( 1 => array() ), $calls );
+
+		$main = $this->make_main();
+		$main->get_options();
+
+		$reflection    = new \ReflectionClass( Main::class );
+		$instance_prop = $reflection->getProperty( 'instance' );
+		$instance_prop->setValue( null, $main );
+		try {
+			$same = array( 'cache_settings' => array( 'enableCache' => true ) );
+			Main::on_settings_update( $same, $same );
+
+			$options_prop = $reflection->getProperty( 'options' );
+			$this->assertNull( $options_prop->getValue( $main ), 'Settings write must drop the Main options memo.' );
+		} finally {
+			Main::reset_instance();
+		}
 	}
 
 	/**
