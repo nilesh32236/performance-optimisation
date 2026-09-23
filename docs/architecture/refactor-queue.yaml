@@ -341,8 +341,11 @@ phase2_items:
       - '2026-09-23: implemented in working tree — new PerformanceOptimise\Inc\Script_Strategy (includes/class-script-strategy.php) owns all 55 defer/delay methods + 11 static memo props (logic preserved; instance state stays on Main as single source of truth via @internal script_state_*() by-ref bridges + script_should_optimise_for_logged_in(), outside-cluster statics called as Main::); Main keeps 55 proxies (public/static same-signature delegates, private helpers as private proxies so existing reflection-based tests stay green) + lazy script_strategy() getter so Hook_Registry registrations stay byte-identical; delay_context_request_signature() blog-keyed as documented multisite correction (no switch_blog hook needed — signature mismatch forces recompute); Loader_Map fallback + inventory known-classes registered, class-inventory.json + DEPENDENCY-GRAPH.json regenerated; new ScriptStrategyParityTest regression suite.'
   - id: ARCH-006
     title: 'Cache CSS-combine cluster extraction'
-    status: issue-created
+    status: merged
     github_issue: 1538
+    pull_request: 1539
+    merge_commit: 2ef5b22d
+    post_merge_result: 'wp wppo verify 6/7 identical. Live combined CSS served (index.css 42KB, wppo-combine-css handle). Manual takeover of parity tests: Mockery doubles incompatible with method_exists atomic-write guard (pre-existing) -> anonymous disk double; trailingslashit re-mock; separate-process isolation (Brain Monkey defs persist); realistic fixtures. Full suite 2576 green. Accepted: ~22 combine_* bridges + private->public widening (precedent, revisit ARCH-014/019).'
     priority: medium
     source_files:
       - includes/class-cache.php
