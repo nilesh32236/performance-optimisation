@@ -300,6 +300,11 @@ trait WPPO_Test_Bootstrap {
 			// leak across tests.
 			\PerformanceOptimise\Inc\RUM::clear_stored_lcp_memo();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) && method_exists( 'PerformanceOptimise\Inc\Wp_Version', 'reset_memo' ) ) {
+			// Version-gate bloginfo memo is per process: reset so
+			// $wp_version/get_bloginfo fixtures never leak across tests.
+			\PerformanceOptimise\Inc\Wp_Version::reset_memo();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

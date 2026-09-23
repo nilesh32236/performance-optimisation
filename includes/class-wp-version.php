@@ -18,8 +18,12 @@
  *   unknown-version branch (the test suite pins `get_bloginfo()` to 6.8
  *   while unsetting the global to exercise the newest default).
  *
- * Pure static, no state. Depends only on WP core (`$wp_version`,
+ * Pure static; the only state is the memoized `get_bloginfo()` fallback
+ * (reset via `reset_memo()` in tests). Depends only on WP core (`$wp_version`,
  * `get_bloginfo()`, `version_compare()`); nothing else in the plugin.
+ *
+ * Chooser rule: native-API probes use `is_at_least()`; inline-budget and
+ * block-asset gates use `is_global_at_least()` — do not swap the defaults.
  *
  * @package PerformanceOptimise\Inc
  * @since   NEXT
@@ -46,6 +50,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 	final class Wp_Version {
 
 		/**
+		 * Memoized `get_bloginfo( 'version' )` resolution for the no-global path.
+		 *
+		 * The `$GLOBALS['wp_version']` read itself is never memoized (it is a
+		 * plain global read, and fixtures may override it mid-request in
+		 * tests), so only the `get_bloginfo()` fallback — the sole WP call on
+		 * this path — is cached. Production resolves it once per request no
+		 * matter how many gates run (defer + fetchpriority + template buffer
+		 * + script strategy).
+		 *
+		 * @since NEXT
+		 * @var string|null
+		 */
+		private static ?string $memo = null;
+
+		/**
+		 * Whether $memo holds a resolved value (it may legitimately be '').
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $memo_ready = false;
+
+		/**
+		 * Reset the memoized version resolution (tests only).
+		 *
+		 * The bootstrap resets this before every test and the gate parity
+		 * tests reset it on each fixture install, so mid-suite
+		 * `$GLOBALS['wp_version']` / `get_bloginfo()` fixture changes stay
+		 * fresh. Production never calls this (one version per request).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_memo(): void {
+			self::$memo       = null;
+			self::$memo_ready = false;
+		}
+
+		/**
 		 * Current WordPress version string.
 		 *
 		 * A non-empty `$GLOBALS['wp_version']` wins (the value core sets in
@@ -54,22 +97,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 		 * `get_bloginfo()` yields `''` instead of a fatal so version-gated
 		 * callers degrade to their documented `$fallback`.
 		 *
+		 * Canonicalization note (REF-010): an explicitly empty-string
+		 * `$wp_version` global falls through to `get_bloginfo()`, matching
+		 * the majority pre-REF-010 spelling. Only the two pre-REF-010
+		 * speculation 6.8 reads used a bare `isset()` cast and compared `''`
+		 * as-is (failing their gate); core never produces an empty
+		 * `$wp_version` (wp-includes/version.php always sets a non-empty
+		 * string), so the central gate adopts the majority spelling and the
+		 * parity test pins the documented outcome.
+		 *
 		 * @since NEXT
 		 * @return string Version string, or '' when unknown.
 		 */
 		public static function current(): string {
 			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+				// Fresh global read every call; drop any stale bloginfo memo
+				// so global/unset alternations never reuse an older fallback.
+				self::$memo       = null;
+				self::$memo_ready = false;
 				return $GLOBALS['wp_version'];
 			}
+			if ( self::$memo_ready ) {
+				return self::$memo ?? '';
+			}
 			if ( ! function_exists( 'get_bloginfo' ) ) {
+				self::$memo       = '';
+				self::$memo_ready = true;
 				return '';
 			}
 			try {
-				return (string) get_bloginfo( 'version' );
+				$resolved = (string) get_bloginfo( 'version' );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return '';
+				$resolved = '';
 			}
+			self::$memo       = $resolved;
+			self::$memo_ready = true;
+			return $resolved;
 		}
 
 		/**

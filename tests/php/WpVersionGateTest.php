@@ -63,6 +63,7 @@ class WpVersionGateTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		$this->had_wp_version   = array_key_exists( 'wp_version', $GLOBALS );
 		$this->saved_wp_version = $GLOBALS['wp_version'] ?? null;
+		Wp_Version::reset_memo();
 	}
 
 	/**
@@ -78,6 +79,7 @@ class WpVersionGateTest extends \PHPUnit\Framework\TestCase {
 			unset( $GLOBALS['wp_version'] );
 		}
 		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
+		Wp_Version::reset_memo();
 		parent::tearDown();
 	}
 
@@ -97,6 +99,7 @@ class WpVersionGateTest extends \PHPUnit\Framework\TestCase {
 		}
 		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
 		Functions\when( 'get_bloginfo' )->justReturn( $bloginfo );
+		Wp_Version::reset_memo();
 	}
 
 	/**
@@ -222,6 +225,62 @@ class WpVersionGateTest extends \PHPUnit\Framework\TestCase {
 		$this->set_version_state( '', '6.8' );
 
 		$this->assertSame( '6.8', Wp_Version::current() );
+	}
+
+	/**
+	 * The bloginfo fallback is memoized until reset_memo().
+	 *
+	 * The `$GLOBALS` read itself stays fresh every call; only the
+	 * `get_bloginfo()` fallback (the sole WP call on the no-global path) is
+	 * cached so requests hitting several gates resolve it once.
+	 *
+	 * @return void
+	 */
+	public function test_current_memoizes_bloginfo_fallback(): void {
+		$this->set_version_state( null, '6.8' );
+		$this->assertSame( '6.8', Wp_Version::current() );
+
+		// Re-stub bloginfo without resetting: the memoized fallback wins.
+		Functions\when( 'get_bloginfo' )->justReturn( '6.2' );
+		$this->assertSame( '6.8', Wp_Version::current() );
+
+		Wp_Version::reset_memo();
+		$this->assertSame( '6.2', Wp_Version::current() );
+	}
+
+	/**
+	 * A non-string global is ignored by the canonical read but cast by the global-only read.
+	 *
+	 * Pins the historic split: the canonical family guarded with
+	 * `is_string()` (so an int/float/bool global falls through to
+	 * `get_bloginfo()`), while the global-only family compared the
+	 * `(string)` cast as-is via a bare `isset()` guard. Core always sets a
+	 * non-empty string, so these inputs only arise from faulty test
+	 * fixtures — the helpers preserve each family's verbatim outcome.
+	 *
+	 * @return void
+	 */
+	public function test_non_string_global_parity(): void {
+		foreach ( array( 0, 68, 6.8, true, false ) as $global_value ) {
+			$this->set_version_state( $global_value, '6.8' );
+			if ( is_bool( $global_value ) ) {
+				$label = $global_value ? 'bool(true)' : 'bool(false)';
+			} elseif ( is_int( $global_value ) || is_float( $global_value ) ) {
+				$label = gettype( $global_value ) . '(' . (string) $global_value . ')';
+			} else {
+				$label = gettype( $global_value );
+			}
+
+			// Canonical read: non-string global ignored, bloginfo wins.
+			$this->assertSame( '6.8', Wp_Version::current(), 'current() with global ' . $label );
+			$this->assertTrue( Wp_Version::is_at_least( '6.3-alpha' ), 'is_at_least() with global ' . $label );
+
+			// Global-only read: present global compared as-is via (string) cast.
+			foreach ( array( '6.3-alpha', '6.3', '6.8', '6.9-alpha', '7.0' ) as $floor ) {
+				$expected = (bool) version_compare( (string) $global_value, $floor, '>=' );
+				$this->assertSame( $expected, Wp_Version::is_global_at_least( $floor ), "Floor {$floor} with global " . $label );
+			}
+		}
 	}
 
 	/**

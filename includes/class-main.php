@@ -10658,7 +10658,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// filters even if a backported helper exists. Fail-open: read-only,
 			// never fatal. An unknown version assumes the newest core (the
 			// historic '6.8' fallback, now the Wp_Version default) so managed
-			// installs keep speculating.
+			// installs keep speculating. Canonicalization note (REF-010): an
+			// explicit '' $wp_version global falls through to get_bloginfo()
+			// (majority spelling); the pre-REF-010 bare-isset() cast compared
+			// '' as-is and failed this gate. Core never emits ''.
 			if ( ! Wp_Version::is_at_least( '6.8', true ) ) {
 				return;
 			}
@@ -12349,6 +12352,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 					// Belt-and-braces version guard (same newest-on-unknown
 					// default as the registration site above, via Wp_Version).
+					// Canonicalization note (REF-010): an explicit ''
+					// $wp_version global falls through to get_bloginfo()
+					// (majority spelling); the pre-REF-010 bare-isset() cast
+					// compared '' as-is and failed this gate. Core never
+					// emits ''.
 					if ( ! Wp_Version::is_at_least( '6.8', true ) ) {
 						return $rules;
 					}
