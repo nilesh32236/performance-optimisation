@@ -451,8 +451,11 @@ phase2_items:
       - '2026-09-23: implemented in working tree — Scheduler gains 3 @since NEXT WP-Cron primitives (next_scheduled/schedule_recurring_event/schedule_single_event, fail-open); Cron matrix + preload/page/sitemap single-events delegate; Pagespeed queue_scan direct call kept with intentional-duplication comment; snapshot helpers untouched; new SchedulerCronPrimitivesTest; inventory regenerated (Scheduler 13 to 16 methods).'
   - id: ARCH-013
     title: 'Physical directory moves per canonical hierarchy (pure git mv)'
-    status: done
+    status: merged
     github_issue: 1552
+    pull_request: 1553
+    merge_commit: 695c999f
+    post_merge_result: 'wp wppo verify 6/7 identical. Loader healthy live: front 200, admin 302, 48 REST routes, 7 CLI subcommands, 7 cron hooks. 62 pure renames; manual fixes: 2 stale flat-path test assertions + comment-path nits. Full suite 2647 green.'
     priority: medium
     responsibility: 'Move class files into ARCH-002 directories with loader-map updates only; no method moves bundled.'
     dependencies: [ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007, ARCH-008, ARCH-009, ARCH-010, ARCH-011, ARCH-012]
