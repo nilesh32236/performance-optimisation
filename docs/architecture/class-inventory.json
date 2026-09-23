@@ -2,7 +2,7 @@
     {
         "file": "includes/class-main.php",
         "class": null,
-        "lines": 14171,
+        "lines": 14172,
         "methods": 232,
         "hooks": [
             "update_option_wppo_settings",
@@ -62,7 +62,7 @@
     {
         "file": "includes/class-util.php",
         "class": null,
-        "lines": 5450,
+        "lines": 5451,
         "methods": 159,
         "hooks": [
             "switch_blog"
@@ -279,7 +279,7 @@
     {
         "file": "includes/class-woo-detect.php",
         "class": null,
-        "lines": 1011,
+        "lines": 1012,
         "methods": 11,
         "hooks": [],
         "static_state": false

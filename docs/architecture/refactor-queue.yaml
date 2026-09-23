@@ -16,6 +16,7 @@ baseline:
   Settings_Store_methods: 22
   Filesystem_methods: 40
   Url_methods: 24
+  Woo_Detect_methods: 12
   Cache_methods_max: 135
   Image_Optimisation_methods_max: 165
   Critical_CSS_methods_max: 137
@@ -199,35 +200,6 @@ items:
     status: autofix-running
     github_issue: 1522
     github_pr: 1523
-    source: BOUNDARIES.md Woo_Detect
+    merge_commit: 79455745
     notes:
-      - 'Discovered during campaign: Woo detection cluster never queued. Keepwoo-safe-mode semantics byte-identical; WooSafeModeTest pins behavior.'
-
-  - id: REF-014
-    title: 'Extract Scheduler boundary from Util (Action-Scheduler unique helpers + stampede locks)'
-    type: architecture
-    priority: medium
-    status: queued
-    source: BOUNDARIES.md Scheduler
-    notes:
-      - 'Covers enqueue_unique_async_action/schedule_unique_single_action/probes + acquire/release_stampede_lock (key helpers already in Cache_Key). Lock semantics must stay advisory-identical.'
-
-  - id: REF-015
-    title: 'Extract Http boundary from Util (curl/finfo/xml/gd teardown + last-response headers)'
-    type: architecture
-    priority: low
-    status: queued
-    source: BOUNDARIES.md Http
-    notes:
-      - 'Mechanical move of close_*/destroy_*/free_* helpers + get_last_response_headers. Low risk; keeps PHP 8.5-compat scanner green.'
-
-  - id: REF-011
-    title: 'Move ALLOWED_SETTINGS_KEYS + sanitizer-map ownership into Settings_Store'
-    type: architecture
-    priority: medium
-    status: autofix-running
-    github_issue: 1520
-    github_pr: 1521
-    merge_commit: c09f5b94
-    notes:
-      - 'Merged 2026-09-23. Store 13→22; const-aliased (PHP class-const expressions); 8/8 sanitizers byte-identical; iterations doc-only.'
+      - 'Merged 2026-09-23. Editor/admin path helpers correctly stayed in Util; has_uncacheable_query correctly targets Util. method_exists(self::class) guards now tautological but outcome-identical (documented, follow-up simplification deferred).'
