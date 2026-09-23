@@ -1,0 +1,441 @@
+{
+    "includes/class-abilities.php": [
+        "AI_Adaptive",
+        "Asset_Manager",
+        "Cache",
+        "Critical_CSS",
+        "Database_Cleanup",
+        "Img_Converter",
+        "LiteSpeed_Crawler",
+        "Main",
+        "Object_Cache",
+        "Pagespeed",
+        "RUM",
+        "Rest",
+        "Suggestion_Engine",
+        "System_Info",
+        "Telemetry",
+        "Used_CSS",
+        "Util"
+    ],
+    "includes/class-activate.php": [
+        "Advanced_Cache_Handler",
+        "Cache",
+        "Htaccess_Handler",
+        "Img_Converter",
+        "Log",
+        "Pagespeed",
+        "RUM",
+        "Server_Rules",
+        "Util"
+    ],
+    "includes/class-admin-notices.php": [
+        "Advanced_Cache_Handler",
+        "Builder_Purge_Watcher",
+        "Htaccess_Handler",
+        "Img_Converter",
+        "LiteSpeed_Integration",
+        "Main",
+        "Object_Cache",
+        "Util"
+    ],
+    "includes/class-advanced-cache-handler.php": [
+        "Advanced_Cache_Handler",
+        "Cache",
+        "Log",
+        "System_Info",
+        "Util"
+    ],
+    "includes/class-ai-adaptive.php": [
+        "Cron",
+        "LiteSpeed_ESI",
+        "Main",
+        "Pagespeed",
+        "RUM",
+        "Suggestion_Engine",
+        "Used_CSS",
+        "Util"
+    ],
+    "includes/class-asset-manager.php": [
+        "Main",
+        "Util"
+    ],
+    "includes/class-bfcache.php": [
+        "Util"
+    ],
+    "includes/class-builder-purge-watcher.php": [
+        "Cache",
+        "Critical_CSS",
+        "Log",
+        "Main",
+        "Used_CSS",
+        "Util"
+    ],
+    "includes/class-cache-key.php": [
+        "Util"
+    ],
+    "includes/class-cache.php": [
+        "CDN",
+        "Cache",
+        "Critical_CSS",
+        "Google_Fonts",
+        "Hook_Registry",
+        "LiteSpeed_ESI",
+        "LiteSpeed_Integration",
+        "Log",
+        "Main",
+        "Sandbox_Preview",
+        "Server_Rules",
+        "Used_CSS",
+        "Util",
+        "Wp_Version"
+    ],
+    "includes/class-cdn-purger.php": [
+        "Cache",
+        "Cloudflare_Purger",
+        "LiteSpeed_Integration",
+        "Util"
+    ],
+    "includes/class-cdn.php": [
+        "LiteSpeed_Integration",
+        "Util"
+    ],
+    "includes/class-cloudflare-purger.php": [
+        "Edge_Purger"
+    ],
+    "includes/class-core-tweaks.php": [
+        "Util"
+    ],
+    "includes/class-critical-css.php": [
+        "CDN",
+        "Cache",
+        "Css_Safelist",
+        "Image_Optimisation",
+        "Log",
+        "Main",
+        "RUM",
+        "Used_CSS",
+        "Util"
+    ],
+    "includes/class-cron.php": [
+        "Cache",
+        "Critical_CSS",
+        "Cron",
+        "Database_Cleanup",
+        "Deactivate",
+        "Img_Converter",
+        "LiteSpeed_Crawler",
+        "LiteSpeed_Integration",
+        "Llms",
+        "Log",
+        "Object_Cache",
+        "Pagespeed",
+        "RUM",
+        "Util"
+    ],
+    "includes/class-database-cleanup.php": [
+        "Log",
+        "Main",
+        "Util"
+    ],
+    "includes/class-deactivate.php": [
+        "Activate",
+        "Advanced_Cache_Handler",
+        "Cache",
+        "Cron",
+        "Deactivate",
+        "Htaccess_Handler",
+        "Image_Optimisation",
+        "LiteSpeed_Integration",
+        "Log",
+        "Main",
+        "Object_Cache",
+        "System_Info",
+        "Util"
+    ],
+    "includes/class-edge-cache.php": [
+        "Util"
+    ],
+    "includes/class-edge-purger.php": [
+        "Cache",
+        "Cloudflare_Purger",
+        "Edge_Cache",
+        "Log",
+        "Util"
+    ],
+    "includes/class-filesystem.php": [
+        "Cache",
+        "Log",
+        "Url",
+        "Used_CSS",
+        "Util"
+    ],
+    "includes/class-google-fonts.php": [
+        "Log",
+        "Util"
+    ],
+    "includes/class-header-emitter.php": [
+        "LiteSpeed_ESI"
+    ],
+    "includes/class-hook-registry.php": [
+        "AI_Adaptive",
+        "Bfcache",
+        "Cache",
+        "Cron",
+        "Deactivate",
+        "Image_Optimisation",
+        "LiteSpeed_ESI",
+        "LiteSpeed_Integration",
+        "Main",
+        "Metabox",
+        "Perf_Translations",
+        "Sandbox_Preview"
+    ],
+    "includes/class-htaccess-handler.php": [
+        "Advanced_Cache_Handler",
+        "LiteSpeed_Integration",
+        "Main",
+        "Server_Rules",
+        "Util"
+    ],
+    "includes/class-http.php": [
+        "Util"
+    ],
+    "includes/class-image-optimisation.php": [
+        "CDN",
+        "Img_Converter",
+        "OD_Bridge",
+        "RUM",
+        "Util"
+    ],
+    "includes/class-img-converter.php": [
+        "Log",
+        "Util"
+    ],
+    "includes/class-litespeed-crawler.php": [
+        "Cron",
+        "Log",
+        "Util"
+    ],
+    "includes/class-litespeed-esi.php": [
+        "Header_Emitter",
+        "LiteSpeed_Integration",
+        "Log",
+        "Main",
+        "RUM",
+        "Rest",
+        "Util"
+    ],
+    "includes/class-litespeed-integration.php": [
+        "Cache",
+        "Header_Emitter",
+        "LiteSpeed_Crawler",
+        "LiteSpeed_ESI",
+        "Main",
+        "Server_Rules",
+        "Util"
+    ],
+    "includes/class-llms.php": [
+        "Log",
+        "Util"
+    ],
+    "includes/class-log.php": [
+        "Log",
+        "Util"
+    ],
+    "includes/class-main.php": [
+        "AI_Adaptive",
+        "Activate",
+        "Advanced_Cache_Handler",
+        "Builder_Purge_Watcher",
+        "Cache",
+        "Critical_CSS",
+        "Deactivate",
+        "Google_Fonts",
+        "Hook_Registry",
+        "Htaccess_Handler",
+        "Image_Optimisation",
+        "Img_Converter",
+        "LiteSpeed_Integration",
+        "Log",
+        "Main",
+        "RUM",
+        "Sandbox_Preview",
+        "Server_Rules",
+        "System_Info",
+        "Telemetry",
+        "Used_CSS",
+        "Util",
+        "Wp_Version"
+    ],
+    "includes/class-metabox.php": [
+        "Asset_Manager",
+        "Main",
+        "Util"
+    ],
+    "includes/class-object-cache.php": [
+        "Cron",
+        "Log",
+        "Server_Rules",
+        "System_Info",
+        "Util"
+    ],
+    "includes/class-od-bridge.php": [
+        "Image_Optimisation",
+        "Log",
+        "Main",
+        "Util"
+    ],
+    "includes/class-pagespeed.php": [
+        "Img_Converter",
+        "Log",
+        "RUM",
+        "Telemetry",
+        "Util"
+    ],
+    "includes/class-perf-translations.php": [
+        "Llms",
+        "Util"
+    ],
+    "includes/class-rest.php": [
+        "AI_Adaptive",
+        "Builder_Purge_Watcher",
+        "Cache",
+        "Critical_CSS",
+        "Cron",
+        "Database_Cleanup",
+        "Img_Converter",
+        "LiteSpeed_Integration",
+        "Log",
+        "Main",
+        "OD_Bridge",
+        "Object_Cache",
+        "Pagespeed",
+        "RUM",
+        "Sandbox_Preview",
+        "Server_Rules",
+        "Suggestion_Engine",
+        "System_Info",
+        "Telemetry",
+        "Used_CSS",
+        "Util"
+    ],
+    "includes/class-rum.php": [
+        "Image_Optimisation",
+        "Img_Converter",
+        "LiteSpeed_ESI",
+        "Pagespeed",
+        "Util"
+    ],
+    "includes/class-sandbox-preview.php": [
+        "Telemetry",
+        "Util"
+    ],
+    "includes/class-scheduler.php": [
+        "Util"
+    ],
+    "includes/class-server-rules.php": [
+        "Cache",
+        "Htaccess_Handler",
+        "LiteSpeed_Integration",
+        "Util"
+    ],
+    "includes/class-settings-store.php": [
+        "Cache",
+        "Main",
+        "Util"
+    ],
+    "includes/class-suggestion-engine.php": [
+        "AI_Adaptive",
+        "Pagespeed",
+        "RUM",
+        "Telemetry"
+    ],
+    "includes/class-system-info.php": [
+        "Advanced_Cache_Handler",
+        "LiteSpeed_Crawler",
+        "LiteSpeed_ESI",
+        "LiteSpeed_Integration",
+        "Object_Cache",
+        "Server_Rules",
+        "Util"
+    ],
+    "includes/class-telemetry.php": [
+        "Util"
+    ],
+    "includes/class-url.php": [
+        "Abilities",
+        "Critical_CSS",
+        "Filesystem",
+        "Image_Optimisation",
+        "RUM",
+        "Rest",
+        "Util"
+    ],
+    "includes/class-used-css.php": [
+        "Cache",
+        "Critical_CSS",
+        "Css_Safelist",
+        "Log",
+        "Main",
+        "RUM",
+        "Util"
+    ],
+    "includes/class-util.php": [
+        "AI_Adaptive",
+        "Abilities",
+        "Activate",
+        "Builder_Purge_Watcher",
+        "CDN",
+        "Cache",
+        "Cache_Key",
+        "Critical_CSS",
+        "Cron",
+        "Filesystem",
+        "Http",
+        "Image_Optimisation",
+        "LiteSpeed_ESI",
+        "Main",
+        "Object_Cache",
+        "Pagespeed",
+        "RUM",
+        "Rest",
+        "Scheduler",
+        "Settings_Store",
+        "System_Info",
+        "Url",
+        "Used_CSS",
+        "Util",
+        "WPPO_CLI_Command",
+        "Woo_Detect",
+        "Wp_Version"
+    ],
+    "includes/class-woo-detect.php": [
+        "Cache",
+        "Cron",
+        "Util"
+    ],
+    "includes/class-wppo-cli-command.php": [
+        "Advanced_Cache_Handler",
+        "Cache",
+        "Cron",
+        "Database_Cleanup",
+        "Img_Converter",
+        "LiteSpeed_ESI",
+        "LiteSpeed_Integration",
+        "Log",
+        "Main",
+        "Object_Cache",
+        "Pagespeed",
+        "Server_Rules",
+        "System_Info",
+        "Util"
+    ],
+    "includes/redis-connect-helper.php": [
+        "Log"
+    ],
+    "includes/trait-purge-logger.php": [
+        "Log",
+        "Util"
+    ]
+}
