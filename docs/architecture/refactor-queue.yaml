@@ -972,11 +972,23 @@ phase3_items:
 
   - id: P3-010
     title: 'Database cleanup application runner'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1585
     github_pr: 1586
     implementation_commit: a5fc10eca353b19338346c0b23f3726563448ac7
+    merge_commit: a3af7b74331a20caa77cbdfb1ba4dbc93e7fad12
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      cleanup_runner: 'loaded; dry-run all preview returned 10 count keys; no cleanup or site data mutation performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '80 inventory files / 83 nodes / 366 edges; generator check passed'
     type: architecture
     problem: 'REST, Abilities, CLI, and Cron duplicate cleanup orchestration around the canonical Database_Cleanup map.'
     target_owner: 'Database_Cleanup_Runner'
@@ -1005,7 +1017,7 @@ phase3_items:
 
   - id: P3-011
     title: 'Admin authentication policy for REST and Abilities'
-    status: queued
+    status: audit-pending
     priority: medium
     type: security-architecture
     problem: 'REST and Abilities independently implement capability and nonce checks.'
