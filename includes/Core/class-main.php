@@ -390,6 +390,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private ?Script_Strategy $script_strategy = null;
 
 		/**
+		 * Lazily-created minification policy owner (P3-014).
+		 *
+		 * Main keeps the public hook callbacks and exclusion/optimization state;
+		 * the policy owns queue/tag transforms and minified-file checks.
+		 *
+		 * @var   Minify\Minify_Policy|null
+		 * @since NEXT
+		 */
+		private ?Minify\Minify_Policy $minify_policy = null;
+
+		/**
 		 * Timestamp (microtime) when the front-end template render started.
 		 *
 		 * @var   float
@@ -1173,6 +1184,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->script_strategy = new Script_Strategy( $this );
 			}
 			return $this->script_strategy;
+		}
+
+		/**
+		 * Lazily-created minification policy owner (P3-014).
+		 *
+		 * @since NEXT
+		 * @return Minify\Minify_Policy Policy owner bound to this instance.
+		 */
+		private function minify_policy(): Minify\Minify_Policy {
+			if ( null === $this->minify_policy ) {
+				$this->minify_policy = new Minify\Minify_Policy( $this );
+			}
+			return $this->minify_policy;
+		}
+
+		/**
+		 * Expose the live logged-in optimisation gate to Minify_Policy.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return bool Whether optimisation applies to this viewer.
+		 */
+		public function minify_should_optimise_for_logged_in(): bool {
+			return $this->should_optimise_for_logged_in();
+		}
+
+		/**
+		 * Expose the live CSS minification exclusions to Minify_Policy.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array<int, string> CSS exclusion handles/URLs.
+		 */
+		public function minify_css_exclusions(): array {
+			return $this->exclude_css;
+		}
+
+		/**
+		 * Expose the live JS minification exclusions to Minify_Policy.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return array<int, string> JS exclusion handles/URLs.
+		 */
+		public function minify_js_exclusions(): array {
+			return $this->exclude_js;
+		}
+
+		/**
+		 * Expose the core on-demand block-asset gate to Minify_Policy.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @param string $handle Registered asset handle.
+		 * @return bool Whether core owns this handle conditionally.
+		 */
+		public function minify_is_core_block_asset_skipped( string $handle ): bool {
+			return $this->is_core_block_asset_skipped( $handle );
 		}
 
 		/**
@@ -9636,28 +9705,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Checks if an asset name (URL or file path) indicates it is already minified.
-		 *
-		 * @since 1.5.1
-		 *
-		 * @param  string $url_or_path The asset URL or local file path.
-		 * @param  string $ext         The asset extension (css or js).
-		 * @return bool True if the asset name indicates it's minified.
-		 */
-		private function is_minified_asset_name( string $url_or_path, string $ext ): bool {
-			if ( empty( $url_or_path ) ) {
-				return false;
-			}
-
-			$path = wp_parse_url( $url_or_path, PHP_URL_PATH );
-			if ( ! is_string( $path ) ) {
-				$path = $url_or_path;
-			}
-
-			return (bool) preg_match( '/(\.min|\.bundle|-min)\.' . preg_quote( $ext, '/' ) . '$/i', $path );
-		}
-
-		/**
 		 * Whether a style handle is a core block asset owned by core's on-demand loader.
 		 *
 		 * On WP 6.9+ with separate core block assets active, the combined
@@ -10249,122 +10296,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public function minify_queued_styles(): void {
-			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
-				return;
-			}
-
-			// Sandbox preview (issue #1163): the preview admin renders staged
-			// output even without logged-in cache enabled; visitors keep the
-			// production gate.
-			$is_preview = self::is_sandbox_preview_active();
-			if ( ! $this->should_optimise_for_logged_in() && ! $is_preview ) {
-				return;
-			}
-
-			// The combine feature owns the whole pipeline; let it handle these handles.
-			// In preview the staged combineCSS flag wins so the two pipelines
-			// cannot run on the same handles.
-			$file_opt_for_minify = $is_preview ? self::get_effective_file_optimisation( $this->get_options()['file_optimisation'] ?? array() ) : ( $this->get_options()['file_optimisation'] ?? array() );
-			if ( ! empty( $file_opt_for_minify['combineCSS'] ) ) {
-				return;
-			}
-
-			global $wp_styles;
-
-			if ( ! is_object( $wp_styles ) ) {
-				return;
-			}
-
-			foreach ( $wp_styles->queue as $handle ) {
-				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-					continue;
-				}
-
-				// Preserve auto-sizes containment fix (WP 6.9+) — must not be minified/combined.
-				if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
-					continue;
-				}
-
-				// On WP 6.9+ with separate (on-demand) core block assets active, never
-				// rewrite core block-asset stylesheets — core loads them conditionally
-				// for the blocks on the page (see is_core_block_asset_skipped()).
-				if ( $this->is_core_block_asset_skipped( $handle ) ) {
-					continue;
-				}
-
-				$style_data = $wp_styles->registered[ $handle ];
-
-				// Only external, 'all'-media stylesheets can be rewritten to a file.
-				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
-					continue;
-				}
-
-				$local_path = $this->get_minifiable_css_path( $handle, $style_data->src );
-				if ( false === $local_path ) {
-					continue;
-				}
-
-				$css_minifier = new Minify\CSS( $local_path, Util::min_cache_dir( 'css' ) );
-				$cached_url   = $css_minifier->minify();
-
-				if ( empty( $cached_url ) ) {
-					continue;
-				}
-
-				$cached_file = $css_minifier->get_cache_file_path();
-				if ( empty( $cached_file ) || ! file_exists( $cached_file ) ) {
-					continue;
-				}
-
-				$wp_styles->registered[ $handle ]->src = $cached_url;
-				$wp_styles->registered[ $handle ]->ver = (int) filemtime( $cached_file );
-
-				// Opt the minified file in to core's inline pass.
-				wp_style_add_data( $handle, 'path', $cached_file );
-			}
+			$this->minify_policy()->minify_queued_styles();
 		}
 
-		/**
-		 * Returns the local path of a style eligible for CSS minification.
-		 *
-		 * Shared by the enqueue-time rewrite ({@see minify_queued_styles()}) and the
-		 * legacy `style_loader_tag` path ({@see minify_css()}) so the eligibility
-		 * decision cannot drift between the two. The 'all'-media check only matters
-		 * at enqueue time and stays in {@see minify_queued_styles()}; the tag-time
-		 * path rewrites every media type as before.
-		 *
-		 * @since 1.9.0
-		 *
-		 * @param string $handle Style handle.
-		 * @param string $src    Style source URL.
-		 * @return string|false The local file path if the style should be minified,
-		 *                      false otherwise.
-		 */
-		private function get_minifiable_css_path( $handle, $src ) {
-			if ( empty( $src ) || in_array( $handle, $this->exclude_css, true ) ) {
-				return false;
-			}
-
-			$local_path = Util::get_local_path( $src );
-			if ( empty( $local_path ) ) {
-				return false;
-			}
-
-			if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'css' ) ) {
-				return false;
-			}
-
-			// Early return if the URL already indicates a minified file.
-			if ( $this->is_minified_asset_name( $src, 'css' ) ) {
-				return false;
-			}
-
-			if ( $this->is_file_minified( $local_path, 'css' ) ) {
-				return false;
-			}
-
-			return $local_path;
-		}
 
 		/**
 		 * Rewrites CSS link tags to use minified versions if they exist.
@@ -10377,78 +10311,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified link tag with minified CSS.
 		 */
 		public function minify_css( $tag, $handle, $href ) {
-			// Preserve auto-sizes containment fix (WP 6.9+) — must not be minified.
-			if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
-				return $tag;
-			}
-			// On WP 6.9+ with separate (on-demand) core block assets active, never
-			// rewrite core block-asset stylesheets — core loads them conditionally
-			// for the blocks on the page (see is_core_block_asset_skipped()).
-			if ( $this->is_core_block_asset_skipped( $handle ) ) {
-				return $tag;
-			}
-			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO minify.
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
-				return $tag;
-			}
-			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
-				return $tag;
-			}
-			// Early return for logged-in users (when optimisation not enabled) to avoid
-			// the expensive Util::get_local_path() computation.
-			if ( ! $this->should_optimise_for_logged_in() ) {
-				return $tag;
-			}
-
-			// Handles already rewritten at enqueue time carry 'path' data pointing at
-			// the plugin's own min cache. Only those are exempt — path data registered
-			// by core or third parties must still fall through to legacy minification.
-			global $wp_styles;
-			if ( isset( $wp_styles ) ) {
-				$path_data = $wp_styles->get_data( $handle, 'path' );
-				$min_dir   = Util::min_cache_base_dir();
-				if ( ! empty( $path_data ) && 0 === strpos( wp_normalize_path( $path_data ), $min_dir ) ) {
-					return $tag;
-				}
-			}
-
-			$local_path = $this->get_minifiable_css_path( $handle, $href );
-			if ( false === $local_path ) {
-				return $tag;
-			}
-
-			// Fail-open safe-mode (#1037): any engine throwable degrades to the
-			// pristine tag — engine failure never fatals or white-screens.
-			try {
-				$css_minifier = new Minify\CSS( $local_path, Util::min_cache_dir( 'css' ) );
-				$cached_file  = $css_minifier->minify();
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $tag;
-			}
-
-			if ( $cached_file ) {
-				$basename         = basename( $cached_file );
-				$content_url      = Util::min_cache_url( 'css', $basename );
-				$cached_file_path = $css_minifier->get_cache_file_path();
-
-				if ( empty( $cached_file_path ) || ! file_exists( $cached_file_path ) ) {
-					return $tag;
-				}
-
-				// filemtime() returns false (with a warning) on failure — it never
-				// throws — so fail open on the false check below.
-				$file_version = filemtime( $cached_file_path );
-				if ( false === $file_version ) {
-					return $tag;
-				}
-
-				$new_href = $content_url . '?ver=' . $file_version;
-				$new_tag  = str_replace( $href, $new_href, $tag );
-				return $new_tag;
-			}
-
-			return $tag;
+			return $this->minify_policy()->minify_css( $tag, $handle, $href );
 		}
 
 		/**
@@ -10462,201 +10325,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with minified JavaScript.
 		 */
 		public function minify_js( $tag, $handle, $src ) {
-			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO minify.
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
-				return $tag;
-			}
-			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
-				return $tag;
-			}
-			// Early return for logged-in users (when optimisation not enabled), empty URLs, or excluded handles
-			// to avoid the expensive Util::get_local_path() computation.
-			if ( ! $this->should_optimise_for_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) ) {
-				return $tag;
-			}
-
-			// Disk-safe guard (issue #1428): randomized per-request query
-			// values (?ver=<timestamp|uniqid|rand>) are excluded from the
-			// minify pipeline so they cannot churn minified output against
-			// the file-count cap. Guarded by cacheRandomizedQueryGuard
-			// (default on), filterable via wppo_exclude_randomized_from_combine.
-			try {
-				$guard_on = true;
-				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_cap_settings' ) ) {
-					$cap      = Cache::get_cache_cap_settings();
-					$guard_on = ! empty( $cap['randomized_guard'] );
-				}
-				if ( $guard_on && class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'is_randomized_query_asset' ) && Cache::is_randomized_query_asset( (string) $src ) ) {
-					$excluded = function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_exclude_randomized_from_combine', true, $handle, $src ) : true;
-					if ( $excluded ) {
-						return $tag;
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			$local_path = Util::get_local_path( $src );
-			if ( empty( $local_path ) ) {
-				return $tag;
-			}
-
-			if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'js' ) ) {
-				return $tag;
-			}
-
-			// Early return if the URL already indicates a minified file.
-			if ( $this->is_minified_asset_name( $src, 'js' ) ) {
-				return $tag;
-			}
-
-			if ( $this->is_js_minified( $local_path ) ) {
-				return $tag;
-			}
-
-			// Fail-open safe-mode (#1037): any engine throwable degrades to the
-			// pristine tag — engine failure never fatals or white-screens.
-			try {
-				$js_minifier = new Minify\JS( $local_path, Util::min_cache_dir( 'js' ) );
-				$cached_file = $js_minifier->minify();
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $tag;
-			}
-
-			if ( $cached_file ) {
-				$basename         = basename( $cached_file );
-				$content_url      = Util::min_cache_url( 'js', $basename );
-				$cached_file_path = $js_minifier->get_cache_file_path();
-
-				if ( empty( $cached_file_path ) || ! file_exists( $cached_file_path ) ) {
-					return $tag;
-				}
-
-				// filemtime() returns false (with a warning) on failure — it never
-				// throws — so fail open on the false check below.
-				$file_version = filemtime( $cached_file_path );
-				if ( false === $file_version ) {
-					return $tag;
-				}
-
-				$new_src = $content_url . '?ver=' . $file_version;
-				$new_tag = str_replace( $src, $new_src, $tag );
-				return $new_tag;
-			}
-
-			return $tag;
+			return $this->minify_policy()->minify_js( $tag, $handle, $src );
 		}
 
-		/**
-		 * Checks if a file is already minified (shared helper for CSS/JS).
-		 *
-		 * @since 1.5.1
-		 *
-		 * @param  string $file_path Path to the file.
-		 * @param  string $type      Asset type ('css' or 'js').
-		 * @return bool True if the file is minified, false otherwise.
-		 */
-		private function is_file_minified( $file_path, $type ) {
-			if ( empty( $file_path ) || ! is_string( $file_path ) ) {
-				return true;
-			}
-
-			// Containment: only stat files under WP_CONTENT_DIR/ABSPATH so a
-			// poisoned wppo_* filter returning an absolute path cannot cause
-			// arbitrary local file stat/read.
-			$normalized = wp_normalize_path( $file_path );
-			$content    = wp_normalize_path( (string) WP_CONTENT_DIR );
-			$base       = wp_normalize_path( (string) ABSPATH );
-			if ( 0 !== strpos( $normalized, $content . '/' ) && 0 !== strpos( $normalized, $base ) ) {
-				return true;
-			}
-
-			if ( $this->is_minified_asset_name( $file_path, $type ) ) {
-				return true;
-			}
-
-			if ( ! file_exists( $file_path ) ) {
-				return true;
-			}
-
-			$file_size = filesize( $file_path );
-			if ( false === $file_size ) {
-				return true;
-			}
-			$file_mtime = filemtime( $file_path );
-			if ( false === $file_mtime ) {
-				return true;
-			}
-
-			// Fold mtime+size into the key so an updated plugin/theme
-			// asset cannot serve a stale 'already minified, skip' verdict
-			// for up to an hour after the file changes.
-			$cache_key   = 'min_' . $type . '_' . md5( $file_path . '|' . $file_mtime . '|' . $file_size );
-			$cache_group = 'wppo_minify_check';
-			$found       = false;
-			$cached      = wp_cache_get( $cache_key, $cache_group, false, $found );
-
-			if ( $found ) {
-				return (bool) $cached;
-			}
-
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-			$handle = fopen( $file_path, 'r' );
-			if ( ! $handle ) {
-				return true;
-			}
-
-			// Acquire a shared read lock to avoid reading a partially-written file.
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_flock
-			if ( ! flock( $handle, LOCK_SH ) ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
-				fclose( $handle );
-				return true;
-			}
-
-			$line_count  = 0;
-			$total_chars = 0;
-			$max_lines   = 50;
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
-			$line = fgets( $handle );
-			while ( false !== $line ) {
-				++$line_count;
-				$total_chars += strlen( $line );
-				if ( $line_count >= $max_lines ) {
-					break;
-				}
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
-				$line = fgets( $handle );
-			}
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_flock
-			flock( $handle, LOCK_UN );
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
-			fclose( $handle );
-
-			$avg_line_length = $total_chars / max( 1, $line_count );
-			$threshold       = 'css' === $type ? 500 : 1000;
-
-			$is_minified = $line_count <= 1
-				|| ( $line_count <= 3 && $file_size > 1000 )
-				|| $avg_line_length > $threshold;
-
-			wp_cache_set( $cache_key, (int) $is_minified, $cache_group, HOUR_IN_SECONDS );
-
-			return $is_minified;
-		}
-
-		/**
-		 * Checks if a JavaScript file is already minified.
-		 *
-		 * @since 1.0.0
-		 *
-		 * @param  string $file_path Path to the JavaScript file.
-		 * @return bool True if the file is minified, false otherwise.
-		 */
-		private function is_js_minified( $file_path ) {
-			return $this->is_file_minified( $file_path, 'js' );
-		}
 
 		/**
 		 * Sanitizes image info for client exposure — replaces path arrays with counts.

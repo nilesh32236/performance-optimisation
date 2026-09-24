@@ -1169,6 +1169,13 @@ phase3_items:
         - 'The minification cluster can move behind a dependency-light policy with Main compatibility facades while preserving hook callback identity, filter/action order, generated filenames, and HTML output.'
         - 'Speculation/resource-hint policy remains explicitly deferred to the next queue item and is not changed here.'
       decision: 'Proceed test-first with one Minify_Policy extraction for the bounded Main minification cluster; leave speculation and resource hints untouched.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'Minify_Policy owns minify_queued_styles(), minify_css(), minify_js(), CSS eligibility, minified-name detection, and contained already-minified-file checks; Main keeps same-signature public callback facades plus narrow live-state bridges'
+        non_goals: 'Speculation, resource hints, preload, cache/asset registration policy, LiteSpeed coexistence/header contracts, settings writes, and data migration remain unchanged'
+        loader: 'Loader_Map::fallback_map()["Minify_Policy"] with minify/ allowed boundary; PHPUnit bootstrap explicitly loads the owner for stale local classmaps'
+         graph_delta: '84 inventory files / 87 graph nodes / 378 edges; runtime 377, compatibility 198, loader 3; feature-to-feature edges remain 46; protected Minify_Policy adds 1 class-like node; runtime SCC 65->66 nodes / 320->325 internal edges; bridge candidates 233->237; boundary violations 16->19'
+        verification: 'Focused minify/asset/frontend, loader, hook, and architecture set passes 62 tests / 13,928 assertions; full PHPUnit passes 2,759 tests / 25,239 assertions (9 skipped, 7 existing deprecations); vendor/bin/phpcs full PHPCS passes; focused PHPStan on Minify_Policy passes; npm run lint:js passes with 2 existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing act/console warnings; npm run build passes with existing index entrypoint-size warning; generator --check and git diff --check pass'
 
   - id: P3-015
     title: 'Main preload and cache-buffer coordination cleanup'

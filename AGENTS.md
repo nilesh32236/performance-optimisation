@@ -116,12 +116,13 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 83 files: 79 runtime plugin files under `includes/` (78 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 84 files: 80 runtime plugin files under `includes/` (79 class-like nodes plus the Redis helper), 4 protected minify boundary files, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
-| `Core/class-main.php` | Hook/admin/enqueue orchestration and public compatibility facades; effective settings resolution is delegated to Settings_Store |
+| `Core/class-main.php` | Hook/admin/enqueue orchestration and public compatibility facades; effective settings resolution is delegated to Settings_Store; minification callbacks delegate to Minify_Policy |
 | `Core/class-runtime-state.php` | Blog-switch registry for six site-sensitive static-state owners |
+| `minify/class-minify-policy.php` | Dependency-light CSS/JS queue, tag-rewrite, minified-file, and containment policy; Main keeps public hook facades |
 | `Cache/class-cache.php` | Static HTML cache (generate, invalidate, clear, CSS combine, CDN rewrite) |
 | `Cache/class-cache-capacity.php` | Static cache statistics, cap settings, byte/file accounting, randomized-query guard, oldest eviction |
 | `Cache/class-object-cache.php` | Redis Object Cache (standalone/sentinel/cluster, enable/disable/flush/status) |
