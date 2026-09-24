@@ -844,6 +844,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1578
+    implementation_commit: 9e008a85567eb762cae8f65b57c71e6d126f2ed1
     type: architecture
     problem: 'System_Info reports drop-ins while Cache and Advanced_Cache mutators call System_Info invalidation methods.'
     target_owner: 'Dropin_Registry under Cache/Support boundary'
