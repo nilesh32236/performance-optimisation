@@ -1020,6 +1020,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1587
+    github_pr: 1588
     implementation_commit: 8e2c3073e1499b6495ac04bd15c351ecf2af45cb
     type: security-architecture
     problem: 'REST and Abilities independently implement capability and nonce checks.'
