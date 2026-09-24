@@ -34,6 +34,7 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | `Log` | Activity persistence and logging calls | Feature decisions | Fan-in 27; deliberate infrastructure hub, not a god class |
 | `Loader_Map` | Eager files, fallback map, CLI path | Feature behavior | Three loader edges; stale-classmap safety remains required |
 | `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 57 and 1,138 incoming executable occurrences; defaults are now a Store facade |
+| `Minify_Policy` | CSS/JS enqueue eligibility, tag rewrites, minified-file checks, and containment guards | Hook registration, speculation/resource hints, preload, cache output, or settings writes | P3-014 extraction under the existing `includes/minify/` boundary; Main retains public callback facades and exclusion state bridges |
 
 ## Domain boundaries
 
@@ -65,6 +66,10 @@ The 839-line `Cache` tail previously owned statistics, cap settings, capacity ch
 | `Img_Converter` | WebP/AVIF conversion and conversion metadata | Consider an `Img_Info_Store` only after atomic and shutdown semantics are pinned |
 
 Do not split `Image_Optimisation` by arbitrary file size. Test output markup, MIME negotiation, dimensions, lazy loading, builder compatibility, and cache-buffer integration.
+
+### Minify
+
+`Minify_Policy` owns the bounded frontend minification cluster extracted in P3-014: queued-style path registration, CSS/JS tag rewrites, exclusion and minified-name decisions, randomized-query protection, and filesystem containment for already-minified checks. It delegates settings and live exclusion reads through narrow `Main` bridges and calls the protected `Minify\CSS` / `Minify\JS` wrappers. It must not own hook registration, asset enqueue policy beyond this cluster, speculation/resource hints, preload, cache output, LiteSpeed coexistence policy, or settings persistence. Main keeps the public callback methods so `Hook_Registry` callback identity, filter priorities, generated filenames, frontend output, and no-op/fail-open behavior remain unchanged.
 
 ### CSS
 

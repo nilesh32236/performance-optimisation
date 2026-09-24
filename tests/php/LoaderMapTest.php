@@ -131,7 +131,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	public function test_every_mapped_short_resolves_to_existing_file(): void {
 		$this->load_loader_map();
 		$map = Loader_Map::fallback_map();
-		$this->assertCount( 78, $map, 'Fallback map must cover every Loader_Map-managed plugin class.' );
+		$this->assertCount( 79, $map, 'Fallback map must cover every Loader_Map-managed plugin class.' );
 		foreach ( $map as $short => $file ) {
 			$path = Loader_Map::path_for( (string) $short );
 			$this->assertNotNull( $path, "Unresolvable short name: {$short}" );

@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `b9347c39135a1ff2e3763d7e378240a35976db99`
+Source: `origin/master` commit `85ed4122ecb523b2d728c6f78af90361e87c2050`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,37 +24,37 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 86 first-party runtime files:
+The tokenizer scans 87 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
 | Plugin classes and traits under `includes/` | 78 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
-| Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
+| Protected minify wrappers | 4 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
 | Plugin entry, uninstall, translation template | 3 | Procedural graph nodes |
 
-The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `vendor`. It includes the plugin entry, `uninstall.php`, runtime templates, and the three minify wrappers so the graph does not hide drop-in or protected coupling.
+The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `vendor`. It includes the plugin entry, `uninstall.php`, runtime templates, and the four minify wrappers/policy so the graph does not hide drop-in or protected coupling.
 
 ## System totals
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 83 |
-| Inventory source lines | 126,772 |
-| Class-like graph nodes | 82 |
+| Inventory files | 84 |
+| Inventory source lines | 126,843 |
+| Class-like graph nodes | 83 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,518 |
-| Methods spanning 80 lines or more | 236 |
+| Named methods | 2,528 |
+| Methods spanning 80 lines or more | 234 |
 | Static properties | 143 across 32 nodes |
-| Unique dependency edges | 373 |
-| Runtime-classified edges | 372 |
-| Compatibility-classified edges | 196 |
+| Unique dependency edges | 378 |
+| Runtime-classified edges | 377 |
+| Compatibility-classified edges | 198 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 315 |
+| Cross-domain edges | 318 |
 | Feature-to-feature edges | 46 |
-| Strict boundary violations | 16 |
-| Bridge candidates | 233 |
+| Strict boundary violations | 19 |
+| Bridge candidates | 237 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -62,7 +62,7 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 65 class-like nodes and 320 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 66 class-like nodes and 325 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
@@ -196,6 +196,8 @@ P3-011 adds the 60-line, one-method dependency-light `Admin_Auth` policy. `Rest:
 P3-012 adds the 150-line, four-method `Edge_Purge_Coordinator`. `Hook_Registry` now registers one priority-10 `wppo_after_cache_clear` listener that calls the unchanged `CDN_Purger` and `Edge_Purger` adapters in their historic order. For a full clear, temporary `pre_http_request` / `http_api_debug` seams reuse the first response only when an identical Cloudflare purge_everything request repeats in that event, reducing overlapping Cloudflare transport from up to two calls to one while retaining separate Bunny and Varnish paths. LiteSpeed sync, single-page Cloudflare files, edge locks, provider-specific failure logging, invalid-payload TypeError behavior, and successful no-data behavior remain with their existing owners. The generated inventory contains 82 files, 85 graph nodes, and 369 edges; the coordinator has one incoming and two outgoing feature edges, no static state, and no feature-to-feature change.
 
 P3-013 moves the canonical defaults, effective-options policy, and all 180 historical backfill assignments from `Util`/`Main::get_options()` to `Settings_Store`. Raw and resolved options are memoized by blog ID; add/update/delete and command writes invalidate the resolved snapshot so same-request reads reapply backfills without persisting them. `Util::get_default_settings()` remains its unchanged facade, while `Main` retains its public options facade, injectable local snapshot, Hook_Registry callback identities, and settings-update side effects. Main's one rollback write now routes through `Settings_Command`, so Main owns no direct `wppo_settings` write. The one bounded cache cluster is the 56-line, one-method `Cache_Coordinator`: `Main::create_cache()` remains the unchanged static facade while construction, collaborator injection, and `wppo_cache_instance` filtering move together. The generated inventory contains 83 files, 86 graph nodes, and 373 edges; Main drops from 11,091 to 10,790 lines and from 21 to 20 methods at least 80 lines, Util drops from 5,006 to 4,791 lines, the runtime SCC grows only from 64 to 65 nodes, and Main feature dependencies remain 17.
+
+P3-014 adds the 385-line, eight-method `Minify_Policy` for the bounded Main minification cluster. `Main` retains public `minify_queued_styles`, `minify_css`, and `minify_js` facades plus callback identity and narrow state bridges; the policy owns queue detection, CSS/JS tag transformation, minified-name/file checks, randomized-query guard, containment, and fail-open behavior. Speculation/resource-hint policy remains outside this item. The generated inventory contains 84 files, 87 graph nodes, and 378 edges; Main's public minify cluster is reduced while feature-to-feature edges remain 46.
 
 ## Static state
 
