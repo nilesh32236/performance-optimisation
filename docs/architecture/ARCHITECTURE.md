@@ -52,13 +52,13 @@ The schema-v2 tokenizer graph covers 86 files: 82 class-like nodes and 4 procedu
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 374 |
-| Runtime / compatibility / loader edges | 373 / 196 / 3 |
-| Cross-domain / feature-to-feature edges | 316 / 46 |
+| Unique edges | 373 |
+| Runtime / compatibility / loader edges | 372 / 196 / 3 |
+| Cross-domain / feature-to-feature edges | 315 / 46 |
 | Boundary violations | 16 |
-| Bridge candidates | 234 |
+| Bridge candidates | 233 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 68 nodes, 332 runtime-classified internal edges |
+| Largest runtime SCC | 65 nodes, 320 runtime-classified internal edges |
 | Static state | 143 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 

@@ -175,12 +175,12 @@ P3-005 through P3-013 record these baselines:
 | Metric | Baseline | Direction |
 |---|---:|---|
 | Runtime SCCs | 1 | Reduce; final target 0 or a documented protected residue |
-| Largest runtime SCC | 68 nodes | Reduce |
+| Largest runtime SCC | 65 nodes | Reduce |
 | Compatibility-classified edges | 196 | Explain and reduce only through explicit compatibility ownership |
 | Compatibility SCCs | 1 | Reduce; retain only documented stable adapters |
 | Largest compatibility SCC | 21 nodes | Reduce after caller migration |
 | Boundary violations | 16 | Reduce; final target 0 or explicit protected exceptions |
-| Bridge candidates | 234 | Reduce after caller migration |
+| Bridge candidates | 233 | Reduce after caller migration |
 | `Util` unique fan-in | 58 | Reduce |
 | `Util` incoming executable evidence | 1,139 | Reduce |
 | `Main` unique fan-out | 37 | Reduce after delegated bridges settle |
