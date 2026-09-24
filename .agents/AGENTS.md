@@ -10,7 +10,7 @@ A WordPress performance optimization plugin (PHP 8.2+, WP 6.2+) providing:
 - JS/CSS/HTML minification
 - Image conversion (WebP/AVIF)
 - Lazy loading (images, iframes, videos)
-- Database cleanup (7 types)
+- Database cleanup (9 canonical types)
 - Google PageSpeed Insights integration
 - Performance telemetry and suggestions
 - CDN support, .htaccess rules, Nginx config
@@ -21,7 +21,9 @@ A WordPress performance optimization plugin (PHP 8.2+, WP 6.2+) providing:
 npm run lint:js        # ESLint via @wordpress/scripts
 composer lint           # PHPCS (WordPress standard)
 npm test                # Jest unit tests (jsdom)
-npm run build           # wp-scripts build
+composer test            # PHPUnit (required when PHP files change)
+npm run build           # wp-scripts build all configured entries
+php scripts/generate-class-inventory.php --check  # architecture graph drift
 ```
 
 ## Key Files
@@ -33,9 +35,9 @@ npm run build           # wp-scripts build
 | `package.json` | JS deps + build/test commands |
 | `.distignore` | WordPress.org SVN exclusion rules |
 | `scripts/build-release.sh` | Builds release ZIP |
-| `includes/class-main.php` | Main orchestrator class (42 classes in `includes/`) |
-| `includes/class-rest.php` | 40 REST API endpoints (namespace `performance-optimisation/v1`, incl. `settings_snapshot` + `restore_settings` one-click undo, plus `sandbox_preview` + `sandbox_save` + `sandbox_promote` + `sandbox_discard` sandbox preview, plus `preload_status` + `preload_resume` preload progress, plus `lcp_preload_candidate` LCP preload candidate) |
-| `includes/class-wppo-cli-command.php` | WP-CLI: 7 subcommands (`wp wppo: cache\|database\|image\|settings\|object-cache\|pagespeed\|system-info`) |
+| `includes/Core/class-main.php` | Main orchestrator; current ownership and metrics live in `docs/architecture/ARCHITECTURE-BASELINE.md` |
+| `includes/Admin/class-rest.php` | REST registrar: 47 concrete endpoints, 48 registered patterns including the namespace root |
+| `includes/Admin/class-wppo-cli-command.php` | WP-CLI: 8 subcommands (`cache`, `database`, `image`, `settings`, `object-cache`, `pagespeed`, `system-info`, `verify`) |
 
 ## Vendor Directory
 
@@ -55,7 +57,7 @@ git add build/
 
 ## File Conventions
 
-- **PHP**: WordPress Coding Standards (`phpcs.xml`), no PSR-4 autoload for plugin classes (manual `require_once`)
+- **PHP**: WordPress Coding Standards (`phpcs.xml`); Composer classmap plus `Main::includes()` / `Loader_Map`; no plugin PSR-4 mapping
 - **JS**: ES modules via `@wordpress/scripts`, no routing/state libraries (pure `useState`)
 - **SCSS**: `.wppo-` prefix, BEM-like naming, CSS custom properties
 - **React**: All settings via `wppoSettings` global, `apiCall()` for REST, no external state managers

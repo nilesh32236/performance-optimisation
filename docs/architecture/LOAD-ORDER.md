@@ -1,114 +1,232 @@
-# Load Order — Performance Optimisation Plugin
+# Load Order and Autoload Boundaries
 
-Evidence baseline: ARCH-001 (2026-09-23); directory moves live per ARCH-013.
-Verified against `performance-optimisation.php`, `Main::includes()`
-(`includes/Core/class-main.php`), `composer.json`, `tests/php/bootstrap.php`,
-`uninstall.php`, `templates/object-cache.php`.
+Phase 3 verification baseline: 2026-09-24
+Runtime source: `origin/master` commit `72818289c9745ed58c17bf3ab418f4d20953b657`
+Loader owner: `includes/Core/class-loader-map.php`
 
-## 1. Plugin bootstrap (every request with the plugin active)
+The plugin uses two autoload mechanisms:
 
-1. `performance-optimisation.php`: defines `WPPO_PLUGIN_PATH/URL/VERSION`,
-   `WPPO_REQUIRES_PHP` (8.2), `WPPO_REQUIRES_WP` (6.2); declares
-   `wppo_get_wp_version()` + runtime guard.
-2. Requires `vendor/autoload.php` when present. When missing: registers an
-   `admin_notices`/`network_admin_notices` notice and keeps the site running
-   unoptimised (fail-open frontend, audit #1362).
-3. Stale-classmap fallback: if `PerformanceOptimise\Inc\Loader_Map` is still
-   unknown, requires `includes/Core/class-loader-map.php` directly, then if
-   `PerformanceOptimise\Inc\Main` is still unknown, requires
-   `includes/Core/class-main.php` directly, then `new Main()` (only when
-   deps present and the version guard passes).
-4. `register_activation_hook` → `wppo_activate()` → `Activate::init()`.
-   `register_deactivation_hook` → `wppo_deactivate()` → `Deactivate::init()`.
+1. Composer generates a recursive classmap for `includes/` and loads vendor packages.
+2. `Loader_Map` and `Main::includes()` provide explicit runtime loading and stale-classmap recovery.
 
-## 2. `Loader_Map` + `Main::includes()` (manual loading — no PSR-4, watchdog-protected)
+The watchdog forbids a PSR-4 conversion. Phase 3 may improve the classmap or fallback map, but it will not replace manual loading.
 
-Single owner for "which file provides which class":
-`PerformanceOptimise\Inc\Loader_Map` (`includes/Core/class-loader-map.php`,
-ARCH-003, canonical subdirectories since ARCH-013) owns the eager-load file
-list, the lazy fallback short-name-to-file map, and the WP-CLI file path —
-all built on `WPPO_PLUGIN_PATH . 'includes/'`. `Main::includes()` is a thin
-delegate: it requires `Loader_Map` first, loops `Loader_Map::eager_files()`,
-applies its own `should_load_litespeed_stack()` decision to
-`Loader_Map::litespeed_stack_files()`, registers one `spl_autoload_register`
-closure that resolves via `Loader_Map::path_for()`, and wires the `WP_CLI`
-block via `Loader_Map::cli_file()`. Directory moves (ARCH-013, done) touch
-exactly `Loader_Map` (+ the entry-point chain below); `Util` stays at the
-`includes/` root until ARCH-014.
+## 1. Plugin entry
 
-Eager `require_once` (each guarded by `file_exists`):
-`Loader_Map` (when not already autoloaded) → Action Scheduler vendor lib
-(not under `includes/`, still wired directly in `Main`) → `Wp_Version` →
-`Server_Rules` → `Header_Emitter` →
-`LiteSpeed_Integration` → conditionally `LiteSpeed_Crawler` + `LiteSpeed_ESI`
-(only when `should_load_litespeed_stack()`; non-LiteSpeed frontends skip parse
-cost, fail-open) → `Llms` → `OD_Bridge` → `Bfcache` → `Perf_Translations` →
-`AI_Adaptive` → `Edge_Cache` → `trait-purge-logger.php` → `Edge_Purger` →
-`CDN` → `Builder_Purge_Watcher` → `Hook_Registry`.
+`performance-optimisation.php` performs these steps:
 
-Lazy: one `spl_autoload_register` fallback map resolves the remaining
-`PerformanceOptimise\Inc\*` classes from `includes/<Domain>/<file>` on first
-missing-class use (covers stale/partial classmaps; every inventory class
-resolves through `Loader_Map::path_for()`, eager or lazy, so a missed mapping
-fails the `LoaderMapTest` smoke gate).
+1. Define `WPPO_PLUGIN_PATH`, `WPPO_PLUGIN_URL`, `WPPO_VERSION`, and runtime floors.
+2. Define guarded version-floor functions.
+3. Return before boot when `WPPO_UNIT_TESTS` is active.
+4. Load `vendor/autoload.php` when present.
+5. Register a fail-open missing-dependency notice otherwise.
+6. Check runtime floors.
+7. Require `includes/Core/class-loader-map.php` when `Loader_Map` remains unknown.
+8. Require `includes/Core/class-main.php` when `Main` remains unknown.
+9. Construct `Main` when the class exists.
+10. Register activation and deactivation callbacks.
 
-`WP_CLI` only: requires `Admin/class-wppo-cli-command.php` and registers
-`wp wppo` (7 subcommands).
+The stale-classmap chain is deliberate. Composer and `Loader_Map` can each satisfy normal loads; the direct requires protect deployments with stale generated classmaps.
 
-## 3. Composer classmap
+## 2. Main and Loader_Map
 
-`composer.json` `autoload.classmap: ["includes/"]` — recursive, so
-subdirectories resolve after a dump, BUT: `Loader_Map` hardcodes
-`includes/<Domain>/<file>` paths in both the eager list and the fallback map
-(ARCH-013, live). Any file move MUST update the loader map in the same change
-(ARCH-003 centralised this into `includes/Core/class-loader-map.php`).
-Release builds use `--optimize-autoloader`.
+`Main::includes()` owns orchestration decisions. `Loader_Map` owns path data.
 
-## 4. Hooks / runtime surfaces
+The loading sequence is:
 
-- `Main::__construct` → `includes()` → collaborator registration →
-  `Hook_Registry` (REF-005; `setup_hooks()` is a 3-line delegate).
-- REST (`class-rest.php`, 40 routes, namespace `performance-optimisation/v1`)
-  loads lazily; routes register on `rest_api_init`. Gate: `manage_options` +
-  `X-WP-Nonce`, except public `rum_collect` (token + IP rate limit).
-- Cron/Action Scheduler: `Cron` registers WP-Cron hooks; payloads enqueue via
-  `Scheduler` boundary (full consolidation: ARCH-012).
-- Admin SPA: `src/index.js` + `src/lazyload.js` → committed `build/` output.
+1. Require `Loader_Map` when needed.
+2. Require the Action Scheduler library from `vendor/woocommerce/action-scheduler/action-scheduler.php` when it remains unavailable.
+3. Require every file in `Loader_Map::eager_files()`.
+4. Apply `Main::should_load_litespeed_stack()`.
+5. Require `Loader_Map::litespeed_stack_files()` only for the true branch.
+6. Register one `spl_autoload_register` callback that calls `Loader_Map::path_for()`.
+7. Require `Loader_Map::cli_file()` and register the WP-CLI command under `WP_CLI`.
 
-## 5. Activation / deactivation / uninstall
+### Eager files
 
-- Activation (`Activate::init`): `dbDelta` creates `{prefix}wppo_activity_logs`;
-  `.htaccess` rules skipped on LiteSpeed (`Server_Rules::should_skip_htaccess_write`);
-  requires `wp-admin/includes/upgrade.php`.
-- Deactivation (`Deactivate::init`): clears scheduled hooks, removes drop-ins
-  it owns; leaves settings for re-activation.
-- Uninstall (`uninstall.php`, `WP_UNINSTALL_PLUGIN` guard): one static-guarded
-  network-file cleanup (cache dir, `wppo/` images, redis config + circuit
-  sidecars, drop-ins, `.htaccess` marker) + per-site loop over 29 known
-  `wppo_*` options (verify gate: `uninstall` check).
+`Loader_Map::eager_files()` loads these files in order:
 
-## 6. Drop-ins (loaded by WordPress core, NOT by `includes()`)
+1. `Core/class-wp-version.php`
+2. `Edge/class-server-rules.php`
+3. `Edge/class-header-emitter.php`
+4. `Integrations/class-litespeed-integration.php`
+5. `Compatibility/class-llms.php`
+6. `Insight/class-od-bridge.php`
+7. `Cache/class-bfcache.php`
+8. `Admin/class-perf-translations.php`
+9. `Insight/class-ai-adaptive.php`
+10. `Insight/class-ai-anomaly.php`
+11. `Edge/class-edge-cache.php`
+12. `Support/trait-purge-logger.php`
+13. `Edge/class-edge-purger.php`
+14. `Edge/class-cdn.php`
+15. `Integrations/class-builder-purge-watcher.php`
+16. `Core/class-hook-registry.php`
 
-- `advanced-cache.php`: created/detected/removed by `Advanced_Cache_Handler`;
-  serves `wp-content/cache/wppo/{domain}/{path}/index.html` before WP boots.
-- `wp-content/object-cache.php`: copied from `templates/object-cache.php`;
-  custom `WP_Object_Cache` (standalone/sentinel/cluster), keyed with
-  `get_current_blog_id()` namespacing. Core loads it before plugins — the PHPUnit
-  bootstrap therefore requires the template early, before Brain Monkey can
-  eval-declare `wp_cache_*` stubs.
+The LiteSpeed-only branch then loads:
 
-## 7. Multisite notes
+1. `Integrations/class-litespeed-crawler.php`
+2. `Integrations/class-litespeed-esi.php`
 
-`Util::transient_key()` prefixes `{blog_id}_`; static HTML cache uses
-domain-based dirs (inherently safe); options are site-native; uninstall iterates
-sites with `switch_to_blog()`. Moved memos MUST stay blog-keyed (precedent:
-REF-003/REF-004 parity fixes).
+Action Scheduler remains a deliberate direct require outside `Loader_Map` path data. Moving that require into data would change the vendor bootstrap contract without architectural benefit.
 
-## 8. Test bootstrap (`tests/php/bootstrap.php`)
+## 3. Lazy class loading
 
-Normalises cwd for `patchwork.json` → `vendor/autoload.php` → early
-`templates/object-cache.php` → in-memory `wp_object_cache` miss-on-read stub
-(`ObjectCacheTest` swaps a richer stub). Test files must be `*Test.php`
-matching the class name; SUT files must NOT be top-level `require_once`d
-(breaks Patchwork mocking); classes with own `tearDown()` alias the trait
-method (`bootstrap_teardown` pattern).
+`Loader_Map::fallback_map()` maps 66 `PerformanceOptimise\Inc` class names to canonical files under:
+
+```text
+includes/<Domain>/class-<name>.php
+includes/class-util.php
+```
+
+`Loader_Map` provides:
+
+- `base_dir()` for the plugin includes path;
+- `file_path()` for one-level canonical path validation;
+- `path_for()` for short and fully qualified plugin class names;
+- `cli_file()` for the WP-CLI command;
+- `allowed_dirs()` for the 14 runtime domain directories.
+
+The fallback autoloader covers the full Loader_Map-managed plugin class set. It does not own the three protected minify wrappers or the Redis drop-in class because WordPress or `Main` loads those through separate contracts.
+
+## 4. Composer classmap
+
+`composer.json` contains:
+
+```json
+"autoload": {
+    "classmap": ["includes/"]
+}
+```
+
+Composer recursively discovers plugin classes and maps vendor packages through its normal autoloader. The generated local classmap contains the plugin classmap plus three minify wrappers. No plugin PSR-4 namespace mapping exists.
+
+Composer provides the normal load path. `Loader_Map` provides deterministic path ownership and stale-classmap recovery. Release builds run an optimized Composer dump.
+
+A directory move must update:
+
+- the file itself;
+- `Loader_Map` eager and fallback data;
+- Composer autoload output when generated locally;
+- inventory and graph artifacts;
+- tests and documentation with old paths;
+- installed drop-ins when the moved file participates in early loading.
+
+## 5. REST loading
+
+`Rest` loads lazily through `Loader_Map`. `Rest::register_routes()` registers the `performance-optimisation/v1` namespace during `rest_api_init`.
+
+The installed site exposes 48 registered patterns including the namespace root, which represents 47 concrete endpoints. Administrative routes require `manage_options` and REST nonce validation. The public `rum_collect` route keeps its token, IP, and global rate-limit checks.
+
+`Rest_Cache` and `Rest_Settings` also load lazily. Current route callbacks point directly to service instances; compatibility proxies remain for direct callers and tests.
+
+## 6. WP-CLI loading
+
+Under `WP_CLI`, `Main::includes()` requires `Admin/class-wppo-cli-command.php` and registers `wp wppo`.
+
+The live command exposes eight subcommands:
+
+1. `cache`
+2. `database`
+3. `image`
+4. `object-cache`
+5. `pagespeed`
+6. `settings`
+7. `system-info`
+8. `verify`
+
+The old “7 subcommands” documentation counted the pre-`verify` surface.
+
+## 7. Cron and Action Scheduler
+
+`Cron` loads lazily and registers WP-Cron hooks. `Scheduler` owns shared Action Scheduler and WP-Cron primitives.
+
+Action Scheduler's vendor library loads before plugin classes. The plugin still has fragmented job ownership:
+
+- `Cron::AS_HOOKS` drives part of deactivation and uninstall cleanup;
+- `Builder_Purge_Watcher` schedules drift and upgrade purge hooks;
+- RUM and `Object_Cache` schedule some Cron-owned hooks directly.
+
+Phase 3 will centralize job ownership without changing the vendor require order.
+
+## 8. Object-cache drop-in
+
+WordPress loads `/wp-content/object-cache.php` before regular plugins. The repository template lives at `templates/object-cache.php` and defines `WP_Object_Cache` with blog-aware key namespacing.
+
+`Object_Cache` and the drop-in load the procedural Redis helper from:
+
+```text
+includes/Support/redis-connect-helper.php
+```
+
+### Installed drift
+
+The installed `/wp-content/object-cache.php` still searches the pre-ARCH-013 path:
+
+```text
+includes/redis-connect-helper.php
+```
+
+That deployed file also predates later template hardening. Every CLI probe logs:
+
+```text
+wppo_redis_connect() not found
+```
+
+The repository template and `Object_Cache` class use the current path. `wp wppo verify` checks drop-in ownership, not byte parity. P3-001 records this installed-state defect. The post-merge refresh must copy the owned template through the plugin's safe install path or a reviewed equivalent, then re-run Redis and object-cache smoke checks.
+
+`tests/php/bootstrap.php` requires the repository template, so PHPUnit does not detect deployed template drift. A later verification improvement should compare the installed drop-in with the repository template without exposing Redis credentials or unrelated site data.
+
+## 9. Advanced-cache drop-in
+
+`Advanced_Cache_Handler` owns the `advanced-cache.php` lifecycle. WordPress loads that drop-in before normal plugins, and it serves the static HTML cache without booting WordPress for a hit.
+
+The early-load contract and cache directory layout stay protected. Loader refactors must not move this drop-in behavior behind a plugin class that cannot load at `advanced-cache.php` time.
+
+## 10. React and frontend assets
+
+`src/index.js`, `src/lazyload.js`, `src/main.js`, `src/rum.js`, and `src/esi.js` build through `@wordpress/scripts`. The committed `build/` directory contains the admin SPA, lazy loader, admin-bar controls, RUM, and ESI bundles.
+
+Any JavaScript or SCSS change requires:
+
+```sh
+npm run build
+```
+
+and a committed `build/` diff. The loader does not affect PHP class order.
+
+## 11. Test bootstrap
+
+`tests/php/bootstrap.php`:
+
+1. normalizes the project root for Patchwork;
+2. loads `vendor/autoload.php`;
+3. requires `templates/object-cache.php` before Brain Monkey defines cache functions;
+4. installs a minimal in-memory object cache;
+5. defines plugin and WordPress test constants;
+6. installs a test `$wpdb` shape;
+7. exposes `WPPO_Test_Bootstrap` for Brain Monkey setup and targeted static reset calls.
+
+The bootstrap uses synthetic `/tmp/wordpress/` paths and defines `WPPO_VERSION` as `2.0.0`. It does not replace installed-site verification. Phase 3 must extend reset coverage through a production-owned runtime-state registry rather than add more scattered test-only calls.
+
+## 12. Activation, deactivation, and uninstall
+
+- `Activate::init()` creates the activity table and installs owned rules/drop-ins through domain owners.
+- `Deactivate::init()` clears scheduled work and removes owned artifacts.
+- `uninstall.php` runs under `WP_UNINSTALL_PLUGIN`, removes network and per-site data, and iterates multisite sites when needed.
+
+Job teardown must use one canonical hook registry. The current builder upgrade purge hook is the first known omission.
+
+## 13. Verification after loader changes
+
+A loader or path change requires all of these:
+
+```sh
+composer dump-autoload --optimize
+php scripts/generate-class-inventory.php --check
+vendor/bin/phpunit tests/php/LoaderMapTest.php
+composer test
+wp wppo verify
+```
+
+Runtime smoke must cover plugin activation, frontend, admin, REST, CLI, cron, cache, and any touched drop-in. The installed Redis drop-in parity check is mandatory until the deployed copy is refreshed.

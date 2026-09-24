@@ -131,7 +131,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	public function test_every_mapped_short_resolves_to_existing_file(): void {
 		$this->load_loader_map();
 		$map = Loader_Map::fallback_map();
-		$this->assertGreaterThanOrEqual( 42, count( $map ), 'Fallback map must keep all pre-change entries plus Loader_Map/Main/CLI.' );
+		$this->assertCount( 66, $map, 'Fallback map must cover every Loader_Map-managed plugin class.' );
 		foreach ( $map as $short => $file ) {
 			$path = Loader_Map::path_for( (string) $short );
 			$this->assertNotNull( $path, "Unresolvable short name: {$short}" );
@@ -158,8 +158,13 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 		$inventory = json_decode( (string) $raw, true );
 		$this->assertIsArray( $inventory, 'Class inventory JSON must decode to an array.' );
 		$this->assertNotEmpty( $inventory );
+		$loader_class_count = 0;
 		foreach ( $inventory as $entry ) {
-			$file = isset( $entry['file'] ) ? (string) $entry['file'] : '';
+			$file  = isset( $entry['file'] ) ? (string) $entry['file'] : '';
+			$scope = isset( $entry['scope'] ) ? (string) $entry['scope'] : 'runtime';
+			if ( in_array( $scope, array( 'protected_vendor_adjacent', 'drop_in' ), true ) ) {
+				continue;
+			}
 			$this->assertNotSame( '', $file, 'Inventory entry must carry a file path.' );
 			$abs = dirname( __DIR__, 2 ) . '/' . $file;
 			$this->assertFileExists( $abs, "Inventory file missing: {$file}" );
@@ -169,11 +174,13 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 			if ( ! preg_match( '/^\s*(?:abstract\s+|final\s+)?(?:class|trait)\s+([A-Za-z_][A-Za-z0-9_]*)/m', (string) $src, $m ) ) {
 				continue;
 			}
+			++$loader_class_count;
 			$short = $m[1];
 			$path  = Loader_Map::path_for( $short );
 			$this->assertNotNull( $path, "Inventory class {$short} ({$file}) does not resolve via Loader_Map::path_for()." );
 			$this->assertFileExists( (string) $path, "Inventory class {$short} resolves to a missing file." );
 		}
+		$this->assertSame( 66, $loader_class_count, 'All Loader_Map-managed runtime classes must participate in the completeness gate.' );
 	}
 
 	/**

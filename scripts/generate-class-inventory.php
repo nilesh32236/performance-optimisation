@@ -1,219 +1,107 @@
 <?php
 /**
- * Deterministic class-inventory + dependency-graph generator (ARCH-001).
+ * Deterministic tokenizer-based class inventory and dependency graph generator.
  *
- * Scans includes subdirectories (ARCH-013 canonical tree: includes/<Domain>/class-*.php
- * + includes/<Domain>/trait-*.php, plus root includes/class-util.php) and writes:
- *   docs/architecture/class-inventory.json  (existing schema + additive `refs` field)
- *   docs/architecture/DEPENDENCY-GRAPH.json (file => [referenced plugin classes])
+ * Scans first-party runtime PHP and writes:
+ *   - docs/architecture/class-inventory.json
+ *   - docs/architecture/DEPENDENCY-GRAPH.json
  *
- * Method counts use the same definition as the campaign baseline:
- * lines starting with an optional indent followed by a visibility keyword
- * and the `function` keyword. Cross-class refs are static `ClassName::`
- * occurrences for known plugin short names; dynamic/string references
- * (class_exists('...'), method_exists()) are intentionally out of scope and
- * documented as a limitation in INCLUDE-HIERARCHY.md.
+ * Runtime dependencies come from PhpToken syntax. Comments and docblocks are
+ * recorded separately and never become graph edges. The analyzer also covers
+ * loader/file paths, compatibility probes, inheritance, trait use, external
+ * dependency signals, method-size metrics, static state, and exact-shape
+ * duplicate candidates.
  *
  * Usage: php scripts/generate-class-inventory.php [--check]
- *   --check exits non-zero when the committed JSON differs (CI drift gate).
+ *   --check exits non-zero when committed JSON is stale.
  *
  * @package PerformanceOptimise
- * @since NEXT
+ * @since   NEXT
  */
 
-// phpcs:disable WordPress.WP.AlternativeFunctions -- CLI dev script runs outside WordPress (no WP_Filesystem, wp_remote_get, or wp_json_encode available).
+// phpcs:disable WordPress.WP.AlternativeFunctions -- CLI development script runs outside WordPress; native filesystem/token APIs are required.
 
 if ( PHP_SAPI !== 'cli' ) {
 	fwrite( STDERR, "generate-class-inventory.php must run from the CLI.\n" );
 	exit( 1 );
 }
 
+require_once __DIR__ . '/architecture/class-source-analyzer.php';
+require_once __DIR__ . '/architecture/class-dependency-graph.php';
+
 $plugin_root = dirname( __DIR__ );
-$includes    = $plugin_root . '/includes';
 $check_mode  = in_array( '--check', $argv, true );
 
-/**
- * Known plugin class short names (namespace PerformanceOptimise\Inc).
- *
- * @return string[]
- */
-function wppo_known_classes(): array {
-	return array(
-		'Abilities',
-		'Activate',
-		'Admin_Notices',
-		'Advanced_Cache_Handler',
-		'AI_Adaptive',
-		'Ai_Anomaly',
-		'Asset_Manager',
-		'Bfcache',
-		'Builder_Purge_Watcher',
-		'Cache',
-		'Cache_Invalidator',
-		'Cache_Key',
-		'CDN',
-		'CDN_Purger',
-		'Cloudflare_Purger',
-		'Core_Tweaks',
-		'Critical_CSS',
-		'Ccss_Store',
-		'Css_Combine',
-		'Css_Safelist',
-		'Cron',
-		'Database_Cleanup',
-		'Deactivate',
-		'Edge_Cache',
-		'Edge_Purger',
-		'Filesystem',
-		'Google_Fonts',
-		'Header_Emitter',
-		'Hook_Registry',
-		'Htaccess_Handler',
-		'Http',
-		'Image_Optimisation',
-		'Img_Converter',
-		'Lcp_Preload',
-		'LiteSpeed_Crawler',
-		'LiteSpeed_ESI',
-		'LiteSpeed_Integration',
-		'Llms',
-		'Loader_Map',
-		'Log',
-		'Main',
-		'Metabox',
-		'Object_Cache',
-		'OD_Bridge',
-		'Pagespeed',
-		'Perf_Translations',
-		'Purge_Logger',
-		'Rest',
-		'Rest_Cache',
-		'Rest_Settings',
-		'RUM',
-		'Sandbox_Preview',
-		'Scheduler',
-		'Script_Strategy',
-		'Server_Rules',
-		'Settings_Migrations',
-		'Settings_Store',
-		'Suggestion_Engine',
-		'System_Info',
-		'Telemetry',
-		'Used_CSS',
-		'Url',
-		'Util',
-		'Woo_Detect',
-		'Wp_Version',
-		'WPPO_CLI_Command',
-	);
-}
-
-$known   = wppo_known_classes();
-$pattern = '/(?<![A-Za-z_\\\\])(' . implode( '|', $known ) . ')::/';
-$files   = array_merge(
-	(array) glob( $includes . '/*/class-*.php' ),
-	(array) glob( $includes . '/*/trait-*.php' ),
-	// ARCH-014 owns the Util facade: stays at the includes/ root.
-	(array) glob( $includes . '/class-util.php' ),
-	// Procedural helper loaded outside the class map; tracked for completeness.
-	(array) glob( $includes . '/Support/redis-connect-helper.php' )
+$inventory_files = array_merge(
+	(array) glob( $plugin_root . '/includes/*/class-*.php' ),
+	(array) glob( $plugin_root . '/includes/*/trait-*.php' ),
+	(array) glob( $plugin_root . '/includes/class-*.php' ),
+	(array) glob( $plugin_root . '/includes/Support/redis-connect-helper.php' ),
+	(array) glob( $plugin_root . '/templates/object-cache.php' )
 );
-$files = array_values( array_unique( $files ) );
-// minify/ wrappers stay out of scope (third-party-adjacent, untouched by ARCH-013).
-$files = array_values(
-	array_filter(
-		$files,
-		static function ( $file_path ) use ( $includes ) {
-			return 0 !== strpos( (string) $file_path, $includes . '/minify/' );
-		}
-	)
-);
-sort( $files );
+$inventory_files = array_values( array_unique( $inventory_files ) );
+sort( $inventory_files, SORT_STRING );
 
-$inventory = array();
-$edges     = array();
-
-foreach ( $files as $file_path ) {
-	$src = file_get_contents( $file_path );
-	if ( false === $src ) {
-		fwrite( STDERR, "Cannot read {$file_path}\n" );
-		exit( 1 );
-	}
-	$rel = 'includes/' . substr( (string) $file_path, strlen( $includes ) + 1 );
-
-	preg_match_all( '/^\s*(?:public|protected|private)\s+(?:static\s+)?function\s+([a-zA-Z0-9_]+)/m', $src, $m );
-	$methods = $m[1];
-
-	preg_match_all( '/add_(?:action|filter)\s*\(\s*[\'"]([^\'"]+)[\'"]/', $src, $h );
-	$hooks = array_values( array_unique( $h[1] ) );
-
-	// Mutable static state = static PROPERTY declarations. Static methods
-	// alone (Main, Cache, Util facades) do not count.
-	$static_state = (bool) preg_match( '/(?:private|protected|public|var)\s+static\s+\$/', $src );
-
-	preg_match_all( $pattern, $src, $r );
-	$refs = array_values( array_unique( $r[1] ) );
-	sort( $refs );
-
-	// Exclude the self-reference: every class mentions its own name. Anchor to
-	// a real declaration (line start + optional modifiers) so docblock prose
-	// such as "the main class for ..." cannot poison the match (ARCH-001 review).
-	$own_class = preg_match( '/^\s*(?:abstract\s+|final\s+)?(?:class|trait)\s+([A-Za-z_][A-Za-z0-9_]*)/m', $src, $sm ) ? $sm[1] : null;
-	if ( null !== $own_class ) {
-		$refs = array_values( array_diff( $refs, array( $own_class ) ) );
-	}
-
-	// Line count uses wc -l semantics (newline count; +1 only when the file
-	// does not end with a newline) to stay comparable with campaign baselines.
-	$line_count = substr_count( $src, "\n" );
-	if ( ! str_ends_with( $src, "\n" ) ) {
-		++$line_count;
-	}
-
-	$inventory[] = array(
-		'file'         => $rel,
-		'class'        => null,
-		'lines'        => $line_count,
-		'methods'      => count( $methods ),
-		'hooks'        => $hooks,
-		'static_state' => $static_state,
-		'refs'         => $refs,
-	);
-
-	if ( count( $refs ) > 0 ) {
-		$edges[ $rel ] = $refs;
+$runtime_files = $inventory_files;
+foreach ( array( 'performance-optimisation.php', 'uninstall.php', 'templates/perf-translations.php' ) as $relative_file ) {
+	$absolute_file = $plugin_root . '/' . $relative_file;
+	if ( file_exists( $absolute_file ) ) {
+		$runtime_files[] = $absolute_file;
 	}
 }
+$runtime_files = array_values( array_unique( $runtime_files ) );
+sort( $runtime_files, SORT_STRING );
 
-$inv_json  = json_encode( $inventory, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n";
-$edge_json = json_encode( $edges, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n";
+try {
+	$analyzer       = new PerformanceOptimise\Architecture\Source_Analyzer();
+	$nodes          = $analyzer->analyze( $runtime_files, $plugin_root );
+	$graph          = new PerformanceOptimise\Architecture\Dependency_Graph( $nodes );
+	$graph_payload  = $graph->graph();
+	$inventory      = $graph->inventory(
+		array_map(
+			static function ( string $file ) use ( $plugin_root ): string {
+				return ltrim( str_replace( '\\', '/', substr( $file, strlen( $plugin_root ) ) ), '/' );
+			},
+			$inventory_files
+		)
+	);
+	$inventory_json = json_encode( $inventory, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ) . "\n";
+	$graph_json     = json_encode( $graph_payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ) . "\n";
+} catch ( Throwable $error ) {
+	fwrite( STDERR, 'Architecture inventory failed: ' . $error->getMessage() . "\n" );
+	exit( 1 );
+}
 
-$inv_path  = $plugin_root . '/docs/architecture/class-inventory.json';
-$edge_path = $plugin_root . '/docs/architecture/DEPENDENCY-GRAPH.json';
+$inv_path   = $plugin_root . '/docs/architecture/class-inventory.json';
+$graph_path = $plugin_root . '/docs/architecture/DEPENDENCY-GRAPH.json';
 
 if ( $check_mode ) {
 	$ok = true;
-	if ( ! file_exists( $inv_path ) || file_get_contents( $inv_path ) !== $inv_json ) {
+	if ( ! file_exists( $inv_path ) || file_get_contents( $inv_path ) !== $inventory_json ) {
 		fwrite( STDERR, "class-inventory.json is stale; regenerate without --check.\n" );
 		$ok = false;
 	}
-	if ( ! file_exists( $edge_path ) || file_get_contents( $edge_path ) !== $edge_json ) {
+	if ( ! file_exists( $graph_path ) || file_get_contents( $graph_path ) !== $graph_json ) {
 		fwrite( STDERR, "DEPENDENCY-GRAPH.json is stale; regenerate without --check.\n" );
 		$ok = false;
 	}
 	exit( $ok ? 0 : 1 );
 }
 
-file_put_contents( $inv_path, $inv_json );
-file_put_contents( $edge_path, $edge_json );
+if ( false === file_put_contents( $inv_path, $inventory_json ) || false === file_put_contents( $graph_path, $graph_json ) ) {
+	fwrite( STDERR, "Could not write architecture inventory files.\n" );
+	exit( 1 );
+}
 
 fwrite(
 	STDOUT,
 	sprintf(
-		"Wrote %s (%d files) and %s (%d edges).\n",
+		"Wrote %s (%d files) and %s (%d nodes, %d edges, %d cyclic components).\n",
 		$inv_path,
 		count( $inventory ),
-		$edge_path,
-		array_sum( array_map( 'count', $edges ) )
+		$graph_path,
+		$graph_payload['summary']['files'],
+		$graph_payload['summary']['edges'],
+		$graph_payload['summary']['cyclic_components']
 	)
 );

@@ -1,5 +1,7 @@
 # PHP 8.4 / 8.5 Compatibility — Deprecation Sweep, JIT & OPcache Guidance
 
+> The issue-era path references below are preserved for audit traceability. For current canonical file paths and loader behavior, use `docs/architecture/LOAD-ORDER.md` and `docs/architecture/INCLUDE-HIERARCHY.md`.
+
 > Scope: WordPress 6.2+, PHP 8.2 minimum. Newer runtimes (8.4/8.5) are supported
 > via additive, version-gated code only — the plugin never fatals on older PHP.
 
@@ -25,10 +27,10 @@
   `close_curl_multi_handle()`, `close_curl_share_handle()`,
   `close_finfo_handle()`, `free_xml_parser()`, `destroy_gd_image()` — each with
   an `is_php85_or_greater( ?string $php_version = null )` gate (test seam) and
-  a fail-open legacy path below 8.5. Call sites (`class-telemetry.php`,
-  `class-litespeed-crawler.php`, `class-img-converter.php`) use the helpers;
+  a fail-open legacy path below 8.5. Call sites (`includes/Insight/class-telemetry.php`,
+  `includes/Integrations/class-litespeed-crawler.php`, `includes/Images/class-img-converter.php`) use the helpers;
   no raw close calls remain in plugin code.
-- **Cron/scheduler hotspot:** `includes/class-cron.php`
+- **Cron/scheduler hotspot:** `includes/Scheduler/class-cron.php`
   (`is_woo_excluded_url()`, `get_rest_route_param()`) is covered by
   `PhpDeprecationHygieneTest::test_cron_woo_exclusion_paths_are_null_safe()`
   under the zero-notice gate.
@@ -157,7 +159,7 @@ and root `*.php`; the machine-checkable subset is pinned by
   `E_STRICT`, `mysqli_ping()`, `mysqli_execute()`,
   `socket_set_timeout()`, `$http_response_header`, `DATE_RFC7231`,
   `__sleep()`/`__wakeup()` definitions, implicitly-nullable signatures.
-  (`chr( 10 )` newline joins in `class-image-optimisation.php` are
+  (`chr( 10 )` newline joins in `includes/Images/class-image-optimisation.php` are
   in-range single bytes — not deprecated.)
 - **Audited, not applicable (zero hits, no scanner rule needed):**
   output-handler echo, `__debugInfo()` returning null, closure-binding
@@ -188,10 +190,10 @@ and root `*.php`; the machine-checkable subset is pinned by
   (always initialized, `is_array`-guarded, string-filtered), and fail-opens
   to `array()` on any probe failure. No raw close-call changes were needed —
   `close_curl_handle()` and siblings already cover every teardown call site
-  (`class-telemetry.php`, `class-litespeed-crawler.php`,
-  `class-img-converter.php`).
+  (`includes/Insight/class-telemetry.php`, `includes/Integrations/class-litespeed-crawler.php`,
+  `includes/Images/class-img-converter.php`).
 - **System Info OPcache/JIT rows:** `System_Info::get_opcache()`
-  (`includes/class-system-info.php`) now reports `opcache_enabled`
+  (`includes/Insight/class-system-info.php`) now reports `opcache_enabled`
   (`opcache.enable`), `opcache_enable_cli` (`opcache.enable_cli`),
   `jit_enabled` + `jit_mode` (`opcache.jit`, `opcache.jit_buffer_size`)
   alongside the existing `status/detail/memory_usage/interned_strings/
@@ -224,24 +226,24 @@ and root `*.php`; the machine-checkable subset is pinned by
   `Util::enqueue_unique_async_action()` path, which passes the explicit
   `$unique` flag on AS 4.x and keeps the legacy guard internally for
   older schedulers:
-  - `includes/class-rest.php` — bulk webp/avif image loops (per-item
+  - `includes/Admin/class-rest.php` — bulk webp/avif image loops (per-item
     `SELECT` removed entirely; a `0` return is never counted as queued)
     and the single `used_css_regenerate` endpoint (a `0` re-probes the
     guard once to report "already queued" vs a 500 enqueue failure).
-  - `includes/class-google-fonts.php` — `maybe_queue_download()`.
-  - `includes/class-abilities.php` — `execute_used_css_regenerate()`
+  - `includes/Assets/class-google-fonts.php` — `maybe_queue_download()`.
+  - `includes/Admin/class-abilities.php` — `execute_used_css_regenerate()`
     (same already-queued vs failure disambiguation as the REST endpoint).
-  - `includes/class-builder-purge-watcher.php` —
+  - `includes/Integrations/class-builder-purge-watcher.php` —
     `schedule_deferred_drift_purge()` (a `0` keeps the existing
     return-false/retryable contract) and
     `schedule_deferred_upgrade_purge()` (a `0` with a pending job still
     reports true per the enqueued-or-pending contract, else falls
     through to WP-Cron).
-  - Intentionally untouched: `class-critical-css.php`
+  - Intentionally untouched: `includes/CSS/class-critical-css.php`
     `schedule_ccss_job()` legacy fallback branches (only run when
     `supports_action_scheduler_unique()` is false) and the
-    already-converted `class-used-css.php` / `class-pagespeed.php` /
-    `class-main.php` / `class-cron.php` paths (verified only).
+    already-converted `includes/CSS/class-used-css.php` / `includes/Insight/class-pagespeed.php` /
+    `includes/Core/class-main.php` / `includes/Scheduler/class-cron.php` paths (verified only).
 - **Tests:** `ActionSchedulerUniquePurge1310Test::test_double_schedule_with_unique_flag_queues_single_job()`
   pins the acceptance criterion — a store-deduping 4.x stub queues a
   single job across a double enqueue with `$unique=true` on both

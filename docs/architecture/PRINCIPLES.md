@@ -1,47 +1,87 @@
-# Architecture Principles — Performance Optimisation Plugin
+# Architecture Principles: Performance Optimisation Plugin
 
-Owner: architecture-refactoring campaign. This file is the design contract for every
-refactor PR. It complements (never overrides) `wppo-agent-rules.md` (watchdog),
-`AGENTS.md`, and `.agents/AGENTS.md`.
+These principles govern the incremental architecture campaign. `wppo-agent-rules.md` remains the final authority for protected behavior and merge safety.
 
-## 1. Pragmatic SOLID
+## 1. Clear ownership before extraction
 
-- **SRP first.** One class owns one responsibility cluster. God classes
-  (`Main` 232 methods, `Util` 170 methods, `Cache` 135 methods — see
-  `docs/architecture/class-inventory.json`) are decomposed one extraction at a time.
-- **Open/Closed where useful:** new behavior via new methods/classes + filters,
-  not by editing hot paths. Never break `wppo_*` hooks, REST contracts, or option names.
-- **Dependency Inversion only at real boundaries** (storage, filesystem, HTTP, scheduler).
-  Do NOT create an interface per class. An interface earns its existence when two
-  implementations exist or a test seam is required at a boundary.
-- **Composition over inheritance.** No new base classes for sharing helpers;
-  prefer small collaborators + facades.
+Move a responsibility only after identifying its current owner, target owner, callers, mutable state, and tests. A new file does not create an owner by itself.
 
-## 2. DRY with intent
+Phase 3 starts from 11,091 lines and 235 methods in `Main`, 5,006 lines and 156 methods in `Util`, and 5,643 lines and 161 methods in `Cache`. These counts describe review pressure; they do not set line-count targets.
 
-Consolidate duplicated settings access, validation, URL normalization, filesystem
-logic, capability checks, hook registration — **unless** the duplication is
-intentional (different lifecycle, security level, or compat requirement).
-Intentional duplication must carry a comment citing why (precedent:
-`class-image-optimisation.php` D-13/D-14 dual-path notes).
+## 2. Dependency direction
 
-## 3. WordPress is the framework
+Prefer:
 
-Preserve hooks, filters, REST namespace `performance-optimisation/v1`, option names,
-multisite behavior (`Util::transient_key()` blog prefix), WooCommerce/Elementor/
-LiteSpeed/CDN/Cloudflare compat, and `WP_Filesystem` vs native-I/O choices
-(see `.jules/bolt.md` streaming lesson). Never swap a WP API for generic PHP
-without a compat analysis in the issue.
+```text
+Bootstrap/Core
+→ application coordination
+→ domain services
+→ infrastructure and compatibility
+→ external systems
+```
 
-## 4. Performance is a gate
+Features do not call `Main` private implementation. Infrastructure does not call feature internals. Presentation adapters call application or domain contracts instead of writing domain state.
 
-No expensive abstraction in hot paths (output buffering, regex callbacks, per-image
-loops). Static memo caches stay per-request, keyed by `get_current_blog_id()`
-where multisite-switchable, and registered in `reset_all_caches()` + test bootstrap.
-A refactor that regresses a hot path fails review even if cleaner.
+The schema-v2 graph records 16 strict boundary violations, one 59-node runtime SCC, and two compatibility-only SCCs. Those findings set priorities; they do not dictate one giant rewrite.
 
-## 5. Compatibility facades, incremental migration
+## 3. Pragmatic SOLID
 
-Moved public/static behavior keeps a thin `Util::`/`Main::` proxy (deprecated
-only after callers migrate). No big-bang rewrites, no namespace migration bundled
-with extraction, no public API removal.
+- Apply SRP to independent reasons to change.
+- Use providers and strategies at real extension seams.
+- Verify substitutability only where shared contracts exist.
+- Define interfaces for external seams or multiple real implementations.
+- Invert filesystem, HTTP, database, time, randomness, and provider dependencies where it improves tests or adapters.
+
+Do not add a DI container, an interface per class, inheritance for demonstration, or a DTO for every settings array.
+
+## 4. Compatibility with a removal path
+
+Public, static, hook-visible, and reflection-visible behavior keeps a proxy until callers migrate. Each facade method needs a target owner, caller census, removal condition, and release impact.
+
+`Util` remains a compatibility layer, not a home for new feature policy. The graph records 56 incoming source nodes and 1,145 executable references, so caller migration matters more than moving the file.
+
+## 5. DRY with semantic proof
+
+Consolidate validation, sanitization, permission checks, settings writes, cache keys, URL policy, response mapping, hook registration, and detection only when the behavior matches.
+
+Intentional duplication must document the lifecycle, security, performance, or provider difference that requires it. Exact tokenizer shape matches remain review candidates until source and tests confirm semantic equivalence.
+
+## 6. Explicit state lifecycle
+
+Classify every static property as request memo, cross-request state, compatibility state, singleton state, or mutable global. Prove reset, blog switching, and test isolation for site-sensitive state.
+
+Static state alone is not a defect. Unclassified shared state is a defect.
+
+## 7. WordPress is the runtime contract
+
+Preserve hook order, filters, option and transient names, multisite isolation, REST permissions, CLI output, cron ownership, builder compatibility, and LiteSpeed behavior.
+
+Keep:
+
+- LiteSpeed ESI, coexistence, headers, and conditional loading;
+- manual plugin class loading and no PSR-4 migration;
+- the React `useState` architecture with no router or store;
+- `advanced-cache.php` early-load behavior;
+- Redis drop-in blog namespacing;
+- public RUM safeguards;
+- committed build output.
+
+## 8. Performance belongs in the design review
+
+Refactoring must not add hot-path I/O, repeated remote requests, new timers, or avoidable output-buffer work. React work should also avoid unrelated eager fetches and whole-tree polling rerenders.
+
+A cleaner class that slows cache generation, image delivery, CSS processing, or the admin SPA fails the review.
+
+## 9. Evidence before claims
+
+Use the current repository and installed WordPress as authority. Regenerate the class inventory and tokenizer graph after runtime source changes. Treat graph metrics as signals that require source, history, tests, and runtime evidence.
+
+The tokenizer excludes comments from runtime edges. It records dynamic references without inventing a target when PHP cannot resolve one from syntax. Compatibility probes, loader edges, and facade calls receive separate classifications.
+
+## 10. One verified step
+
+Each queue item owns one responsibility, one GitHub issue, and one pull request. Pin behavior, extract, run gates, inspect the graph delta, merge through CI, verify installed WordPress, and update the queue before the next item.
+
+One verified architectural step is worth more than a broad file shuffle.
+
+Queue records marked `type: epic` or `status: planning` are non-executable buckets until split into a single responsibility and issue; only one executable item can be active at a time.

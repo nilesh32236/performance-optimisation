@@ -1,8 +1,10 @@
 # WordPress 6.8 → 7.2 Readiness
 
+> Dated verification rows below preserve the September 2026 readiness pass. Current dependency and loader facts are maintained by `composer.lock`, `AGENTS.md`, and `docs/architecture/LOAD-ORDER.md`; do not read historical AS 4.1 rows as the current baseline.
+
 **Date:** 2026-09-01  
 **Core latest fetched:** WordPress 7.1 Mary Lou 2026-08-19; 7.2 alpha trunk r63167, GA 2026-12-09  
-**Plugin baseline:** 1.9.0 + `composer.json`/`package.json` as locked (`woocommerce/action-scheduler` 4.1.0)  
+**Plugin baseline:** 2.4.0 + `composer.json`/`package.json` as locked (`woocommerce/action-scheduler` 4.2.0)
 **Related:** `COMPETITIVE_GAP_ANALYSIS.md:1` (already adopted + 10 opportunity rows), `docs/competitive-audit-2026.md:5`  
 **Issue:** #708 LS-904 WP 7.x readiness + library bump — closes cross-cutting track
 
@@ -29,16 +31,16 @@
 
 Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), **HTML API** `WP_HTML_Processor`/`WP_Block_Processor`/`WP_HTML_Tag_Processor::serialize_token()`, **salted cache family** (`wp_cache_get_salted`, `set_salted`, `get_multiple_salted` etc.).
 
-**We adopted (verified `class-cache.php`, `class-main.php`):**
+**We adopted (verified `includes/Cache/class-cache.php`, `includes/Core/class-main.php`):**
 - ✅ Template buffer dual-path: `wp_template_enhancement_output_buffer` when `function_exists('wp_should_output_buffer_template_for_enhancement') && is WP 6.9+`, else `template_redirect→ob_start` (`TODO #553`).
 - ✅ Inline budget: `class-cache.php:1006` `styles_inline_size_limit` 40k/20k version-aware + `core_will_inline()` greedy accounting with `path&&src` gate + `is_readable` skip.
 - ✅ Separate assets: `block_assets_are_separate()` → `separate` baked into combined-CSS filename (`index-separate.css` vs `index.css`).
 - ✅ Script modules: `apply_module_loading_strategies()` `in_footer + low` via `wp_script_modules()`.
-- ✅ Abilities: `class-abilities.php` registers base set.
+- ✅ Abilities: `includes/Admin/class-abilities.php` registers base set.
 
 **Adopted (LS-904b-d ✅ done 2026-09-01 — #708):**
 - ✅ Salted-cache family completeness — `templates/object-cache.php` now provides `wp_cache_get_salted`/`set_salted`/`get_multiple_salted`/`set_multiple_salted`/`delete_salted`/`delete_multiple_salted` with `function_exists` gates, array salt implode, stable-key check + `*-queries` eviction; `@since 2.0.0` (see `LS-904b`).
-- ✅ `wp_get_loading_optimization_attributes()` for occluded/below-fold images — `class-image-optimisation.php` wires `wp_get_loading_optimization_attributes()` (WP 6.7+) via `set_loading_optimization_attributes()` + `function_exists` gates on both `WP_HTML_Tag_Processor` and regex fallbacks; native-lazy and JS-lazy paths set `fetchpriority=low` for occluded images without overriding existing priority; fallback `low` for pre-6.7; `@since 2.0.0` (see `LS-904c`, `ImageOptimisationTest` occluded cases).
+- ✅ `wp_get_loading_optimization_attributes()` for occluded/below-fold images — `includes/Images/class-image-optimisation.php` wires `wp_get_loading_optimization_attributes()` (WP 6.7+) via `set_loading_optimization_attributes()` + `function_exists` gates on both `WP_HTML_Tag_Processor` and regex fallbacks; native-lazy and JS-lazy paths set `fetchpriority=low` for occluded images without overriding existing priority; fallback `low` for pre-6.7; `@since 2.0.0` (see `LS-904c`, `ImageOptimisationTest` occluded cases).
 - ✅ Emoji footer module — `class-core-tweaks.php` `disable_emojis()` now dequeues footer module `wp_dequeue_script_module('emoji')` + legacy `wp-emoji` when `function_exists`, plus `disable_emojis_script_module()` hooked `wp_enqueue_scripts`/`admin_enqueue_scripts` at 100 when `function_exists('wp_dequeue_script_module')`; `@since 2.0.0` (see `LS-904d`, `CoreTweaksTest`).
 
 **Remain (P1 — low):**
@@ -56,7 +58,7 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 - **Media Editor modal**, **infinite scroll default**, **responsive styling controls** (`mobile:`/`desktop:`), **Notes everywhere**, **accessible tooltips API**.
 
 **We adopted:**
-- ✅ Client-side media coexistence: `filter_client_side_supported_mime_types()` + `forceServerSideConversion` + two-pass `wp_generate_attachment_metadata` idempotency (`ImageOptimization.js:504`, `class-image-optimisation.php`).
+- ✅ Client-side media coexistence: `filter_client_side_supported_mime_types()` + `forceServerSideConversion` + two-pass `wp_generate_attachment_metadata` idempotency (`ImageOptimization.js:504`, `includes/Images/class-image-optimisation.php`).
 - ✅ Speculation env pinning: `WP_SPECULATIVE_LOADING_DEFAULT_*` env/constant → setting (7.1 feature) respected.
 
 ### 7.2 Upcoming 2026-12-09 — Secrets API (Proposal Stage)
@@ -93,11 +95,11 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 |---|---|---|---|---|
 | **P0** | Bump `action-scheduler` ✅ done 4.1.0 | `composer.json`/`composer.lock` | 1 day | ✅ done 2026-08-27 (LS-904a) — see §2 |
 | **P1** | Salted-cache family in `templates/object-cache.php` (`get_multiple_salted` + `*-queries` eviction + `delete_salted`/`delete_multiple_salted`) | `templates/object-cache.php`, `tests/php/ObjectCacheTest.php` | 2 days | ✅ done 2026-09-01 (LS-904b) — `@since 2.0.0` |
-| **P1** | `wp_get_loading_optimization_attributes()` for occluded images (`fetchpriority=low` Image Prioritizer) | `class-image-optimisation.php`, `tests/php/ImageOptimisationTest.php` | 2 days | ✅ done 2026-09-01 (LS-904c) — `@since 2.0.0` |
+| **P1** | `wp_get_loading_optimization_attributes()` for occluded images (`fetchpriority=low` Image Prioritizer) | `includes/Images/class-image-optimisation.php`, `tests/php/ImageOptimisationTest.php` | 2 days | ✅ done 2026-09-01 (LS-904c) — `@since 2.0.0` |
 | **P1** | Emoji footer module dequeuing (`wp_dequeue_script_module('emoji')`) | `class-core-tweaks.php`, `tests/php/CoreTweaksTest.php` | 0.5 day | ✅ done 2026-09-01 (LS-904d) — `@since 2.0.0` |
-| **P2** | `module_dependencies` exclusion in combine/minify | `class-cache.php`, `class-main.php` | 1 day | Deferred |
-| **P2** | OD-aware LCP (detect `OD_URL_Metric`) | `class-image-optimisation.php` | 1 day | Deferred |
-| **P2** | Abilities refinements (`wp_get_abilities($args)`, categories, lifecycle hooks) | `class-abilities.php` | 1-2 days | Deferred |
+| **P2** | `module_dependencies` exclusion in combine/minify | `includes/Cache/class-cache.php`, `includes/Core/class-main.php` | 1 day | Deferred |
+| **P2** | OD-aware LCP (detect `OD_URL_Metric`) | `includes/Images/class-image-optimisation.php` | 1 day | Deferred |
+| **P2** | Abilities refinements (`wp_get_abilities($args)`, categories, lifecycle hooks) | `includes/Admin/class-abilities.php` | 1-2 days | Deferred |
 | **P3** | Secrets migration doc + stub (no auto-migrate) | `docs/*`, `class-cdn-purger.php` | Doc now, code at 7.2 | Doc done, code at 7.2 |
 | **P3** | `symfony/css-selector ^8.0` widening | `composer.json` | 0.5 day | Deferred |
 
@@ -105,7 +107,7 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 
 Keep `voku/html-min`/`matthiasmullie/minify` as-is. Re-assess `combineCSS` once 7.2 concat-elimination lands (`TODO #624`).
 
-> **LS-903 N9 CVE guard (filter-only, S scope, @since 2.0.0):** `wppo_cve_guard_handles` (alias `wppo_cve_excluded_handles`) in `includes/class-main.php:setup_hooks()` merges `array_unique` into `exclude_js`/`exclude_css`/`exclude_defer_js`/`exclude_delay_js`; no `wp_options` persistence, default empty (disabled), respects `litespeed_can_optm` gate (see `docs/hooks.md`).
+> **LS-903 N9 CVE guard (filter-only, S scope, @since 2.0.0):** `wppo_cve_guard_handles` (alias `wppo_cve_excluded_handles`) in `includes/Core/class-main.php:setup_hooks()` merges `array_unique` into `exclude_js`/`exclude_css`/`exclude_defer_js`/`exclude_delay_js`; no `wp_options` persistence, default empty (disabled), respects `litespeed_can_optm` gate (see `docs/hooks.md`).
 
 *Sources: wordpress.org/news (7.1 Mary Lou), make.wordpress.org/core field guides (6.8 2025-03-28, 6.9 2025-11-18, 7.0 2026-05-14, 7.1 2026-08-05) + client-side media deep dive 2026-07-22, proposal 7.2 Secrets 2026-08-25, Perf Chat 2026-08-25, developer.wordpress.org since 6.8-7.1, packagist.org 2026-08-27, 2026-09-01.*
 

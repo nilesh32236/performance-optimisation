@@ -1,12 +1,16 @@
 # Final Architecture Audit — Phase 2 Campaign (ARCH-016)
 
+> Historical Phase 2 closeout. Phase 3 supersedes its metrics and remaining-work decisions with `ARCHITECTURE-BASELINE.md`, `ARCHITECTURE-QUALITY.md`, and schema-v2 `DEPENDENCY-GRAPH.json`.
+
 Date: 2026-09-23. Scope: campaign section 36. Docs-only; no runtime changes.
 Queue: `docs/architecture/refactor-queue.yaml` (phase2_items ARCH-001..016 + future_items).
 Evidence: `class-inventory.json` (regenerated), `DEPENDENCY-GRAPH.json`, ARCHITECTURE.md,
 LOAD-ORDER.md, INCLUDE-HIERARCHY.md. All 15 implementation items merged with
 post-merge `wp wppo verify` 6/7 (known environmental CLI-writability warn).
 
-## 1. BEFORE → AFTER (all numbers measured, generator-canonical)
+## 1. BEFORE → AFTER (historical hand-count archaeology; not generator-canonical)
+
+The values below preserve the Phase 2 closeout record and its commit-era hand counts. They are not current metrics; use the current generated artifacts and `ARCHITECTURE-BASELINE.md` for decisions.
 
 | Metric | Before (ARCH-001) | After (ARCH-016) | Delta |
 |---|---|---|---|
@@ -28,11 +32,10 @@ post-merge `wp wppo verify` 6/7 (known environmental CLI-writability warn).
 
 Method-count increases in Main/Cache/Image_Optimisation/Rest are the facade
 effect (thin proxies + `@internal` bridges retained per REFACTORING-RULES
-facade-first rule); every targeted class lost 15–25% of its lines and at
-least one responsibility cluster. Edge-count growth likewise reflects new
-classes + proxies; raw counts include docblock `ClassName::` mentions, so
-they measure coupling surface honestly but over-approximate true cycles
-(tokenizer-based cycle analysis is future work — see FUT-006).
+facade-first rule); every targeted class lost 15–25% of its lines and at least
+one responsibility cluster. Edge-count growth likewise reflects new classes +
+proxies. Phase 2 used the old raw reference approximation; Phase 3 schema-v2
+token analysis now provides the executable graph in `DEPENDENCY-GRAPH.json`.
 
 ## 2. Per-item record
 
@@ -50,7 +53,7 @@ they measure coupling surface honestly but over-approximate true cycles
 | ARCH-010 | 43 anomaly → Ai_Anomaly; 7/7 bodies identical | 11 tests; AI_Adaptive 98→76 methods |
 | ARCH-011 | 12 cache/settings handlers → Rest_Cache/Rest_Settings | 68 tests; 48 live routes |
 | ARCH-012 | WP-Cron primitives → Scheduler; dedup semantics kept | 36 tests; 7 cron hooks live |
-| ARCH-013 | 62 pure renames to 14 dirs; loader/entry/tests/docs updated | loader healthy live (200/302/48/7/7); suite 2647 green |
+| ARCH-013 | 62 pure renames to 14 dirs; loader/entry/tests/docs updated | loader healthy live (200/302/48/8/8); suite 2647 green |
 | ARCH-014 | 17 internal Util:: edges → boundary owners; proxies stay | 7 tests; triple-Yes reviews |
 | ARCH-015 | PresetsCard extracted (dumb card + props) | Jest 789; build committed |
 
@@ -95,12 +98,11 @@ mixed-version `class_exists` guards; `Util` at root until callers migrate;
 `minify/` untouched; memo non-blog-keying where single-blog lifecycle proven
 (exclusion memo) vs blog-keyed where fixed (delay context, RUM digest).
 
-Future queue items (recorded in refactor-queue.yaml `future_items`):
-FUT-001 Critical_CSS split; FUT-002 bridge/cycle cleanup + Util external
-callers (~650 edges); FUT-003 Used_CSS/Img_Converter/RUM/Database/Object_Cache/
-LiteSpeed remainder consolidation; FUT-004 AI speculation/model + image
-lazy/media leftovers; FUT-005 React cards (13 remain) + Dashboard/App;
-FUT-006 tokenizer-based dependency-cycle analysis.
+Phase 3 queue: P3-001 establishes the tokenizer baseline and quality model.
+P3-002 through P3-024 own scheduler, transport, state, cache, settings,
+insight, database, edge, Main/Util, AI model, React, guardrail, and final-audit work.
+The historical FUT-001..006 records remain for traceability; FUT-006 is
+pending supersession by P3-001.
 
 Protected: LiteSpeed ESI bridge + coexistence (WONTFIX #1291); manual
 loading (no PSR-4); `useState`-only SPA; advanced-cache/object-cache

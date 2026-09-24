@@ -1537,7 +1537,7 @@ WordPress 6.9 late-header / final buffer action. Canonical place to emit late he
 **Parameters:**
 - `$final` *(string)* — Final HTML string before flush (alias `$output` in plugin; not the filtered value).
 
-**Streaming tradeoff:** Registering this action automatically opts into the template-enhancement buffer (priority 1000 by default via `wp_should_output_buffer_template_for_enhancement()`), which disables response streaming / early flush. TTFB increases while TTLB unchanged — intentional when Server-Timing is enabled; keep disabled by default and emit only on cache-miss generation passes (`advanced-cache.php` serves cached pages without booting WordPress; see `includes/class-main.php:559` `setup_hooks`, `capture_template_start`, `emit_server_timing_header` and `includes/class-cache.php:process_buffer_for_cache`).
+**Streaming tradeoff:** Registering this action automatically opts into the template-enhancement buffer (priority 1000 by default via `wp_should_output_buffer_template_for_enhancement()`), which disables response streaming / early flush. TTFB increases while TTLB unchanged — intentional when Server-Timing is enabled; keep disabled by default and emit only on cache-miss generation passes (`advanced-cache.php` serves cached pages without booting WordPress; see `includes/Core/class-main.php:559` `setup_hooks`, `capture_template_start`, `emit_server_timing_header` and `includes/Cache/class-cache.php:process_buffer_for_cache`).
 
 **Late-header mechanics:** Header must be sent via `header( 'Server-Timing: ...', false )` before flush (`false` appends to preserve coexisting metrics); guard `headers_sent()` and `null === System_Info::get_request_start_microtime()`. Core wraps the action in try/catch with `WP_DEBUG_DISPLAY` on error — no extra try/catch needed in plugin.
 
@@ -2455,9 +2455,9 @@ jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
 
 | Key | Type / Default | Consumed by |
 |-----|----------------|-------------|
-| `image_optimisation.excludeWebPImages` | string (newline-separated URLs/handles), default `''` | `Img_Converter::__construct()` (`includes/class-img-converter.php`) — images matching these URLs/handles are skipped during WebP/AVIF conversion. |
-| `image_optimisation.batch` | int, default `50` | `Cron` image-conversion worker (`includes/class-cron.php`) and `wp wppo image convert` (`includes/class-wppo-cli-command.php`) — number of images processed per batch. |
-| `performance_audit.rum_sample_rate` | int 1–100, default `100` | `RUM::get_sample_rate()` / `RUM::get_effective_sample_rate()` (`includes/class-rum.php`) — percent of page views sending a RUM beacon. No SPA toggle (headless by design); edit via `wp wppo settings` or `import_settings`. The client (`src/rum.js`) and server each roll independently at the effective rate, so stored volume is ~rate²/100; the high-traffic auto-throttle halves each gate (see `wppo_rum_throttle_threshold` / `wppo_rum_effective_sample_rate`). |
+| `image_optimisation.excludeWebPImages` | string (newline-separated URLs/handles), default `''` | `Img_Converter::__construct()` (`includes/Images/class-img-converter.php`) — images matching these URLs/handles are skipped during WebP/AVIF conversion. |
+| `image_optimisation.batch` | int, default `50` | `Cron` image-conversion worker (`includes/Scheduler/class-cron.php`) and `wp wppo image convert` (`includes/Admin/class-wppo-cli-command.php`) — number of images processed per batch. |
+| `performance_audit.rum_sample_rate` | int 1–100, default `100` | `RUM::get_sample_rate()` / `RUM::get_effective_sample_rate()` (`includes/Insight/class-rum.php`) — percent of page views sending a RUM beacon. No SPA toggle (headless by design); edit via `wp wppo settings` or `import_settings`. The client (`src/rum.js`) and server each roll independently at the effective rate, so stored volume is ~rate²/100; the high-traffic auto-throttle halves each gate (see `wppo_rum_throttle_threshold` / `wppo_rum_effective_sample_rate`). |
 
 ---
 

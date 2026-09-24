@@ -1,5 +1,7 @@
 # Implementation plan (phases + acceptance criteria)
 
+> Historical site-planning snapshot from 2026-09-07. Counts in this file describe that audit moment. Current plugin architecture facts live in `docs/architecture/ARCHITECTURE-BASELINE.md`.
+
 ## W1 — Recon (DONE)
 Site stack (OpenLiteSpeed/PHP 8.3/MariaDB 11.8/Redis 8.0), plugin architecture (42 classes,
 31 REST routes, 7 CLI subcommands), theme map, content model (6 projects CPT, 9 pages originally,
