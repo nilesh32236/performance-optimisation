@@ -36,7 +36,7 @@ performance-optimisation.php
       │   Database_Cleanup, Database_Cleanup_Runner, Telemetry, Pagespeed, Insight_Query,
       │   Suggestion_Engine, System_Info, RUM, AI_Adaptive, Ai_Anomaly, OD_Bridge
       ├─ Admin and compatibility surfaces
-      │   Rest, Rest_Cache, Rest_Settings, Abilities, Metabox,
+      │   Rest, Rest_Cache, Rest_Settings, Abilities, Admin_Auth, Metabox,
       │   Admin_Notices, Perf_Translations, WPPO_CLI_Command,
       │   Core_Tweaks, Llms, Builder_Purge_Watcher
       └─ React admin SPA
@@ -48,12 +48,12 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 83 files: 79 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 84 files: 80 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 366 |
-| Runtime / compatibility / loader edges | 365 / 195 / 3 |
+| Unique edges | 368 |
+| Runtime / compatibility / loader edges | 367 / 195 / 3 |
 | Cross-domain / feature-to-feature edges | 313 / 46 |
 | Boundary violations | 16 |
 | Bridge candidates | 231 |
@@ -108,6 +108,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Image_Optimisation` | Image markup, lazy loading, media transforms, conversion bridge | Extract cohesive media/metadata or conversion-state clusters with parity tests |
 | `Insight_Query` | Cached telemetry/PageSpeed read models and PageSpeed suggestion projection | Keep read-only; leave scans, storage, AI, and RUM side effects with domain owners |
 | `Database_Cleanup_Runner` | Canonical adapter dispatch, legacy CLI aliases, dry-run previews, activity logging/hooks, and post-cleanup optimization decisions | Keep REST/Abilities/CLI authorization, confirmation, output, and response envelopes outside the runner; keep SQL and counts in `Database_Cleanup` |
+| `Admin_Auth` | Administrative capability and `wp_rest` nonce policy | Keep dependency-light and shared by REST/Abilities; public RUM validation stays in `RUM` |
 | `Rest` / CLI / Abilities | Transport and route/command registration | Add narrow application commands and response mappers; keep transport thin |
 | React cards | Local presentation and workflow state | Extract one card or hook at a time; keep `useState` and `wppoSettings` |
 
@@ -122,7 +123,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 7. **Redis policy:** `Redis_Config_Policy` now owns the full key manifest and value sanitizer used by REST and CLI; `Object_Cache::ALLOWED_KEYS` remains a compatibility alias.
 8. **Drop-in invalidation:** Advanced/Object cache mutators now invalidate through `Dropin_Registry`; `System_Info` remains the sole reporting and cache-storage owner.
 9. **CSS and image cycles:** storage owners exist, but policy and bridges keep the larger SCC connected.
-10. **REST and CLI duplication:** adapters duplicate permissions, dispatch, settings, telemetry, and diagnostics.
+10. **REST and CLI duplication:** `Admin_Auth` now owns the duplicated administrative capability/nonce decision; adapters still duplicate dispatch, settings, telemetry, and diagnostics.
 11. **Database cleanup orchestration:** `Database_Cleanup_Runner` now owns the shared REST/Abilities/CLI dispatch, aliases, dry-run preview, and activity policy; adapters retain transport concerns.
 12. **React async ownership:** cache commits, deferred saves, abort guards, and polling state need bounded fixes.
 

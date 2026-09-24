@@ -14,6 +14,7 @@ A boundary owns one decision or one external capability. Extraction does not cre
 | Application coordination | `Scheduler`, `Cron`, `Settings_Migrations`, `Sandbox_Preview`, `Builder_Purge_Watcher` | Calls domain services and infrastructure; avoids presentation |
 | Domain | Assets, Cache, CSS, Database, Edge, Images, Insight, Integrations | Calls infrastructure and shared policy; avoids `Main`, Admin, and other feature internals |
 | Presentation | Rest, Abilities, Metabox, admin notices, WP-CLI, React | Calls application/domain contracts; owns transport and display only |
+| Administrative security policy | `Admin_Auth` | Calls WordPress auth/nonce APIs only; owns no feature behavior |
 | Infrastructure and compatibility | Support, Settings_Store, Cache_Key, `Util`, protected minify wrappers, drop-ins | Provides narrow shared services; avoids feature internals |
 | Lifecycle and integrations | Activate, Deactivate, uninstall, LiteSpeed stack, Woo detection | Adapts WordPress and external runtime contracts without becoming feature policy |
 
@@ -110,7 +111,7 @@ The current hook registry and purger fallback can send one Cloudflare purge thro
 
 ### REST
 
-`Rest` still owns route registration, authorization helpers, response envelopes, throttling, and many domain handlers. `Rest_Cache` and `Rest_Settings` own two handler groups, but current route callbacks point directly to service instances. Their owner bridges support compatibility and tests.
+`Rest` owns route registration, a compatibility authorization facade, response envelopes, throttling, and many domain handlers. Administrative capability and nonce decisions belong to `Admin_Auth`; REST and Abilities both delegate without changing their callback signatures. `Rest_Cache` and `Rest_Settings` own two handler groups, but current route callbacks point directly to service instances. Their owner bridges support compatibility and tests.
 
 The next REST step should extract a narrow application command or response mapper. It should not redo Phase 2 route groups.
 
@@ -120,7 +121,7 @@ The next REST step should extract a narrow application command or response mappe
 
 ### Abilities
 
-`Abilities` duplicates parts of REST permission checks, telemetry reads, URL validation, image operations, and database orchestration. Shared application services must preserve the Abilities API registry and permission model.
+`Abilities` delegates administrative capability and nonce decisions to `Admin_Auth`; shared application services must preserve the Abilities API registry. Remaining telemetry reads, URL validation, image operations, and database orchestration still require explicit extraction rather than being folded into the auth policy.
 
 ### React
 
@@ -177,6 +178,6 @@ The following remain unchanged unless the owner reverses the watchdog decision:
 - React `useState` architecture with no router or store;
 - `advanced-cache.php` early-load behavior;
 - Redis drop-in blog namespacing;
-- REST capability and nonce policy;
+- REST and Abilities capability/nonce policy through `Admin_Auth`;
 - public RUM collection safeguards;
 - uninstall and multisite isolation behavior.

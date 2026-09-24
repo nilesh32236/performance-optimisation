@@ -128,12 +128,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 76 | 75 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 77 | 76 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 79 | Generated schema-v2 inventory |
+| Total class inventory | 81 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 83 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 84 nodes.
 
 ## Ownership by directory
 
@@ -187,7 +187,7 @@ The dependency graph adds three procedural runtime files: the plugin entry, `uni
 
 ### Admin
 
-`Admin` owns REST, Abilities, metaboxes, notices, translations, and WP-CLI transport. Domain policy should move behind application or domain services before these classes grow further.
+`Admin` owns REST, Abilities, metaboxes, notices, translations, and WP-CLI transport. `Admin_Auth` is the dependency-light shared policy for administrative capability and `wp_rest` nonce decisions; public RUM token/IP/rate-limit validation remains in `RUM`. Domain policy should move behind application or domain services before these classes grow further.
 
 ### Compatibility
 
