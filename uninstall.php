@@ -13,6 +13,11 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
+$wppo_job_registry_file = __DIR__ . '/includes/Scheduler/class-job-registry.php';
+if ( is_readable( $wppo_job_registry_file ) ) {
+	require_once $wppo_job_registry_file;
+}
+
 global $wpdb;
 
 if ( ! function_exists( 'wppo_cleanup_network_files' ) ) {
@@ -402,13 +407,11 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 	 * Unschedule plugin WP-Cron events and Action Scheduler actions (fail-open).
 	 *
 	 * Standalone-safe: uninstall runs under WP_UNINSTALL_PLUGIN without the
-	 * plugin's classes autoloaded, so the hook lists below intentionally
-	 * mirror Cron::SCHEDULED_HOOKS + Cron::AS_HOOKS in includes/Scheduler/class-cron.php
-	 * (plus the legacy `wppo_img_conversation` misspelling and the
-	 * WP-Cron-fallback hooks `wppo_google_fonts_download` and
-	 * `wppo_builder_drift_purge`) instead of requiring the class. Runs
-	 * per-site inside wppo_cleanup_site() so the multisite loop below clears
-	 * every blog; never fatals and never touches foreign hooks/groups.
+	 * plugin's Composer autoloader or feature classes. The dependency-free
+	 * Job_Registry class is loaded directly above and owns the canonical hook
+	 * sets, including the upgrade-purge WP-Cron fallback. Runs per-site inside
+	 * wppo_cleanup_site() so the multisite loop below clears every blog; never
+	 * fatals and never touches foreign hooks/groups.
 	 *
 	 * @since 2.2.0
 	 * @return void
@@ -420,30 +423,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 		// wp_next_scheduled()/wp_unschedule_event() loop for legacy WP.
 		// NOTE: This list must stay in sync with Cron::SCHEDULED_HOOKS in
 		// includes/Scheduler/class-cron.php (plus legacy/fallback extras below).
-		$hooks = array(
-			'wppo_page_cron_hook',
-			'wppo_page_cron_batch',
-			'wppo_generate_static_page',
-			'wppo_generate_static_url',
-			'wppo_preload_url_batch',
-			'wppo_img_conversion',
-			'wppo_database_cleanup_cron',
-			'wppo_web_vitals_rescan',
-			'wppo_llms_txt_daily',
-			'wppo_used_css_cron',
-			'wppo_ccss_regeneration',
-			'wppo_rum_flush',
-			'wppo_run_upgrades',
-			'wppo_litespeed_crawler_batch',
-			'wppo_crawler_warm',
-			'wppo_generate_ccss',
-			'wppo_object_cache_probe',
-			// Legacy misspelled image-conversion hook kept for BC.
-			'wppo_img_conversation',
-			// WP-Cron single-event fallbacks scheduled outside Cron class.
-			'wppo_google_fonts_download',
-			'wppo_builder_drift_purge',
-		);
+		$hooks = \PerformanceOptimise\Inc\Job_Registry::all_cron_hooks();
 		foreach ( $hooks as $hook ) {
 			try {
 				if ( function_exists( 'wp_unschedule_hook' ) ) {
@@ -477,16 +457,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 		if ( ! function_exists( 'as_unschedule_all_actions' ) ) {
 			return;
 		}
-		$as_hooks = array(
-			'wppo_convert_image_background',
-			'wppo_pagespeed_scan',
-			'wppo_used_css_generate',
-			'wppo_generate_ccss',
-			'wppo_litespeed_crawler_batch',
-			'wppo_crawler_warm',
-			'wppo_google_fonts_download',
-			'wppo_builder_drift_purge',
-		);
+		$as_hooks = \PerformanceOptimise\Inc\Job_Registry::all_action_scheduler_hooks();
 		foreach ( $as_hooks as $as_hook ) {
 			try {
 				as_unschedule_all_actions( $as_hook );
@@ -496,7 +467,7 @@ if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
 		}
 		// Forward-compat net for future hooks in the plugin's AS group.
 		try {
-			as_unschedule_all_actions( '', array(), 'performance_optimisation' );
+			as_unschedule_all_actions( '', array(), \PerformanceOptimise\Inc\Job_Registry::AS_GROUP );
 		} catch ( \Throwable $ignored_group ) {
 			unset( $ignored_group );
 		}

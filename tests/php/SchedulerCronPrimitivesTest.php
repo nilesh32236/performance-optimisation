@@ -19,6 +19,7 @@
 
 use PerformanceOptimise\Inc\Cron;
 use PerformanceOptimise\Inc\Object_Cache;
+use PerformanceOptimise\Inc\Job_Registry;
 use PerformanceOptimise\Inc\Scheduler;
 use Brain\Monkey\Functions;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
@@ -391,5 +392,28 @@ class SchedulerCronPrimitivesTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( array( 'wppo_pagespeed_scan', 'wppo_pagespeed_scan' ), $hooks );
 		$this->assertArrayHasKey( 'wppo_web_vitals_last_rescan', $this->options );
+	}
+
+	/**
+	 * Cron teardown consumes the complete registry union, including feature fallbacks.
+	 *
+	 * @return void
+	 */
+	public function test_clear_cron_jobs_clears_registry_union(): void {
+		$cleared = array();
+		Functions\when( 'wp_unschedule_hook' )->alias(
+			static function ( $hook ) use ( &$cleared ): void {
+				$cleared[] = (string) $hook;
+			}
+		);
+		Functions\when( 'delete_option' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'is_multisite' )->justReturn( false );
+
+		Cron::clear_cron_jobs();
+
+		$this->assertSame( Job_Registry::all_cron_hooks(), $cleared );
+		$this->assertContains( 'wppo_builder_drift_purge', $cleared );
+		$this->assertContains( 'wppo_upgrade_purge', $cleared );
 	}
 }

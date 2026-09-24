@@ -13,7 +13,7 @@
  * @phpcs:disable WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
  */
 
-use PerformanceOptimise\Inc\Cron;
+use PerformanceOptimise\Inc\Job_Registry;
 
 /**
  * Uninstall scheduler-cleanup guards.
@@ -107,14 +107,15 @@ class UninstallSchedulerCleanupTest extends \PHPUnit\Framework\TestCase {
 		$source = $this->uninstall_source();
 		$body   = $this->extract_function_body( $source, 'wppo_clear_scheduled_jobs' );
 		$this->assertNotNull( $body, 'wppo_clear_scheduled_jobs() must exist in uninstall.php' );
-		foreach ( Cron::SCHEDULED_HOOKS as $hook ) {
-			$this->assertStringContainsString( $hook, (string) $body, "Uninstall scheduler clear must cover WP-Cron hook {$hook}" );
+		$this->assertStringContainsString( 'Job_Registry::all_cron_hooks()', (string) $body );
+		foreach ( Job_Registry::all_cron_hooks() as $hook ) {
+			$this->assertStringStartsWith( 'wppo_', $hook );
 		}
-		// Legacy misspelling kept for BC with older installs.
-		$this->assertStringContainsString( 'wppo_img_conversation', (string) $body );
-		// WP-Cron single-event fallbacks scheduled outside the Cron class.
-		$this->assertStringContainsString( 'wppo_google_fonts_download', (string) $body );
-		$this->assertStringContainsString( 'wppo_builder_drift_purge', (string) $body );
+		// Legacy misspelling and feature-owned fallbacks are registry-owned.
+		$this->assertContains( 'wppo_img_conversation', Job_Registry::all_cron_hooks() );
+		$this->assertContains( 'wppo_google_fonts_download', Job_Registry::all_cron_hooks() );
+		$this->assertContains( 'wppo_builder_drift_purge', Job_Registry::all_cron_hooks() );
+		$this->assertContains( 'wppo_upgrade_purge', Job_Registry::all_cron_hooks() );
 	}
 
 	/**
@@ -125,13 +126,15 @@ class UninstallSchedulerCleanupTest extends \PHPUnit\Framework\TestCase {
 		$source = $this->uninstall_source();
 		$body   = $this->extract_function_body( $source, 'wppo_clear_scheduled_jobs' );
 		$this->assertNotNull( $body, 'wppo_clear_scheduled_jobs() must exist in uninstall.php' );
-		foreach ( Cron::AS_HOOKS as $hook ) {
-			$this->assertStringContainsString( $hook, (string) $body, "Uninstall scheduler clear must cover AS hook {$hook}" );
+		$this->assertStringContainsString( 'Job_Registry::all_action_scheduler_hooks()', (string) $body );
+		foreach ( Job_Registry::all_action_scheduler_hooks() as $hook ) {
+			$this->assertStringStartsWith( 'wppo_', $hook );
 		}
-		// Drift-purge hook is AS-scheduled but missing from Cron::AS_HOOKS.
-		$this->assertStringContainsString( 'wppo_builder_drift_purge', (string) $body );
+		// Builder drift and generic upgrade purge are AS-owned jobs too.
+		$this->assertContains( 'wppo_builder_drift_purge', Job_Registry::all_action_scheduler_hooks() );
+		$this->assertContains( 'wppo_upgrade_purge', Job_Registry::all_action_scheduler_hooks() );
 		// Forward-compat net for future hooks in the plugin's AS group.
-		$this->assertStringContainsString( 'performance_optimisation', (string) $body );
+		$this->assertStringContainsString( 'Job_Registry::AS_GROUP', (string) $body );
 	}
 
 	/**
@@ -159,10 +162,31 @@ class UninstallSchedulerCleanupTest extends \PHPUnit\Framework\TestCase {
 		$source = $this->uninstall_source();
 		$body   = $this->extract_function_body( $source, 'wppo_clear_scheduled_jobs' );
 		$this->assertNotNull( $body, 'wppo_clear_scheduled_jobs() must exist in uninstall.php' );
-		preg_match_all( "/'(wppo_[a-z0-9_]+)'/", (string) $body, $m );
-		$this->assertNotEmpty( $m[1], 'Scheduler clear must list explicit wppo_ hooks' );
-		foreach ( $m[1] as $hook ) {
+		$this->assertStringContainsString( 'Job_Registry::all_cron_hooks()', (string) $body );
+		$this->assertStringContainsString( 'Job_Registry::all_action_scheduler_hooks()', (string) $body );
+		$this->assertStringContainsString( 'Job_Registry::AS_GROUP', (string) $body );
+		foreach ( Job_Registry::all_cron_hooks() as $hook ) {
 			$this->assertStringStartsWith( 'wppo_', $hook );
 		}
+		foreach ( Job_Registry::all_action_scheduler_hooks() as $hook ) {
+			$this->assertStringStartsWith( 'wppo_', $hook );
+		}
+	}
+
+	/**
+	 * Standalone uninstall must consume the same registry as the booted plugin.
+	 *
+	 * @return void
+	 */
+	public function test_uninstall_consumes_job_registry_manifest(): void {
+		$source = $this->uninstall_source();
+		$this->assertStringContainsString( 'includes/Scheduler/class-job-registry.php', $source );
+		$body = $this->extract_function_body( $source, 'wppo_clear_scheduled_jobs' );
+		$this->assertNotNull( $body, 'wppo_clear_scheduled_jobs() must exist in uninstall.php' );
+		$body = (string) $body;
+		$this->assertStringContainsString( 'Job_Registry::all_cron_hooks()', $body );
+		$this->assertStringContainsString( 'Job_Registry::all_action_scheduler_hooks()', $body );
+		$this->assertStringContainsString( 'Job_Registry::AS_GROUP', $body );
+		$this->assertContains( 'wppo_upgrade_purge', Job_Registry::all_cron_hooks(), 'The upgrade purge fallback must be covered by the registry teardown.' );
 	}
 }

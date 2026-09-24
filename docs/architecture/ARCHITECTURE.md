@@ -48,15 +48,15 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 74 files: 70 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 75 files: 71 class-like nodes and 4 procedural nodes.
 
 | Signal | Baseline |
 |---|---:|
-| Unique edges | 340 |
-| Runtime / compatibility / loader edges | 339 / 191 / 3 |
-| Cross-domain / feature-to-feature edges | 300 / 47 |
+| Unique edges | 343 |
+| Runtime / compatibility / loader edges | 342 / 193 / 3 |
+| Cross-domain / feature-to-feature edges | 302 / 47 |
 | Boundary violations | 16 |
-| Bridge candidates | 226 |
+| Bridge candidates | 228 |
 | Runtime SCCs | 1 |
 | Largest runtime SCC | 59 nodes, 302 runtime-classified internal edges |
 | Static state | 141 properties across 31 nodes |
@@ -95,7 +95,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Util` | Compatibility proxies and residual canonical helpers | Give each method an owner, migrate callers, then thin or remove the facade |
 | `Cache` | HTML cache policy, storage, invalidation facade, CSS-combine facade, capacity | Extract capacity/accounting; keep cache lifecycle and buffer orchestration coherent |
 | `Settings_Store` | Settings memo, validation map, snapshots, write/invalidation | Make it the only settings write owner; adapt REST, CLI, and Abilities |
-| `Scheduler` | Action Scheduler primitives and locks | Add one job ownership registry for scheduling and teardown |
+| `Scheduler` / `Job_Registry` | Action Scheduler primitives, locks, and owned hook manifest | Keep registry-backed scheduling and teardown; no duplicate hook lists |
 | `Object_Cache` | Redis backend, config state, drop-in management | Move full config normalization here or into a Redis policy boundary |
 | `Critical_CSS` / `Ccss_Store` | Generation plus storage/status | Keep storage in the store; move remaining generation clusters by policy |
 | `Used_CSS` | Generation, storage, parsing, delivery, rollout | Split storage and generation only after Used CSS owns no cache purge policy |

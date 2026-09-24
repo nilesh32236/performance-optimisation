@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `72818289c9745ed58c17bf3ab418f4d20953b657`
+Source: `origin/master` commit `d4e0f948dcf69a80259946d13e9a6c1ad6d0a480`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 74 first-party runtime files:
+The tokenizer scans 75 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 66 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 67 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,21 +40,21 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 71 |
-| Inventory source lines | 125,356 |
-| Class-like graph nodes | 70 |
+| Inventory files | 72 |
+| Inventory source lines | 125,451 |
+| Class-like graph nodes | 71 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,456 |
+| Named methods | 2,458 |
 | Methods spanning 80 lines or more | 238 |
 | Static properties | 141 across 31 nodes |
-| Unique dependency edges | 340 |
-| Runtime-classified edges | 339 |
-| Compatibility-classified edges | 191 |
+| Unique dependency edges | 343 |
+| Runtime-classified edges | 342 |
+| Compatibility-classified edges | 193 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 300 |
+| Cross-domain edges | 302 |
 | Feature-to-feature edges | 47 |
 | Strict boundary violations | 16 |
-| Bridge candidates | 226 |
+| Bridge candidates | 228 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -77,7 +77,7 @@ The largest hub scores are:
 | 7 | `Critical_CSS` | 52.95 | 9 | 8 | 7 | 14 |
 | 8 | `RUM` | 50.35 | 14 | 2 | 9 | 12 |
 | 9 | `Rest` | 45.88 | 1 | 21 | 0 | 20 |
-| 10 | `Cron` | 44.83 | 5 | 14 | 3 | 18 |
+| 10 | `Cron` | 45.80 | 5 | 15 | 3 | 18 |
 
 The score formula lives in the graph metadata. It ranks review pressure; it does not grade code quality.
 
