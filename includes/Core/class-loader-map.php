@@ -34,14 +34,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 	 *
 	 * Multisite-agnostic: pure path data, no options or transients touched.
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Loader_Map {
 
 		/**
 		 * Base directory for plugin class files (with trailing slash).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string `WPPO_PLUGIN_PATH . 'includes/'`, or '' when the constant is undefined.
 		 */
 		public static function base_dir(): string {
@@ -59,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		 * directly in `Main`) and minus the LiteSpeed-conditional crawler +
 		 * ESI stack (see `litespeed_stack_files()`).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string[] Relative paths under `includes/`, in load order.
 		 */
 		public static function eager_files(): array {
@@ -90,7 +90,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		 * `Main::should_load_litespeed_stack()`; this method owns only the
 		 * file list for the true branch.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string[] Relative paths under `includes/`, in load order.
 		 */
 		public static function litespeed_stack_files(): array {
@@ -113,7 +113,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		 * `LiteSpeed_Crawler`, `LiteSpeed_ESI` — kept so late callers still
 		 * resolve them via autoload when the eager load was skipped).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array<string,string> Short class name => relative path under `includes/`.
 		 */
 		public static function fallback_map(): array {
@@ -193,7 +193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		 * ARCH-013: `file_path()` allowlists exactly these directories (plus
 		 * the `includes/` root for `Util`, which stays until ARCH-014).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string[]
 		 */
 		public static function allowed_dirs(): array {
@@ -224,7 +224,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		 * Anything else (absolute paths, `..`, deeper nesting) returns ''
 		 * so callers cannot traverse outside `includes/` via untrusted input.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $relative_file Relative path (e.g. `Cache/class-cache.php`).
 		 * @return string Absolute path, or '' when `WPPO_PLUGIN_PATH` is undefined or input is invalid.
 		 */
@@ -273,7 +273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		 * name (`PerformanceOptimise\Inc\Cache`); anything outside the plugin
 		 * namespace returns null.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $class_name Short or fully-qualified class name.
 		 * @return string|null Absolute file path, or null when unmapped/undefined base.
 		 */
@@ -303,7 +303,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		/**
 		 * Absolute path of the WP-CLI command file.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Absolute path, or '' when `WPPO_PLUGIN_PATH` is undefined.
 		 */
 		public static function cli_file(): string {

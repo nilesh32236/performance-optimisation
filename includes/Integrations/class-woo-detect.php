@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 	 * above. `Util` proxies back at call time only
 	 * (autoloader, no load-time cycle).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Woo_Detect {
 		/**

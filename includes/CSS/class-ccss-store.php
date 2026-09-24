@@ -21,10 +21,10 @@
  *
  * @since convention: methods moved verbatim from Critical_CSS retain their
  * original @since tags to preserve history; only new store infrastructure
- * (class, memos, constants, seams) uses @since NEXT.
+ * (class, memos, constants, seams) uses @since 2.4.0.
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.4.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -41,7 +41,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 	 * exclusions, retry/budget scheduling, and hook registrations stay on
 	 * Critical_CSS.
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	class Ccss_Store {
 		/**
@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * {@see get_ccss_dir()} / {@see get_ccss_url()}.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public const CCSS_DIR = '/cache/wppo/ccss';
 
@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * declares its own copy; validation flows through
 		 * {@see is_valid_template_hash()} / {@see get_ccss_file()}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var string
 		 */
 		public const TEMPLATE_HASH_PATTERN = '/^[A-Za-z0-9_\-]{1,128}$/';
@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * CcssStoreParityTest) while its generation code reads this
 		 * constant directly.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var string[]
 		 */
 		public const VIEWPORT_VARIANTS = array( 'mobile', 'desktop' );
@@ -87,7 +87,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * Moved with ccss_exists() from Critical_CSS. Reset via
 		 * reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var array<string, bool>
 		 */
 		private static array $ccss_exists_cache = array();
@@ -98,7 +98,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * Moved with get_ccss_content() from Critical_CSS. Reset via
 		 * reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var array<string, string|null>
 		 */
 		private static array $ccss_content_cache = array();
@@ -109,7 +109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * Moved with get_sample_url() from Critical_CSS. Reset via
 		 * reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var array<string, string|false>
 		 */
 		private static array $sample_url_cache = array();
@@ -120,7 +120,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * Moved with get_templates() from Critical_CSS. Reset via
 		 * reset_ccss_memo().
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var array<string, string>|null
 		 */
 		private static ?array $templates_memo = null;
@@ -135,7 +135,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * single-sourced on Critical_CSS. Not cleared by
 		 * {@see reset_ccss_memo()} — reset explicitly with null.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var callable|null
 		 */
 		private static $status_cache_reader = null;
@@ -146,7 +146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * @internal Test seam to break the Ccss_Store -> Critical_CSS edge.
 		 * Pass null to restore the default Critical_CSS bridge.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param callable|null $reader Status reader: fn( string $hash ): string|false.
 		 * @return void
 		 */
@@ -1007,7 +1007,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		 * The generation-domain half lives on Critical_CSS; its facade resets
 		 * both halves so existing callers stay identical.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function reset_ccss_memo(): void {

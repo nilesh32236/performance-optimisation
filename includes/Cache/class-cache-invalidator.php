@@ -71,7 +71,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 	 * truth, accessed through the `@internal` `invalidator_*()` bridges —
 	 * never a new write path).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Cache_Invalidator {
 
@@ -82,7 +82,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		 * live request state exactly as `$this->prop` accesses did before
 		 * the extraction.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Cache
 		 */
 		private Cache $cache;
@@ -90,7 +90,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 		/**
 		 * Constructor.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param Cache $cache Cache instance (state + storage/policy owner).
 		 */
 		public function __construct( Cache $cache ) {

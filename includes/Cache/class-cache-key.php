@@ -26,7 +26,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Key' ) ) {
 	 * `is_multisite()`, `get_current_blog_id()`, and `get_option()` (for
 	 * `cache_salt()` only). Depends on nothing else in the plugin.
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Cache_Key {
 
@@ -37,7 +37,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Key' ) ) {
 		 * (Redis, Memcached) is present. On single-site installs the key is
 		 * returned unchanged. For option names use {@see option_key()} instead.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $key The bare transient key.
 		 * @return string Blog-ID-prefixed key on multisite, or the original key.
 		 */
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Key' ) ) {
 		 * and can diverge in the future. On single-site installs the key is
 		 * returned unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $key The bare option name.
 		 * @return string Blog-ID-prefixed option name on multisite, or the original name.
 		 */
@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Key' ) ) {
 		 * the current blog prefix only `_stale` is appended; bare keys are
 		 * still qualified via {@see transient_key()} so they stay isolated.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $key Value cache key as passed to get_with_stampede_lock().
 		 * @return string Stale-copy key.
 		 */
@@ -126,7 +126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Key' ) ) {
 		 * (the comparison never changes) and reduce invalidation to the
 		 * entry TTL alone.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $option Option key holding the salt.
 		 * @return string Current salt value ('0' until the first bump).
 		 */

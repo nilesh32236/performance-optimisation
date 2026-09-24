@@ -471,7 +471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the URL + media pair already emitted.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::has_emitted_preload}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public static function has_emitted_preload( string $url, string $media = '' ): bool {
 			return Lcp_Preload::has_emitted_preload( $url, $media );
@@ -491,7 +491,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::mark_preload_emitted}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public static function mark_preload_emitted( string $url, string $media = '' ): void {
 			Lcp_Preload::mark_preload_emitted( $url, $media );
@@ -511,7 +511,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::record_direct_preload_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function record_direct_preload_url( string $url ): void {
 			Lcp_Preload::record_direct_preload_url( $url );
@@ -533,7 +533,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string[] Normalized direct-preload URLs.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_direct_preload_normalized_urls}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function get_direct_preload_normalized_urls(): array {
 			return Lcp_Preload::get_direct_preload_normalized_urls();
@@ -553,7 +553,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The dedup key.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::build_preload_dedup_key}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function build_preload_dedup_key( string $url, string $media ): string {
 			return Lcp_Preload::build_preload_dedup_key( $url, $media );
@@ -577,7 +577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the URL already emitted with any media.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_hero_preload_claimed}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function is_hero_preload_claimed( string $url ): bool {
 			return Lcp_Preload::is_hero_preload_claimed( $url );
@@ -606,7 +606,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the caller may emit (slot claimed), false to skip.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::claim_hero_preload_slot}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function claim_hero_preload_slot( string $url, string $media = '', ?string $buffer = null ): bool {
 			return $this->lcp_preload()->claim_hero_preload_slot( $url, $media, $buffer );
@@ -626,7 +626,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::release_hero_preload_slot}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function release_hero_preload_slot( string $url, string $media = '' ): void {
 			Lcp_Preload::release_hero_preload_slot( $url, $media );
@@ -648,7 +648,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the URL host matches a configured CDN host.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_cdn_preload_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_cdn_preload_url( string $url ): bool {
 			return $this->lcp_preload()->is_cdn_preload_url( $url );
@@ -668,7 +668,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the URL may be preloaded.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_allowed_hero_preload_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_allowed_hero_preload_url( string $url ): bool {
 			return $this->lcp_preload()->is_allowed_hero_preload_url( $url );
@@ -687,7 +687,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the HTML API may be used.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_html_api_available}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_html_api_available(): bool {
 			return $this->lcp_preload()->is_html_api_available();
@@ -710,7 +710,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The computed hero URL, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_computed_css_hero_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_computed_css_hero_url( ?string $buffer = null ): string {
 			return $this->lcp_preload()->get_computed_css_hero_url( $buffer );
@@ -732,7 +732,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The buffer with high-priority nodes forced eager.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::sweep_lazy_high_conflicts}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function sweep_lazy_high_conflicts( string $buffer ): string {
 			return $this->lcp_preload()->sweep_lazy_high_conflicts( $buffer );
@@ -750,7 +750,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when occluded nodes should be demoted to low.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_occlusion_fetchpriority_low_enabled}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_occlusion_fetchpriority_low_enabled(): bool {
 			return $this->lcp_preload()->is_occlusion_fetchpriority_low_enabled();
@@ -768,7 +768,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string[] Occluded image URLs (may be empty).
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_occluded_image_urls_for_request}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_occluded_image_urls_for_request(): array {
 			return $this->lcp_preload()->get_occluded_image_urls_for_request();
@@ -797,7 +797,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The buffer with occluded nodes demoted to low.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::apply_occlusion_fetchpriority_low}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function apply_occlusion_fetchpriority_low( string $buffer, array $occluded_urls, ?string $lcp_url = null ): string {
 			return $this->lcp_preload()->apply_occlusion_fetchpriority_low( $buffer, $occluded_urls, $lcp_url );
@@ -845,7 +845,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * class as the single source of truth, reached through the
 		 * `@internal` `lcp_*()` bridges below — never a new write path).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var Lcp_Preload|null
 		 */
 		private ?Lcp_Preload $lcp_preload = null;
@@ -853,7 +853,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Get (and lazily create) the LCP/preload service bound to this instance.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return Lcp_Preload Service bound to this instance.
 		 */
 		private function lcp_preload(): Lcp_Preload {
@@ -873,7 +873,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array
 		 */
 		public function lcp_get_options(): array {
@@ -890,7 +890,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array
 		 */
 		public function lcp_get_preload_front_page_urls(): array {
@@ -907,7 +907,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array
 		 */
 		public function lcp_get_exclude_post_type_imgs(): array {
@@ -924,7 +924,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array
 		 */
 		public function lcp_get_exclude_sizes(): array {
@@ -941,7 +941,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_current_lcp_url(): ?string {
@@ -958,7 +958,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_current_lcp_url_key(): ?string {
@@ -975,7 +975,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_lazy_lcp_exclusion_url(): ?string {
@@ -992,7 +992,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_lazy_lcp_exclusion_url_key(): ?string {
@@ -1009,7 +1009,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_fetchpriority_lcp_url(): ?string {
@@ -1026,7 +1026,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_fetchpriority_lcp_key(): ?string {
@@ -1043,7 +1043,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_manual_lcp_url(): ?string {
@@ -1060,7 +1060,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?int Reference to the live memo.
 		 */
 		public function &lcp_state_manual_lcp_url_key(): ?int {
@@ -1077,7 +1077,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?bool Reference to the live memo.
 		 */
 		public function &lcp_state_auto_lcp_disabled(): ?bool {
@@ -1094,7 +1094,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?int Reference to the live memo.
 		 */
 		public function &lcp_state_auto_lcp_disabled_key(): ?int {
@@ -1111,7 +1111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_stable_signal_lcp_url(): ?string {
@@ -1128,7 +1128,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return ?string Reference to the live memo.
 		 */
 		public function &lcp_state_stable_signal_lcp_url_key(): ?string {
@@ -1145,7 +1145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $url The URL to normalize.
 		 * @return string Normalized URL.
 		 */
@@ -1163,7 +1163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $buffer             HTML buffer.
 		 * @param array  $image_optimisation Image settings.
 		 * @return string Buffer with first images un-lazy-loaded.
@@ -1182,7 +1182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param array $attrs Loading attributes.
 		 * @return array Sanitized attributes.
 		 */
@@ -1200,7 +1200,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $buffer HTML buffer.
 		 * @return string Buffer with eager picture sources promoted.
 		 */
@@ -1218,7 +1218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param mixed $tags Tag processor.
 		 * @return bool Whether any class was removed.
 		 */
@@ -1236,7 +1236,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param mixed $tags Tag processor.
 		 * @return bool Whether any placeholder was restored.
 		 */
@@ -1254,7 +1254,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@return bool True when the HTML processor path may be used.
 		 */
 		public function lcp_should_use_html_processor(): bool {
@@ -1271,7 +1271,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $path Absolute path.
 		 * @return bool Whether the file exists.
 		 */
@@ -1289,7 +1289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $local_path Absolute path.
 		 * @return array|false Image size or false.
 		 */
@@ -1307,7 +1307,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $url Image URL.
 		 * @return bool Whether dimension lookup is allowed.
 		 */
@@ -1325,7 +1325,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $buffer HTML buffer.
 		 * @return string CSS hero URL or empty string.
 		 */
@@ -1343,7 +1343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $raw Raw srcset attribute.
 		 * @return array Candidate strings.
 		 */
@@ -1361,7 +1361,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		@param string $item Single srcset candidate.
 		 * @return array URL plus descriptor parts.
 		 */
@@ -1526,7 +1526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.0.0
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::preload_images}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function preload_images() {
 			return $this->lcp_preload()->preload_images();
@@ -3809,7 +3809,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload data items.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_all_preload_data}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_all_preload_data(): array {
 			return $this->lcp_preload()->get_all_preload_data();
@@ -3831,7 +3831,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the URL may be preloaded as an image.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_image_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_image_lcp_url( string $url ): bool {
 			return $this->lcp_preload()->is_image_lcp_url( $url );
@@ -3851,7 +3851,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The manual LCP image URL, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_manual_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_manual_lcp_url(): string {
 			return $this->lcp_preload()->get_manual_lcp_url();
@@ -3878,7 +3878,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the URL may be preloaded.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_same_origin_preload_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_same_origin_preload_url( string $url ): bool {
 			return $this->lcp_preload()->is_same_origin_preload_url( $url );
@@ -3901,7 +3901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when core may be consulted for a node verdict.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_core_loading_optimization_available}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_core_loading_optimization_available(): bool {
 			return $this->lcp_preload()->is_core_loading_optimization_available();
@@ -3936,7 +3936,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array{decoding?:string}|null Core's verdict, or null.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_core_loading_verdict_for_tag}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_core_loading_verdict_for_tag( $tags ): ?array {
 			return $this->lcp_preload()->get_core_loading_verdict_for_tag( $tags );
@@ -3955,7 +3955,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when auto-LCP must be skipped for this post.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_auto_lcp_disabled_for_post}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_auto_lcp_disabled_for_post(): bool {
 			return $this->lcp_preload()->is_auto_lcp_disabled_for_post();
@@ -3982,7 +3982,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The stable signal LCP image URL, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_stable_signal_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_stable_signal_lcp_url(): string {
 			return $this->lcp_preload()->get_stable_signal_lcp_url();
@@ -4013,7 +4013,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The OD-only LCP image URL, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::resolve_od_only_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function resolve_od_only_lcp_url(): string {
 			return $this->lcp_preload()->resolve_od_only_lcp_url();
@@ -4052,7 +4052,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The LCP image URL, or empty string when none resolves.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::resolve_auto_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function resolve_auto_lcp_url( ?string $buffer = null ): string {
 			return $this->lcp_preload()->resolve_auto_lcp_url( $buffer );
@@ -4076,7 +4076,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array{srcset: string, sizes: string} Responsive data (empty strings when unavailable).
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lcp_responsive_data_for_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public static function get_lcp_responsive_data_for_url( string $lcp_url ): array {
 			return Lcp_Preload::get_lcp_responsive_data_for_url( $lcp_url );
@@ -4099,7 +4099,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The srcset value, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lcp_srcset_for_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_lcp_srcset_for_url( string $lcp_url, ?string $buffer = null ): string {
 			return $this->lcp_preload()->get_lcp_srcset_for_url( $lcp_url, $buffer );
@@ -4119,7 +4119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The sizes value, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lcp_sizes_for_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_lcp_sizes_for_url( string $lcp_url, ?string $buffer = null ): string {
 			return $this->lcp_preload()->get_lcp_sizes_for_url( $lcp_url, $buffer );
@@ -4161,7 +4161,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The preload `<link>` tag, or empty string when skipped.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::emit_responsive_lcp_preload}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function emit_responsive_lcp_preload( ?string $buffer = null ): string {
 			return $this->lcp_preload()->emit_responsive_lcp_preload( $buffer );
@@ -4182,7 +4182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Empty when unresolved.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_responsive_lcp_candidate}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_responsive_lcp_candidate( ?string $buffer = null ): array {
 			return $this->lcp_preload()->get_responsive_lcp_candidate( $buffer );
@@ -4210,7 +4210,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Winner or empty.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::pick_breakpoint_winner}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function pick_breakpoint_winner( array $entries, ?string $buffer = null ): array {
 			return $this->lcp_preload()->pick_breakpoint_winner( $entries, $buffer );
@@ -4231,7 +4231,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array{url: string, srcset: string, sizes: string, type: string, media: string}|array Candidate or empty.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::resolve_rum_fallback_candidate}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function resolve_rum_fallback_candidate( ?string $buffer = null ): array {
 			return $this->lcp_preload()->resolve_rum_fallback_candidate( $buffer );
@@ -4253,7 +4253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when a high hint already exists.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::response_already_has_high_preload}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function response_already_has_high_preload( ?string $buffer = null ): bool {
 			return $this->lcp_preload()->response_already_has_high_preload( $buffer );
@@ -4274,7 +4274,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items (zero or one item).
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_manual_lcp_preload_data}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_manual_lcp_preload_data(): array {
 			return $this->lcp_preload()->get_manual_lcp_preload_data();
@@ -4314,7 +4314,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items (zero or one item).
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_auto_lcp_preload_data}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_auto_lcp_preload_data(): array {
 			return $this->lcp_preload()->get_auto_lcp_preload_data();
@@ -4336,7 +4336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array{srcset: string, sizes: string} Responsive pair.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_breakpoint_srcset_for_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_breakpoint_srcset_for_url( string $lcp_url, ?string $buffer = null ): array {
 			return $this->lcp_preload()->get_breakpoint_srcset_for_url( $lcp_url, $buffer );
@@ -4356,7 +4356,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when RUM gating passes.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_auto_lcp_rum_satisfied}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_auto_lcp_rum_satisfied(): bool {
 			return $this->lcp_preload()->is_auto_lcp_rum_satisfied();
@@ -4385,7 +4385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The LCP image URL, or empty string when none is stored.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_current_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_current_lcp_url(): string {
 			return $this->lcp_preload()->get_current_lcp_url();
@@ -4405,7 +4405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Memo key (possibly empty).
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lcp_memo_key}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_lcp_memo_key(): string {
 			return $this->lcp_preload()->get_lcp_memo_key();
@@ -4430,7 +4430,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Heuristic LCP URL, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_heuristic_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_heuristic_lcp_url( string $buffer ): string {
 			return $this->lcp_preload()->get_heuristic_lcp_url( $buffer );
@@ -4461,7 +4461,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The candidate URL, or empty string when none applies.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_lazy_lcp_exclusion_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_lazy_lcp_exclusion_url( array $image_optimisation, ?string $buffer = null ): string {
 			return $this->lcp_preload()->get_lazy_lcp_exclusion_url( $image_optimisation, $buffer );
@@ -4485,7 +4485,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return int Exclude count.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_effective_exclude_first_images_count}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_effective_exclude_first_images_count( array $image_optimisation ): int {
 			return $this->lcp_preload()->get_effective_exclude_first_images_count( $image_optimisation );
@@ -4499,7 +4499,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items for the front page.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_front_page_preload_data}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_front_page_preload_data( array $image_optimisation ): array {
 			return $this->lcp_preload()->get_front_page_preload_data( $image_optimisation );
@@ -4512,7 +4512,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items from meta.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_meta_preload_data}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_meta_preload_data(): array {
 			return $this->lcp_preload()->get_meta_preload_data();
@@ -4526,7 +4526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items for the post type.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_post_type_preload_data}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_post_type_preload_data( array $image_optimisation ): array {
 			return $this->lcp_preload()->get_post_type_preload_data( $image_optimisation );
@@ -4541,7 +4541,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The URL of the image.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_image_url_by_post_type}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_image_url_by_post_type( int $thumbnail_id ): string {
 			return $this->lcp_preload()->get_image_url_by_post_type( $thumbnail_id );
@@ -4557,7 +4557,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True if the image should be excluded, false otherwise.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::should_exclude_image}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function should_exclude_image( string $image_url, array $exclude_img_urls ): bool {
 			return $this->lcp_preload()->should_exclude_image( $image_url, $exclude_img_urls );
@@ -4572,7 +4572,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array Array of parsed sources: array( 'url' => string, 'width' => int ).
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::parse_srcset_data}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function parse_srcset_data( $srcset, $image_optimisation ): array {
 			return $this->lcp_preload()->parse_srcset_data( $srcset, $image_optimisation );
@@ -4594,7 +4594,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_srcset_preload_items}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_srcset_preload_items( $srcset, $default_image, $image_optimisation ): array {
 			return $this->lcp_preload()->get_srcset_preload_items( $srcset, $default_image, $image_optimisation );
@@ -4611,7 +4611,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array Structured preload item.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::prepare_preload_item}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function prepare_preload_item( string $img_url, string $imagesrcset = '', string $imagesizes = '' ): array {
 			return $this->lcp_preload()->prepare_preload_item( $img_url, $imagesrcset, $imagesizes );
@@ -4645,7 +4645,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::generate_img_preload}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function generate_img_preload( $img_url = '' ) {
 			$this->lcp_preload()->generate_img_preload( $img_url );
@@ -6648,7 +6648,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed buffer.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::prioritize_lcp_in_buffer}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function prioritize_lcp_in_buffer( $filtered_output, $output = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			return $this->lcp_preload()->prioritize_lcp_in_buffer( $filtered_output, $output );
@@ -6699,7 +6699,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return mixed The (possibly stamped) attributes, unchanged on miss.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::wppo_add_fetchpriority}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		public function wppo_add_fetchpriority( $attr, $attachment = null, $size = null ) {
 			return $this->lcp_preload()->wppo_add_fetchpriority( $attr, $attachment, $size );
@@ -6721,7 +6721,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The validated LCP image URL, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::resolve_fetchpriority_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function resolve_fetchpriority_lcp_url(): string {
 			return $this->lcp_preload()->resolve_fetchpriority_lcp_url();
@@ -6745,7 +6745,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the candidate corresponds to the LCP image.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::fetchpriority_candidate_matches}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function fetchpriority_candidate_matches( string $candidate, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
 			return $this->lcp_preload()->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full );
@@ -7151,7 +7151,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The buffer with fetchpriority="high" on the LCP image.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::prioritize_lcp_image}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function prioritize_lcp_image( string $buffer, ?string $lcp_url = null ): string {
 			return $this->lcp_preload()->prioritize_lcp_image( $buffer, $lcp_url );
@@ -7179,7 +7179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The buffer with hero preload link injected.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::maybe_preload_hero_image}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function maybe_preload_hero_image( string $buffer, array $image_optimisation, ?string $lcp_url = null ): string {
 			return $this->lcp_preload()->maybe_preload_hero_image( $buffer, $image_optimisation, $lcp_url );
@@ -7199,7 +7199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string First image src, or empty string when none found.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_first_image_src_in_buffer}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_first_image_src_in_buffer( string $buffer ): string {
 			return $this->lcp_preload()->get_first_image_src_in_buffer( $buffer );
@@ -7219,7 +7219,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the candidate should be skipped.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::is_trivial_heuristic_image}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function is_trivial_heuristic_image( $tags, string $src ): bool {
 			return $this->lcp_preload()->is_trivial_heuristic_image( $tags, $src );
@@ -7245,7 +7245,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when a matching preload link exists.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::buffer_has_image_preload}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function buffer_has_image_preload( string $buffer, string $url ): bool {
 			return $this->lcp_preload()->buffer_has_image_preload( $buffer, $url );
@@ -7274,7 +7274,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool|null True/false on success, null on failure (fallback).
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::buffer_has_image_preload_with_tag_processor}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function buffer_has_image_preload_with_tag_processor( string $buffer, string $needle, string $needle_exact, bool $needle_has_sizes, string $needle_query ): ?bool {
 			return $this->lcp_preload()->buffer_has_image_preload_with_tag_processor( $buffer, $needle, $needle_exact, $needle_has_sizes, $needle_query );
@@ -7294,7 +7294,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The query string without the leading `?`, or empty.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_url_query}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_url_query( string $url ): string {
 			return $this->lcp_preload()->get_url_query( $url );
@@ -7315,7 +7315,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True if the image references the LCP URL.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::tag_matches_lcp_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function tag_matches_lcp_url( $tags, string $lcp_url ): bool {
 			return $this->lcp_preload()->tag_matches_lcp_url( $tags, $lcp_url );
@@ -7339,7 +7339,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Normalized host + path, or an empty string when unparseable.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::normalize_image_url}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function normalize_image_url( string $url, bool $strip_size_suffix = true ): string {
 			return $this->lcp_preload()->normalize_image_url( $url, $strip_size_suffix );
@@ -7360,7 +7360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Normalized host + path, or empty string.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::normalize_image_url_static}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private static function normalize_image_url_static( string $url, bool $strip_size_suffix = true ): string {
 			return Lcp_Preload::normalize_image_url_static( $url, $strip_size_suffix );
@@ -7388,7 +7388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The dedup key.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::get_preload_dedup_key}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function get_preload_dedup_key( string $url, string $media ): string {
 			return $this->lcp_preload()->get_preload_dedup_key( $url, $media );
@@ -7529,7 +7529,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when an img matches the LCP URL.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::buffer_has_matching_img}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function buffer_has_matching_img( string $buffer, string $lcp_url ): bool {
 			return $this->lcp_preload()->buffer_has_matching_img( $buffer, $lcp_url );
@@ -7564,7 +7564,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The buffer with at most one added preload link.
 		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::maybe_inject_css_hero_preload}.
 		 *
-		 * @since NEXT Proxied to Lcp_Preload (ARCH-008).
+		 * @since 2.4.0 Proxied to Lcp_Preload (ARCH-008).
 		 */
 		private function maybe_inject_css_hero_preload( string $buffer, ?string $lcp_url = null ): string {
 			return $this->lcp_preload()->maybe_inject_css_hero_preload( $buffer, $lcp_url );

@@ -5,7 +5,7 @@
  * Presets section. State + handlers stay in FileOptimization; this card
  * only renders props and forwards callbacks.
  *
- * @since NEXT
+ * @since 2.4.0
  * @param {Object}      props                       Component props.
  * @param {Object|null} props.presetNotice          Active preset notice ({type, message}) or null.
  * @param {Function}    props.onDismissPreset       Dismiss handler for the preset notice.

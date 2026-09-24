@@ -36,7 +36,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * guards green while the in-memory tree keeps the disk untouched.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.4.0
  */
 class WPPO_Invalidator_Fake_FS {
 
@@ -283,7 +283,7 @@ class WPPO_Invalidator_Fake_FS {
  * In-memory $wpdb recorder for activity-log assertions.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.4.0
  */
 class WPPO_Invalidator_Wpdb_Recorder {
 

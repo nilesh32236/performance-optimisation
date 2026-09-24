@@ -10,7 +10,7 @@
  * all existing callers behave identically. No option renames.
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.4.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -28,7 +28,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ai_Anomaly' ) ) {
 	 * CSS-refresh queueing. All methods fail open (never fatal) and all
 	 * state is per-site (multisite-safe).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	class Ai_Anomaly {
 		/**

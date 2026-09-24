@@ -44,7 +44,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * bootstrap/autoloader registered.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Facade alias of Settings_Store::ALLOWED_SETTINGS_KEYS (REF-011).
+		 * @since 2.4.0 Facade alias of Settings_Store::ALLOWED_SETTINGS_KEYS (REF-011).
 		 * @var string[]
 		 */
 		public const ALLOWED_SETTINGS_KEYS = Settings_Store::ALLOWED_SETTINGS_KEYS;
@@ -60,7 +60,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * standalone without the plugin bootstrap/autoloader.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Facade alias of Settings_Store::ALLOWED_SETTINGS_TABS (REF-011).
+		 * @since 2.4.0 Facade alias of Settings_Store::ALLOWED_SETTINGS_TABS (REF-011).
 		 * @var string[]
 		 */
 		public const ALLOWED_SETTINGS_TABS = Settings_Store::ALLOWED_SETTINGS_TABS;
@@ -177,7 +177,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Get the allowlisted top-level settings keys.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 * @return string[]
 		 */
 		public static function get_allowed_settings_keys(): array {
@@ -889,7 +889,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.0.0
 		 * @param array|null $settings Optional settings array (defaults to get_settings()).
 		 * @return bool True when safe mode is enabled.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_safe_mode_enabled( ?array $settings = null ): bool {
 			return Woo_Detect::is_woo_safe_mode_enabled( $settings );
@@ -909,7 +909,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.0.0
 		 * @param string $path Request path (leading slash optional) or a `rest_route` value.
 		 * @return bool True when the path is a Store API route.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_store_api_path( string $path ): bool {
 			return Woo_Detect::is_woo_store_api_path( $path );
@@ -928,7 +928,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string|null $query_string Optional raw query string (defaults to `$_SERVER['QUERY_STRING']`).
 		 * @param string|null $rest_route   Optional `rest_route` value (defaults to `$_GET['rest_route']`).
 		 * @return bool True when the request is a Store API request.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_store_api_request( string $path = '', ?string $query_string = null, ?string $rest_route = null ): bool {
 			return Woo_Detect::is_woo_store_api_request( $path, $query_string, $rest_route );
@@ -948,7 +948,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.0.0
 		 * @param string $path Request path (leading slash optional).
 		 * @return bool True when the path is Woo-dynamic.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_dynamic_path( string $path ): bool {
 			return Woo_Detect::is_woo_dynamic_path( $path );
@@ -969,7 +969,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.0.0
 		 * @return string[] Relative paths (e.g. `cart`, `shop/basket`), unique, lowercased.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function get_woo_excluded_paths(): array {
 			return Woo_Detect::get_woo_excluded_paths();
@@ -985,7 +985,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.0.0
 		 * @return bool True when any WooCommerce symbol is available.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_active(): bool {
 			return Woo_Detect::is_woo_active();
@@ -1006,7 +1006,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.2.0
 		 * @param string|null $query_string Raw query string. Defaults to `$_SERVER['QUERY_STRING']`.
 		 * @return bool True when faceted params are present.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_faceted_query( ?string $query_string = null ): bool {
 			return Woo_Detect::is_woo_faceted_query( $query_string );
@@ -1119,7 +1119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $path         Request path (leading slash optional).
 		 * @param string $query_string Raw query string (without leading `?`).
 		 * @return bool True when the values indicate a wc-ajax request.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_ajax_request( string $path = '', string $query_string = '' ): bool {
 			return Woo_Detect::is_woo_ajax_request( $path, $query_string );
@@ -1139,7 +1139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.3.0
 		 * @param string $query_string Raw query string (without leading `?`).
 		 * @return bool True when the query carries an add-to-cart action.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_add_to_cart_request( string $query_string = '' ): bool {
 			return Woo_Detect::is_woo_add_to_cart_request( $query_string );
@@ -1160,7 +1160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $query      Optional pre-parsed query string (parsed from $url when '').
 		 * @param string $rest_route Optional pre-parsed rest_route value.
 		 * @return bool True when the URL must not be cached/preloaded.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function is_woo_excluded_url( string $url, string $query = '', string $rest_route = '' ): bool {
 			return Woo_Detect::is_woo_excluded_url( $url, $query, $rest_route );
@@ -1374,7 +1374,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.2.0 Added additive `fragment_checks` (wc-ajax / add-to-cart / plain-permalink Store API fragment probes, issue #1197).
 		 * @since 2.2.0 Added additive `preload_checks` (faceted-URL preload-skip probes), `cart_checks` (guest-cart survival probes) and `force_exclude` (fail-closed recommendation, issue #1256).
 		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, fragment_checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, editor_checks: array<int, array{url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, preload_checks: array<int, array{url: string, path: string, skipped: bool, pass: bool, error?: string}>, cart_checks: array<int, array{key: string, url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, force_exclude: bool, all_pass: bool} Structured self-test result.
-		 * @since NEXT Facade proxy delegating to Woo_Detect (REF-013).
+		 * @since 2.4.0 Facade proxy delegating to Woo_Detect (REF-013).
 		 */
 		public static function woo_cache_self_test(): array {
 			return Woo_Detect::woo_cache_self_test();
@@ -3323,7 +3323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return bool True when the `$unique` parameter may be passed.
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function supports_action_scheduler_unique(): bool {
 			return Scheduler::supports_action_scheduler_unique();
@@ -3340,7 +3340,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return void
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function reset_action_scheduler_unique_cache(): void {
 			Scheduler::reset_action_scheduler_unique_cache();
@@ -3363,7 +3363,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string   $group        Action group.
 		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard (e.g. the CCSS legacy group).
 		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function enqueue_unique_async_action( string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
 			return Scheduler::enqueue_unique_async_action( $hook, $args, $group, $extra_groups );
@@ -3384,7 +3384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string   $group        Action group.
 		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard (e.g. the CCSS legacy group).
 		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function schedule_unique_single_action( int $timestamp, string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
 			return Scheduler::schedule_unique_single_action( $timestamp, $hook, $args, $group, $extra_groups );
@@ -3402,7 +3402,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return bool True when coalescing is active.
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function is_stampede_guard_enabled(): bool {
 			return Scheduler::is_stampede_guard_enabled();
@@ -3422,7 +3422,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return int Lock TTL clamped to 2-5 seconds.
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function stampede_lock_ttl(): int {
 			return Scheduler::stampede_lock_ttl();
@@ -3438,7 +3438,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @return string Unique owner token (never empty).
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function generate_stampede_owner(): string {
 			return Scheduler::generate_stampede_owner();
@@ -3469,7 +3469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *                         mid-rebuild and duplicate work).
 		 * @param string $group    Object-cache group for the lock.
 		 * @return bool True when this worker owns the lock.
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function acquire_stampede_lock( string $lock_key, string $owner, int $ttl = 5, string $group = 'wppo' ): bool {
 			return Scheduler::acquire_stampede_lock( $lock_key, $owner, $ttl, $group );
@@ -3488,7 +3488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $owner    Owner token that acquired the lock.
 		 * @param string $group    Object-cache group for the lock.
 		 * @return void
-		 * @since NEXT Facade proxy delegating to Scheduler (REF-014).
+		 * @since 2.4.0 Facade proxy delegating to Scheduler (REF-014).
 		 */
 		public static function release_stampede_lock( string $lock_key, string $owner, string $group = 'wppo' ): void {
 			Scheduler::release_stampede_lock( $lock_key, $owner, $group );
@@ -4054,7 +4054,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * so the allowlist lives in one place with its own unit test.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 * @param mixed $value Raw value.
 		 * @return string Allowlisted mode ('auto' fallback).
 		 */
@@ -4068,7 +4068,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 * @param array $value Raw overrides.
 		 * @return array Sanitized overrides.
 		 */
@@ -4082,7 +4082,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 * @param array $value Raw mapping entries.
 		 * @return array Sanitized mapping.
 		 */
@@ -4098,7 +4098,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * in isolation and the main loop stays a readable dispatcher.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 * @param string $safe_key Sanitized key.
 		 * @param mixed  $value    Raw value.
 		 * @return mixed Sanitized value.
@@ -4119,7 +4119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * can never be silently dropped or stored unsanitized.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 * @return array<string,string> Tab slug => sanitizer method name.
 		 */
 		public static function get_settings_sanitizer_map(): array {
@@ -4134,7 +4134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * testable method.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
 		 */
@@ -4150,7 +4150,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * testable method.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
 		 */
@@ -4168,7 +4168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param array $settings The settings array.
 		 * @return array The sanitized settings array.
 		 * @since 2.0.0
-		 * @since NEXT Facade proxy delegating to Settings_Store (REF-011).
+		 * @since 2.4.0 Facade proxy delegating to Settings_Store (REF-011).
 		 */
 		public static function sanitize_settings_recursively( $settings ) {
 			return Settings_Store::sanitize_settings_recursively( $settings );
@@ -4183,7 +4183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param array $settings The settings array passed by reference.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function remove_sensitive_settings_from_response( array &$settings ): void {
 			if ( isset( $settings['performance_audit'] ) ) {
@@ -4581,7 +4581,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.0.0
 		 * @param string|null $php_version Optional version string for testing; defaults to PHP_VERSION.
 		 * @return bool True on PHP 8.5+, false below.
-		 * @since NEXT Facade proxy delegating to Http (REF-015).
+		 * @since 2.4.0 Facade proxy delegating to Http (REF-015).
 		 */
 		public static function is_php85_or_greater( ?string $php_version = null ): bool {
 			return Http::is_php85_or_greater( $php_version );
@@ -4597,7 +4597,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param mixed       $ch          cURL handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
-		 * @since NEXT Facade proxy delegating to Http (REF-015).
+		 * @since 2.4.0 Facade proxy delegating to Http (REF-015).
 		 */
 		public static function close_curl_handle( &$ch, ?string $php_version = null ): void {
 			Http::close_curl_handle( $ch, $php_version );
@@ -4613,7 +4613,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param mixed       $mh          cURL multi handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
-		 * @since NEXT Facade proxy delegating to Http (REF-015).
+		 * @since 2.4.0 Facade proxy delegating to Http (REF-015).
 		 */
 		public static function close_curl_multi_handle( &$mh, ?string $php_version = null ): void {
 			Http::close_curl_multi_handle( $mh, $php_version );
@@ -4629,7 +4629,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param mixed       $image       GD image to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
-		 * @since NEXT Facade proxy delegating to Http (REF-015).
+		 * @since 2.4.0 Facade proxy delegating to Http (REF-015).
 		 */
 		public static function destroy_gd_image( &$image, ?string $php_version = null ): void {
 			Http::destroy_gd_image( $image, $php_version );
@@ -4645,7 +4645,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param mixed       $sh          cURL share handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
-		 * @since NEXT Facade proxy delegating to Http (REF-015).
+		 * @since 2.4.0 Facade proxy delegating to Http (REF-015).
 		 */
 		public static function close_curl_share_handle( &$sh, ?string $php_version = null ): void {
 			Http::close_curl_share_handle( $sh, $php_version );
@@ -4661,7 +4661,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param mixed       $finfo       Finfo handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
-		 * @since NEXT Facade proxy delegating to Http (REF-015).
+		 * @since 2.4.0 Facade proxy delegating to Http (REF-015).
 		 */
 		public static function close_finfo_handle( &$finfo, ?string $php_version = null ): void {
 			Http::close_finfo_handle( $finfo, $php_version );
@@ -4677,7 +4677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param mixed       $parser      XML parser to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
-		 * @since NEXT Facade proxy delegating to Http (REF-015).
+		 * @since 2.4.0 Facade proxy delegating to Http (REF-015).
 		 */
 		public static function free_xml_parser( &$parser, ?string $php_version = null ): void {
 			Http::free_xml_parser( $parser, $php_version );
@@ -4694,7 +4694,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param array|null $legacy_source Optional explicit header lines for the
 		 *                                  legacy path (string-filtered).
 		 * @return string[] List of response header lines, or empty array when unavailable.
-		 * @since NEXT Facade proxy delegating to Http (REF-015).
+		 * @since 2.4.0 Facade proxy delegating to Http (REF-015).
 		 */
 		public static function get_last_response_headers( ?array $legacy_source = null ): array {
 			return Http::get_last_response_headers( $legacy_source );

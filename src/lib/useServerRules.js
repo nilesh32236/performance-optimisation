@@ -7,7 +7,7 @@
  * semantics, retry trigger, and parallelism with the sibling App fetchers
  * are preserved verbatim.
  *
- * @since NEXT
+ * @since 2.4.0
  * @return {{ serverRules: ?Object, serverRulesError: boolean, retry: Function }}
  *   - `serverRules`:      fetched rules payload or `null` while loading/failed.
  *   - `serverRulesError`: `true` when the last fetch failed.

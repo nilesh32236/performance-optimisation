@@ -43,7 +43,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 	 * for canonical-host resolution. `Util` proxies back at call time only
 	 * (autoloader, no load-time cycle).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Url {
 
@@ -51,7 +51,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * Static cache for resolved home URLs, keyed by blog ID.
 		 *
 		 * @var array<int, string>
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static array $home_url_cache = array();
 
@@ -59,14 +59,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * Per-blog memo for the canonical home host (see get_canonical_host()).
 		 *
 		 * @var array<int, string>
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static array $canonical_host_cache = array();
 
 		/**
 		 * Memoized lowercase home host for same-site checks, keyed by blog.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var array<int, string>
 		 */
 		private static array $same_site_home_host = array();
@@ -80,7 +80,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * reuse the first blog's home-resolved rules on a second blog with
 		 * an identical rules array.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var array<string, array{exact: array<string, bool>, prefix: string[]}>
 		 */
 		private static array $exclusion_rule_cache = array();
@@ -88,7 +88,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		/**
 		 * Per-blog memo for content URLs, keyed by blog ID then path.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var array<int, array<string, string>>
 		 */
 		private static array $content_url_cache = array();
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * cleared via delegation. `Util::reset_cached_home_urls()` delegates
 		 * here so the existing test-isolation entry point keeps working.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function reset_cached_home_urls(): void {
 			self::$home_url_cache       = array();
@@ -123,7 +123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 *
 		 * @param string|array $urls Raw URLs as a newline-delimited string or an array of strings.
 		 * @return array Cleaned list of unique, trimmed URLs with empty values removed and numeric keys reindexed.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function process_urls( $urls ) {
 			if ( is_array( $urls ) ) {
@@ -142,7 +142,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 *
 		 * @param mixed $raw Untrusted list value.
 		 * @return string[] Clean list.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function coerce_string_list( $raw ): array {
 			if ( ! is_array( $raw ) ) {
@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * @param string $url         The URL to check.
 		 * @param array  $exclude_urls List of exclusion rules.
 		 * @return bool True when the URL matches any exclusion rule, false otherwise.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function is_url_excluded( string $url, array $exclude_urls ): bool {
 			$url = rtrim( $url, '/' );
@@ -252,7 +252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * the normalization used in store_lcp_image_url(). The returned
 		 * URL is untrailingslashed and passed through esc_url_raw().
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Current URL.
 		 */
 		public static function get_current_url(): string {
@@ -271,7 +271,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * stored beacon path kept it verbatim. Trims the trailing slash
 		 * (keeping '/' for the root) and ensures a leading slash.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $path Raw page path.
 		 * @return string Normalized path (e.g. '/hero-page', '/').
 		 */
@@ -301,7 +301,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * as the same image as their full-size original. Returns host + path
 		 * lowercased for host, or empty string when unparseable.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url The raw URL to normalize.
 		 * @return string Normalized host + path, or empty string when unparseable.
 		 */
@@ -341,7 +341,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * branches re-implemented across Image_Optimisation, Img_Converter,
 		 * Used_CSS and Critical_CSS so a fix here reaches every pipeline.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url Raw URL.
 		 * @return string Absolute URL or '' when empty/data:.
 		 */
@@ -365,7 +365,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * Thin canonical wrapper over {@see normalize_url()} so image and CSS
 		 * pipelines share one key derivation instead of parallel copies.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url Raw URL.
 		 * @return string Normalized key or ''.
 		 */
@@ -392,7 +392,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 *
 		 * @param string $path Path relative to the content directory.
 		 * @return string The content URL for the given path.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function cached_content_url( $path ) {
 			if ( false !== has_filter( 'content_url' ) ) {
@@ -424,7 +424,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * Only `http`/`https` are touched; any other scheme (or a scheme-less
 		 * value) is returned unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url URL to normalize.
 		 * @return string URL carrying the canonical scheme.
 		 */
@@ -456,7 +456,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * Always returns `'http'` or `'https'`, so the result is safe to pass
 		 * to `set_url_scheme()`.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Either 'http' or 'https'.
 		 */
 		public static function canonical_scheme(): string {
@@ -488,7 +488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 *
 		 * @param string $path Optional. Path relative to the home URL. Default empty.
 		 * @return string The untrailingslashed home URL, with path appended if provided.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function cached_home_url( string $path = '' ): string {
 			if ( false !== has_filter( 'home_url' ) ) {
@@ -516,7 +516,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * compared raw === and was the outlier). Host-only — no scheme or
 		 * syntax validation; use is_same_site_url() for full checks.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url URL to check.
 		 * @return bool True when hosts match and home host is known.
 		 */
@@ -548,7 +548,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * bare name. Only one dot is stripped so malformed `example.com..`
 		 * never canonicalizes to a valid host.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $host Raw host value.
 		 * @return string Normalized host.
 		 */
@@ -578,7 +578,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * host is allowed — those are the standard web ports sharing the
 		 * web attack surface, and the host gate still applies.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url URL to check.
 		 * @return bool True when safe.
 		 */
@@ -611,7 +611,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		/**
 		 * Whether a parsed URL's port is allowed by the same-site policy.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array<string, mixed> $parsed wp_parse_url() output for the candidate URL.
 		 * @return bool True when the port leg passes.
 		 */
@@ -634,7 +634,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		/**
 		 * Effective port of the home URL (explicit port or scheme default).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return int|null Effective home port, or null when indeterminable (fail closed).
 		 */
 		private static function home_effective_port(): ?int {
@@ -659,7 +659,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		/**
 		 * Validate a caller-supplied URL as same-site, else the fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url      Caller URL (already esc_url_raw'd by caller).
 		 * @param string $fallback Fallback (home URL, or '' to fail closed).
 		 * @return string Same-site URL or the fallback.
@@ -689,7 +689,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * (e.g. link-local metadata). Used by Telemetry and the LiteSpeed
 		 * crawler so the two copies of this logic cannot drift apart.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $location    Raw Location header value.
 		 * @param string $current_url URL of the response that sent the Location.
 		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
@@ -765,7 +765,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * concatenation would fetch `/subdir/../other` literally), then
 		 * reattaches the suffix untouched.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $target Path with optional query/fragment suffix.
 		 * @return string Normalized target.
 		 */
@@ -793,7 +793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * slash implied by the input (including `/./` and `/../` endings)
 		 * is preserved so directory redirects keep their canonical form.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $path URL path to normalize.
 		 * @return string Normalized path (always starting with '/').
 		 */
@@ -829,7 +829,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * fataling.
 		 *
 		 * @return string Canonical lowercase host, or '' when it cannot be resolved.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function get_canonical_host(): string {
 			// Per-blog static memo mirroring cached_home_url(): every call
@@ -853,7 +853,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * Uncached canonical-host resolution backing get_canonical_host().
 		 *
 		 * @return string Canonical lowercase host, or '' when unresolvable.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static function resolve_canonical_host(): string {
 			if ( ! function_exists( 'home_url' ) || ! function_exists( 'wp_parse_url' ) ) {

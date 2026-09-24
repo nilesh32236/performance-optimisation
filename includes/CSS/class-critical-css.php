@@ -493,7 +493,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_dir}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Result (see Ccss_Store).
 		 */
 		private static function get_ccss_dir(): string {
@@ -504,7 +504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_url}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Result (see Ccss_Store).
 		 */
 		private static function get_ccss_url(): string {
@@ -553,7 +553,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_file}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @return string Result (see Ccss_Store).
 		 */
@@ -565,7 +565,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::is_ccss_path_contained}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $path Parameter (see Ccss_Store).
 		 * @return bool Result (see Ccss_Store).
 		 */
@@ -577,7 +577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::stage_ccss_for_template}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @param string $css Parameter (see Ccss_Store).
 		 * @return array Result (see Ccss_Store).
@@ -590,7 +590,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::promote_staged_ccss}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @return bool Result (see Ccss_Store).
 		 */
@@ -602,7 +602,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::rollback_ccss_to_fallback}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @param string $reason Parameter (see Ccss_Store).
 		 * @return bool Result (see Ccss_Store).
@@ -615,7 +615,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_rollout_status}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @return array Result (see Ccss_Store).
 		 */
@@ -627,7 +627,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::verify_ccss_health}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @return array Result (see Ccss_Store).
 		 */
@@ -1901,7 +1901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::is_valid_template_hash}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param mixed $hash Parameter (see Ccss_Store).
 		 * @return bool Result (see Ccss_Store).
 		 */
@@ -2545,7 +2545,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_variant_file}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @param string $variant Parameter (see Ccss_Store).
 		 * @return string Result (see Ccss_Store).
@@ -2558,7 +2558,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_variant_content}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @param string $variant Parameter (see Ccss_Store).
 		 * @return ?string Result (see Ccss_Store).
@@ -2571,7 +2571,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::is_variant_stale}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @param string $variant Parameter (see Ccss_Store).
 		 * @return bool Result (see Ccss_Store).
@@ -2584,7 +2584,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::invalidate_stale_variants}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 */
 		public static function invalidate_stale_variants( string $template_hash ): void {
@@ -3771,7 +3771,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_file_url}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @return string Result (see Ccss_Store).
 		 */
@@ -3783,7 +3783,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_meta}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @return array Result (see Ccss_Store).
 		 */
@@ -3798,7 +3798,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::reset_ccss_memo()}.
 		 * Both halves are cleared so existing callers stay identical.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function reset_ccss_memo(): void {
@@ -3817,7 +3817,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::invalidate_ccss_memo}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 */
 		private static function invalidate_ccss_memo( string $template_hash ): void {
@@ -3828,7 +3828,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::ccss_exists}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @return bool Result (see Ccss_Store).
 		 */
@@ -3840,7 +3840,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_ccss_content}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template_hash Parameter (see Ccss_Store).
 		 * @return ?string Result (see Ccss_Store).
 		 */
@@ -3852,7 +3852,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_status_all}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array Result (see Ccss_Store).
 		 */
 		public static function get_status_all(): array {
@@ -3863,7 +3863,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_templates}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array Result (see Ccss_Store).
 		 */
 		private static function get_templates(): array {
@@ -3874,7 +3874,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Facade proxy (FUT-001): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ccss_Store::get_sample_url}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $template Parameter (see Ccss_Store).
 		 * @return string|false Result (see Ccss_Store).
 		 */
@@ -6827,7 +6827,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Keeps get_status_cache() private while letting the extracted store
 		 * share the single salted/transient source of truth.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $hash Template hash.
 		 * @return string|false Status string, or false when unset.
 		 */

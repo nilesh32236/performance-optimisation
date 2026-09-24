@@ -32,7 +32,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 	 * verbatim relocation of `Main::setup_hooks()`; the per-group helpers
 	 * keep their names so hook-group changes stay local to one method.
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Hook_Registry {
 
@@ -44,7 +44,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * (symmetric removal in Deactivate::unregister_runtime_hooks()
 		 * depends on it).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Main
 		 */
 		private Main $main;
@@ -56,7 +56,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * `Main::setup_hooks()` never writes options, so the copy cannot
 		 * drift within a registration pass.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   array
 		 */
 		private array $options;
@@ -64,7 +64,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		/**
 		 * Image_Optimisation instance used as a hook-callback target.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Image_Optimisation
 		 */
 		private Image_Optimisation $image_optimisation;
@@ -72,7 +72,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		/**
 		 * Google_Fonts instance used as a hook-callback target.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Google_Fonts
 		 */
 		private Google_Fonts $google_fonts;
@@ -80,7 +80,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		/**
 		 * Constructor.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param Main               $main               Main instance (callback target).
 		 * @param array              $options            Main options snapshot (registration gates only).
 		 * @param Image_Optimisation $image_optimisation Image optimisation callback target.
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * creation stay on `Main` via its `@internal` hook-state helpers,
 		 * called here at the exact positions the code ran before.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public function register(): void {
@@ -537,7 +537,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * behavior change so hook-group changes stay local to one method.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated from Main to Hook_Registry (REF-005).
+		 * @since 2.4.0 Relocated from Main to Hook_Registry (REF-005).
 		 * @return void
 		 */
 		public function register_head_hint_hooks(): void {
@@ -553,7 +553,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * behavior change.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated from Main to Hook_Registry (REF-005).
+		 * @since 2.4.0 Relocated from Main to Hook_Registry (REF-005).
 		 * @return void
 		 */
 		public function register_background_hooks(): void {
@@ -593,7 +593,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * `__CLASS__`) so the callbacks keep resolving to Main after the move.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated from Main to Hook_Registry (REF-005).
+		 * @since 2.4.0 Relocated from Main to Hook_Registry (REF-005).
 		 * @return void
 		 */
 		public function register_invalidation_hooks(): void {
@@ -628,7 +628,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * behavior change.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated from Main to Hook_Registry (REF-005).
+		 * @since 2.4.0 Relocated from Main to Hook_Registry (REF-005).
 		 * @return void
 		 */
 		public function register_integration_hooks(): void {
@@ -662,7 +662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 		 * On pre-6.9 cores the toggle stays an opt-in via the legacy
 		 * `should_load_block_assets_on_demand` filter.
 		 *
-		 * @since NEXT Relocated from Main to Hook_Registry (REF-005).
+		 * @since 2.4.0 Relocated from Main to Hook_Registry (REF-005).
 		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
 		 *                                                        (core loads separate core
 		 *                                                        block assets on demand).

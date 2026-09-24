@@ -43,7 +43,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 	 * `get_option()`/`update_option()`, `add_action()`, and
 	 * `get_current_blog_id()`. Depends on nothing else in the plugin.
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Settings_Store {
 
@@ -59,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Mirrored as `Util::SETTINGS_SNAPSHOT_OPTION` for backward
 		 * compatibility; the two values must stay identical.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var string
 		 */
 		public const SETTINGS_SNAPSHOT_OPTION = 'wppo_settings_snapshot';
@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * (see Main::enqueue_admin_scripts()) and a build-time comment.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Canonical owner (REF-011); Util:: keeps a facade alias.
+		 * @since 2.4.0 Canonical owner (REF-011); Util:: keeps a facade alias.
 		 * @var string[]
 		 */
 		public const ALLOWED_SETTINGS_KEYS = array(
@@ -101,7 +101,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * clarity at call-sites that validate a single tab.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Canonical owner (REF-011); Util:: keeps a facade alias.
+		 * @since 2.4.0 Canonical owner (REF-011); Util:: keeps a facade alias.
 		 * @var string[]
 		 */
 		public const ALLOWED_SETTINGS_TABS = self::ALLOWED_SETTINGS_KEYS;
@@ -110,7 +110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Get the allowlisted top-level settings keys.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 * @return string[]
 		 */
 		public static function get_allowed_settings_keys(): array {
@@ -123,7 +123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}
 		 * so the allowlist lives in one place with its own unit test.
 		 *
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 * @param mixed $value Raw value.
 		 * @return string Allowlisted mode ('auto' fallback).
 		 */
@@ -137,7 +137,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 *
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 * @param array $value Raw overrides.
 		 * @return array Sanitized overrides.
 		 */
@@ -173,7 +173,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 *
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
 		 *
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 * @param array $value Raw mapping entries.
 		 * @return array Sanitized mapping.
 		 */
@@ -265,7 +265,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * key-name heuristic (exclude/preload/delay/url/cdn) is unit-testable
 		 * in isolation and the main loop stays a readable dispatcher.
 		 *
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 * @param string $safe_key Sanitized key.
 		 * @param mixed  $value    Raw value.
 		 * @return mixed Sanitized value.
@@ -300,7 +300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * {@see get_default_settings()} must appear here so a new tab key
 		 * can never be silently dropped or stored unsanitized.
 		 *
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 * @return array<string,string> Tab slug => sanitizer method name.
 		 */
 		public static function get_settings_sanitizer_map(): array {
@@ -329,7 +329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * exists so the sanitizer map covers every schema tab with a named,
 		 * testable method.
 		 *
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
 		 */
@@ -344,7 +344,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * exists so the sanitizer map covers every schema tab with a named,
 		 * testable method.
 		 *
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 * @param array $settings Raw tab settings.
 		 * @return array Sanitized tab settings.
 		 */
@@ -362,7 +362,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * @param array $settings The settings array.
 		 * @return array The sanitized settings array.
 		 * @since 2.0.0
-		 * @since NEXT Moved from Util (REF-011); behavior unchanged.
+		 * @since 2.4.0 Moved from Util (REF-011); behavior unchanged.
 		 */
 		public static function sanitize_settings_recursively( $settings ) {
 			$sanitized = array();
@@ -772,7 +772,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Keyed by blog ID for multisite correctness under switch_to_blog().
 		 *
 		 * @var array<int, array>
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static array $settings_cache = array();
 
@@ -780,7 +780,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Whether the settings cache has been populated this request, keyed by blog ID.
 		 *
 		 * @var array<int, bool>
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static array $settings_cache_loaded = array();
 
@@ -789,7 +789,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 *
 		 * Mirrored in Util::current_blog_id() by design (decoupling); keep in sync.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return int Blog ID.
 		 */
 		private static function current_blog_id(): int {
@@ -812,7 +812,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * on update/add/delete of the option. Blog-keyed to avoid cross-site
 		 * leakage under switch_to_blog() (see F-COMPAT-03).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array The plugin settings.
 		 */
 		public static function get_settings(): array {
@@ -833,7 +833,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		/**
 		 * Set the settings cache to a known value (e.g. after update_option in same request).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array $settings The settings to cache.
 		 * @return void
 		 */
@@ -851,7 +851,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * sit in alloptions. Refreshes the per-request memo on success so
 		 * same-request reads observe the write.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array $settings Settings array to store.
 		 * @return bool True on success (mirrors update_option()).
 		 */
@@ -884,7 +884,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * state); `Util::clear_settings_cache()` clears it alongside this
 		 * delegate call.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param int|null $blog_id Optional blog ID to clear. Null clears all.
 		 * @return void
 		 */
@@ -918,7 +918,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 *
 		 * Kept separate from clear_settings_cache for hook arity clarity.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param int $new_blog_id New blog ID.
 		 * @param int $prev_blog_id Previous blog ID.
 		 * @return void
@@ -946,7 +946,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * callback also clears the permalink and callback-secret memos that
 		 * live in `Util`.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function register_settings_cache_hooks(): void {
@@ -956,7 +956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		/**
 		 * Ensure the invalidation hooks for wppo_settings are registered once per request.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		private static function ensure_settings_cache_hook(): void {
@@ -973,7 +973,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		/**
 		 * Invalidate/update the memo when wppo_settings is updated.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param mixed $old_value Previous value.
 		 * @param mixed $value New value.
 		 * @return void
@@ -987,7 +987,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		/**
 		 * Populate the memo when wppo_settings is added.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $option Option name.
 		 * @param mixed  $value Option value.
 		 * @return void
@@ -1003,7 +1003,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		/**
 		 * Read the stored prior-settings snapshot.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array|null Snapshot array with `settings` + `taken_at` keys, or null when absent/malformed.
 		 */
 		public static function get_settings_snapshot(): ?array {
@@ -1028,7 +1028,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Fail-open: any failure returns false and must never block the
 		 * settings save that triggered it.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array|null $settings Settings to snapshot (defaults to the current stored settings).
 		 * @return bool True when the snapshot was written.
 		 */
@@ -1057,7 +1057,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Fail-open: snapshot-restore failure leaves the current settings
 		 * intact and returns null; never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array|null The restored settings array, or null when no valid snapshot exists or the write failed.
 		 */
 		public static function restore_settings_snapshot(): ?array {

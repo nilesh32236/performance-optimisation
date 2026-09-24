@@ -323,7 +323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * fallback cluster; every combine proxy delegates here so
 		 * `Hook_Registry` callback identity is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var Css_Combine|null
 		 */
 		private ?Css_Combine $css_combine = null;
@@ -336,7 +336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * `method_exists()` guards, and `Hook_Registry` callback identity
 		 * are unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var Cache_Invalidator|null
 		 */
 		private ?Cache_Invalidator $cache_invalidator = null;
@@ -359,7 +359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param Image_Optimisation|null $image_optimisation Live image-optimisation collaborator (identity shared with Main), or null to build lazily from the resolved options.
 		 * @param Google_Fonts|null       $google_fonts       Live Google-Fonts collaborator (identity shared with Main), or null to build lazily from the resolved options.
 		 * @since 1.0.0
-		 * @since NEXT Constructor collaborators are optional-nullable with lazy in-class fallback.
+		 * @since 2.4.0 Constructor collaborators are optional-nullable with lazy in-class fallback.
 		 */
 		public function __construct( array $options = array(), ?Image_Optimisation $image_optimisation = null, ?Google_Fonts $google_fonts = null ) {
 			$this->image_optimisation = $image_optimisation;
@@ -602,7 +602,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * equivalent instead of fataling on the hot buffer path.
 		 *
 		 * @return Image_Optimisation Non-null collaborator.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private function get_image_optimisation(): Image_Optimisation {
 			if ( null === $this->image_optimisation ) {
@@ -619,7 +619,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * options on first use otherwise.
 		 *
 		 * @return Google_Fonts Non-null collaborator.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private function get_google_fonts(): Google_Fonts {
 			if ( null === $this->google_fonts ) {
@@ -1039,7 +1039,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array $file_opt Production `file_optimisation` slice.
 		 * @return array Effective slice (staged values merged in preview).
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::get_sandbox_effective_file_opt}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function get_sandbox_effective_file_opt( array $file_opt ): array {
 			return $this->css_combine()->get_sandbox_effective_file_opt( $file_opt );
@@ -1065,7 +1065,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *                              pre-gate once instead of twice per request.
 		 * @return bool True when combine/inline must be skipped.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::should_bypass_combine_for_elementor}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function should_bypass_combine_for_elementor( array $file_opt, ?bool $looks_like = null ): bool {
 			return $this->css_combine()->should_bypass_combine_for_elementor( $file_opt, $looks_like );
@@ -1078,7 +1078,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * fallback cluster; every combine proxy delegates here (instance
 		 * methods) so `Hook_Registry` callback identity is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return Css_Combine Combine runner bound to this instance.
 		 */
 		private function css_combine(): Css_Combine {
@@ -1095,7 +1095,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * cluster; every invalidation proxy delegates here (instance
 		 * methods) so `Hook_Registry` callback identity is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return Cache_Invalidator Invalidator bound to this instance.
 		 */
 		private function invalidator(): Cache_Invalidator {
@@ -1111,7 +1111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 * @since 1.0.0
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::combine_css}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		public function combine_css() {
 			$this->css_combine()->combine_css();
@@ -1129,7 +1129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array $exclusions Excluded handles/patterns.
 		 * @return array Eligible handles.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::resolve_eligible_handles}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function resolve_eligible_handles( array $styles, array $exclusions ): array {
 			return $this->css_combine()->resolve_eligible_handles( $styles, $exclusions );
@@ -1145,7 +1145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array $eligible_handles Eligible handles.
 		 * @return array{css:string,handles:array,error:string} Combined CSS + successful handles + error stage ('' on success).
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::fetch_and_minify_css}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function fetch_and_minify_css( array $eligible_handles ): array {
 			return $this->css_combine()->fetch_and_minify_css( $eligible_handles );
@@ -1162,7 +1162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $css_variant  Cache variant suffix.
 		 * @return array{path:string,error:string} File path ('' on failure) + error stage.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::write_combined_file}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function write_combined_file( string $combined_css, string $css_variant ): array {
 			return $this->css_combine()->write_combined_file( $combined_css, $css_variant );
@@ -1180,7 +1180,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string     $css_file_path Absolute path to the combined CSS file.
 		 * @return void
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::emit_combined_preload_hint}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function emit_combined_preload_hint( $css_url, $version, string $css_file_path ): void {
 			$this->css_combine()->emit_combined_preload_hint( $css_url, $version, $css_file_path );
@@ -1201,7 +1201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 * @since 2.0.0
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::set_combine_css_preload}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function set_combine_css_preload( $css_url, $version, $css_file_path ): void {
 			$this->css_combine()->set_combine_css_preload( $css_url, $version, $css_file_path );
@@ -1218,7 +1218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 * @since 2.0.0
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::maybe_preload_combine_css}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		public function maybe_preload_combine_css(): void {
 			$this->css_combine()->maybe_preload_combine_css();
@@ -1235,7 +1235,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array  $exclude_combine_css Exclusion list.
 		 * @return bool True if excluded.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::is_excluded_from_combine}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function is_excluded_from_combine( $handle, $src, array $exclude_combine_css ): bool {
 			return $this->css_combine()->is_excluded_from_combine( $handle, $src, $exclude_combine_css );
@@ -1260,7 +1260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array $exclude_combine_css Handles/URL fragments excluded from combining.
 		 * @return array The handles that would be combined.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::get_combined_handles}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function get_combined_handles( $styles, $exclude_combine_css ): array {
 			return $this->css_combine()->get_combined_handles( $styles, $exclude_combine_css );
@@ -1278,7 +1278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array  $eligible_handles The handles expected in the combined file.
 		 * @return bool True if the cached file matches the current handle set.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::combined_handles_match}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function combined_handles_match( $css_file_path, array $eligible_handles ): bool {
 			return $this->css_combine()->combined_handles_match( $css_file_path, $eligible_handles );
@@ -1293,7 +1293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array  $eligible_handles The handles combined into the file.
 		 * @return void
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::write_combined_handles}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function write_combined_handles( $css_file_path, array $eligible_handles ): void {
 			$this->css_combine()->write_combined_handles( $css_file_path, $eligible_handles );
@@ -1318,7 +1318,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $handle The registered style handle.
 		 * @return bool True if core will inline the style, false otherwise.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::core_will_inline}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function core_will_inline( $handle ): bool {
 			return $this->css_combine()->core_will_inline( $handle );
@@ -1349,7 +1349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param bool   $core_faithful Whether to mirror core's candidate collection.
 		 * @return bool True if core's budget pass would inline the style.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::core_inline_budget_will_inline}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function core_inline_budget_will_inline( $handle, $limit, $core_faithful ): bool {
 			return $this->css_combine()->core_inline_budget_will_inline( $handle, $limit, $core_faithful );
@@ -1373,7 +1373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param int    $limit  The inline size limit in bytes.
 		 * @return void
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::log_inline_budget_drift}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function log_inline_budget_drift( $handle, $limit ): void {
 			$this->css_combine()->log_inline_budget_drift( $handle, $limit );
@@ -1388,7 +1388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 * @return bool True when fallback guards are active.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::is_safe_css_combine_fallback_enabled}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function is_safe_css_combine_fallback_enabled(): bool {
 			return $this->css_combine()->is_safe_css_combine_fallback_enabled();
@@ -1401,7 +1401,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $path Absolute path to the combined CSS file.
 		 * @return bool True when the file is usable.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::is_combined_css_valid}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function is_combined_css_valid( string $path ): bool {
 			return $this->css_combine()->is_combined_css_valid( $path );
@@ -1419,7 +1419,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array  $handles Handles preserved by the fallback.
 		 * @return void
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::log_combine_fallback}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function log_combine_fallback( string $reason, array $handles ): void {
 			$this->css_combine()->log_combine_fallback( $reason, $handles );
@@ -1433,7 +1433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $css_file_path Absolute path to the combined CSS file.
 		 * @return void
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::register_combine_css_path}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function register_combine_css_path( $css_file_path ): void {
 			$this->css_combine()->register_combine_css_path( $css_file_path );
@@ -1452,7 +1452,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param array $file_opt Production `file_optimisation` slice.
 		 * @return bool True when inlining must be skipped.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::should_bypass_inline_for_safe_mode}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function should_bypass_inline_for_safe_mode( array $file_opt ): bool {
 			return $this->css_combine()->should_bypass_inline_for_safe_mode( $file_opt );
@@ -1471,7 +1471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $css_file_path Absolute path to the combined CSS file.
 		 * @return bool True if core will inline the combined file, false otherwise.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::will_combine_css_inline}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function will_combine_css_inline( $css_file_path ): bool {
 			return $this->css_combine()->will_combine_css_inline( $css_file_path );
@@ -1488,7 +1488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return int The inline size limit in bytes.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::get_styles_inline_limit}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function get_styles_inline_limit(): int {
 			return $this->css_combine()->get_styles_inline_limit();
@@ -1506,7 +1506,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return bool True when inline candidates must carry a `src`.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::inline_candidates_require_src}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function inline_candidates_require_src(): bool {
 			return $this->css_combine()->inline_candidates_require_src();
@@ -1526,7 +1526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @return bool True when the core-faithful pass must skip unreadable styles.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::inline_candidates_require_readable}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function inline_candidates_require_readable(): bool {
 			return $this->css_combine()->inline_candidates_require_readable();
@@ -1543,7 +1543,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $path Absolute filesystem path.
 		 * @return array{readable:bool,size:int|false}
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::get_cached_src_stat}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function get_cached_src_stat( string $path ): array {
 			return $this->css_combine()->get_cached_src_stat( $path );
@@ -1580,7 +1580,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string[] $eligible_handles Handles that would be combined.
 		 * @return bool True when combining should be skipped.
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::should_skip_combine_for_inline_budget}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function should_skip_combine_for_inline_budget( array $eligible_handles ): bool {
 			return $this->css_combine()->should_skip_combine_for_inline_budget( $eligible_handles );
@@ -1601,7 +1601,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return int|false Byte size, 0 when the handle contributes nothing, false when unmeasurable.
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::measure_style_byte_size}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function measure_style_byte_size( $handle ) {
 			return $this->css_combine()->measure_style_byte_size( $handle );
@@ -1615,7 +1615,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.0.0
 		 * Facade proxy (ARCH-006): logic lives in {@see Css_Combine::fetch_remote_css}.
-		 * @since NEXT Proxied to Css_Combine (ARCH-006).
+		 * @since 2.4.0 Proxied to Css_Combine (ARCH-006).
 		 */
 		private function fetch_remote_css( $url ) {
 			return $this->css_combine()->fetch_remote_css( $url );
@@ -1632,7 +1632,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array Plugin options snapshot.
 		 */
 		public function combine_options(): array {
@@ -1647,7 +1647,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return object|false|null The filesystem object, or false on init failure.
 		 */
 		public function combine_filesystem(): object|false|null {
@@ -1662,7 +1662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $variant Cache variant suffix.
 		 * @return string Absolute path to the combined CSS file.
 		 */
@@ -1678,7 +1678,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool True when the cache directory is writable.
 		 */
 		public function combine_prepare_cache_dir(): bool {
@@ -1693,7 +1693,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $css  Combined CSS payload.
 		 * @param string $path Absolute path to the combined CSS file.
 		 * @return void
@@ -1710,7 +1710,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool True when the current request must bypass WPPO optimisation.
 		 */
 		public function combine_should_bypass_for_litespeed(): bool {
@@ -1725,7 +1725,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool True when page output may be cached for the current user.
 		 */
 		public function combine_is_cache_allowed_for_current_user(): bool {
@@ -1740,7 +1740,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool True when the current request must not be cached.
 		 */
 		public function combine_is_not_cacheable(): bool {
@@ -1755,7 +1755,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool True when core owns on-demand block styles on this request.
 		 */
 		public function combine_get_effective_separate_block_assets(): bool {
@@ -1770,7 +1770,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $handle                The registered style handle.
 		 * @param bool   $separate_block_assets Whether core loads separate block assets.
 		 * @return bool True when the handle must stay out of the combined file.
@@ -1787,7 +1787,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $throttle_key Transient key guarding the throttle window.
 		 * @param int    $ttl          Throttle window in seconds.
 		 * @return bool True when the key was already seen inside the window.
@@ -1804,7 +1804,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool True when the inline-budget prediction drifted from core this request.
 		 */
 		public function combine_inline_drift_detected(): bool {
@@ -1819,7 +1819,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool True when the drift notice was already logged this PHP process.
 		 */
 		public static function combine_inline_drift_already_logged(): bool {
@@ -1834,7 +1834,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function combine_mark_inline_drift_logged(): void {
@@ -1851,7 +1851,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Reference to the live preload URL state.
 		 */
 		public function &combine_state_preload_url(): string {
@@ -1868,7 +1868,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array<string,array{size:int,readable:bool}>|null Reference to the live size-map state.
 		 */
 		public function &combine_state_inline_size_map(): ?array {
@@ -1885,7 +1885,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array<string,bool> Reference to the live will-inline memo.
 		 */
 		public function &combine_state_core_will_inline_memo(): array {
@@ -1902,7 +1902,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array<string,array{readable:bool,size:int|false}> Reference to the live stat cache.
 		 */
 		public function &combine_state_src_stat_cache(): array {
@@ -1920,7 +1920,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * code; the public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array<string,array> Reference to the live sandbox-slice memo.
 		 */
 		public function &combine_state_sandbox_effective_file_opt_memo(): array {
@@ -1937,7 +1937,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool|null Reference to the live preview-flag memo (null = unresolved).
 		 */
 		public function &combine_state_sandbox_preview_memo() {
@@ -1954,7 +1954,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * the public visibility exists solely for the extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array<string,bool> Reference to the live safe-mode memo.
 		 */
 		public function &combine_state_safe_mode_inline_memo(): array {
@@ -1971,7 +1971,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool Reference to the live drift flag.
 		 */
 		public function &combine_state_inline_drift_detected(): bool {
@@ -1989,7 +1989,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @internal
 		 * @access private
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return object|false|null The filesystem object, or false on init failure.
 		 */
 		public function invalidator_filesystem(): object|false|null {
@@ -2007,7 +2007,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @internal
 		 * @access private
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
@@ -2026,7 +2026,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @internal
 		 * @access private
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string|null $url_path The URL path (optional).
 		 * @param string      $type     The file type (default: 'html').
 		 * @return string The file path.
@@ -2046,7 +2046,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @internal
 		 * @access private
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $raw_input The hostile input that was rejected.
 		 * @return void
 		 */
@@ -2068,7 +2068,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @internal
 		 * @access private
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Cache root directory.
 		 */
 		public function invalidator_cache_root_dir(): string {
@@ -2089,7 +2089,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @internal
 		 * @access private
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Cache domain.
 		 */
 		public function invalidator_domain(): string {
@@ -2110,7 +2110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @internal
 		 * @access private
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Cache root URL.
 		 */
 		public function invalidator_cache_root_url(): string {
@@ -2128,7 +2128,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @internal
 		 * @access private
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Cache directory slug (`CACHE_DIR`).
 		 */
 		public function invalidator_cache_dir(): string {
@@ -3801,7 +3801,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.0.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::invalidate_dynamic_static_html}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public function invalidate_dynamic_static_html( $page_id ): void {
 			$this->invalidator()->invalidate_dynamic_static_html( $page_id );
@@ -3831,7 +3831,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *                         deletes + option write). Default true.
 		 * @return void
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::invalidate_single_static_html}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public function invalidate_single_static_html( int $page_id, bool $bump_stats = true ): void {
 			$this->invalidator()->invalidate_single_static_html( $page_id, $bump_stats );
@@ -3852,7 +3852,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $kind      Object kind: 'product', 'order', or 'coupon'.
 		 * @return void
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::invalidate_woo_object}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public function invalidate_woo_object( int $object_id, string $kind ): void {
 			$this->invalidator()->invalidate_woo_object( $object_id, $kind );
@@ -4174,7 +4174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::get_purge_fallback_path}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public static function get_purge_fallback_path( string $file_path ): string {
 			return Cache_Invalidator::get_purge_fallback_path( $file_path );
@@ -4194,7 +4194,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::retain_purge_fallback}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function retain_purge_fallback( string $file_path ): void {
 			$this->invalidator()->retain_purge_fallback( $file_path );
@@ -4218,7 +4218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::get_purge_fallback_response}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public function get_purge_fallback_response( string $requested_path ): array {
 			return $this->invalidator()->get_purge_fallback_response( $requested_path );
@@ -4234,7 +4234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.2.0
 		 * @return int Redirect status code.
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::purge_fallback_redirect_status}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public static function purge_fallback_redirect_status(): int {
 			return Cache_Invalidator::purge_fallback_redirect_status();
@@ -4253,7 +4253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param int    $status   Redirect status code.
 		 * @return array{location: string, status: int, headers: string[]} Headers to send.
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::build_purge_fallback_headers}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public static function build_purge_fallback_headers( string $location, int $status ): array {
 			return Cache_Invalidator::build_purge_fallback_headers( $location, $status );
@@ -4277,7 +4277,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::serve_purge_fallback_response}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public function serve_purge_fallback_response( array $response ): bool {
 			return $this->invalidator()->serve_purge_fallback_response( $response );
@@ -4297,7 +4297,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::maybe_serve_purge_fallback}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public function maybe_serve_purge_fallback(): void {
 			$this->invalidator()->maybe_serve_purge_fallback();
@@ -4315,7 +4315,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::log_purge_fallback}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function log_purge_fallback(): void {
 			$this->invalidator()->log_purge_fallback();
@@ -4329,7 +4329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.9.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::delete_used_css_file}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function delete_used_css_file( string $file_path ): bool {
 			return $this->invalidator()->delete_used_css_file( $file_path );
@@ -4343,7 +4343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.9.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::delete_no_cache_marker}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function delete_no_cache_marker( string $html_file_path ): void {
 			$this->invalidator()->delete_no_cache_marker( $html_file_path );
@@ -4361,7 +4361,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.1.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::delete_cache_files}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function delete_cache_files( $file_path ): bool {
 			return $this->invalidator()->delete_cache_files( $file_path );
@@ -4378,7 +4378,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 * @since 1.9.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::delete_role_variant_files}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function delete_role_variant_files( string $dir ): void {
 			$this->invalidator()->delete_role_variant_files( $dir );
@@ -4401,7 +4401,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.1.1
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::clear_cache}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		public static function clear_cache( $url_path = null ): bool {
 			$instance = new self();
@@ -4415,7 +4415,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $swap_dir Allowlisted directory.
 		 * @return void
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::delete_swap_dir_files}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private static function delete_swap_dir_files( string $swap_dir ): void {
 			Cache_Invalidator::delete_swap_dir_files( $swap_dir );
@@ -4433,7 +4433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string|null $url_path URL path or null for all.
 		 * @return void
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::purge_litespeed_swap_fallback}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private static function purge_litespeed_swap_fallback( $url_path ): void {
 			Cache_Invalidator::purge_litespeed_swap_fallback( $url_path );
@@ -4453,7 +4453,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $dir Absolute directory candidate.
 		 * @return bool True when the recursive delete may proceed.
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::is_min_dir_allowed}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function is_min_dir_allowed( string $dir ): bool {
 			return $this->invalidator()->is_min_dir_allowed( $dir );
@@ -4471,7 +4471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $path Absolute file candidate.
 		 * @return bool True when the path is min-tree-contained.
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::is_min_path}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function is_min_path( string $path ): bool {
 			return $this->invalidator()->is_min_path( $path );
@@ -4492,7 +4492,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.2.0
 		 * @return array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int, max_total_bytes: int} Limits.
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::purge_fallback_limits}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private static function purge_fallback_limits(): array {
 			return Cache_Invalidator::purge_fallback_limits();
@@ -4509,7 +4509,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.2.0
 		 * @return void
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::log_snapshot_cap}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function log_snapshot_cap(): void {
 			$this->invalidator()->log_snapshot_cap();
@@ -4525,7 +4525,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::snapshot_domain_purge_fallbacks}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function snapshot_domain_purge_fallbacks( string $dir ): array {
 			return $this->invalidator()->snapshot_domain_purge_fallbacks( $dir );
@@ -4541,7 +4541,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::snapshot_min_purge_fallbacks}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function snapshot_min_purge_fallbacks( string $dir ): array {
 			return $this->invalidator()->snapshot_min_purge_fallbacks( $dir );
@@ -4556,7 +4556,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::snapshot_purge_fallbacks_worker}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function snapshot_purge_fallbacks_worker( string $dir, callable $is_allowed ): array {
 			return $this->invalidator()->snapshot_purge_fallbacks_worker( $dir, $is_allowed );
@@ -4577,7 +4577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::snapshot_purge_fallbacks}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function snapshot_purge_fallbacks( string $dir, bool $min_tree = false ): array {
 			return $this->invalidator()->snapshot_purge_fallbacks( $dir, $min_tree );
@@ -4600,7 +4600,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::retain_live_bases_for_wipe}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function retain_live_bases_for_wipe( string $dir, callable $is_allowed ): void {
 			$this->invalidator()->retain_live_bases_for_wipe( $dir, $is_allowed );
@@ -4615,7 +4615,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::restore_purge_fallbacks}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function restore_purge_fallbacks( array $snapshot ): void {
 			$this->invalidator()->restore_purge_fallbacks( $snapshot );
@@ -4629,7 +4629,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::restore_min_fallbacks}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function restore_min_fallbacks( array $snapshot ): void {
 			$this->invalidator()->restore_min_fallbacks( $snapshot );
@@ -4649,7 +4649,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::restore_snapshot}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function restore_snapshot( array $snapshot, callable $is_allowed ): void {
 			$this->invalidator()->restore_snapshot( $snapshot, $is_allowed );
@@ -4671,7 +4671,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::stage_snapshot_to_temp}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function stage_snapshot_to_temp( array $snapshot ): array {
 			return $this->invalidator()->stage_snapshot_to_temp( $snapshot );
@@ -4692,7 +4692,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 2.2.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::restore_staged_snapshot}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function restore_staged_snapshot( array $staged, callable $is_allowed ): void {
 			$this->invalidator()->restore_staged_snapshot( $staged, $is_allowed );
@@ -4705,7 +4705,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.0.0
 		 * Facade proxy (ARCH-007): logic lives in {@see Cache_Invalidator::delete_all_cache_files}.
-		 * @since NEXT Proxied to Cache_Invalidator (ARCH-007).
+		 * @since 2.4.0 Proxied to Cache_Invalidator (ARCH-007).
 		 */
 		private function delete_all_cache_files(): bool {
 			return $this->invalidator()->delete_all_cache_files();

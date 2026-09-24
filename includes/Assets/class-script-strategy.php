@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 	 * on `Main` as the single source of truth, accessed through the
 	 * `@internal` `script_state_*()` bridges — never a new write path).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Script_Strategy {
 
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 		 * the live request state exactly as `$this->prop` accesses did before
 		 * the extraction.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Main
 		 */
 		private Main $main;
@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 		/**
 		 * Constructor.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param Main $main Main instance (hook-state + settings owner).
 		 */
 		public function __construct( Main $main ) {
@@ -1413,7 +1413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 		 * hook is needed.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Blog-keyed signature (ARCH-005 multisite correction).
+		 * @since 2.4.0 Blog-keyed signature (ARCH-005 multisite correction).
 		 * @return string Signature string.
 		 * Relocated from Main::delay_context_request_signature() (ARCH-005).
 		 */
