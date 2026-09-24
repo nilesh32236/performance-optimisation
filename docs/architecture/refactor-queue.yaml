@@ -1152,13 +1152,23 @@ phase3_items:
 
   - id: P3-014
     title: 'Main asset, minification, and speculation cleanup'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1593
     type: epic
     problem: 'Main still owns asset policy, minification, resource hints, and speculation in addition to orchestration.'
     target_owner: 'Existing Assets/Images/URL boundaries'
     exact_scope: 'One cluster per item; preserve callback identity and frontend output.'
     ratchet: 'Main lines, methods, fan-out, and service bridges down.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 10191bfa
+      evidence:
+        - 'Main owns the minification queue and output-transform cluster from minify_queued_styles() through minify_css()/minify_js() and minified-file checks, despite protected Minify CSS/JS wrappers and existing filesystem policy.'
+        - 'Main also owns a larger speculation policy cluster, but it is not cohesive enough to move safely in the same bounded item; this issue selects the minification cluster only.'
+        - 'The minification cluster can move behind a dependency-light policy with Main compatibility facades while preserving hook callback identity, filter/action order, generated filenames, and HTML output.'
+        - 'Speculation/resource-hint policy remains explicitly deferred to the next queue item and is not changed here.'
+      decision: 'Proceed test-first with one Minify_Policy extraction for the bounded Main minification cluster; leave speculation and resource hints untouched.'
 
   - id: P3-015
     title: 'Main preload and cache-buffer coordination cleanup'
