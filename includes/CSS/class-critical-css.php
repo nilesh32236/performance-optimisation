@@ -28,16 +28,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 	class Critical_CSS {
 
 		/**
-		 * Option key of the generation-status cache salt (WP 6.9+ salted
-		 * object cache; issue #882). Bumped by clear_all() so every salted
-		 * status entry invalidates at once without enumerating hashes.
-		 *
-		 * @since 2.0.0
-		 * @var string
-		 */
-		private const SALT_KEY = 'wppo_ccss_salt';
-
-		/**
 		 * Per-request field-LCP preload dedup set keyed by normalized URL so
 		 * repeated inline_ccss() invocations emit the hint once. Reset via
 		 * reset_ccss_memo().
@@ -267,18 +257,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const MAX_CCSS_FILE_BYTES = 524288;
 
 		/**
-		 * Maximum consecutive timeout retries before a template escalates
-		 * to `failed` (issue #1235 review).
-		 *
-		 * Prevents a permanently-slow origin from burning a full
-		 * 25-120s synchronous worker on every cycle forever.
-		 *
-		 * @since 2.2.0
-		 * @var int
-		 */
-		private const MAX_CCSS_TIMEOUT_ATTEMPTS = 5;
-
-		/**
 		 * Default builder-template post types excluded from CSS generation.
 		 *
 		 * Builder library templates are never rendered as standalone pages,
@@ -289,40 +267,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @var string[]
 		 */
 		private const DEFAULT_EXCLUDED_POST_TYPES = array( 'fl-builder-template', 'elementor_library' );
-
-		/**
-		 * Default bounded-retry cap for generic generation failures.
-		 *
-		 * @since 2.2.0
-		 * @var int
-		 */
-		private const DEFAULT_CCSS_MAX_RETRIES = 5;
-
-		/**
-		 * Hard upper bound (and clamp range 0..5) for the bounded-retry cap.
-		 *
-		 * Dedicated to the `ccssMaxRetries` setting / `wppo_ccss_max_retries`
-		 * filter (issue #1274 review) so changing timeout escalation
-		 * (MAX_CCSS_TIMEOUT_ATTEMPTS) can never silently change the generic
-		 * retry cap.
-		 *
-		 * @since 2.2.0
-		 * @var int
-		 */
-		private const MAX_CCSS_MAX_RETRIES = 5;
-
-		/**
-		 * Dedicated Action Scheduler group for CCSS jobs (issue #1235 review).
-		 *
-		 * Keeps 25-120s generation runs off the shared
-		 * `performance_optimisation` worker so a 5-template burst cannot
-		 * starve image/PageSpeed/used-CSS jobs; the 60s stagger in
-		 * regenerate_all() spaces start times on top of the separation.
-		 *
-		 * @since 2.2.0
-		 * @var string
-		 */
-		private const CCSS_AS_GROUP = 'wppo-ccss';
 
 		/**
 		 * Option holding the last full-regeneration timestamp (issue #1462).
@@ -408,20 +352,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @var string[]|null
 		 */
 		private static ?array $excluded_memo = null;
-
-		/**
-		 * Per-request memo of pending/running CCSS job probes (issue #1310 review).
-		 *
-		 * The probe fans out to up to 4 store queries per call
-		 * and runs on the inline_ccss() frontend hot path plus per-template
-		 * loops; the miss case always pays 4 SELECTs before 1 INSERT. Memo
-		 * keyed by hook+args absorbs repeats within one request; the
-		 * status-cache pending/queued gate already absorbs most repeats.
-		 *
-		 * @since 2.2.0
-		 * @var array<string, bool>
-		 */
-		private static array $pending_memo = array();
 
 		/**
 		 * Per-request memo of gzipped transfer sizes keyed by md5(css).
@@ -1133,8 +1063,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					try {
 						if ( ! self::get_sample_url( (string) $template ) ) {
 							$hash = self::get_template_hash( (string) $template );
-							self::set_status_cache( $hash, 'skipped', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-							self::clear_ccss_retry_state( $hash );
+							Ccss_Generator::set_status_cache( $hash, 'skipped', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+							Ccss_Generator::clear_retry_state( $hash );
 							continue;
 						}
 					} catch ( \Throwable $e ) {
@@ -1143,12 +1073,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					$hash      = self::get_template_hash( (string) $template );
 					$hook      = 'wppo_generate_ccss';
 					$hook_args = array( array( 'template_hash' => $hash ) );
-					$job       = self::schedule_ccss_job( $hook, $hook_args, time() + ( $queued * 60 ) );
+					$job       = Ccss_Generator::schedule_job( $hook, $hook_args, time() + ( $queued * 60 ) );
 					if ( $job['id'] > 0 ) {
 						++$queued;
 					}
 					if ( $job['pending'] ) {
-						self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+						Ccss_Generator::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 					}
 				}
 				if ( $queued > 0 ) {
@@ -1752,69 +1682,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * (`file_optimisation.ccssMaxRetries`, default 5, clamped 0..5).
 		 * 0 means fail fast with no retries. Filterable via
 		 * `wppo_ccss_max_retries` when a listener is registered.
+		 * Canonical policy is owned by Ccss_Generator; this public method is
+		 * retained as a compatibility facade.
 		 *
-		 * @return int Retry cap, 0..MAX_CCSS_MAX_RETRIES.
+		 * @return int Retry cap, 0..5.
 		 * @since 2.2.0
 		 */
 		public static function get_ccss_max_retries(): int {
-			try {
-				$options = Util::get_settings();
-				$raw     = $options['file_optimisation']['ccssMaxRetries'] ?? self::DEFAULT_CCSS_MAX_RETRIES;
-				$cap     = is_numeric( $raw ) ? (int) $raw : self::DEFAULT_CCSS_MAX_RETRIES;
-				$cap     = min( self::MAX_CCSS_MAX_RETRIES, max( 0, $cap ) );
-				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_max_retries' ) ) {
-					$filtered = apply_filters( 'wppo_ccss_max_retries', $cap );
-					if ( is_numeric( $filtered ) ) {
-						$cap = min( self::MAX_CCSS_MAX_RETRIES, max( 0, (int) $filtered ) );
-					}
-				}
-				return $cap;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return self::DEFAULT_CCSS_MAX_RETRIES;
-			}
-		}
-
-		/**
-		 * Consecutive generic-failure count for a template (bounded retries).
-		 *
-		 * Stored as a blog-aware transient so multisite sites count
-		 * independently. Missing transient API reads as zero (fail-open).
-		 *
-		 * @param string $template_hash Template hash.
-		 * @return int Consecutive generic failure count.
-		 * @since 2.2.0
-		 */
-		private static function get_ccss_generation_attempts( string $template_hash ): int {
-			try {
-				if ( ! function_exists( 'get_transient' ) || ! self::is_valid_template_hash( $template_hash ) ) {
-					return 0;
-				}
-				$stored = get_transient( Util::transient_key( 'wppo_ccss_attempts_' . $template_hash ) );
-				return is_numeric( $stored ) ? max( 0, (int) $stored ) : 0;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 0;
-			}
-		}
-
-		/**
-		 * Reset the generic-failure count after a successful generation.
-		 *
-		 * Best-effort only; a missing transient API is a no-op.
-		 *
-		 * @param string $template_hash Template hash.
-		 * @return void
-		 * @since 2.2.0
-		 */
-		private static function clear_ccss_generation_attempts( string $template_hash ): void {
-			try {
-				if ( function_exists( 'delete_transient' ) && self::is_valid_template_hash( $template_hash ) ) {
-					delete_transient( Util::transient_key( 'wppo_ccss_attempts_' . $template_hash ) );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			return Ccss_Generator::get_ccss_max_retries();
 		}
 
 		/**
@@ -1958,449 +1833,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			return array( $budget, $deadline );
 		}
 
-		/**
-		 * Record a generation failure, routing expired budgets to the
-		 * timeout path (pending + retry) and all other failures to the
-		 * day-long `failed` state (issue #1235 review).
-		 *
-		 * Single exit funnel so no false return can leave an expired run
-		 * parked in `failed` with no retry while the guard reports timed_out.
-		 *
-		 * @param string     $template_hash Template hash.
-		 * @param int        $budget        Budget in seconds that was exhausted.
-		 * @param float|null $deadline      Absolute deadline, or null when uncapped.
-		 * @return void
-		 * @since 2.2.0
-		 */
-		private static function record_generation_failure( string $template_hash, int $budget, ?float $deadline ): void {
-			try {
-				if ( self::generation_expired( $deadline ) ) {
-					self::handle_ccss_timeout( $template_hash, $budget );
-					return;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			// Bounded generic retries (issue #1274): count consecutive
-			// ordinary failures and escalate to terminal `failed` only at
-			// the cap; below the cap stay `queued` with a retry scheduled
-			// so one bad origin cannot error-loop forever. Escalation uses
-			// the COMBINED generic + timeout count so alternating failure
-			// modes still terminate; a cap of 0 means fail fast with no
-			// retry scheduled.
-			$attempts = 0;
-			$cap      = self::DEFAULT_CCSS_MAX_RETRIES;
-			try {
-				$cap      = self::get_ccss_max_retries();
-				$attempts = self::get_ccss_generation_attempts( $template_hash ) + 1;
-				if ( function_exists( 'set_transient' ) && self::is_valid_template_hash( $template_hash ) ) {
-					set_transient( Util::transient_key( 'wppo_ccss_attempts_' . $template_hash ), $attempts, defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			// Lazy second-counter read: when the generic count alone
-			// already reaches the cap there is no need to spend a
-			// transient read on the timeout counter.
-			$total = $attempts;
-			if ( $cap > 0 && $total < max( 1, $cap ) ) {
-				try {
-					$total = $attempts + self::get_ccss_timeout_attempts( $template_hash );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$total = $attempts;
-				}
-			}
-			if ( $cap <= 0 || $total >= max( 1, $cap ) ) {
-				try {
-					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				// Log generic escalation like the timeout path so
-				// generic-error loops stay visible (issue #1274 review).
-				try {
-					if ( class_exists( Log::class ) ) {
-						Log::add( sprintf( 'Critical CSS escalated to failed for %s after %d failures.', $template_hash, (int) $total ) );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				return;
-			}
-			// Gate the status on the verified schedule outcome (issue #1310
-			// review): only assert `queued` when the retry insert returned an
-			// ID or a job is verifiably pending; on scheduler failure mark
-			// `failed` instead, otherwise inline_ccss() skips re-queueing for
-			// the TTL while no backing job will ever run.
-			$retry = self::schedule_ccss_retry( $template_hash, $attempts );
-			try {
-				if ( $retry['pending'] ) {
-					self::set_status_cache( $template_hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
-				} else {
-					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-		}
 
-		/**
-		 * Schedule a later retry for a timed-out CCSS generation (issue #1235).
-		 *
-		 * Reuses the `wppo_generate_ccss` hook payload shape used by
-		 * inline_ccss()/regenerate_all() so the normal worker path picks the
-		 * template up again. Prefers Action Scheduler, falls back to WP-Cron.
-		 * Fail-open: scheduling is best-effort — any error or missing
-		 * scheduler leaves the pending status cache behind (which the next
-		 * cron run re-queues from) instead of fataling the worker.
-		 *
-		 * Dedup-wins is intentional (issue #1235 review): when a retry is
-		 * already scheduled the existing run keeps its original delay and
-		 * the new exponential delay is skipped, so a burst of timeouts
-		 * cannot stack duplicate jobs — the higher delay applies to the
-		 * next timeout after the pending job runs.
-		 *
-		 * @param string   $template_hash Template hash to retry.
-		 * @param int|null $attempts      Optional pre-read attempt count for the backoff (generic-retry path passes its own counter so generic failures back off exponentially too; null reads the timeout counter).
-		 * @return array{id:int,pending:bool} `id` is the new action ID (>0) when a job was inserted; `pending` tells whether a job is now verifiably pending (new insert, lost unique-race, or WP-Cron fallback).
-		 * @since 2.2.0
-		 */
-		private static function schedule_ccss_retry( string $template_hash, ?int $attempts = null ): array {
-			$none = array(
-				'id'      => 0,
-				'pending' => false,
-			);
-			if ( ! self::is_valid_template_hash( $template_hash ) ) {
-				return $none;
-			}
-			try {
-				// Wrapped payload: AS unpacks args positionally, so the
-				// callback must receive the assoc array as one argument.
-				$hook_args = array( array( 'template_hash' => $template_hash ) );
-				if ( null === $attempts ) {
-					$attempts = self::get_ccss_timeout_attempts( $template_hash );
-				}
-				// Exponential backoff: 5min, 10min, 20min, 40min. The shift is
-				// already bounded to 0..3 so the result is exactly one of those
-				// four steps — no further clamping needed.
-				$delay = 300 * ( 1 << min( max( $attempts - 1, 0 ), 3 ) );
-				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					// Single enqueue-gate flow (issue #1310 review): the
-					// shared helper owns the atomic-first insert plus the
-					// both-group re-check, so this path can never drift
-					// from inline/regenerate_all/regenerate_single.
-					return self::schedule_ccss_job( 'wppo_generate_ccss', $hook_args, time() + $delay );
-				}
-				if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
-					if ( ! wp_next_scheduled( 'wppo_generate_ccss', $hook_args ) ) {
-						$scheduled = (bool) wp_schedule_single_event( time() + $delay, 'wppo_generate_ccss', $hook_args );
-						return array(
-							'id'      => 0,
-							'pending' => $scheduled,
-						);
-					}
-					return array(
-						'id'      => 0,
-						'pending' => true,
-					);
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return $none;
-		}
 
-		/**
-		 * Single home for the CCSS Action Scheduler enqueue-gate flow.
-		 *
-		 * Owns the atomic-first unique insert plus the both-group re-check
-		 * so schedule_ccss_retry(), inline_ccss(), regenerate_all() and
-		 * regenerate_single() can never drift apart again (issue #1310
-		 * review). On AS 4.x the unique insert dedupes by itself, so no
-		 * pre-check SELECTs run on the hot path; a 0 return is disambiguated
-		 * with one both-group re-check (lost unique-race vs scheduler
-		 * failure). On older schedulers the legacy check-then-act probes
-		 * both the dedicated and the legacy group before inserting.
-		 * Fail-open: any missing API or exception reports no pending job
-		 * rather than fataling the caller.
-		 *
-		 * @since 2.2.0
-		 * @param string $hook      Action hook.
-		 * @param array  $hook_args Wrapped action arguments.
-		 * @param int    $timestamp When the job will run.
-		 * @return array{id:int,pending:bool} `id` is the new action ID (>0) for a genuine insert; `pending` tells whether a job is now verifiably pending.
-		 */
-		private static function schedule_ccss_job( string $hook, array $hook_args, int $timestamp ): array {
-			$none = array(
-				'id'      => 0,
-				'pending' => false,
-			);
-			try {
-				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
-					return $none;
-				}
-				$legacy_group = 'performance_optimisation';
-				// Util ships in-repo: no method_exists guard needed.
-				$use_unique = Util::supports_action_scheduler_unique();
-				if ( $use_unique ) {
-					// Atomic path first (issue #1310): the insert itself
-					// dedupes, so the legacy pre-check below only runs on
-					// older schedulers.
-					$job_id = Util::schedule_unique_single_action( $timestamp, $hook, $hook_args, self::CCSS_AS_GROUP, array( $legacy_group ) );
-					if ( $job_id > 0 ) {
-						try {
-							self::$pending_memo[ md5( $hook . serialize( $hook_args ) ) ] = true; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
-						return array(
-							'id'      => $job_id,
-							'pending' => true,
-						);
-					}
-					// A 0 return is ambiguous (deduped race vs scheduler
-					// failure): re-check both groups for the winner.
-					if ( self::has_pending_ccss_job( $hook, $hook_args ) ) {
-						return array(
-							'id'      => 0,
-							'pending' => true,
-						);
-					}
-					return $none;
-				}
-				if ( self::has_pending_ccss_job( $hook, $hook_args ) ) {
-					return array(
-						'id'      => 0,
-						'pending' => true,
-					);
-				}
-				$job_id = 0;
-				if ( function_exists( 'as_schedule_single_action' ) ) {
-					try {
-						$job_id = (int) as_schedule_single_action( $timestamp, $hook, $hook_args, self::CCSS_AS_GROUP );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$job_id = 0;
-					}
-				} else {
-					try {
-						$job_id = (int) as_enqueue_async_action( $hook, $hook_args, self::CCSS_AS_GROUP );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$job_id = 0;
-					}
-				}
-				if ( $job_id > 0 ) {
-					try {
-						self::$pending_memo[ md5( $hook . serialize( $hook_args ) ) ] = true; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-					return array(
-						'id'      => $job_id,
-						'pending' => true,
-					);
-				}
-				if ( self::has_pending_ccss_job( $hook, $hook_args ) ) {
-					return array(
-						'id'      => 0,
-						'pending' => true,
-					);
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return $none;
-		}
 
-		/**
-		 * Consecutive timeout count for a template (backoff + escalation).
-		 *
-		 * Stored as a blog-aware transient so multisite sites back off
-		 * independently. Missing transient API reads as zero (fail-open).
-		 *
-		 * @param string $template_hash Template hash.
-		 * @return int Consecutive timeout count.
-		 * @since 2.2.0
-		 */
-		private static function get_ccss_timeout_attempts( string $template_hash ): int {
-			try {
-				if ( ! function_exists( 'get_transient' ) || ! self::is_valid_template_hash( $template_hash ) ) {
-					return 0;
-				}
-				$stored = get_transient( Util::transient_key( 'wppo_ccss_timeout_' . $template_hash ) );
-				return is_numeric( $stored ) ? max( 0, (int) $stored ) : 0;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 0;
-			}
-		}
 
-		/**
-		 * Reset the consecutive timeout count after a successful generation.
-		 *
-		 * Best-effort only; a missing transient API is a no-op.
-		 *
-		 * @param string $template_hash Template hash.
-		 * @return void
-		 * @since 2.2.0
-		 */
-		private static function clear_ccss_timeout_attempts( string $template_hash ): void {
-			try {
-				if ( function_exists( 'delete_transient' ) && self::is_valid_template_hash( $template_hash ) ) {
-					delete_transient( Util::transient_key( 'wppo_ccss_timeout_' . $template_hash ) );
-					delete_transient( Util::transient_key( 'wppo_ccss_timeout_first_' . $template_hash ) );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-		}
 
-		/**
-		 * Reset all bounded-retry state (generic + timeout) for a template.
-		 *
-		 * Called when a template is marked `skipped` (it may become
-		 * renderable later and must not inherit stale failure counts) and
-		 * after a successful generation. Best-effort only.
-		 *
-		 * @param string $template_hash Template hash.
-		 * @return void
-		 * @since 2.2.0
-		 */
-		private static function clear_ccss_retry_state( string $template_hash ): void {
-			try {
-				self::clear_ccss_generation_attempts( $template_hash );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			try {
-				self::clear_ccss_timeout_attempts( $template_hash );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-		}
 
-		/**
-		 * Record a generation timeout: log, mark pending, schedule a retry.
-		 *
-		 * Fail-open contract (issue #1235): the page keeps its existing
-		 * stylesheets untouched, the stored CCSS file (if any) is left in
-		 * place, and the template is marked `pending` (not `failed`) so the
-		 * next eligible run retries instead of waiting out the day-long
-		 * failure TTL. Never fatals; every step is individually guarded.
-		 * Multisite-safe: status writes go through the blog-aware
-		 * Util::transient_key() path in set_status_cache().
-		 *
-		 * @param string $template_hash Template hash that timed out.
-		 * @param int    $budget        Budget in seconds that was exhausted.
-		 * @return void
-		 * @since 2.2.0
-		 */
-		private static function handle_ccss_timeout( string $template_hash, int $budget ): void {
-			if ( ! self::is_valid_template_hash( $template_hash ) ) {
-				return;
-			}
-			$attempts = 0;
-			try {
-				$attempts = self::get_ccss_timeout_attempts( $template_hash ) + 1;
-				if ( function_exists( 'set_transient' ) ) {
-					set_transient( Util::transient_key( 'wppo_ccss_timeout_' . $template_hash ), $attempts, defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-				}
-				// Wall-clock liveness fallback (issue #1235 review): the
-				// counter above is best-effort — an evicted transient reads
-				// back as 0 and would pin the delay at 5min forever. The
-				// first-timeout stamp gets a TTL strictly longer than the
-				// escalation window (2 days vs the 1-day check) so the
-				// (time() - first) > DAY test can actually fire instead of
-				// expiring together with the window it measures.
-				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
-					$first_key = Util::transient_key( 'wppo_ccss_timeout_first_' . $template_hash );
-					$first     = get_transient( $first_key );
-					$day       = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
-					if ( ! is_numeric( $first ) ) {
-						set_transient( $first_key, time(), 2 * $day );
-					} elseif ( ( time() - (int) $first ) > $day ) {
-						$attempts = max( $attempts, self::MAX_CCSS_TIMEOUT_ATTEMPTS );
-						// Persist the wall-clock bump so the counter and the
-						// transient cannot diverge on the next timeout read.
-						set_transient( Util::transient_key( 'wppo_ccss_timeout_' . $template_hash ), $attempts, $day );
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			// Bounded retries: after MAX consecutive timeouts escalate to
-			// `failed` so a permanently-slow origin stops burning a full
-			// worker per cycle. The effective cap also honours the
-			// additive `ccssMaxRetries` setting (issue #1274); escalation
-			// uses the COMBINED generic + timeout count so alternating
-			// failure modes still terminate, and a cap of 0 fails fast
-			// with no retry scheduled. Only the escalation is logged —
-			// retries below the cap stay silent so timeouts do not cost a
-			// Log::add() DB insert per attempt.
-			$retry_cap = self::MAX_CCSS_MAX_RETRIES;
-			try {
-				$retry_cap = self::get_ccss_max_retries(); // 0..5, 0 = immediate failed.
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			// Lazy second-counter read (see record_generation_failure).
-			$total = $attempts;
-			if ( $retry_cap > 0 && $total < max( 1, $retry_cap ) ) {
-				try {
-					$total = $attempts + self::get_ccss_generation_attempts( $template_hash );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			if ( $retry_cap <= 0 || $total >= max( 1, $retry_cap ) ) {
-				try {
-					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
-						if ( function_exists( '__' ) ) {
-							$message = sprintf(
-								/* translators: 1: Template hash 2: Consecutive failure count 3: Timeout budget in seconds */
-								__( 'Critical CSS generation escalated to failed for template: %1$s after %2$d consecutive failures (timeout budget %3$d seconds).', 'performance-optimisation' ),
-								$template_hash,
-								$total,
-								$budget
-							);
-						} else {
-							$message = sprintf(
-								'Critical CSS generation escalated to failed for template: %s after %d consecutive failures (timeout budget %d seconds).',
-								$template_hash,
-								$total,
-								$budget
-							);
-						}
-						Log::add( $message );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				return;
-			}
-			// Below the cap: stay silent (no per-timeout Log::add) and
-			// re-queue with backoff. The status is gated on the verified
-			// schedule outcome (issue #1310 review): only assert `queued`
-			// when a retry job is now pending, else mark `failed` so no
-			// phantom queued status survives a scheduler failure.
-			$retry = self::schedule_ccss_retry( $template_hash );
-			try {
-				if ( $retry['pending'] ) {
-					self::set_status_cache( $template_hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
-				} else {
-					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-		}
+
+
+
+
+
+
+
 
 		/**
 		 * Guarded CCSS generation wrapper with a wall-clock timeout (issue #1235).
@@ -2443,12 +1888,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$result = self::generate_and_store( $template_hash, $template, $deadline, $budget, $stage_only );
 				if ( $result ) {
 					try {
-						self::clear_ccss_timeout_attempts( $template_hash );
+						Ccss_Generator::clear_timeout_attempts( $template_hash );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
 					try {
-						self::clear_ccss_generation_attempts( $template_hash );
+						Ccss_Generator::clear_generation_attempts( $template_hash );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
@@ -2508,7 +1953,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// the queue slot is not lost with a stale status and no retry.
 				try {
 					if ( self::is_valid_template_hash( $template_hash ) ) {
-						self::record_generation_failure( $template_hash, $budget, $deadline );
+						Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 					}
 				} catch ( \Throwable $ignored ) {
 					unset( $ignored );
@@ -3806,10 +3251,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$ccss_presets_memo              = null;
 			self::$lcp_preload_emitted            = array();
 			self::$ccss_defer_blocked             = array();
-			self::$pending_memo                   = array();
 			self::$gzip_size_memo                 = array();
 			self::$commerce_context_memo          = null;
 			self::$commerce_excluded_context_memo = null;
+			Ccss_Generator::reset_pending_memo();
 			Ccss_Store::reset_ccss_memo();
 		}
 
@@ -5577,11 +5022,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// Retry state is reset so a later renderable run starts
 				// from zero instead of inheriting stale failure counts.
 				try {
-					self::set_status_cache( $template_hash, 'skipped', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+					Ccss_Generator::set_status_cache( $template_hash, 'skipped', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				self::clear_ccss_retry_state( $template_hash );
+				Ccss_Generator::clear_retry_state( $template_hash );
 				return false;
 			}
 
@@ -5599,7 +5044,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// escalation even though no retry can succeed.
 			if ( is_string( $critical_css ) && self::contains_unsafe_css_tokens( $critical_css ) ) {
 				try {
-					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+					Ccss_Generator::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -5613,14 +5058,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// budget keeps existing stylesheets, logs the miss, and
 				// schedules a retry instead of parking the template in the
 				// day-long `failed` state with no retry.
-				self::record_generation_failure( $template_hash, $budget, $deadline );
+				Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
 			}
 			// The sanitize + extraction phases may have consumed the rest of
 			// the budget — never commit output past the deadline (issue
 			// #1235). The previous file (if any) stays in place untouched.
 			if ( self::generation_expired( $deadline ) ) {
-				self::handle_ccss_timeout( $template_hash, $budget );
+				Ccss_Generator::handle_timeout( $template_hash, $budget );
 				return false;
 			}
 			// Defense-in-depth (issue #1181): sanitize before caching so the
@@ -5630,7 +5075,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$critical_css = self::sanitize_inline_css( $critical_css );
 			if ( self::contains_unsafe_css_tokens( $critical_css ) ) {
 				try {
-					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+					Ccss_Generator::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -5638,7 +5083,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 			if ( '' === trim( $critical_css ) ) {
-				self::record_generation_failure( $template_hash, $budget, $deadline );
+				Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
 			}
 
@@ -5646,13 +5091,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// the budget — never commit output past the deadline (issue
 			// #1235). The previous file (if any) stays in place untouched.
 			if ( self::generation_expired( $deadline ) ) {
-				self::handle_ccss_timeout( $template_hash, $budget );
+				Ccss_Generator::handle_timeout( $template_hash, $budget );
 				return false;
 			}
 
 			$dir = self::get_ccss_dir();
 			if ( ! wp_mkdir_p( $dir ) ) {
-				self::record_generation_failure( $template_hash, $budget, $deadline );
+				Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
 			}
 
@@ -5662,7 +5107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// bad generation can never break styling before promote.
 			$file = $stage_only && '' !== $live_file ? Util::get_staged_path_for( $live_file ) : $live_file;
 			if ( '' === $file ) {
-				self::record_generation_failure( $template_hash, $budget, $deadline );
+				Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
 			}
 
@@ -5671,12 +5116,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// the cache. Fail closed: keep the prior file in place.
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'css_within_storage_bounds' ) && ! Util::css_within_storage_bounds( $critical_css ) ) {
-					self::record_generation_failure( $template_hash, $budget, $deadline );
+					Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 					return false;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				self::record_generation_failure( $template_hash, $budget, $deadline );
+				Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
 			}
 
@@ -5686,7 +5131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// prior file in place and mark the status failed.
 			$written = $filesystem ? Util::atomic_file_put_contents( $filesystem, $file, $critical_css ) : false;
 			if ( ! $written ) {
-				self::record_generation_failure( $template_hash, $budget, $deadline );
+				Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
 			}
 
@@ -5762,21 +5207,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( $staged_ok ) {
 					return true;
 				}
-				self::record_generation_failure( $template_hash, $budget, $deadline );
+				Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
 			}
 
 			if ( self::ccss_exists( $template_hash ) ) {
-				self::set_status_cache( $template_hash, 'done', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
+				Ccss_Generator::set_status_cache( $template_hash, 'done', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
 				try {
-					self::clear_ccss_retry_state( $template_hash );
+					Ccss_Generator::clear_retry_state( $template_hash );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 				return true;
 			}
 
-			self::record_generation_failure( $template_hash, $budget, $deadline );
+			Ccss_Generator::record_generation_failure( $template_hash, $budget, $deadline );
 			return false;
 		}
 
@@ -5995,7 +5440,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// schedule_ccss_job() SELECTs per pageview
 					// (issue #1310 review); dedupe alone preserves
 					// correctness but not the storm.
-					$cached = self::get_status_cache( $template_hash );
+					$cached = Ccss_Generator::get_status_cache( $template_hash );
 					if ( 'pending' === $cached || 'queued' === $cached || 'processing' === $cached ) {
 						$queued = true;
 					}
@@ -6011,7 +5456,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// dedupe). A lost unique-race reports pending (skip
 					// the WP-Cron fallback, no double-schedule); only a
 					// verified scheduler failure falls through to cron.
-					$job    = self::schedule_ccss_job( $hook, $hook_args, time() );
+					$job    = Ccss_Generator::schedule_job( $hook, $hook_args, time() );
 					$queued = $job['pending'];
 				}
 
@@ -6032,11 +5477,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 
 				if ( $queued ) {
-					self::set_status_cache( $template_hash, 'pending', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+					Ccss_Generator::set_status_cache( $template_hash, 'pending', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 				} else {
 					// Nothing could be scheduled (e.g. cron disabled) — surface
 					// the failure instead of reporting an hour of fake pending.
-					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+					Ccss_Generator::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 				}
 
 				// Non-blocking fallback: expose the async loader while the
@@ -6325,7 +5770,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						// unverifiable — job is distinguishable from a
 						// genuine generation failure in the status UI and
 						// does not block the next legitimate signed retry.
-						self::set_status_cache( $template_hash, 'rejected', defined( 'MINUTE_IN_SECONDS' ) ? 5 * MINUTE_IN_SECONDS : 300 );
+						Ccss_Generator::set_status_cache( $template_hash, 'rejected', defined( 'MINUTE_IN_SECONDS' ) ? 5 * MINUTE_IN_SECONDS : 300 );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
@@ -6362,11 +5807,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			if ( empty( $found_template ) ) {
-				self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				Ccss_Generator::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 				return;
 			}
 
-			self::set_status_cache( $template_hash, 'processing', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+			Ccss_Generator::set_status_cache( $template_hash, 'processing', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 
 			$timed_out = null;
 			$result    = self::generate_guarded( $template_hash, $found_template, $timed_out );
@@ -6387,7 +5832,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// so operators never chase phantom failures.
 				$is_skipped = false;
 				try {
-					$is_skipped = ( 'skipped' === self::get_status_cache( $template_hash ) );
+					$is_skipped = ( 'skipped' === Ccss_Generator::get_status_cache( $template_hash ) );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -6599,8 +6044,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// are marked `skipped`, never queued into an error loop.
 				try {
 					if ( ! self::get_sample_url( (string) $template ) ) {
-						self::set_status_cache( $hash, 'skipped', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-						self::clear_ccss_retry_state( $hash );
+						Ccss_Generator::set_status_cache( $hash, 'skipped', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+						Ccss_Generator::clear_retry_state( $hash );
 						continue;
 					}
 				} catch ( \Throwable $e ) {
@@ -6624,7 +6069,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// burst never holds the worker for back-to-back
 					// full-budget runs on the dedicated `wppo-ccss` AS
 					// group (issue #1235 review).
-					$job         = self::schedule_ccss_job( $hook, $hook_args, time() + ( $queued * 60 ) );
+					$job         = Ccss_Generator::schedule_job( $hook, $hook_args, time() + ( $queued * 60 ) );
 					$pending_now = $job['pending'];
 					if ( $job['id'] > 0 ) {
 						++$queued;
@@ -6634,7 +6079,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// (issue #1274 review): without Action Scheduler the status
 				// must not claim queued with zero jobs queued.
 				if ( $pending_now ) {
-					self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+					Ccss_Generator::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 				}
 			}
 
@@ -6685,8 +6130,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$hash = self::get_template_hash( $slug );
 				try {
 					if ( ! self::get_sample_url( $slug ) ) {
-						self::set_status_cache( $hash, 'skipped', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
-						self::clear_ccss_retry_state( $hash );
+						Ccss_Generator::set_status_cache( $hash, 'skipped', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+						Ccss_Generator::clear_retry_state( $hash );
 						return 0;
 					}
 				} catch ( \Throwable $e ) {
@@ -6715,7 +6160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// only fires on a 0 return. A 0 with no job pending is
 					// a scheduler failure — return 0 instead of claiming
 					// queued with zero jobs.
-					$job = self::schedule_ccss_job( $hook, $hook_args, time() );
+					$job = Ccss_Generator::schedule_job( $hook, $hook_args, time() );
 					if ( ! $job['pending'] ) {
 						return 0;
 					}
@@ -6725,7 +6170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// the REST layer can return an error instead of a 200.
 					return -1;
 				}
-				self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+				Ccss_Generator::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 				return 1;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -6784,167 +6229,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				delete_transient( self::get_source_checksum_key( $hash ) );
 				delete_transient( self::get_source_urls_key( $hash ) );
 			}
-			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
-				// Monotonic increment: same-second mutations must produce
-				// distinct salts (issue #882 review).
-				update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
-			}
+			// Monotonic status-salt invalidation remains a storage-clear
+			// side effect, but its key policy now belongs to Ccss_Generator.
+			Ccss_Generator::bump_status_salt();
 		}
 
 		/**
-		 * Read a generation status from the salted object cache (WP 6.9+) or
-		 * the transient fallback.
+		 * Read the generation-status cache through the canonical owner.
 		 *
-		 * The salt is the current option VALUE (Util::cache_salt) so a
-		 * clear_all() bump invalidates every entry at once (issue #882).
-		 *
-		 * @since 2.0.0
-		 *
-		 * @param string $hash Template hash.
-		 * @return string|false Status string, or false when unset.
-		 */
-		private static function get_status_cache( string $hash ) {
-			$key = 'wppo_ccss_status_' . $hash;
-			// Salted layer requires a persistent object cache; the transient
-			// fallback keeps the status across requests otherwise (issue #882
-			// review). clear_all() deletes the transients when it bumps.
-			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
-				// Salted eviction (TTL) without a bump: the transient written
-				// by set_status_cache() is still fresh — reuse it instead of
-				// reporting 'none' (issue #882 review). clear_all() deletes
-				// the transients when it bumps the salt, so a post-bump read
-				// cannot resurrect stale status.
-				$cached = wp_cache_get_salted( $key, 'wppo', Util::cache_salt( self::SALT_KEY ) );
-				return false !== $cached ? $cached : get_transient( Util::transient_key( $key ) );
-			}
-			return get_transient( Util::transient_key( $key ) );
-		}
-
-		/**
-		 * Read the generation-status cache for the storage store (FUT-001).
-		 *
-		 * @internal Bridge for {@see \PerformanceOptimise\Inc\Ccss_Store::get_status_all()}.
-		 * Keeps get_status_cache() private while letting the extracted store
-		 * share the single salted/transient source of truth.
+		 * Public compatibility facade retained for existing external callers.
+		 * Ccss_Store now reads Ccss_Generator directly in production.
 		 *
 		 * @since 2.4.0
 		 * @param string $hash Template hash.
 		 * @return string|false Status string, or false when unset.
 		 */
 		public static function get_status_cache_for_store( string $hash ) {
-			return self::get_status_cache( $hash );
-		}
-
-		/**
-		 * Store a generation status in the salted object cache (WP 6.9+) or
-		 * the transient fallback.
-		 *
-		 * @since 2.0.0
-		 *
-		 * @param string $hash   Template hash.
-		 * @param string $status Status value ('queued'|'processing'|'done'|'skipped'|'failed'|'rejected'; legacy 'ready'|'pending' still accepted on read).
-		 * @param int    $ttl    Time to live in seconds.
-		 * @return void
-		 */
-		private static function set_status_cache( string $hash, string $status, int $ttl ): void {
-			$key = 'wppo_ccss_status_' . $hash;
-			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
-				wp_cache_set_salted( $key, $status, 'wppo', Util::cache_salt( self::SALT_KEY ), $ttl );
-			}
-			// Always write the transient too: it is the persistence fallback on
-			// hosts without an external object cache (issue #882 review).
-			set_transient( Util::transient_key( $key ), $status, $ttl );
-		}
-
-		/**
-		 * Whether a CCSS generation job is pending or running in either AS group.
-		 *
-		 * Single home for the dedicated-group-plus-legacy-group disjunction
-		 * so the pre-check and the post-race re-check can never drift apart
-		 * (issue #1310 review): a concurrent winner in the legacy
-		 * `performance_optimisation` group must dedupe exactly like one in
-		 * `wppo-ccss`, never fall through to a double-schedule. Fail-open:
-		 * returns false when the lookup API is unavailable or throws.
-		 *
-		 * The probe covers pending plus running/claimed (issue #1310
-		 * review): a winner that transitioned to running between the 0
-		 * return and the re-check must still disambiguate as "job live"
-		 * rather than scheduler failure, otherwise the template is marked
-		 * failed with a day TTL while its job runs.
-		 *
-		 * @since 2.2.0
-		 * @param string $hook      Action hook.
-		 * @param array  $hook_args Action arguments.
-		 * @return bool True when a matching action is pending or running in either group.
-		 */
-		private static function has_pending_ccss_job( string $hook, array $hook_args ): bool {
-			if ( ! function_exists( 'as_next_scheduled_action' ) ) {
-				return false;
-			}
-			// Per-request memo (issue #1310 review): the frontend hot path
-			// and per-template loops repeat identical probes; the
-			// status-cache gate absorbs most repeats but the memo covers
-			// the rest within one request.
-			try {
-				$memo_key = md5( $hook . serialize( $hook_args ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$memo_key = '';
-			}
-			if ( '' !== $memo_key && array_key_exists( $memo_key, self::$pending_memo ) ) {
-				return self::$pending_memo[ $memo_key ];
-			}
-			$pending = false;
-			try {
-				if ( (bool) as_next_scheduled_action( $hook, $hook_args, self::CCSS_AS_GROUP )
-					|| (bool) as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' ) ) {
-					$pending = true;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				// Fall through to the running backstop below instead of
-				// returning false: a transient pending-lookup failure
-				// while the winner is running must not misreport as no
-				// job (which would double-schedule plus mark failed with
-				// a day TTL while a job runs).
-			}
-			if ( $pending ) {
-				if ( '' !== $memo_key ) {
-					self::$pending_memo[ $memo_key ] = true;
-				}
-				return true;
-			}
-			// Running/claimed backstop: only when the store lookup API is
-			// available; a missing API fails open to the pending result
-			// above (false here).
-			$result = false;
-			try {
-				if ( function_exists( 'as_get_scheduled_actions' ) && class_exists( \ActionScheduler_Store::class ) ) {
-					foreach ( array( self::CCSS_AS_GROUP, 'performance_optimisation' ) as $ccss_group ) {
-						$running = as_get_scheduled_actions(
-							array(
-								'hook'     => $hook,
-								'args'     => $hook_args,
-								'group'    => $ccss_group,
-								'status'   => \ActionScheduler_Store::STATUS_RUNNING,
-								'per_page' => 1,
-							),
-							'ids'
-						);
-						if ( is_array( $running ) && ! empty( $running ) ) {
-							$result = true;
-							break;
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$result = false;
-			}
-			if ( '' !== $memo_key ) {
-				self::$pending_memo[ $memo_key ] = $result;
-			}
-			return $result;
+			return Ccss_Generator::get_status_cache( $hash );
 		}
 	}
 }

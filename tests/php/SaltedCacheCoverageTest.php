@@ -13,6 +13,7 @@
  */
 
 use PerformanceOptimise\Inc\Cache;
+use PerformanceOptimise\Inc\Ccss_Generator;
 use PerformanceOptimise\Inc\Critical_CSS;
 use PerformanceOptimise\Inc\System_Info;
 use PerformanceOptimise\Inc\Util;
@@ -133,10 +134,10 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 	 * and that a salt bump invalidates them (issue #882).
 	 */
 	public function test_critical_css_status_cache_is_salted_and_bumpable(): void {
-		$ref = new \ReflectionMethod( Critical_CSS::class, 'set_status_cache' );
+		$ref = new \ReflectionMethod( Ccss_Generator::class, 'set_status_cache' );
 		$ref->invoke( null, 'abc123', 'ready', WEEK_IN_SECONDS );
 
-		$get = new \ReflectionMethod( Critical_CSS::class, 'get_status_cache' );
+		$get = new \ReflectionMethod( Ccss_Generator::class, 'get_status_cache' );
 		$this->assertSame( 'ready', $get->invoke( null, 'abc123' ) );
 
 		// Transient fallback is not populated on the salted path.
@@ -155,13 +156,13 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_page_templates' )->justReturn( array() );
 		Functions\when( 'get_stylesheet' )->justReturn( 'testtheme' );
 
-		$ref = new \ReflectionMethod( Critical_CSS::class, 'set_status_cache' );
+		$ref = new \ReflectionMethod( Ccss_Generator::class, 'set_status_cache' );
 		$ref->invoke( null, 'abc123', 'pending', HOUR_IN_SECONDS );
 
 		Critical_CSS::clear_all();
 
 		$this->assertArrayHasKey( 'wppo_ccss_salt', $this->options_store );
-		$get = new \ReflectionMethod( Critical_CSS::class, 'get_status_cache' );
+		$get = new \ReflectionMethod( Ccss_Generator::class, 'get_status_cache' );
 		$this->assertFalse( $get->invoke( null, 'abc123' ) );
 	}
 

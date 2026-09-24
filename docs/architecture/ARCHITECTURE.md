@@ -31,7 +31,7 @@ performance-optimisation.php
       ├─ Assets, images, and CSS
       │   Asset_Manager, Script_Strategy, Css_Combine, Css_Safelist,
       │   Google_Fonts, Image_Optimisation, Lcp_Preload, Img_Converter,
-      │   Critical_CSS, Ccss_Store, Used_CSS
+      │   Critical_CSS, Ccss_Generator, Ccss_Store, Used_CSS
       ├─ Database and insight
       │   Database_Cleanup, Database_Cleanup_Runner, Telemetry, Pagespeed, Insight_Query,
       │   Suggestion_Engine, System_Info, RUM, AI_Adaptive, Ai_Anomaly, OD_Bridge
@@ -48,19 +48,19 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 88 files: 84 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 89 files: 85 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 383 |
-| Runtime / compatibility / loader edges | 382 / 199 / 3 |
-| Cross-domain / feature-to-feature edges | 321 / 46 |
+| Unique edges | 395 |
+| Runtime / compatibility / loader edges | 394 / 206 / 3 |
+| Cross-domain / feature-to-feature edges | 330 / 50 |
 | Boundary violations | 20 |
-| Bridge candidates | 238 |
+| Bridge candidates | 247 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 67 nodes, 329 runtime-classified internal edges |
-| Static state | 143 properties across 32 nodes |
-| Exact duplicate candidates | 17 |
+| Largest runtime SCC | 68 nodes |
+| Static state | 143 properties across 33 nodes |
+| Exact duplicate candidates | 18 |
 
 The runtime SCC shows reciprocal reach across major subsystems. It does not prove that one extraction will fix the whole component. Each queue item must identify a smaller owner and dependency path.
 
@@ -104,7 +104,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Redis_Config_Policy` | Complete Redis key manifest and value normalization | Keep REST and CLI on this narrow security policy; leave connection and persistence in `Object_Cache` |
 | `Dropin_Registry` | Neutral forwarding seam for post-mutation drop-in cache invalidation | Keep fail-open and stateless; leave reporting, path/ownership detection, and storage in `System_Info` |
 | `Object_Cache` | Redis backend, connection, circuit state, drop-in management | Keep lifecycle and drop-in behavior; expose the policy key constant for compatibility |
-| `Critical_CSS` / `Ccss_Store` | Generation plus storage/status | Keep storage in the store; move remaining generation clusters by policy |
+| `Critical_CSS` / `Ccss_Generator` / `Ccss_Store` | Fetch/parse/output orchestration, generation lifecycle status/retry policy, and file/status projection | Keep the three axes explicit; do not absorb frontend output, purge, or image/preload concerns |
 | `Used_CSS` | Generation, storage, parsing, delivery, rollout | Split storage and generation only after Used CSS owns no cache purge policy |
 | `Image_Optimisation` | Image markup, lazy loading, media transforms, conversion bridge | Extract cohesive media/metadata or conversion-state clusters with parity tests |
 | `Insight_Query` | Cached telemetry/PageSpeed read models and PageSpeed suggestion projection | Keep read-only; leave scans, storage, AI, and RUM side effects with domain owners |
@@ -123,7 +123,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 6. **Settings writes:** `Settings_Command` now routes REST partial/import/safe-mode writes through `Settings_Store`; no direct runtime `update_option('wppo_settings')` remains outside the canonical store.
 7. **Redis policy:** `Redis_Config_Policy` now owns the full key manifest and value sanitizer used by REST and CLI; `Object_Cache::ALLOWED_KEYS` remains a compatibility alias.
 8. **Drop-in invalidation:** Advanced/Object cache mutators now invalidate through `Dropin_Registry`; `System_Info` remains the sole reporting and cache-storage owner.
-9. **CSS and image cycles:** storage owners exist, but policy and bridges keep the larger SCC connected.
+9. **CSS and image cycles:** `Ccss_Generator` now owns generation lifecycle status/retry policy and `Ccss_Store` owns file projection, but parser/frontend bridges still keep the larger SCC connected.
 10. **REST and CLI duplication:** `Admin_Auth` now owns the duplicated administrative capability/nonce decision; adapters still duplicate dispatch, settings, telemetry, and diagnostics.
 11. **Database cleanup orchestration:** `Database_Cleanup_Runner` now owns the shared REST/Abilities/CLI dispatch, aliases, dry-run preview, and activity policy; adapters retain transport concerns.
 12. **React async ownership:** cache commits, deferred saves, abort guards, and polling state need bounded fixes.

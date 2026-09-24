@@ -172,7 +172,7 @@ P3-005 implementation update: `Cache_Capacity` now owns that statistics/cap/olde
 
 ### CSS and image policy remains cross-owned
 
-`Critical_CSS`, `Ccss_Store`, `Used_CSS`, and `Lcp_Preload` remain inside a 59-node runtime SCC with the wider plugin. Storage owners exist, but callers still route through facades and several policy helpers cross CSS and image boundaries.
+`Critical_CSS`, `Ccss_Generator`, `Ccss_Store`, `Used_CSS`, and `Lcp_Preload` remain inside the wider runtime SCC. P3-018 gives generation status/retry/queue lifecycle one owner and leaves fetch/parse/output plus frontend delivery on `Critical_CSS`; storage/status projection remains on `Ccss_Store`. Parser, image, and compatibility bridges still keep the SCC connected.
 
 ### Scheduler ownership has a teardown hole
 
@@ -210,16 +210,18 @@ P3-017 (issue #1599) migrates one bounded external Woo caller cluster from `Util
 
 The generated inventory remains 85 files, 88 graph nodes, and 2,541 methods. Seven cache/Core/Assets/Scheduler callers now have explicit `Woo_Detect` edges, reducing incoming executable evidence on `Util` from 1,138 to 1,084. Because those callers still use unrelated `Util` settings/filesystem/URL/cache-key methods, `Util` fan-in remains 59; the direct owner edges temporarily raise total edges from 383 to 390, compatibility edges from 199 to 205, feature-to-feature edges from 46 to 50, and bridge candidates from 238 to 245. Those duplicate caller→`Util` edges disappear as the separately queued settings/filesystem/URL/cache-key/HTTP clusters migrate. The runtime SCC remains 67 nodes (336 edges); the compatibility SCC grows from 21 to 22 nodes (72 edges) because seven direct owner references join the existing `Woo_Detect` ↔ `Util` facade cycle.
 
+P3-018 (issue #1602) selects one bounded Critical CSS lifecycle cluster from the fresh graph. New `Ccss_Generator` owns generation status values and keys, salted/transient persistence, bounded generic/timeout retry counters, failure/escalation logging, and the dedicated-plus-legacy Action Scheduler/WP-Cron liveness/enqueue policy. `Critical_CSS` keeps the public retry-cap and store status facades plus all public generation/frontend callbacks; `Ccss_Store` reads the canonical status reader directly and remains the file/staging/variant/status-projection owner. The moved private implementation methods have no compatibility proxies because they were not public or hook-visible. Critical_CSS falls from 6,950 lines / 138 methods / 11 static properties to 6,251 / 126 / 10; the new owner is 593 lines / 17 methods / one request memo. Total graph metrics are 86 inventory files, 89 graph nodes, and 395 edges; compatibility edges are 206, bridge candidates 247, and feature-to-feature edges remain 50. The explicit owner edges are documented bridges, and the added exact-shape group is a review signal rather than evidence of shared semantics.
+
 ## Static state
 
-The old regex found 12 stateful files. The tokenizer finds 143 static properties across 32 nodes. The largest owners are:
+The old regex found 12 stateful files. The tokenizer finds 143 static properties across 33 nodes. The largest owners are:
 
 | Node | Static properties | Review finding |
 |---|---:|---|
 | `LiteSpeed_Integration` | 17 | Request, URI, purge, and setting memos lack complete blog scoping and central reset ownership. |
 | `Main` | 12 | Request memos mix with persistent feature state; switch-blog coverage is partial. |
 | `Script_Strategy` | 11 | Extracted delay/defer state still lives behind Main bridges. |
-| `Critical_CSS` | 11 | Generation and status memos have separate reset paths. |
+| `Critical_CSS` | 10 | Generation/status queue state moved to `Ccss_Generator`; parser, frontend, commerce, gzip, and probe memos remain here. |
 | `Image_Optimisation` | 7 | Media and preload state spans extracted and non-extracted owners. |
 | `RUM` | 7 | Aggregate and queue memos need request, blog, and test reset contracts. |
 | `Builder_Purge_Watcher` | 7 | Builder detection and purge state lacks one runtime reset owner. |

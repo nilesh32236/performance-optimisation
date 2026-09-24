@@ -343,7 +343,7 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 		if ( ! function_exists( 'as_next_scheduled_action' ) ) {
 			eval( 'function as_next_scheduled_action( $hook, $args = array(), $group = "" ) { if ( "performance_optimisation" === $group ) { return time() + 60; } return false; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only group-sensitive lookup stub in an isolated process.
 		}
-		$method = new \ReflectionMethod( \PerformanceOptimise\Inc\Critical_CSS::class, 'has_pending_ccss_job' );
+		$method = new \ReflectionMethod( \PerformanceOptimise\Inc\Ccss_Generator::class, 'has_pending_job' );
 		$this->assertTrue( $method->invoke( null, 'wppo_generate_ccss', array( array( 'template_hash' => 'abc' ) ) ) );
 	}
 
