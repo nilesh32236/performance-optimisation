@@ -42,12 +42,13 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 |---|---|---|
 | `Cache` | HTML cache policy, output buffer, storage, invalidation and CSS-combine facades | Keep lifecycle and buffer orchestration; extract capacity/accounting |
 | `Cache_Invalidator` | Invalidation, purge fallback, deletes | Keep; remove temporary owner bridges when callers permit |
+| `Cache_Capacity` | Static cache statistics, cap settings, byte/file accounting, randomized-query guard, oldest eviction | Keep narrow owner bridges for Cache filesystem, containment, and sibling-aware deletion |
 | `Cache_Key` | Key derivation | Keep as infrastructure |
 | `Advanced_Cache_Handler` | `advanced-cache.php` drop-in lifecycle | Protect early-load contract |
 | `Object_Cache` | Redis config, connection, reads/writes, circuit, drop-in management | Move full config normalization into a Redis policy owner |
 | `Bfcache` | Logged-in no-store policy | Keep narrow |
 
-The 839-line `Cache` tail owns statistics, cap settings, capacity checks, and eviction. `Cache_Capacity` can own that one contract after scheduler and runtime-state ownership stabilize.
+The 839-line `Cache` tail previously owned statistics, cap settings, capacity checks, and eviction. `Cache_Capacity` now owns that one accounting contract; `Cache` retains only the public facade and lifecycle/storage policy. The owner reaches Cache through narrow filesystem, root/domain, containment, and deletion bridges.
 
 ### Images
 

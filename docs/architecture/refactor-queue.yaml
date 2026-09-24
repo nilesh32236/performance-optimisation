@@ -747,8 +747,9 @@ phase3_items:
 
   - id: P3-005
     title: 'Cache capacity and eviction accounting owner'
-    status: audit-pending
+    status: active
     priority: high
+    github_issue: 1574
     type: architecture
     problem: 'Cache carries an 839-line statistics, cap, and eviction tail with one accounting contract and callers in Cron, REST, Main, and CLI.'
     target_owner: 'Cache_Capacity under Cache/'
@@ -757,6 +758,24 @@ phase3_items:
     non_goals: 'Do not move Host/path security, HTML buffer, invalidation, object-cache flush APIs, or storage policy.'
     tests: 'CacheCapacityParityTest plus SaltedCacheCoverageTest, Perf874Test, CacheTest, Cron, and Rest_Cache callers.'
     ratchet: 'Cache responsibility density and capacity body LOC down; public compatibility surface unchanged.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: b71350ab
+      evidence:
+        - 'Cache::get_cache_stats, get_cache_cap_settings, get_cache_bytes_and_files, get_cache_cap_status, maybe_enforce_cache_cap, randomized-query detection, and oldest-entry eviction form one 839-line accounting cluster.'
+        - 'The cluster already shares one directory walk and transient/stampede policy, but it is interleaved with Cache instance filesystem/domain helpers and public compatibility methods.'
+        - 'Cron, REST cache adapters, Main, and CLI call the public Cache facades; callers should not need to migrate in this item.'
+        - 'Cache_Capacity can receive narrow filesystem/domain/setting collaborators while Cache retains the public facade and lifecycle policy.'
+      decision: 'Proceed test-first with a compatibility-preserving Cache_Capacity owner; move accounting internals behind existing Cache methods, preserve all cap defaults, salted/stale stats behavior, randomized-query filtering, and oldest eviction semantics.'
+      implementation:
+        status: 'implemented'
+        owner: 'includes/Cache/class-cache-capacity.php'
+        facade: 'Cache public methods and private accounting helpers delegate through narrow filesystem/domain/containment/deletion bridges'
+        loader: 'Loader_Map::fallback_map()["Cache_Capacity"]'
+        preserved: '512 MB / .8 warning ratio / enforcement / 5000 files / randomized guard, clamping, salted transient fallback, stale copy, stampede lock, 15-minute writes, 5-minute throttle, oldest eviction, and stable hash rules'
+        graph_delta: '75 inventory files / 78 graph nodes / 348 edges; Cache 5643->5077 lines and 161->167 methods after facade bridges; Cache_Capacity is the sole accounting owner'
+        tests: 'CacheCapacityParityTest, SaltedCacheCoverageTest, PreloadHonestStatus1428Test, CacheTest, CacheInvalidatorTest, CronPreloadGatingTest, CronHookParityTest, RestTest'
+        verification: 'Focused PHPUnit, PHPCS, generator --check, and git diff --check'
 
   - id: P3-006
     title: 'Redis configuration value policy'

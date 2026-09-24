@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `33711d11e41614fb7661e3a1b2c6bdb0330a743d`
+Source: `origin/master` commit `b71350ab43d0bccfbcb355d1f632d9e940885950`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 77 first-party runtime files:
+The tokenizer scans 78 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 69 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 70 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,21 +40,21 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 74 |
-| Inventory source lines | 125,734 |
-| Class-like graph nodes | 73 |
+| Inventory files | 75 |
+| Inventory source lines | 126,083 |
+| Class-like graph nodes | 74 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,468 |
-| Methods spanning 80 lines or more | 238 |
-| Static properties | 141 across 31 nodes |
-| Unique dependency edges | 345 |
-| Runtime-classified edges | 344 |
-| Compatibility-classified edges | 194 |
+| Named methods | 2,492 |
+| Methods spanning 80 lines or more | 237 |
+| Static properties | 141 across 32 nodes |
+| Unique dependency edges | 348 |
+| Runtime-classified edges | 347 |
+| Compatibility-classified edges | 195 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 302 |
+| Cross-domain edges | 303 |
 | Feature-to-feature edges | 47 |
 | Strict boundary violations | 16 |
-| Bridge candidates | 229 |
+| Bridge candidates | 231 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -150,7 +150,9 @@ The graph records 56 incoming source nodes and 1,145 incoming executable occurre
 
 ### Cache has a cohesive capacity tail
 
-`Cache` ends with an 839-line statistics, cap, and eviction cluster. `Cron`, `Rest_Cache`, `Main`, and CLI consume it. `Cache_Capacity` is a credible later extraction because the cluster shares one accounting and retention contract.
+Before P3-005, `Cache` ended with an 839-line statistics, cap, and eviction cluster. `Cron`, `Rest_Cache`, `Main`, and CLI consumed it. `Cache_Capacity` was identified as the extraction owner because the cluster shared one accounting and retention contract.
+
+P3-005 implementation update: `Cache_Capacity` now owns that statistics/cap/oldest-eviction contract. The generated inventory contains 75 files, 78 graph nodes, and 348 edges; `Cache` is 5,077 lines with 167 methods after facade bridges. Public callers remain on `Cache`, while the owner uses narrow filesystem/domain/containment/deletion bridges and preserves the one-walk, salted/stale stats, stampede lock, throttle, warning, and eviction semantics.
 
 ### CSS and image policy remains cross-owned
 
