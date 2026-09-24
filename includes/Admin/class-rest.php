@@ -3679,8 +3679,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							unset( $e );
 						}
 					}
-				} elseif ( function_exists( 'update_option' ) ) {
-						update_option( 'wppo_settings', $options, false );
+				} elseif ( class_exists( 'PerformanceOptimise\\Inc\\Settings_Command' ) ) {
+						Settings_Command::save( $options );
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) && method_exists( 'PerformanceOptimise\Inc\Telemetry', 'invalidate_audit_cache' ) ) {
 					try {

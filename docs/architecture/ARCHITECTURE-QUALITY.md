@@ -170,17 +170,17 @@ The generated metrics act as signals. Reviewers combine them with source and run
 
 ## Phase 3 ratchet
 
-P3-005 and P3-006 record these baselines:
+P3-005 through P3-008 record these baselines:
 
 | Metric | Baseline | Direction |
 |---|---:|---|
 | Runtime SCCs | 1 | Reduce; final target 0 or a documented protected residue |
-| Largest runtime SCC | 60 nodes | Reduce |
-| Compatibility-classified edges | 194 | Explain and reduce only through explicit compatibility ownership |
+| Largest runtime SCC | 61 nodes | Reduce |
+| Compatibility-classified edges | 195 | Explain and reduce only through explicit compatibility ownership |
 | Compatibility SCCs | 2 | Reduce; retain only documented stable adapters |
 | Largest compatibility SCC | 21 nodes | Reduce after caller migration |
 | Boundary violations | 16 | Reduce; final target 0 or explicit protected exceptions |
-| Bridge candidates | 230 | Reduce after caller migration |
+| Bridge candidates | 231 | Reduce after caller migration |
 | `Util` unique fan-in | 56 | Reduce |
 | `Util` incoming executable evidence | 1,145 | Reduce |
 | `Main` unique fan-out | 34 | Reduce |

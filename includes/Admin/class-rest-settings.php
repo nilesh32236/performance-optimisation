@@ -323,22 +323,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Settings' ) ) {
 			$prior_tab              = ( isset( $options[ $tab ] ) && is_array( $options[ $tab ] ) ) ? $options[ $tab ] : array();
 			$merged_options[ $tab ] = array_merge( $prior_tab, is_array( $sanitized_settings ) ? $sanitized_settings : array() );
 
-			// One-click undo (issue #1144): snapshot the prior settings before
-			// overwriting, but skip no-op saves so an identical write does not
-			// churn the single-slot snapshot (mirrors import_settings). Fail-open:
-			// a snapshot failure must never block the save.
-			if ( $merged_options !== $options ) {
-				try {
-					Util::take_settings_snapshot( $options );
-				} catch ( \Throwable $snapshot_error ) {
-					unset( $snapshot_error );
-				}
-			}
+			$prior_options = $options;
+			$options       = $merged_options;
 
-			$options = $merged_options;
-
-			// Audit #1325: never autoload the multi-tab settings array.
-			update_option( 'wppo_settings', $options, false );
+			// One-click undo and the canonical Store write stay behind Settings_Command.
+			Settings_Command::save( $options, $prior_options );
 
 			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				Telemetry::invalidate_audit_cache();
@@ -417,15 +406,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Settings' ) ) {
 				return $this->owner->rest_send_response( $response_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}
 
-			// One-click undo (issue #1144): snapshot the prior settings before
-			// overwriting. Fail-open: a snapshot failure must never block the save.
-			try {
-				Util::take_settings_snapshot( $existing_settings );
-			} catch ( \Throwable $snapshot_error ) {
-				unset( $snapshot_error );
-			}
-
-			if ( ! update_option( 'wppo_settings', $merged_settings, false ) ) {
+			// One-click undo and the canonical Store write stay behind Settings_Command.
+			if ( ! Settings_Command::save( $merged_settings, $existing_settings ) ) {
 				return $this->owner->rest_send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
