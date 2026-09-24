@@ -28,14 +28,14 @@
         "high_risk_hub_score": "fan_in + fan_out + 2*compatibility_fan_in + cross_domain_edges + static_state + lines/1000."
     },
     "summary": {
-        "files": 80,
-        "class_like_nodes": 76,
+        "files": 81,
+        "class_like_nodes": 77,
         "procedural_nodes": 4,
-        "edges": 352,
-        "runtime_edges": 351,
+        "edges": 355,
+        "runtime_edges": 354,
         "compatibility_edges": 194,
         "loader_edges": 3,
-        "cross_domain_edges": 304,
+        "cross_domain_edges": 306,
         "feature_to_feature_edges": 46,
         "boundary_violations": 16,
         "bridge_candidates": 230,
@@ -12495,7 +12495,7 @@
             "file": "includes/Core/class-loader-map.php",
             "domain": "Core",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 319,
+            "lines": 320,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -12509,16 +12509,16 @@
                 {
                     "name": "fallback_map",
                     "line": 119,
-                    "end_line": 194,
-                    "lines": 76,
+                    "end_line": 195,
+                    "lines": 77,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
                     "name": "file_path",
-                    "line": 237,
-                    "end_line": 273,
+                    "line": 238,
+                    "end_line": 274,
                     "lines": 37,
                     "visibility": "public",
                     "static": true,
@@ -12526,8 +12526,8 @@
                 },
                 {
                     "name": "path_for",
-                    "line": 286,
-                    "end_line": 307,
+                    "line": 287,
+                    "end_line": 308,
                     "lines": 22,
                     "visibility": "public",
                     "static": true,
@@ -12544,8 +12544,8 @@
                 },
                 {
                     "name": "allowed_dirs",
-                    "line": 205,
-                    "end_line": 222,
+                    "line": 206,
+                    "end_line": 223,
                     "lines": 18,
                     "visibility": "public",
                     "static": true,
@@ -12571,8 +12571,8 @@
                 },
                 {
                     "name": "cli_file",
-                    "line": 315,
-                    "end_line": 317,
+                    "line": 316,
+                    "end_line": 318,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -12582,10 +12582,10 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "self::allowed_dirs": 258,
-                    "self::base_dir": 268,
-                    "self::fallback_map": 297,
-                    "self::file_path": 302
+                    "self::allowed_dirs": 259,
+                    "self::base_dir": 269,
+                    "self::fallback_map": 298,
+                    "self::file_path": 303
                 },
                 "instance_calls": [],
                 "new_expressions": [],
@@ -12610,7 +12610,7 @@
                     "Admin/class-rest-cache.php": 171,
                     "Admin/class-rest-settings.php": 172,
                     "Admin/class-rest.php": 169,
-                    "Admin/class-wppo-cli-command.php": 188,
+                    "Admin/class-wppo-cli-command.php": 189,
                     "Assets/class-asset-manager.php": 125,
                     "Assets/class-css-combine.php": 136,
                     "Assets/class-css-safelist.php": 137,
@@ -12618,7 +12618,7 @@
                     "Assets/class-script-strategy.php": 176,
                     "CSS/class-ccss-store.php": 135,
                     "CSS/class-critical-css.php": 134,
-                    "CSS/class-used-css.php": 183,
+                    "CSS/class-used-css.php": 184,
                     "Cache/class-advanced-cache-handler.php": 124,
                     "Cache/class-bfcache.php": 73,
                     "Cache/class-cache-capacity.php": 127,
@@ -12654,43 +12654,44 @@
                     "Insight/class-od-bridge.php": 72,
                     "Insight/class-pagespeed.php": 166,
                     "Insight/class-rum.php": 173,
-                    "Insight/class-suggestion-engine.php": 180,
-                    "Insight/class-system-info.php": 181,
-                    "Insight/class-telemetry.php": 182,
+                    "Insight/class-suggestion-engine.php": 181,
+                    "Insight/class-system-info.php": 182,
+                    "Insight/class-telemetry.php": 183,
                     "Integrations/class-builder-purge-watcher.php": 81,
                     "Integrations/class-litespeed-crawler.php": 98,
                     "Integrations/class-litespeed-esi.php": 99,
                     "Integrations/class-litespeed-integration.php": 70,
-                    "Integrations/class-woo-detect.php": 186,
+                    "Integrations/class-woo-detect.php": 187,
                     "Scheduler/class-cron.php": 138,
                     "Scheduler/class-job-registry.php": 139,
                     "Scheduler/class-preload-transport.php": 140,
                     "Scheduler/class-scheduler.php": 175,
                     "Settings/class-sandbox-preview.php": 174,
-                    "Settings/class-settings-migrations.php": 178,
-                    "Settings/class-settings-store.php": 179,
+                    "Settings/class-settings-command.php": 178,
+                    "Settings/class-settings-migrations.php": 179,
+                    "Settings/class-settings-store.php": 180,
                     "Support/class-filesystem.php": 146,
                     "Support/class-http.php": 151,
                     "Support/class-log.php": 160,
-                    "Support/class-url.php": 184,
+                    "Support/class-url.php": 185,
                     "Support/trait-purge-logger.php": 78
                 },
                 "external_classes": [],
                 "external_functions": {
-                    "basename": 265,
+                    "basename": 266,
                     "class_exists": 26,
-                    "count": 251,
+                    "count": 252,
                     "defined": 22,
-                    "explode": 250,
-                    "in_array": 258,
-                    "ltrim": 287,
-                    "strlen": 291,
-                    "strpos": 241,
-                    "substr": 291
+                    "explode": 251,
+                    "in_array": 259,
+                    "ltrim": 288,
+                    "strlen": 292,
+                    "strpos": 242,
+                    "substr": 292
                 },
                 "wordpress_functions": [],
                 "filesystem_dependencies": {
-                    "basename": 265
+                    "basename": 266
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -12703,7 +12704,7 @@
             "compatibility_dependencies": [],
             "loader_dependencies": [],
             "documentation_references": {
-                "PerformanceOptimise\\Inc\\Cache": 275
+                "PerformanceOptimise\\Inc\\Cache": 276
             },
             "delegating_methods": [],
             "hooks": [],
@@ -16849,7 +16850,7 @@
             "file": "includes/Admin/class-rest.php",
             "domain": "Admin",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 3750,
+            "lines": 3728,
             "property_count": 3,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -16933,19 +16934,19 @@
                     "delegates": false
                 },
                 {
-                    "name": "handle_safe_mode",
-                    "line": 3629,
-                    "end_line": 3713,
-                    "lines": 85,
-                    "visibility": "public",
-                    "static": false,
-                    "delegates": false
-                },
-                {
                     "name": "handle_ccss_rollout_action",
                     "line": 2884,
                     "end_line": 2960,
                     "lines": 77,
+                    "visibility": "private",
+                    "static": false,
+                    "delegates": false
+                },
+                {
+                    "name": "handle_used_css_rollout_action",
+                    "line": 2793,
+                    "end_line": 2867,
+                    "lines": 75,
                     "visibility": "private",
                     "static": false,
                     "delegates": false
@@ -17000,8 +17001,8 @@
                     "PerformanceOptimise\\Inc\\LiteSpeed_Integration::get_info": 3099,
                     "PerformanceOptimise\\Inc\\Log::add": 973,
                     "PerformanceOptimise\\Inc\\Log::get_recent_activities": 1134,
-                    "PerformanceOptimise\\Inc\\Main::build_safe_mode_enable_payload": 3662,
-                    "PerformanceOptimise\\Inc\\Main::clear_all_cache": 3702,
+                    "PerformanceOptimise\\Inc\\Main::build_safe_mode_enable_payload": 3659,
+                    "PerformanceOptimise\\Inc\\Main::clear_all_cache": 3680,
                     "PerformanceOptimise\\Inc\\Main::detect_fragile_handles": 3568,
                     "PerformanceOptimise\\Inc\\Main::get_safe_mode_stack_state": 3584,
                     "PerformanceOptimise\\Inc\\OD_Bridge::get_lcp_url": 690,
@@ -17023,6 +17024,7 @@
                     "PerformanceOptimise\\Inc\\Server_Rules::get_apache_rules": 3095,
                     "PerformanceOptimise\\Inc\\Server_Rules::get_nginx_rules": 3094,
                     "PerformanceOptimise\\Inc\\Server_Rules::get_server_type": 2586,
+                    "PerformanceOptimise\\Inc\\Settings_Command::toggle_safe_mode": 3654,
                     "PerformanceOptimise\\Inc\\Suggestion_Engine::from_ai_adaptive": 2541,
                     "PerformanceOptimise\\Inc\\Suggestion_Engine::from_pagespeed": 2437,
                     "PerformanceOptimise\\Inc\\Suggestion_Engine::from_telemetry": 2538,
@@ -17045,10 +17047,7 @@
                     "PerformanceOptimise\\Inc\\Util::is_same_site_url": 1060,
                     "PerformanceOptimise\\Inc\\Util::remove_sensitive_settings_from_response": 1118,
                     "PerformanceOptimise\\Inc\\Util::sanitize_settings_recursively": 1105,
-                    "PerformanceOptimise\\Inc\\Util::save_settings": 3674,
-                    "PerformanceOptimise\\Inc\\Util::set_settings_cache": 3677,
                     "PerformanceOptimise\\Inc\\Util::sign_callback_payload": 2709,
-                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 3653,
                     "PerformanceOptimise\\Inc\\Util::transient_key": 989,
                     "PerformanceOptimise\\Inc\\Util::woo_cache_self_test": 2614,
                     "self::static_throttle_hit": 980,
@@ -17109,7 +17108,7 @@
                     "PerformanceOptimise\\Inc\\Rest_Settings": 68,
                     "PerformanceOptimise\\Inc\\Used_CSS": 2757,
                     "\\WP_Error": 2016,
-                    "\\WP_REST_Response": 3740
+                    "\\WP_REST_Response": 3718
                 },
                 "class_references": [],
                 "class_constant_references": {
@@ -17164,14 +17163,14 @@
                     "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_safe_preview_url": 3068,
                     "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::purge_derived_caches": 2999,
                     "PerformanceOptimise\\Inc\\Cache::bump_stats_cache": 3006,
-                    "PerformanceOptimise\\Inc\\Cache::clear_cache": 3699,
+                    "PerformanceOptimise\\Inc\\Cache::clear_cache": 3677,
                     "PerformanceOptimise\\Inc\\Critical_CSS::get_templates": 3159,
                     "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 3187,
                     "PerformanceOptimise\\Inc\\Critical_CSS::is_known_template": 3167,
                     "PerformanceOptimise\\Inc\\Critical_CSS::resolve_template_slug": 2889,
                     "PerformanceOptimise\\Inc\\Img_Converter::is_path_in_allowlist": 1155,
-                    "PerformanceOptimise\\Inc\\Main::build_safe_mode_enable_payload": 3660,
-                    "PerformanceOptimise\\Inc\\Main::clear_all_cache": 3701,
+                    "PerformanceOptimise\\Inc\\Main::build_safe_mode_enable_payload": 3657,
+                    "PerformanceOptimise\\Inc\\Main::clear_all_cache": 3679,
                     "PerformanceOptimise\\Inc\\Main::detect_fragile_handles": 3566,
                     "PerformanceOptimise\\Inc\\Main::get_safe_mode_stack_state": 3582,
                     "PerformanceOptimise\\Inc\\OD_Bridge::get_lcp_url": 686,
@@ -17182,16 +17181,13 @@
                     "PerformanceOptimise\\Inc\\RUM::is_same_origin_url": 843,
                     "PerformanceOptimise\\Inc\\RUM::is_same_origin_url_strict": 840,
                     "PerformanceOptimise\\Inc\\Server_Rules::get_server_type": 2585,
-                    "PerformanceOptimise\\Inc\\Telemetry::invalidate_audit_cache": 3685,
+                    "PerformanceOptimise\\Inc\\Telemetry::invalidate_audit_cache": 3663,
                     "PerformanceOptimise\\Inc\\Used_CSS::get_staleness_info": 3308,
                     "PerformanceOptimise\\Inc\\Used_CSS::is_excluded_post": 2664,
                     "PerformanceOptimise\\Inc\\Util::get_image_mime_type": 797,
                     "PerformanceOptimise\\Inc\\Util::get_settings": 3477,
                     "PerformanceOptimise\\Inc\\Util::is_same_site_url": 1058,
-                    "PerformanceOptimise\\Inc\\Util::save_settings": 3673,
-                    "PerformanceOptimise\\Inc\\Util::set_settings_cache": 3675,
-                    "PerformanceOptimise\\Inc\\Util::sign_callback_payload": 2708,
-                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 3652
+                    "PerformanceOptimise\\Inc\\Util::sign_callback_payload": 2708
                 },
                 "interface_exists": [],
                 "trait_exists": [],
@@ -17207,7 +17203,7 @@
                     "WooCommerce": 3541,
                     "\\ActionScheduler_Store": 1317,
                     "\\WP_Error": 2016,
-                    "\\WP_REST_Response": 3740
+                    "\\WP_REST_Response": 3718
                 },
                 "external_functions": {
                     "Builder_Purge_Watcher": 3002,
@@ -17217,7 +17213,7 @@
                     "Rest_Settings": 68,
                     "Used_CSS": 2757,
                     "\\WP_Error": 2016,
-                    "\\WP_REST_Response": 3740,
+                    "\\WP_REST_Response": 3718,
                     "__": 499,
                     "absint": 459,
                     "apply_filters": 1280,
@@ -17296,9 +17292,8 @@
                     "time": 669,
                     "trailingslashit": 66,
                     "trim": 646,
-                    "update_option": 3683,
                     "update_settings": 1089,
-                    "update_user_meta": 3724,
+                    "update_user_meta": 3702,
                     "wp_cache_get_salted": 2517,
                     "wp_clear_scheduled_hook": 1996,
                     "wp_create_nonce": 2214,
@@ -17313,7 +17308,7 @@
                 },
                 "wordpress_functions": {
                     "\\WP_Error": 2016,
-                    "\\WP_REST_Response": 3740,
+                    "\\WP_REST_Response": 3718,
                     "absint": 459,
                     "apply_filters": 1280,
                     "current_user_can": 902,
@@ -17330,8 +17325,7 @@
                     "sanitize_key": 989,
                     "sanitize_text_field": 496,
                     "trailingslashit": 66,
-                    "update_option": 3683,
-                    "update_user_meta": 3724,
+                    "update_user_meta": 3702,
                     "wp_cache_get_salted": 2517,
                     "wp_clear_scheduled_hook": 1996,
                     "wp_create_nonce": 2214,
@@ -17375,6 +17369,7 @@
                 "PerformanceOptimise\\Inc\\Rest_Cache",
                 "PerformanceOptimise\\Inc\\Rest_Settings",
                 "PerformanceOptimise\\Inc\\Server_Rules",
+                "PerformanceOptimise\\Inc\\Settings_Command",
                 "PerformanceOptimise\\Inc\\Suggestion_Engine",
                 "PerformanceOptimise\\Inc\\System_Info",
                 "PerformanceOptimise\\Inc\\Telemetry",
@@ -17406,16 +17401,16 @@
             "hooks": [],
             "metrics": {
                 "fan_in": 1,
-                "fan_out": 22,
+                "fan_out": 23,
                 "incoming_reference_evidence": 1,
-                "outgoing_reference_evidence": 193,
+                "outgoing_reference_evidence": 188,
                 "runtime_fan_in": 1,
-                "runtime_fan_out": 22,
+                "runtime_fan_out": 23,
                 "compatibility_fan_in": 0,
                 "compatibility_fan_out": 15,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 21,
+                "cross_domain_edges": 22,
                 "boundary_violations": 1,
                 "strongly_connected_component": 0
             }
@@ -17618,7 +17613,7 @@
             "file": "includes/Admin/class-rest-settings.php",
             "domain": "Admin",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 643,
+            "lines": 625,
             "property_count": 1,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -17632,34 +17627,34 @@
                 {
                     "name": "update_settings",
                     "line": 88,
-                    "end_line": 350,
-                    "lines": 263,
+                    "end_line": 333,
+                    "lines": 246,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "import_settings",
-                    "line": 359,
-                    "end_line": 440,
-                    "lines": 82,
+                    "line": 342,
+                    "end_line": 420,
+                    "lines": 79,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "restore_settings",
-                    "line": 483,
-                    "end_line": 503,
-                    "lines": 21,
+                    "line": 463,
+                    "end_line": 485,
+                    "lines": 23,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "promote_sandbox_preview",
-                    "line": 569,
-                    "end_line": 588,
+                    "line": 551,
+                    "end_line": 570,
                     "lines": 20,
                     "visibility": "public",
                     "static": false,
@@ -17667,8 +17662,8 @@
                 },
                 {
                     "name": "get_settings_snapshot",
-                    "line": 452,
-                    "end_line": 470,
+                    "line": 432,
+                    "end_line": 450,
                     "lines": 19,
                     "visibility": "public",
                     "static": false,
@@ -17676,8 +17671,8 @@
                 },
                 {
                     "name": "save_sandbox_preview",
-                    "line": 544,
-                    "end_line": 560,
+                    "line": 526,
+                    "end_line": 542,
                     "lines": 17,
                     "visibility": "public",
                     "static": false,
@@ -17685,8 +17680,8 @@
                 },
                 {
                     "name": "get_sandbox_preview",
-                    "line": 518,
-                    "end_line": 532,
+                    "line": 500,
+                    "end_line": 514,
                     "lines": 15,
                     "visibility": "public",
                     "static": false,
@@ -17694,8 +17689,8 @@
                 },
                 {
                     "name": "discard_sandbox_preview",
-                    "line": 597,
-                    "end_line": 611,
+                    "line": 579,
+                    "end_line": 593,
                     "lines": 15,
                     "visibility": "public",
                     "static": false,
@@ -17703,8 +17698,8 @@
                 },
                 {
                     "name": "sanitize_settings_recursively",
-                    "line": 624,
-                    "end_line": 627,
+                    "line": 606,
+                    "end_line": 609,
                     "lines": 4,
                     "visibility": "private",
                     "static": false,
@@ -17723,25 +17718,26 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview::discard_staged": 606,
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview::get_preview_url": 523,
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview::get_staged_settings": 519,
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview::is_staged_available": 578,
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview::promote_staged": 581,
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview::save_staged": 555,
-                    "PerformanceOptimise\\Inc\\Telemetry::invalidate_audit_cache": 344,
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview::discard_staged": 588,
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview::get_preview_url": 505,
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview::get_staged_settings": 501,
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview::is_staged_available": 560,
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview::promote_staged": 563,
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview::save_staged": 537,
+                    "PerformanceOptimise\\Inc\\Settings_Command::restore": 471,
+                    "PerformanceOptimise\\Inc\\Settings_Command::save_merged": 397,
+                    "PerformanceOptimise\\Inc\\Settings_Command::save_tab": 323,
+                    "PerformanceOptimise\\Inc\\Telemetry::invalidate_audit_cache": 327,
                     "PerformanceOptimise\\Inc\\Util::get_settings": 134,
-                    "PerformanceOptimise\\Inc\\Util::get_settings_snapshot": 453,
-                    "PerformanceOptimise\\Inc\\Util::remove_sensitive_settings_from_response": 640,
-                    "PerformanceOptimise\\Inc\\Util::restore_settings_snapshot": 489,
-                    "PerformanceOptimise\\Inc\\Util::sanitize_settings_recursively": 626,
-                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 332
+                    "PerformanceOptimise\\Inc\\Util::get_settings_snapshot": 433,
+                    "PerformanceOptimise\\Inc\\Util::remove_sensitive_settings_from_response": 622,
+                    "PerformanceOptimise\\Inc\\Util::sanitize_settings_recursively": 608
                 },
                 "instance_calls": {
-                    "$request->get_json_params": 365,
+                    "$request->get_json_params": 348,
                     "$request->get_params": 94,
                     "$response->header": 91,
-                    "$this->remove_sensitive_settings_from_response": 347,
+                    "$this->remove_sensitive_settings_from_response": 330,
                     "$this->sanitize_settings_recursively": 105
                 },
                 "new_expressions": [],
@@ -17753,17 +17749,17 @@
                 "class_string_references": {
                     "PerformanceOptimise\\Inc\\RUM": 158,
                     "PerformanceOptimise\\Inc\\Rest_Settings": 46,
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview": 519,
-                    "PerformanceOptimise\\Inc\\Telemetry": 343
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview": 501,
+                    "PerformanceOptimise\\Inc\\Telemetry": 326
                 },
                 "class_exists": {
                     "PerformanceOptimise\\Inc\\RUM": 158,
                     "PerformanceOptimise\\Inc\\Rest_Settings": 46,
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview": 519,
-                    "PerformanceOptimise\\Inc\\Telemetry": 343
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview": 501,
+                    "PerformanceOptimise\\Inc\\Telemetry": 326
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\Sandbox_Preview::get_preview_url": 521
+                    "PerformanceOptimise\\Inc\\Sandbox_Preview::get_preview_url": 503
                 },
                 "interface_exists": [],
                 "trait_exists": [],
@@ -17776,36 +17772,32 @@
                     "absint": 191,
                     "array_filter": 253,
                     "array_key_exists": 259,
-                    "array_keys": 382,
+                    "array_keys": 365,
                     "array_map": 253,
-                    "array_merge": 324,
-                    "array_replace_recursive": 411,
                     "array_unique": 181,
                     "array_values": 181,
                     "class_exists": 46,
                     "defined": 42,
                     "filter_var": 205,
-                    "function_exists": 522,
-                    "home_url": 522,
+                    "function_exists": 504,
+                    "home_url": 504,
                     "in_array": 100,
                     "is_array": 96,
                     "is_bool": 202,
                     "is_numeric": 160,
                     "is_string": 149,
                     "max": 191,
-                    "method_exists": 521,
+                    "method_exists": 503,
                     "min": 191,
                     "rest_send_response": 90,
                     "rest_throttle_hit": 89,
                     "sanitize_text_field": 95,
-                    "substr": 178,
-                    "update_option": 341
+                    "substr": 178
                 },
                 "wordpress_functions": {
                     "absint": 191,
-                    "home_url": 522,
-                    "sanitize_text_field": 95,
-                    "update_option": 341
+                    "home_url": 504,
+                    "sanitize_text_field": 95
                 },
                 "filesystem_dependencies": [],
                 "network_dependencies": [],
@@ -17818,6 +17810,7 @@
             "runtime_dependencies": [
                 "PerformanceOptimise\\Inc\\RUM",
                 "PerformanceOptimise\\Inc\\Sandbox_Preview",
+                "PerformanceOptimise\\Inc\\Settings_Command",
                 "PerformanceOptimise\\Inc\\Telemetry",
                 "PerformanceOptimise\\Inc\\Util"
             ],
@@ -17832,16 +17825,16 @@
             "hooks": [],
             "metrics": {
                 "fan_in": 1,
-                "fan_out": 4,
+                "fan_out": 5,
                 "incoming_reference_evidence": 1,
                 "outgoing_reference_evidence": 29,
                 "runtime_fan_in": 1,
-                "runtime_fan_out": 4,
+                "runtime_fan_out": 5,
                 "compatibility_fan_in": 0,
                 "compatibility_fan_out": 3,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 4,
+                "cross_domain_edges": 5,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -18926,6 +18919,126 @@
                 "strongly_connected_component": 0
             }
         },
+        "PerformanceOptimise\\Inc\\Settings_Command": {
+            "id": "PerformanceOptimise\\Inc\\Settings_Command",
+            "name": "Settings_Command",
+            "fqcn": "PerformanceOptimise\\Inc\\Settings_Command",
+            "kind": "class",
+            "file": "includes/Settings/class-settings-command.php",
+            "domain": "Settings",
+            "namespace": "PerformanceOptimise\\Inc",
+            "lines": 209,
+            "property_count": 0,
+            "static_property_count": 0,
+            "public_property_count": 0,
+            "protected_property_count": 0,
+            "private_property_count": 0,
+            "static_state": false,
+            "method_count": 4,
+            "top_level_function_count": 0,
+            "top_level_functions": [],
+            "largest_methods": [
+                {
+                    "name": "toggle_safe_mode",
+                    "line": 155,
+                    "end_line": 193,
+                    "lines": 39,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "save_tab",
+                    "line": 64,
+                    "end_line": 88,
+                    "lines": 25,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "save_merged",
+                    "line": 106,
+                    "end_line": 128,
+                    "lines": 23,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "restore",
+                    "line": 205,
+                    "end_line": 207,
+                    "lines": 3,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                }
+            ],
+            "imports": [],
+            "references": {
+                "static_calls": {
+                    "PerformanceOptimise\\Inc\\Settings_Store::restore_settings_snapshot": 206,
+                    "PerformanceOptimise\\Inc\\Settings_Store::save_settings": 85,
+                    "PerformanceOptimise\\Inc\\Settings_Store::take_settings_snapshot": 79
+                },
+                "instance_calls": [],
+                "new_expressions": [],
+                "class_references": [],
+                "class_constant_references": [],
+                "class_string_references": {
+                    "PerformanceOptimise\\Inc\\Settings_Command": 33
+                },
+                "class_exists": {
+                    "PerformanceOptimise\\Inc\\Settings_Command": 33
+                },
+                "method_exists": [],
+                "interface_exists": [],
+                "trait_exists": [],
+                "reflection": [],
+                "loader_references": [],
+                "file_references": [],
+                "external_classes": [],
+                "external_functions": {
+                    "array_merge": 71,
+                    "array_replace_recursive": 109,
+                    "class_exists": 33,
+                    "defined": 29,
+                    "is_array": 70
+                },
+                "wordpress_functions": [],
+                "filesystem_dependencies": [],
+                "network_dependencies": [],
+                "database_dependencies": [],
+                "dynamic_references": []
+            },
+            "extends": [],
+            "implements": [],
+            "trait_usage": [],
+            "runtime_dependencies": [
+                "PerformanceOptimise\\Inc\\Settings_Store"
+            ],
+            "compatibility_dependencies": [],
+            "loader_dependencies": [],
+            "documentation_references": [],
+            "delegating_methods": [],
+            "hooks": [],
+            "metrics": {
+                "fan_in": 2,
+                "fan_out": 1,
+                "incoming_reference_evidence": 4,
+                "outgoing_reference_evidence": 7,
+                "runtime_fan_in": 2,
+                "runtime_fan_out": 1,
+                "compatibility_fan_in": 0,
+                "compatibility_fan_out": 0,
+                "loader_fan_in": 0,
+                "loader_fan_out": 0,
+                "cross_domain_edges": 2,
+                "boundary_violations": 0,
+                "strongly_connected_component": 13
+            }
+        },
         "PerformanceOptimise\\Inc\\Settings_Migrations": {
             "id": "PerformanceOptimise\\Inc\\Settings_Migrations",
             "name": "Settings_Migrations",
@@ -19357,11 +19470,11 @@
                 ]
             },
             "metrics": {
-                "fan_in": 4,
+                "fan_in": 5,
                 "fan_out": 0,
-                "incoming_reference_evidence": 26,
+                "incoming_reference_evidence": 33,
                 "outgoing_reference_evidence": 0,
-                "runtime_fan_in": 4,
+                "runtime_fan_in": 5,
                 "runtime_fan_out": 0,
                 "compatibility_fan_in": 0,
                 "compatibility_fan_out": 0,
@@ -19369,7 +19482,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 4,
                 "boundary_violations": 0,
-                "strongly_connected_component": 13
+                "strongly_connected_component": 14
             }
         },
         "PerformanceOptimise\\Inc\\Suggestion_Engine": {
@@ -21411,7 +21524,7 @@
             "metrics": {
                 "fan_in": 57,
                 "fan_out": 9,
-                "incoming_reference_evidence": 1145,
+                "incoming_reference_evidence": 1136,
                 "outgoing_reference_evidence": 115,
                 "runtime_fan_in": 57,
                 "runtime_fan_out": 9,
@@ -22199,7 +22312,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 4,
                 "boundary_violations": 0,
-                "strongly_connected_component": 14
+                "strongly_connected_component": 15
             }
         },
         "WP_Object_Cache": {
@@ -22608,7 +22721,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 0,
                 "boundary_violations": 0,
-                "strongly_connected_component": 15
+                "strongly_connected_component": 16
             }
         },
         "file:includes/Support/redis-connect-helper.php": {
@@ -22785,7 +22898,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 0,
                 "boundary_violations": 0,
-                "strongly_connected_component": 16
+                "strongly_connected_component": 17
             }
         },
         "file:performance-optimisation.php": {
@@ -22950,7 +23063,7 @@
                 "loader_fan_out": 2,
                 "cross_domain_edges": 4,
                 "boundary_violations": 0,
-                "strongly_connected_component": 17
+                "strongly_connected_component": 18
             }
         },
         "file:templates/perf-translations.php": {
@@ -23019,7 +23132,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 0,
                 "boundary_violations": 0,
-                "strongly_connected_component": 18
+                "strongly_connected_component": 19
             }
         },
         "file:uninstall.php": {
@@ -23231,7 +23344,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 2,
                 "boundary_violations": 0,
-                "strongly_connected_component": 19
+                "strongly_connected_component": 20
             }
         }
     },
@@ -30504,8 +30617,8 @@
                 3005,
                 3006,
                 3007,
-                3699,
-                3700
+                3677,
+                3678
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -30717,10 +30830,10 @@
                 3568,
                 3582,
                 3584,
-                3660,
-                3662,
-                3701,
-                3702
+                3657,
+                3659,
+                3679,
+                3680
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -30922,6 +31035,26 @@
         },
         {
             "from": "PerformanceOptimise\\Inc\\Rest",
+            "to": "PerformanceOptimise\\Inc\\Settings_Command",
+            "from_file": "includes/Admin/class-rest.php",
+            "to_file": "includes/Settings/class-settings-command.php",
+            "from_domain": "Admin",
+            "to_domain": "Settings",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "static_call"
+            ],
+            "lines": [
+                3654
+            ],
+            "evidence_count": 1,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Rest",
             "to": "PerformanceOptimise\\Inc\\Suggestion_Engine",
             "from_file": "includes/Admin/class-rest.php",
             "to_file": "includes/Insight/class-suggestion-engine.php",
@@ -30988,8 +31121,8 @@
                 1654,
                 1655,
                 2278,
-                3685,
-                3687
+                3663,
+                3665
             ],
             "evidence_count": 5,
             "cross_domain": true,
@@ -31081,15 +31214,9 @@
                 2722,
                 3477,
                 3479,
-                3641,
-                3652,
-                3653,
-                3673,
-                3674,
-                3675,
-                3677
+                3641
             ],
-            "evidence_count": 39,
+            "evidence_count": 33,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -31265,19 +31392,41 @@
                 "static_call"
             ],
             "lines": [
-                519,
-                521,
-                523,
-                552,
-                555,
-                559,
-                575,
-                578,
-                581,
-                603,
-                606
+                501,
+                503,
+                505,
+                534,
+                537,
+                541,
+                557,
+                560,
+                563,
+                585,
+                588
             ],
             "evidence_count": 11,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Rest_Settings",
+            "to": "PerformanceOptimise\\Inc\\Settings_Command",
+            "from_file": "includes/Admin/class-rest-settings.php",
+            "to_file": "includes/Settings/class-settings-command.php",
+            "from_domain": "Admin",
+            "to_domain": "Settings",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "static_call"
+            ],
+            "lines": [
+                323,
+                397,
+                471
+            ],
+            "evidence_count": 3,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -31298,12 +31447,12 @@
                 "static_call"
             ],
             "lines": [
-                343,
-                344,
-                432,
-                433,
-                495,
-                496
+                326,
+                327,
+                412,
+                413,
+                477,
+                478
             ],
             "evidence_count": 6,
             "cross_domain": true,
@@ -31326,17 +31475,14 @@
             "lines": [
                 99,
                 134,
-                332,
-                380,
-                410,
-                423,
-                453,
-                489,
-                585,
-                626,
-                640
+                363,
+                396,
+                433,
+                567,
+                608,
+                622
             ],
-            "evidence_count": 11,
+            "evidence_count": 8,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -31640,6 +31786,32 @@
             ],
             "evidence_count": 3,
             "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Settings_Command",
+            "to": "PerformanceOptimise\\Inc\\Settings_Store",
+            "from_file": "includes/Settings/class-settings-command.php",
+            "to_file": "includes/Settings/class-settings-store.php",
+            "from_domain": "Settings",
+            "to_domain": "Settings",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "static_call"
+            ],
+            "lines": [
+                79,
+                85,
+                120,
+                125,
+                166,
+                190,
+                206
+            ],
+            "evidence_count": 7,
+            "cross_domain": false,
             "boundary_violation": ""
         },
         {
@@ -33315,8 +33487,9 @@
             "PerformanceOptimise\\Inc\\Scheduler": 2,
             "PerformanceOptimise\\Inc\\Script_Strategy": 1,
             "PerformanceOptimise\\Inc\\Server_Rules": 8,
+            "PerformanceOptimise\\Inc\\Settings_Command": 2,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 1,
-            "PerformanceOptimise\\Inc\\Settings_Store": 4,
+            "PerformanceOptimise\\Inc\\Settings_Store": 5,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 3,
             "PerformanceOptimise\\Inc\\System_Info": 6,
             "PerformanceOptimise\\Inc\\Telemetry": 6,
@@ -33389,14 +33562,15 @@
             "PerformanceOptimise\\Inc\\Purge_Logger": 2,
             "PerformanceOptimise\\Inc\\RUM": 2,
             "PerformanceOptimise\\Inc\\Redis_Config_Policy": 0,
-            "PerformanceOptimise\\Inc\\Rest": 22,
+            "PerformanceOptimise\\Inc\\Rest": 23,
             "PerformanceOptimise\\Inc\\Rest_Cache": 5,
-            "PerformanceOptimise\\Inc\\Rest_Settings": 4,
+            "PerformanceOptimise\\Inc\\Rest_Settings": 5,
             "PerformanceOptimise\\Inc\\Runtime_State": 0,
             "PerformanceOptimise\\Inc\\Sandbox_Preview": 2,
             "PerformanceOptimise\\Inc\\Scheduler": 1,
             "PerformanceOptimise\\Inc\\Script_Strategy": 4,
             "PerformanceOptimise\\Inc\\Server_Rules": 3,
+            "PerformanceOptimise\\Inc\\Settings_Command": 1,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 5,
             "PerformanceOptimise\\Inc\\Settings_Store": 0,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 1,
@@ -33479,14 +33653,15 @@
             "PerformanceOptimise\\Inc\\Scheduler": 29,
             "PerformanceOptimise\\Inc\\Script_Strategy": 35,
             "PerformanceOptimise\\Inc\\Server_Rules": 23,
+            "PerformanceOptimise\\Inc\\Settings_Command": 4,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 1,
-            "PerformanceOptimise\\Inc\\Settings_Store": 26,
+            "PerformanceOptimise\\Inc\\Settings_Store": 33,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 9,
             "PerformanceOptimise\\Inc\\System_Info": 8,
             "PerformanceOptimise\\Inc\\Telemetry": 17,
             "PerformanceOptimise\\Inc\\Url": 23,
             "PerformanceOptimise\\Inc\\Used_CSS": 39,
-            "PerformanceOptimise\\Inc\\Util": 1145,
+            "PerformanceOptimise\\Inc\\Util": 1136,
             "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 2,
             "PerformanceOptimise\\Inc\\Woo_Detect": 11,
             "PerformanceOptimise\\Inc\\Wp_Version": 16,
@@ -33553,7 +33728,7 @@
             "PerformanceOptimise\\Inc\\Purge_Logger": 3,
             "PerformanceOptimise\\Inc\\RUM": 48,
             "PerformanceOptimise\\Inc\\Redis_Config_Policy": 0,
-            "PerformanceOptimise\\Inc\\Rest": 193,
+            "PerformanceOptimise\\Inc\\Rest": 188,
             "PerformanceOptimise\\Inc\\Rest_Cache": 24,
             "PerformanceOptimise\\Inc\\Rest_Settings": 29,
             "PerformanceOptimise\\Inc\\Runtime_State": 0,
@@ -33561,6 +33736,7 @@
             "PerformanceOptimise\\Inc\\Scheduler": 2,
             "PerformanceOptimise\\Inc\\Script_Strategy": 57,
             "PerformanceOptimise\\Inc\\Server_Rules": 10,
+            "PerformanceOptimise\\Inc\\Settings_Command": 7,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 60,
             "PerformanceOptimise\\Inc\\Settings_Store": 0,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 3,
@@ -33643,8 +33819,9 @@
             "PerformanceOptimise\\Inc\\Scheduler": 2,
             "PerformanceOptimise\\Inc\\Script_Strategy": 1,
             "PerformanceOptimise\\Inc\\Server_Rules": 8,
+            "PerformanceOptimise\\Inc\\Settings_Command": 2,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 1,
-            "PerformanceOptimise\\Inc\\Settings_Store": 4,
+            "PerformanceOptimise\\Inc\\Settings_Store": 5,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 3,
             "PerformanceOptimise\\Inc\\System_Info": 6,
             "PerformanceOptimise\\Inc\\Telemetry": 6,
@@ -33717,14 +33894,15 @@
             "PerformanceOptimise\\Inc\\Purge_Logger": 2,
             "PerformanceOptimise\\Inc\\RUM": 2,
             "PerformanceOptimise\\Inc\\Redis_Config_Policy": 0,
-            "PerformanceOptimise\\Inc\\Rest": 22,
+            "PerformanceOptimise\\Inc\\Rest": 23,
             "PerformanceOptimise\\Inc\\Rest_Cache": 5,
-            "PerformanceOptimise\\Inc\\Rest_Settings": 4,
+            "PerformanceOptimise\\Inc\\Rest_Settings": 5,
             "PerformanceOptimise\\Inc\\Runtime_State": 0,
             "PerformanceOptimise\\Inc\\Sandbox_Preview": 2,
             "PerformanceOptimise\\Inc\\Scheduler": 1,
             "PerformanceOptimise\\Inc\\Script_Strategy": 4,
             "PerformanceOptimise\\Inc\\Server_Rules": 3,
+            "PerformanceOptimise\\Inc\\Settings_Command": 1,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 5,
             "PerformanceOptimise\\Inc\\Settings_Store": 0,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 1,
@@ -33807,6 +33985,7 @@
             "PerformanceOptimise\\Inc\\Scheduler": 0,
             "PerformanceOptimise\\Inc\\Script_Strategy": 0,
             "PerformanceOptimise\\Inc\\Server_Rules": 8,
+            "PerformanceOptimise\\Inc\\Settings_Command": 0,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 0,
             "PerformanceOptimise\\Inc\\Settings_Store": 0,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 2,
@@ -33889,6 +34068,7 @@
             "PerformanceOptimise\\Inc\\Scheduler": 0,
             "PerformanceOptimise\\Inc\\Script_Strategy": 2,
             "PerformanceOptimise\\Inc\\Server_Rules": 3,
+            "PerformanceOptimise\\Inc\\Settings_Command": 0,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 4,
             "PerformanceOptimise\\Inc\\Settings_Store": 0,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 1,
@@ -33971,6 +34151,7 @@
             "PerformanceOptimise\\Inc\\Scheduler": 0,
             "PerformanceOptimise\\Inc\\Script_Strategy": 0,
             "PerformanceOptimise\\Inc\\Server_Rules": 0,
+            "PerformanceOptimise\\Inc\\Settings_Command": 0,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 0,
             "PerformanceOptimise\\Inc\\Settings_Store": 0,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 0,
@@ -34053,6 +34234,7 @@
             "PerformanceOptimise\\Inc\\Scheduler": 0,
             "PerformanceOptimise\\Inc\\Script_Strategy": 0,
             "PerformanceOptimise\\Inc\\Server_Rules": 0,
+            "PerformanceOptimise\\Inc\\Settings_Command": 0,
             "PerformanceOptimise\\Inc\\Settings_Migrations": 0,
             "PerformanceOptimise\\Inc\\Settings_Store": 0,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 0,
@@ -34169,6 +34351,9 @@
             ],
             [
                 "PerformanceOptimise\\Inc\\Scheduler"
+            ],
+            [
+                "PerformanceOptimise\\Inc\\Settings_Command"
             ],
             [
                 "PerformanceOptimise\\Inc\\Settings_Store"
@@ -42877,13 +43062,13 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Rest",
                 "file": "includes/Admin/class-rest.php",
-                "score": 47.75,
+                "score": 49.73,
                 "fan_in": 1,
-                "fan_out": 22,
+                "fan_out": 23,
                 "compatibility_in": 0,
-                "cross_domain": 21,
+                "cross_domain": 22,
                 "static_state": false,
-                "lines": 3750
+                "lines": 3728
             },
             {
                 "node": "PerformanceOptimise\\Inc\\Cron",
@@ -49414,8 +49599,8 @@
                     3005,
                     3006,
                     3007,
-                    3699,
-                    3700
+                    3677,
+                    3678
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -49633,10 +49818,10 @@
                     3568,
                     3582,
                     3584,
-                    3660,
-                    3662,
-                    3701,
-                    3702
+                    3657,
+                    3659,
+                    3679,
+                    3680
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -49805,6 +49990,27 @@
             },
             {
                 "from": "PerformanceOptimise\\Inc\\Rest",
+                "to": "PerformanceOptimise\\Inc\\Settings_Command",
+                "from_file": "includes/Admin/class-rest.php",
+                "to_file": "includes/Settings/class-settings-command.php",
+                "from_domain": "Admin",
+                "to_domain": "Settings",
+                "classifications": [
+                    "runtime"
+                ],
+                "kinds": [
+                    "static_call"
+                ],
+                "lines": [
+                    3654
+                ],
+                "evidence_count": 1,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Rest",
                 "to": "PerformanceOptimise\\Inc\\Suggestion_Engine",
                 "from_file": "includes/Admin/class-rest.php",
                 "to_file": "includes/Insight/class-suggestion-engine.php",
@@ -49873,8 +50079,8 @@
                     1654,
                     1655,
                     2278,
-                    3685,
-                    3687
+                    3663,
+                    3665
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -49968,15 +50174,9 @@
                     2722,
                     3477,
                     3479,
-                    3641,
-                    3652,
-                    3653,
-                    3673,
-                    3674,
-                    3675,
-                    3677
+                    3641
                 ],
-                "evidence_count": 39,
+                "evidence_count": 33,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -50159,19 +50359,42 @@
                     "static_call"
                 ],
                 "lines": [
-                    519,
-                    521,
-                    523,
-                    552,
-                    555,
-                    559,
-                    575,
-                    578,
-                    581,
-                    603,
-                    606
+                    501,
+                    503,
+                    505,
+                    534,
+                    537,
+                    541,
+                    557,
+                    560,
+                    563,
+                    585,
+                    588
                 ],
                 "evidence_count": 11,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Rest_Settings",
+                "to": "PerformanceOptimise\\Inc\\Settings_Command",
+                "from_file": "includes/Admin/class-rest-settings.php",
+                "to_file": "includes/Settings/class-settings-command.php",
+                "from_domain": "Admin",
+                "to_domain": "Settings",
+                "classifications": [
+                    "runtime"
+                ],
+                "kinds": [
+                    "static_call"
+                ],
+                "lines": [
+                    323,
+                    397,
+                    471
+                ],
+                "evidence_count": 3,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -50193,12 +50416,12 @@
                     "static_call"
                 ],
                 "lines": [
-                    343,
-                    344,
-                    432,
-                    433,
-                    495,
-                    496
+                    326,
+                    327,
+                    412,
+                    413,
+                    477,
+                    478
                 ],
                 "evidence_count": 6,
                 "cross_domain": true,
@@ -50222,17 +50445,14 @@
                 "lines": [
                     99,
                     134,
-                    332,
-                    380,
-                    410,
-                    423,
-                    453,
-                    489,
-                    585,
-                    626,
-                    640
+                    363,
+                    396,
+                    433,
+                    567,
+                    608,
+                    622
                 ],
-                "evidence_count": 11,
+                "evidence_count": 8,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -52452,10 +52672,10 @@
                     3568,
                     3582,
                     3584,
-                    3660,
-                    3662,
-                    3701,
-                    3702
+                    3657,
+                    3659,
+                    3679,
+                    3680
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -57886,8 +58106,8 @@
                     3005,
                     3006,
                     3007,
-                    3699,
-                    3700
+                    3677,
+                    3678
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -58049,10 +58269,10 @@
                     3568,
                     3582,
                     3584,
-                    3660,
-                    3662,
-                    3701,
-                    3702
+                    3657,
+                    3659,
+                    3679,
+                    3680
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -58195,8 +58415,8 @@
                     1654,
                     1655,
                     2278,
-                    3685,
-                    3687
+                    3663,
+                    3665
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -58288,15 +58508,9 @@
                     2722,
                     3477,
                     3479,
-                    3641,
-                    3652,
-                    3653,
-                    3673,
-                    3674,
-                    3675,
-                    3677
+                    3641
                 ],
-                "evidence_count": 39,
+                "evidence_count": 33,
                 "cross_domain": true,
                 "boundary_violation": ""
             },
@@ -58425,17 +58639,17 @@
                     "static_call"
                 ],
                 "lines": [
-                    519,
-                    521,
-                    523,
-                    552,
-                    555,
-                    559,
-                    575,
-                    578,
-                    581,
-                    603,
-                    606
+                    501,
+                    503,
+                    505,
+                    534,
+                    537,
+                    541,
+                    557,
+                    560,
+                    563,
+                    585,
+                    588
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,
@@ -58458,12 +58672,12 @@
                     "static_call"
                 ],
                 "lines": [
-                    343,
-                    344,
-                    432,
-                    433,
-                    495,
-                    496
+                    326,
+                    327,
+                    412,
+                    413,
+                    477,
+                    478
                 ],
                 "evidence_count": 6,
                 "cross_domain": true,
@@ -58486,17 +58700,14 @@
                 "lines": [
                     99,
                     134,
-                    332,
-                    380,
-                    410,
-                    423,
-                    453,
-                    489,
-                    585,
-                    626,
-                    640
+                    363,
+                    396,
+                    433,
+                    567,
+                    608,
+                    622
                 ],
-                "evidence_count": 11,
+                "evidence_count": 8,
                 "cross_domain": true,
                 "boundary_violation": ""
             },

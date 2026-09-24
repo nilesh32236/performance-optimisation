@@ -95,7 +95,8 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Util` | Compatibility proxies and residual canonical helpers | Give each method an owner, migrate callers, then thin or remove the facade |
 | `Cache` | HTML cache policy, storage, invalidation facade, CSS-combine facade | Keep lifecycle and buffer orchestration; capacity/accounting is delegated to `Cache_Capacity` |
 | `Cache_Capacity` | Static cache statistics, cap settings, single-walk byte/file accounting, randomized-query guard, oldest eviction | Keep the accounting contract narrow; retain only the bridges required for Cache filesystem, containment, and deletion policy |
-| `Settings_Store` | Settings memo, validation map, snapshots, write/invalidation | Make it the only settings write owner; adapt REST, CLI, and Abilities |
+| `Settings_Store` | Settings memo, validation map, snapshots, write/invalidation | Sole direct `wppo_settings` writer; CLI/Abilities already via its facades |
+| `Settings_Command` | Tab-merge, import-merge, safe-mode transition, and restore orchestration | Keep orchestration-only; validation, sanitization, redaction, and snapshot policy stay on `Settings_Store` and the call sites |
 | `Scheduler` / `Job_Registry` | Action Scheduler primitives, locks, and owned hook manifest | Keep registry-backed scheduling and teardown; no duplicate hook lists |
 | `Preload_Transport` | Same-host URL validation and bounded non-following redirects for Cron warmup | Keep all three Cron fetch seams on the transport policy; preserve LiteSpeed bypass |
 | `Runtime_State` | Central switch_blog reset registry for six site-sensitive static-state owners | Keep reset methods feature-owned; classify the remaining 25 static owners |
@@ -115,7 +116,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 3. **`Util` hub:** 56 source nodes and 1,145 executable occurrences still depend on it.
 4. **`Main` hub:** 34 outgoing class dependencies and 17 feature dependencies remain.
 5. **Cache capacity:** `Cache_Capacity` now owns the statistics, cap, and eviction contract; `Cache` remains the public facade and lifecycle owner.
-6. **Settings writes:** REST adapters still write `wppo_settings` outside `Settings_Store`.
+6. **Settings writes:** `Rest_Settings` and the REST safe-mode path now route through `Settings_Command` (P3-008); `Settings_Store` is the sole direct `wppo_settings` writer.
 7. **Redis policy:** `Redis_Config_Policy` now owns the full key manifest and value sanitizer used by REST and CLI; `Object_Cache::ALLOWED_KEYS` remains a compatibility alias.
 8. **Drop-in invalidation:** Advanced/Object cache mutators now invalidate through `Dropin_Registry`; `System_Info` remains the sole reporting and cache-storage owner.
 9. **CSS and image cycles:** storage owners exist, but policy and bridges keep the larger SCC connected.

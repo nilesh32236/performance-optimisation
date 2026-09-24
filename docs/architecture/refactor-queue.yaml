@@ -884,7 +884,7 @@ phase3_items:
 
   - id: P3-008
     title: 'Settings write command and direct-write cleanup'
-    status: audit-pending
+    status: autofix-running
     priority: high
     type: architecture
     problem: 'Rest_Settings and REST safe-mode paths write wppo_settings outside Settings_Store.'
@@ -892,6 +892,17 @@ phase3_items:
     target_direction: 'REST/CLI/Abilities -> Settings_Command -> Settings_Store'
     tests: 'Partial-save, redaction, snapshot/restore, safe-mode, import, and memo parity.'
     ratchet: 'Direct settings writes outside Settings_Store: 3+ -> 0.'
+    github_issue: 1580
+    implementation:
+      owner: 'includes/Settings/class-settings-command.php'
+      methods: 'save_tab, save_merged, toggle_safe_mode, restore (all static, @since NEXT; orchestration only, no validation/sanitization/redaction)'
+      call_sites: 'Rest_Settings::update_settings (save_tab, return ignored as before), Rest_Settings::import_settings (save_merged, no-op 200 vs 500-fail preserved), Rest_Settings::restore_settings (restore delegate), Rest::handle_safe_mode (toggle_safe_mode with injected Main payload builder)'
+      layering: 'Enable payload builder injected as callable from Rest (presentation already depends on Main) so Settings_Command keeps no upper-layer edge; boundary violations stay 16, bridge candidates 230'
+      loader: 'Loader_Map::fallback_map()["Settings_Command"] plus LoaderMapTest count 72->73 and resolution test'
+      graph_delta: '78 inventory files / 81 graph nodes / 355 edges; runtime 354; compatibility 194; feature-to-feature edges stay 46; runtime SCC stays 61 nodes / 306 edges'
+      tests_added: 'SettingsCommandTest (19 behavior + source-boundary vectors: partial merge, missing-tab create, no-op snapshot skip, prior snapshot, fail-open snapshot, memo coherence, import no-op/changed/500-fail, safe-mode enable/re-enable/disable/missing-tab/builder-injection/builder-failure, restore null/round-trip, direct-write scanner, seam reflection)'
+      ratchet_result: 'Direct update_option(wppo_settings) writes outside Settings_Store 3 -> 0 (canonical write remains Settings_Store::save_settings only)'
+      rollback: 'Revert the single P3-008 merge commit; no site-data migration included'
 
   - id: P3-009
     title: 'Canonical insight read model'

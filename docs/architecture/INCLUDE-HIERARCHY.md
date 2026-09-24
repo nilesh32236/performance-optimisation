@@ -34,6 +34,7 @@ includes/
 
   Settings/
     class-settings-store.php
+    class-settings-command.php
     class-settings-migrations.php
     class-sandbox-preview.php
 
@@ -145,7 +146,7 @@ The dependency graph adds three procedural runtime files: the plugin entry, `uni
 
 ### Settings
 
-`Settings_Store` owns settings validation, memoization, snapshots, and writes. `Settings_Migrations` owns one-time migration payloads. `Sandbox_Preview` owns staged preview settings. Direct writes from presentation adapters remain migration debt.
+`Settings_Store` owns settings validation, memoization, snapshots, and writes. `Settings_Command` owns write orchestration only (tab merge, import merge, safe-mode transition, restore) and delegates every write to `Settings_Store`. `Settings_Migrations` owns one-time migration payloads. `Sandbox_Preview` owns staged preview settings. No direct writes from presentation adapters remain.
 
 ### Scheduler
 

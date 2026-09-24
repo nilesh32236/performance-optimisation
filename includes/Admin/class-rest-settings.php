@@ -315,30 +315,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Settings' ) ) {
 				}
 			}
 
-			$merged_options = $options;
-			// Merge into the existing tab (issue #1216): a partial POST (e.g.
-			// only autoLcpPreload from an older client) must not delete sibling
-			// keys like enablePreloadCache or preloadFontsUrls. The tab value is
-			// replaced only when no prior tab array exists.
-			$prior_tab              = ( isset( $options[ $tab ] ) && is_array( $options[ $tab ] ) ) ? $options[ $tab ] : array();
-			$merged_options[ $tab ] = array_merge( $prior_tab, is_array( $sanitized_settings ) ? $sanitized_settings : array() );
-
-			// One-click undo (issue #1144): snapshot the prior settings before
-			// overwriting, but skip no-op saves so an identical write does not
-			// churn the single-slot snapshot (mirrors import_settings). Fail-open:
-			// a snapshot failure must never block the save.
-			if ( $merged_options !== $options ) {
-				try {
-					Util::take_settings_snapshot( $options );
-				} catch ( \Throwable $snapshot_error ) {
-					unset( $snapshot_error );
-				}
-			}
-
-			$options = $merged_options;
-
-			// Audit #1325: never autoload the multi-tab settings array.
-			update_option( 'wppo_settings', $options, false );
+		// P3-008: single write seam — tab merge + snapshot-if-changed +
+		// canonical Settings_Store write (autoload disabled, audit #1325).
+		// The write result is intentionally ignored on this path (parity
+		// with the pre-P3-008 inline update_option() whose return was
+		// ignored here); the merged options are always returned.
+		$save_result = Settings_Command::save_tab( $options, $tab, $sanitized_settings );
+		$options     = $save_result[0];
 
 			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				Telemetry::invalidate_audit_cache();
@@ -405,29 +388,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Settings' ) ) {
 			// Sanitize settings before saving.
 			$sanitized_settings = $this->sanitize_settings_recursively( $data['settings'] );
 
-			// Retrieve the existing settings and merge the imported settings on top,
-			// so newer setting keys from future plugin versions are preserved.
-			$existing_settings = Util::get_settings();
-			$merged_settings   = array_replace_recursive( $existing_settings, $sanitized_settings );
+		// P3-008: single write seam — recursive merge + snapshot-if-changed
+		// + canonical Settings_Store write. No-op imports skip the snapshot
+		// and the write inside the command and report success, preserving
+		// the 200 no-change branch below; changed imports report the write
+		// result, preserving the 500-failure branch.
+		$existing_settings = Util::get_settings();
+		$save_result       = Settings_Command::save_merged( $existing_settings, $sanitized_settings );
+		$merged_settings   = $save_result[0];
+		$saved             = $save_result[1];
 
-			// Check if the settings are the same.
-			if ( $existing_settings === $merged_settings ) {
-				$response_settings = $existing_settings;
-				$this->remove_sensitive_settings_from_response( $response_settings );
-				return $this->owner->rest_send_response( $response_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
-			}
+		// Check if the settings are the same.
+		if ( $existing_settings === $merged_settings ) {
+			$response_settings = $existing_settings;
+			$this->remove_sensitive_settings_from_response( $response_settings );
+			return $this->owner->rest_send_response( $response_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
+		}
 
-			// One-click undo (issue #1144): snapshot the prior settings before
-			// overwriting. Fail-open: a snapshot failure must never block the save.
-			try {
-				Util::take_settings_snapshot( $existing_settings );
-			} catch ( \Throwable $snapshot_error ) {
-				unset( $snapshot_error );
-			}
-
-			if ( ! update_option( 'wppo_settings', $merged_settings, false ) ) {
-				return $this->owner->rest_send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
-			}
+		if ( ! $saved ) {
+			return $this->owner->rest_send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
+		}
 
 			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				Telemetry::invalidate_audit_cache();
@@ -486,7 +466,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Settings' ) ) {
 				$response->header( 'Retry-After', '60' );
 				return $response;
 			}
-			$restored = Util::restore_settings_snapshot();
+			// P3-008: restore routes through the command (delegates to the
+		// Settings_Store snapshot policy owner).
+		$restored = Settings_Command::restore();
 
 			if ( ! is_array( $restored ) ) {
 				return $this->owner->rest_send_response( null, false, 404, __( 'No settings snapshot available to restore.', 'performance-optimisation' ) );

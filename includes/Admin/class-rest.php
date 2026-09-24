@@ -3642,46 +3642,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
 					$options['file_optimisation'] = array();
 				}
-				// Snapshot only on enable while safe mode is off: snapshotting
-				// on disable would overwrite the pre-enable undo state with
-				// the safeMode=true state, so a later restore would wrongly
-				// re-enable safe mode instead of the original config.
-				$was_safe = ! empty( $options['file_optimisation']['safeMode'] );
-				if ( 'enable' === $action && ! $was_safe ) {
-					try {
-						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'take_settings_snapshot' ) ) {
-							Util::take_settings_snapshot( $options );
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+			// P3-008: single write seam — enable-only snapshot rule +
+			// safe-mode payload build + canonical Settings_Store write all
+			// live in Settings_Command::toggle_safe_mode(). The enable
+			// payload builder is injected here (presentation already depends
+			// on Main) so the infrastructure-layer command stays free of
+			// upper-layer edges. The raw update_option() fallback is removed
+			// so direct settings writes outside Settings_Store drop to zero;
+			// the Store write refreshes the per-request memo on success (the
+			// redundant set_settings_cache call is subsumed).
+			$options = Settings_Command::toggle_safe_mode(
+				$options,
+				$action,
+				( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'build_safe_mode_enable_payload' ) )
+					? static function ( array $tab ): array {
+						return Main::build_safe_mode_enable_payload( $tab );
 					}
-				}
-				if ( 'enable' === $action ) {
-					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'build_safe_mode_enable_payload' ) ) {
-						try {
-							$options['file_optimisation'] = Main::build_safe_mode_enable_payload( $options['file_optimisation'] );
-						} catch ( \Throwable $e ) {
-							unset( $e );
-							$options['file_optimisation']['safeMode'] = true;
-						}
-					} else {
-						$options['file_optimisation']['safeMode'] = true;
-					}
-				} else {
-					$options['file_optimisation']['safeMode'] = false;
-				}
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'save_settings' ) ) {
-					Util::save_settings( $options );
-					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
-						try {
-							Util::set_settings_cache( $options );
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
-					}
-				} elseif ( function_exists( 'update_option' ) ) {
-						update_option( 'wppo_settings', $options, false );
-				}
+					: null
+			);
 				if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) && method_exists( 'PerformanceOptimise\Inc\Telemetry', 'invalidate_audit_cache' ) ) {
 					try {
 						Telemetry::invalidate_audit_cache();

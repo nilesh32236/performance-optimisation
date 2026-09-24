@@ -24,7 +24,8 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | Boundary | Owns | Must not own | Phase 3 evidence |
 |---|---|---|---|
 | `Cache_Key` | Transient, option, cache-salt, and stampede key policy | Storage, TTL, feature settings | Classified as infrastructure despite its `Cache/` path |
-| `Settings_Store` | Settings read/write, validation dispatch, snapshots, memo reset | REST/CLI response shaping, feature defaults outside the schema | REST still writes `wppo_settings` through two direct paths |
+| `Settings_Store` | Settings read/write, validation dispatch, snapshots, memo reset | REST/CLI response shaping, feature defaults outside the schema | Sole direct `wppo_settings` writer; orchestration via `Settings_Command` |
+| `Settings_Command` | Settings write orchestration (tab merge, import merge, safe-mode transition, restore) | Validation, sanitization, redaction, snapshot policy, permissions | No direct option writes; delegates snapshot policy + writes to `Settings_Store` |
 | `Filesystem` | WP_Filesystem/native I/O, atomic writes, containment, path helpers | Cache policy, HTML mutation | Four static properties; partial test reset ownership |
 | `Url` | Home/content URL memos, normalization, same-site policy, redirect parsing | Settings arrays, feature decisions | Five static properties; preload policy needs a separate allowance-preserving owner |
 | `Scheduler` | Action Scheduler and WP-Cron primitives, locks, job ownership registry | Job payload policy owned by a feature | First Phase 3 implementation target; teardown lists miss builder hooks |
@@ -139,7 +140,7 @@ A feature should not read another feature's internal settings paths. `Settings_S
 
 Two high-value corrections:
 
-1. Move `Rest_Settings` and REST safe-mode direct writes behind `Settings_Store`.
+1. ~~Move `Rest_Settings` and REST safe-mode direct writes behind `Settings_Store`~~ — done in P3-008: `Rest_Settings` partial saves, imports, and restores plus the REST safe-mode toggle route through `Settings_Command`, which snapshots-if-changed (fail-open) and writes only via `Settings_Store::save_settings()`.
 2. Keep Redis config construction on `Redis_Config_Policy`; REST, CLI, and `Object_Cache::ALLOWED_KEYS` share its manifest without moving connection or persistence into the policy.
 
 Do not introduce a configuration framework or DTO for every array. Use value objects only where stable shape and invariants already repeat.

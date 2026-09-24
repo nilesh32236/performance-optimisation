@@ -131,7 +131,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 	public function test_every_mapped_short_resolves_to_existing_file(): void {
 		$this->load_loader_map();
 		$map = Loader_Map::fallback_map();
-		$this->assertCount( 72, $map, 'Fallback map must cover every Loader_Map-managed plugin class.' );
+		$this->assertCount( 73, $map, 'Fallback map must cover every Loader_Map-managed plugin class.' );
 		foreach ( $map as $short => $file ) {
 			$path = Loader_Map::path_for( (string) $short );
 			$this->assertNotNull( $path, "Unresolvable short name: {$short}" );
@@ -180,7 +180,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotNull( $path, "Inventory class {$short} ({$file}) does not resolve via Loader_Map::path_for()." );
 			$this->assertFileExists( (string) $path, "Inventory class {$short} resolves to a missing file." );
 		}
-		$this->assertSame( 72, $loader_class_count, 'All Loader_Map-managed runtime classes must participate in the completeness gate.' );
+		$this->assertSame( 73, $loader_class_count, 'All Loader_Map-managed runtime classes must participate in the completeness gate.' );
 	}
 
 	/**
@@ -195,6 +195,21 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 		$path = Loader_Map::path_for( 'Dropin_Registry' );
 		$this->assertNotNull( $path );
 		$this->assertStringEndsWith( 'includes/Cache/class-dropin-registry.php', (string) $path );
+		$this->assertFileExists( (string) $path );
+	}
+
+	/**
+	 * The P3-008 command resolves through the lazy fallback map.
+	 *
+	 * @return void
+	 */
+	public function test_settings_command_resolves_via_fallback(): void {
+		$this->load_loader_map();
+
+		$this->assertSame( 'Settings/class-settings-command.php', Loader_Map::fallback_map()['Settings_Command'] );
+		$path = Loader_Map::path_for( 'Settings_Command' );
+		$this->assertNotNull( $path );
+		$this->assertStringEndsWith( 'includes/Settings/class-settings-command.php', (string) $path );
 		$this->assertFileExists( (string) $path );
 	}
 
