@@ -653,11 +653,25 @@ phase3_items:
 
   - id: P3-003
     title: 'Preload target and redirect transport policy'
-    status: active
+    status: merged
     priority: high
     github_issue: 1570
     github_pr: 1571
     implementation_commit: cb9630883c0c8989ef35613bd16110a817e84df1
+    merge_commit: 72b811d4532629c7704108f997cceb8eed6d63f7
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      transport: 'same-host accepted; off-host and unsafe port rejected; adapter loaded'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      cron: 'owned events remain scheduled; no orphan-hook warning'
+      object_cache: 'template parity; mode 0644; owner nobody:nogroup'
+      architecture_graph: '73 inventory files / 76 nodes / 344 edges; generator check passed'
     type: security-architecture
     problem: 'Arbitrary Cron preload URLs enforce a same-host sink check but still use implicit redirect-following transport; sitemap discovery remains host-only, while crawler and telemetry paths validate redirects explicitly.'
     target_owner: 'Preload_Transport under Scheduler/Support boundary'
@@ -685,7 +699,7 @@ phase3_items:
 
   - id: P3-004
     title: 'Blog-scoped runtime state and reset registry'
-    status: queued
+    status: audit-pending
     priority: high
     type: architecture
     problem: 'RUM, AI, System Info, LiteSpeed, Object Cache, and Database Cleanup hold site-sensitive static memos without a complete production switch_blog reset contract.'
