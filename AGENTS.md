@@ -116,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 81 files: 77 runtime plugin files under `includes/` (76 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 82 files: 78 runtime plugin files under `includes/` (77 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -151,7 +151,7 @@ The schema-v2 inventory tracks 81 files: 77 runtime plugin files under `includes
 | `Integrations/class-litespeed-integration.php` | LiteSpeed/OLS coexistence modes (auto/wppo/litespeed/standalone), header protocol (X-LiteSpeed-*), TTL, purge sync |
 | `Integrations/class-litespeed-crawler.php` | curl_multi cache preloader (variant matrix, concurrency, load-limit) |
 | `Integrations/class-litespeed-esi.php` | ESI bridge (LSWS Enterprise only; OLS → disabled) |
-| `Edge/class-edge-cache.php` / `Edge/class-edge-purger.php` / `Edge/class-cloudflare-purger.php` / `Edge/class-cdn-purger.php` | Edge (Cloudflare/Bunny/Varnish) cache config + purge fan-out |
+| `Edge/class-edge-cache.php` / `Edge/class-edge-purge-coordinator.php` / `Edge/class-edge-purger.php` / `Edge/class-cloudflare-purger.php` / `Edge/class-cdn-purger.php` | Edge cache config + one cache-clear fan-out with per-event Cloudflare transport de-duplication; provider adapters retain Cloudflare/Bunny/Varnish behavior |
 | `Edge/class-cdn.php` | LiteSpeed CDN mapping + URL rewrite |
 | `Compatibility/class-llms.php` | /llms.txt + /llms-full.txt virtual files (daily cron) |
 | `Insight/class-rum.php` | Real-user Web Vitals beacon collection/aggregation |

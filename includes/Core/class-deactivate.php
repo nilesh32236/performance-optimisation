@@ -192,9 +192,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			// Deliberately NOT removed: the wppo_after_cache_clear listeners.
 			// Cache::clear_cache() below fires that action once more, and its
 			// listeners are both safe and desirable during teardown:
-			// - CDN_Purger/Edge_Purger purge_all() sends the final edge purge so
-			// stale Cloudflare/Bunny/Varnish copies do not outlive the plugin
-			// (both purgers no-op when their integration is not configured);
+			// - Edge_Purge_Coordinator fans out to the CDN/Edge purgers for the
+			// final edge purge so stale Cloudflare/Bunny/Varnish copies do not
+			// outlive the plugin (the purgers no-op when unconfigured);
 			// - Image_Optimisation::clear_runtime_caches() is a cheap local
 			// stat-cache reset with no external side effects.
 		}

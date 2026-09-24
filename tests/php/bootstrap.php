@@ -29,7 +29,7 @@ if ( file_exists( $patchwork_path ) ) {
 }
 
 require_once __DIR__ . '/../../vendor/autoload.php';
-// P3-005 through P3-011: the local Composer classmap may predate new boundary
+// P3-005 through P3-012: the local Composer classmap may predate new boundary
 // owners in a dirty development checkout; production loading is owned by
 // Loader_Map/Composer.
 require_once __DIR__ . '/../../includes/Cache/class-cache-capacity.php';
@@ -39,6 +39,7 @@ require_once __DIR__ . '/../../includes/Settings/class-settings-command.php';
 require_once __DIR__ . '/../../includes/Insight/class-insight-query.php';
 require_once __DIR__ . '/../../includes/Database/class-database-cleanup-runner.php';
 require_once __DIR__ . '/../../includes/Admin/class-admin-auth.php';
+require_once __DIR__ . '/../../includes/Edge/class-edge-purge-coordinator.php';
 
 // Load the object-cache drop-in template early so wp_cache_set() and friends
 // are declared as real PHP functions BEFORE any Brain Monkey test can

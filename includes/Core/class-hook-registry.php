@@ -413,12 +413,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 			add_action( 'wp_enqueue_scripts', array( 'PerformanceOptimise\Inc\RUM', 'maybe_enqueue_scripts' ), 5 );
 			add_action( 'wp_footer', array( 'PerformanceOptimise\Inc\RUM', 'print_config' ), 90 );
 
-			// Edge/CDN cache purge on full cache clear (Cloudflare / Varnish).
-			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\CDN_Purger', 'purge_all' ) );
-			// N2 Edge HTML adapter — purge alongside CDN_Purger (stale-while-revalidate).
-			if ( class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
-				add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Edge_Purger', 'purge_all' ), 20, 2 );
-			}
+			// One shared listener fans out to the legacy CDN and edge adapters.
+			// The coordinator scopes Cloudflare transport de-duplication to this event.
+			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Edge_Purge_Coordinator', 'purge_after_cache_clear' ), 10, 2 );
 
 			// LS-410 CDN typed hooks + buffer cooperation (LSCWP cdn.cls.php:195,199,203 + litespeed_buffer_finalize).
 			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {

@@ -99,13 +99,15 @@ Fetch, persist, analyze, schedule, and display should not share one new “Servi
 ### Edge and integrations
 
 - `Edge_Cache` owns edge-provider configuration.
-- `Edge_Purger` and `CDN_Purger` own purge fan-out.
+- `Edge_Purge_Coordinator` owns cache-clear fan-out and per-event identical Cloudflare transport de-duplication.
+- `Edge_Purger` owns Cloudflare/Bunny edge purges, URL scope, and edge locks.
+- `CDN_Purger` owns legacy service dispatch, LiteSpeed sync, and Varnish purges.
 - `Cloudflare_Purger` owns Cloudflare transport.
 - `LiteSpeed_Integration` owns coexistence, headers, TTL, and purge coordination.
 - `LiteSpeed_Crawler` owns crawl scheduling and variants.
 - `LiteSpeed_ESI` stays protected.
 
-The current hook registry and purger fallback can send one Cloudflare purge through more than one path. A later queue item must prove duplicate side effects before consolidating dispatch.
+One priority-10 `wppo_after_cache_clear` listener now fans out through the coordinator. Identical full-zone Cloudflare transport is reused only within that event; separate providers and single-page scope remain independent.
 
 ## Presentation boundaries
 

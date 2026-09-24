@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `86e264b3b7f72b5f3f1a477fb26fc66217a57248`
+Source: `origin/master` commit `4054075ac45c313f4f997cb83b3f5bcd636260d2`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 84 first-party runtime files:
+The tokenizer scans 85 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 76 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 77 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,21 +40,21 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 81 |
-| Inventory source lines | 126,527 |
-| Class-like graph nodes | 80 |
+| Inventory files | 82 |
+| Inventory source lines | 126,675 |
+| Class-like graph nodes | 81 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,511 |
+| Named methods | 2,515 |
 | Methods spanning 80 lines or more | 236 |
 | Static properties | 141 across 32 nodes |
-| Unique dependency edges | 368 |
-| Runtime-classified edges | 367 |
-| Compatibility-classified edges | 195 |
+| Unique dependency edges | 369 |
+| Runtime-classified edges | 368 |
+| Compatibility-classified edges | 196 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 313 |
+| Cross-domain edges | 312 |
 | Feature-to-feature edges | 46 |
 | Strict boundary violations | 16 |
-| Bridge candidates | 231 |
+| Bridge candidates | 232 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -62,7 +62,7 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 63 class-like nodes and 317 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 64 class-like nodes and 318 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
@@ -104,6 +104,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Object_Cache` | 3,215 | 55 | 11 | 6 | 11 | 8/5 | 33 | 3 | `trip_circuit_on_outage` 174 |
 | `Dropin_Registry` | 45 | 1 | 0 | 0 | 0 | 2/1 | 12 | 1 | `invalidate` 7 |
 | `Redis_Config_Policy` | 183 | 3 | 0 | 0 | 0 | 3/0 | 6 | 0 | `sanitize_value` 58 |
+| `Edge_Purge_Coordinator` | 150 | 4 | 0 | 0 | 0 | 1/2 | 1 | 0 | `purge_after_cache_clear` 27 |
 | `LiteSpeed_Integration` | 2,797 | 58 | 4 | 17 | 17 | 17/7 | 95 | 5 | `get_litespeed_ttl` 216 |
 | `WPPO_CLI_Command` | 2,362 | 27 | 7 | 0 | 0 | 1/14 | 2 | 11 | `settings` 224 |
 | `Builder_Purge_Watcher` | 2,110 | 45 | 2 | 7 | 7 | 4/6 | 19 | 3 | `on_any_upgrade` 103 |
@@ -144,6 +145,7 @@ These counts come from method names, call sites, tests, and history. They approx
 | `Runtime_State` | 1 | Six-owner blog-switch reset registry with feature-owned reset delegation |
 | `Insight_Query` | 1 | Cached telemetry/PageSpeed read models and deterministic PageSpeed suggestion augmentation |
 | `Admin_Auth` | 1 | Administrative capability, REST header canonicalization, legacy nonce fallback, and wp_rest verification |
+| `Edge_Purge_Coordinator` | 1 | One cache-clear fan-out and per-event identical Cloudflare transport de-duplication |
 
 ## Coupling findings
 
@@ -186,6 +188,8 @@ P3-009 adds the 74-line, three-method `Insight_Query` read boundary. REST, Abili
 P3-010 adds the 323-line, seven-method `Database_Cleanup_Runner` application boundary. REST, Abilities, and WP-CLI now delegate canonical validation, all/Action Scheduler dispatch, revision defaults, legacy CLI aliases, dry-run previews, logging/hooks, and REST table optimization through it; `Database_Cleanup` remains the SQL/map/counts/health owner, and Cron still calls `auto_clean()` directly. The generated inventory contains 80 files, 83 graph nodes, and 366 edges; the runner has three incoming feature edges and no static state.
 
 P3-011 adds the 60-line, one-method dependency-light `Admin_Auth` policy. `Rest::permission_callback()` and `Abilities::permission_check()` retain their public signatures but delegate capability-first, request-header/legacy-server nonce handling, sanitization, and `wp_rest` verification to one owner. Public `rum_collect` remains `__return_true`, and RUM token, IP, and global rate-limit policy remains untouched. The generated inventory contains 81 files, 84 graph nodes, and 368 edges; `Admin_Auth` has two incoming edges, no feature dependencies, and no static state.
+
+P3-012 adds the 150-line, four-method `Edge_Purge_Coordinator`. `Hook_Registry` now registers one priority-10 `wppo_after_cache_clear` listener that calls the unchanged `CDN_Purger` and `Edge_Purger` adapters in their historic order. For a full clear, temporary `pre_http_request` / `http_api_debug` seams reuse the first response only when an identical Cloudflare purge_everything request repeats in that event, reducing overlapping Cloudflare transport from up to two calls to one while retaining separate Bunny and Varnish paths. LiteSpeed sync, single-page Cloudflare files, edge locks, provider-specific failure logging, invalid-payload TypeError behavior, and successful no-data behavior remain with their existing owners. The generated inventory contains 82 files, 85 graph nodes, and 369 edges; the coordinator has one incoming and two outgoing feature edges, no static state, and no feature-to-feature change.
 
 ## Static state
 
