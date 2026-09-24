@@ -298,7 +298,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Active drop-in path (containment-validated).
 		 *
-		 * Consumers (e.g. System_Info::detect_dropin_ownership()) must use this
+		 * Consumers (e.g. the System Info reporter) must use this
 		 * instead of assuming the canonical WP_CONTENT_DIR location, so a
 		 * relocated drop-in is still reported correctly.
 		 *

@@ -365,9 +365,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			// Drop-in arbitration is the expensive part (WP_Filesystem reads +
 			// an Object_Cache instantiation with possible Redis pings), so it is
-			// cached in a short transient (audit #888 finding 25). Mutators
-			// (Object_Cache::enable()/disable(), Advanced_Cache_Handler
-			// create/remove) flush it via flush_dropin_cache().
+			// cached in a short transient (audit #888 finding 25). Drop-in
+			// mutators request invalidation through Dropin_Registry; System_Info
+			// remains the owner of this memo and its storage here.
 			$dropin_transient_key = Util::transient_key( 'wppo_sysinfo_dropin_check' );
 			// Salted object-cache layer (WP 6.9+, issue #882) with the
 			// transient fallback; the salt is bumped by flush_dropin_cache().
