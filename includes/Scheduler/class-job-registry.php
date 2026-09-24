@@ -97,6 +97,7 @@ if ( ! class_exists( __NAMESPACE__ . '\\Job_Registry' ) ) {
 		 * Return every owned WP-Cron hook for teardown.
 		 *
 		 * @return string[]
+		 * @since NEXT
 		 */
 		public static function all_cron_hooks(): array {
 			return array_values(
@@ -114,6 +115,7 @@ if ( ! class_exists( __NAMESPACE__ . '\\Job_Registry' ) ) {
 		 * Return every owned Action Scheduler hook for teardown.
 		 *
 		 * @return string[]
+		 * @since NEXT
 		 */
 		public static function all_action_scheduler_hooks(): array {
 			return self::AS_HOOKS;
