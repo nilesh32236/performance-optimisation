@@ -1063,14 +1063,24 @@ phase3_items:
 
   - id: P3-012
     title: 'Edge/CDN purge coordinator'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1589
     type: architecture
     problem: 'CDN_Purger and Edge_Purger can both issue Cloudflare transport for one cache-clear event when settings overlap.'
     target_owner: 'Edge_Purge_Coordinator'
     target_direction: 'Cache lifecycle -> coordinator -> provider transport adapters'
     tests: 'Dual-settings Cloudflare, Cloudflare+Bunny, Varnish, and LiteSpeed cross-purge vectors.'
     ratchet: 'Duplicate Cloudflare transport calls for one event: up to 2 -> 1.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 4054075a
+      evidence:
+        - 'Hook_Registry registers CDN_Purger::purge_all at priority 10 and Edge_Purger::purge_all at priority 20 for the same wppo_after_cache_clear event.'
+        - 'Both purgers can resolve Cloudflare credentials from overlapping cache/edge settings and delegate to Cloudflare_Purger, so one event can issue duplicate Cloudflare transport.'
+        - 'CDN_Purger owns the legacy CDN service/LS sync/Varnish branch, while Edge_Purger owns Cloudflare/Bunny edge-worker purges and URL-scoped behavior.'
+        - 'A narrow Edge_Purge_Coordinator can own event fan-out and provider de-duplication while leaving LiteSpeed sync, transport locks, failure logging, and response behavior in existing owners.'
+      decision: 'Proceed test-first with a dependency-light Edge_Purge_Coordinator; route the shared wppo_after_cache_clear listener through one coordinator and preserve CDN/Edge transport, LiteSpeed, Varnish, URL-scope, lock, and logging contracts.'
 
   - id: P3-013
     title: 'Main options and lifecycle ownership cleanup'
