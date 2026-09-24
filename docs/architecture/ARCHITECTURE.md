@@ -26,7 +26,7 @@ performance-optimisation.php
       ├─ Cache and edge delivery
       │   Cache, Cache_Invalidator, Advanced_Cache_Handler, Bfcache,
       │   Object_Cache, Dropin_Registry, Redis_Config_Policy, CDN, CDN_Purger, Cloudflare_Purger, Edge_Cache,
-      │   Edge_Purger, Server_Rules, Htaccess_Handler, Header_Emitter,
+      │   Edge_Purge_Coordinator, Edge_Purger, Server_Rules, Htaccess_Handler, Header_Emitter,
       │   LiteSpeed_Integration, LiteSpeed_Crawler, LiteSpeed_ESI
       ├─ Assets, images, and CSS
       │   Asset_Manager, Script_Strategy, Css_Combine, Css_Safelist,
@@ -48,17 +48,17 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 84 files: 80 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 85 files: 81 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 368 |
-| Runtime / compatibility / loader edges | 367 / 195 / 3 |
-| Cross-domain / feature-to-feature edges | 313 / 46 |
+| Unique edges | 369 |
+| Runtime / compatibility / loader edges | 368 / 196 / 3 |
+| Cross-domain / feature-to-feature edges | 312 / 46 |
 | Boundary violations | 16 |
-| Bridge candidates | 231 |
+| Bridge candidates | 232 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 63 nodes, 317 runtime-classified internal edges |
+| Largest runtime SCC | 64 nodes, 318 runtime-classified internal edges |
 | Static state | 141 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 

@@ -28,17 +28,17 @@
         "high_risk_hub_score": "fan_in + fan_out + 2*compatibility_fan_in + cross_domain_edges + static_state + lines/1000."
     },
     "summary": {
-        "files": 84,
-        "class_like_nodes": 80,
+        "files": 85,
+        "class_like_nodes": 81,
         "procedural_nodes": 4,
-        "edges": 368,
-        "runtime_edges": 367,
-        "compatibility_edges": 195,
+        "edges": 369,
+        "runtime_edges": 368,
+        "compatibility_edges": 196,
         "loader_edges": 3,
-        "cross_domain_edges": 313,
+        "cross_domain_edges": 312,
         "feature_to_feature_edges": 46,
         "boundary_violations": 16,
-        "bridge_candidates": 231,
+        "bridge_candidates": 232,
         "cyclic_components": 1,
         "runtime_cyclic_components": 1,
         "compatibility_cyclic_components": 1,
@@ -3223,11 +3223,11 @@
                 "outgoing_reference_evidence": 17,
                 "runtime_fan_in": 1,
                 "runtime_fan_out": 4,
-                "compatibility_fan_in": 0,
+                "compatibility_fan_in": 1,
                 "compatibility_fan_out": 2,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 4,
+                "cross_domain_edges": 3,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -7833,6 +7833,156 @@
                 "strongly_connected_component": 0
             }
         },
+        "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": {
+            "id": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+            "name": "Edge_Purge_Coordinator",
+            "fqcn": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+            "kind": "class",
+            "file": "includes/Edge/class-edge-purge-coordinator.php",
+            "domain": "Edge",
+            "namespace": "PerformanceOptimise\\Inc",
+            "lines": 150,
+            "property_count": 0,
+            "static_property_count": 0,
+            "public_property_count": 0,
+            "protected_property_count": 0,
+            "private_property_count": 0,
+            "static_state": false,
+            "method_count": 4,
+            "top_level_function_count": 0,
+            "top_level_functions": [],
+            "largest_methods": [
+                {
+                    "name": "purge_after_cache_clear",
+                    "line": 41,
+                    "end_line": 67,
+                    "lines": 27,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "cloudflare_request_key",
+                    "line": 129,
+                    "end_line": 148,
+                    "lines": 20,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "deduplicate_cloudflare_request",
+                    "line": 81,
+                    "end_line": 96,
+                    "lines": 16,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "remember_cloudflare_response",
+                    "line": 110,
+                    "end_line": 118,
+                    "lines": 9,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                }
+            ],
+            "imports": [],
+            "references": {
+                "static_calls": {
+                    "PerformanceOptimise\\Inc\\CDN_Purger::purge_all": 59,
+                    "PerformanceOptimise\\Inc\\Edge_Purger::purge_all": 60,
+                    "self::cloudflare_request_key": 86,
+                    "self::deduplicate_cloudflare_request": 45,
+                    "self::remember_cloudflare_response": 48
+                },
+                "instance_calls": [],
+                "new_expressions": [],
+                "class_references": {
+                    "PerformanceOptimise\\Inc\\CDN_Purger": 59,
+                    "PerformanceOptimise\\Inc\\Edge_Purger": 60
+                },
+                "class_constant_references": [],
+                "class_string_references": {
+                    "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 19
+                },
+                "class_exists": {
+                    "PerformanceOptimise\\Inc\\CDN_Purger": 59,
+                    "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 19,
+                    "PerformanceOptimise\\Inc\\Edge_Purger": 60
+                },
+                "method_exists": [],
+                "interface_exists": [],
+                "trait_exists": [],
+                "reflection": [],
+                "loader_references": [],
+                "file_references": [],
+                "external_classes": [],
+                "external_functions": {
+                    "add_action": 56,
+                    "add_filter": 55,
+                    "array_key_exists": 90,
+                    "class_exists": 19,
+                    "defined": 15,
+                    "hash": 147,
+                    "is_array": 130,
+                    "is_string": 130,
+                    "preg_match": 139,
+                    "remove_action": 63,
+                    "remove_filter": 62,
+                    "strtoupper": 134
+                },
+                "wordpress_functions": {
+                    "add_action": 56,
+                    "add_filter": 55,
+                    "remove_action": 63,
+                    "remove_filter": 62
+                },
+                "filesystem_dependencies": [],
+                "network_dependencies": [],
+                "database_dependencies": [],
+                "dynamic_references": []
+            },
+            "extends": [],
+            "implements": [],
+            "trait_usage": [],
+            "runtime_dependencies": [
+                "PerformanceOptimise\\Inc\\CDN_Purger",
+                "PerformanceOptimise\\Inc\\Edge_Purger"
+            ],
+            "compatibility_dependencies": [
+                "PerformanceOptimise\\Inc\\CDN_Purger",
+                "PerformanceOptimise\\Inc\\Edge_Purger"
+            ],
+            "loader_dependencies": [],
+            "documentation_references": [],
+            "delegating_methods": [],
+            "hooks": {
+                "http_api_debug": [
+                    56
+                ],
+                "pre_http_request": [
+                    55
+                ]
+            },
+            "metrics": {
+                "fan_in": 1,
+                "fan_out": 2,
+                "incoming_reference_evidence": 1,
+                "outgoing_reference_evidence": 2,
+                "runtime_fan_in": 1,
+                "runtime_fan_out": 2,
+                "compatibility_fan_in": 0,
+                "compatibility_fan_out": 2,
+                "loader_fan_in": 0,
+                "loader_fan_out": 0,
+                "cross_domain_edges": 1,
+                "boundary_violations": 0,
+                "strongly_connected_component": 0
+            }
+        },
         "PerformanceOptimise\\Inc\\Edge_Purger": {
             "id": "PerformanceOptimise\\Inc\\Edge_Purger",
             "name": "Edge_Purger",
@@ -8049,7 +8199,7 @@
             "metrics": {
                 "fan_in": 2,
                 "fan_out": 4,
-                "incoming_reference_evidence": 4,
+                "incoming_reference_evidence": 3,
                 "outgoing_reference_evidence": 10,
                 "runtime_fan_in": 2,
                 "runtime_fan_out": 4,
@@ -8057,7 +8207,7 @@
                 "compatibility_fan_out": 2,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 4,
+                "cross_domain_edges": 3,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -8850,7 +9000,7 @@
             "file": "includes/Core/class-hook-registry.php",
             "domain": "Core",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 692,
+            "lines": 689,
             "property_count": 4,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -8864,16 +9014,16 @@
                 {
                     "name": "register",
                     "line": 109,
-                    "end_line": 532,
-                    "lines": 424,
+                    "end_line": 529,
+                    "lines": 421,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "register_background_hooks",
-                    "line": 560,
-                    "end_line": 587,
+                    "line": 557,
+                    "end_line": 584,
                     "lines": 28,
                     "visibility": "public",
                     "static": false,
@@ -8881,8 +9031,8 @@
                 },
                 {
                     "name": "register_invalidation_hooks",
-                    "line": 600,
-                    "end_line": 623,
+                    "line": 597,
+                    "end_line": 620,
                     "lines": 24,
                     "visibility": "public",
                     "static": false,
@@ -8890,8 +9040,8 @@
                 },
                 {
                     "name": "register_block_assets_filters",
-                    "line": 672,
-                    "end_line": 690,
+                    "line": 669,
+                    "end_line": 687,
                     "lines": 19,
                     "visibility": "public",
                     "static": false,
@@ -8899,8 +9049,8 @@
                 },
                 {
                     "name": "register_integration_hooks",
-                    "line": 635,
-                    "end_line": 648,
+                    "line": 632,
+                    "end_line": 645,
                     "lines": 14,
                     "visibility": "public",
                     "static": false,
@@ -8917,8 +9067,8 @@
                 },
                 {
                     "name": "register_head_hint_hooks",
-                    "line": 544,
-                    "end_line": 548,
+                    "line": 541,
+                    "end_line": 545,
                     "lines": 5,
                     "visibility": "public",
                     "static": false,
@@ -8928,79 +9078,77 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\AI_Adaptive::init": 455,
-                    "PerformanceOptimise\\Inc\\Bfcache::init": 445,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::init": 646,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::init": 638,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive::init": 452,
+                    "PerformanceOptimise\\Inc\\Bfcache::init": 442,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::init": 643,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::init": 635,
                     "PerformanceOptimise\\Inc\\Main::is_safe_mode_active": 158,
-                    "PerformanceOptimise\\Inc\\Main::should_load_litespeed_stack": 645,
+                    "PerformanceOptimise\\Inc\\Main::should_load_litespeed_stack": 642,
                     "PerformanceOptimise\\Inc\\Main::should_use_core_template_buffer": 225,
                     "PerformanceOptimise\\Inc\\Main::supports_native_defer_strategy": 204,
                     "PerformanceOptimise\\Inc\\Main::supports_native_script_fetchpriority": 212,
-                    "PerformanceOptimise\\Inc\\Perf_Translations::init": 450,
+                    "PerformanceOptimise\\Inc\\Perf_Translations::init": 447,
                     "PerformanceOptimise\\Inc\\Sandbox_Preview::get_staged_settings": 174
                 },
                 "instance_calls": {
                     "$main->ensure_hook_cache_for_registry": 261,
-                    "$main->is_hidden_block_asset_omission_enabled": 498,
-                    "$main->prepare_defer_delay_state_for_registry": 505,
-                    "$main->prepare_minify_excludes_for_registry": 459,
-                    "$main->register_collaborators": 508,
+                    "$main->is_hidden_block_asset_omission_enabled": 495,
+                    "$main->prepare_defer_delay_state_for_registry": 502,
+                    "$main->prepare_minify_excludes_for_registry": 456,
+                    "$main->register_collaborators": 505,
                     "$main->server_timing_enabled": 318,
-                    "$this->register_background_hooks": 525,
-                    "$this->register_block_assets_filters": 484,
-                    "$this->register_head_hint_hooks": 507,
-                    "$this->register_integration_hooks": 531,
-                    "$this->register_invalidation_hooks": 527
+                    "$this->register_background_hooks": 522,
+                    "$this->register_block_assets_filters": 481,
+                    "$this->register_head_hint_hooks": 504,
+                    "$this->register_integration_hooks": 528,
+                    "$this->register_invalidation_hooks": 524
                 },
                 "new_expressions": {
                     "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 124,
                     "PerformanceOptimise\\Inc\\Rest": 408
                 },
                 "class_references": {
-                    "PerformanceOptimise\\Inc\\Main": 602
+                    "PerformanceOptimise\\Inc\\Main": 599
                 },
                 "class_constant_references": [],
                 "class_string_references": {
-                    "PerformanceOptimise\\Inc\\AI_Adaptive": 454,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive": 451,
                     "PerformanceOptimise\\Inc\\Activate": 116,
-                    "PerformanceOptimise\\Inc\\Bfcache": 444,
+                    "PerformanceOptimise\\Inc\\Bfcache": 441,
                     "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 123,
-                    "PerformanceOptimise\\Inc\\CDN": 424,
-                    "PerformanceOptimise\\Inc\\CDN_Purger": 417,
-                    "PerformanceOptimise\\Inc\\Critical_CSS": 513,
+                    "PerformanceOptimise\\Inc\\CDN": 421,
+                    "PerformanceOptimise\\Inc\\Critical_CSS": 510,
                     "PerformanceOptimise\\Inc\\Database_Cleanup": 370,
-                    "PerformanceOptimise\\Inc\\Edge_Purger": 419,
-                    "PerformanceOptimise\\Inc\\Google_Fonts": 583,
+                    "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 418,
+                    "PerformanceOptimise\\Inc\\Google_Fonts": 580,
                     "PerformanceOptimise\\Inc\\Hook_Registry": 24,
                     "PerformanceOptimise\\Inc\\Image_Optimisation": 378,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 645,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 637,
-                    "PerformanceOptimise\\Inc\\Llms": 433,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 642,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 634,
+                    "PerformanceOptimise\\Inc\\Llms": 430,
                     "PerformanceOptimise\\Inc\\Main": 379,
-                    "PerformanceOptimise\\Inc\\Pagespeed": 565,
-                    "PerformanceOptimise\\Inc\\Perf_Translations": 449,
+                    "PerformanceOptimise\\Inc\\Pagespeed": 562,
+                    "PerformanceOptimise\\Inc\\Perf_Translations": 446,
                     "PerformanceOptimise\\Inc\\RUM": 413,
                     "PerformanceOptimise\\Inc\\Runtime_State": 377,
                     "PerformanceOptimise\\Inc\\Sandbox_Preview": 150,
-                    "PerformanceOptimise\\Inc\\Used_CSS": 574
+                    "PerformanceOptimise\\Inc\\Used_CSS": 571
                 },
                 "class_exists": {
-                    "PerformanceOptimise\\Inc\\AI_Adaptive": 454,
-                    "PerformanceOptimise\\Inc\\Bfcache": 444,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive": 451,
+                    "PerformanceOptimise\\Inc\\Bfcache": 441,
                     "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 123,
-                    "PerformanceOptimise\\Inc\\CDN": 424,
-                    "PerformanceOptimise\\Inc\\Edge_Purger": 419,
+                    "PerformanceOptimise\\Inc\\CDN": 421,
                     "PerformanceOptimise\\Inc\\Hook_Registry": 24,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 645,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 637,
-                    "PerformanceOptimise\\Inc\\Llms": 433,
-                    "PerformanceOptimise\\Inc\\Perf_Translations": 449,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 642,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 634,
+                    "PerformanceOptimise\\Inc\\Llms": 430,
+                    "PerformanceOptimise\\Inc\\Perf_Translations": 446,
                     "PerformanceOptimise\\Inc\\Sandbox_Preview": 150
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::init": 645,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::init": 637,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::init": 642,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::init": 634,
                     "PerformanceOptimise\\Inc\\Sandbox_Preview::get_staged_settings": 172
                 },
                 "interface_exists": [],
@@ -9022,13 +9170,13 @@
                     "is_array": 175,
                     "method_exists": 172,
                     "register": 124,
-                    "wp_is_block_theme": 683
+                    "wp_is_block_theme": 680
                 },
                 "wordpress_functions": {
                     "add_action": 113,
                     "add_filter": 237,
                     "is_admin": 369,
-                    "wp_is_block_theme": 683
+                    "wp_is_block_theme": 680
                 },
                 "filesystem_dependencies": [],
                 "network_dependencies": [],
@@ -9044,10 +9192,9 @@
                 "PerformanceOptimise\\Inc\\Bfcache",
                 "PerformanceOptimise\\Inc\\Builder_Purge_Watcher",
                 "PerformanceOptimise\\Inc\\CDN",
-                "PerformanceOptimise\\Inc\\CDN_Purger",
                 "PerformanceOptimise\\Inc\\Critical_CSS",
                 "PerformanceOptimise\\Inc\\Database_Cleanup",
-                "PerformanceOptimise\\Inc\\Edge_Purger",
+                "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
                 "PerformanceOptimise\\Inc\\Google_Fonts",
                 "PerformanceOptimise\\Inc\\Image_Optimisation",
                 "PerformanceOptimise\\Inc\\LiteSpeed_ESI",
@@ -9067,7 +9214,6 @@
                 "PerformanceOptimise\\Inc\\Bfcache",
                 "PerformanceOptimise\\Inc\\Builder_Purge_Watcher",
                 "PerformanceOptimise\\Inc\\CDN",
-                "PerformanceOptimise\\Inc\\Edge_Purger",
                 "PerformanceOptimise\\Inc\\LiteSpeed_ESI",
                 "PerformanceOptimise\\Inc\\LiteSpeed_Integration",
                 "PerformanceOptimise\\Inc\\Llms",
@@ -9079,10 +9225,10 @@
             "delegating_methods": [],
             "hooks": {
                 "activated_plugin": [
-                    616
+                    613
                 ],
                 "add_option_wppo_settings": [
-                    610
+                    607
                 ],
                 "added_post_meta": [
                     298,
@@ -9120,7 +9266,7 @@
                     113
                 ],
                 "deactivated_plugin": [
-                    617
+                    614
                 ],
                 "deleted_post": [
                     371
@@ -9131,13 +9277,13 @@
                 ],
                 "init": [
                     144,
-                    434
+                    431
                 ],
                 "litespeed_buffer_finalize": [
-                    429
+                    426
                 ],
                 "query_vars": [
-                    435
+                    432
                 ],
                 "rest_api_init": [
                     409
@@ -9145,33 +9291,33 @@
                 "save_post": [
                     288,
                     370,
-                    586
+                    583
                 ],
                 "script_loader_src": [
-                    428
+                    425
                 ],
                 "script_loader_tag": [
                     237,
                     246,
                     251,
-                    461
+                    458
                 ],
                 "send_headers": [
-                    437
+                    434
                 ],
                 "should_load_block_assets_on_demand": [
-                    688
+                    685
                 ],
                 "should_load_separate_core_block_assets": [
-                    684
+                    681
                 ],
                 "style_loader_src": [
-                    427
+                    424
                 ],
                 "style_loader_tag": [
-                    475,
-                    481,
-                    521
+                    472,
+                    478,
+                    518
                 ],
                 "switch_blog": [
                     377,
@@ -9180,8 +9326,8 @@
                     380
                 ],
                 "switch_theme": [
-                    603,
-                    606
+                    600,
+                    603
                 ],
                 "template_redirect": [
                     151,
@@ -9191,20 +9337,20 @@
                     342,
                     364,
                     401,
-                    436
+                    433
                 ],
                 "update_option_home": [
-                    614
+                    611
                 ],
                 "update_option_permalink_structure": [
-                    602
+                    599
                 ],
                 "update_option_siteurl": [
-                    615
+                    612
                 ],
                 "update_option_wppo_settings": [
-                    440,
-                    607
+                    437,
+                    604
                 ],
                 "updated_post_meta": [
                     299,
@@ -9213,7 +9359,7 @@
                 "upgrader_process_complete": [
                     117,
                     119,
-                    622
+                    619
                 ],
                 "woocommerce_checkout_order_created": [
                     307
@@ -9231,10 +9377,10 @@
                     234
                 ],
                 "wp_ajax_wppo_get_nonce": [
-                    529
+                    526
                 ],
                 "wp_calculate_image_srcset": [
-                    426
+                    423
                 ],
                 "wp_enqueue_scripts": [
                     146,
@@ -9243,9 +9389,9 @@
                     257,
                     395,
                     413,
-                    472,
-                    499,
-                    520
+                    469,
+                    496,
+                    517
                 ],
                 "wp_finalized_template_enhancement_output_buffer": [
                     271,
@@ -9255,20 +9401,20 @@
                     414
                 ],
                 "wp_get_attachment_url": [
-                    425
+                    422
                 ],
                 "wp_head": [
                     405,
-                    438,
-                    513,
-                    545,
-                    546
+                    435,
+                    510,
+                    542,
+                    543
                 ],
                 "wp_logout": [
                     145
                 ],
                 "wp_resource_hints": [
-                    547
+                    544
                 ],
                 "wp_template_enhancement_output_buffer": [
                     270,
@@ -9277,43 +9423,42 @@
                 ],
                 "wppo_after_cache_clear": [
                     381,
-                    417,
-                    420
+                    418
                 ],
                 "wppo_ai_css_refresh_queued": [
-                    580
+                    577
                 ],
                 "wppo_convert_image_background": [
-                    562
+                    559
                 ],
                 "wppo_generate_ccss": [
-                    522
+                    519
                 ],
                 "wppo_google_fonts_download": [
-                    583
+                    580
                 ],
                 "wppo_pagespeed_scan": [
-                    565
+                    562
                 ],
                 "wppo_run_upgrades": [
                     116
                 ],
                 "wppo_used_css_generate": [
-                    574
+                    571
                 ]
             },
             "metrics": {
                 "fan_in": 1,
-                "fan_out": 22,
+                "fan_out": 21,
                 "incoming_reference_evidence": 1,
-                "outgoing_reference_evidence": 65,
+                "outgoing_reference_evidence": 63,
                 "runtime_fan_in": 1,
-                "runtime_fan_out": 22,
+                "runtime_fan_out": 21,
                 "compatibility_fan_in": 0,
-                "compatibility_fan_out": 10,
+                "compatibility_fan_out": 9,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 19,
+                "cross_domain_edges": 18,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -12867,7 +13012,7 @@
             "file": "includes/Core/class-loader-map.php",
             "domain": "Core",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 323,
+            "lines": 324,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -12881,16 +13026,16 @@
                 {
                     "name": "fallback_map",
                     "line": 119,
-                    "end_line": 198,
-                    "lines": 80,
+                    "end_line": 199,
+                    "lines": 81,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
                     "name": "file_path",
-                    "line": 241,
-                    "end_line": 277,
+                    "line": 242,
+                    "end_line": 278,
                     "lines": 37,
                     "visibility": "public",
                     "static": true,
@@ -12898,8 +13043,8 @@
                 },
                 {
                     "name": "path_for",
-                    "line": 290,
-                    "end_line": 311,
+                    "line": 291,
+                    "end_line": 312,
                     "lines": 22,
                     "visibility": "public",
                     "static": true,
@@ -12916,8 +13061,8 @@
                 },
                 {
                     "name": "allowed_dirs",
-                    "line": 209,
-                    "end_line": 226,
+                    "line": 210,
+                    "end_line": 227,
                     "lines": 18,
                     "visibility": "public",
                     "static": true,
@@ -12943,8 +13088,8 @@
                 },
                 {
                     "name": "cli_file",
-                    "line": 319,
-                    "end_line": 321,
+                    "line": 320,
+                    "end_line": 322,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -12954,10 +13099,10 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "self::allowed_dirs": 262,
-                    "self::base_dir": 272,
-                    "self::fallback_map": 301,
-                    "self::file_path": 306
+                    "self::allowed_dirs": 263,
+                    "self::base_dir": 273,
+                    "self::fallback_map": 302,
+                    "self::file_path": 307
                 },
                 "instance_calls": [],
                 "new_expressions": [],
@@ -12978,20 +13123,20 @@
                     "Admin/class-abilities.php": 121,
                     "Admin/class-admin-auth.php": 122,
                     "Admin/class-admin-notices.php": 124,
-                    "Admin/class-metabox.php": 165,
+                    "Admin/class-metabox.php": 166,
                     "Admin/class-perf-translations.php": 74,
-                    "Admin/class-rest-cache.php": 174,
-                    "Admin/class-rest-settings.php": 175,
-                    "Admin/class-rest.php": 172,
-                    "Admin/class-wppo-cli-command.php": 192,
+                    "Admin/class-rest-cache.php": 175,
+                    "Admin/class-rest-settings.php": 176,
+                    "Admin/class-rest.php": 173,
+                    "Admin/class-wppo-cli-command.php": 193,
                     "Assets/class-asset-manager.php": 126,
                     "Assets/class-css-combine.php": 137,
                     "Assets/class-css-safelist.php": 138,
-                    "Assets/class-google-fonts.php": 149,
-                    "Assets/class-script-strategy.php": 179,
+                    "Assets/class-google-fonts.php": 150,
+                    "Assets/class-script-strategy.php": 180,
                     "CSS/class-ccss-store.php": 136,
                     "CSS/class-critical-css.php": 135,
-                    "CSS/class-used-css.php": 187,
+                    "CSS/class-used-css.php": 188,
                     "Cache/class-advanced-cache-handler.php": 125,
                     "Cache/class-bfcache.php": 73,
                     "Cache/class-cache-capacity.php": 128,
@@ -12999,16 +13144,16 @@
                     "Cache/class-cache-key.php": 130,
                     "Cache/class-cache.php": 127,
                     "Cache/class-dropin-registry.php": 145,
-                    "Cache/class-object-cache.php": 166,
-                    "Cache/class-redis-config-policy.php": 167,
+                    "Cache/class-object-cache.php": 167,
+                    "Cache/class-redis-config-policy.php": 168,
                     "Compatibility/class-core-tweaks.php": 134,
                     "Compatibility/class-llms.php": 71,
                     "Core/class-activate.php": 123,
                     "Core/class-deactivate.php": 144,
                     "Core/class-hook-registry.php": 82,
-                    "Core/class-loader-map.php": 162,
-                    "Core/class-main.php": 164,
-                    "Core/class-runtime-state.php": 173,
+                    "Core/class-loader-map.php": 163,
+                    "Core/class-main.php": 165,
+                    "Core/class-runtime-state.php": 174,
                     "Core/class-wp-version.php": 67,
                     "Database/class-database-cleanup-runner.php": 143,
                     "Database/class-database-cleanup.php": 142,
@@ -13016,57 +13161,58 @@
                     "Edge/class-cdn.php": 80,
                     "Edge/class-cloudflare-purger.php": 133,
                     "Edge/class-edge-cache.php": 77,
+                    "Edge/class-edge-purge-coordinator.php": 147,
                     "Edge/class-edge-purger.php": 79,
                     "Edge/class-header-emitter.php": 69,
-                    "Edge/class-htaccess-handler.php": 152,
+                    "Edge/class-htaccess-handler.php": 153,
                     "Edge/class-server-rules.php": 68,
-                    "Images/class-image-optimisation.php": 154,
-                    "Images/class-img-converter.php": 156,
-                    "Images/class-lcp-preload.php": 157,
+                    "Images/class-image-optimisation.php": 155,
+                    "Images/class-img-converter.php": 157,
+                    "Images/class-lcp-preload.php": 158,
                     "Insight/class-ai-adaptive.php": 75,
                     "Insight/class-ai-anomaly.php": 76,
-                    "Insight/class-insight-query.php": 155,
+                    "Insight/class-insight-query.php": 156,
                     "Insight/class-od-bridge.php": 72,
-                    "Insight/class-pagespeed.php": 169,
-                    "Insight/class-rum.php": 176,
-                    "Insight/class-suggestion-engine.php": 184,
-                    "Insight/class-system-info.php": 185,
-                    "Insight/class-telemetry.php": 186,
+                    "Insight/class-pagespeed.php": 170,
+                    "Insight/class-rum.php": 177,
+                    "Insight/class-suggestion-engine.php": 185,
+                    "Insight/class-system-info.php": 186,
+                    "Insight/class-telemetry.php": 187,
                     "Integrations/class-builder-purge-watcher.php": 81,
                     "Integrations/class-litespeed-crawler.php": 98,
                     "Integrations/class-litespeed-esi.php": 99,
                     "Integrations/class-litespeed-integration.php": 70,
-                    "Integrations/class-woo-detect.php": 190,
+                    "Integrations/class-woo-detect.php": 191,
                     "Scheduler/class-cron.php": 139,
                     "Scheduler/class-job-registry.php": 140,
                     "Scheduler/class-preload-transport.php": 141,
-                    "Scheduler/class-scheduler.php": 178,
-                    "Settings/class-sandbox-preview.php": 177,
-                    "Settings/class-settings-command.php": 182,
-                    "Settings/class-settings-migrations.php": 181,
-                    "Settings/class-settings-store.php": 183,
-                    "Support/class-filesystem.php": 148,
-                    "Support/class-http.php": 153,
-                    "Support/class-log.php": 163,
-                    "Support/class-url.php": 188,
+                    "Scheduler/class-scheduler.php": 179,
+                    "Settings/class-sandbox-preview.php": 178,
+                    "Settings/class-settings-command.php": 183,
+                    "Settings/class-settings-migrations.php": 182,
+                    "Settings/class-settings-store.php": 184,
+                    "Support/class-filesystem.php": 149,
+                    "Support/class-http.php": 154,
+                    "Support/class-log.php": 164,
+                    "Support/class-url.php": 189,
                     "Support/trait-purge-logger.php": 78
                 },
                 "external_classes": [],
                 "external_functions": {
-                    "basename": 269,
+                    "basename": 270,
                     "class_exists": 26,
-                    "count": 255,
+                    "count": 256,
                     "defined": 22,
-                    "explode": 254,
-                    "in_array": 262,
-                    "ltrim": 291,
-                    "strlen": 295,
-                    "strpos": 245,
-                    "substr": 295
+                    "explode": 255,
+                    "in_array": 263,
+                    "ltrim": 292,
+                    "strlen": 296,
+                    "strpos": 246,
+                    "substr": 296
                 },
                 "wordpress_functions": [],
                 "filesystem_dependencies": {
-                    "basename": 269
+                    "basename": 270
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -13079,7 +13225,7 @@
             "compatibility_dependencies": [],
             "loader_dependencies": [],
             "documentation_references": {
-                "PerformanceOptimise\\Inc\\Cache": 279
+                "PerformanceOptimise\\Inc\\Cache": 280
             },
             "delegating_methods": [],
             "hooks": [],
@@ -27572,6 +27718,52 @@
             "boundary_violation": ""
         },
         {
+            "from": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+            "to": "PerformanceOptimise\\Inc\\CDN_Purger",
+            "from_file": "includes/Edge/class-edge-purge-coordinator.php",
+            "to_file": "includes/Edge/class-cdn-purger.php",
+            "from_domain": "Edge",
+            "to_domain": "Edge",
+            "classifications": [
+                "compatibility",
+                "runtime"
+            ],
+            "kinds": [
+                "class_exists",
+                "class_reference",
+                "static_call"
+            ],
+            "lines": [
+                59
+            ],
+            "evidence_count": 1,
+            "cross_domain": false,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+            "to": "PerformanceOptimise\\Inc\\Edge_Purger",
+            "from_file": "includes/Edge/class-edge-purge-coordinator.php",
+            "to_file": "includes/Edge/class-edge-purger.php",
+            "from_domain": "Edge",
+            "to_domain": "Edge",
+            "classifications": [
+                "compatibility",
+                "runtime"
+            ],
+            "kinds": [
+                "class_exists",
+                "class_reference",
+                "static_call"
+            ],
+            "lines": [
+                60
+            ],
+            "evidence_count": 1,
+            "cross_domain": false,
+            "boundary_violation": ""
+        },
+        {
             "from": "PerformanceOptimise\\Inc\\Edge_Purger",
             "to": "PerformanceOptimise\\Inc\\Cloudflare_Purger",
             "from_file": "includes/Edge/class-edge-purger.php",
@@ -27842,8 +28034,8 @@
                 "static_call"
             ],
             "lines": [
-                454,
-                455
+                451,
+                452
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -27886,8 +28078,8 @@
                 "static_call"
             ],
             "lines": [
-                444,
-                445
+                441,
+                442
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -27933,34 +28125,14 @@
                 "class_string_reference"
             ],
             "lines": [
+                421,
+                422,
+                423,
                 424,
                 425,
-                426,
-                427,
-                428,
-                429
+                426
             ],
             "evidence_count": 6,
-            "cross_domain": true,
-            "boundary_violation": ""
-        },
-        {
-            "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-            "to": "PerformanceOptimise\\Inc\\CDN_Purger",
-            "from_file": "includes/Core/class-hook-registry.php",
-            "to_file": "includes/Edge/class-cdn-purger.php",
-            "from_domain": "Core",
-            "to_domain": "Edge",
-            "classifications": [
-                "runtime"
-            ],
-            "kinds": [
-                "class_string_reference"
-            ],
-            "lines": [
-                417
-            ],
-            "evidence_count": 1,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -27978,10 +28150,10 @@
                 "class_string_reference"
             ],
             "lines": [
-                513,
-                520,
-                521,
-                522
+                510,
+                517,
+                518,
+                519
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -28010,24 +28182,21 @@
         },
         {
             "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-            "to": "PerformanceOptimise\\Inc\\Edge_Purger",
+            "to": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
             "from_file": "includes/Core/class-hook-registry.php",
-            "to_file": "includes/Edge/class-edge-purger.php",
+            "to_file": "includes/Edge/class-edge-purge-coordinator.php",
             "from_domain": "Core",
             "to_domain": "Edge",
             "classifications": [
-                "compatibility",
                 "runtime"
             ],
             "kinds": [
-                "class_exists",
                 "class_string_reference"
             ],
             "lines": [
-                419,
-                420
+                418
             ],
-            "evidence_count": 2,
+            "evidence_count": 1,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -28045,7 +28214,7 @@
                 "class_string_reference"
             ],
             "lines": [
-                583
+                580
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -28090,8 +28259,8 @@
                 "static_call"
             ],
             "lines": [
-                645,
-                646
+                642,
+                643
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -28115,8 +28284,8 @@
                 "static_call"
             ],
             "lines": [
-                637,
-                638
+                634,
+                635
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -28138,13 +28307,13 @@
                 "class_string_reference"
             ],
             "lines": [
+                430,
+                431,
+                432,
                 433,
                 434,
                 435,
-                436,
-                437,
-                438,
-                440
+                437
             ],
             "evidence_count": 7,
             "cross_domain": true,
@@ -28172,17 +28341,17 @@
                 225,
                 379,
                 380,
-                602,
+                599,
+                600,
                 603,
-                606,
+                604,
                 607,
-                610,
+                611,
+                612,
+                613,
                 614,
-                615,
-                616,
-                617,
-                622,
-                645
+                619,
+                642
             ],
             "evidence_count": 17,
             "cross_domain": false,
@@ -28202,7 +28371,7 @@
                 "class_string_reference"
             ],
             "lines": [
-                565
+                562
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -28225,8 +28394,8 @@
                 "static_call"
             ],
             "lines": [
-                449,
-                450
+                446,
+                447
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -28334,7 +28503,7 @@
                 "class_string_reference"
             ],
             "lines": [
-                574
+                571
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -34046,6 +34215,7 @@
             "PerformanceOptimise\\Inc\\Deactivate": 1,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 3,
             "PerformanceOptimise\\Inc\\Google_Fonts": 4,
@@ -34132,11 +34302,12 @@
             "PerformanceOptimise\\Inc\\Deactivate": 12,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 2,
             "PerformanceOptimise\\Inc\\Edge_Purger": 4,
             "PerformanceOptimise\\Inc\\Filesystem": 4,
             "PerformanceOptimise\\Inc\\Google_Fonts": 3,
             "PerformanceOptimise\\Inc\\Header_Emitter": 0,
-            "PerformanceOptimise\\Inc\\Hook_Registry": 22,
+            "PerformanceOptimise\\Inc\\Hook_Registry": 21,
             "PerformanceOptimise\\Inc\\Htaccess_Handler": 3,
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 4,
@@ -34218,7 +34389,8 @@
             "PerformanceOptimise\\Inc\\Deactivate": 1,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 12,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
-            "PerformanceOptimise\\Inc\\Edge_Purger": 4,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 1,
+            "PerformanceOptimise\\Inc\\Edge_Purger": 3,
             "PerformanceOptimise\\Inc\\Filesystem": 36,
             "PerformanceOptimise\\Inc\\Google_Fonts": 6,
             "PerformanceOptimise\\Inc\\Header_Emitter": 15,
@@ -34304,11 +34476,12 @@
             "PerformanceOptimise\\Inc\\Deactivate": 38,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 7,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 2,
             "PerformanceOptimise\\Inc\\Edge_Purger": 10,
             "PerformanceOptimise\\Inc\\Filesystem": 7,
             "PerformanceOptimise\\Inc\\Google_Fonts": 16,
             "PerformanceOptimise\\Inc\\Header_Emitter": 0,
-            "PerformanceOptimise\\Inc\\Hook_Registry": 65,
+            "PerformanceOptimise\\Inc\\Hook_Registry": 63,
             "PerformanceOptimise\\Inc\\Htaccess_Handler": 19,
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 59,
@@ -34390,6 +34563,7 @@
             "PerformanceOptimise\\Inc\\Deactivate": 1,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 2,
             "PerformanceOptimise\\Inc\\Google_Fonts": 4,
@@ -34476,11 +34650,12 @@
             "PerformanceOptimise\\Inc\\Deactivate": 12,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 2,
             "PerformanceOptimise\\Inc\\Edge_Purger": 4,
             "PerformanceOptimise\\Inc\\Filesystem": 4,
             "PerformanceOptimise\\Inc\\Google_Fonts": 3,
             "PerformanceOptimise\\Inc\\Header_Emitter": 0,
-            "PerformanceOptimise\\Inc\\Hook_Registry": 22,
+            "PerformanceOptimise\\Inc\\Hook_Registry": 21,
             "PerformanceOptimise\\Inc\\Htaccess_Handler": 3,
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 4,
@@ -34545,7 +34720,7 @@
             "PerformanceOptimise\\Inc\\Bfcache": 1,
             "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 4,
             "PerformanceOptimise\\Inc\\CDN": 6,
-            "PerformanceOptimise\\Inc\\CDN_Purger": 0,
+            "PerformanceOptimise\\Inc\\CDN_Purger": 1,
             "PerformanceOptimise\\Inc\\Cache": 9,
             "PerformanceOptimise\\Inc\\Cache_Capacity": 0,
             "PerformanceOptimise\\Inc\\Cache_Invalidator": 0,
@@ -34562,6 +34737,7 @@
             "PerformanceOptimise\\Inc\\Deactivate": 0,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 0,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 1,
             "PerformanceOptimise\\Inc\\Google_Fonts": 1,
@@ -34648,11 +34824,12 @@
             "PerformanceOptimise\\Inc\\Deactivate": 5,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 2,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 1,
             "PerformanceOptimise\\Inc\\Google_Fonts": 1,
             "PerformanceOptimise\\Inc\\Header_Emitter": 0,
-            "PerformanceOptimise\\Inc\\Hook_Registry": 10,
+            "PerformanceOptimise\\Inc\\Hook_Registry": 9,
             "PerformanceOptimise\\Inc\\Htaccess_Handler": 3,
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 2,
@@ -34734,6 +34911,7 @@
             "PerformanceOptimise\\Inc\\Deactivate": 0,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 0,
             "PerformanceOptimise\\Inc\\Edge_Purger": 0,
             "PerformanceOptimise\\Inc\\Filesystem": 0,
             "PerformanceOptimise\\Inc\\Google_Fonts": 0,
@@ -34820,6 +34998,7 @@
             "PerformanceOptimise\\Inc\\Deactivate": 0,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
+            "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 0,
             "PerformanceOptimise\\Inc\\Edge_Purger": 0,
             "PerformanceOptimise\\Inc\\Filesystem": 0,
             "PerformanceOptimise\\Inc\\Google_Fonts": 0,
@@ -34902,6 +35081,7 @@
                 "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                 "PerformanceOptimise\\Inc\\Dropin_Registry",
                 "PerformanceOptimise\\Inc\\Edge_Cache",
+                "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
                 "PerformanceOptimise\\Inc\\Edge_Purger",
                 "PerformanceOptimise\\Inc\\Filesystem",
                 "PerformanceOptimise\\Inc\\Google_Fonts",
@@ -35033,6 +35213,7 @@
                     "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                     "PerformanceOptimise\\Inc\\Dropin_Registry",
                     "PerformanceOptimise\\Inc\\Edge_Cache",
+                    "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
                     "PerformanceOptimise\\Inc\\Edge_Purger",
                     "PerformanceOptimise\\Inc\\Filesystem",
                     "PerformanceOptimise\\Inc\\Google_Fonts",
@@ -36524,6 +36705,32 @@
                         ]
                     },
                     {
+                        "from": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+                        "to": "PerformanceOptimise\\Inc\\CDN_Purger",
+                        "classifications": [
+                            "compatibility",
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_exists",
+                            "class_reference",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+                        "to": "PerformanceOptimise\\Inc\\Edge_Purger",
+                        "classifications": [
+                            "compatibility",
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_exists",
+                            "class_reference",
+                            "static_call"
+                        ]
+                    },
+                    {
                         "from": "PerformanceOptimise\\Inc\\Edge_Purger",
                         "to": "PerformanceOptimise\\Inc\\Edge_Cache",
                         "classifications": [
@@ -36675,16 +36882,6 @@
                     },
                     {
                         "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-                        "to": "PerformanceOptimise\\Inc\\CDN_Purger",
-                        "classifications": [
-                            "runtime"
-                        ],
-                        "kinds": [
-                            "class_string_reference"
-                        ]
-                    },
-                    {
-                        "from": "PerformanceOptimise\\Inc\\Hook_Registry",
                         "to": "PerformanceOptimise\\Inc\\Critical_CSS",
                         "classifications": [
                             "runtime"
@@ -36705,13 +36902,11 @@
                     },
                     {
                         "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-                        "to": "PerformanceOptimise\\Inc\\Edge_Purger",
+                        "to": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
                         "classifications": [
-                            "compatibility",
                             "runtime"
                         ],
                         "kinds": [
-                            "class_exists",
                             "class_string_reference"
                         ]
                     },
@@ -38967,6 +39162,7 @@
                         "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                         "PerformanceOptimise\\Inc\\Dropin_Registry",
                         "PerformanceOptimise\\Inc\\Edge_Cache",
+                        "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
                         "PerformanceOptimise\\Inc\\Edge_Purger",
                         "PerformanceOptimise\\Inc\\Filesystem",
                         "PerformanceOptimise\\Inc\\Google_Fonts",
@@ -40458,6 +40654,32 @@
                             ]
                         },
                         {
+                            "from": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+                            "to": "PerformanceOptimise\\Inc\\CDN_Purger",
+                            "classifications": [
+                                "compatibility",
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_exists",
+                                "class_reference",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+                            "to": "PerformanceOptimise\\Inc\\Edge_Purger",
+                            "classifications": [
+                                "compatibility",
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_exists",
+                                "class_reference",
+                                "static_call"
+                            ]
+                        },
+                        {
                             "from": "PerformanceOptimise\\Inc\\Edge_Purger",
                             "to": "PerformanceOptimise\\Inc\\Edge_Cache",
                             "classifications": [
@@ -40609,16 +40831,6 @@
                         },
                         {
                             "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-                            "to": "PerformanceOptimise\\Inc\\CDN_Purger",
-                            "classifications": [
-                                "runtime"
-                            ],
-                            "kinds": [
-                                "class_string_reference"
-                            ]
-                        },
-                        {
-                            "from": "PerformanceOptimise\\Inc\\Hook_Registry",
                             "to": "PerformanceOptimise\\Inc\\Critical_CSS",
                             "classifications": [
                                 "runtime"
@@ -40639,13 +40851,11 @@
                         },
                         {
                             "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-                            "to": "PerformanceOptimise\\Inc\\Edge_Purger",
+                            "to": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
                             "classifications": [
-                                "compatibility",
                                 "runtime"
                             ],
                             "kinds": [
-                                "class_exists",
                                 "class_string_reference"
                             ]
                         },
@@ -43946,13 +44156,13 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Hook_Registry",
                 "file": "includes/Core/class-hook-registry.php",
-                "score": 42.69,
+                "score": 40.69,
                 "fan_in": 1,
-                "fan_out": 22,
+                "fan_out": 21,
                 "compatibility_in": 0,
-                "cross_domain": 19,
+                "cross_domain": 18,
                 "static_state": false,
-                "lines": 692
+                "lines": 689
             },
             {
                 "node": "PerformanceOptimise\\Inc\\Abilities",
@@ -47703,8 +47913,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    454,
-                    455
+                    451,
+                    452
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -47728,8 +47938,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    444,
-                    445
+                    441,
+                    442
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -47777,35 +47987,14 @@
                     "class_string_reference"
                 ],
                 "lines": [
+                    421,
+                    422,
+                    423,
                     424,
                     425,
-                    426,
-                    427,
-                    428,
-                    429
+                    426
                 ],
                 "evidence_count": 6,
-                "cross_domain": true,
-                "boundary_violation": "",
-                "feature_to_feature": false
-            },
-            {
-                "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-                "to": "PerformanceOptimise\\Inc\\CDN_Purger",
-                "from_file": "includes/Core/class-hook-registry.php",
-                "to_file": "includes/Edge/class-cdn-purger.php",
-                "from_domain": "Core",
-                "to_domain": "Edge",
-                "classifications": [
-                    "runtime"
-                ],
-                "kinds": [
-                    "class_string_reference"
-                ],
-                "lines": [
-                    417
-                ],
-                "evidence_count": 1,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -47824,10 +48013,10 @@
                     "class_string_reference"
                 ],
                 "lines": [
-                    513,
-                    520,
-                    521,
-                    522
+                    510,
+                    517,
+                    518,
+                    519
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -47858,24 +48047,21 @@
             },
             {
                 "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-                "to": "PerformanceOptimise\\Inc\\Edge_Purger",
+                "to": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
                 "from_file": "includes/Core/class-hook-registry.php",
-                "to_file": "includes/Edge/class-edge-purger.php",
+                "to_file": "includes/Edge/class-edge-purge-coordinator.php",
                 "from_domain": "Core",
                 "to_domain": "Edge",
                 "classifications": [
-                    "compatibility",
                     "runtime"
                 ],
                 "kinds": [
-                    "class_exists",
                     "class_string_reference"
                 ],
                 "lines": [
-                    419,
-                    420
+                    418
                 ],
-                "evidence_count": 2,
+                "evidence_count": 1,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -47894,7 +48080,7 @@
                     "class_string_reference"
                 ],
                 "lines": [
-                    583
+                    580
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -47941,8 +48127,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    645,
-                    646
+                    642,
+                    643
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -47967,8 +48153,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    637,
-                    638
+                    634,
+                    635
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -47991,13 +48177,13 @@
                     "class_string_reference"
                 ],
                 "lines": [
+                    430,
+                    431,
+                    432,
                     433,
                     434,
                     435,
-                    436,
-                    437,
-                    438,
-                    440
+                    437
                 ],
                 "evidence_count": 7,
                 "cross_domain": true,
@@ -48018,7 +48204,7 @@
                     "class_string_reference"
                 ],
                 "lines": [
-                    565
+                    562
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -48042,8 +48228,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    449,
-                    450
+                    446,
+                    447
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -48135,7 +48321,7 @@
                     "class_string_reference"
                 ],
                 "lines": [
-                    574
+                    571
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -56610,6 +56796,52 @@
                 "boundary_violation": ""
             },
             {
+                "from": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+                "to": "PerformanceOptimise\\Inc\\CDN_Purger",
+                "from_file": "includes/Edge/class-edge-purge-coordinator.php",
+                "to_file": "includes/Edge/class-cdn-purger.php",
+                "from_domain": "Edge",
+                "to_domain": "Edge",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_exists",
+                    "class_reference",
+                    "static_call"
+                ],
+                "lines": [
+                    59
+                ],
+                "evidence_count": 1,
+                "cross_domain": false,
+                "boundary_violation": ""
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+                "to": "PerformanceOptimise\\Inc\\Edge_Purger",
+                "from_file": "includes/Edge/class-edge-purge-coordinator.php",
+                "to_file": "includes/Edge/class-edge-purger.php",
+                "from_domain": "Edge",
+                "to_domain": "Edge",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_exists",
+                    "class_reference",
+                    "static_call"
+                ],
+                "lines": [
+                    60
+                ],
+                "evidence_count": 1,
+                "cross_domain": false,
+                "boundary_violation": ""
+            },
+            {
                 "from": "PerformanceOptimise\\Inc\\Edge_Purger",
                 "to": "PerformanceOptimise\\Inc\\Cloudflare_Purger",
                 "from_file": "includes/Edge/class-edge-purger.php",
@@ -56779,8 +57011,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    454,
-                    455
+                    451,
+                    452
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -56803,8 +57035,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    444,
-                    445
+                    441,
+                    442
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -56850,12 +57082,12 @@
                     "class_string_reference"
                 ],
                 "lines": [
+                    421,
+                    422,
+                    423,
                     424,
                     425,
-                    426,
-                    427,
-                    428,
-                    429
+                    426
                 ],
                 "evidence_count": 6,
                 "cross_domain": true,
@@ -56875,35 +57107,12 @@
                     "class_string_reference"
                 ],
                 "lines": [
-                    513,
-                    520,
-                    521,
-                    522
+                    510,
+                    517,
+                    518,
+                    519
                 ],
                 "evidence_count": 4,
-                "cross_domain": true,
-                "boundary_violation": ""
-            },
-            {
-                "from": "PerformanceOptimise\\Inc\\Hook_Registry",
-                "to": "PerformanceOptimise\\Inc\\Edge_Purger",
-                "from_file": "includes/Core/class-hook-registry.php",
-                "to_file": "includes/Edge/class-edge-purger.php",
-                "from_domain": "Core",
-                "to_domain": "Edge",
-                "classifications": [
-                    "compatibility",
-                    "runtime"
-                ],
-                "kinds": [
-                    "class_exists",
-                    "class_string_reference"
-                ],
-                "lines": [
-                    419,
-                    420
-                ],
-                "evidence_count": 2,
                 "cross_domain": true,
                 "boundary_violation": ""
             },
@@ -56946,8 +57155,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    645,
-                    646
+                    642,
+                    643
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -56971,8 +57180,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    637,
-                    638
+                    634,
+                    635
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -56994,13 +57203,13 @@
                     "class_string_reference"
                 ],
                 "lines": [
+                    430,
+                    431,
+                    432,
                     433,
                     434,
                     435,
-                    436,
-                    437,
-                    438,
-                    440
+                    437
                 ],
                 "evidence_count": 7,
                 "cross_domain": true,
@@ -57028,17 +57237,17 @@
                     225,
                     379,
                     380,
-                    602,
+                    599,
+                    600,
                     603,
-                    606,
+                    604,
                     607,
-                    610,
+                    611,
+                    612,
+                    613,
                     614,
-                    615,
-                    616,
-                    617,
-                    622,
-                    645
+                    619,
+                    642
                 ],
                 "evidence_count": 17,
                 "cross_domain": false,
@@ -57061,8 +57270,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    449,
-                    450
+                    446,
+                    447
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,

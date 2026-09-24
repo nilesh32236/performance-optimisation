@@ -1081,6 +1081,16 @@ phase3_items:
         - 'CDN_Purger owns the legacy CDN service/LS sync/Varnish branch, while Edge_Purger owns Cloudflare/Bunny edge-worker purges and URL-scoped behavior.'
         - 'A narrow Edge_Purge_Coordinator can own event fan-out and provider de-duplication while leaving LiteSpeed sync, transport locks, failure logging, and response behavior in existing owners.'
       decision: 'Proceed test-first with a dependency-light Edge_Purge_Coordinator; route the shared wppo_after_cache_clear listener through one coordinator and preserve CDN/Edge transport, LiteSpeed, Varnish, URL-scope, lock, and logging contracts.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'includes/Edge/class-edge-purge-coordinator.php'
+        hook: 'Hook_Registry replaces the CDN_Purger priority-10 and Edge_Purger priority-20 listeners with one Edge_Purge_Coordinator::purge_after_cache_clear listener at priority 10 with two accepted arguments'
+        dedup: 'Temporary pre_http_request and http_api_debug callbacks reuse the first response only for an identical Cloudflare purge_everything request in the same event; distinct zones and all other provider requests remain independent'
+        compatibility: 'CDN_Purger and Edge_Purger public contracts, Cloudflare_Purger transport contracts, and LiteSpeed_Integration remain unchanged; legacy service/LiteSpeed/Varnish, edge Cloudflare/Bunny, single-page scope, edge locks, provider failure logging, invalid-payload TypeError, and successful no-data behavior are preserved'
+        loader: 'Loader_Map::fallback_map()["Edge_Purge_Coordinator"] with explicit PHPUnit bootstrap loading for stale local classmaps'
+        graph_delta: '82 inventory files / 85 graph nodes / 369 edges; shared purge listeners 2->1; overlapping full-zone Cloudflare transport calls per event up to 2->1; feature-to-feature edges remain 46; compatibility edges 195->196; bridge candidates 231->232; runtime SCC 63->64 nodes / 317->318 internal edges'
+        tests: 'EdgePurgeCoordinatorTest, HookRegistryParityTest, LoaderMapTest, ArchitectureInventoryTest, CDNPurgerTest, CloudflarePurgerFilesTest, and LiteSpeedIntegrationTest'
+        verification: 'Focused coordinator/Hook_Registry/Loader_Map/architecture/CDN/Cloudflare/LiteSpeed tests pass (61 tests / 13,799 assertions); focused PHPStan on Edge_Purge_Coordinator passes; full PHPCS passes via vendor/bin/phpcs because the composer executable is unavailable; npm run lint:js passes with 2 pre-existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing console warnings; full PHPUnit passes 2,746 tests / 25,042 assertions (7 PHPUnit deprecations, 9 skipped; existing warning output); npm run build passes with the existing entrypoint-size warning and no build diff; generator --check and git diff --check pass.'
 
   - id: P3-013
     title: 'Main options and lifecycle ownership cleanup'

@@ -1985,7 +1985,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 692,
+        "lines": 689,
         "methods": 7,
         "public_methods": 7,
         "large_methods": 1,
@@ -1993,7 +1993,7 @@
         "largest_method": {
             "name": "register",
             "line": 109,
-            "lines": 424
+            "lines": 421
         },
         "method_prefixes": {
             "register": 6
@@ -2064,28 +2064,27 @@
         "filesystem_dependencies": 0,
         "network_dependencies": 0,
         "database_dependencies": 0,
-        "feature_dependencies": 15,
+        "feature_dependencies": 14,
         "compat_facade_methods": 0,
         "duplicate_code_candidates": 0,
         "fan_in": 1,
-        "fan_out": 22,
+        "fan_out": 21,
         "incoming_reference_evidence": 1,
-        "outgoing_reference_evidence": 65,
+        "outgoing_reference_evidence": 63,
         "runtime_fan_in": 1,
-        "runtime_fan_out": 22,
+        "runtime_fan_out": 21,
         "compatibility_fan_in": 0,
-        "compatibility_fan_out": 10,
-        "cross_domain_edges": 19,
+        "compatibility_fan_out": 9,
+        "cross_domain_edges": 18,
         "refs": [
             "AI_Adaptive",
             "Activate",
             "Bfcache",
             "Builder_Purge_Watcher",
             "CDN",
-            "CDN_Purger",
             "Critical_CSS",
             "Database_Cleanup",
-            "Edge_Purger",
+            "Edge_Purge_Coordinator",
             "Google_Fonts",
             "Image_Optimisation",
             "LiteSpeed_ESI",
@@ -2108,7 +2107,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 323,
+        "lines": 324,
         "methods": 8,
         "public_methods": 8,
         "large_methods": 1,
@@ -2116,7 +2115,7 @@
         "largest_method": {
             "name": "fallback_map",
             "line": 119,
-            "lines": 80
+            "lines": 81
         },
         "method_prefixes": {
             "base": 1,
@@ -2554,9 +2553,9 @@
         "outgoing_reference_evidence": 17,
         "runtime_fan_in": 1,
         "runtime_fan_out": 4,
-        "compatibility_fan_in": 0,
+        "compatibility_fan_in": 1,
         "compatibility_fan_out": 2,
-        "cross_domain_edges": 4,
+        "cross_domain_edges": 3,
         "refs": [
             "Cloudflare_Purger",
             "LiteSpeed_Integration",
@@ -2715,6 +2714,60 @@
         ]
     },
     {
+        "file": "includes/Edge/class-edge-purge-coordinator.php",
+        "class": "Edge_Purge_Coordinator",
+        "fqcn": "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator",
+        "kind": "class",
+        "scope": "runtime",
+        "domain": "Edge",
+        "lines": 150,
+        "methods": 4,
+        "public_methods": 1,
+        "large_methods": 0,
+        "large_method_threshold_lines": 80,
+        "largest_method": {
+            "name": "purge_after_cache_clear",
+            "line": 41,
+            "lines": 27
+        },
+        "method_prefixes": {
+            "purge": 1,
+            "deduplicate": 1,
+            "remember": 1,
+            "cloudflare": 1
+        },
+        "hooks": [
+            "http_api_debug",
+            "pre_http_request"
+        ],
+        "static_state": false,
+        "static_properties": 0,
+        "private_state_properties": 0,
+        "protected_state_properties": 0,
+        "public_state_properties": 0,
+        "external_dependencies": 12,
+        "wordpress_dependencies": 4,
+        "filesystem_dependencies": 0,
+        "network_dependencies": 0,
+        "database_dependencies": 0,
+        "feature_dependencies": 2,
+        "compat_facade_methods": 0,
+        "duplicate_code_candidates": 0,
+        "fan_in": 1,
+        "fan_out": 2,
+        "incoming_reference_evidence": 1,
+        "outgoing_reference_evidence": 2,
+        "runtime_fan_in": 1,
+        "runtime_fan_out": 2,
+        "compatibility_fan_in": 0,
+        "compatibility_fan_out": 2,
+        "cross_domain_edges": 1,
+        "refs": [
+            "CDN_Purger",
+            "Edge_Purger"
+        ]
+    },
+    {
         "file": "includes/Edge/class-edge-purger.php",
         "class": "Edge_Purger",
         "fqcn": "PerformanceOptimise\\Inc\\Edge_Purger",
@@ -2756,13 +2809,13 @@
         "duplicate_code_candidates": 1,
         "fan_in": 2,
         "fan_out": 4,
-        "incoming_reference_evidence": 4,
+        "incoming_reference_evidence": 3,
         "outgoing_reference_evidence": 10,
         "runtime_fan_in": 2,
         "runtime_fan_out": 4,
         "compatibility_fan_in": 2,
         "compatibility_fan_out": 2,
-        "cross_domain_edges": 4,
+        "cross_domain_edges": 3,
         "refs": [
             "Cloudflare_Purger",
             "Edge_Cache",

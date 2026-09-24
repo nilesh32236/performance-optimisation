@@ -86,6 +86,7 @@ includes/
     class-cdn-purger.php
     class-cloudflare-purger.php
     class-edge-cache.php
+    class-edge-purge-coordinator.php
     class-edge-purger.php
     class-server-rules.php
     class-htaccess-handler.php
@@ -128,12 +129,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 77 | 76 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 78 | 77 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 81 | Generated schema-v2 inventory |
+| Total class inventory | 82 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 84 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 85 nodes.
 
 ## Ownership by directory
 
@@ -179,7 +180,7 @@ The dependency graph adds three procedural runtime files: the plugin entry, `uni
 
 ### Edge
 
-`Edge` owns CDN and cache-provider configuration, purge transport, server rules, `.htaccess`, and response headers. Provider fan-out can create duplicate side effects when two registrars accept the same configuration.
+`Edge` owns CDN and cache-provider configuration, cache-clear fan-out, purge transport, server rules, `.htaccess`, and response headers. `Edge_Purge_Coordinator` suppresses only identical full-zone Cloudflare transport within one event; provider adapters retain their own scope, locks, LiteSpeed sync, Varnish, Bunny, and logging behavior.
 
 ### Integrations
 

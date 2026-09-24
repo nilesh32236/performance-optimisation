@@ -144,6 +144,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Deactivate'              => 'Core/class-deactivate.php',
 				'Dropin_Registry'         => 'Cache/class-dropin-registry.php',
 				'Edge_Cache'              => 'Edge/class-edge-cache.php',
+				'Edge_Purge_Coordinator'  => 'Edge/class-edge-purge-coordinator.php',
 				'Edge_Purger'             => 'Edge/class-edge-purger.php',
 				'Filesystem'              => 'Support/class-filesystem.php',
 				'Google_Fonts'            => 'Assets/class-google-fonts.php',

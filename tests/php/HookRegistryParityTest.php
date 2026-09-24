@@ -15,6 +15,7 @@ use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\Hook_Registry;
 use PerformanceOptimise\Inc\Image_Optimisation;
 use PerformanceOptimise\Inc\Google_Fonts;
+use PerformanceOptimise\Inc\Edge_Purge_Coordinator;
 use PerformanceOptimise\Inc\LiteSpeed_Integration;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
@@ -448,6 +449,40 @@ class HookRegistryParityTest extends \PHPUnit\Framework\TestCase {
 	public function test_manifest_matches_between_main_and_registry_kitchen_sink(): void {
 		$this->install_stubs( true, '6.9', $this->wp69_probes() );
 		$this->assert_manifest_matches_between_main_and_registry( $this->kitchen_sink_options() );
+	}
+
+	/**
+	 * The shared cache-clear event has one coordinator listener only.
+	 *
+	 * @return void
+	 */
+	public function test_cache_clear_uses_single_coordinator_listener(): void {
+		$this->install_stubs( false, '6.2', $this->legacy_probes() );
+		$main = $this->make_main( $this->legacy_options() );
+		$this->register_via_registry( $main, $this->legacy_options() );
+
+		$listeners = array_values(
+			array_filter(
+				$this->recorded,
+				static function ( $entry ) {
+					if ( 'A' !== $entry[0] || 'wppo_after_cache_clear' !== $entry[1] ) {
+						return false;
+					}
+					$callback = is_array( $entry[2] ) ? (string) $entry[2][1] : '';
+					return in_array( $callback, array( 'purge_all', 'purge_after_cache_clear' ), true );
+				}
+			)
+		);
+
+		$this->assertCount( 1, $listeners );
+		$this->assertSame(
+			array( Edge_Purge_Coordinator::class, 'purge_after_cache_clear' ),
+			$listeners[0][2]
+		);
+		$this->assertSame( 10, $listeners[0][3] );
+		$this->assertSame( 2, $listeners[0][4] );
+		$this->assertStringNotContainsString( 'CDN_Purger', $this->normalize_callback( $listeners[0][2] ) );
+		$this->assertStringNotContainsString( 'Edge_Purger', $this->normalize_callback( $listeners[0][2] ) );
 	}
 
 	/**
