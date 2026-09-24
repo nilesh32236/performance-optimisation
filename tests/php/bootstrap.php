@@ -44,6 +44,8 @@ require_once __DIR__ . '/../../includes/Edge/class-edge-purge-coordinator.php';
 // P3-014/P3-015: keep local test loading deterministic when the Composer classmap predates new owners.
 require_once __DIR__ . '/../../includes/minify/class-minify-policy.php';
 require_once __DIR__ . '/../../includes/Core/class-preload-buffer-coordinator.php';
+// P3-018: keep local classmap-based tests deterministic before first autoload.
+require_once __DIR__ . '/../../includes/CSS/class-ccss-generator.php';
 
 // Load the object-cache drop-in template early so wp_cache_set() and friends
 // are declared as real PHP functions BEFORE any Brain Monkey test can

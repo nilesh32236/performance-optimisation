@@ -252,7 +252,7 @@ The current Phase 3 baseline records the starting metrics in `ARCHITECTURE-BASEL
 | `Util` fan-in / incoming evidence | 57 / 1,138 | Target down |
 | `Cache` lines / methods | 5,077 / 167 | Target down with cohesive extractions |
 | `Image_Optimisation` lines / methods | 8,999 / 183 | Target down with media or state owners |
-| `Critical_CSS` lines / methods | 6,950 / 138 | Target down with generation owners |
+| `Critical_CSS` lines / methods | 6,253 / 126 | P3-018 ratchet; keep generation-status policy in `Ccss_Generator` |
 | Largest runtime SCC | 67 nodes | Target down |
 | Compatibility-classified edges | 199 | Explain and reduce through explicit compatibility ownership |
 | Compatibility SCCs / largest | 1 / 21 nodes | Reduce; retain only documented stable adapters |

@@ -80,8 +80,9 @@ Do not split `Image_Optimisation` by arbitrary file size. Test output markup, MI
 
 | Owner | Current scope | Next ownership move |
 |---|---|---|
-| `Critical_CSS` | Generation, parsing, exclusions, budgets, rollout facade, purge/reactivity | Move remaining generation/parsing clusters after storage stays in `Ccss_Store` |
-| `Ccss_Store` | Files, staging, promotion, variants, status | Keep as the storage/status owner |
+| `Critical_CSS` | Fetch/parse/store orchestration, exclusions, budgets, frontend output, public generation facades | Keep public generation/frontend behavior; move further parsing only after lifecycle status is delegated |
+| `Ccss_Generator` | Generation status values, salted/transient status keys, bounded retry/timeout counters, Action Scheduler/WP-Cron liveness and enqueue policy | Keep the lifecycle cluster narrow; do not own file writes, frontend output, purge, image/preload, or other features |
+| `Ccss_Store` | Files, staging, promotion, variants, status projection, storage memos | Keep as the storage/status projection owner; read generation status through `Ccss_Generator` |
 | `Used_CSS` | Generation, storage, parsing, delivery, rollout, purge integration | Split storage only after it stops owning coupled purge policy |
 | `Css_Combine` | Combined CSS fetch, minify, write, inline budget | Keep in Assets; remove Cache owner bridges when safe |
 | `Css_Safelist` | Shared CSS exclusions | Keep as a small policy boundary |

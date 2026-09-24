@@ -1322,7 +1322,7 @@ phase3_items:
       rest_patterns: 48
       cli_commands: 8
       http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
-      architecture_graph: '85 inventory files / 88 graph nodes / 383 edges; generator check passed'
+      architecture_graph: '86 inventory files / 89 graph nodes / 395 edges; generator check passed'
 
   - id: P3-018
     title: 'Remaining image, CSS, and cache policy extraction'
@@ -1343,6 +1343,17 @@ phase3_items:
         - 'A fresh graph and characterization pass must choose the smallest extractable CSS generation/status cluster before issue implementation.'
         - 'Public admin/REST surfaces, generation status, cache keys, output, and data contracts must remain stable.'
       decision: 'Re-audit the fresh graph and implement one cohesive CSS generation/status extraction only; defer image media and cache purge policy.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'Ccss_Generator under CSS/ owns generation status values, salted/transient status keys, bounded retry/timeout counters, and Action Scheduler/WP-Cron job liveness/enqueue policy'
+        compatibility: 'Critical_CSS retains the public get_ccss_max_retries() and get_status_cache_for_store() facades; public generation, hook callback identity, REST/admin responses, and frontend output stay on Critical_CSS. Ccss_Store reads status directly from Ccss_Generator and keeps its test reader seam.'
+        exact_scope: 'Critical CSS generation lifecycle status/retry/queue policy only; no parser, frontend output, file promotion/clear, image/preload, cache purge, Used CSS, LiteSpeed, Redis/drop-in, or data changes.'
+        tests: 'CcssGeneratorParity1602Test plus existing CriticalCss, CcssExclusionsRetry1274, CcssSafelistChecksum, CcssStoreParity, CssInlineBudget1462, CssSafeRollout1348, CssSanitizeHmac1347, CcssChecksumRegen1388, ActionSchedulerUniquePurge1310, SaltedCacheCoverage, Rest, HookRegistryParity, and LiteSpeedIntegration suites'
+        loader: 'Lazy Loader_Map entry plus deterministic PHPUnit bootstrap require; no eager load and no PSR-4 change'
+        graph_delta: '86 inventory files / 89 graph nodes / 395 edges; compatibility 206; bridge candidates 247; Critical_CSS 6,950→6,253 lines and 138→126 methods; Ccss_Generator 586 lines / 17 methods / one request memo'
+        ratchet_result: 'Critical_CSS generation/status implementation methods 12→0 outside two public compatibility facades; Critical_CSS scheduler pending memo and salt/group/retry constants moved to one lifecycle owner; feature-to-feature edges remain 50'
+        compatibility_edge_note: 'The new Critical_CSS→Ccss_Generator and Ccss_Store→Ccss_Generator owner edges are explicit lifecycle bridges; they remain until external callers can be migrated under a later approved compatibility-removal item.'
+        verification: 'Focused Ccss_Generator/Critical_CSS/Ccss_Store/cache/loader/architecture set passes 125 tests / 14,631 assertions; full PHPUnit passes 2,776 tests / 25,757 assertions (9 skipped, 7 existing deprecations); full PHPCS passes; focused Ccss_Generator PHPStan passes; npm run lint:js passes with 2 existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing warnings; npm run build passes with existing entrypoint-size warning; generator --check and git diff --check pass'
 
   - id: P3-024
     title: 'AI model persistence and learning ownership'

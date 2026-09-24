@@ -116,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 85 files: 81 runtime plugin files under `includes/` (80 class-like nodes plus the Redis helper), 4 protected minify boundary files, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 86 files: 82 runtime plugin files under `includes/` (81 class-like nodes plus the Redis helper), 4 protected minify boundary files, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -165,7 +165,8 @@ The schema-v2 inventory tracks 85 files: 81 runtime plugin files under `includes
 | `Insight/class-od-bridge.php` | Optimization Detective bridge (real-visit LCP data) |
 | `Cache/class-bfcache.php` | bfcache for logged-in users (no-store removal + session invalidation) |
 | `Assets/class-google-fonts.php` | Self-host Google Fonts (download + local serving) |
-| `CSS/class-used-css.php` / `CSS/class-critical-css.php` | Per-URL used CSS + per-template critical CSS |
+| `CSS/class-used-css.php` / `CSS/class-critical-css.php` | Per-URL used CSS + Critical CSS fetch/parse/output and public generation/frontend facades |
+| `CSS/class-ccss-generator.php` / `CSS/class-ccss-store.php` | Critical CSS generation status/retry/queue lifecycle + file storage/status projection; no frontend output or purge ownership |
 | `Admin/class-wppo-cli-command.php` | `wp wppo` CLI (8 subcommands: cache, database, image, settings, object-cache, pagespeed, system-info, verify) |
 
 ### Caching stack

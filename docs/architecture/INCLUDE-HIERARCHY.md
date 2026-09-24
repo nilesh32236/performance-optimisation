@@ -65,6 +65,7 @@ includes/
 
   CSS/
     class-critical-css.php
+    class-ccss-generator.php
     class-ccss-store.php
     class-used-css.php
 
@@ -131,12 +132,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 80 | 79 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 81 | 80 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers/policy | 4 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total inventory entries | 85 | Generated schema-v2 inventory |
+| Total inventory entries | 86 | Generated schema-v2 inventory |
 
-The dependency graph adds four procedural runtime files: the plugin entry, `uninstall.php`, the Redis helper, and `templates/perf-translations.php`. Combined with 84 class-like nodes, the graph has 88 nodes.
+The dependency graph adds four procedural runtime files: the plugin entry, `uninstall.php`, the Redis helper, and `templates/perf-translations.php`. Combined with 85 class-like nodes, the graph has 89 nodes.
 
 ## Ownership by directory
 
@@ -170,7 +171,7 @@ The dependency graph adds four procedural runtime files: the plugin entry, `unin
 
 ### CSS
 
-`CSS` owns critical and used CSS generation, delivery, policy, and status. `Ccss_Store` owns critical CSS storage. Used CSS still owns a coupled purge path, which the graph records for later coordination.
+`CSS` owns critical and used CSS generation, delivery, policy, and status. `Ccss_Generator` owns Critical CSS status values, retry/timeout state, and queue liveness/enqueue policy; `Ccss_Store` owns critical CSS file storage and status projection. `Critical_CSS` retains public generation/frontend facades and actual fetch/parse/output orchestration. Used CSS still owns a coupled purge path, which the graph records for later coordination.
 
 ### Database
 

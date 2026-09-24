@@ -17,7 +17,7 @@
  * may load first via Loader_Map without a circular-include failure. The
  * generation-status read additionally supports an injected callable seam
  * ({@see set_status_cache_reader()}) so unit tests can break the
- * Ccss_Store -> Critical_CSS edge entirely.
+ * Ccss_Store status-reader edge entirely.
  *
  * @since convention: methods moved verbatim from Critical_CSS retain their
  * original @since tags to preserve history; only new store infrastructure
@@ -128,11 +128,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		/**
 		 * Injected generation-status reader (FUT-001 review).
 		 *
-		 * Breaks the Ccss_Store -> Critical_CSS static edge for unit
-		 * isolation: when set, {@see get_status_all()} calls this instead
-		 * of Critical_CSS::get_status_cache_for_store(). Production leaves
-		 * it null so the salted/transient source of truth stays
-		 * single-sourced on Critical_CSS. Not cleared by
+		 * Breaks the Ccss_Store status reader seam for unit isolation: when
+		 * set, {@see get_status_all()} calls this instead of the canonical
+		 * Ccss_Generator reader. Production leaves it null so the
+		 * salted/transient source of truth stays single-sourced on
+		 * Ccss_Generator. Not cleared by
 		 * {@see reset_ccss_memo()} — reset explicitly with null.
 		 *
 		 * @since 2.4.0
@@ -876,7 +876,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 					);
 				} else {
 					$reader       = self::$status_cache_reader;
-					$cache_status = is_callable( $reader ) ? $reader( $hash ) : Critical_CSS::get_status_cache_for_store( $hash );
+					$cache_status = is_callable( $reader ) ? $reader( $hash ) : Ccss_Generator::get_status_cache( $hash );
 					if ( ! is_string( $cache_status ) || ! in_array( $cache_status, $allowed, true ) ) {
 						$cache_status = 'none';
 					} elseif ( 'ready' === $cache_status ) {
