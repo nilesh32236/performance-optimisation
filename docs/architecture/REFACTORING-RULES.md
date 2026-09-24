@@ -18,6 +18,24 @@ A directory move, method extraction, bug fix, and facade removal do not belong i
 
 ## Issue gate
 
+- There is **no standalone issue-analysis workflow**. The pipeline is:
+  issue labeled `autofix-trigger` (or trusted `/fix` comment on a plain issue)
+  → `fix-issue` job in `wppo-ai-review.yml` (branch `autofix/issue-N`, PR labeled `autofix`)
+  → `review` + `autofix` loop → `autofix:ready` → auto-merge consideration.
+- Campaign issues are created **without** `autofix-trigger` so design review happens
+  first. The label (or trusted `/fix`) is added only when analysis questions are resolved.
+- **Security policy (issue #1564):** every `/fix` comment trigger on `fix-issue`
+  (plain issue) and `autofix` (PR comment) allows only trusted
+  `github.event.comment.author_association` values `OWNER`, `MEMBER`, or
+  `COLLABORATOR`; the job-level `if` rejects all other associations before any
+  secret-bearing step runs. Label triggers (`issues.labeled` + `autofix-trigger`,
+  `pull_request.labeled` + `autofix`) remain maintainer-controlled because applying
+  labels requires triage/write permission.
+- **Merge gate:** branch loop idle (all workflows, not just one) + CI clean +
+  manual diff review. Never merge mid-loop. Build-asset conflicts: keep `--ours`,
+  rebuild, commit, push with lease.
+- Watchdog `wppo-agent-rules.md` wins over any loop prompt on conflicts.
+
 Every architecture issue records:
 
 - current owner and evidence;

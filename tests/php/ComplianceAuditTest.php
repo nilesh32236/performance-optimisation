@@ -157,6 +157,24 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Comment-triggered AI fixers must reject untrusted commenter associations.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_ai_fixer_comment_triggers_require_trusted_association(): void {
+		$workflow = $this->read_plugin_file( '.github/workflows/wppo-ai-review.yml' );
+		$this->assertStringContainsString( 'github.event.issue.pull_request == null', $workflow );
+		$this->assertStringContainsString( 'github.event.issue.pull_request != null', $workflow );
+		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "contains(github.event.comment.body || '', '/fix')" ) );
+		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "github.event.comment.author_association == 'OWNER'" ) );
+		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "github.event.comment.author_association == 'MEMBER'" ) );
+		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "github.event.comment.author_association == 'COLLABORATOR'" ) );
+		$this->assertStringNotContainsString( "author_association == 'NONE'", $workflow );
+		$this->assertStringNotContainsString( "author_association == 'CONTRIBUTOR'", $workflow );
+	}
+
+	/**
 	 * The review notice must only render on the plugin's own admin screen.
 	 */
 	public function test_review_notice_is_scoped_to_plugin_screen(): void {
