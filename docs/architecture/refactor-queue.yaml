@@ -1285,6 +1285,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1599
+    github_pr: 1600
     implementation_commit: ad431292eb83d0c417b2bce830ed58c4d14a9c0f
     type: epic
     problem: 'Util has 56 incoming source nodes and 1,145 executable occurrences while retaining canonical helpers and compatibility proxies.'
