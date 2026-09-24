@@ -93,7 +93,7 @@ Fetch, persist, analyze, schedule, and display should not share one new “Servi
 
 ### Database
 
-`Database_Cleanup` owns the cleanup method map and SQL behavior. REST already calls that map. The remaining duplication sits in adapter orchestration: validation, counts, Action Scheduler availability, logging, table optimization, and response shape. A later `Database_Cleanup_Runner` can serve REST, Abilities, and CLI without changing the canonical map.
+`Database_Cleanup` owns the cleanup method map, SQL behavior, counts, and Action Scheduler health. `Database_Cleanup_Runner` now owns the shared application dispatch used by REST, Abilities, and CLI: canonical validation, all/Action Scheduler branching, revision defaults, legacy CLI aliases, dry-run count previews, logging/action hooks, and REST table optimization. Authorization, response/output envelopes, CLI confirmation, and Cron scheduling/auto-clean remain with their existing owners.
 
 ### Edge and integrations
 

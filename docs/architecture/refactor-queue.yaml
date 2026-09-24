@@ -974,7 +974,9 @@ phase3_items:
     title: 'Database cleanup application runner'
     status: active
     priority: medium
-    github_issue: 1583
+    github_issue: 1585
+    github_pr: 1586
+    implementation_commit: a5fc10eca353b19338346c0b23f3726563448ac7
     type: architecture
     problem: 'REST, Abilities, CLI, and Cron duplicate cleanup orchestration around the canonical Database_Cleanup map.'
     target_owner: 'Database_Cleanup_Runner'
@@ -990,6 +992,16 @@ phase3_items:
         - 'Database_Cleanup already owns CLEANUP_METHOD_MAP, counts, Action Scheduler health, table optimization, and cleanup execution; a Database_Cleanup_Runner can centralize only application dispatch/orchestration.'
         - 'A dependency-light runner can preserve REST/Abilities/CLI response shapes, confirmation/dry-run semantics, Action Scheduler availability, legacy aliases, and cron scheduling.'
       decision: 'Proceed test-first with a narrow Database_Cleanup_Runner application runner; keep Database_Cleanup domain methods, Cron scheduling, and adapter security/formatting outside the runner.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'includes/Database/class-database-cleanup-runner.php'
+        adapters: 'Rest::database_cleanup, Abilities::execute_database_cleanup, and WPPO_CLI_Command database cleanup execution delegate to the runner; CLI dry-run previews also delegate'
+        compatibility: 'Database_Cleanup remains SQL/map/counts/health owner; Cron::database_cleanup_cron remains the direct auto_clean scheduling boundary; REST manage_options + X-WP-Nonce, Abilities permission checks, CLI confirmation/output, multisite settings, and Action Scheduler availability behavior remain outside the runner'
+        aliases: 'CLI-only legacy aliases are normalized for dispatch while requested aliases remain in CLI logs/hooks; unknown and alias dry-run keys retain the full-count preview'
+        loader: 'Loader_Map::fallback_map()["Database_Cleanup_Runner"] with explicit PHPUnit bootstrap loading for stale local classmaps'
+        graph_delta: '80 inventory files / 83 graph nodes / 366 edges; adapter cleanup orchestrators 3->1; direct legacy cleanup dispatch calls 1->0; runtime SCC 62->63 and edges 312->317; compatibility and feature-to-feature edges remain 195 and 46'
+        tests: 'DatabaseCleanupRunnerTest, AbilitiesTest, DatabaseCleanupTest, DatabaseCleanupGuardTest, LoaderMapTest, and ArchitectureInventoryTest'
+        verification: 'Focused runner/database/Abilities/loader/architecture tests pass (56 tests / 13,731 assertions); REST/Abilities/CLI adapter tests pass (88 tests / 437 assertions); full PHPCS passes; npm run lint:js passes with 2 pre-existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing console warnings; npm run build passes with the existing entrypoint-size warning; full PHPUnit passes 2,726 tests / 24,883 assertions (7 PHPUnit deprecations, 9 skipped); focused PHPStan on Database_Cleanup_Runner passes; generator --check and git diff --check pass.'
 
   - id: P3-011
     title: 'Admin authentication policy for REST and Abilities'

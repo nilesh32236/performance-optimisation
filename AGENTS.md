@@ -116,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 79 files: 75 runtime plugin files under `includes/` (74 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 80 files: 76 runtime plugin files under `includes/` (75 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -132,6 +132,7 @@ The schema-v2 inventory tracks 79 files: 75 runtime plugin files under `includes
 | `Edge/class-htaccess-handler.php` | `.htaccess` Gzip + Expires rules via `insert_with_markers()` |
 | `Edge/class-server-rules.php` | Nginx rules (gzip, browser caching), server type detection |
 | `Database/class-database-cleanup.php` | 9 cleanup operations (CLEANUP_METHOD_MAP, batched, $wpdb queries) |
+| `Database/class-database-cleanup-runner.php` | Shared REST/Abilities/CLI cleanup dispatch, canonical validation, CLI aliases/dry-run previews, activity hooks/logging, and REST optimization |
 | `Scheduler/class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
 | `Images/class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `Images/class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |

@@ -68,6 +68,7 @@ includes/
 
   Database/
     class-database-cleanup.php
+    class-database-cleanup-runner.php
 
   Insight/
     class-telemetry.php
@@ -127,12 +128,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 75 | 74 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 76 | 75 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
 | Total class inventory | 79 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 82 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 83 nodes.
 
 ## Ownership by directory
 
@@ -170,7 +171,7 @@ The dependency graph adds three procedural runtime files: the plugin entry, `uni
 
 ### Database
 
-`Database` owns cleanup SQL, batching, eligibility, and Action Scheduler cleanup health. Adapter response orchestration remains outside this directory.
+`Database_Cleanup` owns cleanup SQL, batching, eligibility, counts, and Action Scheduler cleanup health. `Database_Cleanup_Runner` owns only shared adapter dispatch, aliases, previews, activity, and post-cleanup optimization policy. REST/Abilities/CLI retain authorization, confirmation, and response/output formatting; Cron remains the scheduled `auto_clean()` caller.
 
 ### Insight
 

@@ -28,14 +28,14 @@
         "high_risk_hub_score": "fan_in + fan_out + 2*compatibility_fan_in + cross_domain_edges + static_state + lines/1000."
     },
     "summary": {
-        "files": 82,
-        "class_like_nodes": 78,
+        "files": 83,
+        "class_like_nodes": 79,
         "procedural_nodes": 4,
-        "edges": 361,
-        "runtime_edges": 360,
+        "edges": 366,
+        "runtime_edges": 365,
         "compatibility_edges": 195,
         "loader_edges": 3,
-        "cross_domain_edges": 309,
+        "cross_domain_edges": 313,
         "feature_to_feature_edges": 46,
         "boundary_violations": 16,
         "bridge_candidates": 231,
@@ -447,7 +447,7 @@
             "file": "includes/Admin/class-abilities.php",
             "domain": "Admin",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 1460,
+            "lines": 1430,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -469,8 +469,8 @@
                 },
                 {
                     "name": "get_wppo_ability_definitions",
-                    "line": 1121,
-                    "end_line": 1251,
+                    "line": 1091,
+                    "end_line": 1221,
                     "lines": 131,
                     "visibility": "private",
                     "static": true,
@@ -487,8 +487,8 @@
                 },
                 {
                     "name": "execute_get_autoloaded_options",
-                    "line": 994,
-                    "end_line": 1054,
+                    "line": 964,
+                    "end_line": 1024,
                     "lines": 61,
                     "visibility": "public",
                     "static": true,
@@ -496,8 +496,8 @@
                 },
                 {
                     "name": "execute_used_css_regenerate",
-                    "line": 1342,
-                    "end_line": 1397,
+                    "line": 1312,
+                    "end_line": 1367,
                     "lines": 56,
                     "visibility": "public",
                     "static": true,
@@ -505,8 +505,8 @@
                 },
                 {
                     "name": "execute_crawler",
-                    "line": 1414,
-                    "end_line": 1458,
+                    "line": 1384,
+                    "end_line": 1428,
                     "lines": 45,
                     "visibility": "public",
                     "static": true,
@@ -514,18 +514,9 @@
                 },
                 {
                     "name": "register_wppo_abilities",
-                    "line": 1267,
-                    "end_line": 1306,
+                    "line": 1237,
+                    "end_line": 1276,
                     "lines": 40,
-                    "visibility": "public",
-                    "static": true,
-                    "delegates": false
-                },
-                {
-                    "name": "execute_database_cleanup",
-                    "line": 738,
-                    "end_line": 773,
-                    "lines": 36,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
@@ -541,9 +532,18 @@
                 },
                 {
                     "name": "execute_get_suggestions",
-                    "line": 907,
-                    "end_line": 927,
+                    "line": 877,
+                    "end_line": 897,
                     "lines": 21,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "execute_flush_object_cache",
+                    "line": 1053,
+                    "end_line": 1071,
+                    "lines": 19,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
@@ -552,81 +552,79 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\AI_Adaptive::is_enabled": 920,
-                    "PerformanceOptimise\\Inc\\Asset_Manager::get_page_assets": 975,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive::is_enabled": 890,
+                    "PerformanceOptimise\\Inc\\Asset_Manager::get_page_assets": 945,
                     "PerformanceOptimise\\Inc\\Cache::clear_cache": 698,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::regenerate_all": 1326,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_action_scheduler": 756,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_all": 745,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_autoload_audit": 1026,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_autoload_critical_threshold": 1017,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_counts": 940,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_revision_defaults": 764,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_valid_cleanup_types": 740,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::invoke_cleanup_method": 765,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::is_autoload_critical": 1018,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::regenerate_all": 1296,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_autoload_audit": 996,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_autoload_critical_threshold": 987,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_counts": 910,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::is_autoload_critical": 988,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner::run": 740,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner::valid_types": 531,
                     "PerformanceOptimise\\Inc\\Img_Converter::add_img_into_queue": 726,
-                    "PerformanceOptimise\\Inc\\Img_Converter::get_img_info": 954,
-                    "PerformanceOptimise\\Inc\\Insight_Query::get_pagespeed": 892,
-                    "PerformanceOptimise\\Inc\\Insight_Query::get_telemetry": 915,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::crawl_batch": 1453,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::get_urls_to_crawl": 1426,
+                    "PerformanceOptimise\\Inc\\Img_Converter::get_img_info": 924,
+                    "PerformanceOptimise\\Inc\\Insight_Query::get_pagespeed": 862,
+                    "PerformanceOptimise\\Inc\\Insight_Query::get_telemetry": 885,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::crawl_batch": 1423,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::get_urls_to_crawl": 1396,
                     "PerformanceOptimise\\Inc\\Main::clear_all_cache": 701,
-                    "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 871,
-                    "PerformanceOptimise\\Inc\\RUM::get_data": 1067,
-                    "PerformanceOptimise\\Inc\\Suggestion_Engine::from_ai_adaptive": 921,
-                    "PerformanceOptimise\\Inc\\Suggestion_Engine::from_telemetry": 919,
-                    "PerformanceOptimise\\Inc\\System_Info::get_all": 786,
-                    "PerformanceOptimise\\Inc\\Telemetry::scan": 845,
-                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 803,
-                    "PerformanceOptimise\\Inc\\Util::enqueue_unique_async_action": 1364,
+                    "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 841,
+                    "PerformanceOptimise\\Inc\\RUM::get_data": 1037,
+                    "PerformanceOptimise\\Inc\\Suggestion_Engine::from_ai_adaptive": 891,
+                    "PerformanceOptimise\\Inc\\Suggestion_Engine::from_telemetry": 889,
+                    "PerformanceOptimise\\Inc\\System_Info::get_all": 756,
+                    "PerformanceOptimise\\Inc\\Telemetry::scan": 815,
+                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 773,
+                    "PerformanceOptimise\\Inc\\Util::enqueue_unique_async_action": 1334,
                     "PerformanceOptimise\\Inc\\Util::get_settings": 608,
-                    "PerformanceOptimise\\Inc\\Util::same_site_url_or_home": 822,
-                    "PerformanceOptimise\\Inc\\Util::transient_key": 997,
-                    "\\WP_Abilities_Registry::get_instance": 1300,
-                    "self::get_wppo_ability_definitions": 1272,
-                    "self::resolve_input_url": 841,
+                    "PerformanceOptimise\\Inc\\Util::same_site_url_or_home": 792,
+                    "PerformanceOptimise\\Inc\\Util::transient_key": 967,
+                    "\\WP_Abilities_Registry::get_instance": 1270,
+                    "self::get_wppo_ability_definitions": 1242,
+                    "self::resolve_input_url": 811,
                     "self::same_site_url_or_home": 688
                 },
                 "instance_calls": {
-                    "$flush_error->get_error_code": 1098,
-                    "$flush_error->get_error_message": 1099,
-                    "$object_cache->flush_scoped": 1087,
-                    "$object_cache->get_last_flush_error": 1095,
-                    "$registry->register": 1302,
-                    "$result->get_error_message": 847,
+                    "$flush_error->get_error_code": 1068,
+                    "$flush_error->get_error_message": 1069,
+                    "$object_cache->flush_scoped": 1057,
+                    "$object_cache->get_last_flush_error": 1065,
+                    "$registry->register": 1272,
+                    "$result->get_error_message": 817,
                     "$this->get_ability_definitions": 72,
                     "$this->get_operational_abilities": 176,
-                    "$used_css->regenerate_all": 1395
+                    "$used_css->regenerate_all": 1365
                 },
                 "new_expressions": {
-                    "PerformanceOptimise\\Inc\\Object_Cache": 1084,
-                    "PerformanceOptimise\\Inc\\Used_CSS": 1392
+                    "PerformanceOptimise\\Inc\\Object_Cache": 1054,
+                    "PerformanceOptimise\\Inc\\Used_CSS": 1362
                 },
                 "class_references": {
-                    "PerformanceOptimise\\Inc\\AI_Adaptive": 920,
-                    "PerformanceOptimise\\Inc\\Critical_CSS": 1320,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1425,
-                    "PerformanceOptimise\\Inc\\Used_CSS": 1386
+                    "PerformanceOptimise\\Inc\\AI_Adaptive": 890,
+                    "PerformanceOptimise\\Inc\\Critical_CSS": 1290,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1395,
+                    "PerformanceOptimise\\Inc\\Used_CSS": 1356
                 },
                 "class_constant_references": {
-                    "PerformanceOptimise\\Inc\\Database_Cleanup": 754
+                    "PerformanceOptimise\\Inc\\Database_Cleanup": 1009,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 740
                 },
                 "class_string_references": {
                     "PerformanceOptimise\\Inc\\Abilities": 18,
-                    "PerformanceOptimise\\Inc\\Util": 820
+                    "PerformanceOptimise\\Inc\\Util": 790
                 },
                 "class_exists": {
-                    "PerformanceOptimise\\Inc\\AI_Adaptive": 920,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive": 890,
                     "PerformanceOptimise\\Inc\\Abilities": 18,
-                    "PerformanceOptimise\\Inc\\Critical_CSS": 1320,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1425,
-                    "PerformanceOptimise\\Inc\\Used_CSS": 1386,
-                    "PerformanceOptimise\\Inc\\Util": 820,
-                    "WP_Abilities_Registry": 1299
+                    "PerformanceOptimise\\Inc\\Critical_CSS": 1290,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1395,
+                    "PerformanceOptimise\\Inc\\Used_CSS": 1356,
+                    "PerformanceOptimise\\Inc\\Util": 790,
+                    "WP_Abilities_Registry": 1269
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\Util::same_site_url_or_home": 820
+                    "PerformanceOptimise\\Inc\\Util::same_site_url_or_home": 790
                 },
                 "interface_exists": [],
                 "trait_exists": [],
@@ -634,21 +632,21 @@
                 "loader_references": [],
                 "file_references": [],
                 "external_classes": {
-                    "WP_Abilities_Registry": 1299,
-                    "\\WP_Abilities_Registry": 1300
+                    "WP_Abilities_Registry": 1269,
+                    "\\WP_Abilities_Registry": 1270
                 },
                 "external_functions": {
-                    "Object_Cache": 1084,
-                    "Used_CSS": 1392,
+                    "Object_Cache": 1054,
+                    "Used_CSS": 1362,
                     "__": 55,
-                    "absint": 968,
+                    "absint": 938,
                     "add_action": 35,
-                    "array_filter": 1423,
-                    "array_map": 1423,
+                    "array_filter": 1393,
+                    "array_map": 1393,
                     "array_merge": 110,
-                    "array_slice": 1446,
-                    "array_values": 1423,
-                    "as_has_scheduled_action": 1369,
+                    "array_slice": 1416,
+                    "array_values": 1393,
+                    "as_has_scheduled_action": 1339,
                     "class_exists": 18,
                     "current_user_can": 590,
                     "defined": 14,
@@ -656,19 +654,19 @@
                     "file_exists": 723,
                     "function_exists": 48,
                     "get_attached_file": 722,
-                    "get_post": 1352,
-                    "get_transient": 998,
+                    "get_post": 1322,
+                    "get_transient": 968,
                     "in_array": 716,
-                    "is_array": 893,
-                    "is_callable": 1295,
+                    "is_array": 863,
+                    "is_callable": 1265,
                     "is_string": 695,
-                    "is_wp_error": 748,
-                    "method_exists": 820,
-                    "round": 1005,
+                    "is_wp_error": 816,
+                    "method_exists": 790,
+                    "round": 975,
                     "sanitize_text_field": 598,
-                    "set_transient": 1052,
-                    "strtolower": 1441,
-                    "wp_has_ability": 1299,
+                    "set_transient": 1022,
+                    "strtolower": 1411,
+                    "wp_has_ability": 1269,
                     "wp_parse_url": 692,
                     "wp_register_ability": 75,
                     "wp_register_ability_category": 52,
@@ -677,16 +675,16 @@
                     "wp_verify_nonce": 598
                 },
                 "wordpress_functions": {
-                    "absint": 968,
+                    "absint": 938,
                     "add_action": 35,
                     "current_user_can": 590,
                     "esc_url_raw": 684,
                     "get_attached_file": 722,
-                    "get_post": 1352,
-                    "get_transient": 998,
-                    "is_wp_error": 748,
+                    "get_post": 1322,
+                    "get_transient": 968,
+                    "is_wp_error": 816,
                     "sanitize_text_field": 598,
-                    "wp_has_ability": 1299,
+                    "wp_has_ability": 1269,
                     "wp_parse_url": 692,
                     "wp_register_ability": 75,
                     "wp_register_ability_category": 52,
@@ -710,6 +708,7 @@
                 "PerformanceOptimise\\Inc\\Cache",
                 "PerformanceOptimise\\Inc\\Critical_CSS",
                 "PerformanceOptimise\\Inc\\Database_Cleanup",
+                "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                 "PerformanceOptimise\\Inc\\Img_Converter",
                 "PerformanceOptimise\\Inc\\Insight_Query",
                 "PerformanceOptimise\\Inc\\LiteSpeed_Crawler",
@@ -747,16 +746,16 @@
             },
             "metrics": {
                 "fan_in": 1,
-                "fan_out": 17,
+                "fan_out": 18,
                 "incoming_reference_evidence": 1,
-                "outgoing_reference_evidence": 48,
+                "outgoing_reference_evidence": 42,
                 "runtime_fan_in": 1,
-                "runtime_fan_out": 17,
+                "runtime_fan_out": 18,
                 "compatibility_fan_in": 0,
                 "compatibility_fan_out": 5,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 18,
+                "cross_domain_edges": 19,
                 "boundary_violations": 1,
                 "strongly_connected_component": 0
             }
@@ -7051,17 +7050,184 @@
             "delegating_methods": [],
             "hooks": [],
             "metrics": {
-                "fan_in": 6,
+                "fan_in": 7,
                 "fan_out": 2,
-                "incoming_reference_evidence": 64,
+                "incoming_reference_evidence": 44,
                 "outgoing_reference_evidence": 31,
-                "runtime_fan_in": 6,
+                "runtime_fan_in": 7,
                 "runtime_fan_out": 2,
                 "compatibility_fan_in": 0,
                 "compatibility_fan_out": 1,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
                 "cross_domain_edges": 8,
+                "boundary_violations": 0,
+                "strongly_connected_component": 0
+            }
+        },
+        "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": {
+            "id": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+            "name": "Database_Cleanup_Runner",
+            "fqcn": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+            "kind": "class",
+            "file": "includes/Database/class-database-cleanup-runner.php",
+            "domain": "Database",
+            "namespace": "PerformanceOptimise\\Inc",
+            "lines": 323,
+            "property_count": 0,
+            "static_property_count": 0,
+            "public_property_count": 0,
+            "protected_property_count": 0,
+            "private_property_count": 0,
+            "static_state": false,
+            "method_count": 7,
+            "top_level_function_count": 0,
+            "top_level_functions": [],
+            "largest_methods": [
+                {
+                    "name": "run",
+                    "line": 131,
+                    "end_line": 198,
+                    "lines": 68,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "log_result",
+                    "line": 272,
+                    "end_line": 321,
+                    "lines": 50,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "empty_result",
+                    "line": 222,
+                    "end_line": 234,
+                    "lines": 13,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "completed_result",
+                    "line": 247,
+                    "end_line": 259,
+                    "lines": 13,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "preview",
+                    "line": 97,
+                    "end_line": 106,
+                    "lines": 10,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "canonical_type",
+                    "line": 208,
+                    "end_line": 213,
+                    "lines": 6,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "valid_types",
+                    "line": 82,
+                    "end_line": 84,
+                    "lines": 3,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                }
+            ],
+            "imports": [
+                "class:WP_Error"
+            ],
+            "references": {
+                "static_calls": {
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_action_scheduler": 155,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_all": 138,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_counts": 98,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_revision_defaults": 163,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_valid_cleanup_types": 83,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::invoke_cleanup_method": 164,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::is_action_scheduler_available": 156,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::maybe_optimize_tables": 191,
+                    "PerformanceOptimise\\Inc\\Log::add": 278,
+                    "self::canonical_type": 132,
+                    "self::completed_result": 150,
+                    "self::empty_result": 134,
+                    "self::log_result": 149,
+                    "self::valid_types": 212
+                },
+                "instance_calls": [],
+                "new_expressions": [],
+                "class_references": [],
+                "class_constant_references": {
+                    "PerformanceOptimise\\Inc\\Database_Cleanup": 154,
+                    "self": 131
+                },
+                "class_string_references": {
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 22
+                },
+                "class_exists": {
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 22
+                },
+                "method_exists": [],
+                "interface_exists": [],
+                "trait_exists": [],
+                "reflection": [],
+                "loader_references": [],
+                "file_references": [],
+                "external_classes": [],
+                "external_functions": {
+                    "__": 281,
+                    "class_exists": 22,
+                    "defined": 18,
+                    "do_action": 188,
+                    "in_array": 212,
+                    "sprintf": 279
+                },
+                "wordpress_functions": {
+                    "do_action": 188
+                },
+                "filesystem_dependencies": [],
+                "network_dependencies": [],
+                "database_dependencies": [],
+                "dynamic_references": []
+            },
+            "extends": [],
+            "implements": [],
+            "trait_usage": [],
+            "runtime_dependencies": [
+                "PerformanceOptimise\\Inc\\Database_Cleanup",
+                "PerformanceOptimise\\Inc\\Log"
+            ],
+            "compatibility_dependencies": [],
+            "loader_dependencies": [],
+            "documentation_references": [],
+            "delegating_methods": [],
+            "hooks": [],
+            "metrics": {
+                "fan_in": 3,
+                "fan_out": 2,
+                "incoming_reference_evidence": 6,
+                "outgoing_reference_evidence": 17,
+                "runtime_fan_in": 3,
+                "runtime_fan_out": 2,
+                "compatibility_fan_in": 0,
+                "compatibility_fan_out": 0,
+                "loader_fan_in": 0,
+                "loader_fan_out": 0,
+                "cross_domain_edges": 4,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -12608,7 +12774,7 @@
             "file": "includes/Core/class-loader-map.php",
             "domain": "Core",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 321,
+            "lines": 322,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -12622,16 +12788,16 @@
                 {
                     "name": "fallback_map",
                     "line": 119,
-                    "end_line": 196,
-                    "lines": 78,
+                    "end_line": 197,
+                    "lines": 79,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
                     "name": "file_path",
-                    "line": 239,
-                    "end_line": 275,
+                    "line": 240,
+                    "end_line": 276,
                     "lines": 37,
                     "visibility": "public",
                     "static": true,
@@ -12639,8 +12805,8 @@
                 },
                 {
                     "name": "path_for",
-                    "line": 288,
-                    "end_line": 309,
+                    "line": 289,
+                    "end_line": 310,
                     "lines": 22,
                     "visibility": "public",
                     "static": true,
@@ -12657,8 +12823,8 @@
                 },
                 {
                     "name": "allowed_dirs",
-                    "line": 207,
-                    "end_line": 224,
+                    "line": 208,
+                    "end_line": 225,
                     "lines": 18,
                     "visibility": "public",
                     "static": true,
@@ -12684,8 +12850,8 @@
                 },
                 {
                     "name": "cli_file",
-                    "line": 317,
-                    "end_line": 319,
+                    "line": 318,
+                    "end_line": 320,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -12695,10 +12861,10 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "self::allowed_dirs": 260,
-                    "self::base_dir": 270,
-                    "self::fallback_map": 299,
-                    "self::file_path": 304
+                    "self::allowed_dirs": 261,
+                    "self::base_dir": 271,
+                    "self::fallback_map": 300,
+                    "self::file_path": 305
                 },
                 "instance_calls": [],
                 "new_expressions": [],
@@ -12718,38 +12884,39 @@
                 "file_references": {
                     "Admin/class-abilities.php": 121,
                     "Admin/class-admin-notices.php": 123,
-                    "Admin/class-metabox.php": 163,
+                    "Admin/class-metabox.php": 164,
                     "Admin/class-perf-translations.php": 74,
-                    "Admin/class-rest-cache.php": 172,
-                    "Admin/class-rest-settings.php": 173,
-                    "Admin/class-rest.php": 170,
-                    "Admin/class-wppo-cli-command.php": 190,
+                    "Admin/class-rest-cache.php": 173,
+                    "Admin/class-rest-settings.php": 174,
+                    "Admin/class-rest.php": 171,
+                    "Admin/class-wppo-cli-command.php": 191,
                     "Assets/class-asset-manager.php": 125,
                     "Assets/class-css-combine.php": 136,
                     "Assets/class-css-safelist.php": 137,
-                    "Assets/class-google-fonts.php": 147,
-                    "Assets/class-script-strategy.php": 177,
+                    "Assets/class-google-fonts.php": 148,
+                    "Assets/class-script-strategy.php": 178,
                     "CSS/class-ccss-store.php": 135,
                     "CSS/class-critical-css.php": 134,
-                    "CSS/class-used-css.php": 185,
+                    "CSS/class-used-css.php": 186,
                     "Cache/class-advanced-cache-handler.php": 124,
                     "Cache/class-bfcache.php": 73,
                     "Cache/class-cache-capacity.php": 127,
                     "Cache/class-cache-invalidator.php": 128,
                     "Cache/class-cache-key.php": 129,
                     "Cache/class-cache.php": 126,
-                    "Cache/class-dropin-registry.php": 143,
-                    "Cache/class-object-cache.php": 164,
-                    "Cache/class-redis-config-policy.php": 165,
+                    "Cache/class-dropin-registry.php": 144,
+                    "Cache/class-object-cache.php": 165,
+                    "Cache/class-redis-config-policy.php": 166,
                     "Compatibility/class-core-tweaks.php": 133,
                     "Compatibility/class-llms.php": 71,
                     "Core/class-activate.php": 122,
-                    "Core/class-deactivate.php": 142,
+                    "Core/class-deactivate.php": 143,
                     "Core/class-hook-registry.php": 82,
-                    "Core/class-loader-map.php": 160,
-                    "Core/class-main.php": 162,
-                    "Core/class-runtime-state.php": 171,
+                    "Core/class-loader-map.php": 161,
+                    "Core/class-main.php": 163,
+                    "Core/class-runtime-state.php": 172,
                     "Core/class-wp-version.php": 67,
+                    "Database/class-database-cleanup-runner.php": 142,
                     "Database/class-database-cleanup.php": 141,
                     "Edge/class-cdn-purger.php": 131,
                     "Edge/class-cdn.php": 80,
@@ -12757,55 +12924,55 @@
                     "Edge/class-edge-cache.php": 77,
                     "Edge/class-edge-purger.php": 79,
                     "Edge/class-header-emitter.php": 69,
-                    "Edge/class-htaccess-handler.php": 150,
+                    "Edge/class-htaccess-handler.php": 151,
                     "Edge/class-server-rules.php": 68,
-                    "Images/class-image-optimisation.php": 152,
-                    "Images/class-img-converter.php": 154,
-                    "Images/class-lcp-preload.php": 155,
+                    "Images/class-image-optimisation.php": 153,
+                    "Images/class-img-converter.php": 155,
+                    "Images/class-lcp-preload.php": 156,
                     "Insight/class-ai-adaptive.php": 75,
                     "Insight/class-ai-anomaly.php": 76,
-                    "Insight/class-insight-query.php": 153,
+                    "Insight/class-insight-query.php": 154,
                     "Insight/class-od-bridge.php": 72,
-                    "Insight/class-pagespeed.php": 167,
-                    "Insight/class-rum.php": 174,
-                    "Insight/class-suggestion-engine.php": 182,
-                    "Insight/class-system-info.php": 183,
-                    "Insight/class-telemetry.php": 184,
+                    "Insight/class-pagespeed.php": 168,
+                    "Insight/class-rum.php": 175,
+                    "Insight/class-suggestion-engine.php": 183,
+                    "Insight/class-system-info.php": 184,
+                    "Insight/class-telemetry.php": 185,
                     "Integrations/class-builder-purge-watcher.php": 81,
                     "Integrations/class-litespeed-crawler.php": 98,
                     "Integrations/class-litespeed-esi.php": 99,
                     "Integrations/class-litespeed-integration.php": 70,
-                    "Integrations/class-woo-detect.php": 188,
+                    "Integrations/class-woo-detect.php": 189,
                     "Scheduler/class-cron.php": 138,
                     "Scheduler/class-job-registry.php": 139,
                     "Scheduler/class-preload-transport.php": 140,
-                    "Scheduler/class-scheduler.php": 176,
-                    "Settings/class-sandbox-preview.php": 175,
-                    "Settings/class-settings-command.php": 180,
-                    "Settings/class-settings-migrations.php": 179,
-                    "Settings/class-settings-store.php": 181,
-                    "Support/class-filesystem.php": 146,
-                    "Support/class-http.php": 151,
-                    "Support/class-log.php": 161,
-                    "Support/class-url.php": 186,
+                    "Scheduler/class-scheduler.php": 177,
+                    "Settings/class-sandbox-preview.php": 176,
+                    "Settings/class-settings-command.php": 181,
+                    "Settings/class-settings-migrations.php": 180,
+                    "Settings/class-settings-store.php": 182,
+                    "Support/class-filesystem.php": 147,
+                    "Support/class-http.php": 152,
+                    "Support/class-log.php": 162,
+                    "Support/class-url.php": 187,
                     "Support/trait-purge-logger.php": 78
                 },
                 "external_classes": [],
                 "external_functions": {
-                    "basename": 267,
+                    "basename": 268,
                     "class_exists": 26,
-                    "count": 253,
+                    "count": 254,
                     "defined": 22,
-                    "explode": 252,
-                    "in_array": 260,
-                    "ltrim": 289,
-                    "strlen": 293,
-                    "strpos": 243,
-                    "substr": 293
+                    "explode": 253,
+                    "in_array": 261,
+                    "ltrim": 290,
+                    "strlen": 294,
+                    "strpos": 244,
+                    "substr": 294
                 },
                 "wordpress_functions": [],
                 "filesystem_dependencies": {
-                    "basename": 267
+                    "basename": 268
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -12818,7 +12985,7 @@
             "compatibility_dependencies": [],
             "loader_dependencies": [],
             "documentation_references": {
-                "PerformanceOptimise\\Inc\\Cache": 277
+                "PerformanceOptimise\\Inc\\Cache": 278
             },
             "delegating_methods": [],
             "hooks": [],
@@ -13005,17 +13172,17 @@
             "delegating_methods": [],
             "hooks": [],
             "metrics": {
-                "fan_in": 27,
+                "fan_in": 28,
                 "fan_out": 1,
                 "incoming_reference_evidence": 150,
                 "outgoing_reference_evidence": 2,
-                "runtime_fan_in": 27,
+                "runtime_fan_in": 28,
                 "runtime_fan_out": 1,
                 "compatibility_fan_in": 14,
                 "compatibility_fan_out": 0,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 26,
+                "cross_domain_edges": 27,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -16964,7 +17131,7 @@
             "file": "includes/Admin/class-rest.php",
             "domain": "Admin",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 3740,
+            "lines": 3674,
             "property_count": 3,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -16995,8 +17162,8 @@
                 },
                 {
                     "name": "regenerate_ccss",
-                    "line": 3105,
-                    "end_line": 3267,
+                    "line": 3039,
+                    "end_line": 3201,
                     "lines": 163,
                     "visibility": "public",
                     "static": false,
@@ -17004,8 +17171,8 @@
                 },
                 {
                     "name": "used_css_regenerate",
-                    "line": 2618,
-                    "end_line": 2765,
+                    "line": 2552,
+                    "end_line": 2699,
                     "lines": 148,
                     "visibility": "public",
                     "static": false,
@@ -17013,18 +17180,9 @@
                 },
                 {
                     "name": "detect_safe_mode_excludes",
-                    "line": 3464,
-                    "end_line": 3603,
+                    "line": 3398,
+                    "end_line": 3537,
                     "lines": 140,
-                    "visibility": "public",
-                    "static": false,
-                    "delegates": false
-                },
-                {
-                    "name": "database_cleanup",
-                    "line": 1690,
-                    "end_line": 1816,
-                    "lines": 127,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
@@ -17040,8 +17198,8 @@
                 },
                 {
                     "name": "handle_object_cache",
-                    "line": 1918,
-                    "end_line": 2024,
+                    "line": 1852,
+                    "end_line": 1958,
                     "lines": 107,
                     "visibility": "public",
                     "static": false,
@@ -17049,8 +17207,8 @@
                 },
                 {
                     "name": "handle_safe_mode",
-                    "line": 3619,
-                    "end_line": 3703,
+                    "line": 3553,
+                    "end_line": 3637,
                     "lines": 85,
                     "visibility": "public",
                     "static": false,
@@ -17058,9 +17216,18 @@
                 },
                 {
                     "name": "handle_ccss_rollout_action",
-                    "line": 2874,
-                    "end_line": 2950,
+                    "line": 2808,
+                    "end_line": 2884,
                     "lines": 77,
+                    "visibility": "private",
+                    "static": false,
+                    "delegates": false
+                },
+                {
+                    "name": "handle_used_css_rollout_action",
+                    "line": 2717,
+                    "end_line": 2791,
+                    "lines": 75,
                     "visibility": "private",
                     "static": false,
                     "delegates": false
@@ -17069,88 +17236,82 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\AI_Adaptive::get_model": 3341,
-                    "PerformanceOptimise\\Inc\\AI_Adaptive::is_enabled": 2530,
-                    "PerformanceOptimise\\Inc\\AI_Adaptive::learn": 3358,
-                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_last_purge": 3025,
-                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_safe_preview_url": 3059,
-                    "PerformanceOptimise\\Inc\\Cache::bump_stats_cache": 2997,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive::get_model": 3275,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive::is_enabled": 2464,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive::learn": 3292,
+                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_last_purge": 2959,
+                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_safe_preview_url": 2993,
+                    "PerformanceOptimise\\Inc\\Cache::bump_stats_cache": 2931,
                     "PerformanceOptimise\\Inc\\Cache::clear_cache": 1467,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::clear_all": 3004,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::generate_preview_for_template": 2887,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::get_ccss_rollout_status": 2912,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::get_status_all": 3277,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::get_template_hash": 2885,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::get_templates": 3151,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 3177,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::is_known_template": 3160,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::promote_staged_ccss": 2911,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::regenerate_all": 3242,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::regenerate_single": 3203,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::resolve_template_slug": 2880,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::rollback_ccss_to_fallback": 2922,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::verify_ccss_health": 2936,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_action_scheduler": 1757,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_all": 1706,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::clear_all": 2938,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::generate_preview_for_template": 2821,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::get_ccss_rollout_status": 2846,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::get_status_all": 3211,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::get_template_hash": 2819,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::get_templates": 3085,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 3111,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::is_known_template": 3094,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::promote_staged_ccss": 2845,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::regenerate_all": 3176,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::regenerate_single": 3137,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::resolve_template_slug": 2814,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::rollback_ccss_to_fallback": 2856,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::verify_ccss_health": 2870,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::export_expired_transients": 558,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_action_scheduler_health": 1830,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_action_scheduler_health": 1764,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::get_autoload_audit": 461,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::get_autoload_parity": 464,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::get_autoload_size_limit": 471,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_counts": 1826,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_counts": 1760,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::get_remediated_options": 536,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_revision_defaults": 1769,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::get_valid_cleanup_types": 1699,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::invoke_cleanup_method": 1770,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::is_action_scheduler_available": 1758,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::maybe_optimize_tables": 1798,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::plan_autoload_remediation": 540,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::remediate_autoload": 535,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::revert_autoload_all": 523,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::revert_autoload_option": 515,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner::run": 1698,
                     "PerformanceOptimise\\Inc\\Img_Converter::clear_completed_formats": 1534,
                     "PerformanceOptimise\\Inc\\Img_Converter::get_img_info": 1212,
-                    "PerformanceOptimise\\Inc\\Img_Converter::get_savings_summary": 1894,
+                    "PerformanceOptimise\\Inc\\Img_Converter::get_savings_summary": 1828,
                     "PerformanceOptimise\\Inc\\Img_Converter::is_path_in_allowlist": 1155,
-                    "PerformanceOptimise\\Inc\\Insight_Query::get_pagespeed_report": 2407,
-                    "PerformanceOptimise\\Inc\\Insight_Query::get_telemetry": 2513,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::get_info": 3089,
+                    "PerformanceOptimise\\Inc\\Insight_Query::get_pagespeed_report": 2341,
+                    "PerformanceOptimise\\Inc\\Insight_Query::get_telemetry": 2447,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::get_info": 3023,
                     "PerformanceOptimise\\Inc\\Log::add": 973,
                     "PerformanceOptimise\\Inc\\Log::get_recent_activities": 1134,
-                    "PerformanceOptimise\\Inc\\Main::build_safe_mode_enable_payload": 3652,
-                    "PerformanceOptimise\\Inc\\Main::clear_all_cache": 3692,
-                    "PerformanceOptimise\\Inc\\Main::detect_fragile_handles": 3558,
-                    "PerformanceOptimise\\Inc\\Main::get_safe_mode_stack_state": 3574,
+                    "PerformanceOptimise\\Inc\\Main::build_safe_mode_enable_payload": 3586,
+                    "PerformanceOptimise\\Inc\\Main::clear_all_cache": 3626,
+                    "PerformanceOptimise\\Inc\\Main::detect_fragile_handles": 3492,
+                    "PerformanceOptimise\\Inc\\Main::get_safe_mode_stack_state": 3508,
                     "PerformanceOptimise\\Inc\\OD_Bridge::get_lcp_url": 690,
                     "PerformanceOptimise\\Inc\\OD_Bridge::is_enabled": 689,
-                    "PerformanceOptimise\\Inc\\Pagespeed::get_trends": 2463,
-                    "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 2364,
-                    "PerformanceOptimise\\Inc\\Pagespeed::store_lcp_image_url": 2434,
+                    "PerformanceOptimise\\Inc\\Pagespeed::get_trends": 2397,
+                    "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 2298,
+                    "PerformanceOptimise\\Inc\\Pagespeed::store_lcp_image_url": 2368,
                     "PerformanceOptimise\\Inc\\RUM::collect": 585,
-                    "PerformanceOptimise\\Inc\\RUM::get_aggregate_readonly": 2557,
+                    "PerformanceOptimise\\Inc\\RUM::get_aggregate_readonly": 2491,
                     "PerformanceOptimise\\Inc\\RUM::get_data": 601,
                     "PerformanceOptimise\\Inc\\RUM::get_field_lcp_url": 721,
                     "PerformanceOptimise\\Inc\\RUM::get_stored_pagespeed_lcp_url": 734,
                     "PerformanceOptimise\\Inc\\RUM::is_same_origin_url": 844,
                     "PerformanceOptimise\\Inc\\RUM::is_same_origin_url_strict": 841,
-                    "PerformanceOptimise\\Inc\\Redis_Config_Policy::build": 2047,
-                    "PerformanceOptimise\\Inc\\Redis_Config_Policy::sanitize_nodes": 2079,
-                    "PerformanceOptimise\\Inc\\Redis_Config_Policy::sanitize_value": 2064,
-                    "PerformanceOptimise\\Inc\\Server_Rules::get_apache_rules": 3085,
-                    "PerformanceOptimise\\Inc\\Server_Rules::get_nginx_rules": 3084,
-                    "PerformanceOptimise\\Inc\\Server_Rules::get_server_type": 2576,
-                    "PerformanceOptimise\\Inc\\Settings_Command::save": 3673,
-                    "PerformanceOptimise\\Inc\\Suggestion_Engine::from_ai_adaptive": 2531,
-                    "PerformanceOptimise\\Inc\\Suggestion_Engine::from_telemetry": 2528,
-                    "PerformanceOptimise\\Inc\\Suggestion_Engine::pick_rum_next_action": 2557,
-                    "PerformanceOptimise\\Inc\\System_Info::get_all": 2227,
+                    "PerformanceOptimise\\Inc\\Redis_Config_Policy::build": 1981,
+                    "PerformanceOptimise\\Inc\\Redis_Config_Policy::sanitize_nodes": 2013,
+                    "PerformanceOptimise\\Inc\\Redis_Config_Policy::sanitize_value": 1998,
+                    "PerformanceOptimise\\Inc\\Server_Rules::get_apache_rules": 3019,
+                    "PerformanceOptimise\\Inc\\Server_Rules::get_nginx_rules": 3018,
+                    "PerformanceOptimise\\Inc\\Server_Rules::get_server_type": 2510,
+                    "PerformanceOptimise\\Inc\\Settings_Command::save": 3607,
+                    "PerformanceOptimise\\Inc\\Suggestion_Engine::from_ai_adaptive": 2465,
+                    "PerformanceOptimise\\Inc\\Suggestion_Engine::from_telemetry": 2462,
+                    "PerformanceOptimise\\Inc\\Suggestion_Engine::pick_rum_next_action": 2491,
+                    "PerformanceOptimise\\Inc\\System_Info::get_all": 2161,
                     "PerformanceOptimise\\Inc\\Telemetry::invalidate_audit_cache": 1655,
-                    "PerformanceOptimise\\Inc\\Telemetry::scan": 2278,
-                    "PerformanceOptimise\\Inc\\Used_CSS::get_staleness_info": 3299,
-                    "PerformanceOptimise\\Inc\\Used_CSS::is_excluded_post": 2656,
-                    "PerformanceOptimise\\Inc\\Used_CSS::purge_coupled": 3001,
+                    "PerformanceOptimise\\Inc\\Telemetry::scan": 2212,
+                    "PerformanceOptimise\\Inc\\Used_CSS::get_staleness_info": 3233,
+                    "PerformanceOptimise\\Inc\\Used_CSS::is_excluded_post": 2590,
+                    "PerformanceOptimise\\Inc\\Used_CSS::purge_coupled": 2935,
                     "PerformanceOptimise\\Inc\\Util::apply_optimization_preset": 1649,
-                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 2252,
+                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 2186,
                     "PerformanceOptimise\\Inc\\Util::enqueue_unique_async_action": 1387,
                     "PerformanceOptimise\\Inc\\Util::get_image_mime_type": 797,
                     "PerformanceOptimise\\Inc\\Util::get_optimization_presets": 1598,
@@ -17160,155 +17321,156 @@
                     "PerformanceOptimise\\Inc\\Util::is_same_site_url": 1060,
                     "PerformanceOptimise\\Inc\\Util::remove_sensitive_settings_from_response": 1118,
                     "PerformanceOptimise\\Inc\\Util::sanitize_settings_recursively": 1105,
-                    "PerformanceOptimise\\Inc\\Util::save_settings": 3664,
-                    "PerformanceOptimise\\Inc\\Util::set_settings_cache": 3667,
-                    "PerformanceOptimise\\Inc\\Util::sign_callback_payload": 2699,
-                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 3643,
+                    "PerformanceOptimise\\Inc\\Util::save_settings": 3598,
+                    "PerformanceOptimise\\Inc\\Util::set_settings_cache": 3601,
+                    "PerformanceOptimise\\Inc\\Util::sign_callback_payload": 2633,
+                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 3577,
                     "PerformanceOptimise\\Inc\\Util::transient_key": 989,
-                    "PerformanceOptimise\\Inc\\Util::woo_cache_self_test": 2604,
+                    "PerformanceOptimise\\Inc\\Util::woo_cache_self_test": 2538,
                     "self::static_throttle_hit": 980,
                     "self::throttle_client_suffix": 987
                 },
                 "instance_calls": {
-                    "$_request->get_params": 3116,
-                    "$error->get_error_code": 2108,
-                    "$error->get_error_data": 2108,
-                    "$error->get_error_message": 2097,
+                    "$_request->get_params": 3050,
+                    "$error->get_error_code": 2042,
+                    "$error->get_error_data": 2042,
+                    "$error->get_error_message": 2031,
                     "$img_converter->convert_image": 1455,
-                    "$manager->clear_circuit_state": 1993,
-                    "$manager->disable": 1968,
-                    "$manager->enable": 1956,
-                    "$manager->flush_scoped": 2006,
-                    "$manager->get_last_flush_error": 2014,
-                    "$manager->get_redis_config": 1984,
-                    "$manager->get_serializer_support": 1937,
-                    "$manager->get_status": 1930,
-                    "$manager->ping": 1944,
+                    "$manager->clear_circuit_state": 1927,
+                    "$manager->disable": 1902,
+                    "$manager->enable": 1890,
+                    "$manager->flush_scoped": 1940,
+                    "$manager->get_last_flush_error": 1948,
+                    "$manager->get_redis_config": 1918,
+                    "$manager->get_serializer_support": 1871,
+                    "$manager->get_status": 1864,
+                    "$manager->ping": 1878,
                     "$request->get_header": 911,
                     "$request->get_json_params": 584,
                     "$request->get_params": 458,
                     "$response->header": 1174,
                     "$result->get_error_message": 517,
-                    "$sanitized->get_error_message": 2166,
-                    "$this->build_redis_config": 1943,
-                    "$this->get_detected_server_type": 2520,
+                    "$sanitized->get_error_message": 2100,
+                    "$this->build_redis_config": 1877,
+                    "$this->get_detected_server_type": 2454,
                     "$this->get_routes": 128,
-                    "$this->get_rum_next_action": 2519,
-                    "$this->handle_ccss_rollout_action": 3201,
-                    "$this->handle_used_css_rollout_action": 2684,
+                    "$this->get_rum_next_action": 2453,
+                    "$this->handle_ccss_rollout_action": 3135,
+                    "$this->handle_used_css_rollout_action": 2618,
                     "$this->is_endpoint_throttled": 86,
                     "$this->is_image_candidate_url": 665,
                     "$this->is_same_origin_candidate_url": 665,
-                    "$this->is_same_site_url": 2398,
-                    "$this->redis_error_payload": 1948,
+                    "$this->is_same_site_url": 2332,
+                    "$this->redis_error_payload": 1882,
                     "$this->remove_sensitive_settings_from_response": 1659,
                     "$this->resolve_optimise_source_path": 1247,
-                    "$this->sanitize_flush_error": 2018,
-                    "$this->scrub_flush_error_data": 2108,
+                    "$this->sanitize_flush_error": 1952,
+                    "$this->scrub_flush_error_data": 2042,
                     "$this->send_response": 105,
                     "$throttled->header": 506,
-                    "$used_css->generate_preview_for_post": 2794,
-                    "$used_css->get_used_css_rollout_status": 2819,
-                    "$used_css->promote_staged_used_css": 2818,
-                    "$used_css->regenerate_all": 2750,
-                    "$used_css->rollback_used_css_to_fallback": 2829,
-                    "$used_css->verify_used_css_health": 2843,
+                    "$used_css->generate_preview_for_post": 2728,
+                    "$used_css->get_used_css_rollout_status": 2753,
+                    "$used_css->promote_staged_used_css": 2752,
+                    "$used_css->regenerate_all": 2684,
+                    "$used_css->rollback_used_css_to_fallback": 2763,
+                    "$used_css->verify_used_css_health": 2777,
                     "$wp_filesystem->delete": 1530,
                     "$wp_filesystem->is_dir": 1526
                 },
                 "new_expressions": {
-                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 2992,
+                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 2926,
                     "PerformanceOptimise\\Inc\\Img_Converter": 1449,
-                    "PerformanceOptimise\\Inc\\Object_Cache": 1927,
+                    "PerformanceOptimise\\Inc\\Object_Cache": 1861,
                     "PerformanceOptimise\\Inc\\Rest_Cache": 67,
                     "PerformanceOptimise\\Inc\\Rest_Settings": 68,
-                    "PerformanceOptimise\\Inc\\Used_CSS": 2747,
-                    "\\WP_Error": 2016,
-                    "\\WP_REST_Response": 3730
+                    "PerformanceOptimise\\Inc\\Used_CSS": 2681,
+                    "\\WP_Error": 1950,
+                    "\\WP_REST_Response": 3664
                 },
                 "class_references": [],
                 "class_constant_references": {
                     "PerformanceOptimise\\Inc\\Database_Cleanup": 529,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 1698,
                     "PerformanceOptimise\\Inc\\Util": 1645,
                     "\\ActionScheduler_Store": 1317,
                     "self": 131
                 },
                 "class_string_references": {
-                    "PerformanceOptimise\\Inc\\AI_Adaptive": 2530,
-                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 2989,
-                    "PerformanceOptimise\\Inc\\Cache": 2994,
-                    "PerformanceOptimise\\Inc\\Critical_CSS": 2876,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive": 2464,
+                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 2923,
+                    "PerformanceOptimise\\Inc\\Cache": 2928,
+                    "PerformanceOptimise\\Inc\\Critical_CSS": 2810,
                     "PerformanceOptimise\\Inc\\Img_Converter": 1155,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 3088,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 3022,
                     "PerformanceOptimise\\Inc\\Log": 971,
-                    "PerformanceOptimise\\Inc\\Main": 3556,
+                    "PerformanceOptimise\\Inc\\Main": 3490,
                     "PerformanceOptimise\\Inc\\OD_Bridge": 686,
                     "PerformanceOptimise\\Inc\\RUM": 719,
                     "PerformanceOptimise\\Inc\\Rest": 19,
-                    "PerformanceOptimise\\Inc\\Server_Rules": 2575,
-                    "PerformanceOptimise\\Inc\\Settings_Command": 3672,
-                    "PerformanceOptimise\\Inc\\Suggestion_Engine": 3379,
+                    "PerformanceOptimise\\Inc\\Server_Rules": 2509,
+                    "PerformanceOptimise\\Inc\\Settings_Command": 3606,
+                    "PerformanceOptimise\\Inc\\Suggestion_Engine": 3313,
                     "PerformanceOptimise\\Inc\\Telemetry": 1654,
-                    "PerformanceOptimise\\Inc\\Used_CSS": 2654,
+                    "PerformanceOptimise\\Inc\\Used_CSS": 2588,
                     "PerformanceOptimise\\Inc\\Util": 714
                 },
                 "class_exists": {
                     "ActionScheduler_Store": 1315,
-                    "ET_Builder_Element": 3541,
-                    "Elementor\\Plugin": 3535,
-                    "Kadence_Blocks": 3538,
+                    "ET_Builder_Element": 3475,
+                    "Elementor\\Plugin": 3469,
+                    "Kadence_Blocks": 3472,
                     "OD_URL_Metric": 688,
-                    "PerformanceOptimise\\Inc\\AI_Adaptive": 2530,
-                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 2989,
-                    "PerformanceOptimise\\Inc\\Cache": 2994,
-                    "PerformanceOptimise\\Inc\\Critical_CSS": 2876,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 3088,
+                    "PerformanceOptimise\\Inc\\AI_Adaptive": 2464,
+                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher": 2923,
+                    "PerformanceOptimise\\Inc\\Cache": 2928,
+                    "PerformanceOptimise\\Inc\\Critical_CSS": 2810,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 3022,
                     "PerformanceOptimise\\Inc\\Log": 971,
-                    "PerformanceOptimise\\Inc\\Main": 3556,
+                    "PerformanceOptimise\\Inc\\Main": 3490,
                     "PerformanceOptimise\\Inc\\OD_Bridge": 686,
                     "PerformanceOptimise\\Inc\\RUM": 719,
                     "PerformanceOptimise\\Inc\\Rest": 19,
-                    "PerformanceOptimise\\Inc\\Server_Rules": 2575,
-                    "PerformanceOptimise\\Inc\\Settings_Command": 3672,
-                    "PerformanceOptimise\\Inc\\Suggestion_Engine": 3379,
+                    "PerformanceOptimise\\Inc\\Server_Rules": 2509,
+                    "PerformanceOptimise\\Inc\\Settings_Command": 3606,
+                    "PerformanceOptimise\\Inc\\Suggestion_Engine": 3313,
                     "PerformanceOptimise\\Inc\\Telemetry": 1654,
-                    "PerformanceOptimise\\Inc\\Used_CSS": 2654,
+                    "PerformanceOptimise\\Inc\\Used_CSS": 2588,
                     "PerformanceOptimise\\Inc\\Util": 714,
-                    "WooCommerce": 3531
+                    "WooCommerce": 3465
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_last_purge": 3024,
-                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_safe_preview_url": 3058,
-                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::purge_derived_caches": 2989,
-                    "PerformanceOptimise\\Inc\\Cache::bump_stats_cache": 2996,
-                    "PerformanceOptimise\\Inc\\Cache::clear_cache": 3689,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::get_templates": 3149,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 3177,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::is_known_template": 3157,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::resolve_template_slug": 2879,
+                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_last_purge": 2958,
+                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::get_safe_preview_url": 2992,
+                    "PerformanceOptimise\\Inc\\Builder_Purge_Watcher::purge_derived_caches": 2923,
+                    "PerformanceOptimise\\Inc\\Cache::bump_stats_cache": 2930,
+                    "PerformanceOptimise\\Inc\\Cache::clear_cache": 3623,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::get_templates": 3083,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 3111,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::is_known_template": 3091,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::resolve_template_slug": 2813,
                     "PerformanceOptimise\\Inc\\Img_Converter::is_path_in_allowlist": 1155,
-                    "PerformanceOptimise\\Inc\\Main::build_safe_mode_enable_payload": 3650,
-                    "PerformanceOptimise\\Inc\\Main::clear_all_cache": 3691,
-                    "PerformanceOptimise\\Inc\\Main::detect_fragile_handles": 3556,
-                    "PerformanceOptimise\\Inc\\Main::get_safe_mode_stack_state": 3572,
+                    "PerformanceOptimise\\Inc\\Main::build_safe_mode_enable_payload": 3584,
+                    "PerformanceOptimise\\Inc\\Main::clear_all_cache": 3625,
+                    "PerformanceOptimise\\Inc\\Main::detect_fragile_handles": 3490,
+                    "PerformanceOptimise\\Inc\\Main::get_safe_mode_stack_state": 3506,
                     "PerformanceOptimise\\Inc\\OD_Bridge::get_lcp_url": 686,
                     "PerformanceOptimise\\Inc\\OD_Bridge::is_enabled": 689,
-                    "PerformanceOptimise\\Inc\\RUM::get_aggregate_readonly": 2556,
+                    "PerformanceOptimise\\Inc\\RUM::get_aggregate_readonly": 2490,
                     "PerformanceOptimise\\Inc\\RUM::get_field_lcp_url": 719,
                     "PerformanceOptimise\\Inc\\RUM::get_stored_pagespeed_lcp_url": 732,
                     "PerformanceOptimise\\Inc\\RUM::is_same_origin_url": 843,
                     "PerformanceOptimise\\Inc\\RUM::is_same_origin_url_strict": 840,
-                    "PerformanceOptimise\\Inc\\Server_Rules::get_server_type": 2575,
-                    "PerformanceOptimise\\Inc\\Telemetry::invalidate_audit_cache": 3675,
-                    "PerformanceOptimise\\Inc\\Used_CSS::get_staleness_info": 3298,
-                    "PerformanceOptimise\\Inc\\Used_CSS::is_excluded_post": 2654,
+                    "PerformanceOptimise\\Inc\\Server_Rules::get_server_type": 2509,
+                    "PerformanceOptimise\\Inc\\Telemetry::invalidate_audit_cache": 3609,
+                    "PerformanceOptimise\\Inc\\Used_CSS::get_staleness_info": 3232,
+                    "PerformanceOptimise\\Inc\\Used_CSS::is_excluded_post": 2588,
                     "PerformanceOptimise\\Inc\\Util::get_image_mime_type": 797,
-                    "PerformanceOptimise\\Inc\\Util::get_settings": 3467,
+                    "PerformanceOptimise\\Inc\\Util::get_settings": 3401,
                     "PerformanceOptimise\\Inc\\Util::is_same_site_url": 1058,
-                    "PerformanceOptimise\\Inc\\Util::save_settings": 3663,
-                    "PerformanceOptimise\\Inc\\Util::set_settings_cache": 3665,
-                    "PerformanceOptimise\\Inc\\Util::sign_callback_payload": 2698,
-                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 3642
+                    "PerformanceOptimise\\Inc\\Util::save_settings": 3597,
+                    "PerformanceOptimise\\Inc\\Util::set_settings_cache": 3599,
+                    "PerformanceOptimise\\Inc\\Util::sign_callback_payload": 2632,
+                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 3576
                 },
                 "interface_exists": [],
                 "trait_exists": [],
@@ -17317,67 +17479,67 @@
                 "file_references": [],
                 "external_classes": {
                     "ActionScheduler_Store": 1315,
-                    "ET_Builder_Element": 3541,
-                    "Elementor\\Plugin": 3535,
-                    "Kadence_Blocks": 3538,
+                    "ET_Builder_Element": 3475,
+                    "Elementor\\Plugin": 3469,
+                    "Kadence_Blocks": 3472,
                     "OD_URL_Metric": 688,
-                    "WooCommerce": 3531,
+                    "WooCommerce": 3465,
                     "\\ActionScheduler_Store": 1317,
-                    "\\WP_Error": 2016,
-                    "\\WP_REST_Response": 3730
+                    "\\WP_Error": 1950,
+                    "\\WP_REST_Response": 3664
                 },
                 "external_functions": {
-                    "Builder_Purge_Watcher": 2992,
+                    "Builder_Purge_Watcher": 2926,
                     "Img_Converter": 1449,
-                    "Object_Cache": 1927,
+                    "Object_Cache": 1861,
                     "Rest_Cache": 67,
                     "Rest_Settings": 68,
-                    "Used_CSS": 2747,
-                    "\\WP_Error": 2016,
-                    "\\WP_REST_Response": 3730,
+                    "Used_CSS": 2681,
+                    "\\WP_Error": 1950,
+                    "\\WP_REST_Response": 3664,
                     "__": 499,
                     "absint": 459,
                     "apply_filters": 1280,
                     "array_diff_key": 1351,
-                    "array_filter": 2468,
-                    "array_key_exists": 3120,
+                    "array_filter": 2402,
+                    "array_key_exists": 3054,
                     "array_map": 1197,
                     "array_merge": 1192,
                     "array_slice": 1284,
-                    "array_unique": 3583,
-                    "array_values": 3583,
+                    "array_unique": 3517,
+                    "array_values": 3517,
                     "as_get_scheduled_actions": 1330,
-                    "as_has_scheduled_action": 2717,
-                    "check_ajax_referer": 2208,
+                    "as_has_scheduled_action": 2651,
+                    "check_ajax_referer": 2142,
                     "class_exists": 19,
                     "clear_cache": 1077,
                     "count": 562,
                     "current_user_can": 902,
                     "defined": 15,
-                    "did_action": 3535,
-                    "discard_sandbox_preview": 3437,
+                    "did_action": 3469,
+                    "discard_sandbox_preview": 3371,
                     "esc_url_raw": 660,
-                    "explode": 3484,
+                    "explode": 3418,
                     "file_exists": 1251,
                     "function_exists": 656,
                     "get_current_user_id": 985,
-                    "get_permalink": 2785,
-                    "get_post": 2649,
+                    "get_permalink": 2719,
+                    "get_post": 2583,
                     "get_post_meta": 658,
                     "get_preload_status": 615,
-                    "get_sandbox_preview": 3398,
+                    "get_sandbox_preview": 3332,
                     "get_settings_snapshot": 1564,
-                    "get_template": 3538,
+                    "get_template": 3472,
                     "get_transient": 990,
                     "import_settings": 1549,
                     "in_array": 498,
                     "is_array": 585,
                     "is_int": 1193,
-                    "is_numeric": 2629,
-                    "is_object": 3508,
-                    "is_scalar": 2140,
+                    "is_numeric": 2563,
+                    "is_object": 3442,
+                    "is_scalar": 2074,
                     "is_string": 646,
-                    "is_user_logged_in": 2204,
+                    "is_user_logged_in": 2138,
                     "is_wp_error": 516,
                     "json_decode": 1345,
                     "ltrim": 788,
@@ -17388,9 +17550,9 @@
                     "parse_url": 803,
                     "preg_match": 804,
                     "preg_replace": 989,
-                    "promote_sandbox_preview": 3425,
-                    "purge_derived_caches": 2992,
-                    "purge_used_css_cache": 2965,
+                    "promote_sandbox_preview": 3359,
+                    "purge_derived_caches": 2926,
+                    "purge_used_css_cache": 2899,
                     "rawurldecode": 1243,
                     "realpath": 1254,
                     "register_rest_route": 131,
@@ -17400,13 +17562,13 @@
                     "rtrim": 1511,
                     "sanitize_key": 989,
                     "sanitize_text_field": 496,
-                    "save_sandbox_preview": 3413,
+                    "save_sandbox_preview": 3347,
                     "set_transient": 995,
                     "sprintf": 973,
-                    "str_ends_with": 2474,
+                    "str_ends_with": 2408,
                     "str_replace": 1243,
                     "str_starts_with": 789,
-                    "stripos": 3538,
+                    "stripos": 3472,
                     "strpos": 1238,
                     "strtolower": 788,
                     "substr": 646,
@@ -17414,44 +17576,44 @@
                     "trailingslashit": 66,
                     "trim": 646,
                     "update_settings": 1089,
-                    "update_user_meta": 3714,
-                    "wp_clear_scheduled_hook": 1996,
-                    "wp_create_nonce": 2214,
-                    "wp_http_validate_url": 2260,
+                    "update_user_meta": 3648,
+                    "wp_clear_scheduled_hook": 1930,
+                    "wp_create_nonce": 2148,
+                    "wp_http_validate_url": 2194,
                     "wp_normalize_path": 1154,
                     "wp_parse_url": 803,
-                    "wp_send_json_error": 2205,
-                    "wp_send_json_success": 2212,
+                    "wp_send_json_error": 2139,
+                    "wp_send_json_success": 2146,
                     "wp_unslash": 646,
                     "wp_verify_nonce": 925
                 },
                 "wordpress_functions": {
-                    "\\WP_Error": 2016,
-                    "\\WP_REST_Response": 3730,
+                    "\\WP_Error": 1950,
+                    "\\WP_REST_Response": 3664,
                     "absint": 459,
                     "apply_filters": 1280,
                     "current_user_can": 902,
-                    "did_action": 3535,
+                    "did_action": 3469,
                     "esc_url_raw": 660,
                     "get_current_user_id": 985,
-                    "get_permalink": 2785,
-                    "get_post": 2649,
+                    "get_permalink": 2719,
+                    "get_post": 2583,
                     "get_post_meta": 658,
                     "get_transient": 990,
-                    "is_user_logged_in": 2204,
+                    "is_user_logged_in": 2138,
                     "is_wp_error": 516,
                     "register_rest_route": 131,
                     "sanitize_key": 989,
                     "sanitize_text_field": 496,
                     "trailingslashit": 66,
-                    "update_user_meta": 3714,
-                    "wp_clear_scheduled_hook": 1996,
-                    "wp_create_nonce": 2214,
-                    "wp_http_validate_url": 2260,
+                    "update_user_meta": 3648,
+                    "wp_clear_scheduled_hook": 1930,
+                    "wp_create_nonce": 2148,
+                    "wp_http_validate_url": 2194,
                     "wp_normalize_path": 1154,
                     "wp_parse_url": 803,
-                    "wp_send_json_error": 2205,
-                    "wp_send_json_success": 2212,
+                    "wp_send_json_error": 2139,
+                    "wp_send_json_success": 2146,
                     "wp_unslash": 646,
                     "wp_verify_nonce": 925
                 },
@@ -17474,6 +17636,7 @@
                 "PerformanceOptimise\\Inc\\Cache",
                 "PerformanceOptimise\\Inc\\Critical_CSS",
                 "PerformanceOptimise\\Inc\\Database_Cleanup",
+                "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                 "PerformanceOptimise\\Inc\\Img_Converter",
                 "PerformanceOptimise\\Inc\\Insight_Query",
                 "PerformanceOptimise\\Inc\\LiteSpeed_Integration",
@@ -17520,16 +17683,16 @@
             "hooks": [],
             "metrics": {
                 "fan_in": 1,
-                "fan_out": 24,
+                "fan_out": 25,
                 "incoming_reference_evidence": 1,
-                "outgoing_reference_evidence": 193,
+                "outgoing_reference_evidence": 179,
                 "runtime_fan_in": 1,
-                "runtime_fan_out": 24,
+                "runtime_fan_out": 25,
                 "compatibility_fan_in": 0,
                 "compatibility_fan_out": 16,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 23,
+                "cross_domain_edges": 24,
                 "boundary_violations": 1,
                 "strongly_connected_component": 0
             }
@@ -21645,7 +21808,7 @@
             "file": "includes/Admin/class-wppo-cli-command.php",
             "domain": "Admin",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 2363,
+            "lines": 2297,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -21658,26 +21821,17 @@
             "largest_methods": [
                 {
                     "name": "settings",
-                    "line": 596,
-                    "end_line": 819,
+                    "line": 530,
+                    "end_line": 753,
                     "lines": 224,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
-                    "name": "database",
-                    "line": 206,
-                    "end_line": 399,
-                    "lines": 194,
-                    "visibility": "public",
-                    "static": false,
-                    "delegates": false
-                },
-                {
                     "name": "check_verify_cron",
-                    "line": 2103,
-                    "end_line": 2239,
+                    "line": 2037,
+                    "end_line": 2173,
                     "lines": 137,
                     "visibility": "private",
                     "static": false,
@@ -21685,17 +21839,26 @@
                 },
                 {
                     "name": "check_verify_dropins",
-                    "line": 1828,
-                    "end_line": 1958,
+                    "line": 1762,
+                    "end_line": 1892,
                     "lines": 131,
                     "visibility": "private",
                     "static": false,
                     "delegates": false
                 },
                 {
+                    "name": "database",
+                    "line": 206,
+                    "end_line": 333,
+                    "lines": 128,
+                    "visibility": "public",
+                    "static": false,
+                    "delegates": false
+                },
+                {
                     "name": "verify",
-                    "line": 1163,
-                    "end_line": 1288,
+                    "line": 1097,
+                    "end_line": 1222,
                     "lines": 126,
                     "visibility": "public",
                     "static": false,
@@ -21703,8 +21866,8 @@
                 },
                 {
                     "name": "check_verify_cache_dirs",
-                    "line": 1655,
-                    "end_line": 1758,
+                    "line": 1589,
+                    "end_line": 1692,
                     "lines": 104,
                     "visibility": "private",
                     "static": false,
@@ -21712,8 +21875,8 @@
                 },
                 {
                     "name": "validate_settings_schema",
-                    "line": 1381,
-                    "end_line": 1462,
+                    "line": 1315,
+                    "end_line": 1396,
                     "lines": 82,
                     "visibility": "public",
                     "static": true,
@@ -21721,8 +21884,8 @@
                 },
                 {
                     "name": "check_verify_uninstall_spot",
-                    "line": 2251,
-                    "end_line": 2325,
+                    "line": 2185,
+                    "end_line": 2259,
                     "lines": 75,
                     "visibility": "private",
                     "static": false,
@@ -21730,8 +21893,8 @@
                 },
                 {
                     "name": "object_cache",
-                    "line": 900,
-                    "end_line": 973,
+                    "line": 834,
+                    "end_line": 907,
                     "lines": 74,
                     "visibility": "public",
                     "static": false,
@@ -21739,8 +21902,8 @@
                 },
                 {
                     "name": "image",
-                    "line": 432,
-                    "end_line": 504,
+                    "line": 366,
+                    "end_line": 438,
                     "lines": 73,
                     "visibility": "public",
                     "static": false,
@@ -21753,133 +21916,125 @@
             ],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::foreign_dropin_present": 1841,
-                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::is_our_dropin": 1835,
+                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::foreign_dropin_present": 1775,
+                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::is_our_dropin": 1769,
                     "PerformanceOptimise\\Inc\\Cache::clear_cache": 111,
                     "PerformanceOptimise\\Inc\\Cache::get_cache_stats": 93,
                     "PerformanceOptimise\\Inc\\Cron::trigger_preload": 86,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_action_scheduler": 368,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_all": 307,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_auto_drafts": 337,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_expired_transients": 353,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_oembed_cache": 365,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_orphan_postmeta": 357,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_revisions": 333,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_spam_comments": 345,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_trashed_comments": 349,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_trashed_posts": 341,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::clean_unattached_media": 361,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::get_counts": 250,
                     "PerformanceOptimise\\Inc\\Database_Cleanup::optimize_table": 235,
-                    "PerformanceOptimise\\Inc\\Img_Converter::get_img_info": 439,
-                    "PerformanceOptimise\\Inc\\Insight_Query::get_pagespeed": 1044,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::is_esi_available": 2086,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::is_setting_enabled": 2083,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::effective_mode": 2052,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::is_lscache_active": 2070,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner::preview": 274,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner::run": 298,
+                    "PerformanceOptimise\\Inc\\Img_Converter::get_img_info": 373,
+                    "PerformanceOptimise\\Inc\\Insight_Query::get_pagespeed": 978,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::is_esi_available": 2020,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::is_setting_enabled": 2017,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::effective_mode": 1986,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::is_lscache_active": 2004,
                     "PerformanceOptimise\\Inc\\Log::add": 87,
-                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 1901,
-                    "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 1031,
-                    "PerformanceOptimise\\Inc\\Redis_Config_Policy::build": 986,
-                    "PerformanceOptimise\\Inc\\Server_Rules::is_litespeed": 2061,
-                    "PerformanceOptimise\\Inc\\System_Info::get_all": 1096,
-                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 1027,
-                    "PerformanceOptimise\\Inc\\Util::clear_settings_cache": 1207,
-                    "PerformanceOptimise\\Inc\\Util::get_default_settings": 516,
-                    "PerformanceOptimise\\Inc\\Util::get_settings": 437,
-                    "PerformanceOptimise\\Inc\\Util::get_settings_schema": 1383,
-                    "PerformanceOptimise\\Inc\\Util::init_filesystem": 627,
-                    "PerformanceOptimise\\Inc\\Util::min_cache_dir": 1714,
-                    "PerformanceOptimise\\Inc\\Util::sanitize_settings_recursively": 682,
-                    "PerformanceOptimise\\Inc\\Util::save_settings": 706,
-                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 702,
-                    "WP_CLI::confirm": 304,
+                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 1835,
+                    "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 965,
+                    "PerformanceOptimise\\Inc\\Redis_Config_Policy::build": 920,
+                    "PerformanceOptimise\\Inc\\Server_Rules::is_litespeed": 1995,
+                    "PerformanceOptimise\\Inc\\System_Info::get_all": 1030,
+                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 961,
+                    "PerformanceOptimise\\Inc\\Util::clear_settings_cache": 1141,
+                    "PerformanceOptimise\\Inc\\Util::get_default_settings": 450,
+                    "PerformanceOptimise\\Inc\\Util::get_settings": 371,
+                    "PerformanceOptimise\\Inc\\Util::get_settings_schema": 1317,
+                    "PerformanceOptimise\\Inc\\Util::init_filesystem": 561,
+                    "PerformanceOptimise\\Inc\\Util::min_cache_dir": 1648,
+                    "PerformanceOptimise\\Inc\\Util::sanitize_settings_recursively": 616,
+                    "PerformanceOptimise\\Inc\\Util::save_settings": 640,
+                    "PerformanceOptimise\\Inc\\Util::take_settings_snapshot": 636,
+                    "WP_CLI::confirm": 295,
                     "WP_CLI::error": 102,
                     "WP_CLI::log": 94,
                     "WP_CLI::success": 88,
                     "WP_CLI::warning": 222,
-                    "\\Spyc::YAMLDump": 746,
-                    "\\WP_CLI\\Utils::format_items": 1269,
+                    "\\Spyc::YAMLDump": 680,
+                    "\\WP_CLI\\Utils::format_items": 1203,
                     "\\WP_CLI\\Utils::get_flag_value": 212,
-                    "self::build_redis_config_from_settings": 2005,
-                    "self::build_verify_payload": 1264,
-                    "self::classify_unwritable_cache_root": 1694,
-                    "self::evaluate_litespeed_state": 2093,
-                    "self::find_orphan_cron_hooks": 2130,
-                    "self::find_unknown_wppo_options": 2291,
-                    "self::get_default_settings": 607,
-                    "self::get_redis_config_from_assoc": 911,
-                    "self::get_verify_check_names": 1191,
+                    "self::build_redis_config_from_settings": 1939,
+                    "self::build_verify_payload": 1198,
+                    "self::classify_unwritable_cache_root": 1628,
+                    "self::evaluate_litespeed_state": 2027,
+                    "self::find_orphan_cron_hooks": 2064,
+                    "self::find_unknown_wppo_options": 2225,
+                    "self::get_default_settings": 541,
+                    "self::get_redis_config_from_assoc": 845,
+                    "self::get_verify_check_names": 1125,
                     "self::log_json": 221,
-                    "self::resolve_verify_domain": 1711,
-                    "self::validate_settings_schema": 1236
+                    "self::resolve_verify_domain": 1645,
+                    "self::validate_settings_schema": 1170
                 },
                 "instance_calls": {
-                    "$cleaned_count->get_error_message": 377,
-                    "$e->getMessage": 2013,
-                    "$fs->get_contents": 2351,
-                    "$img_converter->convert_image": 470,
-                    "$manager->disable": 950,
-                    "$manager->enable": 922,
-                    "$manager->flush": 960,
-                    "$manager->get_dropin_path": 1977,
-                    "$manager->get_status": 906,
-                    "$manager->ping": 912,
-                    "$oc_manager->get_dropin_path": 1895,
-                    "$ping->get_error_message": 2027,
-                    "$result->get_error_message": 914,
-                    "$this->check_verify_cache_dirs": 1224,
-                    "$this->check_verify_cron": 1239,
-                    "$this->check_verify_dropins": 1227,
-                    "$this->check_verify_litespeed": 1233,
-                    "$this->check_verify_redis": 1230,
-                    "$this->check_verify_uninstall_spot": 1242,
-                    "$this->read_small_file": 1885,
-                    "$val->get_error_message": 313,
-                    "$wp_filesystem->exists": 659,
-                    "$wp_filesystem->get_contents": 664,
-                    "$wp_filesystem->put_contents": 638,
-                    "$wpdb->esc_like": 2257,
-                    "$wpdb->get_col": 2187,
-                    "$wpdb->prepare": 2188
+                    "$cleaned_count->get_error_message": 327,
+                    "$e->getMessage": 1947,
+                    "$fs->get_contents": 2285,
+                    "$img_converter->convert_image": 404,
+                    "$manager->disable": 884,
+                    "$manager->enable": 856,
+                    "$manager->flush": 894,
+                    "$manager->get_dropin_path": 1911,
+                    "$manager->get_status": 840,
+                    "$manager->ping": 846,
+                    "$oc_manager->get_dropin_path": 1829,
+                    "$ping->get_error_message": 1961,
+                    "$result->get_error_message": 848,
+                    "$this->check_verify_cache_dirs": 1158,
+                    "$this->check_verify_cron": 1173,
+                    "$this->check_verify_dropins": 1161,
+                    "$this->check_verify_litespeed": 1167,
+                    "$this->check_verify_redis": 1164,
+                    "$this->check_verify_uninstall_spot": 1176,
+                    "$this->read_small_file": 1819,
+                    "$val->get_error_message": 305,
+                    "$wp_filesystem->exists": 593,
+                    "$wp_filesystem->get_contents": 598,
+                    "$wp_filesystem->put_contents": 572,
+                    "$wpdb->esc_like": 2191,
+                    "$wpdb->get_col": 2121,
+                    "$wpdb->prepare": 2122
                 },
                 "new_expressions": {
-                    "PerformanceOptimise\\Inc\\Img_Converter": 438,
-                    "PerformanceOptimise\\Inc\\Object_Cache": 902
+                    "PerformanceOptimise\\Inc\\Img_Converter": 372,
+                    "PerformanceOptimise\\Inc\\Object_Cache": 836
                 },
                 "class_references": [],
                 "class_constant_references": {
-                    "PerformanceOptimise\\Inc\\Cron": 1485,
+                    "PerformanceOptimise\\Inc\\Cron": 1419,
                     "PerformanceOptimise\\Inc\\Database_Cleanup": 227,
-                    "PerformanceOptimise\\Inc\\Object_Cache": 1909,
-                    "PerformanceOptimise\\Inc\\Util": 672
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 298,
+                    "PerformanceOptimise\\Inc\\Object_Cache": 1843,
+                    "PerformanceOptimise\\Inc\\Util": 606
                 },
                 "class_string_references": {
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 2081,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 2051,
-                    "PerformanceOptimise\\Inc\\Server_Rules": 2060,
-                    "PerformanceOptimise\\Inc\\Util": 1703,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 2015,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 1985,
+                    "PerformanceOptimise\\Inc\\Server_Rules": 1994,
+                    "PerformanceOptimise\\Inc\\Util": 1637,
                     "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 21,
                     "WP_CLI\\Utils": 211
                 },
                 "class_exists": {
-                    "LiteSpeed_Cache_API": 2072,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 2081,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 2051,
-                    "PerformanceOptimise\\Inc\\Server_Rules": 2060,
+                    "LiteSpeed_Cache_API": 2006,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 2015,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 1985,
+                    "PerformanceOptimise\\Inc\\Server_Rules": 1994,
                     "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 21,
-                    "Redis": 1987,
-                    "Spyc": 745,
+                    "Redis": 1921,
+                    "Spyc": 679,
                     "WP_CLI\\Utils": 211
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::is_esi_available": 2085,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::is_setting_enabled": 2082,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::effective_mode": 2051,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::is_lscache_active": 2069,
-                    "PerformanceOptimise\\Inc\\Server_Rules::is_litespeed": 2060,
-                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 1703,
-                    "WP_CLI\\Utils::format_items": 1268,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::is_esi_available": 2019,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_ESI::is_setting_enabled": 2016,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::effective_mode": 1985,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::is_lscache_active": 2003,
+                    "PerformanceOptimise\\Inc\\Server_Rules::is_litespeed": 1994,
+                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 1637,
+                    "WP_CLI\\Utils::format_items": 1202,
                     "WP_CLI\\Utils::get_flag_value": 211
                 },
                 "interface_exists": [],
@@ -21887,121 +22042,119 @@
                 "reflection": [],
                 "loader_references": [],
                 "file_references": {
-                    "/object-cache.php": 1898,
-                    "/wp-config.php": 1877,
-                    "/wppo-redis-config.php": 1913,
-                    "litespeed-cache/litespeed-cache.php": 2072
+                    "/object-cache.php": 1832,
+                    "/wp-config.php": 1811,
+                    "/wppo-redis-config.php": 1847,
+                    "litespeed-cache/litespeed-cache.php": 2006
                 },
                 "external_classes": {
-                    "LiteSpeed_Cache_API": 2072,
-                    "Redis": 1987,
-                    "Spyc": 745,
+                    "LiteSpeed_Cache_API": 2006,
+                    "Redis": 1921,
+                    "Spyc": 679,
                     "WP_CLI": 88,
                     "WP_CLI\\Utils": 211,
                     "WP_CLI_Command": 0,
-                    "\\Spyc": 746,
+                    "\\Spyc": 680,
                     "\\WP_CLI\\Utils": 212
                 },
                 "external_functions": {
-                    "Img_Converter": 438,
-                    "Object_Cache": 902,
+                    "Img_Converter": 372,
+                    "Object_Cache": 836,
                     "__": 87,
-                    "_get_cron_array": 2112,
-                    "array_fill": 2185,
-                    "array_key_exists": 1394,
-                    "array_keys": 673,
+                    "_get_cron_array": 2046,
+                    "array_fill": 2119,
+                    "array_key_exists": 1328,
+                    "array_keys": 607,
                     "array_map": 220,
                     "array_merge": 227,
-                    "array_replace_recursive": 611,
-                    "array_slice": 2310,
+                    "array_replace_recursive": 545,
+                    "array_slice": 2244,
                     "array_unique": 227,
                     "array_values": 227,
-                    "as_get_scheduled_actions": 2170,
-                    "as_has_scheduled_action": 2205,
+                    "as_get_scheduled_actions": 2104,
+                    "as_has_scheduled_action": 2139,
                     "class_exists": 21,
-                    "clearstatcache": 1217,
+                    "clearstatcache": 1151,
                     "count": 245,
                     "defined": 17,
-                    "dirname": 1877,
-                    "do_action": 396,
-                    "esc_url_raw": 1027,
+                    "dirname": 1811,
+                    "esc_url_raw": 961,
                     "explode": 220,
-                    "file_get_contents": 2359,
-                    "filesize": 2340,
-                    "function_exists": 298,
-                    "home_url": 1702,
-                    "idn_to_ascii": 1327,
-                    "implode": 717,
+                    "file_get_contents": 2293,
+                    "filesize": 2274,
+                    "function_exists": 289,
+                    "home_url": 1636,
+                    "idn_to_ascii": 1261,
+                    "implode": 651,
                     "in_array": 230,
-                    "is_array": 606,
-                    "is_dir": 1668,
-                    "is_object": 2256,
-                    "is_plugin_active": 2072,
-                    "is_readable": 1874,
-                    "is_string": 532,
-                    "is_wp_error": 311,
-                    "is_writable": 1669,
-                    "json_decode": 665,
-                    "max": 443,
+                    "is_array": 540,
+                    "is_dir": 1602,
+                    "is_object": 2190,
+                    "is_plugin_active": 2006,
+                    "is_readable": 1808,
+                    "is_string": 466,
+                    "is_wp_error": 303,
+                    "is_writable": 1603,
+                    "json_decode": 599,
+                    "max": 377,
                     "method_exists": 211,
-                    "min": 443,
-                    "parse_url": 1318,
-                    "posix_geteuid": 1689,
-                    "posix_getpwuid": 1798,
-                    "posix_isatty": 299,
-                    "preg_match": 1342,
-                    "preg_replace": 1592,
-                    "realpath": 466,
-                    "sanitize_key": 599,
+                    "min": 377,
+                    "parse_url": 1252,
+                    "posix_geteuid": 1623,
+                    "posix_getpwuid": 1732,
+                    "posix_isatty": 290,
+                    "preg_match": 1276,
+                    "preg_replace": 1526,
+                    "realpath": 400,
+                    "sanitize_key": 533,
                     "sanitize_text_field": 107,
                     "sprintf": 94,
-                    "stat": 1692,
-                    "stream_isatty": 301,
-                    "strpos": 467,
-                    "strtolower": 1346,
-                    "substr_count": 1336,
-                    "trailingslashit": 452,
+                    "stat": 1626,
+                    "stream_isatty": 292,
+                    "strpos": 401,
+                    "strtolower": 1280,
+                    "substr_count": 1270,
+                    "trailingslashit": 386,
                     "trim": 110,
-                    "wp_json_encode": 531,
-                    "wp_next_scheduled": 2147,
+                    "wp_json_encode": 465,
+                    "wp_next_scheduled": 2081,
                     "wp_normalize_path": 110,
                     "wp_parse_url": 110,
-                    "yaml_emit": 751
+                    "yaml_emit": 685
                 },
                 "wordpress_functions": {
-                    "do_action": 396,
-                    "esc_url_raw": 1027,
-                    "home_url": 1702,
-                    "is_plugin_active": 2072,
-                    "is_wp_error": 311,
-                    "sanitize_key": 599,
+                    "esc_url_raw": 961,
+                    "home_url": 1636,
+                    "is_plugin_active": 2006,
+                    "is_wp_error": 303,
+                    "sanitize_key": 533,
                     "sanitize_text_field": 107,
-                    "trailingslashit": 452,
-                    "wp_json_encode": 531,
-                    "wp_next_scheduled": 2147,
+                    "trailingslashit": 386,
+                    "wp_json_encode": 465,
+                    "wp_next_scheduled": 2081,
                     "wp_normalize_path": 110,
                     "wp_parse_url": 110
                 },
                 "filesystem_dependencies": {
-                    "$fs->get_contents": 2351,
-                    "$wp_filesystem->exists": 659,
-                    "$wp_filesystem->get_contents": 664,
-                    "$wp_filesystem->put_contents": 638,
-                    "clearstatcache": 1217,
-                    "dirname": 1877,
-                    "file_get_contents": 2359,
-                    "filesize": 2340,
-                    "is_dir": 1668,
-                    "is_readable": 1874,
-                    "is_writable": 1669,
-                    "realpath": 466,
-                    "stat": 1692
+                    "$fs->get_contents": 2285,
+                    "$wp_filesystem->exists": 593,
+                    "$wp_filesystem->get_contents": 598,
+                    "$wp_filesystem->put_contents": 572,
+                    "clearstatcache": 1151,
+                    "dirname": 1811,
+                    "file_get_contents": 2293,
+                    "filesize": 2274,
+                    "is_dir": 1602,
+                    "is_readable": 1808,
+                    "is_writable": 1603,
+                    "realpath": 400,
+                    "stat": 1626
                 },
                 "network_dependencies": [],
                 "database_dependencies": {
-                    "$wpdb->esc_like": 2257,
-                    "$wpdb->get_col": 2187,
-                    "$wpdb->prepare": 2188
+                    "$wpdb->esc_like": 2191,
+                    "$wpdb->get_col": 2121,
+                    "$wpdb->prepare": 2122
                 },
                 "dynamic_references": []
             },
@@ -22017,6 +22170,7 @@
                 "PerformanceOptimise\\Inc\\Cache",
                 "PerformanceOptimise\\Inc\\Cron",
                 "PerformanceOptimise\\Inc\\Database_Cleanup",
+                "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                 "PerformanceOptimise\\Inc\\Img_Converter",
                 "PerformanceOptimise\\Inc\\Insight_Query",
                 "PerformanceOptimise\\Inc\\LiteSpeed_ESI",
@@ -22042,16 +22196,16 @@
             "hooks": [],
             "metrics": {
                 "fan_in": 1,
-                "fan_out": 15,
+                "fan_out": 16,
                 "incoming_reference_evidence": 2,
-                "outgoing_reference_evidence": 91,
+                "outgoing_reference_evidence": 80,
                 "runtime_fan_in": 1,
-                "runtime_fan_out": 15,
+                "runtime_fan_out": 16,
                 "compatibility_fan_in": 1,
                 "compatibility_fan_out": 5,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 16,
+                "cross_domain_edges": 17,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -23649,7 +23803,7 @@
                 "static_call"
             ],
             "lines": [
-                920
+                890
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -23669,7 +23823,7 @@
                 "static_call"
             ],
             "lines": [
-                975
+                945
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -23712,8 +23866,8 @@
                 "static_call"
             ],
             "lines": [
-                1320,
-                1326
+                1290,
+                1296
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -23734,22 +23888,36 @@
                 "static_call"
             ],
             "lines": [
-                740,
-                745,
-                754,
-                756,
-                758,
-                764,
-                765,
-                767,
-                940,
-                1017,
-                1018,
-                1026,
-                1039,
-                1049
+                910,
+                987,
+                988,
+                996,
+                1009,
+                1019
             ],
-            "evidence_count": 14,
+            "evidence_count": 6,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Abilities",
+            "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+            "from_file": "includes/Admin/class-abilities.php",
+            "to_file": "includes/Database/class-database-cleanup-runner.php",
+            "from_domain": "Admin",
+            "to_domain": "Database",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "class_constant_reference",
+                "static_call"
+            ],
+            "lines": [
+                531,
+                740
+            ],
+            "evidence_count": 2,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -23768,7 +23936,7 @@
             ],
             "lines": [
                 726,
-                954
+                924
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -23788,8 +23956,8 @@
                 "static_call"
             ],
             "lines": [
-                892,
-                915
+                862,
+                885
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -23812,10 +23980,10 @@
                 "static_call"
             ],
             "lines": [
-                1425,
-                1426,
-                1452,
-                1453
+                1395,
+                1396,
+                1422,
+                1423
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -23855,7 +24023,7 @@
                 "new_expression"
             ],
             "lines": [
-                1084
+                1054
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -23875,7 +24043,7 @@
                 "static_call"
             ],
             "lines": [
-                871
+                841
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -23895,7 +24063,7 @@
                 "static_call"
             ],
             "lines": [
-                1067
+                1037
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -23915,8 +24083,8 @@
                 "static_call"
             ],
             "lines": [
-                919,
-                921
+                889,
+                891
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -23936,7 +24104,7 @@
                 "static_call"
             ],
             "lines": [
-                786
+                756
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -23956,7 +24124,7 @@
                 "static_call"
             ],
             "lines": [
-                845
+                815
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -23979,8 +24147,8 @@
                 "new_expression"
             ],
             "lines": [
-                1386,
-                1392
+                1356,
+                1362
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -24009,12 +24177,12 @@
                 630,
                 641,
                 652,
-                803,
-                820,
-                822,
-                997,
-                1364,
-                1434
+                773,
+                790,
+                792,
+                967,
+                1334,
+                1404
             ],
             "evidence_count": 11,
             "cross_domain": true,
@@ -26900,6 +27068,62 @@
                 3125
             ],
             "evidence_count": 20,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+            "to": "PerformanceOptimise\\Inc\\Database_Cleanup",
+            "from_file": "includes/Database/class-database-cleanup-runner.php",
+            "to_file": "includes/Database/class-database-cleanup.php",
+            "from_domain": "Database",
+            "to_domain": "Database",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "class_constant_reference",
+                "static_call"
+            ],
+            "lines": [
+                83,
+                98,
+                138,
+                154,
+                155,
+                156,
+                158,
+                163,
+                164,
+                166,
+                190,
+                191,
+                298
+            ],
+            "evidence_count": 13,
+            "cross_domain": false,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+            "to": "PerformanceOptimise\\Inc\\Log",
+            "from_file": "includes/Database/class-database-cleanup-runner.php",
+            "to_file": "includes/Support/class-log.php",
+            "from_domain": "Database",
+            "to_domain": "Support",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "static_call"
+            ],
+            "lines": [
+                278,
+                287,
+                303,
+                313
+            ],
+            "evidence_count": 4,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -30732,9 +30956,9 @@
                 "static_call"
             ],
             "lines": [
-                2530,
-                3341,
-                3358
+                2464,
+                3275,
+                3292
             ],
             "evidence_count": 3,
             "cross_domain": true,
@@ -30759,15 +30983,15 @@
                 "static_call"
             ],
             "lines": [
+                2923,
+                2926,
+                2958,
+                2959,
+                2988,
                 2989,
+                2990,
                 2992,
-                3024,
-                3025,
-                3054,
-                3055,
-                3056,
-                3058,
-                3059
+                2993
             ],
             "evidence_count": 9,
             "cross_domain": true,
@@ -30793,12 +31017,12 @@
             "lines": [
                 1467,
                 1535,
-                2994,
-                2995,
-                2996,
-                2997,
-                3689,
-                3690
+                2928,
+                2929,
+                2930,
+                2931,
+                3623,
+                3624
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -30822,27 +31046,27 @@
                 "static_call"
             ],
             "lines": [
-                2876,
-                2879,
-                2880,
-                2885,
-                2887,
-                2911,
-                2912,
-                2922,
-                2923,
-                2936,
-                3003,
-                3004,
-                3149,
-                3151,
-                3157,
-                3160,
-                3177,
-                3203,
-                3242,
-                3248,
-                3277
+                2810,
+                2813,
+                2814,
+                2819,
+                2821,
+                2845,
+                2846,
+                2856,
+                2857,
+                2870,
+                2937,
+                2938,
+                3083,
+                3085,
+                3091,
+                3094,
+                3111,
+                3137,
+                3176,
+                3182,
+                3211
             ],
             "evidence_count": 21,
             "cross_domain": true,
@@ -30877,24 +31101,32 @@
                 541,
                 557,
                 558,
-                1699,
-                1706,
-                1756,
-                1757,
-                1758,
+                1741,
                 1760,
-                1769,
-                1770,
-                1772,
-                1784,
-                1797,
-                1798,
-                1799,
-                1808,
-                1826,
-                1830
+                1764
             ],
-            "evidence_count": 30,
+            "evidence_count": 17,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Rest",
+            "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+            "from_file": "includes/Admin/class-rest.php",
+            "to_file": "includes/Database/class-database-cleanup-runner.php",
+            "from_domain": "Admin",
+            "to_domain": "Database",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "class_constant_reference",
+                "static_call"
+            ],
+            "lines": [
+                1698
+            ],
+            "evidence_count": 1,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -30922,8 +31154,8 @@
                 1449,
                 1469,
                 1534,
-                1849,
-                1894
+                1783,
+                1828
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -30943,8 +31175,8 @@
                 "static_call"
             ],
             "lines": [
-                2407,
-                2513
+                2341,
+                2447
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -30967,8 +31199,8 @@
                 "static_call"
             ],
             "lines": [
-                3088,
-                3089
+                3022,
+                3023
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -30995,17 +31227,15 @@
                 973,
                 1134,
                 1425,
-                1722,
-                1786,
-                1963,
-                1971,
-                1975,
-                1999,
-                2008,
-                3010,
-                3012
+                1897,
+                1905,
+                1909,
+                1933,
+                1942,
+                2944,
+                2946
             ],
-            "evidence_count": 13,
+            "evidence_count": 11,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -31027,14 +31257,14 @@
                 "static_call"
             ],
             "lines": [
-                3556,
-                3558,
-                3572,
-                3574,
-                3650,
-                3652,
-                3691,
-                3692
+                3490,
+                3492,
+                3506,
+                3508,
+                3584,
+                3586,
+                3625,
+                3626
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -31080,7 +31310,7 @@
                 "new_expression"
             ],
             "lines": [
-                1927
+                1861
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -31100,9 +31330,9 @@
                 "static_call"
             ],
             "lines": [
-                2364,
-                2434,
-                2463
+                2298,
+                2368,
+                2397
             ],
             "evidence_count": 3,
             "cross_domain": true,
@@ -31136,8 +31366,8 @@
                 841,
                 843,
                 844,
-                2556,
-                2557
+                2490,
+                2491
             ],
             "evidence_count": 12,
             "cross_domain": true,
@@ -31157,9 +31387,9 @@
                 "static_call"
             ],
             "lines": [
-                2047,
-                2064,
-                2079
+                1981,
+                1998,
+                2013
             ],
             "evidence_count": 3,
             "cross_domain": true,
@@ -31223,11 +31453,11 @@
                 "static_call"
             ],
             "lines": [
-                2575,
-                2576,
-                3081,
-                3084,
-                3085
+                2509,
+                2510,
+                3015,
+                3018,
+                3019
             ],
             "evidence_count": 5,
             "cross_domain": true,
@@ -31250,8 +31480,8 @@
                 "static_call"
             ],
             "lines": [
-                3672,
-                3673
+                3606,
+                3607
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -31274,10 +31504,10 @@
                 "static_call"
             ],
             "lines": [
-                2528,
-                2531,
-                2557,
-                3379
+                2462,
+                2465,
+                2491,
+                3313
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -31297,7 +31527,7 @@
                 "static_call"
             ],
             "lines": [
-                2227
+                2161
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -31323,9 +31553,9 @@
             "lines": [
                 1654,
                 1655,
-                2278,
-                3675,
-                3677
+                2212,
+                3609,
+                3611
             ],
             "evidence_count": 5,
             "cross_domain": true,
@@ -31350,17 +31580,17 @@
                 "static_call"
             ],
             "lines": [
-                2654,
-                2656,
-                2747,
-                2789,
-                2792,
-                3000,
-                3001,
-                3298,
-                3299,
-                3315,
-                3318
+                2588,
+                2590,
+                2681,
+                2723,
+                2726,
+                2934,
+                2935,
+                3232,
+                3233,
+                3249,
+                3252
             ],
             "evidence_count": 11,
             "cross_domain": true,
@@ -31402,26 +31632,26 @@
                 1618,
                 1645,
                 1649,
-                1844,
-                2252,
-                2272,
-                2322,
-                2337,
-                2397,
-                2508,
-                2604,
-                2698,
-                2699,
-                2712,
-                3467,
-                3469,
-                3631,
-                3642,
-                3643,
-                3663,
-                3664,
-                3665,
-                3667
+                1778,
+                2186,
+                2206,
+                2256,
+                2271,
+                2331,
+                2442,
+                2538,
+                2632,
+                2633,
+                2646,
+                3401,
+                3403,
+                3565,
+                3576,
+                3577,
+                3597,
+                3598,
+                3599,
+                3601
             ],
             "evidence_count": 37,
             "cross_domain": true,
@@ -33050,8 +33280,8 @@
                 "static_call"
             ],
             "lines": [
-                1835,
-                1841
+                1769,
+                1775
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -33096,9 +33326,9 @@
             ],
             "lines": [
                 86,
-                1485,
-                2204,
-                2213
+                1419,
+                2138,
+                2147
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -33121,21 +33351,32 @@
             "lines": [
                 227,
                 235,
-                250,
-                274,
-                307,
-                333,
-                337,
-                341,
-                345,
-                349,
-                353,
-                357,
-                361,
-                365,
-                368
+                250
             ],
-            "evidence_count": 15,
+            "evidence_count": 3,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
+            "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+            "from_file": "includes/Admin/class-wppo-cli-command.php",
+            "to_file": "includes/Database/class-database-cleanup-runner.php",
+            "from_domain": "Admin",
+            "to_domain": "Database",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "class_constant_reference",
+                "static_call"
+            ],
+            "lines": [
+                274,
+                298,
+                318
+            ],
+            "evidence_count": 3,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -33154,9 +33395,9 @@
                 "static_call"
             ],
             "lines": [
-                438,
-                439,
-                483
+                372,
+                373,
+                417
             ],
             "evidence_count": 3,
             "cross_domain": true,
@@ -33176,7 +33417,7 @@
                 "static_call"
             ],
             "lines": [
-                1044
+                978
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -33200,11 +33441,11 @@
                 "static_call"
             ],
             "lines": [
-                2081,
-                2082,
-                2083,
-                2085,
-                2086
+                2015,
+                2016,
+                2017,
+                2019,
+                2020
             ],
             "evidence_count": 5,
             "cross_domain": true,
@@ -33228,10 +33469,10 @@
                 "static_call"
             ],
             "lines": [
-                2051,
-                2052,
-                2069,
-                2070
+                1985,
+                1986,
+                2003,
+                2004
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -33255,17 +33496,15 @@
                 115,
                 127,
                 243,
-                323,
-                388,
-                476,
-                708,
-                811,
-                926,
-                954,
-                962,
-                1037
+                410,
+                642,
+                745,
+                860,
+                888,
+                896,
+                971
             ],
-            "evidence_count": 13,
+            "evidence_count": 11,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -33285,14 +33524,14 @@
                 "static_call"
             ],
             "lines": [
-                902,
-                1894,
-                1901,
-                1909,
+                836,
+                1828,
+                1835,
+                1843,
+                1844,
                 1910,
-                1976,
-                1979,
-                2007
+                1913,
+                1941
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -33312,7 +33551,7 @@
                 "static_call"
             ],
             "lines": [
-                1031
+                965
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -33332,8 +33571,8 @@
                 "static_call"
             ],
             "lines": [
-                986,
-                1361
+                920,
+                1295
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -33357,8 +33596,8 @@
                 "static_call"
             ],
             "lines": [
-                2060,
-                2061
+                1994,
+                1995
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -33378,7 +33617,7 @@
                 "static_call"
             ],
             "lines": [
-                1096
+                1030
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -33402,33 +33641,33 @@
                 "static_call"
             ],
             "lines": [
-                437,
-                516,
-                601,
-                627,
-                657,
-                672,
-                682,
-                697,
-                702,
-                706,
-                787,
-                789,
-                804,
-                808,
-                1027,
-                1207,
-                1208,
-                1382,
-                1383,
-                1575,
-                1580,
-                1656,
-                1703,
-                1705,
-                1714,
-                1715,
-                2348
+                371,
+                450,
+                535,
+                561,
+                591,
+                606,
+                616,
+                631,
+                636,
+                640,
+                721,
+                723,
+                738,
+                742,
+                961,
+                1141,
+                1142,
+                1316,
+                1317,
+                1509,
+                1514,
+                1590,
+                1637,
+                1639,
+                1648,
+                1649,
+                2282
             ],
             "evidence_count": 27,
             "cross_domain": true,
@@ -33669,7 +33908,8 @@
             "PerformanceOptimise\\Inc\\Cron": 5,
             "PerformanceOptimise\\Inc\\Css_Combine": 1,
             "PerformanceOptimise\\Inc\\Css_Safelist": 2,
-            "PerformanceOptimise\\Inc\\Database_Cleanup": 6,
+            "PerformanceOptimise\\Inc\\Database_Cleanup": 7,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 3,
             "PerformanceOptimise\\Inc\\Deactivate": 1,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
@@ -33690,7 +33930,7 @@
             "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 17,
             "PerformanceOptimise\\Inc\\Llms": 2,
             "PerformanceOptimise\\Inc\\Loader_Map": 2,
-            "PerformanceOptimise\\Inc\\Log": 27,
+            "PerformanceOptimise\\Inc\\Log": 28,
             "PerformanceOptimise\\Inc\\Main": 15,
             "PerformanceOptimise\\Inc\\Metabox": 1,
             "PerformanceOptimise\\Inc\\Minify\\CSS": 3,
@@ -33732,7 +33972,7 @@
         },
         "fan_out": {
             "PerformanceOptimise\\Inc\\AI_Adaptive": 5,
-            "PerformanceOptimise\\Inc\\Abilities": 17,
+            "PerformanceOptimise\\Inc\\Abilities": 18,
             "PerformanceOptimise\\Inc\\Activate": 9,
             "PerformanceOptimise\\Inc\\Admin_Notices": 7,
             "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 3,
@@ -33754,6 +33994,7 @@
             "PerformanceOptimise\\Inc\\Css_Combine": 8,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 2,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 2,
             "PerformanceOptimise\\Inc\\Deactivate": 12,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
@@ -33788,7 +34029,7 @@
             "PerformanceOptimise\\Inc\\Purge_Logger": 2,
             "PerformanceOptimise\\Inc\\RUM": 2,
             "PerformanceOptimise\\Inc\\Redis_Config_Policy": 0,
-            "PerformanceOptimise\\Inc\\Rest": 24,
+            "PerformanceOptimise\\Inc\\Rest": 25,
             "PerformanceOptimise\\Inc\\Rest_Cache": 5,
             "PerformanceOptimise\\Inc\\Rest_Settings": 5,
             "PerformanceOptimise\\Inc\\Runtime_State": 0,
@@ -33805,7 +34046,7 @@
             "PerformanceOptimise\\Inc\\Url": 1,
             "PerformanceOptimise\\Inc\\Used_CSS": 8,
             "PerformanceOptimise\\Inc\\Util": 9,
-            "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 15,
+            "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 16,
             "PerformanceOptimise\\Inc\\Woo_Detect": 3,
             "PerformanceOptimise\\Inc\\Wp_Version": 0,
             "WP_Object_Cache": 0,
@@ -33837,7 +34078,8 @@
             "PerformanceOptimise\\Inc\\Cron": 14,
             "PerformanceOptimise\\Inc\\Css_Combine": 1,
             "PerformanceOptimise\\Inc\\Css_Safelist": 8,
-            "PerformanceOptimise\\Inc\\Database_Cleanup": 64,
+            "PerformanceOptimise\\Inc\\Database_Cleanup": 44,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 6,
             "PerformanceOptimise\\Inc\\Deactivate": 1,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 12,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
@@ -33900,7 +34142,7 @@
         },
         "outgoing_reference_evidence": {
             "PerformanceOptimise\\Inc\\AI_Adaptive": 75,
-            "PerformanceOptimise\\Inc\\Abilities": 48,
+            "PerformanceOptimise\\Inc\\Abilities": 42,
             "PerformanceOptimise\\Inc\\Activate": 30,
             "PerformanceOptimise\\Inc\\Admin_Notices": 30,
             "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 16,
@@ -33922,6 +34164,7 @@
             "PerformanceOptimise\\Inc\\Css_Combine": 43,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 31,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 17,
             "PerformanceOptimise\\Inc\\Deactivate": 38,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 7,
@@ -33956,7 +34199,7 @@
             "PerformanceOptimise\\Inc\\Purge_Logger": 3,
             "PerformanceOptimise\\Inc\\RUM": 48,
             "PerformanceOptimise\\Inc\\Redis_Config_Policy": 0,
-            "PerformanceOptimise\\Inc\\Rest": 193,
+            "PerformanceOptimise\\Inc\\Rest": 179,
             "PerformanceOptimise\\Inc\\Rest_Cache": 24,
             "PerformanceOptimise\\Inc\\Rest_Settings": 29,
             "PerformanceOptimise\\Inc\\Runtime_State": 0,
@@ -33973,7 +34216,7 @@
             "PerformanceOptimise\\Inc\\Url": 3,
             "PerformanceOptimise\\Inc\\Used_CSS": 120,
             "PerformanceOptimise\\Inc\\Util": 115,
-            "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 91,
+            "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 80,
             "PerformanceOptimise\\Inc\\Woo_Detect": 10,
             "PerformanceOptimise\\Inc\\Wp_Version": 0,
             "WP_Object_Cache": 0,
@@ -34005,7 +34248,8 @@
             "PerformanceOptimise\\Inc\\Cron": 5,
             "PerformanceOptimise\\Inc\\Css_Combine": 1,
             "PerformanceOptimise\\Inc\\Css_Safelist": 2,
-            "PerformanceOptimise\\Inc\\Database_Cleanup": 6,
+            "PerformanceOptimise\\Inc\\Database_Cleanup": 7,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 3,
             "PerformanceOptimise\\Inc\\Deactivate": 1,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
@@ -34026,7 +34270,7 @@
             "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 17,
             "PerformanceOptimise\\Inc\\Llms": 2,
             "PerformanceOptimise\\Inc\\Loader_Map": 2,
-            "PerformanceOptimise\\Inc\\Log": 27,
+            "PerformanceOptimise\\Inc\\Log": 28,
             "PerformanceOptimise\\Inc\\Main": 15,
             "PerformanceOptimise\\Inc\\Metabox": 1,
             "PerformanceOptimise\\Inc\\Minify\\CSS": 3,
@@ -34068,7 +34312,7 @@
         },
         "runtime_fan_out": {
             "PerformanceOptimise\\Inc\\AI_Adaptive": 5,
-            "PerformanceOptimise\\Inc\\Abilities": 17,
+            "PerformanceOptimise\\Inc\\Abilities": 18,
             "PerformanceOptimise\\Inc\\Activate": 9,
             "PerformanceOptimise\\Inc\\Admin_Notices": 7,
             "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 3,
@@ -34090,6 +34334,7 @@
             "PerformanceOptimise\\Inc\\Css_Combine": 8,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 2,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 2,
             "PerformanceOptimise\\Inc\\Deactivate": 12,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
@@ -34124,7 +34369,7 @@
             "PerformanceOptimise\\Inc\\Purge_Logger": 2,
             "PerformanceOptimise\\Inc\\RUM": 2,
             "PerformanceOptimise\\Inc\\Redis_Config_Policy": 0,
-            "PerformanceOptimise\\Inc\\Rest": 24,
+            "PerformanceOptimise\\Inc\\Rest": 25,
             "PerformanceOptimise\\Inc\\Rest_Cache": 5,
             "PerformanceOptimise\\Inc\\Rest_Settings": 5,
             "PerformanceOptimise\\Inc\\Runtime_State": 0,
@@ -34141,7 +34386,7 @@
             "PerformanceOptimise\\Inc\\Url": 1,
             "PerformanceOptimise\\Inc\\Used_CSS": 8,
             "PerformanceOptimise\\Inc\\Util": 9,
-            "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 15,
+            "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 16,
             "PerformanceOptimise\\Inc\\Woo_Detect": 3,
             "PerformanceOptimise\\Inc\\Wp_Version": 0,
             "WP_Object_Cache": 0,
@@ -34174,6 +34419,7 @@
             "PerformanceOptimise\\Inc\\Css_Combine": 0,
             "PerformanceOptimise\\Inc\\Css_Safelist": 2,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 0,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 0,
             "PerformanceOptimise\\Inc\\Deactivate": 0,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
@@ -34258,6 +34504,7 @@
             "PerformanceOptimise\\Inc\\Css_Combine": 6,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 1,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 0,
             "PerformanceOptimise\\Inc\\Deactivate": 5,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
@@ -34342,6 +34589,7 @@
             "PerformanceOptimise\\Inc\\Css_Combine": 0,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 0,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 0,
             "PerformanceOptimise\\Inc\\Deactivate": 0,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
@@ -34426,6 +34674,7 @@
             "PerformanceOptimise\\Inc\\Css_Combine": 0,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 0,
+            "PerformanceOptimise\\Inc\\Database_Cleanup_Runner": 0,
             "PerformanceOptimise\\Inc\\Deactivate": 0,
             "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
@@ -34508,6 +34757,7 @@
                 "PerformanceOptimise\\Inc\\Cron",
                 "PerformanceOptimise\\Inc\\Css_Combine",
                 "PerformanceOptimise\\Inc\\Database_Cleanup",
+                "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                 "PerformanceOptimise\\Inc\\Dropin_Registry",
                 "PerformanceOptimise\\Inc\\Edge_Cache",
                 "PerformanceOptimise\\Inc\\Edge_Purger",
@@ -34635,6 +34885,7 @@
                     "PerformanceOptimise\\Inc\\Cron",
                     "PerformanceOptimise\\Inc\\Css_Combine",
                     "PerformanceOptimise\\Inc\\Database_Cleanup",
+                    "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                     "PerformanceOptimise\\Inc\\Dropin_Registry",
                     "PerformanceOptimise\\Inc\\Edge_Cache",
                     "PerformanceOptimise\\Inc\\Edge_Purger",
@@ -34790,6 +35041,17 @@
                     {
                         "from": "PerformanceOptimise\\Inc\\Abilities",
                         "to": "PerformanceOptimise\\Inc\\Database_Cleanup",
+                        "classifications": [
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_constant_reference",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Abilities",
+                        "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                         "classifications": [
                             "runtime"
                         ],
@@ -36071,6 +36333,27 @@
                             "class_exists",
                             "class_string_reference",
                             "method_exists",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                        "to": "PerformanceOptimise\\Inc\\Database_Cleanup",
+                        "classifications": [
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_constant_reference",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                        "to": "PerformanceOptimise\\Inc\\Log",
+                        "classifications": [
+                            "runtime"
+                        ],
+                        "kinds": [
                             "static_call"
                         ]
                     },
@@ -37545,6 +37828,17 @@
                     },
                     {
                         "from": "PerformanceOptimise\\Inc\\Rest",
+                        "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                        "classifications": [
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_constant_reference",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Rest",
                         "to": "PerformanceOptimise\\Inc\\Img_Converter",
                         "classifications": [
                             "compatibility",
@@ -38347,6 +38641,17 @@
                     },
                     {
                         "from": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
+                        "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                        "classifications": [
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_constant_reference",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
                         "to": "PerformanceOptimise\\Inc\\Img_Converter",
                         "classifications": [
                             "runtime"
@@ -38514,6 +38819,7 @@
                         "PerformanceOptimise\\Inc\\Cron",
                         "PerformanceOptimise\\Inc\\Css_Combine",
                         "PerformanceOptimise\\Inc\\Database_Cleanup",
+                        "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                         "PerformanceOptimise\\Inc\\Dropin_Registry",
                         "PerformanceOptimise\\Inc\\Edge_Cache",
                         "PerformanceOptimise\\Inc\\Edge_Purger",
@@ -38669,6 +38975,17 @@
                         {
                             "from": "PerformanceOptimise\\Inc\\Abilities",
                             "to": "PerformanceOptimise\\Inc\\Database_Cleanup",
+                            "classifications": [
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_constant_reference",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Abilities",
+                            "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                             "classifications": [
                                 "runtime"
                             ],
@@ -39950,6 +40267,27 @@
                                 "class_exists",
                                 "class_string_reference",
                                 "method_exists",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                            "to": "PerformanceOptimise\\Inc\\Database_Cleanup",
+                            "classifications": [
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_constant_reference",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                            "to": "PerformanceOptimise\\Inc\\Log",
+                            "classifications": [
+                                "runtime"
+                            ],
+                            "kinds": [
                                 "static_call"
                             ]
                         },
@@ -41414,6 +41752,17 @@
                         },
                         {
                             "from": "PerformanceOptimise\\Inc\\Rest",
+                            "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                            "classifications": [
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_constant_reference",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Rest",
                             "to": "PerformanceOptimise\\Inc\\Img_Converter",
                             "classifications": [
                                 "compatibility",
@@ -42206,6 +42555,17 @@
                         {
                             "from": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
                             "to": "PerformanceOptimise\\Inc\\Database_Cleanup",
+                            "classifications": [
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_constant_reference",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
+                            "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
                             "classifications": [
                                 "runtime"
                             ],
@@ -43353,11 +43713,11 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Log",
                 "file": "includes/Support/class-log.php",
-                "score": 83.25,
-                "fan_in": 27,
+                "score": 85.25,
+                "fan_in": 28,
                 "fan_out": 1,
                 "compatibility_in": 14,
-                "cross_domain": 26,
+                "cross_domain": 27,
                 "static_state": true,
                 "lines": 248
             },
@@ -43384,6 +43744,17 @@
                 "lines": 5077
             },
             {
+                "node": "PerformanceOptimise\\Inc\\Rest",
+                "file": "includes/Admin/class-rest.php",
+                "score": 53.67,
+                "fan_in": 1,
+                "fan_out": 25,
+                "compatibility_in": 0,
+                "cross_domain": 24,
+                "static_state": false,
+                "lines": 3674
+            },
+            {
                 "node": "PerformanceOptimise\\Inc\\Used_CSS",
                 "file": "includes/CSS/class-used-css.php",
                 "score": 52.96,
@@ -43404,17 +43775,6 @@
                 "cross_domain": 14,
                 "static_state": true,
                 "lines": 6950
-            },
-            {
-                "node": "PerformanceOptimise\\Inc\\Rest",
-                "file": "includes/Admin/class-rest.php",
-                "score": 51.74,
-                "fan_in": 1,
-                "fan_out": 24,
-                "compatibility_in": 0,
-                "cross_domain": 23,
-                "static_state": false,
-                "lines": 3740
             },
             {
                 "node": "PerformanceOptimise\\Inc\\RUM",
@@ -43450,6 +43810,28 @@
                 "lines": 692
             },
             {
+                "node": "PerformanceOptimise\\Inc\\Abilities",
+                "file": "includes/Admin/class-abilities.php",
+                "score": 39.43,
+                "fan_in": 1,
+                "fan_out": 18,
+                "compatibility_in": 0,
+                "cross_domain": 19,
+                "static_state": false,
+                "lines": 1430
+            },
+            {
+                "node": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
+                "file": "includes/Admin/class-wppo-cli-command.php",
+                "score": 38.3,
+                "fan_in": 1,
+                "fan_out": 16,
+                "compatibility_in": 1,
+                "cross_domain": 17,
+                "static_state": false,
+                "lines": 2297
+            },
+            {
                 "node": "PerformanceOptimise\\Inc\\Object_Cache",
                 "file": "includes/Cache/class-object-cache.php",
                 "score": 38.22,
@@ -43459,28 +43841,6 @@
                 "cross_domain": 11,
                 "static_state": true,
                 "lines": 3215
-            },
-            {
-                "node": "PerformanceOptimise\\Inc\\Abilities",
-                "file": "includes/Admin/class-abilities.php",
-                "score": 37.46,
-                "fan_in": 1,
-                "fan_out": 17,
-                "compatibility_in": 0,
-                "cross_domain": 18,
-                "static_state": false,
-                "lines": 1460
-            },
-            {
-                "node": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
-                "file": "includes/Admin/class-wppo-cli-command.php",
-                "score": 36.36,
-                "fan_in": 1,
-                "fan_out": 15,
-                "compatibility_in": 1,
-                "cross_domain": 16,
-                "static_state": false,
-                "lines": 2363
             },
             {
                 "node": "PerformanceOptimise\\Inc\\Server_Rules",
@@ -43665,7 +44025,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    920
+                    890
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -43686,7 +44046,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    975
+                    945
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -43731,8 +44091,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    1320,
-                    1326
+                    1290,
+                    1296
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -43754,22 +44114,37 @@
                     "static_call"
                 ],
                 "lines": [
-                    740,
-                    745,
-                    754,
-                    756,
-                    758,
-                    764,
-                    765,
-                    767,
-                    940,
-                    1017,
-                    1018,
-                    1026,
-                    1039,
-                    1049
+                    910,
+                    987,
+                    988,
+                    996,
+                    1009,
+                    1019
                 ],
-                "evidence_count": 14,
+                "evidence_count": 6,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Abilities",
+                "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                "from_file": "includes/Admin/class-abilities.php",
+                "to_file": "includes/Database/class-database-cleanup-runner.php",
+                "from_domain": "Admin",
+                "to_domain": "Database",
+                "classifications": [
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_constant_reference",
+                    "static_call"
+                ],
+                "lines": [
+                    531,
+                    740
+                ],
+                "evidence_count": 2,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -43789,7 +44164,7 @@
                 ],
                 "lines": [
                     726,
-                    954
+                    924
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -43810,8 +44185,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    892,
-                    915
+                    862,
+                    885
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -43835,10 +44210,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    1425,
-                    1426,
-                    1452,
-                    1453
+                    1395,
+                    1396,
+                    1422,
+                    1423
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -43880,7 +44255,7 @@
                     "new_expression"
                 ],
                 "lines": [
-                    1084
+                    1054
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -43901,7 +44276,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    871
+                    841
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -43922,7 +44297,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    1067
+                    1037
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -43943,8 +44318,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    919,
-                    921
+                    889,
+                    891
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -43965,7 +44340,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    786
+                    756
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -43986,7 +44361,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    845
+                    815
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -44010,8 +44385,8 @@
                     "new_expression"
                 ],
                 "lines": [
-                    1386,
-                    1392
+                    1356,
+                    1362
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -44041,12 +44416,12 @@
                     630,
                     641,
                     652,
-                    803,
-                    820,
-                    822,
-                    997,
-                    1364,
-                    1434
+                    773,
+                    790,
+                    792,
+                    967,
+                    1334,
+                    1404
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,
@@ -46630,6 +47005,30 @@
                     3125
                 ],
                 "evidence_count": 20,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                "to": "PerformanceOptimise\\Inc\\Log",
+                "from_file": "includes/Database/class-database-cleanup-runner.php",
+                "to_file": "includes/Support/class-log.php",
+                "from_domain": "Database",
+                "to_domain": "Support",
+                "classifications": [
+                    "runtime"
+                ],
+                "kinds": [
+                    "static_call"
+                ],
+                "lines": [
+                    278,
+                    287,
+                    303,
+                    313
+                ],
+                "evidence_count": 4,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -49909,9 +50308,9 @@
                     "static_call"
                 ],
                 "lines": [
-                    2530,
-                    3341,
-                    3358
+                    2464,
+                    3275,
+                    3292
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -49937,15 +50336,15 @@
                     "static_call"
                 ],
                 "lines": [
+                    2923,
+                    2926,
+                    2958,
+                    2959,
+                    2988,
                     2989,
+                    2990,
                     2992,
-                    3024,
-                    3025,
-                    3054,
-                    3055,
-                    3056,
-                    3058,
-                    3059
+                    2993
                 ],
                 "evidence_count": 9,
                 "cross_domain": true,
@@ -49972,12 +50371,12 @@
                 "lines": [
                     1467,
                     1535,
-                    2994,
-                    2995,
-                    2996,
-                    2997,
-                    3689,
-                    3690
+                    2928,
+                    2929,
+                    2930,
+                    2931,
+                    3623,
+                    3624
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -50002,27 +50401,27 @@
                     "static_call"
                 ],
                 "lines": [
-                    2876,
-                    2879,
-                    2880,
-                    2885,
-                    2887,
-                    2911,
-                    2912,
-                    2922,
-                    2923,
-                    2936,
-                    3003,
-                    3004,
-                    3149,
-                    3151,
-                    3157,
-                    3160,
-                    3177,
-                    3203,
-                    3242,
-                    3248,
-                    3277
+                    2810,
+                    2813,
+                    2814,
+                    2819,
+                    2821,
+                    2845,
+                    2846,
+                    2856,
+                    2857,
+                    2870,
+                    2937,
+                    2938,
+                    3083,
+                    3085,
+                    3091,
+                    3094,
+                    3111,
+                    3137,
+                    3176,
+                    3182,
+                    3211
                 ],
                 "evidence_count": 21,
                 "cross_domain": true,
@@ -50058,24 +50457,33 @@
                     541,
                     557,
                     558,
-                    1699,
-                    1706,
-                    1756,
-                    1757,
-                    1758,
+                    1741,
                     1760,
-                    1769,
-                    1770,
-                    1772,
-                    1784,
-                    1797,
-                    1798,
-                    1799,
-                    1808,
-                    1826,
-                    1830
+                    1764
                 ],
-                "evidence_count": 30,
+                "evidence_count": 17,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Rest",
+                "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                "from_file": "includes/Admin/class-rest.php",
+                "to_file": "includes/Database/class-database-cleanup-runner.php",
+                "from_domain": "Admin",
+                "to_domain": "Database",
+                "classifications": [
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_constant_reference",
+                    "static_call"
+                ],
+                "lines": [
+                    1698
+                ],
+                "evidence_count": 1,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -50104,8 +50512,8 @@
                     1449,
                     1469,
                     1534,
-                    1849,
-                    1894
+                    1783,
+                    1828
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -50126,8 +50534,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    2407,
-                    2513
+                    2341,
+                    2447
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -50151,8 +50559,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    3088,
-                    3089
+                    3022,
+                    3023
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -50180,17 +50588,15 @@
                     973,
                     1134,
                     1425,
-                    1722,
-                    1786,
-                    1963,
-                    1971,
-                    1975,
-                    1999,
-                    2008,
-                    3010,
-                    3012
+                    1897,
+                    1905,
+                    1909,
+                    1933,
+                    1942,
+                    2944,
+                    2946
                 ],
-                "evidence_count": 13,
+                "evidence_count": 11,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -50213,14 +50619,14 @@
                     "static_call"
                 ],
                 "lines": [
-                    3556,
-                    3558,
-                    3572,
-                    3574,
-                    3650,
-                    3652,
-                    3691,
-                    3692
+                    3490,
+                    3492,
+                    3506,
+                    3508,
+                    3584,
+                    3586,
+                    3625,
+                    3626
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -50268,7 +50674,7 @@
                     "new_expression"
                 ],
                 "lines": [
-                    1927
+                    1861
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -50289,9 +50695,9 @@
                     "static_call"
                 ],
                 "lines": [
-                    2364,
-                    2434,
-                    2463
+                    2298,
+                    2368,
+                    2397
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -50326,8 +50732,8 @@
                     841,
                     843,
                     844,
-                    2556,
-                    2557
+                    2490,
+                    2491
                 ],
                 "evidence_count": 12,
                 "cross_domain": true,
@@ -50348,9 +50754,9 @@
                     "static_call"
                 ],
                 "lines": [
-                    2047,
-                    2064,
-                    2079
+                    1981,
+                    1998,
+                    2013
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -50375,11 +50781,11 @@
                     "static_call"
                 ],
                 "lines": [
-                    2575,
-                    2576,
-                    3081,
-                    3084,
-                    3085
+                    2509,
+                    2510,
+                    3015,
+                    3018,
+                    3019
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -50403,8 +50809,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    3672,
-                    3673
+                    3606,
+                    3607
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -50428,10 +50834,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    2528,
-                    2531,
-                    2557,
-                    3379
+                    2462,
+                    2465,
+                    2491,
+                    3313
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -50452,7 +50858,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    2227
+                    2161
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -50479,9 +50885,9 @@
                 "lines": [
                     1654,
                     1655,
-                    2278,
-                    3675,
-                    3677
+                    2212,
+                    3609,
+                    3611
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -50507,17 +50913,17 @@
                     "static_call"
                 ],
                 "lines": [
-                    2654,
-                    2656,
-                    2747,
-                    2789,
-                    2792,
-                    3000,
-                    3001,
-                    3298,
-                    3299,
-                    3315,
-                    3318
+                    2588,
+                    2590,
+                    2681,
+                    2723,
+                    2726,
+                    2934,
+                    2935,
+                    3232,
+                    3233,
+                    3249,
+                    3252
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,
@@ -50560,26 +50966,26 @@
                     1618,
                     1645,
                     1649,
-                    1844,
-                    2252,
-                    2272,
-                    2322,
-                    2337,
-                    2397,
-                    2508,
-                    2604,
-                    2698,
-                    2699,
-                    2712,
-                    3467,
-                    3469,
-                    3631,
-                    3642,
-                    3643,
-                    3663,
-                    3664,
-                    3665,
-                    3667
+                    1778,
+                    2186,
+                    2206,
+                    2256,
+                    2271,
+                    2331,
+                    2442,
+                    2538,
+                    2632,
+                    2633,
+                    2646,
+                    3401,
+                    3403,
+                    3565,
+                    3576,
+                    3577,
+                    3597,
+                    3598,
+                    3599,
+                    3601
                 ],
                 "evidence_count": 37,
                 "cross_domain": true,
@@ -52137,8 +52543,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    1835,
-                    1841
+                    1769,
+                    1775
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -52185,9 +52591,9 @@
                 ],
                 "lines": [
                     86,
-                    1485,
-                    2204,
-                    2213
+                    1419,
+                    2138,
+                    2147
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -52211,21 +52617,33 @@
                 "lines": [
                     227,
                     235,
-                    250,
-                    274,
-                    307,
-                    333,
-                    337,
-                    341,
-                    345,
-                    349,
-                    353,
-                    357,
-                    361,
-                    365,
-                    368
+                    250
                 ],
-                "evidence_count": 15,
+                "evidence_count": 3,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
+                "to": "PerformanceOptimise\\Inc\\Database_Cleanup_Runner",
+                "from_file": "includes/Admin/class-wppo-cli-command.php",
+                "to_file": "includes/Database/class-database-cleanup-runner.php",
+                "from_domain": "Admin",
+                "to_domain": "Database",
+                "classifications": [
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_constant_reference",
+                    "static_call"
+                ],
+                "lines": [
+                    274,
+                    298,
+                    318
+                ],
+                "evidence_count": 3,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -52245,9 +52663,9 @@
                     "static_call"
                 ],
                 "lines": [
-                    438,
-                    439,
-                    483
+                    372,
+                    373,
+                    417
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -52268,7 +52686,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    1044
+                    978
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -52293,11 +52711,11 @@
                     "static_call"
                 ],
                 "lines": [
-                    2081,
-                    2082,
-                    2083,
-                    2085,
-                    2086
+                    2015,
+                    2016,
+                    2017,
+                    2019,
+                    2020
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -52322,10 +52740,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    2051,
-                    2052,
-                    2069,
-                    2070
+                    1985,
+                    1986,
+                    2003,
+                    2004
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -52350,17 +52768,15 @@
                     115,
                     127,
                     243,
-                    323,
-                    388,
-                    476,
-                    708,
-                    811,
-                    926,
-                    954,
-                    962,
-                    1037
+                    410,
+                    642,
+                    745,
+                    860,
+                    888,
+                    896,
+                    971
                 ],
-                "evidence_count": 13,
+                "evidence_count": 11,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -52381,14 +52797,14 @@
                     "static_call"
                 ],
                 "lines": [
-                    902,
-                    1894,
-                    1901,
-                    1909,
+                    836,
+                    1828,
+                    1835,
+                    1843,
+                    1844,
                     1910,
-                    1976,
-                    1979,
-                    2007
+                    1913,
+                    1941
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -52409,7 +52825,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    1031
+                    965
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -52430,8 +52846,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    986,
-                    1361
+                    920,
+                    1295
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -52456,8 +52872,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    2060,
-                    2061
+                    1994,
+                    1995
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -52478,7 +52894,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    1096
+                    1030
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -52503,33 +52919,33 @@
                     "static_call"
                 ],
                 "lines": [
-                    437,
-                    516,
-                    601,
-                    627,
-                    657,
-                    672,
-                    682,
-                    697,
-                    702,
-                    706,
-                    787,
-                    789,
-                    804,
-                    808,
-                    1027,
-                    1207,
-                    1208,
-                    1382,
-                    1383,
-                    1575,
-                    1580,
-                    1656,
-                    1703,
-                    1705,
-                    1714,
-                    1715,
-                    2348
+                    371,
+                    450,
+                    535,
+                    561,
+                    591,
+                    606,
+                    616,
+                    631,
+                    636,
+                    640,
+                    721,
+                    723,
+                    738,
+                    742,
+                    961,
+                    1141,
+                    1142,
+                    1316,
+                    1317,
+                    1509,
+                    1514,
+                    1590,
+                    1637,
+                    1639,
+                    1648,
+                    1649,
+                    2282
                 ],
                 "evidence_count": 27,
                 "cross_domain": true,
@@ -53095,14 +53511,14 @@
                     "static_call"
                 ],
                 "lines": [
-                    3556,
-                    3558,
-                    3572,
-                    3574,
-                    3650,
-                    3652,
-                    3691,
-                    3692
+                    3490,
+                    3492,
+                    3506,
+                    3508,
+                    3584,
+                    3586,
+                    3625,
+                    3626
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -53379,7 +53795,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    920
+                    890
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -53422,8 +53838,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    1320,
-                    1326
+                    1290,
+                    1296
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -53446,10 +53862,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    1425,
-                    1426,
-                    1452,
-                    1453
+                    1395,
+                    1396,
+                    1422,
+                    1423
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -53492,8 +53908,8 @@
                     "new_expression"
                 ],
                 "lines": [
-                    1386,
-                    1392
+                    1356,
+                    1362
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -53522,12 +53938,12 @@
                     630,
                     641,
                     652,
-                    803,
-                    820,
-                    822,
-                    997,
-                    1364,
-                    1434
+                    773,
+                    790,
+                    792,
+                    967,
+                    1334,
+                    1404
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,
@@ -58467,9 +58883,9 @@
                     "static_call"
                 ],
                 "lines": [
-                    2530,
-                    3341,
-                    3358
+                    2464,
+                    3275,
+                    3292
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -58494,15 +58910,15 @@
                     "static_call"
                 ],
                 "lines": [
+                    2923,
+                    2926,
+                    2958,
+                    2959,
+                    2988,
                     2989,
+                    2990,
                     2992,
-                    3024,
-                    3025,
-                    3054,
-                    3055,
-                    3056,
-                    3058,
-                    3059
+                    2993
                 ],
                 "evidence_count": 9,
                 "cross_domain": true,
@@ -58528,12 +58944,12 @@
                 "lines": [
                     1467,
                     1535,
-                    2994,
-                    2995,
-                    2996,
-                    2997,
-                    3689,
-                    3690
+                    2928,
+                    2929,
+                    2930,
+                    2931,
+                    3623,
+                    3624
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -58557,27 +58973,27 @@
                     "static_call"
                 ],
                 "lines": [
-                    2876,
-                    2879,
-                    2880,
-                    2885,
-                    2887,
-                    2911,
-                    2912,
-                    2922,
-                    2923,
-                    2936,
-                    3003,
-                    3004,
-                    3149,
-                    3151,
-                    3157,
-                    3160,
-                    3177,
-                    3203,
-                    3242,
-                    3248,
-                    3277
+                    2810,
+                    2813,
+                    2814,
+                    2819,
+                    2821,
+                    2845,
+                    2846,
+                    2856,
+                    2857,
+                    2870,
+                    2937,
+                    2938,
+                    3083,
+                    3085,
+                    3091,
+                    3094,
+                    3111,
+                    3137,
+                    3176,
+                    3182,
+                    3211
                 ],
                 "evidence_count": 21,
                 "cross_domain": true,
@@ -58607,8 +59023,8 @@
                     1449,
                     1469,
                     1534,
-                    1849,
-                    1894
+                    1783,
+                    1828
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -58631,8 +59047,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    3088,
-                    3089
+                    3022,
+                    3023
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -58659,17 +59075,15 @@
                     973,
                     1134,
                     1425,
-                    1722,
-                    1786,
-                    1963,
-                    1971,
-                    1975,
-                    1999,
-                    2008,
-                    3010,
-                    3012
+                    1897,
+                    1905,
+                    1909,
+                    1933,
+                    1942,
+                    2944,
+                    2946
                 ],
-                "evidence_count": 13,
+                "evidence_count": 11,
                 "cross_domain": true,
                 "boundary_violation": ""
             },
@@ -58691,14 +59105,14 @@
                     "static_call"
                 ],
                 "lines": [
-                    3556,
-                    3558,
-                    3572,
-                    3574,
-                    3650,
-                    3652,
-                    3691,
-                    3692
+                    3490,
+                    3492,
+                    3506,
+                    3508,
+                    3584,
+                    3586,
+                    3625,
+                    3626
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -58758,8 +59172,8 @@
                     841,
                     843,
                     844,
-                    2556,
-                    2557
+                    2490,
+                    2491
                 ],
                 "evidence_count": 12,
                 "cross_domain": true,
@@ -58783,11 +59197,11 @@
                     "static_call"
                 ],
                 "lines": [
-                    2575,
-                    2576,
-                    3081,
-                    3084,
-                    3085
+                    2509,
+                    2510,
+                    3015,
+                    3018,
+                    3019
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -58810,8 +59224,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    3672,
-                    3673
+                    3606,
+                    3607
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -58834,10 +59248,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    2528,
-                    2531,
-                    2557,
-                    3379
+                    2462,
+                    2465,
+                    2491,
+                    3313
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -58863,9 +59277,9 @@
                 "lines": [
                     1654,
                     1655,
-                    2278,
-                    3675,
-                    3677
+                    2212,
+                    3609,
+                    3611
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -58890,17 +59304,17 @@
                     "static_call"
                 ],
                 "lines": [
-                    2654,
-                    2656,
-                    2747,
-                    2789,
-                    2792,
-                    3000,
-                    3001,
-                    3298,
-                    3299,
-                    3315,
-                    3318
+                    2588,
+                    2590,
+                    2681,
+                    2723,
+                    2726,
+                    2934,
+                    2935,
+                    3232,
+                    3233,
+                    3249,
+                    3252
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,
@@ -58942,26 +59356,26 @@
                     1618,
                     1645,
                     1649,
-                    1844,
-                    2252,
-                    2272,
-                    2322,
-                    2337,
-                    2397,
-                    2508,
-                    2604,
-                    2698,
-                    2699,
-                    2712,
-                    3467,
-                    3469,
-                    3631,
-                    3642,
-                    3643,
-                    3663,
-                    3664,
-                    3665,
-                    3667
+                    1778,
+                    2186,
+                    2206,
+                    2256,
+                    2271,
+                    2331,
+                    2442,
+                    2538,
+                    2632,
+                    2633,
+                    2646,
+                    3401,
+                    3403,
+                    3565,
+                    3576,
+                    3577,
+                    3597,
+                    3598,
+                    3599,
+                    3601
                 ],
                 "evidence_count": 37,
                 "cross_domain": true,
@@ -60164,9 +60578,9 @@
                 ],
                 "lines": [
                     86,
-                    1485,
-                    2204,
-                    2213
+                    1419,
+                    2138,
+                    2147
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -60190,11 +60604,11 @@
                     "static_call"
                 ],
                 "lines": [
-                    2081,
-                    2082,
-                    2083,
-                    2085,
-                    2086
+                    2015,
+                    2016,
+                    2017,
+                    2019,
+                    2020
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -60218,10 +60632,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    2051,
-                    2052,
-                    2069,
-                    2070
+                    1985,
+                    1986,
+                    2003,
+                    2004
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -60245,8 +60659,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    2060,
-                    2061
+                    1994,
+                    1995
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -60270,33 +60684,33 @@
                     "static_call"
                 ],
                 "lines": [
-                    437,
-                    516,
-                    601,
-                    627,
-                    657,
-                    672,
-                    682,
-                    697,
-                    702,
-                    706,
-                    787,
-                    789,
-                    804,
-                    808,
-                    1027,
-                    1207,
-                    1208,
-                    1382,
-                    1383,
-                    1575,
-                    1580,
-                    1656,
-                    1703,
-                    1705,
-                    1714,
-                    1715,
-                    2348
+                    371,
+                    450,
+                    535,
+                    561,
+                    591,
+                    606,
+                    616,
+                    631,
+                    636,
+                    640,
+                    721,
+                    723,
+                    738,
+                    742,
+                    961,
+                    1141,
+                    1142,
+                    1316,
+                    1317,
+                    1509,
+                    1514,
+                    1590,
+                    1637,
+                    1639,
+                    1648,
+                    1649,
+                    2282
                 ],
                 "evidence_count": 27,
                 "cross_domain": true,

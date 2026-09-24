@@ -33,7 +33,7 @@ performance-optimisation.php
       │   Google_Fonts, Image_Optimisation, Lcp_Preload, Img_Converter,
       │   Critical_CSS, Ccss_Store, Used_CSS
       ├─ Database and insight
-      │   Database_Cleanup, Telemetry, Pagespeed, Insight_Query,
+      │   Database_Cleanup, Database_Cleanup_Runner, Telemetry, Pagespeed, Insight_Query,
       │   Suggestion_Engine, System_Info, RUM, AI_Adaptive, Ai_Anomaly, OD_Bridge
       ├─ Admin and compatibility surfaces
       │   Rest, Rest_Cache, Rest_Settings, Abilities, Metabox,
@@ -48,17 +48,17 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 82 files: 78 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 83 files: 79 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 361 |
-| Runtime / compatibility / loader edges | 360 / 195 / 3 |
-| Cross-domain / feature-to-feature edges | 309 / 46 |
+| Unique edges | 366 |
+| Runtime / compatibility / loader edges | 365 / 195 / 3 |
+| Cross-domain / feature-to-feature edges | 313 / 46 |
 | Boundary violations | 16 |
 | Bridge candidates | 231 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 62 nodes, 312 runtime-classified internal edges |
+| Largest runtime SCC | 63 nodes, 317 runtime-classified internal edges |
 | Static state | 141 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 
@@ -107,6 +107,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Used_CSS` | Generation, storage, parsing, delivery, rollout | Split storage and generation only after Used CSS owns no cache purge policy |
 | `Image_Optimisation` | Image markup, lazy loading, media transforms, conversion bridge | Extract cohesive media/metadata or conversion-state clusters with parity tests |
 | `Insight_Query` | Cached telemetry/PageSpeed read models and PageSpeed suggestion projection | Keep read-only; leave scans, storage, AI, and RUM side effects with domain owners |
+| `Database_Cleanup_Runner` | Canonical adapter dispatch, legacy CLI aliases, dry-run previews, activity logging/hooks, and post-cleanup optimization decisions | Keep REST/Abilities/CLI authorization, confirmation, output, and response envelopes outside the runner; keep SQL and counts in `Database_Cleanup` |
 | `Rest` / CLI / Abilities | Transport and route/command registration | Add narrow application commands and response mappers; keep transport thin |
 | React cards | Local presentation and workflow state | Extract one card or hook at a time; keep `useState` and `wppoSettings` |
 
@@ -122,7 +123,8 @@ Cross-domain edges require review. An edge can represent a real product interact
 8. **Drop-in invalidation:** Advanced/Object cache mutators now invalidate through `Dropin_Registry`; `System_Info` remains the sole reporting and cache-storage owner.
 9. **CSS and image cycles:** storage owners exist, but policy and bridges keep the larger SCC connected.
 10. **REST and CLI duplication:** adapters duplicate permissions, dispatch, settings, telemetry, and diagnostics.
-11. **React async ownership:** cache commits, deferred saves, abort guards, and polling state need bounded fixes.
+11. **Database cleanup orchestration:** `Database_Cleanup_Runner` now owns the shared REST/Abilities/CLI dispatch, aliases, dry-run preview, and activity policy; adapters retain transport concerns.
+12. **React async ownership:** cache commits, deferred saves, abort guards, and polling state need bounded fixes.
 
 `ARCHITECTURE-BASELINE.md` records source evidence and queue priority for each finding.
 

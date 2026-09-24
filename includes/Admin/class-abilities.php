@@ -528,7 +528,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 							'properties' => array(
 								'type' => array(
 									'type'        => 'string',
-									'enum'        => array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'action_scheduler', 'all' ),
+									'enum'        => Database_Cleanup_Runner::valid_types(),
 									'description' => __( 'Cleanup type.', 'performance-optimisation' ),
 								),
 							),
@@ -736,40 +736,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array{cleaned: int}
 		 */
 		public static function execute_database_cleanup( array $input ): array {
-			$type        = isset( $input['type'] ) ? sanitize_text_field( $input['type'] ) : '';
-			$valid_types = Database_Cleanup::get_valid_cleanup_types();
-			if ( ! in_array( $type, $valid_types, true ) ) {
-				return array( 'cleaned' => 0 );
-			}
-			if ( 'all' === $type ) {
-				$results = Database_Cleanup::clean_all();
-				$total   = 0;
-				foreach ( $results as $value ) {
-					if ( ! is_wp_error( $value ) ) {
-						$total += (int) $value;
-					}
-				}
-				return array( 'cleaned' => $total );
-			}
-			if ( Database_Cleanup::ACTION_SCHEDULER_TYPE === $type ) {
-				// clean_action_scheduler() returns int only (fail-open 0).
-				return array( 'cleaned' => (int) Database_Cleanup::clean_action_scheduler() );
-			}
-			$method_map = Database_Cleanup::CLEANUP_METHOD_MAP;
-			$method     = $method_map[ $type ] ?? null;
-			if ( ! $method ) {
-				return array( 'cleaned' => 0 );
-			}
-			if ( 'revisions' === $type ) {
-				list( $rev_max_age, $rev_keep ) = Database_Cleanup::get_revision_defaults();
-				$result                         = Database_Cleanup::invoke_cleanup_method( $method, $rev_max_age, $rev_keep );
-			} else {
-				$result = Database_Cleanup::invoke_cleanup_method( $method );
-			}
-			if ( is_wp_error( $result ) ) {
-				return array( 'cleaned' => 0 );
-			}
-			return array( 'cleaned' => (int) $result );
+			$type   = isset( $input['type'] ) ? sanitize_text_field( $input['type'] ) : '';
+			$result = Database_Cleanup_Runner::run( $type, Database_Cleanup_Runner::SOURCE_ABILITY );
+
+			return array( 'cleaned' => $result['valid'] ? (int) $result['deleted'] : 0 );
 		}
 
 		/**

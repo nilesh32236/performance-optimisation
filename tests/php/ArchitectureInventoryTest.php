@@ -133,11 +133,11 @@ final class ArchitectureInventoryTest extends TestCase {
 		$graph = $this->read_json( 'DEPENDENCY-GRAPH.json' );
 		$this->assertSame( 2, $graph['schema_version'] );
 		$this->assertStringContainsString( 'PhpToken', $graph['analysis_method'] );
-		$this->assertSame( 82, $graph['summary']['files'] );
-		$this->assertSame( 78, $graph['summary']['class_like_nodes'] );
+		$this->assertSame( 83, $graph['summary']['files'] );
+		$this->assertSame( 79, $graph['summary']['class_like_nodes'] );
 		$this->assertSame( 4, $graph['summary']['procedural_nodes'] );
-		$this->assertSame( 361, $graph['summary']['edges'] );
-		$this->assertSame( 360, $graph['summary']['runtime_edges'] );
+		$this->assertSame( 366, $graph['summary']['edges'] );
+		$this->assertSame( 365, $graph['summary']['runtime_edges'] );
 		$this->assertSame( 195, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
@@ -291,8 +291,8 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertSame( 1, $graph['summary']['runtime_cyclic_components'] );
 		$this->assertSame( 1, $graph['summary']['compatibility_cyclic_components'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['runtime'] );
-		$this->assertCount( 62, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
-		$this->assertCount( 312, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
+		$this->assertCount( 63, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
+		$this->assertCount( 317, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['compatibility'] );
 
 		$candidates = $graph['duplicate_candidates'];

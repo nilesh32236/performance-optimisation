@@ -176,6 +176,11 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\stubs(
 			array(
+				'apply_filters',
+			)
+		);
+		Functions\stubs(
+			array(
 				'wp_normalize_path',
 				'sanitize_text_field',
 				'wp_unslash',
