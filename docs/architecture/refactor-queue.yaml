@@ -928,11 +928,23 @@ phase3_items:
 
   - id: P3-009
     title: 'Canonical insight read model'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1582
     github_pr: 1584
     implementation_commit: 737f860f2ada5303ed96e8f15d1597b6688a61a4
+    merge_commit: 79af688cd1c344ee9c0d1fc9f2a031893d127a9a
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      insight_query: 'loaded; cached telemetry read returned expected missing sentinel; no scan or side effect triggered'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '79 inventory files / 82 nodes / 361 edges; generator check passed'
     type: architecture
     problem: 'REST and Abilities read telemetry/PageSpeed results through different cache and augmentation paths.'
     target_owner: 'Insight_Query/Insight_Report read boundary'
@@ -960,7 +972,7 @@ phase3_items:
 
   - id: P3-010
     title: 'Database cleanup application runner'
-    status: queued
+    status: audit-pending
     priority: medium
     type: architecture
     problem: 'REST, Abilities, CLI, and Cron duplicate cleanup orchestration around the canonical Database_Cleanup map.'
