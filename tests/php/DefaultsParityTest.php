@@ -141,9 +141,24 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		$this->assertIsString( $source );
 
 		$this->assertStringContainsString(
-			'Util::get_default_settings()',
+			'Settings_Store::get_resolved_settings()',
 			$source,
-			'Main::__construct() must delegate to Util::get_default_settings()'
+			'Main must delegate effective option resolution to Settings_Store'
+		);
+
+		$settings_path = dirname( __DIR__, 2 ) . '/includes/Settings/class-settings-store.php';
+		$this->assertFileExists( $settings_path );
+		$settings_source = file_get_contents( $settings_path );
+		$this->assertIsString( $settings_source );
+		$this->assertStringContainsString(
+			'self::get_default_settings()',
+			$settings_source,
+			'Settings_Store must own and consume the canonical defaults'
+		);
+		$this->assertStringContainsString(
+			'return Settings_Store::get_default_settings();',
+			(string) file_get_contents( WPPO_PLUGIN_PATH . 'includes/class-util.php' ),
+			'Util::get_default_settings() must remain a compatibility facade'
 		);
 
 		// The old inline literal keyed cache_settings inside __construct must be gone.

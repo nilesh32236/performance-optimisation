@@ -27,6 +27,7 @@ includes/
     class-cache.php
     class-cache-key.php
     class-cache-invalidator.php
+    class-cache-coordinator.php
     class-advanced-cache-handler.php
     class-bfcache.php
     class-dropin-registry.php
@@ -34,6 +35,7 @@ includes/
 
   Settings/
     class-settings-store.php
+    class-settings-command.php
     class-settings-migrations.php
     class-sandbox-preview.php
 
@@ -129,12 +131,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 78 | 77 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 79 | 78 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 82 | Generated schema-v2 inventory |
+| Total class inventory | 83 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 85 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 86 nodes.
 
 ## Ownership by directory
 
@@ -144,11 +146,11 @@ The dependency graph adds three procedural runtime files: the plugin entry, `uni
 
 ### Cache
 
-`Cache` owns static HTML cache policy, storage, buffer orchestration, and the capacity/accounting tail. `Cache_Invalidator` owns invalidation and purge fallback. `Cache_Key` stays an infrastructure primitive even though it lives here. `Object_Cache` owns Redis connection, circuit, persistence, and drop-in lifecycle; `Redis_Config_Policy` owns the complete key manifest and value normalization used by REST and CLI. `Dropin_Registry` is a stateless forwarding seam only: Advanced/Object drop-in mutators use it to request System_Info cache invalidation without taking over reporting, path/ownership detection, or storage.
+`Cache` owns static HTML cache policy, storage, buffer orchestration, and the capacity/accounting tail. `Cache_Invalidator` owns invalidation and purge fallback. `Cache_Coordinator` owns only Cache construction, collaborator injection, and the public injection filter while Main retains its factory facade. `Cache_Key` stays an infrastructure primitive even though it lives here. `Object_Cache` owns Redis connection, circuit, persistence, and drop-in lifecycle; `Redis_Config_Policy` owns the complete key manifest and value normalization used by REST and CLI. `Dropin_Registry` is a stateless forwarding seam only: Advanced/Object drop-in mutators use it to request System_Info cache invalidation without taking over reporting, path/ownership detection, or storage.
 
 ### Settings
 
-`Settings_Store` owns settings validation, memoization, snapshots, and writes. `Settings_Migrations` owns one-time migration payloads. `Sandbox_Preview` owns staged preview settings. Direct writes from presentation adapters remain migration debt.
+`Settings_Store` owns effective options resolution, historical in-memory backfills, blog-keyed raw/resolved memo invalidation, validation, snapshots, and persistence. `Settings_Command` owns the bounded write orchestration seam. `Settings_Migrations` owns one-time migration payloads, and `Sandbox_Preview` owns staged preview settings. Main keeps only its compatibility facade and local injectable snapshot.
 
 ### Scheduler
 

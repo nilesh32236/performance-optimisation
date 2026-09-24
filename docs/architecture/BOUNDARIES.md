@@ -25,7 +25,7 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | Boundary | Owns | Must not own | Phase 3 evidence |
 |---|---|---|---|
 | `Cache_Key` | Transient, option, cache-salt, and stampede key policy | Storage, TTL, feature settings | Classified as infrastructure despite its `Cache/` path |
-| `Settings_Store` | Settings read/write, validation dispatch, snapshots, memo reset | REST/CLI response shaping, feature defaults outside the schema | REST still writes `wppo_settings` through two direct paths |
+| `Settings_Store` | Effective settings resolution, historical in-memory backfills, blog-keyed raw/resolved memos, writes, validation dispatch, snapshots | REST/CLI response shaping, asset/minification/speculation behavior | P3-013 moved the 300-line Main resolver; historical compatibility data remains, not new feature policy |
 | `Filesystem` | WP_Filesystem/native I/O, atomic writes, containment, path helpers | Cache policy, HTML mutation | Four static properties; partial test reset ownership |
 | `Url` | Home/content URL memos, normalization, same-site policy, redirect parsing | Settings arrays, feature decisions | Five static properties; preload policy needs a separate allowance-preserving owner |
 | `Scheduler` | Action Scheduler and WP-Cron primitives, locks, job ownership registry | Job payload policy owned by a feature | First Phase 3 implementation target; teardown lists miss builder hooks |
@@ -33,7 +33,7 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | `Woo_Detect` | Woo detection and exclusion policy | Cache invalidation actions | `Util` still calls it, keeping a shared-facade edge |
 | `Log` | Activity persistence and logging calls | Feature decisions | Fan-in 27; deliberate infrastructure hub, not a god class |
 | `Loader_Map` | Eager files, fallback map, CLI path | Feature behavior | Three loader edges; stale-classmap safety remains required |
-| `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 57 and 1,145 incoming executable occurrences |
+| `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 58 and 1,139 incoming executable occurrences |
 
 ## Domain boundaries
 
@@ -44,6 +44,7 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | `Cache` | HTML cache policy, output buffer, storage, invalidation and CSS-combine facades | Keep lifecycle and buffer orchestration; extract capacity/accounting |
 | `Cache_Invalidator` | Invalidation, purge fallback, deletes | Keep; remove temporary owner bridges when callers permit |
 | `Cache_Capacity` | Static cache statistics, cap settings, byte/file accounting, randomized-query guard, oldest eviction | Keep narrow owner bridges for Cache filesystem, containment, and sibling-aware deletion |
+| `Cache_Coordinator` | Cache construction, collaborator injection, and `wppo_cache_instance` filtering | Buffer lifecycle, storage, invalidation, or broad application wiring | Main keeps its unchanged public factory facade |
 | `Cache_Key` | Key derivation | Keep as infrastructure |
 | `Advanced_Cache_Handler` | `advanced-cache.php` drop-in lifecycle | Protect early-load contract |
 | `Redis_Config_Policy` | Complete Redis key manifest, host/node safety, value bounds and enums, password precedence | Keep dependency-light; do not connect, persist, flush, or publish drop-ins |
@@ -139,11 +140,11 @@ Current sizes are `FileOptimization.js` 6,114 lines, `Dashboard.js` 2,168, and `
 
 ## Configuration ownership
 
-A feature should not read another feature's internal settings paths. `Settings_Store` owns schema validation and writes. Feature owners should expose typed or narrow validated access for their own settings.
+A feature should not read another feature's internal settings paths. `Settings_Store` owns effective resolution, schema validation, writes, snapshots, and blog-keyed memo invalidation. Feature owners should expose typed or narrow validated access for their own settings.
 
 Two high-value corrections:
 
-1. Move `Rest_Settings` and REST safe-mode direct writes behind `Settings_Store`.
+1. Keep `Settings_Command` as the bounded write seam; Main and adapters must not bypass it for `wppo_settings` persistence.
 2. Keep Redis config construction on `Redis_Config_Policy`; REST, CLI, and `Object_Cache::ALLOWED_KEYS` share its manifest without moving connection or persistence into the policy.
 
 Do not introduce a configuration framework or DTO for every array. Use value objects only where stable shape and invariants already repeat.

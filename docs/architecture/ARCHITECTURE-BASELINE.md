@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `4054075ac45c313f4f997cb83b3f5bcd636260d2`
+Source: `origin/master` commit `b9347c39135a1ff2e3763d7e378240a35976db99`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 85 first-party runtime files:
+The tokenizer scans 86 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 77 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 78 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,21 +40,21 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 82 |
-| Inventory source lines | 126,675 |
-| Class-like graph nodes | 81 |
+| Inventory files | 83 |
+| Inventory source lines | 126,772 |
+| Class-like graph nodes | 82 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,515 |
+| Named methods | 2,518 |
 | Methods spanning 80 lines or more | 236 |
-| Static properties | 141 across 32 nodes |
-| Unique dependency edges | 369 |
-| Runtime-classified edges | 368 |
+| Static properties | 143 across 32 nodes |
+| Unique dependency edges | 374 |
+| Runtime-classified edges | 373 |
 | Compatibility-classified edges | 196 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 312 |
+| Cross-domain edges | 316 |
 | Feature-to-feature edges | 46 |
 | Strict boundary violations | 16 |
-| Bridge candidates | 232 |
+| Bridge candidates | 234 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -62,7 +62,7 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 64 class-like nodes and 318 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 68 class-like nodes and 332 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
@@ -87,7 +87,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 
 | Class | Lines | Methods | 80+ | Static | Private state | Fan in/out | Evidence in | Feature deps | Largest method |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| `Main` | 11,091 | 235 | 21 | 12 | 38 | 15/34 | 131 | 17 | `get_options` 300 |
+| `Main` | 10,790 | 235 | 20 | 12 | 38 | 15/37 | 131 | 17 | `enqueue_scripts` 203 |
 | `Image_Optimisation` | 8,999 | 183 | 13 | 7 | 30 | 4/4 | 11 | 3 | `add_delay_load_img` 476 |
 | `Critical_CSS` | 6,950 | 138 | 12 | 11 | 11 | 9/8 | 50 | 5 | `generate` 267 |
 | `Cache` | 5,643 | 161 | 8 | 4 | 29 | 14/13 | 71 | 8 | `maybe_store_cache` 177 |
@@ -105,6 +105,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Dropin_Registry` | 45 | 1 | 0 | 0 | 0 | 2/1 | 12 | 1 | `invalidate` 7 |
 | `Redis_Config_Policy` | 183 | 3 | 0 | 0 | 0 | 3/0 | 6 | 0 | `sanitize_value` 58 |
 | `Edge_Purge_Coordinator` | 150 | 4 | 0 | 0 | 0 | 1/2 | 1 | 0 | `purge_after_cache_clear` 27 |
+| `Cache_Coordinator` | 56 | 1 | 0 | 0 | 0 | 1/1 | 1 | 0 | `create` 15 |
 | `LiteSpeed_Integration` | 2,797 | 58 | 4 | 17 | 17 | 17/7 | 95 | 5 | `get_litespeed_ttl` 216 |
 | `WPPO_CLI_Command` | 2,362 | 27 | 7 | 0 | 0 | 1/14 | 2 | 11 | `settings` 224 |
 | `Builder_Purge_Watcher` | 2,110 | 45 | 2 | 7 | 7 | 4/6 | 19 | 3 | `on_any_upgrade` 103 |
@@ -146,16 +147,18 @@ These counts come from method names, call sites, tests, and history. They approx
 | `Insight_Query` | 1 | Cached telemetry/PageSpeed read models and deterministic PageSpeed suggestion augmentation |
 | `Admin_Auth` | 1 | Administrative capability, REST header canonicalization, legacy nonce fallback, and wp_rest verification |
 | `Edge_Purge_Coordinator` | 1 | One cache-clear fan-out and per-event identical Cloudflare transport de-duplication |
+| `Cache_Coordinator` | 1 | Cache construction plus the unchanged injection-filter contract; Main retains the public facade |
+| `Settings_Store` effective-read policy | 1 | Canonical defaults/stored replacement, historical in-memory backfills, and blog-keyed resolved memo invalidation |
 
 ## Coupling findings
 
 ### Util remains a dependency hub
 
-The graph records 56 incoming source nodes and 1,145 incoming executable occurrences. `Main`, `Used_CSS`, `Critical_CSS`, `Cache`, and `Cron` account for most calls. The facade still contains canonical helpers, so callers must migrate by method ownership rather than replace every `Util::` call mechanically.
+The graph records 58 incoming source nodes and 1,139 incoming executable occurrences. `Main`, `Used_CSS`, `Critical_CSS`, `Cache`, and `Cron` account for most calls. The facade still contains canonical helpers, so callers must migrate by method ownership rather than replace every `Util::` call mechanically.
 
 ### Main still owns feature policy
 
-`Main` has 34 outgoing class dependencies, 17 feature dependencies, 21 large methods, and direct service-to-owner bridges. Phase 1 and 2 moved several service/boundary clusters, but constructor state, asset policy, preload, speculation, minification, cache coordination, and feature bridges remain.
+`Main` has 37 outgoing class dependencies, 17 feature dependencies, 20 large methods, and direct service-to-owner bridges. P3-013 removes the 300-line options resolver and cache-construction policy, reducing Main by 301 lines and one large method. The three added owner edges (`Settings_Store`, `Settings_Command`, and `Cache_Coordinator`) are explicit delegation contracts; asset policy, preload, speculation, and minification remain queued for P3-014/P3-015.
 
 ### Cache has a cohesive capacity tail
 
@@ -191,9 +194,11 @@ P3-011 adds the 60-line, one-method dependency-light `Admin_Auth` policy. `Rest:
 
 P3-012 adds the 150-line, four-method `Edge_Purge_Coordinator`. `Hook_Registry` now registers one priority-10 `wppo_after_cache_clear` listener that calls the unchanged `CDN_Purger` and `Edge_Purger` adapters in their historic order. For a full clear, temporary `pre_http_request` / `http_api_debug` seams reuse the first response only when an identical Cloudflare purge_everything request repeats in that event, reducing overlapping Cloudflare transport from up to two calls to one while retaining separate Bunny and Varnish paths. LiteSpeed sync, single-page Cloudflare files, edge locks, provider-specific failure logging, invalid-payload TypeError behavior, and successful no-data behavior remain with their existing owners. The generated inventory contains 82 files, 85 graph nodes, and 369 edges; the coordinator has one incoming and two outgoing feature edges, no static state, and no feature-to-feature change.
 
+P3-013 moves the effective-options policy and all 180 historical backfill assignments from `Main::get_options()` to `Settings_Store::get_resolved_settings()`. Raw and resolved options are memoized by blog ID; add/update/delete and command writes invalidate the resolved snapshot so same-request reads reapply backfills without persisting them. `Main` retains its public facade, injectable local snapshot, Hook_Registry callback identities, and unchanged settings-update side effects. Its one rollback write now routes through `Settings_Command`, so Main owns no direct `wppo_settings` write. The one bounded cache cluster is the 56-line, one-method `Cache_Coordinator`: `Main::create_cache()` remains the unchanged static facade while construction, collaborator injection, and `wppo_cache_instance` filtering move together. The generated inventory contains 83 files, 86 graph nodes, and 374 edges; Main drops from 11,091 to 10,790 lines and from 21 to 20 methods at least 80 lines, while feature dependencies remain 17.
+
 ## Static state
 
-The old regex found 12 stateful files. The tokenizer finds 141 static properties across 32 nodes. The largest owners are:
+The old regex found 12 stateful files. The tokenizer finds 143 static properties across 32 nodes. The largest owners are:
 
 | Node | Static properties | Review finding |
 |---|---:|---|
@@ -205,6 +210,7 @@ The old regex found 12 stateful files. The tokenizer finds 141 static properties
 | `RUM` | 7 | Aggregate and queue memos need request, blog, and test reset contracts. |
 | `Builder_Purge_Watcher` | 7 | Builder detection and purge state lacks one runtime reset owner. |
 | `Object_Cache` | 6 | Circuit state and outage state use different scoping models. |
+| `Settings_Store` | 4 | Raw and resolved settings memos are blog-keyed; add/update/delete/write paths invalidate resolved snapshots. |
 
 `Ai_Anomaly` provides the positive precedent: it keys request memos by blog ID and exposes a reset. The next static-state item should create a runtime reset registry, classify each memo, and add blog-switch parity before removing scattered test setup.
 

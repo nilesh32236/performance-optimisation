@@ -116,16 +116,18 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 82 files: 78 runtime plugin files under `includes/` (77 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 83 files: 79 runtime plugin files under `includes/` (78 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
-| `Core/class-main.php` | Hooks, admin page, enqueue, minification, preload, WooCommerce cleanup |
+| `Core/class-main.php` | Hook/admin/enqueue orchestration and public compatibility facades; effective settings resolution is delegated to Settings_Store |
 | `Core/class-runtime-state.php` | Blog-switch registry for six site-sensitive static-state owners |
 | `Cache/class-cache.php` | Static HTML cache (generate, invalidate, clear, CSS combine, CDN rewrite) |
 | `Cache/class-cache-capacity.php` | Static cache statistics, cap settings, byte/file accounting, randomized-query guard, oldest eviction |
 | `Cache/class-object-cache.php` | Redis Object Cache (standalone/sentinel/cluster, enable/disable/flush/status) |
 | `Cache/class-redis-config-policy.php` | Redis key manifest, value normalization, host/node safety, bounds, enums, and password precedence |
+| `Cache/class-cache-coordinator.php` | Cache construction and `wppo_cache_instance` filter/injection coordination; Main retains the public factory facade |
+| `Settings/class-settings-store.php` | Schema/defaults, effective options resolution, blog-keyed raw/resolved memos, writes, invalidation, and snapshots |
 | `Settings/class-settings-command.php` | Bounded settings write orchestration; validation, snapshots, and memo policy remain in Settings_Store |
 | `Cache/class-dropin-registry.php` | Neutral drop-in mutation invalidation bridge; System_Info remains reporting/storage owner |
 | `Cache/class-advanced-cache-handler.php` | `advanced-cache.php` drop-in (create/detect/remove) |

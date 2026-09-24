@@ -11,18 +11,20 @@
  * one-click-undo settings snapshots. `Util::get_settings()` and friends remain
  * as thin facade proxies so all existing callers keep working untouched.
  *
- * Minimal WordPress APIs only: `get_option()`/`update_option()`,
- * `add_action()`, `get_current_blog_id()` for multisite memo keying, the
- * core sanitizers (`sanitize_text_field()`, `sanitize_textarea_field()`,
- * `esc_url_raw()`, `absint()`), and `apply_filters()` for the TTL/CDN
- * mapping filters. Depends on nothing else in the plugin.
+ * Minimal WordPress APIs: `get_option()`/`update_option()`, `add_action()`,
+ * `get_current_blog_id()` for multisite memo keying, the core sanitizers
+ * (`sanitize_text_field()`, `sanitize_textarea_field()`, `esc_url_raw()`,
+ * `absint()`), and `apply_filters()` for the TTL/CDN mapping filters.
  *
  * Owns the settings schema allowlist (`ALLOWED_SETTINGS_KEYS` /
  * `ALLOWED_SETTINGS_TABS`, `get_allowed_settings_keys()`), the per-tab
  * sanitizer map (`get_settings_sanitizer_map()`), and the `sanitize_*`
  * family, moved from the god utility `Util` (REF-011). `Util::` keeps
  * thin facade proxies/aliases so existing callers keep working untouched.
- * Still deliberately OUT: `Main`'s defaults/lazy options.
+ * P3-013 also owns the effective-options read policy: stored settings over
+ * canonical defaults plus every historical in-memory compatibility backfill.
+ * Main retains only its public, blog-aware compatibility facade and local
+ * injectable snapshot needed by existing collaborators/migrations.
  *
  * @package PerformanceOptimise\Inc
  * @since   NEXT
@@ -38,10 +40,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 	/**
 	 * Class Settings_Store
 	 *
-	 * Static settings-state and settings-schema owner. Depends only on the minimal WordPress
-	 * APIs required to preserve the existing implementation verbatim:
-	 * `get_option()`/`update_option()`, `add_action()`, and
-	 * `get_current_blog_id()`. Depends on nothing else in the plugin.
+	 * Static settings-state and settings-schema owner. Uses only minimal
+	 * WordPress APIs and owns the canonical fresh-install defaults. Effective
+	 * settings resolution and invalidation remain bounded here; `Main` is a
+	 * compatibility facade and orchestrator.
 	 *
 	 * @since 2.4.0
 	 */
@@ -767,6 +769,572 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		}
 
 		/**
+		 * Get the canonical default settings structure.
+		 *
+		 * Owns fresh-install defaults used by activation, CLI, settings reads,
+		 * and schema verification. Util::get_default_settings() remains the
+		 * backward-compatible facade.
+		 *
+		 * @since NEXT
+		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
+		 */
+		public static function get_default_settings(): array {
+			return array(
+				'cache_settings'        => array(
+					'enableLoggedInCache'       => false,
+					'loggedInCacheRoles'        => array(),
+					'enableCache'               => true,
+					'cacheLife'                 => 0,
+					'ttlOverrides'              => array(),
+					'wooSafeMode'               => true,
+					'stampedeGuard'             => true,
+					'stampedeLockTtl'           => 5,
+					'cacheMaxSizeMB'            => 512,
+					'cacheSizeWarnRatio'        => 0.8,
+					'cacheSizeEnforce'          => true,
+					'cacheMaxFiles'             => 5000,
+					'cacheRandomizedQueryGuard' => true,
+				),
+				'file_optimisation'     => array(
+					'enableServerRules'            => false,
+					'cdnURL'                       => '',
+					'cdnMapping'                   => array(),
+					'removeUnusedCSS'              => false,
+					'excludeUnusedCSS'             => '',
+					'unusedCSSSafelistExtra'       => '',
+					'unusedCSSRegressionGuard'     => true,
+					'unusedCSSRegressionThreshold' => 20,
+					'criticalCSS'                  => false,
+					'ccssMaxSize'                  => 20480,
+					'ccssSafelistExtra'            => '',
+					'ccssRumPriority'              => true,
+					'usedCssRumPriority'           => true,
+					'ccssQueueCap'                 => 5,
+					'ccssGenTimeout'               => 25,
+					'ccssInlineBudgetKb'           => 14,
+					'ccssCommerceExclude'          => true,
+					'ccssChecksumRegen'            => true,
+					'ccssExcludedPostTypes'        => "fl-builder-template\nelementor_library",
+					'ccssMaxRetries'               => 5,
+					'usedCssQueueCap'              => 50,
+					'ccssViewportVariants'         => false,
+					'usedCSSDeliveryMode'          => 'file',
+					'hostGoogleFontsLocally'       => false,
+					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+					'loadAllCoreBlockAssets'       => false,
+					'delayJSDefaultStrategy'       => 'interaction',
+					'delayJSPreset'                => 'safe',
+					'delayJSINPPreset'             => false,
+					'delayJSExternalOnly'          => false,
+					'delayJSThirdParty'            => false,
+					'delayJSThirdPartyAuto'        => false,
+					'delayJSThirdPartyDenylist'    => '',
+					'delayJSThirdPartyAllowlist'   => '',
+					'delayJSBuilderPreset'         => true,
+					'delayJSCommercePreset'        => true,
+					'delayJSInteractionPreset'     => true,
+					'delayJSConsentPreset'         => false,
+					'delayJSAnalyticsPreset'       => false,
+					'delayJSGalleryPreset'         => false,
+					'delayJSJqueryPreset'          => false,
+					'delayJSExcludeUrls'           => '',
+					'usedCSSExcludeUrls'           => '',
+					'delayJSIdleList'              => '',
+					'delayJSViewportList'          => '',
+					'delayJSPriority'              => '',
+					'delayJSIdleTimeout'           => 3000,
+					'minifyHTML'                   => false,
+					'minifyJS'                     => false,
+					'minifyCSS'                    => false,
+					'deferJS'                      => false,
+					'delayJS'                      => false,
+					'delayJSSafeMode'              => true,
+					'safeMode'                     => false,
+					'elementorSafeMode'            => true,
+					'sandboxStaged'                => array(),
+					'combineCSS'                   => false,
+					'excludeJS'                    => '',
+					'excludeCSS'                   => '',
+					'excludeDeferJS'               => '',
+					'excludeDelayJS'               => '',
+					'excludeCombineCSS'            => '',
+					'minifyInlineCSS'              => false,
+					'minifyInlineJS'               => false,
+					'removeHTMLComments'           => true,
+					'disableRestApiLinks'          => false,
+					'disableRssFeeds'              => false,
+					'disableShortlinks'            => false,
+					'disableGeneratorTag'          => false,
+					'disableJQueryMigrate'         => false,
+					'disablePasswordStrength'      => false,
+					'disableSelfPingbacks'         => false,
+					'disableRSD'                   => false,
+					'disableWLWManifest'           => false,
+					'disableGlobalStyles'          => false,
+					'disableClassicThemeStyles'    => false,
+					'disableWooCartFragments'      => false,
+					'disableRecentCommentsStyle'   => false,
+					'disableCommentReply'          => false,
+					'disableOEmbedDiscovery'       => false,
+					'disableBlockWidgets'          => false,
+					'fontMetricFallback'           => false,
+					'fontSubset'                   => false,
+					'fontSubsetSubsets'            => 'latin',
+					'purgeFallbackEnabled'         => false,
+					'builderPurgeWatcher'          => true,
+					'builderPurgeDriftLog'         => true,
+				),
+				'preload_settings'      => array(
+					'enablePreloadCache'       => false,
+					'excludePreloadCache'      => "my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
+					'enableSpeculationRules'   => false,
+					'speculationMode'          => 'prefetch',
+					'speculationEagerness'     => 'conservative',
+					'speculationRumGating'     => true,
+					'speculationTopUrlsLimit'  => 2,
+					'speculationPrerenderList' => false,
+					'speculationExcludeUrls'   => '',
+					'speculationDocumentRules' => true,
+					'preloadSitemap'           => false,
+					'autoLcpPreload'           => false,
+					'autoDiscoverFonts'        => false,
+				),
+				'image_optimisation'    => array(
+					'lazyLoadImages'             => false,
+					'lazyLoadNative'             => true,
+					'placeholderType'            => 'svg',
+					'autoPreloadLCP'             => false,
+					'prioritizeLCPImages'        => false,
+					'lcpHeroPreload'             => true,
+					'lcp_guardrails'             => true,
+					'lcp_first_n'                => 3,
+					'clientSideMimeTypeOverride' => false,
+					'clientSideMimeTypes'        => array(),
+					'lazyLoadBackgroundImages'   => false,
+					'avifFirst'                  => true,
+					'smartQuality'               => true,
+					'skipSmallThresholdBytes'    => 5120,
+					'discardOversizedSibling'    => true,
+					'fieldLcpOverride'           => false,
+					'fieldLcpMinSamples'         => 20,
+					'cssHeroPreload'             => false,
+					'autoAltText'                => false,
+					'maxLongestEdgePx'           => 2560,
+					'lazyRenderBelowFold'        => false,
+					'lazyRenderExcludeBuilders'  => true,
+					'hardenCommentImages'        => true,
+					'occlusionFetchpriorityLow'  => false,
+				),
+				'performance_audit'     => array(
+					'pagespeed_api_key'     => '',
+					'high_value_urls'       => array(),
+					'auto_fix_enabled'      => false,
+					'server_timing_enabled' => false,
+					'auto_rescan'           => '',
+					'rum_enabled'           => false,
+					'rum_sample_rate'       => 100,
+				),
+				'database_cleanup'      => array(
+					'autoloadThreshold'  => 1024,
+					'purgeFailedActions' => false,
+				),
+				'object_cache'          => array(),
+				'litespeed_integration' => array(
+					'mode'                 => 'auto',
+					'enableNextGenRewrite' => false,
+					'enableBrotli'         => false,
+					'purgeSync'            => true,
+					'varyGroups'           => array(
+						'guest'  => false,
+						'mobile' => false,
+						'webp'   => false,
+					),
+					'crawler'              => array(
+						'concurrency'        => 2,
+						'loadLimit'          => 0,
+						'blacklistThreshold' => 3,
+					),
+					'esi'                  => array(
+						'enabled' => false,
+					),
+				),
+				'llms_txt'              => array(
+					'enabled' => false,
+					'source'  => 'both',
+				),
+				'od_integration'        => array(
+					'enabled' => class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' ),
+				),
+				'bfcache'               => array(
+					'enabled' => false,
+				),
+				'perf_translations'     => array(
+					'enabled' => false,
+				),
+				'ai_adaptive'           => array(
+					'enabled'                       => false,
+					'use_wp_ai_client'              => false,
+					'field_lcp_min_samples'         => 20,
+					'dismissed_suggestions'         => array(),
+					'anomaly_cooldown_days'         => 7,
+					'anomaly_min_samples'           => 10,
+					'css_refresh_on_lcp_regression' => false,
+					'css_refresh_cooldown_days'     => 7,
+					'speculation_autotune_enabled'  => false,
+					'speculation_min_samples'       => 20,
+					'speculation_max_urls'          => 5,
+					'anomaly_tolerance_pct'         => 5.0,
+					'anomaly_tolerance_abs'         => 0.01,
+					'anomaly_persistence_windows'   => 3,
+					'anomaly_p75_min_samples'       => 10,
+					'anomaly_band_window'           => 10,
+					'anomaly_recovery_days'         => 3,
+					'deploy_notes'                  => array(),
+				),
+				'edge_cache'            => array(
+					'enabled' => false,
+				),
+			);
+		}
+
+		/**
+		 * Per-request resolved-options memo keyed by blog ID.
+		 *
+		 * Stores the effective options (canonical defaults or stored settings,
+		 * followed by historical in-memory backfills). Kept separate from the
+		 * raw option memo so add/update/delete hooks can invalidate the resolved
+		 * policy without losing the raw write-through value.
+		 *
+		 * @var array<int, array>
+		 * @since NEXT
+		 */
+		private static array $resolved_settings_cache = array();
+
+		/**
+		 * Blog IDs with a populated resolved-options memo.
+		 *
+		 * @var array<int, bool>
+		 * @since NEXT
+		 */
+		private static array $resolved_settings_cache_loaded = array();
+
+		/**
+		 * Get the effective options for the current blog.
+		 *
+		 * Stored settings replace the canonical defaults exactly as the historic
+		 * Main resolver did, then every compatibility backfill is applied in
+		 * memory. No option write occurs on this read path. The result is
+		 * memoized per blog ID for switch_to_blog() isolation.
+		 *
+		 * @since NEXT
+		 * @return array Effective settings for the current blog.
+		 */
+		public static function get_resolved_settings(): array {
+			$blog_id = self::current_blog_id();
+			if ( ! empty( self::$resolved_settings_cache_loaded[ $blog_id ] ) ) {
+				return self::$resolved_settings_cache[ $blog_id ] ?? array();
+			}
+
+			$options = self::get_default_settings();
+			$stored  = self::get_settings();
+			if ( ! empty( $stored ) ) {
+				$options = $stored;
+			}
+
+			// WooCommerce safe mode (issue #1383): defensive in-memory parity
+			// with the canonical defaults (wooSafeMode defaults to on).
+			if ( ! isset( $options['cache_settings'] ) || ! is_array( $options['cache_settings'] ) ) {
+				$options['cache_settings'] = array();
+			}
+			if ( ! isset( $options['cache_settings']['wooSafeMode'] ) ) {
+				$options['cache_settings']['wooSafeMode'] = true;
+			}
+			// WP 6.9+ loads core block assets on demand in classic themes by default.
+			if ( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) ) {
+				if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
+					$options['file_optimisation'] = array();
+				}
+				if ( ! isset( $options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+					$options['file_optimisation']['blockAssetsOnDemand'] = true;
+				}
+			}
+			// Native lazy loading is the default path.
+			if ( ! isset( $options['image_optimisation'] ) || ! is_array( $options['image_optimisation'] ) ) {
+				$options['image_optimisation'] = array();
+			}
+			if ( ! isset( $options['image_optimisation']['lazyLoadNative'] ) ) {
+				$options['image_optimisation']['lazyLoadNative'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['lazyLoadImages'] ) ) {
+				$options['image_optimisation']['lazyLoadImages'] = false;
+			}
+			if ( ! isset( $options['image_optimisation']['avifFirst'] ) ) {
+				$options['image_optimisation']['avifFirst'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['smartQuality'] ) ) {
+				$options['image_optimisation']['smartQuality'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['skipSmallThresholdBytes'] ) ) {
+				$options['image_optimisation']['skipSmallThresholdBytes'] = 5120;
+			}
+			if ( ! isset( $options['image_optimisation']['discardOversizedSibling'] ) ) {
+				$options['image_optimisation']['discardOversizedSibling'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['lcpHeroPreload'] ) ) {
+				$options['image_optimisation']['lcpHeroPreload'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['lcp_guardrails'] ) ) {
+				$options['image_optimisation']['lcp_guardrails'] = true;
+			}
+			if ( ! isset( $options['image_optimisation']['lcp_first_n'] ) ) {
+				$options['image_optimisation']['lcp_first_n'] = 3;
+			}
+			if ( ! isset( $options['image_optimisation']['autoAltText'] ) ) {
+				$options['image_optimisation']['autoAltText'] = false;
+			}
+			if ( ! isset( $options['image_optimisation']['maxLongestEdgePx'] ) ) {
+				$options['image_optimisation']['maxLongestEdgePx'] = 2560;
+			}
+			if ( ! isset( $options['image_optimisation']['lazyRenderBelowFold'] ) ) {
+				$options['image_optimisation']['lazyRenderBelowFold'] = false;
+			}
+			if ( ! isset( $options['image_optimisation']['lazyRenderExcludeBuilders'] ) ) {
+				$options['image_optimisation']['lazyRenderExcludeBuilders'] = true;
+			}
+			// Comment-image hardening (issue #1271).
+			if ( ! isset( $options['image_optimisation']['hardenCommentImages'] ) ) {
+				$options['image_optimisation']['hardenCommentImages'] = true;
+			}
+			// Occlusion-aware fetchpriority=low (issue #1426).
+			if ( ! isset( $options['image_optimisation']['occlusionFetchpriorityLow'] ) ) {
+				$options['image_optimisation']['occlusionFetchpriorityLow'] = false;
+			}
+			if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
+				$options['file_optimisation'] = array();
+			}
+			if ( ! isset( $options['file_optimisation']['delayJSSafeMode'] ) ) {
+				$options['file_optimisation']['delayJSSafeMode'] = true;
+			}
+			// Auto third-party delay (issue #1314).
+			if ( ! isset( $options['file_optimisation']['delayJSThirdPartyAuto'] ) ) {
+				$options['file_optimisation']['delayJSThirdPartyAuto'] = false;
+			}
+			// One-click Delay-JS preset level (issue #1385).
+			if ( ! isset( $options['file_optimisation']['delayJSPreset'] ) || ! in_array( strtolower( trim( (string) $options['file_optimisation']['delayJSPreset'] ) ), array( 'safe', 'balanced', 'aggressive' ), true ) ) {
+				$options['file_optimisation']['delayJSPreset'] = 'safe';
+			}
+			// Unified safe-mode kill switch (issue #1098).
+			if ( ! isset( $options['file_optimisation']['safeMode'] ) ) {
+				$options['file_optimisation']['safeMode'] = false;
+			}
+			// Elementor-safe mode (issue #1259).
+			if ( ! isset( $options['file_optimisation']['elementorSafeMode'] ) ) {
+				$options['file_optimisation']['elementorSafeMode'] = true;
+			}
+			// Sandbox preview staged values (issue #1163).
+			if ( ! isset( $options['file_optimisation']['sandboxStaged'] ) || ! is_array( $options['file_optimisation']['sandboxStaged'] ) ) {
+				$options['file_optimisation']['sandboxStaged'] = array();
+			}
+			// Font subsetting opt-in (issue #1145).
+			if ( ! isset( $options['file_optimisation']['fontSubset'] ) ) {
+				$options['file_optimisation']['fontSubset'] = false;
+			}
+			if ( ! isset( $options['file_optimisation']['fontSubsetSubsets'] ) ) {
+				$options['file_optimisation']['fontSubsetSubsets'] = 'latin';
+			}
+			// Builder CSS drift purge watcher (issue #1288).
+			if ( ! isset( $options['file_optimisation']['builderPurgeWatcher'] ) ) {
+				$options['file_optimisation']['builderPurgeWatcher'] = true;
+			}
+			if ( ! isset( $options['file_optimisation']['builderPurgeDriftLog'] ) ) {
+				$options['file_optimisation']['builderPurgeDriftLog'] = true;
+			}
+			// Speculation-rules backfills (issues #1061, #1183, #1237, #1215).
+			if ( ! isset( $options['preload_settings'] ) || ! is_array( $options['preload_settings'] ) ) {
+				$options['preload_settings'] = array();
+			}
+			if ( ! isset( $options['preload_settings']['speculationRumGating'] ) ) {
+				$options['preload_settings']['speculationRumGating'] = true;
+			}
+			if ( ! isset( $options['preload_settings']['speculationTopUrlsLimit'] ) ) {
+				$options['preload_settings']['speculationTopUrlsLimit'] = 2;
+			}
+			if ( ! isset( $options['preload_settings']['speculationPrerenderList'] ) ) {
+				$options['preload_settings']['speculationPrerenderList'] = false;
+			}
+			if ( ! isset( $options['preload_settings']['enableSpeculationRules'] ) ) {
+				$options['preload_settings']['enableSpeculationRules'] = false;
+			}
+			if ( ! isset( $options['preload_settings']['speculationMode'] ) ) {
+				$options['preload_settings']['speculationMode'] = 'prefetch';
+			}
+			if ( ! isset( $options['preload_settings']['speculationEagerness'] ) ) {
+				$options['preload_settings']['speculationEagerness'] = 'conservative';
+			}
+			if ( ! isset( $options['preload_settings']['speculationExcludeUrls'] ) ) {
+				$options['preload_settings']['speculationExcludeUrls'] = '';
+			}
+			if ( ! isset( $options['preload_settings']['speculationDocumentRules'] ) ) {
+				$options['preload_settings']['speculationDocumentRules'] = true;
+			}
+			// Automatic LCP hero preload + automatic font discovery (issue #1216).
+			if ( ! isset( $options['preload_settings']['autoLcpPreload'] ) ) {
+				$options['preload_settings']['autoLcpPreload'] = false;
+			}
+			if ( ! isset( $options['preload_settings']['autoDiscoverFonts'] ) ) {
+				$options['preload_settings']['autoDiscoverFonts'] = false;
+			}
+			if ( ! isset( $options['llms_txt'] ) || ! is_array( $options['llms_txt'] ) ) {
+				$options['llms_txt'] = array();
+			}
+			if ( ! isset( $options['llms_txt']['enabled'] ) ) {
+				$options['llms_txt']['enabled'] = false;
+			}
+			if ( ! isset( $options['llms_txt']['source'] ) ) {
+				$options['llms_txt']['source'] = 'both';
+			}
+			if ( ! isset( $options['od_integration'] ) || ! is_array( $options['od_integration'] ) ) {
+				$options['od_integration'] = array();
+			}
+			if ( ! isset( $options['od_integration']['enabled'] ) ) {
+				$options['od_integration']['enabled'] = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+			}
+			if ( ! isset( $options['bfcache'] ) || ! is_array( $options['bfcache'] ) ) {
+				$options['bfcache'] = array();
+			}
+			if ( ! isset( $options['bfcache']['enabled'] ) ) {
+				$options['bfcache']['enabled'] = false;
+			}
+			if ( ! isset( $options['perf_translations'] ) || ! is_array( $options['perf_translations'] ) ) {
+				$options['perf_translations'] = array();
+			}
+			if ( ! isset( $options['perf_translations']['enabled'] ) ) {
+				$options['perf_translations']['enabled'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive'] ) || ! is_array( $options['ai_adaptive'] ) ) {
+				$options['ai_adaptive'] = array();
+			}
+			if ( ! isset( $options['ai_adaptive']['enabled'] ) ) {
+				$options['ai_adaptive']['enabled'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive']['use_wp_ai_client'] ) ) {
+				$options['ai_adaptive']['use_wp_ai_client'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+				$options['ai_adaptive']['field_lcp_min_samples'] = 20;
+			}
+			if ( ! isset( $options['ai_adaptive']['dismissed_suggestions'] ) || ! is_array( $options['ai_adaptive']['dismissed_suggestions'] ) ) {
+				$options['ai_adaptive']['dismissed_suggestions'] = array();
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_cooldown_days'] ) ) {
+				$options['ai_adaptive']['anomaly_cooldown_days'] = 7;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_min_samples'] ) ) {
+				$options['ai_adaptive']['anomaly_min_samples'] = 10;
+			}
+			if ( ! isset( $options['ai_adaptive']['css_refresh_on_lcp_regression'] ) ) {
+				$options['ai_adaptive']['css_refresh_on_lcp_regression'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
+				$options['ai_adaptive']['css_refresh_cooldown_days'] = 7;
+			}
+			// RUM-segmented speculation auto-tune keys (issue #1425).
+			if ( ! isset( $options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
+				$options['ai_adaptive']['speculation_autotune_enabled'] = false;
+			}
+			if ( ! isset( $options['ai_adaptive']['speculation_min_samples'] ) ) {
+				$options['ai_adaptive']['speculation_min_samples'] = 20;
+			}
+			if ( ! isset( $options['ai_adaptive']['speculation_max_urls'] ) ) {
+				$options['ai_adaptive']['speculation_max_urls'] = 5;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_tolerance_pct'] ) ) {
+				$options['ai_adaptive']['anomaly_tolerance_pct'] = 5.0;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_tolerance_abs'] ) ) {
+				$options['ai_adaptive']['anomaly_tolerance_abs'] = 0.01;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_persistence_windows'] ) ) {
+				$options['ai_adaptive']['anomaly_persistence_windows'] = 3;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_p75_min_samples'] ) ) {
+				$options['ai_adaptive']['anomaly_p75_min_samples'] = 10;
+			}
+			// Anomaly detector v2 keys (issue #1313).
+			if ( ! isset( $options['ai_adaptive']['anomaly_band_window'] ) ) {
+				$options['ai_adaptive']['anomaly_band_window'] = 10;
+			}
+			if ( ! isset( $options['ai_adaptive']['anomaly_recovery_days'] ) ) {
+				$options['ai_adaptive']['anomaly_recovery_days'] = 3;
+			}
+			if ( ! isset( $options['ai_adaptive']['deploy_notes'] ) || ! is_array( $options['ai_adaptive']['deploy_notes'] ) ) {
+				$options['ai_adaptive']['deploy_notes'] = array();
+			}
+			if ( ! isset( $options['edge_cache'] ) || ! is_array( $options['edge_cache'] ) ) {
+				$options['edge_cache'] = array();
+			}
+			if ( ! isset( $options['edge_cache']['enabled'] ) ) {
+				$options['edge_cache']['enabled'] = false;
+			}
+			// CCSS/used-CSS queue keys (issues #1038, #1164, #1235, #1388).
+			if ( ! isset( $options['file_optimisation'] ) || ! is_array( $options['file_optimisation'] ) ) {
+				$options['file_optimisation'] = array();
+			}
+			if ( ! isset( $options['file_optimisation']['ccssMaxSize'] ) ) {
+				$options['file_optimisation']['ccssMaxSize'] = 20480;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssSafelistExtra'] ) ) {
+				$options['file_optimisation']['ccssSafelistExtra'] = '';
+			}
+			if ( ! isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
+				$options['file_optimisation']['ccssQueueCap'] = 5;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssGenTimeout'] ) ) {
+				$options['file_optimisation']['ccssGenTimeout'] = 25;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssInlineBudgetKb'] ) ) {
+				$options['file_optimisation']['ccssInlineBudgetKb'] = 14;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssCommerceExclude'] ) ) {
+				$options['file_optimisation']['ccssCommerceExclude'] = true;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssChecksumRegen'] ) ) {
+				$options['file_optimisation']['ccssChecksumRegen'] = true;
+			}
+			if ( ! isset( $options['file_optimisation']['usedCssQueueCap'] ) ) {
+				$options['file_optimisation']['usedCssQueueCap'] = 50;
+			}
+			if ( ! isset( $options['file_optimisation']['ccssViewportVariants'] ) ) {
+				$options['file_optimisation']['ccssViewportVariants'] = false;
+			}
+
+			self::$resolved_settings_cache[ $blog_id ]        = $options;
+			self::$resolved_settings_cache_loaded[ $blog_id ] = true;
+			return $options;
+		}
+
+		/**
+		 * Invalidate one or all resolved-options memo entries.
+		 *
+		 * Raw settings writes remain owned by Settings_Store::save_settings();
+		 * this method only drops effective read snapshots. A blog ID scopes
+		 * invalidation, while null clears every site for test isolation and
+		 * delete_option compatibility.
+		 *
+		 * @since NEXT
+		 * @param int|null $blog_id Optional blog ID.
+		 * @return void
+		 */
+		public static function invalidate_resolved_settings( ?int $blog_id = null ): void {
+			if ( null !== $blog_id ) {
+				unset( self::$resolved_settings_cache[ $blog_id ], self::$resolved_settings_cache_loaded[ $blog_id ] );
+				return;
+			}
+			self::$resolved_settings_cache        = array();
+			self::$resolved_settings_cache_loaded = array();
+		}
+
+		/**
 		 * Per-request memo for wppo_settings to avoid repeated get_option deserialization.
 		 *
 		 * Keyed by blog ID for multisite correctness under switch_to_blog().
@@ -790,9 +1358,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * Mirrored in Util::current_blog_id() by design (decoupling); keep in sync.
 		 *
 		 * @since 2.4.0
+		 * @since NEXT Public for Main's blog-aware options facade.
 		 * @return int Blog ID.
 		 */
-		private static function current_blog_id(): int {
+		public static function current_blog_id(): int {
 			if ( ! function_exists( 'get_current_blog_id' ) ) {
 				return 0;
 			}
@@ -841,6 +1410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 			$bid                                 = self::current_blog_id();
 			self::$settings_cache[ $bid ]        = $settings;
 			self::$settings_cache_loaded[ $bid ] = true;
+			self::invalidate_resolved_settings( $bid );
 			self::ensure_settings_cache_hook();
 		}
 
@@ -892,18 +1462,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 			if ( null !== $blog_id && is_int( $blog_id ) ) {
 				$bid = (int) $blog_id;
 				unset( self::$settings_cache[ $bid ], self::$settings_cache_loaded[ $bid ] );
+				self::invalidate_resolved_settings( $bid );
 				return;
 			}
 			// Action callbacks (update/delete) pass $old/$new or $option/$value
 			// which are not int blog IDs; treat non-int as "clear all" for
 			// backwards-compat with the pre-blog-keyed API.
-			if ( null !== $blog_id && ! is_int( $blog_id ) ) {
-				self::$settings_cache        = array();
-				self::$settings_cache_loaded = array();
-				return;
-			}
 			self::$settings_cache        = array();
 			self::$settings_cache_loaded = array();
+			self::invalidate_resolved_settings();
 		}
 
 		/**
@@ -982,6 +1549,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 			$bid                                 = self::current_blog_id();
 			self::$settings_cache[ $bid ]        = is_array( $value ) ? $value : array();
 			self::$settings_cache_loaded[ $bid ] = true;
+			self::invalidate_resolved_settings( $bid );
 		}
 
 		/**
@@ -997,6 +1565,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 				$bid                                 = self::current_blog_id();
 				self::$settings_cache[ $bid ]        = is_array( $value ) ? $value : array();
 				self::$settings_cache_loaded[ $bid ] = true;
+				self::invalidate_resolved_settings( $bid );
 			}
 		}
 
