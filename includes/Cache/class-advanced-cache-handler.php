@@ -495,9 +495,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// Semantics mirror Cache::is_woo_excluded(): an absent key defaults to
 			// enabled (fail-safe), and malformed values normalize to enabled.
 			$woo_safe_mode = true;
-			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+			if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_safe_mode_enabled' ) ) {
 				try {
-					$woo_safe_mode = \PerformanceOptimise\Inc\Util::is_woo_safe_mode_enabled( is_array( $wppo_options ) ? $wppo_options : null );
+					$woo_safe_mode = Woo_Detect::is_woo_safe_mode_enabled( is_array( $wppo_options ) ? $wppo_options : null );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$woo_safe_mode = true;
@@ -513,7 +513,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// never reaches wppo_serve_cache_file().
 			$woo_uri_segments = array( 'cart', 'checkout', 'my-account' );
 			if ( $woo_safe_mode ) {
-				foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
+				foreach ( Woo_Detect::get_woo_excluded_paths() as $woo_path ) {
 					$woo_path = strtolower( trim( (string) $woo_path, '/' ) );
 					$woo_path = (string) preg_replace( '/[\x00-\x1F\x7F]/u', '', $woo_path );
 					$woo_path = trim( $woo_path, '/' );

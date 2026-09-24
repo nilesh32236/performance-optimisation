@@ -913,11 +913,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			$woo_safe  = true;
 			$woo_paths = array();
 			try {
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
-					$woo_safe = Util::is_woo_safe_mode_enabled();
+				if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_safe_mode_enabled' ) ) {
+					$woo_safe = Woo_Detect::is_woo_safe_mode_enabled();
 				}
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'get_woo_excluded_paths' ) ) {
-					$woo_paths = (array) Util::get_woo_excluded_paths();
+				if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'get_woo_excluded_paths' ) ) {
+					$woo_paths = (array) Woo_Detect::get_woo_excluded_paths();
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -979,12 +979,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 		private function is_woo_excluded_url( string $url, ?bool $woo_safe = null, ?array $woo_paths = null ): bool {
 			// Single-source fast path: non-batch callers delegate to the
-			// canonical Util::is_woo_excluded_url() so serve-path and
+			// canonical Woo_Detect::is_woo_excluded_url() so serve-path and
 			// warm-path verdicts can never drift. Batch callers pass
 			// pre-resolved $woo_safe/$woo_paths to skip per-URL option reads.
-			if ( null === $woo_safe && null === $woo_paths && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_excluded_url' ) ) {
+			if ( null === $woo_safe && null === $woo_paths && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_excluded_url' ) ) {
 				try {
-					return Util::is_woo_excluded_url( $url );
+					return Woo_Detect::is_woo_excluded_url( $url );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					return true;
@@ -995,11 +995,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$path  = (string) wp_parse_url( $url, PHP_URL_PATH );
 				// Plain-permalink Store API (?rest_route=/wc/store/...) is never
 				// preloaded — unconditional on safe mode.
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
-					if ( Util::is_woo_store_api_request( $path, $query, '' ) || Util::is_woo_store_api_request( $path, '', $this->get_rest_route_param( $url, $query ) ) ) {
+				if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_store_api_request' ) ) {
+					if ( Woo_Detect::is_woo_store_api_request( $path, $query, '' ) || Woo_Detect::is_woo_store_api_request( $path, '', $this->get_rest_route_param( $url, $query ) ) ) {
 						return true;
 					}
-				} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && ( Util::is_woo_store_api_path( $path ) || Util::is_woo_store_api_path( $this->get_rest_route_param( $url, $query ) ) ) ) {
+				} elseif ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_store_api_path' ) && ( Woo_Detect::is_woo_store_api_path( $path ) || Woo_Detect::is_woo_store_api_path( $this->get_rest_route_param( $url, $query ) ) ) ) {
 					return true;
 				} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $path, '/' ) ) || (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $query ) ) ) {
 					return true;
@@ -1011,8 +1011,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				// drop-in). Falls back to the path-segment + query-param
 				// regex on mixed-version deploys.
 				try {
-					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
-						if ( Util::is_woo_ajax_request( $path, $query ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_ajax_request' ) ) {
+						if ( Woo_Detect::is_woo_ajax_request( $path, $query ) ) {
 							return true;
 						}
 					} elseif ( (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . ltrim( (string) rawurldecode( $path ), '/' ) ) || ( '' !== $query && (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', $query ) ) ) {
@@ -1025,11 +1025,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				// Faceted layered-nav queries (issue #1256) are never preloaded —
 				// unconditional on safe mode: a filtered URL is dynamic by nature
 				// and warming it wastes cron slots plus risks caching filtered
-				// output. Mirrors Util::is_woo_faceted_query() with a pre-boot
+				// output. Mirrors Woo_Detect::is_woo_faceted_query() with a pre-boot
 				// regex fallback for mixed-version deploys.
 				try {
-					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
-						if ( '' !== $query && Util::is_woo_faceted_query( $query ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_faceted_query' ) ) {
+						if ( '' !== $query && Woo_Detect::is_woo_faceted_query( $query ) ) {
 							return true;
 						}
 					} elseif ( '' !== $query && (bool) preg_match( '/(?:^|[&;])(?:filter_[^=&]*|query_type_[^=&]*|min_price|max_price|rating_filter|orderby|product_cat|pa_[^=&]*|attribute_[^=&]*|gpf_[^=&]*)(?:=|&|;|$)/i', $query ) ) {
@@ -1057,13 +1057,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					unset( $e );
 					return true;
 				}
-				if ( ! method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+				if ( ! method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_safe_mode_enabled' ) || ! method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_dynamic_path' ) ) {
 					// Fail-safe on mixed-version deploys: absent helper means
 					// exclude (never preload potentially dynamic content).
 					return true;
 				}
 				if ( null === $woo_safe ) {
-					$woo_safe = Util::is_woo_safe_mode_enabled();
+					$woo_safe = Woo_Detect::is_woo_safe_mode_enabled();
 				}
 				if ( ! $woo_safe ) {
 					// Safe mode off: only the unconditional skips apply
@@ -1081,9 +1081,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 							return true;
 						}
 					}
-					return Util::is_woo_store_api_path( $path );
+					return Woo_Detect::is_woo_store_api_path( $path );
 				}
-				return Util::is_woo_dynamic_path( $path );
+				return Woo_Detect::is_woo_dynamic_path( $path );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;

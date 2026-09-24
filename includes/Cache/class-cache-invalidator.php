@@ -613,9 +613,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 				return;
 			}
 			$skip_regen = false;
-			if ( '' !== $primary_normalized && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+			if ( '' !== $primary_normalized && class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_dynamic_path' ) ) {
 				try {
-					$skip_regen = Util::is_woo_dynamic_path( $primary_normalized );
+					$skip_regen = Woo_Detect::is_woo_dynamic_path( $primary_normalized );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$skip_regen = true;

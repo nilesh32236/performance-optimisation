@@ -170,33 +170,33 @@ The generated metrics act as signals. Reviewers combine them with source and run
 
 ## Phase 3 ratchet
 
-P3-005 through P3-015 record these baselines:
+P3-005 through P3-017 record these current ratchet values:
 
 | Metric | Baseline | Direction |
 |---|---:|---|
 | Runtime SCCs | 1 | Reduce; final target 0 or a documented protected residue |
 | Largest runtime SCC | 67 nodes | Reduce |
-| Compatibility-classified edges | 199 | Explain and reduce only through explicit compatibility ownership |
+| Compatibility-classified edges | 205 | Explain and reduce only through explicit compatibility ownership |
 | Compatibility SCCs | 1 | Reduce; retain only documented stable adapters |
-| Largest compatibility SCC | 21 nodes | Reduce after caller migration |
+| Largest compatibility SCC | 22 nodes | Reduce after remaining facade callers migrate |
 | Boundary violations | 20 | Reduce; final target 0 or explicit protected exceptions |
-| Bridge candidates | 238 | Reduce after caller migration |
-| `Util` unique fan-in | 57 | Reduce |
-| `Util` incoming executable evidence | 1,138 | Reduce |
-| `Main` unique fan-out | 37 | Reduce after delegated bridges settle |
-| `Main` feature dependencies | 18 | Reduce after delegated bridges settle |
+| Bridge candidates | 245 | Reduce as remaining `Util` clusters and temporary duplicate caller edges migrate |
+| `Util` unique fan-in | 59 | Reduce when callers finish unrelated `Util` clusters |
+| `Util` incoming executable evidence | 1,084 | Reduce; P3-017 removes 54 Woo-proxy occurrences |
+| `Main` unique fan-out | 38 | Reduce after delegated bridges settle |
+| `Main` feature dependencies | 19 | Reduce after delegated bridges settle |
 | `Main` methods at least 80 lines | 17 | Reduce |
 | Static-state nodes | 32 | Classify, then reduce or document |
 | Static properties | 143 | Classify, then reduce or document |
 | Exact duplicate groups | 17 | Review; reduce only semantic duplicates |
-| Feature-to-feature edges | 46 | Keep only deliberate interactions |
+| Feature-to-feature edges | 50 | Keep only deliberate interactions; P3-017's four increases are direct cache/Core/Assets/Scheduler → Woo_Detect ownership edges |
 | Independent admin-auth implementations | 1 | Reduce to 0 outside `Admin_Auth` |
 
 P3-014 moves the bounded Main minification cluster behind `Minify_Policy`; P3-015 moves legacy/core buffer routing, used-CSS lifecycle, and cache-aware scheduling seams behind `Preload_Buffer_Coordinator`. Speculation/resource-hint, image-serving, and LiteSpeed ownership remain deferred.
 
 A pull request may increase a metric for a documented bridge. It must name the follow-up item and removal condition. An unexplained increase fails the ratchet.
 
-P3-013 trades three explicit `Main` owner edges for a 301-line and one-large-method reduction. P3-014 owns the remaining asset/minification/speculation fan-out reduction; P3-016 now replaces the `Settings_Migrations` → `Main` owner-state bridge with callable effective-options and invalidation contracts. `Settings_Store` adds two blog-keyed resolved-memo properties, while incoming executable `Util` evidence falls 1,142 to 1,138. Moving the canonical defaults into the dependency-light Store prevents a new Store-to-Util edge; the runtime SCC grows only from 64 to 65 nodes.
+P3-013 trades three explicit `Main` owner edges for a 301-line and one-large-method reduction. P3-014 owns the remaining asset/minification/speculation fan-out reduction; P3-016 now replaces the `Settings_Migrations` → `Main` owner-state bridge with callable effective-options and invalidation contracts. `Settings_Store` adds two blog-keyed resolved-memo properties, while incoming executable `Util` evidence falls 1,142 to 1,138. Moving the canonical defaults into the dependency-light Store prevents a new Store-to-Util edge; the runtime SCC grows only from 64 to 65 nodes. P3-017 removes 54 Woo-proxy occurrences from the 1,138 incoming `Util` evidence, while retaining every public proxy. The seven new direct owner edges are expected temporary duplicates: each caller still depends on `Util` for a separately scoped cluster, and those aggregate edges collapse only when those follow-up migrations complete.
 
 ## SOLID policy
 

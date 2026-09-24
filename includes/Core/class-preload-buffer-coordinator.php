@@ -271,9 +271,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Preload_Buffer_Coordinator' ) ) {
 			if ( ! is_string( $url ) || '' === $url ) {
 				return;
 			}
-			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_excluded_url' ) ) {
+			if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_excluded_url' ) ) {
 				try {
-					if ( Util::is_woo_excluded_url( $url ) ) {
+					if ( Woo_Detect::is_woo_excluded_url( $url ) ) {
 						return;
 					}
 				} catch ( \Throwable $e ) {
@@ -361,24 +361,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Preload_Buffer_Coordinator' ) ) {
 						$warm_rest_route = $warm_params['rest_route'];
 					}
 				}
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
-					if ( Util::is_woo_store_api_request( $warm_path, $warm_qs, '' ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_request( $warm_path, '', $warm_rest_route ) ) ) {
+				if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_store_api_request' ) ) {
+					if ( Woo_Detect::is_woo_store_api_request( $warm_path, $warm_qs, '' ) || ( '' !== $warm_rest_route && Woo_Detect::is_woo_store_api_request( $warm_path, '', $warm_rest_route ) ) ) {
 						return true;
 					}
-				} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && ( Util::is_woo_store_api_path( $warm_path ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_path( $warm_rest_route ) ) ) ) {
+				} elseif ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_store_api_path' ) && ( Woo_Detect::is_woo_store_api_path( $warm_path ) || ( '' !== $warm_rest_route && Woo_Detect::is_woo_store_api_path( $warm_rest_route ) ) ) ) {
 					return true;
 				} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $warm_path, '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $warm_qs ) ) ) ) {
 					return true;
 				}
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
-					if ( Util::is_woo_ajax_request( $warm_path, $warm_qs ) ) {
+				if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_ajax_request' ) ) {
+					if ( Woo_Detect::is_woo_ajax_request( $warm_path, $warm_qs ) ) {
 						return true;
 					}
 				} elseif ( (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . ltrim( (string) rawurldecode( $warm_path ), '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', $warm_qs ) ) ) {
 					return true;
 				}
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
-					if ( '' !== $warm_qs && Util::is_woo_faceted_query( $warm_qs ) ) {
+				if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_faceted_query' ) ) {
+					if ( '' !== $warm_qs && Woo_Detect::is_woo_faceted_query( $warm_qs ) ) {
 						return true;
 					}
 				} elseif ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])(?:filter_[^=&]*|query_type_[^=&]*|min_price|max_price|rating_filter|orderby|product_cat|pa_[^=&]*|attribute_[^=&]*|gpf_[^=&]*)(?:=|&|;|$)/i', $warm_qs ) ) {
@@ -391,8 +391,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Preload_Buffer_Coordinator' ) ) {
 				} elseif ( '' !== $warm_qs ) {
 					return true;
 				}
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
-					if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( $warm_path ) ) {
+				if ( method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_safe_mode_enabled' ) ) {
+					if ( Woo_Detect::is_woo_safe_mode_enabled( $options ) && Woo_Detect::is_woo_dynamic_path( $warm_path ) ) {
 						return true;
 					}
 				}
