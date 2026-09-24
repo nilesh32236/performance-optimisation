@@ -11,7 +11,7 @@
 ```sh
 composer dev-setup           # install PHP deps (--ignore-platform-reqs)
 npm install                  # install JS deps
-npm run build                # wp-scripts build src/index.js src/lazyload.js
+npm run build                # wp-scripts build all configured entries
 npm run start                # dev watch mode
 ```
 
@@ -28,25 +28,25 @@ npm run start                # dev watch mode
 | `composer makepot` | Generate `.pot` translation file (PHP + JS `@wordpress/i18n` strings) |
 | `composer release` | `composer install --no-dev --optimize-autoloader` |
 
-**Required order for full verification:** `npm run lint:js` → `composer lint` → `npm test` → `npm run build`
+**Required order for full verification:** `npm run lint:js` → `composer lint` → `npm test` → `composer test` (when PHP files change) → `npm run build`
 
 ## Vendor directory
 
 `vendor/` is **ignored in git** (`/.gitignore`). It is installed on demand:
 
 - **Locally**: `composer dev-setup` (dev deps) or `composer release` (production-only).
-- **In CI/release**: `release.yml` and `scripts/build-release.sh` run `composer install --no-dev --optimize-autoloader` before packaging, so the shipped ZIP/SVN build always contains the production dependencies (`voku/html-min`, `matthiasmullie/minify`, `woocommerce/action-scheduler`).
+- **In CI/release**: `release.yml` and `scripts/build-release.sh` run `composer install --no-dev --optimize-autoloader` before packaging. The four direct production requires are `voku/html-min`, `matthiasmullie/minify`, `symfony/css-selector`, and `woocommerce/action-scheduler`; the lock currently resolves seven production packages including their transitives.
 
 `composer.lock` **is tracked** so installs are reproducible. After changing `composer.json`/`composer.lock`, run `composer dev-setup` locally to verify the lock file resolves.
 
 ## Architecture
 
 ### Plugin entry
-`performance-optimisation.php` → `includes/Core/class-main.php` (orchestrator). Namespace `PerformanceOptimise\Inc`. Classes are **manually loaded** via `Main::includes()` + `Loader_Map` (`includes/Core/class-loader-map.php`) + `vendor/autoload.php` (Composer for vendor packages only, no PSR-4 autoload for plugin classes).
+`performance-optimisation.php` → `includes/Core/class-main.php` (orchestrator). Namespace `PerformanceOptimise\Inc`. `vendor/autoload.php` provides vendor packages plus Composer's recursive plugin classmap; `Main::includes()` + `Loader_Map` (`includes/Core/class-loader-map.php`) provide explicit loading and stale-classmap recovery. No plugin PSR-4 mapping is allowed.
 
 ### React SPA
 - Mounts at `<div id="performance-optimisation">` in WP admin
-- Built from `src/index.js` + `src/lazyload.js` via `@wordpress/scripts`
+- Built from `src/index.js`, `src/lazyload.js`, `src/main.js`, `src/rum.js`, and `src/esi.js` via `@wordpress/scripts`
 - **No routing library** — tab switching via `useState` + conditional rendering
 - **No state management library** — pure `useState` throughout
 - **All settings pages** call `update_settings` API with `{tab: '...', settings: {...}}`
@@ -77,7 +77,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.php` (40 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 40-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
+Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.php`. The installed site registers 48 route patterns including the namespace root, which represents 47 concrete endpoints. Administrative endpoints require `manage_options` + `X-WP-Nonce`; `rum_collect` stays public with token, IP, and global rate limits. `Rest::register_routes()` is authoritative; the table below highlights common endpoints.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -116,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-42 class files in `includes/<Domain>/` (+ `includes/minify/` wrappers and `includes/Support/redis-connect-helper.php`; `includes/class-util.php` stays at root). The authoritative per-class responsibility table lives in `.agents/AGENTS.md`; the summary table below covers the core classes:
+The schema-v2 inventory tracks 71 files: 67 runtime plugin files under `includes/` (66 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `Util` stays at the includes root. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -130,7 +130,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `Scheduler/class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
 | `Images/class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `Images/class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `Admin/class-rest.php` | All 40 REST API endpoints |
+| `Admin/class-rest.php` | REST registrar for 47 concrete endpoints (48 registered patterns including the namespace root) |
 | `Insight/class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `Insight/class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
 | `Insight/class-telemetry.php` | Local cURL-based performance scanner |
@@ -147,12 +147,12 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `Edge/class-cdn.php` | LiteSpeed CDN mapping + URL rewrite |
 | `Compatibility/class-llms.php` | /llms.txt + /llms-full.txt virtual files (daily cron) |
 | `Insight/class-rum.php` | Real-user Web Vitals beacon collection/aggregation |
-| `Insight/class-ai-adaptive.php` | Heuristic auto-tune from RUM/trends (read-only suggestions, speculation override) |
+| `Insight/class-ai-adaptive.php` | Heuristic auto-tune from RUM/trends, model learning/persistence, opt-in remote AI, speculation override |
 | `Insight/class-od-bridge.php` | Optimization Detective bridge (real-visit LCP data) |
 | `Cache/class-bfcache.php` | bfcache for logged-in users (no-store removal + session invalidation) |
 | `Assets/class-google-fonts.php` | Self-host Google Fonts (download + local serving) |
 | `CSS/class-used-css.php` / `CSS/class-critical-css.php` | Per-URL used CSS + per-template critical CSS |
-| `Admin/class-wppo-cli-command.php` | `wp wppo` CLI (7 subcommands: cache, database, image, settings, object-cache, pagespeed, system-info) |
+| `Admin/class-wppo-cli-command.php` | `wp wppo` CLI (8 subcommands: cache, database, image, settings, object-cache, pagespeed, system-info, verify) |
 
 ### Caching stack
 1. **Static HTML cache** — `wp-content/cache/wppo/{domain}/{path}/index.html` (+ gzip variant). Generated via output buffer on `template_redirect`. Served via `advanced-cache.php` drop-in (skips WordPress entirely for cached pages).
@@ -160,7 +160,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 3. **Cache clearing** triggered on: permalink change, theme switch, settings save, plugin activate/deactivate, `save_post` (smart purge: home, archive, taxonomies).
 
 ### Background jobs
-- **Image conversion**: Action Scheduler (`wppo_convert_image_background`) + hourly cron (`wppo_img_conversation`)
+- **Image conversion**: Action Scheduler (`wppo_convert_image_background`) + hourly cron (`wppo_img_conversion`)
 - **PageSpeed scans**: Action Scheduler (`wppo_pagespeed_scan`)
 - **Web Vitals auto-rescan**: daily cron (`wppo_web_vitals_rescan`), gates on `performance_audit.auto_rescan` (`daily`/`weekly`), queues home + high-value URLs for both strategies, stores history in `wppo_web_vitals_trends` option (capped at 30/URL+strategy)
 - **Cache preload**: 5-hourly cron, processes 200 posts per batch, random delay 0-1800s per page; when `preload_settings.preloadSitemap` is on, `wppo_generate_static_url` single events are scheduled per `wp-sitemap.xml` URL (index child sitemaps followed, off-site URLs filtered, 500-URL discovery cap, 15s wall-clock budget) via `Cron::get_sitemap_urls()` + `schedule_sitemap_url_jobs()`
@@ -178,7 +178,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 - Jest config lives in `package.json` (no `jest.config.js`). Environment is `jsdom`.
 - `src/setupTests.js` mocks: `wppoSettings` (translations), `window.matchMedia`, and `@wordpress/components` (ToggleControl → plain checkbox)
 - Global `wppoSettings` object must be extended per-test (`apiUrl`, `nonce`, `settings`, etc.)
-- All 9 test suites use `@testing-library/react` + `@testing-library/jest-dom`
+- React component tests use `@testing-library/react` + `@testing-library/jest-dom`; the current Jest baseline has 56 suites and 789 tests
 - **API mocking patterns**:
   - `jest.mock('../../lib/apiRequest', () => ({ apiCall: jest.fn() }))` (preferred for components)
   - `global.fetch = jest.fn()` (used in apiRequest.test.js)
@@ -201,8 +201,8 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 - PHP 8.2 minimum
 - PHPCS excludes: `vendor/*`, `node_modules/*`, `build/*`
 - Composer deps (7 packages): `voku/html-min`, `voku/simple_html_dom`, `matthiasmullie/minify`, `matthiasmullie/path-converter`, `symfony/css-selector`, `tedivm/jshrink`, `woocommerce/action-scheduler`
-- `wp wppo` WP-CLI commands registered (7 subcommands — see `includes/Admin/class-wppo-cli-command.php`)
-- All REST endpoints require `manage_options` + `X-WP-Nonce`
+- `wp wppo` WP-CLI commands registered (8 subcommands, including `verify` — see `includes/Admin/class-wppo-cli-command.php`)
+- REST routes require `manage_options` + `X-WP-Nonce` except public `rum_collect`, which keeps token, IP, and global rate-limit validation
 - Settings stored as serialized array in single `wppo_settings` option
 - **PHP 8.5 compat**: never call `Reflection::{Method,Property}::setAccessible()` (deprecated on PHP 8.5, no-op since PHP 8.1 — reflection works without it on the PHP 8.2+ floor); route resource teardown (`curl_close`, `curl_multi_close`, `curl_share_close`, `finfo_close`, `xml_parser_free`, `imagedestroy`) through the `Util` helpers (`close_curl_handle()`, `close_curl_multi_handle()`, `close_curl_share_handle()`, `close_finfo_handle()`, `free_xml_parser()`, `destroy_gd_image()`). Both rules are pinned by `tests/php/PhpDeprecationHygieneTest.php` (13-pattern scanner). See `docs/php-84-85-compat.md`.
 - **Filters**: `wppo_inline_combined_css` (return falsy to disable inlining of the combined/minified CSS via core `wp_maybe_inline_styles()` — e.g. when using a CDN for the combined file)
@@ -220,8 +220,8 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 ## Build
 
 - No custom Webpack config — uses `@wordpress/scripts` defaults
-- Entry points: `src/index.js` (React SPA) + `src/lazyload.js` (frontend lazy loader)
-- **Build output is committed** to git: `build/index.js`, `build/lazyload.js`, `build/style-index.css`, `build/style-index-rtl.css`, `build/*.asset.php`
+- Entry points: `src/index.js` (React SPA), `src/lazyload.js` (frontend lazy loader), `src/main.js` (admin bar), `src/rum.js` (RUM), and `src/esi.js` (LiteSpeed ESI)
+- **Build output is committed** to git: `build/index.js`, `build/lazyload.js`, `build/main.js`, `build/rum.js`, `build/esi.js`, `build/style-index.css`, `build/style-index-rtl.css`, `build/*.asset.php`
 - Always rebuild after JS/SCSS changes (`npm run build`)
 - Node version: 22.14.0 (`.nvmrc`)
 - `.browserslistrc`: `last 1` Chrome/Firefox/Safari, `not dead`
@@ -230,6 +230,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 
 | Doc | Purpose |
 |-----|---------|
+| `docs/architecture/` | Phase 3 architecture baseline, quality model, ownership boundaries, load order, hierarchy, and generated graph |
 | `docs/hooks.md` | All `wppo_*` filters/actions |
 | `docs/php-84-85-compat.md` | PHP 8.4/8.5 compat: setAccessible ban, Util teardown helpers, 13-pattern scanner, OPcache/JIT guidance |
 | `docs/litespeed-research.md` | LiteSpeed/OpenLiteSpeed deep research (server, LSCWP 7.9, conflict matrix, header protocol, feature comparison) |

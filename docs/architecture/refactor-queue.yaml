@@ -2,9 +2,11 @@
 # Rules: ONE active item at a time; at most ONE campaign GitHub issue open.
 # Statuses: queued|planning|issue-created|analysis-running|analysis-question|
 #   analysis-approved|autofix-running|pr-created|pr-review-running|
-#   human-verification|changes-requested|merged|blocked|cancelled
+#   human-verification|changes-requested|merged|superseded|blocked|cancelled
+# `planning` is non-active; multiple planning epics may be recorded, but only one executable item may advance to issue-created.
 # NOTE 2026-09-23: rewritten clean after scripted edits left stale statuses
-# and duplicate keys. All states below verified against gh issue/pr list.
+# and duplicate keys. Historical merged records were reconciled against GitHub;
+# Phase 3 planning records are intentionally local until their issue is created.
 
 campaign: incremental-architecture-refactor
 created: 2026-09-22
@@ -286,7 +288,7 @@ phase2_items:
     dependencies: [ARCH-001]
     risk: low
     expected_change: 'docs/architecture/INCLUDE-HIERARCHY.md canonical tree + per-class target mapping; no code.'
-    target_tree: 'docs/architecture/INCLUDE-HIERARCHY.md#canonical-tree-decided-arch-002'
+    target_tree: 'docs/architecture/INCLUDE-HIERARCHY.md#canonical-tree'
     notes:
       - '2026-09-23: canonical 14-directory tree decided from ARCH-001 evidence (ARCHITECTURE.md system map + 322 graph edges + LOAD-ORDER.md loader paths); 57-file target mapping + open-points resolutions recorded in INCLUDE-HIERARCHY.md. Util stays at root until ARCH-014; minify/ as-is; flat one-level rule; protected ESI/drop-in handlers unchanged by construction. Docs-only, no runtime change.'
   - id: ARCH-003
@@ -505,6 +507,333 @@ phase2_items:
     risk: low
     expected_change: 'Audit report + future queue items if justified; no code.'
 
+phase3:
+  goal: 'Reduce ownership ambiguity, reciprocal coupling, misplaced policy, unclassified state, and adapter duplication without big-bang rewrites.'
+  baselined: '2026-09-24'
+  source_baseline: 'origin/master@72818289; see ARCHITECTURE-BASELINE.md and schema-v2 DEPENDENCY-GRAPH.json'
+  baseline_metrics:
+    inventory_files: 71
+    graph_nodes: 74
+    graph_edges: 340
+    runtime_edges: 339
+    compatibility_edges: 191
+    loader_edges: 3
+    feature_to_feature_edges: 47
+    boundary_violations: 16
+    bridge_candidates: 226
+    runtime_sccs: 1
+    compatibility_sccs: 2
+    largest_runtime_scc: '59 nodes / 302 runtime edges'
+    static_properties: 141
+    static_state_nodes: 31
+    duplicate_candidate_groups: 17
+    Util_fan_in: 56
+    Util_incoming_evidence: 1145
+    Main_fan_out: 34
+    Main_feature_dependencies: 17
+
+phase3_items:
+  - id: P3-001
+    title: 'Fresh architecture baseline, tokenizer graph, quality model, and documentation reconciliation'
+    status: planning
+    priority: high
+    type: architecture
+    source: 'Phase 3 startup audit at origin/master@72818289'
+    scope:
+      - scripts/generate-class-inventory.php
+      - scripts/architecture/class-source-analyzer.php
+      - scripts/architecture/class-dependency-graph.php
+      - tests/php/ArchitectureInventoryTest.php
+      - tests/php/LoaderMapTest.php
+      - .github/workflows/psalm-wpcs-check.yml
+      - docs/architecture/
+      - AGENTS.md
+      - .agents/AGENTS.md
+      - .agents/tracking/01-IMPLEMENTATION-PLAN.md
+      - wppo-agent-rules.md
+    responsibility: 'Replace the Phase 2 regex approximation with deterministic executable-token evidence, exact file-set inventory, CI drift enforcement, current architecture docs, and an ordered Phase 3 queue.'
+    non_goals:
+      - 'No production PHP or React behavior changes.'
+      - 'No namespace, loader strategy, facade removal, or directory move.'
+    compatibility_constraints:
+      - 'Preserve manual loading, Composer classmap, LiteSpeed ESI, REST/CLI contracts, and installed site data.'
+    tests:
+      - 'ArchitectureInventoryTest schema/file-set/classification/cycle checks.'
+      - 'LoaderMapTest runtime-scope coverage.'
+      - 'Full lint, Jest, PHPUnit, build, and WordPress verify gates.'
+    ratchet: 'Establish 74-node/340-edge schema-v2 baseline; make drift non-zero on stale artifacts.'
+    notes:
+      - 'Fresh audit found one 59-node runtime SCC, two compatibility SCCs, 16 boundary violations, 226 bridge candidates, 141 static properties, and 17 exact-shape duplicate groups.'
+      - 'P3-002 is the first implementation item after this audit merges.'
+
+  - id: P3-002
+    title: 'Scheduler job ownership registry and teardown parity'
+    status: queued
+    priority: high
+    type: architecture
+    problem: 'Builder drift and upgrade purge hooks are scheduled outside Cron::AS_HOOKS; deactivation omits both, while standalone uninstall clears the owned Action Scheduler group but omits the upgrade purge WP-Cron fallback.'
+    current_owner: 'Cron::AS_HOOKS plus duplicated Deactivate/uninstall/Builder scheduling lists'
+    target_owner: 'Scheduler-domain Job_Registry with standalone-safe hook declarations'
+    target_direction: 'Feature scheduler calls -> Scheduler registry/primitives; Deactivate and standalone uninstall consume the same owned hook set without requiring autoload'
+    exact_scope:
+      - 'includes/Scheduler/'
+      - 'includes/Core/class-deactivate.php'
+      - 'includes/Integrations/class-builder-purge-watcher.php'
+      - 'uninstall.php'
+      - 'Direct Cron-owned hook scheduling in RUM and Object_Cache when included by the registry item'
+    non_goals:
+      - 'Do not change PageSpeed non-unique scheduling semantics.'
+      - 'Do not merge LiteSpeed crawler queue behavior with Cron queue behavior.'
+      - 'Do not clear foreign hooks or groups.'
+    compatibility_constraints:
+      - 'Preserve legacy wppo_img_conversation, performance_optimisation group, unique/non-unique Action Scheduler semantics, and current builder run locks.'
+    tests:
+      - 'Executable hook coverage parity for every owned schedule.'
+      - 'Deactivate and uninstall unschedule every registry hook exactly once.'
+      - 'Builder, RUM, Object Cache, Scheduler, and Cron regression suites.'
+    ratchet: 'Owned Action Scheduler hooks missing from registry: 2 -> 0; owned WP-Cron fallback hooks missing from teardown: 1 -> 0; teardown parity: 100%.'
+    wordpress_verification: 'Inspect Action Scheduler queue before/after deactivation smoke; wp wppo verify; cron hook parity.'
+
+  - id: P3-003
+    title: 'Preload target and redirect transport policy'
+    status: queued
+    priority: high
+    type: security-architecture
+    problem: 'Arbitrary Cron preload URLs enforce a same-host sink check but still use implicit redirect-following transport; sitemap discovery remains host-only, while crawler and telemetry paths validate redirects explicitly.'
+    target_owner: 'Preload_Transport under Scheduler/Support boundary'
+    target_direction: 'Cron queue/progress -> validated preload transport -> WordPress HTTP'
+    exact_scope: 'Cron sitemap discovery, arbitrary URL preload, and page fetch transport only.'
+    non_goals: 'Do not change sitemap progress semantics, LiteSpeed variant throttles, or unrelated telemetry transport.'
+    compatibility_constraints: 'Preserve the current wp_http_validate_url plus same-host sink behavior; any localhost/private-staging allowance restoration requires an explicit compatibility decision, while redirects become bounded and non-following.'
+    tests: 'Off-host, port, redirect-chain, current localhost/private rejection, sitemap cap, and 15-second discovery deadline vectors.'
+    ratchet: 'Implicit-follow Cron preload fetches: 3 -> 0; host-only-only gates: 1 -> 0.'
+
+  - id: P3-004
+    title: 'Blog-scoped runtime state and reset registry'
+    status: queued
+    priority: high
+    type: architecture
+    problem: 'RUM, AI, System Info, LiteSpeed, Object Cache, and Database Cleanup hold site-sensitive static memos without a complete production switch_blog reset contract.'
+    target_owner: 'Runtime_State reset/keying boundary with feature-owned memos'
+    target_direction: 'Hook_Registry switch_blog -> Runtime_State -> registered feature reset contracts'
+    exact_scope: 'Classify and isolate the six proven site-sensitive owners; test bootstrap delegates to the registry.'
+    non_goals: 'Do not make Util depend on features; do not alter RUM security or AI opt-in behavior.'
+    tests: 'Blog A/B memo isolation, switch_blog reset, existing RUM/AI/LS/ObjectCache/Database suites.'
+    ratchet: 'Site-sensitive static owners without production key/reset: 6 -> 0; registered owner coverage: 100%.'
+
+  - id: P3-005
+    title: 'Cache capacity and eviction accounting owner'
+    status: queued
+    priority: high
+    type: architecture
+    problem: 'Cache carries an 839-line statistics, cap, and eviction tail with one accounting contract and callers in Cron, REST, Main, and CLI.'
+    target_owner: 'Cache_Capacity under Cache/'
+    target_direction: 'Cache lifecycle -> Cache_Capacity; capacity service uses narrow Cache owner bridges'
+    exact_scope: 'Stats, cap settings, byte/file checks, randomized query guard, and oldest eviction only.'
+    non_goals: 'Do not move Host/path security, HTML buffer, invalidation, object-cache flush APIs, or storage policy.'
+    tests: 'CacheCapacityParityTest plus SaltedCacheCoverageTest, Perf874Test, CacheTest, Cron, and Rest_Cache callers.'
+    ratchet: 'Cache responsibility density and capacity body LOC down; public compatibility surface unchanged.'
+
+  - id: P3-006
+    title: 'Redis configuration value policy'
+    status: queued
+    priority: high
+    type: security-architecture
+    problem: 'REST owns the complete Redis value sanitizer while CLI and Object_Cache carry weaker key-level validation.'
+    target_owner: 'Redis_Config_Policy under Cache/'
+    target_direction: 'REST and CLI adapters -> one value policy -> Object_Cache'
+    tests: 'REST/CLI parity for host, userinfo, nodes, port, database, timeout, prefix, compression, mode, TLS, and password precedence.'
+    ratchet: 'Sanitizer owner copies: 1 -> 1; raw CLI config path: 1 -> 0.'
+
+  - id: P3-007
+    title: 'Neutral drop-in registry and invalidation'
+    status: queued
+    priority: medium
+    type: architecture
+    problem: 'System_Info reports drop-ins while Cache and Advanced_Cache mutators call System_Info invalidation methods.'
+    target_owner: 'Dropin_Registry under Cache/Support boundary'
+    target_direction: 'Reporters read registry; mutators invalidate registry; no Cache -> System_Info edge'
+    ratchet: 'Cache/Advanced-to-SystemInfo invalidation edges: 2 -> 0.'
+
+  - id: P3-008
+    title: 'Settings write command and direct-write cleanup'
+    status: queued
+    priority: high
+    type: architecture
+    problem: 'Rest_Settings and REST safe-mode paths write wppo_settings outside Settings_Store.'
+    target_owner: 'Settings_Store plus narrow Settings_Command'
+    target_direction: 'REST/CLI/Abilities -> Settings_Command -> Settings_Store'
+    tests: 'Partial-save, redaction, snapshot/restore, safe-mode, import, and memo parity.'
+    ratchet: 'Direct settings writes outside Settings_Store: 3+ -> 0.'
+
+  - id: P3-009
+    title: 'Canonical insight read model'
+    status: queued
+    priority: medium
+    type: architecture
+    problem: 'REST and Abilities read telemetry/PageSpeed results through different cache and augmentation paths.'
+    target_owner: 'Insight_Query/Insight_Report read boundary'
+    target_direction: 'REST/Abilities/CLI -> insight query -> Telemetry/PageSpeed/RUM/AI readers'
+    tests: 'Salted/transient parity, PageSpeed augmentation, and explicit AI side-effect tests.'
+    ratchet: 'Direct audit-cache readers outside Telemetry: 2 -> 0.'
+
+  - id: P3-010
+    title: 'Database cleanup application runner'
+    status: queued
+    priority: medium
+    type: architecture
+    problem: 'REST, Abilities, CLI, and Cron duplicate cleanup orchestration around the canonical Database_Cleanup map.'
+    target_owner: 'Database_Cleanup_Runner'
+    target_direction: 'Adapters -> runner -> Database_Cleanup domain map'
+    tests: 'Type, counts, dry-run, confirmation, AS availability, logging, legacy aliases, and result parity.'
+    ratchet: 'Independent adapter orchestrators: 3 -> 1; legacy adapter calls: 1 -> 0.'
+
+  - id: P3-011
+    title: 'Admin authentication policy for REST and Abilities'
+    status: queued
+    priority: medium
+    type: security-architecture
+    problem: 'REST and Abilities independently implement capability and nonce checks.'
+    target_owner: 'Admin_Auth policy'
+    target_direction: 'REST/Abilities adapters -> Admin_Auth -> WordPress auth APIs'
+    tests: 'Header, legacy server, missing/invalid nonce, capability, and public RUM exception vectors.'
+    ratchet: 'Admin auth implementations: 2 -> 1; no nonce weakening.'
+
+  - id: P3-012
+    title: 'Edge/CDN purge coordinator'
+    status: queued
+    priority: medium
+    type: architecture
+    problem: 'CDN_Purger and Edge_Purger can both issue Cloudflare transport for one cache-clear event when settings overlap.'
+    target_owner: 'Edge_Purge_Coordinator'
+    target_direction: 'Cache lifecycle -> coordinator -> provider transport adapters'
+    tests: 'Dual-settings Cloudflare, Cloudflare+Bunny, Varnish, and LiteSpeed cross-purge vectors.'
+    ratchet: 'Duplicate Cloudflare transport calls for one event: up to 2 -> 1.'
+
+  - id: P3-013
+    title: 'Main options and lifecycle ownership cleanup'
+    status: queued
+    priority: medium
+    type: epic
+    problem: 'Main still owns options backfills, settings invalidation, cache coordination, and collaborator construction.'
+    target_owner: 'Settings_Store/Cache coordination contracts with Main as orchestrator'
+    exact_scope: 'Options resolution, settings update invalidation, and one cache coordination cluster per item.'
+    ratchet: 'Main feature dependencies, fan-out, and large methods down.'
+
+  - id: P3-014
+    title: 'Main asset, minification, and speculation cleanup'
+    status: queued
+    priority: medium
+    type: epic
+    problem: 'Main still owns asset policy, minification, resource hints, and speculation in addition to orchestration.'
+    target_owner: 'Existing Assets/Images/URL boundaries'
+    exact_scope: 'One cluster per item; preserve callback identity and frontend output.'
+    ratchet: 'Main lines, methods, fan-out, and service bridges down.'
+
+  - id: P3-015
+    title: 'Main preload and cache-buffer coordination cleanup'
+    status: queued
+    priority: medium
+    type: epic
+    problem: 'Main coordinates preload, resource hints, and cache/image/CSS output ordering.'
+    target_owner: 'Preload_Transport/Cache/Image coordination contracts'
+    non_goals: 'Do not merge LiteSpeed crawler lanes or change image buffer order.'
+    ratchet: 'Main feature dependencies and cross-domain edges down.'
+
+  - id: P3-016
+    title: 'Main and service bridge cleanup'
+    status: queued
+    priority: medium
+    type: epic
+    problem: 'Extracted services still hold Main owner state through @internal bridges and reverse edges.'
+    target_owner: 'Explicit service state or narrow application contracts'
+    exact_scope: 'One bridge family per item; no broad namespace rewrite.'
+    ratchet: 'Bridge candidates and domain-to-Main violations down.'
+
+  - id: P3-017
+    title: 'Util external caller migration and facade reduction'
+    status: queued
+    priority: medium
+    type: epic
+    problem: 'Util has 56 incoming source nodes and 1,145 executable occurrences while retaining canonical helpers and compatibility proxies.'
+    target_owner: 'Method-specific Settings_Store, Filesystem, Url, Cache_Key, Http, Woo_Detect, and domain owners'
+    exact_scope: 'Migrate callers by method cluster; retain public proxies until compatibility permits removal.'
+    ratchet: 'Util fan-in, incoming evidence, facade count, and cross-domain edges down.'
+
+  - id: P3-018
+    title: 'Remaining image, CSS, and cache policy extraction'
+    status: queued
+    priority: medium
+    type: epic
+    problem: 'Image media/state, Used CSS storage, Critical CSS generation, and cache/CSS purge coordination remain broad.'
+    target_owner: 'Cohesive media, CSS storage/generation, and purge coordination owners'
+    exact_scope: 'Choose one bounded cluster from the fresh graph after P3-002 through P3-017.'
+    ratchet: 'Feature-to-feature edges, responsibility density, and runtime SCC down.'
+
+  - id: P3-024
+    title: 'AI model persistence and learning ownership'
+    status: queued
+    priority: medium
+    type: architecture
+    problem: 'AI_Adaptive persists learned model data and performs opt-in remote suggestion work inside the same feature adapter.'
+    target_owner: 'AI_Model_Store/Policy under Insight boundary'
+    target_direction: 'AI_Adaptive -> explicit model store/policy; REST and settings adapters remain thin'
+    exact_scope: 'Model option read/write, learning reset, opt-in remote request boundary, and migration-compatible defaults.'
+    non_goals: 'Do not change AI opt-in defaults, REST security, or suggestion response shape.'
+    tests: 'Model persistence parity, reset isolation, opt-in/remote-disabled behavior, and multisite option ownership.'
+    ratchet: 'AI_Adaptive direct model persistence/remote-policy responsibilities: 2 -> 0.'
+
+  - id: P3-019
+    title: 'React settings-response and async lifecycle correctness'
+    status: queued
+    priority: medium
+    type: epic
+    problem: 'Import, sandbox promote, and preset responses can miss the global settings cache; deferred saves and abort paths can clobber or strand state.'
+    target_owner: 'apiRequest response mapper plus narrow async workflow hooks'
+    exact_scope: 'Response commits, deferred save snapshots, CCSS/used-CSS/sandbox hydration, and abort guards.'
+    non_goals: 'No router, global store, or polling framework.'
+    tests: 'Cross-tab cache, deferred edit, abort/unmount, and response-shape Jest coverage.'
+    ratchet: 'Global settings response misses: 3 -> 0; known async state races: 4 -> 0.'
+
+  - id: P3-020
+    title: 'React card and polling isolation'
+    status: queued
+    priority: low
+    type: epic
+    problem: 'FileOptimization, Dashboard, and App still combine many cards, polling effects, and shell fetches.'
+    target_owner: 'Presentational cards and narrow workflow hooks'
+    exact_scope: 'One card or one polling boundary per item after correctness tests.'
+    ratchet: 'FileOptimization/Dashboard/App responsibility and unrelated fetch counts down.'
+
+  - id: P3-021
+    title: 'Static-state cleanup and runtime reset coverage'
+    status: queued
+    priority: medium
+    type: architecture
+    problem: '31 owners hold 141 static properties; P3-004 covers site-sensitive owners, then request/cross-request residues remain.'
+    target_owner: 'Feature-owned instance/request state where lifecycle permits'
+    ratchet: 'Unclassified static properties: 141 -> 0; documented request/cross-request residues tracked.'
+
+  - id: P3-022
+    title: 'Architecture guardrails and dependency-direction enforcement'
+    status: queued
+    priority: medium
+    type: tooling
+    problem: 'The graph drift gate exists, but no guard prevents new forbidden boundary edges, unowned schedules, or static-state gaps.'
+    target_owner: 'Architecture tests and CI checks'
+    exact_scope: 'Executable token checks for schedules, static owners, boundary edges, and generated artifact drift.'
+    ratchet: 'New unexplained edges or state owners: 0.'
+
+  - id: P3-023
+    title: 'Final deep architecture audit'
+    status: queued
+    priority: high
+    type: audit
+    problem: 'The campaign cannot finish on passing tests alone.'
+    target_owner: 'Final audit artifacts and hotspot classification'
+    exact_scope: 'ARCHITECTURE-FINAL.md, ARCHITECTURE-BEFORE-AFTER.md, updated graph/inventory/hierarchy/load order, and resolved/intentional/protected/acceptable/future classification.'
+    ratchet: 'No unexplained major hotspot; all metrics compared with P3-001.'
+
 future_items:
   - id: FUT-001
     title: 'Critical_CSS storage/staging cluster extraction (Ccss_Store)'
@@ -519,34 +848,39 @@ future_items:
       - '2026-09-24: implemented in working tree — new PerformanceOptimise\Inc\Ccss_Store (includes/CSS/class-ccss-store.php, CSS domain, @since NEXT) owns 23 storage/staging/health/status methods + 4 memos + 3 const mirrors verbatim (cross-domain reads via Critical_CSS::get_template_hash/get_ccss_max_size/is_viewport_variants_enabled/get_status_cache_for_store bridge); Critical_CSS keeps 23 same-signature proxies (visibility preserved) + 1 @internal bridge + 8 generation memos, reset_ccss_memo() clears both halves; Loader_Map fallback + inventory known-classes registered, class-inventory.json + DEPENDENCY-GRAPH.json regenerated (Critical 7594→6964 lines, 137→138 methods incl. bridge; Store 996 lines/23 methods); hierarchy mapping row added; new CcssStoreParityTest regression suite.'
   - id: FUT-002
     title: 'Bridge/cycle cleanup + Util external caller migration (~650 edges)'
-    status: queued
+    status: superseded
+    superseded_by: [P3-016, P3-017]
     priority: low
     notes:
       - 'Collapse Main<->service reference bridges and migrate external Util:: callers to owning boundaries; method counts ratchet down as proxies go.'
   - id: FUT-003
     title: 'Used_CSS / Img_Converter / RUM / Database_Cleanup / Object_Cache / LiteSpeed remainder consolidation'
-    status: queued
+    status: superseded
+    superseded_by: [P3-004, P3-006, P3-009, P3-010, P3-012, P3-016, P3-018]
     priority: low
     notes:
       - 'Mid-size classes (54-94 methods) untouched or sliced this round; consolidate per evidence when scheduled.'
   - id: FUT-004
     title: 'AI speculation/model + image lazy/media leftovers'
-    status: queued
+    status: superseded
+    superseded_by: [P3-013, P3-014, P3-024]
     priority: low
     notes:
       - 'Remainder clusters of AI_Adaptive (76) and Image_Optimisation (183) after ARCH-008/010 slices.'
   - id: FUT-005
     title: 'React remainder: 13 FileOptimization cards + Dashboard/App'
-    status: queued
+    status: superseded
+    superseded_by: [P3-019, P3-020]
     priority: low
     notes:
       - 'Continue one-card-per-PR pattern (ARCH-015 precedent).'
   - id: FUT-006
     title: 'Tokenizer-based dependency-cycle analysis'
-    status: queued
+    status: merged
     priority: low
+    pending_supersession: P3-001
     notes:
-      - 'Static ClassName:: refs include docblocks (over-approximate SCC); build a tokenizer use-graph for true cycle detection.'
+      - 'P3-001 now owns the replacement schema-v2 PhpToken graph, SCC analysis, boundary metrics, CI drift gate, and Phase 3 baseline docs; mark superseded after P3-001 merges.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'

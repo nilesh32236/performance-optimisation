@@ -1,5 +1,7 @@
 # LiteSpeed / OpenLiteSpeed Deep Research
 
+> Historical planning/research snapshot. The environment and version below describe the 2026-08-27 research pass, not the current plugin baseline. For current architecture paths, loader rules, and environment evidence, use `docs/architecture/ARCHITECTURE-BASELINE.md`, `docs/architecture/LOAD-ORDER.md`, and `docs/architecture/INCLUDE-HIERARCHY.md`.
+
 **Date:** 2026-08-27  
 **Status:** Planning & Research Phase  
 **Environment:** OpenLiteSpeed 1.9.1 · `server: LiteSpeed` · `lsphp83` · Debian 13 · `nileshportfolio.duckdns.org`  

@@ -1,9 +1,12 @@
 # LiteSpeed / OpenLiteSpeed Integration Plan
 
-**Date:** 2026-08-27  
-**Status:** Shipped — Phases 0–4 implemented and verified (see `docs/litespeed-compatibility-audit-2026-09-01.md` and the ✅ ticks in `docs/litespeed-roadmap.md`). Phase 5 (enterprise/QUIC options) remains deferred.  
-**Companion:** `docs/litespeed-research.md` (deep research)  
-**Principles:** Zero breakage on non-LS hosts — every LiteSpeed path is an additive, opt-in or auto-detected path with fallback. No invention of version numbers — new symbols get `@since 2.0.0`.
+**Date:** 2026-08-27
+
+**Status:** Shipped — Phases 0–4 implemented and verified (see `docs/litespeed-compatibility-audit-2026-09-01.md` and the ✅ ticks in `docs/litespeed-roadmap.md`). Phase 5 (enterprise/QUIC options) remains deferred. This is a historical implementation record; current file paths and loader rules are maintained in `docs/architecture/LOAD-ORDER.md` and `docs/architecture/INCLUDE-HIERARCHY.md`.
+
+**Companion:** `docs/litespeed-research.md` (deep research)
+
+**Principles:** Zero breakage on non-LS hosts — every LiteSpeed path is an additive, opt-in or auto-detected path with fallback. New symbols use the current unreleased `NEXT` version placeholder.
 
 ---
 
@@ -80,7 +83,7 @@ Alternative name considered: `cache_engine` — rejected as ambiguous with objec
 │  LiteSpeed_Integration::is_litespeed() / is_lscache_active()    │
 ├─────────────────────────────────────────────────────────────────┤
 │  Integration Layer (new)                                        │
-│  includes/class-litespeed-integration.php                       │
+│  includes/Integrations/class-litespeed-integration.php                       │
 │  - emits X-LiteSpeed-* headers when mode=wppo                   │
 │  - emits X-LiteSpeed-Cache-Control: no-cache when mode=litespeed│
 │  - purge bridge (wppo_* → litespeed_purge_*, and reverse)      │
@@ -104,7 +107,7 @@ Alternative name considered: `cache_engine` — rejected as ambiguous with objec
 
 **Class naming:** `PerformanceOptimise\Inc\LiteSpeed_Integration` (per project `PerformanceOptimise\Inc` namespace, manual loading via `Main::includes()`). Alias `WPPO_LiteSpeed` is not needed.
 
-**File placement:** `includes/class-litespeed-integration.php` + `templates/litespeed-check.php` (if needed for `advanced-cache.php` LS check). No vendor deps.
+**File placement:** `includes/Integrations/class-litespeed-integration.php` + `templates/litespeed-check.php` (if needed for `advanced-cache.php` LS check). No vendor deps.
 
 ---
 
@@ -128,7 +131,7 @@ Tag: `S < 1 day`, `M 1-3 days`, `L 1 week`.
 ### 5.1 Code change
 
 ```php
-// includes/class-server-rules.php — new return value 'litespeed'
+// includes/Edge/class-server-rules.php — new return value 'litespeed'
 
 public static function get_server_type(): string {
     $raw = isset($_SERVER['SERVER_SOFTWARE']) ? sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE'])) : '';
@@ -174,7 +177,7 @@ public static function is_litespeed(): bool {
 
 **Goal:** Never corrupt pages when both plugins are active. Show the user exactly what's happening.
 
-### 6.1 New class — `includes/class-litespeed-integration.php`
+### 6.1 New class — `includes/Integrations/class-litespeed-integration.php`
 
 ```php
 final class LiteSpeed_Integration {
@@ -250,7 +253,7 @@ if ( has_filter('litespeed_can_optm') && ! apply_filters('litespeed_can_optm', t
 In `Cache::clear_cache()` (fires `wppo_before_cache_clear` / `wppo_after_cache_clear`), add after file deletion:
 
 ```php
-// includes/class-cache.php — at end of clear_cache(), before return
+// includes/Cache/class-cache.php — at end of clear_cache(), before return
 if ( LiteSpeed_Integration::is_litespeed() && LiteSpeed_Integration::is_lscache_active() ) {
     // Purge LS server cache — tag=* is atomic in LSWS shared memory
     if ( 'all' === $type_or_path_or_null ) {
@@ -491,7 +494,7 @@ No new tables. No options outside `wppo_settings`.
 
 ### 12.3 Build
 
-- Entry points stay `src/index.js` + `src/lazyload.js` via `@wordpress/scripts`. Add `src/lib/litespeed.js` helper (pure JS, no dep).
+- Entry points are `src/index.js`, `src/lazyload.js`, `src/main.js`, `src/rum.js`, and `src/esi.js` via `@wordpress/scripts`. Add `src/lib/litespeed.js` helper (pure JS, no dep).
 - `npm run build` after any JS change — build output committed (`build/index.js`, etc.).
 
 ---
@@ -592,16 +595,16 @@ No new tables. No options outside `wppo_settings`.
 
 | File | Phase | Change |
 |---|---|---|
-| `includes/class-server-rules.php` | 0 | `get_server_type()` → `litespeed` branch + `is_litespeed()` helper |
-| `includes/class-litespeed-integration.php` | 1 | **New** — detection, mode, optimizer guard, purge bridge, vary bridge |
-| `includes/class-main.php` | 0-3 | `includes()` loads new class, `setup_hooks()` registers it, optimizer filter guards, `on_settings_update()` handles `litespeed` like `apache`, `maybe_fix_wp_cache()` comment |
-| `includes/class-cache.php` | 2-3 | `clear_cache()` + `invalidate_dynamic_static_html()` → LS purge, `maybe_store_cache()` gating, optional `Vary: Accept` header |
-| `includes/class-advanced-cache-handler.php` | 1 | comment + test coverage only (logic already correct) |
-| `includes/class-object-cache.php` | 1 | expose `litespeed` drop-in status to REST |
-| `includes/class-htaccess-handler.php` | 1,4 | allow `litespeed` to trigger update, add next-gen `Vary: Accept` block behind setting |
-| `includes/class-cdn-purger.php` | 2 | `purge_litespeed()` method + call in `purge_all()` |
-| `includes/class-system-info.php` | 0 | `get_litespeed()` group or extend `get_cache()` with `litespeed_detected` / `lscache_active` / `effective_mode` |
-| `includes/class-rest.php` | 0-2 | whitelist `litespeed_integration` tab, extend `system_info` + `server_rules` + `clear_cache` purge |
+| `includes/Edge/class-server-rules.php` | 0 | `get_server_type()` → `litespeed` branch + `is_litespeed()` helper |
+| `includes/Integrations/class-litespeed-integration.php` | 1 | **New** — detection, mode, optimizer guard, purge bridge, vary bridge |
+| `includes/Core/class-main.php` | 0-3 | `includes()` loads new class, `setup_hooks()` registers it, optimizer filter guards, `on_settings_update()` handles `litespeed` like `apache`, `maybe_fix_wp_cache()` comment |
+| `includes/Cache/class-cache.php` | 2-3 | `clear_cache()` + `invalidate_dynamic_static_html()` → LS purge, `maybe_store_cache()` gating, optional `Vary: Accept` header |
+| `includes/Cache/class-advanced-cache-handler.php` | 1 | comment + test coverage only (logic already correct) |
+| `includes/Cache/class-object-cache.php` | 1 | expose `litespeed` drop-in status to REST |
+| `includes/Edge/class-htaccess-handler.php` | 1,4 | allow `litespeed` to trigger update, add next-gen `Vary: Accept` block behind setting |
+| `includes/Edge/class-cdn-purger.php` | 2 | `purge_litespeed()` method + call in `purge_all()` |
+| `includes/Insight/class-system-info.php` | 0 | `get_litespeed()` group or extend `get_cache()` with `litespeed_detected` / `lscache_active` / `effective_mode` |
+| `includes/Admin/class-rest.php` | 0-2 | whitelist `litespeed_integration` tab, extend `system_info` + `server_rules` + `clear_cache` purge |
 | `src/components/FileOptimization.js` | 0-1 | Network tab — LS branch, rule preview, optimizer-paused tooltips |
 | `src/components/Dashboard.js` | 1 | LS banner when `is_litespeed` |
 | `src/components/LiteSpeedPanel.js` | 1-2 | **New (optional)** — dedicated LS card/panel |

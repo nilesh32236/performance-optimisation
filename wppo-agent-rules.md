@@ -13,11 +13,11 @@ Modular detail lives in `AGENTS.md`, `.agents/AGENTS.md`, and `docs/` — load t
    - LiteSpeed work → `docs/litespeed-integration-plan.md`, `docs/litespeed-roadmap.md`, `docs/litespeed-research.md`
    - Hooks/filters → `docs/hooks.md`
    - Compat → `docs/php-84-85-compat.md`, `docs/wordpress-7x-readiness.md`
-5. Never invent version numbers. New code gets `@since NEXT` (replaced at release). Current release line: `2.0.0` (`performance-optimisation.php:8`).
+5. Never invent version numbers. New code gets `@since NEXT` (replaced at release). Current release line: `2.4.0` (`performance-optimisation.php:8`, `WPPO_VERSION`).
 
 ## Module 1 — Protected owner decisions (do NOT re-litigate)
 
-- **LiteSpeed ESI bridge STAYS.** `includes/class-litespeed-esi.php` is deliberate (LSWS Enterprise ESI; OLS → disabled path).
+- **LiteSpeed ESI bridge STAYS.** `includes/Integrations/class-litespeed-esi.php` is deliberate (LSWS Enterprise ESI; OLS → disabled path).
   - Issue #1291 ("Delete Enterprise only LiteSpeed ESI bridge") is **WONTFIX** by owner decision (2026-09-17). Do not re-open it.
   - Deletion PR #1301 was **closed unmerged** with its branch deleted before anything merged. Do not re-create it.
   - PR #1249 nonce hardening (ESI POST-only nonce, per-key dismiss nonces, cookie SameSite) must NOT be reverted.
@@ -25,9 +25,9 @@ Modular detail lives in `AGENTS.md`, `.agents/AGENTS.md`, and `docs/` — load t
 
 ## Module 2 — Forbidden proposals (close as WONTFIX, do not open PRs)
 
-- Deleting `includes/class-litespeed-esi.php` or its tests (`tests/php/LiteSpeedEsiTest.php`).
+- Deleting `includes/Integrations/class-litespeed-esi.php` or its tests (`tests/php/LiteSpeedEsiTest.php`).
 - Removing LiteSpeed integration classes to "simplify" (`class-litespeed-integration.php`, `class-litespeed-crawler.php`, `class-litespeed-esi.php`).
-- Switching plugin classes to PSR-4 autoload (classes are manually loaded via `Main::includes()`; Composer autoload is vendor-only).
+- Switching plugin classes to PSR-4 autoload (Composer generates a plugin classmap, while `Main::includes()` and `Loader_Map` provide explicit runtime/stale-classmap loading).
 - Adding a routing or state-management library to the React SPA (tab switching is `useState` + conditional rendering; state is `useState` only).
 - Committing `vendor/` (git-ignored; installed on demand) or skipping committed `build/` output after JS/SCSS changes.
 - Bulk-merging without per-PR diff review (owner flagged over-eager auto-merge as an error).
@@ -60,10 +60,10 @@ Modular detail lives in `AGENTS.md`, `.agents/AGENTS.md`, and `docs/` — load t
 
 ## Module 6 — Verification + release gate
 
-- Required order: `npm run lint:js` → `composer lint` → `npm test` → `npm run build` (plus `composer test` for PHP unit tests where touched).
+- Required order: `npm run lint:js` → `composer lint` → `npm test` → `npm run build` (plus `composer test` for PHP unit tests where touched). After PHP source changes, run `php scripts/generate-class-inventory.php --check` and review the architecture delta.
 - Rebuild after every JS/SCSS change and stage `build/` output.
-- Before any wordpress.org release: regression-test old + new functionality (cache generate/serve/purge, minify/defer/delay, lazy load, WebP/AVIF, DB cleanup, Redis object cache, PageSpeed, RUM, CLI `wp wppo` 7 subcommands). Fix breakage first, then release.
-- Release tags are `vX.Y.Z` (plugin is at `2.0.0`).
+- Before any wordpress.org release: regression-test old + new functionality (cache generate/serve/purge, minify/defer/delay, lazy load, WebP/AVIF, DB cleanup, Redis object cache, PageSpeed, RUM, CLI `wp wppo` 8 subcommands). Fix breakage first, then release.
+- Release tags are `vX.Y.Z` (plugin is at `2.4.0`).
 
 ## Module 7 — Evidence before claims
 
