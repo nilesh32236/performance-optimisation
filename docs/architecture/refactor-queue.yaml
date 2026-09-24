@@ -1111,6 +1111,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1591
+    implementation_commit: cd3850ed49284706c392ff21a169c670ee1bc5a6
     type: epic
     problem: 'Main still owns options backfills, settings invalidation, cache coordination, and collaborator construction.'
     target_owner: 'Settings_Store/Cache coordination contracts with Main as orchestrator'
