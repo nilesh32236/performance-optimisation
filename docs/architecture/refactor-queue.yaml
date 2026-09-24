@@ -795,11 +795,24 @@ phase3_items:
 
   - id: P3-006
     title: 'Redis configuration value policy'
-    status: active
+    status: merged
     priority: high
     github_issue: 1576
     github_pr: 1577
     implementation_commit: 261272ba7cde0de984bed5f3be1bfaf48e560eea
+    merge_commit: d328a313e0e5f10dfce46d10e320c6ca29d7d19a
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      redis_policy: 'loaded; unsafe scheme/userinfo host and node values rejected; numeric/enum/prefix policy returned normalized values'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only; Redis disabled safely'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      object_cache: 'template parity; mode 0644; owner nobody:nogroup'
+      architecture_graph: '76 inventory files / 79 nodes / 351 edges; generator check passed'
     type: security-architecture
     problem: 'REST owns the complete Redis value sanitizer while CLI and Object_Cache carry weaker key-level validation.'
     target_owner: 'Redis_Config_Policy under Cache/'
@@ -828,7 +841,7 @@ phase3_items:
 
   - id: P3-007
     title: 'Neutral drop-in registry and invalidation'
-    status: queued
+    status: audit-pending
     priority: medium
     type: architecture
     problem: 'System_Info reports drop-ins while Cache and Advanced_Cache mutators call System_Info invalidation methods.'
