@@ -114,9 +114,15 @@
         "Util",
         "Wp_Version"
     ],
-    "includes/CSS/class-critical-css.php": [
+    "includes/CSS/class-ccss-store.php": [
         "CDN",
+        "Critical_CSS",
+        "Log",
+        "Util"
+    ],
+    "includes/CSS/class-critical-css.php": [
         "Cache",
+        "Ccss_Store",
         "Css_Safelist",
         "Image_Optimisation",
         "Log",
