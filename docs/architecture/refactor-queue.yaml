@@ -590,7 +590,8 @@ phase3_items:
     status: active
     priority: high
     github_issue: 1568
-    head_commit: 0e3d201e81455ee05919df111136b509fa67390b
+    github_pr: 1569
+    head_commit: 42beb8003f81bededc0e11031ad2767449d0e034
     type: architecture
     problem: 'Builder drift and upgrade purge hooks are scheduled outside Cron::AS_HOOKS; deactivation omits both, while standalone uninstall clears the owned Action Scheduler group but omits the upgrade purge WP-Cron fallback.'
     current_owner: 'Cron::AS_HOOKS plus duplicated Deactivate/uninstall/Builder scheduling lists'
