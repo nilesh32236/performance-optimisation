@@ -900,14 +900,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "CSS",
-        "lines": 654,
+        "lines": 659,
         "methods": 17,
         "public_methods": 16,
         "large_methods": 0,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "coordinate_inline_budgets",
-            "line": 523,
+            "line": 528,
             "lines": 38
         },
         "method_prefixes": {
@@ -1013,14 +1013,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "CSS",
-        "lines": 6575,
+        "lines": 6584,
         "methods": 138,
         "public_methods": 74,
         "large_methods": 12,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "generate",
-            "line": 4017,
+            "line": 4026,
             "lines": 267
         },
         "method_prefixes": {
