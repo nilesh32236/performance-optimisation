@@ -245,20 +245,20 @@ The current Phase 3 baseline records the starting metrics in `ARCHITECTURE-BASEL
 
 | Metric | Current cap or baseline | Rule |
 |---|---:|---|
-| `Main` lines / methods | 11,091 / 235 | Do not grow without a documented extraction path |
-| `Main` methods at least 80 lines | 21 | Target down |
-| `Main` fan-out / feature dependencies | 34 / 17 | Target down |
+| `Main` lines / methods | 10,790 / 235 | Do not grow without a documented extraction path |
+| `Main` methods at least 80 lines | 20 | Target down |
+| `Main` fan-out / feature dependencies | 37 / 17 | Reduce delegated edges in P3-014/P3-016 |
 | `Util` lines / methods | 5,006 / 156 | Target down through caller migration |
-| `Util` fan-in / incoming evidence | 57 / 1,142 | Target down |
+| `Util` fan-in / incoming evidence | 58 / 1,139 | Target down |
 | `Cache` lines / methods | 5,077 / 167 | Target down with cohesive extractions |
 | `Image_Optimisation` lines / methods | 8,999 / 183 | Target down with media or state owners |
 | `Critical_CSS` lines / methods | 6,950 / 138 | Target down with generation owners |
-| Largest runtime SCC | 64 nodes | Target down |
+| Largest runtime SCC | 68 nodes | Target down |
 | Compatibility-classified edges | 196 | Explain and reduce through explicit compatibility ownership |
 | Compatibility SCCs / largest | 1 / 21 nodes | Reduce; retain only documented stable adapters |
 | Boundary violations | 16 | Target zero or protected exception |
-| Bridge candidates | 232 | Target down |
-| Static properties / owners | 141 / 32 | Classify, then reduce or document |
+| Bridge candidates | 234 | Target down |
+| Static properties / owners | 143 / 32 | Classify, then reduce or document |
 | `FileOptimization.js` | 6,114 | Target down one card at a time |
 | `Dashboard.js` | 2,168 | Target down one card or hook at a time |
 

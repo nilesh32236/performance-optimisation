@@ -1125,6 +1125,15 @@ phase3_items:
         - 'Main::create_cache() and constructor collaborator wiring combine cache lifecycle with Main orchestration, leaving a bounded cache coordination contract available for extraction.'
         - 'Existing Settings_Store/Settings_Command contracts can absorb options read/invalidation without moving asset, preload, or speculative policy into a new service.'
       decision: 'Proceed test-first in one P3-013 issue: move options resolution/invalidation to the existing settings boundaries and extract only the smallest cache coordination cluster, keeping Main as orchestrator.'
+      implementation:
+        status: 'implemented-active'
+        settings_owner: 'Settings_Store::get_resolved_settings() owns canonical-default/stored replacement, all 180 historical in-memory backfill assignments, and blog-keyed resolved memo invalidation; Main retains get_options(), refresh_options(), on_settings_add(), and on_settings_update() with unchanged public signatures and Hook_Registry callback identities'
+        settings_writes: 'Main has no direct wppo_settings write; its existing htaccess rollback delegates to Settings_Command::save() and add/update/delete callbacks keep raw and resolved Settings_Store memos coherent in the same request'
+        cache_owner: 'Cache_Coordinator::create() is the only extracted cache cluster; Main::create_cache() retains its static facade, optional collaborator injection, and wppo_cache_instance filter/return contract'
+        loader: 'Loader_Map::fallback_map()["Cache_Coordinator"] plus explicit PHPUnit bootstrap loading for stale local classmaps'
+        graph_delta: '83 inventory files / 86 graph nodes / 374 edges; Main 11,091->10,790 lines and 21->20 methods at least 80 lines; Main fan-out 34->37 for three explicit owner edges; Main feature dependencies remain 17; Settings_Store static properties 2->4 and Util incoming executable evidence 1,142->1,139'
+        tests: 'MainSettingsOwnershipTest plus MainOptionsLazyTest, SettingsStoreTest, SettingsCommandTest, CacheTest, CacheCoreParity1165Test, LoaderMapTest, HookRegistryParityTest, and ArchitectureInventoryTest'
+        verification: 'Focused Main/Settings/Cache/loader/architecture set passes 99 tests / 13961 assertions; full PHPUnit passes 2755 tests / 25162 assertions (9 skipped, 7 existing deprecations); full PHPCS passes; focused PHPStan on Cache_Coordinator and Settings_Store passes; generator --check and git diff --check pass; npm lint/Jest/build pass with existing warnings.'
 
   - id: P3-014
     title: 'Main asset, minification, and speculation cleanup'

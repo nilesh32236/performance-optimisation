@@ -33,6 +33,7 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 // owners in a dirty development checkout; production loading is owned by
 // Loader_Map/Composer.
 require_once __DIR__ . '/../../includes/Cache/class-cache-capacity.php';
+require_once __DIR__ . '/../../includes/Cache/class-cache-coordinator.php';
 require_once __DIR__ . '/../../includes/Cache/class-redis-config-policy.php';
 require_once __DIR__ . '/../../includes/Cache/class-dropin-registry.php';
 require_once __DIR__ . '/../../includes/Settings/class-settings-command.php';

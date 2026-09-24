@@ -48,18 +48,18 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 85 files: 81 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 86 files: 82 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 369 |
-| Runtime / compatibility / loader edges | 368 / 196 / 3 |
-| Cross-domain / feature-to-feature edges | 312 / 46 |
+| Unique edges | 374 |
+| Runtime / compatibility / loader edges | 373 / 196 / 3 |
+| Cross-domain / feature-to-feature edges | 316 / 46 |
 | Boundary violations | 16 |
-| Bridge candidates | 232 |
+| Bridge candidates | 234 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 64 nodes, 318 runtime-classified internal edges |
-| Static state | 141 properties across 32 nodes |
+| Largest runtime SCC | 68 nodes, 332 runtime-classified internal edges |
+| Static state | 143 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 
 The runtime SCC shows reciprocal reach across major subsystems. It does not prove that one extraction will fix the whole component. Each queue item must identify a smaller owner and dependency path.

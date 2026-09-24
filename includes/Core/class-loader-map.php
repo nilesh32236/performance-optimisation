@@ -126,6 +126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Asset_Manager'           => 'Assets/class-asset-manager.php',
 				'Cache'                   => 'Cache/class-cache.php',
 				'Cache_Capacity'          => 'Cache/class-cache-capacity.php',
+				'Cache_Coordinator'       => 'Cache/class-cache-coordinator.php',
 				'Cache_Invalidator'       => 'Cache/class-cache-invalidator.php',
 				'Cache_Key'               => 'Cache/class-cache-key.php',
 				'CDN'                     => 'Edge/class-cdn.php',
