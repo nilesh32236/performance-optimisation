@@ -537,8 +537,11 @@ phase3:
 phase3_items:
   - id: P3-001
     title: 'Fresh architecture baseline, tokenizer graph, quality model, and documentation reconciliation'
-    status: planning
+    status: pr-review-running
     priority: high
+    github_issue: 1566
+    github_pr: 1567
+    head_commit: 8c0343a4279dcf966908509769a0e7459fe7bf28
     type: architecture
     source: 'Phase 3 startup audit at origin/master@72818289'
     scope:
