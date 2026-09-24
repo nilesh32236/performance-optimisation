@@ -241,7 +241,7 @@ A new warning, route-count change, cron leak, console error, or graph regression
 
 ## Current numeric ratchet
 
-P3-001 records the starting metrics in `ARCHITECTURE-BASELINE.md`.
+The current Phase 3 baseline records the starting metrics in `ARCHITECTURE-BASELINE.md`.
 
 | Metric | Current cap or baseline | Rule |
 |---|---:|---|
