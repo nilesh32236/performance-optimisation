@@ -887,6 +887,7 @@ phase3_items:
     status: active
     priority: high
     github_issue: 1580
+    implementation_commit: eb52fa35a43d9ac46ca9b90cb004827531188b0d
     type: architecture
     problem: 'Rest_Settings and REST safe-mode paths write wppo_settings outside Settings_Store.'
     target_owner: 'Settings_Store plus narrow Settings_Command'
