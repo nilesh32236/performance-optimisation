@@ -25,7 +25,7 @@ performance-optimisation.php
       │   Filesystem, Url, Http, Cache_Key, Woo_Detect, Log, Purge_Logger
       ├─ Cache and edge delivery
       │   Cache, Cache_Invalidator, Advanced_Cache_Handler, Bfcache,
-      │   Object_Cache, Redis_Config_Policy, CDN, CDN_Purger, Cloudflare_Purger, Edge_Cache,
+      │   Object_Cache, Dropin_Registry, Redis_Config_Policy, CDN, CDN_Purger, Cloudflare_Purger, Edge_Cache,
       │   Edge_Purger, Server_Rules, Htaccess_Handler, Header_Emitter,
       │   LiteSpeed_Integration, LiteSpeed_Crawler, LiteSpeed_ESI
       ├─ Assets, images, and CSS
@@ -48,17 +48,17 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 79 files: 75 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 80 files: 76 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 351 |
-| Runtime / compatibility / loader edges | 350 / 194 / 3 |
-| Cross-domain / feature-to-feature edges | 305 / 47 |
+| Unique edges | 352 |
+| Runtime / compatibility / loader edges | 351 / 194 / 3 |
+| Cross-domain / feature-to-feature edges | 304 / 46 |
 | Boundary violations | 16 |
 | Bridge candidates | 230 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 60 nodes, 305 runtime-classified internal edges |
+| Largest runtime SCC | 61 nodes, 306 runtime-classified internal edges |
 | Static state | 141 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 
@@ -100,6 +100,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Preload_Transport` | Same-host URL validation and bounded non-following redirects for Cron warmup | Keep all three Cron fetch seams on the transport policy; preserve LiteSpeed bypass |
 | `Runtime_State` | Central switch_blog reset registry for six site-sensitive static-state owners | Keep reset methods feature-owned; classify the remaining 25 static owners |
 | `Redis_Config_Policy` | Complete Redis key manifest and value normalization | Keep REST and CLI on this narrow security policy; leave connection and persistence in `Object_Cache` |
+| `Dropin_Registry` | Neutral forwarding seam for post-mutation drop-in cache invalidation | Keep fail-open and stateless; leave reporting, path/ownership detection, and storage in `System_Info` |
 | `Object_Cache` | Redis backend, connection, circuit state, drop-in management | Keep lifecycle and drop-in behavior; expose the policy key constant for compatibility |
 | `Critical_CSS` / `Ccss_Store` | Generation plus storage/status | Keep storage in the store; move remaining generation clusters by policy |
 | `Used_CSS` | Generation, storage, parsing, delivery, rollout | Split storage and generation only after Used CSS owns no cache purge policy |
@@ -116,9 +117,10 @@ Cross-domain edges require review. An edge can represent a real product interact
 5. **Cache capacity:** `Cache_Capacity` now owns the statistics, cap, and eviction contract; `Cache` remains the public facade and lifecycle owner.
 6. **Settings writes:** REST adapters still write `wppo_settings` outside `Settings_Store`.
 7. **Redis policy:** `Redis_Config_Policy` now owns the full key manifest and value sanitizer used by REST and CLI; `Object_Cache::ALLOWED_KEYS` remains a compatibility alias.
-8. **CSS and image cycles:** storage owners exist, but policy and bridges keep the larger SCC connected.
-9. **REST and CLI duplication:** adapters duplicate permissions, dispatch, settings, telemetry, and diagnostics.
-10. **React async ownership:** cache commits, deferred saves, abort guards, and polling state need bounded fixes.
+8. **Drop-in invalidation:** Advanced/Object cache mutators now invalidate through `Dropin_Registry`; `System_Info` remains the sole reporting and cache-storage owner.
+9. **CSS and image cycles:** storage owners exist, but policy and bridges keep the larger SCC connected.
+10. **REST and CLI duplication:** adapters duplicate permissions, dispatch, settings, telemetry, and diagnostics.
+11. **React async ownership:** cache commits, deferred saves, abort guards, and polling state need bounded fixes.
 
 `ARCHITECTURE-BASELINE.md` records source evidence and queue priority for each finding.
 

@@ -32,7 +32,7 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | `Woo_Detect` | Woo detection and exclusion policy | Cache invalidation actions | `Util` still calls it, keeping a shared-facade edge |
 | `Log` | Activity persistence and logging calls | Feature decisions | Fan-in 27; deliberate infrastructure hub, not a god class |
 | `Loader_Map` | Eager files, fallback map, CLI path | Feature behavior | Three loader edges; stale-classmap safety remains required |
-| `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 56 and 1,145 incoming executable occurrences |
+| `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 57 and 1,145 incoming executable occurrences |
 
 ## Domain boundaries
 
@@ -46,10 +46,13 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | `Cache_Key` | Key derivation | Keep as infrastructure |
 | `Advanced_Cache_Handler` | `advanced-cache.php` drop-in lifecycle | Protect early-load contract |
 | `Redis_Config_Policy` | Complete Redis key manifest, host/node safety, value bounds and enums, password precedence | Keep dependency-light; do not connect, persist, flush, or publish drop-ins |
+| `Dropin_Registry` | Stateless, fail-open forwarding for post-mutation drop-in observation invalidation | Do not detect/report ownership, resolve paths, or own memo/transient/salt storage; System_Info remains owner |
 | `Object_Cache` | Redis connection, reads/writes, circuit, drop-in management, config key compatibility constant | Keep lifecycle and storage behavior; route adapter construction through `Redis_Config_Policy` |
 | `Bfcache` | Logged-in no-store policy | Keep narrow |
 
 The 839-line `Cache` tail previously owned statistics, cap settings, capacity checks, and eviction. `Cache_Capacity` now owns that one accounting contract; `Cache` retains only the public facade and lifecycle/storage policy. The owner reaches Cache through narrow filesystem, root/domain, containment, and deletion bridges.
+
+`Advanced_Cache_Handler` and `Object_Cache` call `Dropin_Registry::invalidate()` only after their existing successful-mutation conditions. The registry forwards to `System_Info::flush_dropin_cache()` when available; it does not absorb System Info's request memo, transient, or salted-cache responsibilities.
 
 ### Images
 
@@ -83,7 +86,7 @@ Do not split `Image_Optimisation` by arbitrary file size. Test output markup, MI
 | `AI_Adaptive` | Suggestion, model persistence/learning, speculation autotune | Keep model writes behind an explicit owner; move reaction side effects out of anomaly code |
 | `Ai_Anomaly` | Math, thresholds, breach state, RUM digest | Keep; use its blog-aware memo pattern as the reset precedent |
 | `Suggestion_Engine` | Cross-source recommendations | Call canonical telemetry/PageSpeed/RUM contracts |
-| `System_Info` | Environment and infrastructure facts | Remove its cycle with `Object_Cache` report/drop-in ownership |
+| `System_Info` | Environment and infrastructure facts, drop-in path/ownership detection, memo/transient/salt storage | Keep reporting and storage ownership; mutators invalidate only through `Dropin_Registry` |
 
 Fetch, persist, analyze, schedule, and display should not share one new “Service” class. Create narrow use-case owners only when the graph shows repeated calls or misplaced writes.
 
