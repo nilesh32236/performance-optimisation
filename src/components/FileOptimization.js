@@ -13,12 +13,14 @@ import useUnsavedChanges, { stableStringify } from '../lib/useUnsavedChanges';
 import {
 	apiCall,
 	commitSettingsCache,
+	commitSettingsResponse,
 	getErrorLogMessage,
 	getWppoSettings,
 	isValidScanUrl,
 	patchSettingsCache,
 	runPerformanceScan,
 } from '../lib/apiRequest';
+import { useAsyncWorkflow } from '../lib/useAbortableFetch';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
@@ -895,30 +897,82 @@ const FileOptimization = ( {
 	// Used-CSS staleness (issue #1220): last-regen time + stale flag from the
 	// read-only used_css_status endpoint, shown as a warning banner while
 	// removeUnusedCSS is on. Fail-open: a failed fetch simply hides the banner.
+	// P3-019: sequenced + abortable so a slow earlier refresh can never
+	// overwrite a newer status after rapid regen/purge clicks.
 	const [ usedCssStatus, setUsedCssStatus ] = useState( null );
-	const refreshUsedCssStatus = useCallback( async ( postIdOverride ) => {
-		try {
-			// Safe-rollout detail (issue #1348): a post ID attaches the
-			// read-only slot description (staged/health) for the rollout
-			// row. Omit it otherwise so the call stays identical to the
-			// staleness-only fetch.
-			const parsed = parseInt( postIdOverride, 10 );
-			const params =
-				Number.isFinite( parsed ) && parsed > 0
-					? { post_id: parsed }
-					: {};
-			const res = await apiCall( 'used_css_status', params, 'GET' );
-			if ( res && res.success && res.data ) {
-				setUsedCssStatus( res.data );
-			}
-		} catch ( statusError ) {
-			// Fail-open: leave the banner hidden.
-			console.error(
-				'Failed refreshing used-CSS status:',
-				getErrorLogMessage( statusError )
-			);
-		}
+	const usedCssStatusSeqRef = useRef( 0 );
+	const usedCssStatusAbortRef = useRef( null );
+	// P3-019: abort refs for the CCSS/used-CSS regen requests; aborted on
+	// unmount alongside the controllers above.
+	const ccssRegenAbortRef = useRef( null );
+	const usedCssRegenAbortRef = useRef( null );
+	useEffect( () => {
+		return () => {
+			usedCssStatusAbortRef.current?.abort();
+			ccssRegenAbortRef.current?.abort();
+			usedCssRegenAbortRef.current?.abort();
+		};
 	}, [] );
+	const refreshUsedCssStatus = useCallback(
+		async ( postIdOverride, signalOverride ) => {
+			const seq = ++usedCssStatusSeqRef.current;
+			const isStale = ( signal ) =>
+				seq !== usedCssStatusSeqRef.current || signal?.aborted;
+			let signal = signalOverride;
+			let ownController = null;
+			if ( ! signal ) {
+				if ( usedCssStatusAbortRef.current ) {
+					usedCssStatusAbortRef.current.abort();
+				}
+				ownController =
+					typeof AbortController !== 'undefined'
+						? new AbortController()
+						: null;
+				usedCssStatusAbortRef.current = ownController;
+				signal = ownController?.signal;
+			}
+			try {
+				// Safe-rollout detail (issue #1348): a post ID attaches the
+				// read-only slot description (staged/health) for the rollout
+				// row. Omit it otherwise so the call stays identical to the
+				// staleness-only fetch.
+				const parsed = parseInt( postIdOverride, 10 );
+				const params =
+					Number.isFinite( parsed ) && parsed > 0
+						? { post_id: parsed }
+						: {};
+				const res = await apiCall(
+					'used_css_status',
+					params,
+					'GET',
+					signal
+				);
+				if ( isStale( signal ) ) {
+					return;
+				}
+				if ( res && res.success && res.data ) {
+					setUsedCssStatus( res.data );
+				}
+			} catch ( statusError ) {
+				if ( isStale( signal ) || statusError?.name === 'AbortError' ) {
+					return;
+				}
+				// Fail-open: leave the banner hidden.
+				console.error(
+					'Failed refreshing used-CSS status:',
+					getErrorLogMessage( statusError )
+				);
+			} finally {
+				if (
+					ownController &&
+					usedCssStatusAbortRef.current === ownController
+				) {
+					usedCssStatusAbortRef.current = null;
+				}
+			}
+		},
+		[]
+	);
 	useEffect( () => {
 		if ( ! options.removeUnusedCSS ) {
 			// Clear a stale banner when the feature is toggled off.
@@ -1097,6 +1151,10 @@ const FileOptimization = ( {
 	// Audit #1354: mount guard so unmount mid-request cannot setState in
 	// the save/promote/discard handlers below.
 	const isSandboxMountedRef = useRef( true );
+	// P3-019: one sequenced workflow for stage/promote/discard so rapid
+	// clicks abort the previous op and a stale response can never strand
+	// sandboxBusy or overwrite newer staged state.
+	const sandboxWorkflow = useAsyncWorkflow();
 	useEffect( () => {
 		return () => {
 			isSandboxMountedRef.current = false;
@@ -1157,51 +1215,65 @@ const FileOptimization = ( {
 	}, [ activeSubTab ] );
 	const handleSandboxSave = async () => {
 		setSandboxBusy( true );
+		dismissSandbox();
 		try {
-			const res = await apiCall( 'sandbox_save', {
-				settings: buildStagedFromForm(),
-			} );
-			if ( ! isSandboxMountedRef.current ) {
-				return;
-			}
-			if ( res && res.success ) {
-				setSandboxStaged( res.data ? res.data.staged || {} : {} );
-				try {
-					const status = await apiCall(
-						'sandbox_preview',
-						{},
-						'GET'
-					);
-					if ( ! isSandboxMountedRef.current ) {
-						return;
-					}
-					if ( status && status.success && status.data ) {
-						setSandboxPreviewUrl( status.data.preview_url || '' );
-					}
-				} catch {
-					// Preview link is best-effort; staged state above is enough.
-				}
-				if ( ! isSandboxMountedRef.current ) {
+			await sandboxWorkflow.run( async ( { signal, isStale } ) => {
+				const res = await apiCall(
+					'sandbox_save',
+					{
+						settings: buildStagedFromForm(),
+					},
+					'POST',
+					signal
+				);
+				if ( isStale() ) {
 					return;
 				}
-				notifySandbox( {
-					type: 'success',
-					message: __(
-						'Preview staged. Open the preview link as admin — visitors still see production markup.',
-						'performance-optimisation'
-					),
-				} );
-			} else {
-				notifySandbox( {
-					type: 'error',
-					message: __(
-						'Could not stage the preview.',
-						'performance-optimisation'
-					),
-				} );
-			}
-		} catch {
-			if ( ! isSandboxMountedRef.current ) {
+				if ( res && res.success ) {
+					setSandboxStaged( res.data ? res.data.staged || {} : {} );
+					try {
+						const status = await apiCall(
+							'sandbox_preview',
+							{},
+							'GET',
+							signal
+						);
+						if ( isStale() ) {
+							return;
+						}
+						if ( status && status.success && status.data ) {
+							setSandboxPreviewUrl(
+								status.data.preview_url || ''
+							);
+						}
+					} catch {
+						// Preview link is best-effort; staged state above is enough.
+					}
+					if ( isStale() ) {
+						return;
+					}
+					notifySandbox( {
+						type: 'success',
+						message: __(
+							'Preview staged. Open the preview link as admin — visitors still see production markup.',
+							'performance-optimisation'
+						),
+					} );
+				} else {
+					notifySandbox( {
+						type: 'error',
+						message: __(
+							'Could not stage the preview.',
+							'performance-optimisation'
+						),
+					} );
+				}
+			} );
+		} catch ( sandboxSaveError ) {
+			if (
+				sandboxSaveError?.name === 'AbortError' ||
+				! isSandboxMountedRef.current
+			) {
 				return;
 			}
 			notifySandbox( {
@@ -1219,72 +1291,97 @@ const FileOptimization = ( {
 	};
 	const handleSandboxPromote = async () => {
 		setSandboxBusy( true );
+		dismissSandbox();
 		try {
-			const res = await apiCall( 'sandbox_promote', {} );
-			if ( ! isSandboxMountedRef.current ) {
-				return;
-			}
-			if ( res && res.success ) {
-				// Sync the production baseline so the form reflects the
-				// promoted values: prefer the production slice returned by
-				// the endpoint, falling back to the last staged values.
-				const promotedSlice =
-					res.data &&
-					typeof res.data === 'object' &&
-					res.data.file_optimisation &&
-					typeof res.data.file_optimisation === 'object'
-						? res.data.file_optimisation
-						: sandboxStaged;
-				if ( promotedSlice && typeof promotedSlice === 'object' ) {
-					// Normalize through the shared normalizer so backend
-					// arrays never reach controlled textareas verbatim
-					// (which would render "a,b" while the baseline stays
-					// equal and the bad display persists as clean).
-					// normalizeFileOpt() only defaults keys present in the
-					// slice, so unmentioned production fields survive the
-					// merge below instead of resetting to builder defaults.
-					const synced = normalizeFileOpt( { ...promotedSlice } );
-					// Re-attach deterministic row ids so synced server rows
-					// keep React keys instead of remounting; the baseline
-					// stays id-less to match the server payload. Guarded so
-					// a partial slice without a mapping never injects [].
-					if ( 'cdnMapping' in synced ) {
-						synced.cdnMapping = withCdnRowIds( synced.cdnMapping );
-					}
-					setSettings( ( prev ) => ( { ...prev, ...synced } ) );
-					setBaseline( ( prev ) => ( {
-						...prev,
-						...stripCdnRowIds( synced ),
-					} ) );
-				}
-				if ( ! isSandboxMountedRef.current ) {
+			await sandboxWorkflow.run( async ( { signal, isStale } ) => {
+				const res = await apiCall(
+					'sandbox_promote',
+					{},
+					'POST',
+					signal
+				);
+				if ( isStale() ) {
 					return;
 				}
-				setSandboxStaged( {} );
-				setSandboxPreviewUrl( '' );
-				notifySandbox( {
-					type: 'success',
-					message: __(
-						'Preview promoted to production.',
-						'performance-optimisation'
-					),
-				} );
-			} else {
-				notifySandbox( {
-					type: 'error',
-					// The REST envelope is { data, success, message }: data
-					// is null on failure (or an object on validation-style
-					// failures), so prefer the string message to avoid
-					// rendering [object Object].
-					message:
-						( res &&
-							typeof res.message === 'string' &&
-							res.message ) ||
-						__( 'Could not promote.', 'performance-optimisation' ),
-				} );
-			}
-		} catch {
-			if ( ! isSandboxMountedRef.current ) {
+				if ( res && res.success ) {
+					// P3-019: commit the full-map production payload via
+					// the shared contract so sibling tabs see the
+					// promoted values without reload.
+					commitSettingsResponse( 'sandbox_promote', res.data );
+					// Sync the production baseline so the form reflects the
+					// promoted values: prefer the production slice returned by
+					// the endpoint, falling back to the last staged values.
+					const promotedSlice =
+						res.data &&
+						typeof res.data === 'object' &&
+						res.data.file_optimisation &&
+						typeof res.data.file_optimisation === 'object'
+							? res.data.file_optimisation
+							: sandboxStaged;
+					if ( promotedSlice && typeof promotedSlice === 'object' ) {
+						// Normalize through the shared normalizer so backend
+						// arrays never reach controlled textareas verbatim
+						// (which would render "a,b" while the baseline stays
+						// equal and the bad display persists as clean).
+						// normalizeFileOpt() only defaults keys present in the
+						// slice, so unmentioned production fields survive the
+						// merge below instead of resetting to builder defaults.
+						const synced = normalizeFileOpt( {
+							...promotedSlice,
+						} );
+						// Re-attach deterministic row ids so synced server rows
+						// keep React keys instead of remounting; the baseline
+						// stays id-less to match the server payload. Guarded so
+						// a partial slice without a mapping never injects [].
+						if ( 'cdnMapping' in synced ) {
+							synced.cdnMapping = withCdnRowIds(
+								synced.cdnMapping
+							);
+						}
+						setSettings( ( prev ) => ( {
+							...prev,
+							...synced,
+						} ) );
+						setBaseline( ( prev ) => ( {
+							...prev,
+							...stripCdnRowIds( synced ),
+						} ) );
+					}
+					if ( isStale() ) {
+						return;
+					}
+					setSandboxStaged( {} );
+					setSandboxPreviewUrl( '' );
+					notifySandbox( {
+						type: 'success',
+						message: __(
+							'Preview promoted to production.',
+							'performance-optimisation'
+						),
+					} );
+				} else {
+					notifySandbox( {
+						type: 'error',
+						// The REST envelope is { data, success, message }: data
+						// is null on failure (or an object on validation-style
+						// failures), so prefer the string message to avoid
+						// rendering [object Object].
+						message:
+							( res &&
+								typeof res.message === 'string' &&
+								res.message ) ||
+							__(
+								'Could not promote.',
+								'performance-optimisation'
+							),
+					} );
+				}
+			} );
+		} catch ( sandboxPromoteError ) {
+			if (
+				sandboxPromoteError?.name === 'AbortError' ||
+				! isSandboxMountedRef.current
+			) {
 				return;
 			}
 			notifySandbox( {
@@ -1299,34 +1396,45 @@ const FileOptimization = ( {
 	};
 	const handleSandboxDiscard = async () => {
 		setSandboxBusy( true );
+		dismissSandbox();
 		try {
-			const res = await apiCall( 'sandbox_discard', {} );
-			if ( ! isSandboxMountedRef.current ) {
-				return;
-			}
-			if ( res && res.success ) {
-				setSandboxStaged( {} );
-				// Clear the stale preview link (its nonce and staged values
-				// no longer exist) so it cannot be reopened.
-				setSandboxPreviewUrl( '' );
-				notifySandbox( {
-					type: 'success',
-					message: __(
-						'Preview discarded. Production settings unchanged.',
-						'performance-optimisation'
-					),
-				} );
-			} else {
-				notifySandbox( {
-					type: 'error',
-					message: __(
-						'Could not discard.',
-						'performance-optimisation'
-					),
-				} );
-			}
-		} catch {
-			if ( ! isSandboxMountedRef.current ) {
+			await sandboxWorkflow.run( async ( { signal, isStale } ) => {
+				const res = await apiCall(
+					'sandbox_discard',
+					{},
+					'POST',
+					signal
+				);
+				if ( isStale() ) {
+					return;
+				}
+				if ( res && res.success ) {
+					setSandboxStaged( {} );
+					// Clear the stale preview link (its nonce and staged values
+					// no longer exist) so it cannot be reopened.
+					setSandboxPreviewUrl( '' );
+					notifySandbox( {
+						type: 'success',
+						message: __(
+							'Preview discarded. Production settings unchanged.',
+							'performance-optimisation'
+						),
+					} );
+				} else {
+					notifySandbox( {
+						type: 'error',
+						message: __(
+							'Could not discard.',
+							'performance-optimisation'
+						),
+					} );
+				}
+			} );
+		} catch ( sandboxDiscardError ) {
+			if (
+				sandboxDiscardError?.name === 'AbortError' ||
+				! isSandboxMountedRef.current
+			) {
 				return;
 			}
 			notifySandbox( {
@@ -1729,10 +1837,15 @@ const FileOptimization = ( {
 	// a replacement of the global settings object while the user is editing —
 	// do not merge saved values over in-progress edits.
 	// Mirrors PreloadSettings/ImageOptimization.
+	// P3-019: additionally gated on isSaving so a global cache replace
+	// landing mid-save never clobbers the in-flight form edits.
 	// Deps are FILE_OPT_SYNC_KEYS mapped over options (non-literal by design).
 	useEffect(
 		() => {
 			if ( ! options || Object.keys( options ).length === 0 ) {
+				return;
+			}
+			if ( isSaving ) {
 				return;
 			}
 			setSettings( ( prev ) => {
@@ -1755,7 +1868,7 @@ const FileOptimization = ( {
 			} );
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		FILE_OPT_SYNC_KEYS.map( ( key ) => options[ key ] )
+		[ ...FILE_OPT_SYNC_KEYS.map( ( key ) => options[ key ] ), isSaving ]
 	);
 
 	// INP-first preset (#932): one-click idle + viewport delay with 60s
@@ -2155,33 +2268,74 @@ const FileOptimization = ( {
 	};
 
 	const handleRegenerateCss = async () => {
-		await withNotification(
-			( async () => {
-				const res = await apiCall( 'regenerate_ccss' );
-				if ( res?.success && onCcssRefresh ) {
-					onCcssRefresh();
-				}
-				return res;
-			} )(),
-			__(
-				'Critical CSS regeneration queued.',
-				'performance-optimisation'
-			),
-			__(
-				'Failed to regenerate critical CSS.',
-				'performance-optimisation'
-			)
-		);
+		// P3-019: abort-wire the regen request so unmount/tab-switch cannot
+		// leave the banner owning a stale promise; withNotification stays
+		// the single banner owner.
+		if ( ccssRegenAbortRef.current ) {
+			ccssRegenAbortRef.current.abort();
+		}
+		ccssRegenAbortRef.current =
+			typeof AbortController !== 'undefined'
+				? new AbortController()
+				: null;
+		const regenSignal = ccssRegenAbortRef.current?.signal;
+		try {
+			await withNotification(
+				( async () => {
+					const res = await apiCall(
+						'regenerate_ccss',
+						{},
+						'POST',
+						regenSignal
+					);
+					if ( regenSignal?.aborted ) {
+						return { success: false, message: '' };
+					}
+					if ( res?.success && onCcssRefresh ) {
+						onCcssRefresh();
+					}
+					return res;
+				} )(),
+				__(
+					'Critical CSS regeneration queued.',
+					'performance-optimisation'
+				),
+				__(
+					'Failed to regenerate critical CSS.',
+					'performance-optimisation'
+				)
+			);
+		} finally {
+			ccssRegenAbortRef.current = null;
+		}
 	};
 
 	const handleRegenerateUsedCSS = async () => {
 		setIsRegenerating( true );
 		dismiss();
+		// P3-019: abort-wire the save+regen pair so a second click or
+		// unmount cannot interleave two regens; the seq guards the banner.
+		if ( usedCssRegenAbortRef.current ) {
+			usedCssRegenAbortRef.current.abort();
+		}
+		usedCssRegenAbortRef.current =
+			typeof AbortController !== 'undefined'
+				? new AbortController()
+				: null;
+		const regenSignal = usedCssRegenAbortRef.current?.signal;
 		try {
-			const saveRes = await apiCall( 'update_settings', {
-				tab: 'file_optimisation',
-				settings: stripCdnRowIds( { ...settings } ),
-			} );
+			const saveRes = await apiCall(
+				'update_settings',
+				{
+					tab: 'file_optimisation',
+					settings: stripCdnRowIds( { ...settings } ),
+				},
+				'POST',
+				regenSignal
+			);
+			if ( regenSignal?.aborted ) {
+				return;
+			}
 			if ( ! saveRes.success ) {
 				notify( {
 					type: 'error',
@@ -2197,7 +2351,15 @@ const FileOptimization = ( {
 			}
 			setBaseline( stripCdnRowIds( { ...settings } ) );
 			setIsDirty( false );
-			const res = await apiCall( 'used_css_regenerate' );
+			const res = await apiCall(
+				'used_css_regenerate',
+				{},
+				'POST',
+				regenSignal
+			);
+			if ( regenSignal?.aborted ) {
+				return;
+			}
 			if ( res.success ) {
 				notify( {
 					type: 'success',
@@ -2225,6 +2387,9 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch ( err ) {
+			if ( regenSignal?.aborted || err?.name === 'AbortError' ) {
+				return;
+			}
 			console.error(
 				'Failed to regenerate used CSS.',
 				getErrorLogMessage( err )
@@ -2238,6 +2403,7 @@ const FileOptimization = ( {
 				durationMs: 3000,
 			} );
 		} finally {
+			usedCssRegenAbortRef.current = null;
 			setIsRegenerating( false );
 		}
 	};

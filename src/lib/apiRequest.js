@@ -1,9 +1,20 @@
 import { isAuthErrorCode } from './authErrors';
 import { redactLogSecrets } from './logSecrets';
+import { commitSettingsResponse } from './settingsResponse';
 
 // Audit #1354: the raw lookup Set stays module-private in
 // authErrors.js — re-export only the frozen list and the lookup.
 export { AUTH_ERROR_CODES, isAuthErrorCode } from './authErrors';
+
+// P3-019: single response-commit contract re-exported for reuse so
+// components commit server payloads instead of patching request echoes.
+export {
+	commitSettingsResponse,
+	resolveSettingsPayload,
+	isFullSettingsMap,
+	FULL_SETTINGS_MAP_ACTIONS,
+	NESTED_SETTINGS_ACTIONS,
+} from './settingsResponse';
 
 /**
  * Safe accessor for the global wppoSettings object injected by PHP via
@@ -382,13 +393,11 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		// Mutates the global wppoSettings.settings so all components reading from it
 		// (e.g. WelcomePanel.STEPS.isEnabled) reflect the new state without re-rendering.
 		// This is an implicit coupling — the global serves as a shared reactive store.
-		// restore_settings returns the full restored settings payload, so it syncs too.
-		if (
-			( 'update_settings' === action || 'restore_settings' === action ) &&
-			data.success &&
-			data.data
-		) {
-			commitSettingsCache( data.data );
+		// P3-019: one response-commit contract covers every settings-bearing
+		// action (update/import/restore/sandbox_promote/safe_mode full maps,
+		// apply_preset nested settings). Fail-safe no-op otherwise.
+		if ( data.success ) {
+			commitSettingsResponse( action, data.data );
 		}
 		return data;
 	};

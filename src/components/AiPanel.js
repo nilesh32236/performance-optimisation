@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBrain } from '@fortawesome/free-solid-svg-icons';
 import {
 	apiCall,
+	commitSettingsResponse,
 	getErrorLogMessage,
 	getWppoSettings,
 	patchSettingsCache,
@@ -222,7 +223,13 @@ const AiPanel = () => {
 				settings: merged,
 			} );
 			if ( res.success ) {
-				patchSettingsCache( payload.tab, merged );
+				// P3-019: commit the server payload first (already
+				// committed by the apiCall gate for live transports);
+				// only patch the request echo when the response carries
+				// no committable map (e.g. mocked transports).
+				if ( ! commitSettingsResponse( 'update_settings', res.data ) ) {
+					patchSettingsCache( payload.tab, merged );
+				}
 				notify( {
 					type: 'success',
 					message: __(
@@ -285,12 +292,17 @@ const AiPanel = () => {
 				},
 			} );
 			if ( res.success ) {
-				patchSettingsCache( 'ai_adaptive', {
+				// P3-019: server payload wins; request-echo patch is the
+				// fallback for responses without a committable map.
+				const dismissedSlice = {
 					enabled,
 					use_wp_ai_client: useWpAiClient,
 					css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
 					dismissed_suggestions: [ ...current ],
-				} );
+				};
+				if ( ! commitSettingsResponse( 'update_settings', res.data ) ) {
+					patchSettingsCache( 'ai_adaptive', dismissedSlice );
+				}
 				notify( {
 					type: 'success',
 					message: __(

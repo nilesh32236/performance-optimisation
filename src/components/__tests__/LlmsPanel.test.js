@@ -63,10 +63,15 @@ describe( 'LlmsPanel', () => {
 		fireEvent.click( screen.getByRole( 'button', { name: /Save LLMs/i } ) );
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'llms_txt',
-				settings: { enabled: true, source: 'both' },
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'llms_txt',
+					settings: { enabled: true, source: 'both' },
+				},
+				'POST',
+				expect.anything()
+			)
 		);
 		expect(
 			screen.getByText( /LLMs.txt settings saved/i )
@@ -81,10 +86,15 @@ describe( 'LlmsPanel', () => {
 		fireEvent.click( screen.getByRole( 'button', { name: /Save LLMs/i } ) );
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
-				tab: 'llms_txt',
-				settings: expect.objectContaining( { source: 'sitemap' } ),
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				{
+					tab: 'llms_txt',
+					settings: expect.objectContaining( { source: 'sitemap' } ),
+				},
+				'POST',
+				expect.anything()
+			)
 		);
 	} );
 

@@ -1210,4 +1210,69 @@ describe( 'API Request library', () => {
 			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
 		} );
 	} );
+
+	describe( 'settings response commit gate (P3-019)', () => {
+		const respondWith = ( payload ) => {
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( payload ),
+			} );
+		};
+
+		it.each( [
+			'update_settings',
+			'restore_settings',
+			'import_settings',
+			'sandbox_promote',
+			'safe_mode',
+		] )( 'commits the full map for %s', async ( action ) => {
+			const map = {
+				cache_settings: { enabled: true },
+				file_optimisation: { delayJS: true },
+			};
+			respondWith( { success: true, data: map } );
+
+			await apiCall( action, {} );
+
+			expect( global.wppoSettings.settings ).toBe( map );
+		} );
+
+		it( 'commits nested settings for apply_preset', async () => {
+			const map = { file_optimisation: { delayJS: true } };
+			respondWith( {
+				success: true,
+				data: { preset: 'balanced', settings: map, diff: [] },
+			} );
+
+			await apiCall( 'apply_preset', { preset: 'balanced' } );
+
+			expect( global.wppoSettings.settings ).toBe( map );
+		} );
+
+		it( 'leaves the cache untouched for non-settings actions', async () => {
+			global.wppoSettings.settings = { keep: true };
+			respondWith( {
+				success: true,
+				data: { cache_settings: { enabled: true } },
+			} );
+
+			await apiCall( 'suggestions', {} );
+
+			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
+		} );
+
+		it( 'leaves the cache untouched on unsuccessful envelopes and empty maps', async () => {
+			global.wppoSettings.settings = { keep: true };
+			respondWith( {
+				success: false,
+				data: { cache_settings: {} },
+			} );
+			await apiCall( 'update_settings', {} );
+			respondWith( { success: true, data: {} } );
+			await apiCall( 'import_settings', {} );
+			respondWith( { success: true, data: null } );
+			await apiCall( 'sandbox_promote', {} );
+
+			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
+		} );
+	} );
 } );

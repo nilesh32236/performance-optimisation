@@ -489,11 +489,64 @@ describe( 'PluginSetting', () => {
 		fireEvent.click( screen.getByRole( 'button', { name: /^Confirm$/i } ) );
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'import_settings', {
-				action: 'import_settings',
-				settings: { file_optimisation: { minifyJS: true } },
-			} )
+			expect( apiCall ).toHaveBeenCalledWith(
+				'import_settings',
+				{
+					action: 'import_settings',
+					settings: { file_optimisation: { minifyJS: true } },
+				},
+				'POST',
+				expect.anything()
+			)
 		);
+	} );
+
+	it( 'commits the import_settings server map to the shared cache', async () => {
+		const serverMap = {
+			file_optimisation: { minifyJS: true },
+			performance_audit: {},
+		};
+		// First call is the mount-time settings_snapshot probe.
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully',
+			data: serverMap,
+		} );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		const file = new File(
+			[ JSON.stringify( { file_optimisation: { minifyJS: true } } ) ],
+			'settings.json',
+			{ type: 'application/json' }
+		);
+		fireEvent.change(
+			screen.getByLabelText( 'Select configuration file' ),
+			{
+				target: { files: [ file ] },
+			}
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Import Settings/i } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( /Importing this file will overwrite/i )
+			).toBeInTheDocument()
+		);
+
+		fireEvent.click( screen.getByRole( 'button', { name: /^Confirm$/i } ) );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( /Settings updated successfully/i )
+			).toBeInTheDocument()
+		);
+		// P3-019: the full-map server payload reaches the shared global.
+		expect( global.wppoSettings.settings ).toBe( serverMap );
 	} );
 
 	it( 'redacts generic *_key names on export', () => {
