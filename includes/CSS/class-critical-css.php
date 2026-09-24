@@ -361,9 +361,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * {@see \PerformanceOptimise\Inc\Ccss_Budget_Policy::$gzip_size_memo}
 		 * (P3-018); cleared via Critical_CSS::reset_ccss_memo() delegation.
 		 * Kept as a deprecated unused alias so reflection-based callers do
-		 * not fatal; new code must not use it.
+		 * not fatal; new code must not use it. Always empty — reads always
+		 * see `array()`; use Ccss_Budget_Policy::gzipped_size() instead.
+		 * Planned removal in a follow-up once callers are verified.
 		 *
 		 * @since 2.3.0
+		 * @deprecated NEXT Use {@see \PerformanceOptimise\Inc\Ccss_Budget_Policy::$gzip_size_memo} (retained only for reflection BC).
 		 * @var array<string, int>
 		 */
 		private static array $gzip_size_memo = array();
@@ -3272,8 +3275,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * {@see Util::get_styles_inline_limit()} so Cache and Critical_CSS
 		 * cannot disagree during the 6.9 pre-release window.
 		 *
+		 * Intentional duplication: must stay in sync with
+		 * {@see \PerformanceOptimise\Inc\Ccss_Budget_Policy::get_styles_inline_limit()}.
+		 * Both helpers are the same one-line Util bridge; the policy keeps
+		 * a local copy so it adds no edge back to this facade (P3-018).
+		 *
 		 * @return int The inline size limit in bytes.
 		 * @since 2.0.0
+		 * @see \PerformanceOptimise\Inc\Ccss_Budget_Policy::get_styles_inline_limit() Keep in sync — same one-line Util bridge.
 		 */
 		private static function get_styles_inline_limit(): int {
 			return Util::get_styles_inline_limit();

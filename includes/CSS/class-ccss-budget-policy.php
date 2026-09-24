@@ -162,7 +162,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Budget_Policy' ) ) {
 		 * policy through a private Critical_CSS method would re-add the
 		 * edge this extraction removes. Single line, same contract.
 		 *
+		 * Intentional duplication: must stay in sync with
+		 * {@see \PerformanceOptimise\Inc\Critical_CSS::get_styles_inline_limit()}.
+		 * Both helpers delegate to {@see \PerformanceOptimise\Inc\Util::get_styles_inline_limit()}.
+		 *
 		 * @since NEXT
+		 * @see \PerformanceOptimise\Inc\Critical_CSS::get_styles_inline_limit() Keep in sync — same one-line Util bridge.
 		 * @return int The inline size limit in bytes.
 		 */
 		private static function get_styles_inline_limit(): int {
