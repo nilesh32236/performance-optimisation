@@ -15,6 +15,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
 
+if ( ! class_exists( __NAMESPACE__ . '\\Job_Registry', false ) ) {
+	require_once dirname( __DIR__ ) . '/Scheduler/class-job-registry.php';
+}
+
 if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 	/**
 	 * Class Deactivate
@@ -231,7 +235,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				return;
 			}
 
-			foreach ( Cron::AS_HOOKS as $hook ) {
+			foreach ( Job_Registry::all_action_scheduler_hooks() as $hook ) {
 				as_unschedule_all_actions( $hook );
 			}
 		}

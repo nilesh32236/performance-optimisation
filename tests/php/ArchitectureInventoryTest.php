@@ -133,12 +133,12 @@ final class ArchitectureInventoryTest extends TestCase {
 		$graph = $this->read_json( 'DEPENDENCY-GRAPH.json' );
 		$this->assertSame( 2, $graph['schema_version'] );
 		$this->assertStringContainsString( 'PhpToken', $graph['analysis_method'] );
-		$this->assertSame( 74, $graph['summary']['files'] );
-		$this->assertSame( 70, $graph['summary']['class_like_nodes'] );
+		$this->assertSame( 75, $graph['summary']['files'] );
+		$this->assertSame( 71, $graph['summary']['class_like_nodes'] );
 		$this->assertSame( 4, $graph['summary']['procedural_nodes'] );
-		$this->assertSame( 340, $graph['summary']['edges'] );
-		$this->assertSame( 339, $graph['summary']['runtime_edges'] );
-		$this->assertSame( 191, $graph['summary']['compatibility_edges'] );
+		$this->assertSame( 343, $graph['summary']['edges'] );
+		$this->assertSame( 342, $graph['summary']['runtime_edges'] );
+		$this->assertSame( 193, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
 		$this->assertNotEmpty( $graph['edges'] );

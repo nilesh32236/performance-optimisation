@@ -17,6 +17,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
 
+if ( ! class_exists( __NAMESPACE__ . '\\Job_Registry', false ) ) {
+	require_once __DIR__ . '/class-job-registry.php';
+}
+
 if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 	/**
 	 * Class Cron
@@ -390,46 +394,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 2.0.0
 		 * @var string[]
 		 */
-		public const SCHEDULED_HOOKS = array(
-			'wppo_page_cron_hook',       // Recurring preload dispatcher (every_5_hours).
-			'wppo_page_cron_batch',      // Single-event batch continuation.
-			'wppo_generate_static_page', // Single-event per-post preload.
-			'wppo_generate_static_url',  // Single-event per-URL preload (sitemap).
-			'wppo_preload_url_batch',    // Single-event per-chunk preload resume (50 URLs per event).
-			'wppo_img_conversion',       // Hourly image conversion dispatcher.
-			'wppo_database_cleanup_cron', // Daily DB cleanup.
-			'wppo_web_vitals_rescan',    // Daily Web Vitals auto-rescan.
-			'wppo_llms_txt_daily',       // Daily llms.txt regeneration.
-			'wppo_used_css_cron',        // Recurring used-CSS regeneration (every_5_hours).
-			'wppo_ccss_regeneration',    // Daily critical-CSS regeneration.
-			'wppo_rum_flush',            // Single-event RUM queue flush (scheduled by RUM::queue()).
-			'wppo_run_upgrades',         // Single-event upgrade routine (scheduled by Activate).
-			'wppo_litespeed_crawler_batch', // Dual-scheduled: WP-Cron here + AS in the crawler bridge.
-			'wppo_crawler_warm',         // Dual-scheduled: WP-Cron here + AS in the crawler bridge.
-			'wppo_generate_ccss',        // Dual-scheduled: AS-first + WP-Cron fallback single event.
-			'wppo_object_cache_probe',   // Recurring object-cache recovery probe (only while the circuit is open).
-		);
+		public const SCHEDULED_HOOKS = Job_Registry::CRON_HOOKS;
 
 		/**
 		 * Action Scheduler hooks this plugin schedules via as_enqueue_async_action().
 		 *
-		 * Companion to SCHEDULED_HOOKS for store ownership: these live in the AS
-		 * custom tables, not WP-Cron, so deactivation cleanup must use
-		 * as_unschedule_all_actions() (see Deactivate::unschedule_action_scheduler_jobs()).
-		 * Any future as_enqueue_async_action() site must be added here.
+		 * Compatibility alias for the scheduler registry owner. The registry
+		 * includes feature-owned builder/upgrade jobs and the owned group.
 		 *
 		 * @since 2.0.0
 		 * @var string[]
 		 */
-		public const AS_HOOKS = array(
-			'wppo_convert_image_background', // Image conversion (Img_Converter / REST).
-			'wppo_pagespeed_scan',           // PageSpeed scans (Pagespeed).
-			'wppo_used_css_generate',        // Used-CSS generation (Main / Used_CSS).
-			'wppo_generate_ccss',            // Critical CSS generation (Critical_CSS — AS-only).
-			'wppo_litespeed_crawler_batch',  // Dual-scheduled with SCHEDULED_HOOKS.
-			'wppo_crawler_warm',             // Dual-scheduled with SCHEDULED_HOOKS.
-			'wppo_google_fonts_download',    // Google Fonts CSS/font download (Google_Fonts — out-of-band).
-		);
+		public const AS_HOOKS = Job_Registry::AS_HOOKS;
 
 		/**
 		 * Constructor: registers the actions and filters used to schedule
@@ -1290,13 +1266,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 2.0.0 Derived from Cron::SCHEDULED_HOOKS; added wppo_img_conversion and wppo_database_cleanup_cron.
 		 */
 		public static function clear_cron_jobs(): void {
-			// Canonical plugin hooks (recurring + single events).
-			foreach ( self::SCHEDULED_HOOKS as $hook ) {
+			// Canonical, feature-fallback, and legacy plugin hooks.
+			foreach ( Job_Registry::all_cron_hooks() as $hook ) {
 				wp_unschedule_hook( $hook );
 			}
-
-			// Legacy misspelled image-conversion hook kept for BC with older installs.
-			wp_unschedule_hook( 'wppo_img_conversation' );
 
 			// Preload bookkeeping options + locks.
 			delete_option( 'wppo_preload_cron_offset' );

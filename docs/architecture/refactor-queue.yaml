@@ -589,6 +589,9 @@ phase3_items:
     title: 'Scheduler job ownership registry and teardown parity'
     status: active
     priority: high
+    github_issue: 1568
+    github_pr: 1569
+    implementation_commit: 0e3d201e81455ee05919df111136b509fa67390b
     type: architecture
     problem: 'Builder drift and upgrade purge hooks are scheduled outside Cron::AS_HOOKS; deactivation omits both, while standalone uninstall clears the owned Action Scheduler group but omits the upgrade purge WP-Cron fallback.'
     current_owner: 'Cron::AS_HOOKS plus duplicated Deactivate/uninstall/Builder scheduling lists'
@@ -626,6 +629,12 @@ phase3_items:
         - 'Preserve performance_optimisation group ownership and never clear foreign hooks/groups.'
         - 'Preserve builder transient locks and unique/non-unique scheduling semantics.'
       decision: 'Proceed test-first with one standalone-safe hook manifest/registry consumed by Cron, Deactivate, Builder_Purge_Watcher, and uninstall; do not bulk-create later queue issues.'
+      implementation:
+        registry: 'includes/Scheduler/class-job-registry.php'
+        cron_union: '17 canonical + 3 feature fallback + 1 legacy = 21 hooks'
+        action_scheduler_union: '9 owned hooks'
+        graph_delta: '72 inventory files / 75 graph nodes / 343 edges; compatibility 193; bridge candidates 228'
+        ratchet_result: 'Missing owned AS hooks 2 -> 0; missing owned WP-Cron fallback hooks 1 -> 0; teardown parity 100%'
 
   - id: P3-003
     title: 'Preload target and redirect transport policy'

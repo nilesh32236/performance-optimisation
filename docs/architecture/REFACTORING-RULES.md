@@ -241,7 +241,7 @@ A new warning, route-count change, cron leak, console error, or graph regression
 
 ## Current numeric ratchet
 
-P3-001 records the starting metrics in `ARCHITECTURE-BASELINE.md`.
+The current Phase 3 baseline records the starting metrics in `ARCHITECTURE-BASELINE.md`.
 
 | Metric | Current cap or baseline | Rule |
 |---|---:|---|
@@ -254,10 +254,10 @@ P3-001 records the starting metrics in `ARCHITECTURE-BASELINE.md`.
 | `Image_Optimisation` lines / methods | 8,999 / 183 | Target down with media or state owners |
 | `Critical_CSS` lines / methods | 6,950 / 138 | Target down with generation owners |
 | Largest runtime SCC | 59 nodes | Target down |
-| Compatibility-classified edges | 191 | Explain and reduce through explicit compatibility ownership |
+| Compatibility-classified edges | 193 | Explain and reduce through explicit compatibility ownership |
 | Compatibility SCCs / largest | 2 / 21 nodes | Reduce; retain only documented stable adapters |
 | Boundary violations | 16 | Target zero or protected exception |
-| Bridge candidates | 226 | Target down |
+| Bridge candidates | 228 | Target down |
 | Static properties / owners | 141 / 31 | Classify, then reduce or document |
 | `FileOptimization.js` | 6,114 | Target down one card at a time |
 | `Dashboard.js` | 2,168 | Target down one card or hook at a time |

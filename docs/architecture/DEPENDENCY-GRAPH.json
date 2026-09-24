@@ -28,17 +28,17 @@
         "high_risk_hub_score": "fan_in + fan_out + 2*compatibility_fan_in + cross_domain_edges + static_state + lines/1000."
     },
     "summary": {
-        "files": 74,
-        "class_like_nodes": 70,
+        "files": 75,
+        "class_like_nodes": 71,
         "procedural_nodes": 4,
-        "edges": 340,
-        "runtime_edges": 339,
-        "compatibility_edges": 191,
+        "edges": 343,
+        "runtime_edges": 342,
+        "compatibility_edges": 193,
         "loader_edges": 3,
-        "cross_domain_edges": 300,
+        "cross_domain_edges": 302,
         "feature_to_feature_edges": 47,
         "boundary_violations": 16,
-        "bridge_candidates": 226,
+        "bridge_candidates": 228,
         "cyclic_components": 1,
         "runtime_cyclic_components": 1,
         "compatibility_cyclic_components": 2,
@@ -5574,7 +5574,7 @@
             "file": "includes/Scheduler/class-cron.php",
             "domain": "Scheduler",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 1830,
+            "lines": 1803,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -5587,8 +5587,8 @@
             "largest_methods": [
                 {
                     "name": "schedule_page_cron_jobs",
-                    "line": 757,
-                    "end_line": 915,
+                    "line": 733,
+                    "end_line": 891,
                     "lines": 159,
                     "visibility": "private",
                     "static": false,
@@ -5596,8 +5596,8 @@
                 },
                 {
                     "name": "is_woo_excluded_url",
-                    "line": 1000,
-                    "end_line": 1111,
+                    "line": 976,
+                    "end_line": 1087,
                     "lines": 112,
                     "visibility": "private",
                     "static": false,
@@ -5605,8 +5605,8 @@
                 },
                 {
                     "name": "process_url",
-                    "line": 1350,
-                    "end_line": 1435,
+                    "line": 1323,
+                    "end_line": 1408,
                     "lines": 86,
                     "visibility": "public",
                     "static": false,
@@ -5614,8 +5614,8 @@
                 },
                 {
                     "name": "get_sitemap_urls",
-                    "line": 1449,
-                    "end_line": 1524,
+                    "line": 1422,
+                    "end_line": 1497,
                     "lines": 76,
                     "visibility": "public",
                     "static": false,
@@ -5623,8 +5623,8 @@
                 },
                 {
                     "name": "img_convert_cron",
-                    "line": 1707,
-                    "end_line": 1776,
+                    "line": 1680,
+                    "end_line": 1749,
                     "lines": 70,
                     "visibility": "public",
                     "static": false,
@@ -5632,8 +5632,8 @@
                 },
                 {
                     "name": "web_vitals_rescan_cron",
-                    "line": 668,
-                    "end_line": 731,
+                    "line": 644,
+                    "end_line": 707,
                     "lines": 64,
                     "visibility": "public",
                     "static": false,
@@ -5641,8 +5641,8 @@
                 },
                 {
                     "name": "get_preload_status",
-                    "line": 213,
-                    "end_line": 272,
+                    "line": 217,
+                    "end_line": 276,
                     "lines": 60,
                     "visibility": "public",
                     "static": true,
@@ -5650,8 +5650,8 @@
                 },
                 {
                     "name": "schedule_sitemap_url_jobs",
-                    "line": 927,
-                    "end_line": 985,
+                    "line": 903,
+                    "end_line": 961,
                     "lines": 59,
                     "visibility": "private",
                     "static": false,
@@ -5659,8 +5659,8 @@
                 },
                 {
                     "name": "mark_page_as_processed",
-                    "line": 1641,
-                    "end_line": 1697,
+                    "line": 1614,
+                    "end_line": 1670,
                     "lines": 57,
                     "visibility": "private",
                     "static": false,
@@ -5668,8 +5668,8 @@
                 },
                 {
                     "name": "database_cleanup_cron",
-                    "line": 1786,
-                    "end_line": 1828,
+                    "line": 1759,
+                    "end_line": 1801,
                     "lines": 43,
                     "visibility": "public",
                     "static": false,
@@ -5679,248 +5679,254 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Cache::bump_stats_cache": 1695,
-                    "PerformanceOptimise\\Inc\\Cache::get_cache_bytes_and_files": 224,
-                    "PerformanceOptimise\\Inc\\Cache::get_cache_file_count": 232,
-                    "PerformanceOptimise\\Inc\\Cache::get_cache_size_bytes": 229,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 650,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::regenerate_all": 653,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup::auto_clean": 1819,
-                    "PerformanceOptimise\\Inc\\Img_Converter::get_img_info": 1717,
-                    "PerformanceOptimise\\Inc\\Img_Converter::queue_unconverted_library_images": 1738,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::crawl_batch": 1580,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::crawl_single": 1381,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::is_litespeed": 1380,
-                    "PerformanceOptimise\\Inc\\Llms::generate": 634,
-                    "PerformanceOptimise\\Inc\\Log::add": 1429,
-                    "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 714,
-                    "PerformanceOptimise\\Inc\\Scheduler::next_scheduled": 909,
-                    "PerformanceOptimise\\Inc\\Scheduler::schedule_recurring_event": 531,
-                    "PerformanceOptimise\\Inc\\Scheduler::schedule_single_event": 301,
-                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 688,
-                    "PerformanceOptimise\\Inc\\Util::get_settings": 526,
-                    "PerformanceOptimise\\Inc\\Util::get_woo_excluded_paths": 940,
-                    "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 1068,
-                    "PerformanceOptimise\\Inc\\Util::init_filesystem": 1660,
-                    "PerformanceOptimise\\Inc\\Util::is_cache_path_contained": 1654,
-                    "PerformanceOptimise\\Inc\\Util::is_editor_preview_url": 1127,
-                    "PerformanceOptimise\\Inc\\Util::is_url_excluded": 876,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_ajax_request": 1035,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_dynamic_path": 1106,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_excluded_url": 1007,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_faceted_query": 1052,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 937,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_path": 1022,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_request": 1019,
-                    "PerformanceOptimise\\Inc\\Util::memoized_permalink": 867,
-                    "PerformanceOptimise\\Inc\\Util::normalize_cache_host": 1650,
-                    "PerformanceOptimise\\Inc\\Util::process_urls": 844,
-                    "PerformanceOptimise\\Inc\\Util::sanitize_cache_url_path": 1651,
-                    "PerformanceOptimise\\Inc\\Util::transient_key": 605,
-                    "self::get_preload_queue": 113,
-                    "self::init_preload_queue": 983,
-                    "self::mark_preload_done": 1367,
-                    "self::mark_preload_failed": 1431,
-                    "self::peek_crawler_batch_arg": 1571,
-                    "self::save_preload_queue": 124
+                    "PerformanceOptimise\\Inc\\Cache::bump_stats_cache": 1668,
+                    "PerformanceOptimise\\Inc\\Cache::get_cache_bytes_and_files": 228,
+                    "PerformanceOptimise\\Inc\\Cache::get_cache_file_count": 236,
+                    "PerformanceOptimise\\Inc\\Cache::get_cache_size_bytes": 233,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 626,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::regenerate_all": 629,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup::auto_clean": 1792,
+                    "PerformanceOptimise\\Inc\\Img_Converter::get_img_info": 1690,
+                    "PerformanceOptimise\\Inc\\Img_Converter::queue_unconverted_library_images": 1711,
+                    "PerformanceOptimise\\Inc\\Job_Registry::all_cron_hooks": 1270,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::crawl_batch": 1553,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::crawl_single": 1354,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::is_litespeed": 1353,
+                    "PerformanceOptimise\\Inc\\Llms::generate": 610,
+                    "PerformanceOptimise\\Inc\\Log::add": 1402,
+                    "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 690,
+                    "PerformanceOptimise\\Inc\\Scheduler::next_scheduled": 885,
+                    "PerformanceOptimise\\Inc\\Scheduler::schedule_recurring_event": 507,
+                    "PerformanceOptimise\\Inc\\Scheduler::schedule_single_event": 305,
+                    "PerformanceOptimise\\Inc\\Util::cached_home_url": 664,
+                    "PerformanceOptimise\\Inc\\Util::get_settings": 502,
+                    "PerformanceOptimise\\Inc\\Util::get_woo_excluded_paths": 916,
+                    "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 1044,
+                    "PerformanceOptimise\\Inc\\Util::init_filesystem": 1633,
+                    "PerformanceOptimise\\Inc\\Util::is_cache_path_contained": 1627,
+                    "PerformanceOptimise\\Inc\\Util::is_editor_preview_url": 1103,
+                    "PerformanceOptimise\\Inc\\Util::is_url_excluded": 852,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_ajax_request": 1011,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_dynamic_path": 1082,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_excluded_url": 983,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_faceted_query": 1028,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 913,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_path": 998,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_request": 995,
+                    "PerformanceOptimise\\Inc\\Util::memoized_permalink": 843,
+                    "PerformanceOptimise\\Inc\\Util::normalize_cache_host": 1623,
+                    "PerformanceOptimise\\Inc\\Util::process_urls": 820,
+                    "PerformanceOptimise\\Inc\\Util::sanitize_cache_url_path": 1624,
+                    "PerformanceOptimise\\Inc\\Util::transient_key": 581,
+                    "self::get_preload_queue": 117,
+                    "self::init_preload_queue": 959,
+                    "self::mark_preload_done": 1340,
+                    "self::mark_preload_failed": 1404,
+                    "self::peek_crawler_batch_arg": 1544,
+                    "self::save_preload_queue": 128
                 },
                 "instance_calls": {
-                    "$img_converter->convert_image": 1770,
-                    "$instance->schedule_page_cron_jobs": 485,
-                    "$manager->get_circuit_state": 584,
-                    "$manager->probe_recovery": 616,
-                    "$response->get_error_message": 1398,
-                    "$this->get_rest_route_param": 1019,
-                    "$this->get_scheduled_args_set": 864,
-                    "$this->get_sitemap_urls": 928,
-                    "$this->is_editor_preview_url": 889,
-                    "$this->is_hook_arg_scheduled": 893,
-                    "$this->is_object_cache_circuit_open": 561,
-                    "$this->is_woo_excluded_url": 883,
-                    "$this->load_page": 1335,
-                    "$this->mark_page_as_processed": 1327,
-                    "$this->process_url": 344,
-                    "$this->schedule_page_cron_jobs": 743,
-                    "$this->schedule_sitemap_url_jobs": 849,
-                    "$used_css->regenerate_all": 1273,
-                    "$wp_filesystem->delete": 1667,
-                    "$wp_filesystem->dirlist": 1682,
-                    "$wp_filesystem->exists": 1666,
-                    "$wp_filesystem->is_dir": 1681,
-                    "$wpdb->get_col": 826,
-                    "$wpdb->get_var": 784,
-                    "$wpdb->prepare": 786
+                    "$img_converter->convert_image": 1743,
+                    "$instance->schedule_page_cron_jobs": 461,
+                    "$manager->get_circuit_state": 560,
+                    "$manager->probe_recovery": 592,
+                    "$response->get_error_message": 1371,
+                    "$this->get_rest_route_param": 995,
+                    "$this->get_scheduled_args_set": 840,
+                    "$this->get_sitemap_urls": 904,
+                    "$this->is_editor_preview_url": 865,
+                    "$this->is_hook_arg_scheduled": 869,
+                    "$this->is_object_cache_circuit_open": 537,
+                    "$this->is_woo_excluded_url": 859,
+                    "$this->load_page": 1308,
+                    "$this->mark_page_as_processed": 1300,
+                    "$this->process_url": 348,
+                    "$this->schedule_page_cron_jobs": 719,
+                    "$this->schedule_sitemap_url_jobs": 825,
+                    "$used_css->regenerate_all": 1249,
+                    "$wp_filesystem->delete": 1640,
+                    "$wp_filesystem->dirlist": 1655,
+                    "$wp_filesystem->exists": 1639,
+                    "$wp_filesystem->is_dir": 1654,
+                    "$wpdb->get_col": 802,
+                    "$wpdb->get_var": 760,
+                    "$wpdb->prepare": 762
                 },
                 "new_expressions": {
-                    "PerformanceOptimise\\Inc\\Img_Converter": 1715,
-                    "PerformanceOptimise\\Inc\\Object_Cache": 583,
-                    "PerformanceOptimise\\Inc\\Used_CSS": 1272,
-                    "self": 484
+                    "PerformanceOptimise\\Inc\\Img_Converter": 1688,
+                    "PerformanceOptimise\\Inc\\Object_Cache": 559,
+                    "PerformanceOptimise\\Inc\\Used_CSS": 1248,
+                    "self": 460
                 },
                 "class_references": [],
                 "class_constant_references": {
-                    "PerformanceOptimise\\Inc\\Util": 1137,
-                    "self": 61
+                    "PerformanceOptimise\\Inc\\Job_Registry": 397,
+                    "PerformanceOptimise\\Inc\\Util": 1113,
+                    "self": 65
                 },
                 "class_string_references": {
-                    "PerformanceOptimise\\Inc\\Cache": 223,
-                    "PerformanceOptimise\\Inc\\Critical_CSS": 650,
-                    "PerformanceOptimise\\Inc\\Cron": 20,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1380,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 1380,
-                    "PerformanceOptimise\\Inc\\Llms": 633,
-                    "PerformanceOptimise\\Inc\\Object_Cache": 578,
-                    "PerformanceOptimise\\Inc\\RUM": 472,
-                    "PerformanceOptimise\\Inc\\Util": 936
+                    "PerformanceOptimise\\Inc\\Cache": 227,
+                    "PerformanceOptimise\\Inc\\Critical_CSS": 626,
+                    "PerformanceOptimise\\Inc\\Cron": 24,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1353,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 1353,
+                    "PerformanceOptimise\\Inc\\Llms": 609,
+                    "PerformanceOptimise\\Inc\\Object_Cache": 554,
+                    "PerformanceOptimise\\Inc\\RUM": 448,
+                    "PerformanceOptimise\\Inc\\Util": 912
                 },
                 "class_exists": {
-                    "PerformanceOptimise\\Inc\\Cache": 223,
-                    "PerformanceOptimise\\Inc\\Cron": 20,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1380,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 1380,
-                    "PerformanceOptimise\\Inc\\Llms": 633,
-                    "PerformanceOptimise\\Inc\\Object_Cache": 578,
-                    "PerformanceOptimise\\Inc\\Util": 1137
+                    "Job_Registry": 20,
+                    "PerformanceOptimise\\Inc\\Cache": 227,
+                    "PerformanceOptimise\\Inc\\Cron": 24,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1353,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration": 1353,
+                    "PerformanceOptimise\\Inc\\Llms": 609,
+                    "PerformanceOptimise\\Inc\\Object_Cache": 554,
+                    "PerformanceOptimise\\Inc\\Util": 1113
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\Cache::get_cache_bytes_and_files": 223,
-                    "PerformanceOptimise\\Inc\\Cache::get_cache_file_count": 231,
-                    "PerformanceOptimise\\Inc\\Cache::get_cache_size_bytes": 228,
-                    "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 650,
-                    "PerformanceOptimise\\Inc\\Util::get_woo_excluded_paths": 939,
-                    "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 1067,
-                    "PerformanceOptimise\\Inc\\Util::is_editor_preview_url": 1126,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_ajax_request": 1034,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_dynamic_path": 1080,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_excluded_url": 1005,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_faceted_query": 1051,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 936,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_path": 1022,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_request": 1018
+                    "PerformanceOptimise\\Inc\\Cache::get_cache_bytes_and_files": 227,
+                    "PerformanceOptimise\\Inc\\Cache::get_cache_file_count": 235,
+                    "PerformanceOptimise\\Inc\\Cache::get_cache_size_bytes": 232,
+                    "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 626,
+                    "PerformanceOptimise\\Inc\\Util::get_woo_excluded_paths": 915,
+                    "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 1043,
+                    "PerformanceOptimise\\Inc\\Util::is_editor_preview_url": 1102,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_ajax_request": 1010,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_dynamic_path": 1056,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_excluded_url": 981,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_faceted_query": 1027,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 912,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_path": 998,
+                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_request": 994
                 },
                 "interface_exists": [],
                 "trait_exists": [],
                 "reflection": [],
                 "loader_references": [],
-                "file_references": [],
+                "file_references": {
+                    "/class-job-registry.php": 21,
+                    "<dynamic>": 21
+                },
                 "external_classes": [],
                 "external_functions": {
-                    "Img_Converter": 1715,
-                    "Object_Cache": 583,
-                    "Used_CSS": 1272,
-                    "__": 501,
-                    "_get_cron_array": 1176,
-                    "_prime_post_caches": 858,
-                    "add_action": 452,
-                    "add_filter": 456,
-                    "apply_filters": 510,
-                    "array_chunk": 295,
-                    "array_diff": 120,
-                    "array_fill": 780,
-                    "array_filter": 66,
-                    "array_map": 66,
-                    "array_merge": 65,
-                    "array_shift": 1461,
-                    "array_slice": 121,
-                    "array_unique": 114,
-                    "array_values": 66,
+                    "Img_Converter": 1688,
+                    "Object_Cache": 559,
+                    "Used_CSS": 1248,
+                    "__": 477,
+                    "_get_cron_array": 1152,
+                    "_prime_post_caches": 834,
+                    "add_action": 428,
+                    "add_filter": 432,
+                    "apply_filters": 486,
+                    "array_chunk": 299,
+                    "array_diff": 124,
+                    "array_fill": 756,
+                    "array_filter": 70,
+                    "array_map": 70,
+                    "array_merge": 69,
+                    "array_shift": 1434,
+                    "array_slice": 125,
+                    "array_unique": 118,
+                    "array_values": 70,
                     "class_exists": 20,
-                    "count": 122,
+                    "count": 126,
                     "defined": 16,
-                    "delete_option": 804,
-                    "delete_transient": 618,
-                    "end": 903,
-                    "error_log": 797,
-                    "esc_url_raw": 692,
-                    "function_exists": 58,
-                    "get_option": 61,
-                    "get_permalink": 1325,
-                    "get_post_types": 777,
-                    "get_transient": 605,
-                    "home_url": 1365,
-                    "implode": 780,
-                    "in_array": 70,
-                    "is_array": 62,
-                    "is_string": 341,
-                    "is_wp_error": 1397,
-                    "json_encode": 1216,
-                    "ltrim": 1024,
-                    "max": 68,
-                    "method_exists": 223,
-                    "microtime": 1458,
-                    "min": 1723,
-                    "parse_str": 1146,
-                    "preg_match": 1024,
-                    "preg_match_all": 1488,
-                    "preg_quote": 1100,
-                    "rawurldecode": 1024,
-                    "realpath": 1765,
-                    "sanitize_text_field": 672,
-                    "set_transient": 608,
-                    "site_url": 1647,
-                    "sprintf": 1408,
-                    "str_replace": 1398,
-                    "strpos": 1486,
-                    "strtolower": 1094,
-                    "time": 93,
-                    "trailingslashit": 1654,
-                    "trim": 341,
-                    "update_option": 94,
-                    "wp_clear_scheduled_hook": 533,
-                    "wp_http_validate_url": 1359,
-                    "wp_json_encode": 898,
-                    "wp_next_scheduled": 1224,
-                    "wp_normalize_path": 1652,
-                    "wp_parse_url": 1014,
-                    "wp_rand": 298,
-                    "wp_remote_get": 1391,
-                    "wp_remote_retrieve_body": 1481,
-                    "wp_remote_retrieve_response_code": 1410,
-                    "wp_unschedule_hook": 1295
+                    "delete_option": 780,
+                    "delete_transient": 594,
+                    "end": 879,
+                    "error_log": 773,
+                    "esc_url_raw": 668,
+                    "function_exists": 62,
+                    "get_option": 65,
+                    "get_permalink": 1298,
+                    "get_post_types": 753,
+                    "get_transient": 581,
+                    "home_url": 1338,
+                    "implode": 756,
+                    "in_array": 74,
+                    "is_array": 66,
+                    "is_string": 345,
+                    "is_wp_error": 1370,
+                    "json_encode": 1192,
+                    "ltrim": 1000,
+                    "max": 72,
+                    "method_exists": 227,
+                    "microtime": 1431,
+                    "min": 1696,
+                    "parse_str": 1122,
+                    "preg_match": 1000,
+                    "preg_match_all": 1461,
+                    "preg_quote": 1076,
+                    "rawurldecode": 1000,
+                    "realpath": 1738,
+                    "sanitize_text_field": 648,
+                    "set_transient": 584,
+                    "site_url": 1620,
+                    "sprintf": 1381,
+                    "str_replace": 1371,
+                    "strpos": 1459,
+                    "strtolower": 1070,
+                    "time": 97,
+                    "trailingslashit": 1627,
+                    "trim": 345,
+                    "update_option": 98,
+                    "wp_clear_scheduled_hook": 509,
+                    "wp_http_validate_url": 1332,
+                    "wp_json_encode": 874,
+                    "wp_next_scheduled": 1200,
+                    "wp_normalize_path": 1625,
+                    "wp_parse_url": 990,
+                    "wp_rand": 302,
+                    "wp_remote_get": 1364,
+                    "wp_remote_retrieve_body": 1454,
+                    "wp_remote_retrieve_response_code": 1383,
+                    "wp_unschedule_hook": 1271
                 },
                 "wordpress_functions": {
-                    "add_action": 452,
-                    "add_filter": 456,
-                    "apply_filters": 510,
-                    "delete_option": 804,
-                    "delete_transient": 618,
-                    "esc_url_raw": 692,
-                    "get_option": 61,
-                    "get_permalink": 1325,
-                    "get_post_types": 777,
-                    "get_transient": 605,
-                    "home_url": 1365,
-                    "is_wp_error": 1397,
-                    "sanitize_text_field": 672,
-                    "site_url": 1647,
-                    "trailingslashit": 1654,
-                    "update_option": 94,
-                    "wp_clear_scheduled_hook": 533,
-                    "wp_http_validate_url": 1359,
-                    "wp_json_encode": 898,
-                    "wp_next_scheduled": 1224,
-                    "wp_normalize_path": 1652,
-                    "wp_parse_url": 1014,
-                    "wp_rand": 298,
-                    "wp_remote_get": 1391,
-                    "wp_remote_retrieve_body": 1481,
-                    "wp_remote_retrieve_response_code": 1410,
-                    "wp_unschedule_hook": 1295
+                    "add_action": 428,
+                    "add_filter": 432,
+                    "apply_filters": 486,
+                    "delete_option": 780,
+                    "delete_transient": 594,
+                    "esc_url_raw": 668,
+                    "get_option": 65,
+                    "get_permalink": 1298,
+                    "get_post_types": 753,
+                    "get_transient": 581,
+                    "home_url": 1338,
+                    "is_wp_error": 1370,
+                    "sanitize_text_field": 648,
+                    "site_url": 1620,
+                    "trailingslashit": 1627,
+                    "update_option": 98,
+                    "wp_clear_scheduled_hook": 509,
+                    "wp_http_validate_url": 1332,
+                    "wp_json_encode": 874,
+                    "wp_next_scheduled": 1200,
+                    "wp_normalize_path": 1625,
+                    "wp_parse_url": 990,
+                    "wp_rand": 302,
+                    "wp_remote_get": 1364,
+                    "wp_remote_retrieve_body": 1454,
+                    "wp_remote_retrieve_response_code": 1383,
+                    "wp_unschedule_hook": 1271
                 },
                 "filesystem_dependencies": {
-                    "$wp_filesystem->delete": 1667,
-                    "$wp_filesystem->dirlist": 1682,
-                    "$wp_filesystem->exists": 1666,
-                    "$wp_filesystem->is_dir": 1681,
-                    "realpath": 1765
+                    "$wp_filesystem->delete": 1640,
+                    "$wp_filesystem->dirlist": 1655,
+                    "$wp_filesystem->exists": 1639,
+                    "$wp_filesystem->is_dir": 1654,
+                    "realpath": 1738
                 },
                 "network_dependencies": {
-                    "wp_remote_get": 1391
+                    "wp_remote_get": 1364
                 },
                 "database_dependencies": {
-                    "$wpdb->get_col": 826,
-                    "$wpdb->get_var": 784,
-                    "$wpdb->prepare": 786
+                    "$wpdb->get_col": 802,
+                    "$wpdb->get_var": 760,
+                    "$wpdb->prepare": 762
                 },
                 "dynamic_references": []
             },
@@ -5932,6 +5938,7 @@
                 "PerformanceOptimise\\Inc\\Critical_CSS",
                 "PerformanceOptimise\\Inc\\Database_Cleanup",
                 "PerformanceOptimise\\Inc\\Img_Converter",
+                "PerformanceOptimise\\Inc\\Job_Registry",
                 "PerformanceOptimise\\Inc\\LiteSpeed_Crawler",
                 "PerformanceOptimise\\Inc\\LiteSpeed_Integration",
                 "PerformanceOptimise\\Inc\\Llms",
@@ -5946,6 +5953,7 @@
             "compatibility_dependencies": [
                 "PerformanceOptimise\\Inc\\Cache",
                 "PerformanceOptimise\\Inc\\Critical_CSS",
+                "PerformanceOptimise\\Inc\\Job_Registry",
                 "PerformanceOptimise\\Inc\\LiteSpeed_Crawler",
                 "PerformanceOptimise\\Inc\\LiteSpeed_Integration",
                 "PerformanceOptimise\\Inc\\Llms",
@@ -5959,66 +5967,66 @@
             ],
             "hooks": {
                 "cron_schedules": [
-                    456
+                    432
                 ],
                 "init": [
-                    452
+                    428
                 ],
                 "wppo_ccss_regeneration": [
-                    471
+                    447
                 ],
                 "wppo_crawler_warm": [
-                    462
+                    438
                 ],
                 "wppo_database_cleanup_cron": [
-                    464
+                    440
                 ],
                 "wppo_generate_static_page": [
-                    458
+                    434
                 ],
                 "wppo_generate_static_url": [
-                    459
+                    435
                 ],
                 "wppo_img_conversion": [
-                    455
+                    431
                 ],
                 "wppo_litespeed_crawler_batch": [
-                    461
+                    437
                 ],
                 "wppo_llms_txt_daily": [
-                    468
+                    444
                 ],
                 "wppo_object_cache_probe": [
-                    473
+                    449
                 ],
                 "wppo_page_cron_batch": [
-                    454
+                    430
                 ],
                 "wppo_page_cron_hook": [
-                    453
+                    429
                 ],
                 "wppo_preload_url_batch": [
-                    460
+                    436
                 ],
                 "wppo_rum_flush": [
-                    472
+                    448
                 ],
                 "wppo_used_css_cron": [
-                    470
+                    446
                 ],
                 "wppo_web_vitals_rescan": [
-                    466
+                    442
                 ]
             },
             "metrics": {
                 "fan_in": 5,
-                "fan_out": 14,
-                "incoming_reference_evidence": 15,
-                "outgoing_reference_evidence": 111,
+                "fan_out": 15,
+                "incoming_reference_evidence": 14,
+                "outgoing_reference_evidence": 115,
                 "runtime_fan_in": 5,
-                "runtime_fan_out": 14,
+                "runtime_fan_out": 15,
                 "compatibility_fan_in": 3,
-                "compatibility_fan_out": 7,
+                "compatibility_fan_out": 8,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
                 "cross_domain_edges": 18,
@@ -6830,7 +6838,7 @@
             "file": "includes/Core/class-deactivate.php",
             "domain": "Core",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 368,
+            "lines": 372,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -6843,8 +6851,8 @@
             "largest_methods": [
                 {
                     "name": "init",
-                    "line": 37,
-                    "end_line": 137,
+                    "line": 41,
+                    "end_line": 141,
                     "lines": 101,
                     "visibility": "public",
                     "static": true,
@@ -6852,8 +6860,8 @@
                 },
                 {
                     "name": "remove_wp_cache_constant",
-                    "line": 300,
-                    "end_line": 366,
+                    "line": 304,
+                    "end_line": 370,
                     "lines": 67,
                     "visibility": "public",
                     "static": true,
@@ -6861,8 +6869,8 @@
                 },
                 {
                     "name": "unregister_runtime_hooks",
-                    "line": 162,
-                    "end_line": 196,
+                    "line": 166,
+                    "end_line": 200,
                     "lines": 35,
                     "visibility": "public",
                     "static": true,
@@ -6870,8 +6878,8 @@
                 },
                 {
                     "name": "remove_htaccess_rules",
-                    "line": 250,
-                    "end_line": 265,
+                    "line": 254,
+                    "end_line": 269,
                     "lines": 16,
                     "visibility": "private",
                     "static": true,
@@ -6879,8 +6887,8 @@
                 },
                 {
                     "name": "cleanup_dropin_artifacts",
-                    "line": 277,
-                    "end_line": 288,
+                    "line": 281,
+                    "end_line": 292,
                     "lines": 12,
                     "visibility": "private",
                     "static": true,
@@ -6888,8 +6896,8 @@
                 },
                 {
                     "name": "unschedule_action_scheduler_jobs",
-                    "line": 229,
-                    "end_line": 237,
+                    "line": 233,
+                    "end_line": 241,
                     "lines": 9,
                     "visibility": "private",
                     "static": true,
@@ -6897,8 +6905,8 @@
                 },
                 {
                     "name": "unschedule_crons",
-                    "line": 211,
-                    "end_line": 213,
+                    "line": 215,
+                    "end_line": 217,
                     "lines": 3,
                     "visibility": "private",
                     "static": true,
@@ -6908,108 +6916,110 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::cleanup_stale_artifacts": 283,
-                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::remove": 70,
-                    "PerformanceOptimise\\Inc\\Cache::clear_cache": 136,
-                    "PerformanceOptimise\\Inc\\Cron::clear_cron_jobs": 212,
-                    "PerformanceOptimise\\Inc\\Htaccess_Handler::cleanup_backup_artifacts": 121,
-                    "PerformanceOptimise\\Inc\\Htaccess_Handler::remove_rules": 256,
-                    "PerformanceOptimise\\Inc\\Htaccess_Handler::update_rules": 260,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::get_db_queue_key": 54,
-                    "PerformanceOptimise\\Inc\\Log::add": 133,
-                    "PerformanceOptimise\\Inc\\Main::get_instance": 163,
-                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 95,
-                    "PerformanceOptimise\\Inc\\System_Info::flush_dropin_cache": 61,
-                    "PerformanceOptimise\\Inc\\Util::atomic_write_php_verified": 344,
-                    "PerformanceOptimise\\Inc\\Util::init_filesystem": 78,
-                    "PerformanceOptimise\\Inc\\Util::transient_key": 55,
-                    "self::cleanup_dropin_artifacts": 74,
-                    "self::remove_htaccess_rules": 68,
-                    "self::remove_wp_cache_constant": 130,
-                    "self::unregister_runtime_hooks": 41,
-                    "self::unschedule_action_scheduler_jobs": 46,
-                    "self::unschedule_crons": 45
+                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::cleanup_stale_artifacts": 287,
+                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::remove": 74,
+                    "PerformanceOptimise\\Inc\\Cache::clear_cache": 140,
+                    "PerformanceOptimise\\Inc\\Cron::clear_cron_jobs": 216,
+                    "PerformanceOptimise\\Inc\\Htaccess_Handler::cleanup_backup_artifacts": 125,
+                    "PerformanceOptimise\\Inc\\Htaccess_Handler::remove_rules": 260,
+                    "PerformanceOptimise\\Inc\\Htaccess_Handler::update_rules": 264,
+                    "PerformanceOptimise\\Inc\\Job_Registry::all_action_scheduler_hooks": 238,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Integration::get_db_queue_key": 58,
+                    "PerformanceOptimise\\Inc\\Log::add": 137,
+                    "PerformanceOptimise\\Inc\\Main::get_instance": 167,
+                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 99,
+                    "PerformanceOptimise\\Inc\\System_Info::flush_dropin_cache": 65,
+                    "PerformanceOptimise\\Inc\\Util::atomic_write_php_verified": 348,
+                    "PerformanceOptimise\\Inc\\Util::init_filesystem": 82,
+                    "PerformanceOptimise\\Inc\\Util::transient_key": 59,
+                    "self::cleanup_dropin_artifacts": 78,
+                    "self::remove_htaccess_rules": 72,
+                    "self::remove_wp_cache_constant": 134,
+                    "self::unregister_runtime_hooks": 45,
+                    "self::unschedule_action_scheduler_jobs": 50,
+                    "self::unschedule_crons": 49
                 },
                 "instance_calls": {
-                    "$wp_filesystem->delete": 101,
-                    "$wp_filesystem->exists": 88,
-                    "$wp_filesystem->get_contents": 91,
-                    "$wp_filesystem->is_writable": 313,
-                    "$wp_filesystem->put_contents": 363
+                    "$wp_filesystem->delete": 105,
+                    "$wp_filesystem->exists": 92,
+                    "$wp_filesystem->get_contents": 95,
+                    "$wp_filesystem->is_writable": 317,
+                    "$wp_filesystem->put_contents": 367
                 },
                 "new_expressions": [],
                 "class_references": {
-                    "PerformanceOptimise\\Inc\\Main": 167
+                    "PerformanceOptimise\\Inc\\Main": 171
                 },
-                "class_constant_references": {
-                    "PerformanceOptimise\\Inc\\Cron": 234
-                },
+                "class_constant_references": [],
                 "class_string_references": {
-                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 279,
-                    "PerformanceOptimise\\Inc\\Database_Cleanup": 185,
-                    "PerformanceOptimise\\Inc\\Deactivate": 18,
-                    "PerformanceOptimise\\Inc\\Htaccess_Handler": 119,
-                    "PerformanceOptimise\\Inc\\Object_Cache": 94,
-                    "PerformanceOptimise\\Inc\\System_Info": 60,
-                    "PerformanceOptimise\\Inc\\Util": 343
+                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 283,
+                    "PerformanceOptimise\\Inc\\Database_Cleanup": 189,
+                    "PerformanceOptimise\\Inc\\Deactivate": 22,
+                    "PerformanceOptimise\\Inc\\Htaccess_Handler": 123,
+                    "PerformanceOptimise\\Inc\\Object_Cache": 98,
+                    "PerformanceOptimise\\Inc\\System_Info": 64,
+                    "PerformanceOptimise\\Inc\\Util": 347
                 },
                 "class_exists": {
-                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 279,
-                    "PerformanceOptimise\\Inc\\Deactivate": 18,
-                    "PerformanceOptimise\\Inc\\Htaccess_Handler": 119
+                    "Job_Registry": 18,
+                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 283,
+                    "PerformanceOptimise\\Inc\\Deactivate": 22,
+                    "PerformanceOptimise\\Inc\\Htaccess_Handler": 123
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::cleanup_stale_artifacts": 282,
-                    "PerformanceOptimise\\Inc\\Htaccess_Handler::cleanup_backup_artifacts": 119,
-                    "PerformanceOptimise\\Inc\\Htaccess_Handler::remove_rules": 255,
-                    "PerformanceOptimise\\Inc\\Htaccess_Handler::update_rules": 259,
-                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 94,
-                    "PerformanceOptimise\\Inc\\Util::atomic_write_php_verified": 343
+                    "PerformanceOptimise\\Inc\\Advanced_Cache_Handler::cleanup_stale_artifacts": 286,
+                    "PerformanceOptimise\\Inc\\Htaccess_Handler::cleanup_backup_artifacts": 123,
+                    "PerformanceOptimise\\Inc\\Htaccess_Handler::remove_rules": 259,
+                    "PerformanceOptimise\\Inc\\Htaccess_Handler::update_rules": 263,
+                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 98,
+                    "PerformanceOptimise\\Inc\\Util::atomic_write_php_verified": 347
                 },
                 "interface_exists": [],
                 "trait_exists": [],
                 "reflection": [],
                 "loader_references": [],
                 "file_references": {
-                    "/object-cache.php": 85,
-                    "/wp-config.php": 310,
-                    "/wppo-redis-config.php": 108
+                    "/Scheduler/class-job-registry.php": 19,
+                    "/object-cache.php": 89,
+                    "/wp-config.php": 314,
+                    "/wppo-redis-config.php": 112,
+                    "<dynamic>": 19
                 },
                 "external_classes": [],
                 "external_functions": {
-                    "__": 133,
-                    "as_unschedule_all_actions": 235,
+                    "__": 137,
+                    "as_unschedule_all_actions": 239,
                     "class_exists": 18,
                     "defined": 14,
-                    "delete_option": 48,
-                    "delete_transient": 55,
-                    "dirname": 310,
-                    "filesize": 89,
-                    "function_exists": 230,
-                    "is_callable": 60,
-                    "is_string": 93,
-                    "method_exists": 94,
-                    "preg_match": 326,
-                    "preg_replace": 327,
-                    "remove_action": 167,
-                    "sprintf": 133,
-                    "strpos": 97,
-                    "wp_normalize_path": 85
+                    "delete_option": 52,
+                    "delete_transient": 59,
+                    "dirname": 19,
+                    "filesize": 93,
+                    "function_exists": 234,
+                    "is_callable": 64,
+                    "is_string": 97,
+                    "method_exists": 98,
+                    "preg_match": 330,
+                    "preg_replace": 331,
+                    "remove_action": 171,
+                    "sprintf": 137,
+                    "strpos": 101,
+                    "wp_normalize_path": 89
                 },
                 "wordpress_functions": {
-                    "delete_option": 48,
-                    "delete_transient": 55,
-                    "remove_action": 167,
-                    "wp_normalize_path": 85
+                    "delete_option": 52,
+                    "delete_transient": 59,
+                    "remove_action": 171,
+                    "wp_normalize_path": 89
                 },
                 "filesystem_dependencies": {
-                    "$wp_filesystem->delete": 101,
-                    "$wp_filesystem->exists": 88,
-                    "$wp_filesystem->get_contents": 91,
-                    "$wp_filesystem->is_writable": 313,
-                    "$wp_filesystem->put_contents": 363,
-                    "dirname": 310,
-                    "filesize": 89
+                    "$wp_filesystem->delete": 105,
+                    "$wp_filesystem->exists": 92,
+                    "$wp_filesystem->get_contents": 95,
+                    "$wp_filesystem->is_writable": 317,
+                    "$wp_filesystem->put_contents": 367,
+                    "dirname": 19,
+                    "filesize": 93
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -7024,6 +7034,7 @@
                 "PerformanceOptimise\\Inc\\Cron",
                 "PerformanceOptimise\\Inc\\Database_Cleanup",
                 "PerformanceOptimise\\Inc\\Htaccess_Handler",
+                "PerformanceOptimise\\Inc\\Job_Registry",
                 "PerformanceOptimise\\Inc\\LiteSpeed_Integration",
                 "PerformanceOptimise\\Inc\\Log",
                 "PerformanceOptimise\\Inc\\Main",
@@ -7034,6 +7045,7 @@
             "compatibility_dependencies": [
                 "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
                 "PerformanceOptimise\\Inc\\Htaccess_Handler",
+                "PerformanceOptimise\\Inc\\Job_Registry",
                 "PerformanceOptimise\\Inc\\Object_Cache",
                 "PerformanceOptimise\\Inc\\Util"
             ],
@@ -7043,16 +7055,16 @@
             "hooks": [],
             "metrics": {
                 "fan_in": 1,
-                "fan_out": 11,
+                "fan_out": 12,
                 "incoming_reference_evidence": 1,
-                "outgoing_reference_evidence": 37,
+                "outgoing_reference_evidence": 38,
                 "runtime_fan_in": 1,
-                "runtime_fan_out": 11,
+                "runtime_fan_out": 12,
                 "compatibility_fan_in": 0,
-                "compatibility_fan_out": 4,
+                "compatibility_fan_out": 5,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 11,
+                "cross_domain_edges": 12,
                 "boundary_violations": 0,
                 "strongly_connected_component": 4
             }
@@ -10247,6 +10259,102 @@
                 "strongly_connected_component": 0
             }
         },
+        "PerformanceOptimise\\Inc\\Job_Registry": {
+            "id": "PerformanceOptimise\\Inc\\Job_Registry",
+            "name": "Job_Registry",
+            "fqcn": "PerformanceOptimise\\Inc\\Job_Registry",
+            "kind": "class",
+            "file": "includes/Scheduler/class-job-registry.php",
+            "domain": "Scheduler",
+            "namespace": "PerformanceOptimise\\Inc",
+            "lines": 124,
+            "property_count": 0,
+            "static_property_count": 0,
+            "public_property_count": 0,
+            "protected_property_count": 0,
+            "private_property_count": 0,
+            "static_state": false,
+            "method_count": 2,
+            "top_level_function_count": 0,
+            "top_level_functions": [],
+            "largest_methods": [
+                {
+                    "name": "all_cron_hooks",
+                    "line": 102,
+                    "end_line": 112,
+                    "lines": 11,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
+                    "name": "all_action_scheduler_hooks",
+                    "line": 120,
+                    "end_line": 122,
+                    "lines": 3,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                }
+            ],
+            "imports": [],
+            "references": {
+                "static_calls": [],
+                "instance_calls": [],
+                "new_expressions": [],
+                "class_references": [],
+                "class_constant_references": {
+                    "self": 106
+                },
+                "class_string_references": [],
+                "class_exists": {
+                    "Job_Registry": 14
+                },
+                "method_exists": [],
+                "interface_exists": [],
+                "trait_exists": [],
+                "reflection": [],
+                "loader_references": [],
+                "file_references": [],
+                "external_classes": [],
+                "external_functions": {
+                    "array_merge": 105,
+                    "array_unique": 104,
+                    "array_values": 103,
+                    "class_exists": 14,
+                    "defined": 10
+                },
+                "wordpress_functions": [],
+                "filesystem_dependencies": [],
+                "network_dependencies": [],
+                "database_dependencies": [],
+                "dynamic_references": []
+            },
+            "extends": [],
+            "implements": [],
+            "trait_usage": [],
+            "runtime_dependencies": [],
+            "compatibility_dependencies": [],
+            "loader_dependencies": [],
+            "documentation_references": [],
+            "delegating_methods": [],
+            "hooks": [],
+            "metrics": {
+                "fan_in": 3,
+                "fan_out": 0,
+                "incoming_reference_evidence": 9,
+                "outgoing_reference_evidence": 0,
+                "runtime_fan_in": 3,
+                "runtime_fan_out": 0,
+                "compatibility_fan_in": 2,
+                "compatibility_fan_out": 0,
+                "loader_fan_in": 0,
+                "loader_fan_out": 0,
+                "cross_domain_edges": 2,
+                "boundary_violations": 0,
+                "strongly_connected_component": 7
+            }
+        },
         "PerformanceOptimise\\Inc\\Lcp_Preload": {
             "id": "PerformanceOptimise\\Inc\\Lcp_Preload",
             "name": "Lcp_Preload",
@@ -12059,7 +12167,7 @@
             "file": "includes/Core/class-loader-map.php",
             "domain": "Core",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 313,
+            "lines": 314,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -12073,16 +12181,16 @@
                 {
                     "name": "fallback_map",
                     "line": 119,
-                    "end_line": 188,
-                    "lines": 70,
+                    "end_line": 189,
+                    "lines": 71,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
                     "name": "file_path",
-                    "line": 231,
-                    "end_line": 267,
+                    "line": 232,
+                    "end_line": 268,
                     "lines": 37,
                     "visibility": "public",
                     "static": true,
@@ -12090,8 +12198,8 @@
                 },
                 {
                     "name": "path_for",
-                    "line": 280,
-                    "end_line": 301,
+                    "line": 281,
+                    "end_line": 302,
                     "lines": 22,
                     "visibility": "public",
                     "static": true,
@@ -12108,8 +12216,8 @@
                 },
                 {
                     "name": "allowed_dirs",
-                    "line": 199,
-                    "end_line": 216,
+                    "line": 200,
+                    "end_line": 217,
                     "lines": 18,
                     "visibility": "public",
                     "static": true,
@@ -12135,8 +12243,8 @@
                 },
                 {
                     "name": "cli_file",
-                    "line": 309,
-                    "end_line": 311,
+                    "line": 310,
+                    "end_line": 312,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -12146,10 +12254,10 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "self::allowed_dirs": 252,
-                    "self::base_dir": 262,
-                    "self::fallback_map": 291,
-                    "self::file_path": 296
+                    "self::allowed_dirs": 253,
+                    "self::base_dir": 263,
+                    "self::fallback_map": 292,
+                    "self::file_path": 297
                 },
                 "instance_calls": [],
                 "new_expressions": [],
@@ -12169,86 +12277,87 @@
                 "file_references": {
                     "Admin/class-abilities.php": 121,
                     "Admin/class-admin-notices.php": 123,
-                    "Admin/class-metabox.php": 158,
+                    "Admin/class-metabox.php": 159,
                     "Admin/class-perf-translations.php": 74,
-                    "Admin/class-rest-cache.php": 165,
-                    "Admin/class-rest-settings.php": 166,
-                    "Admin/class-rest.php": 164,
-                    "Admin/class-wppo-cli-command.php": 182,
+                    "Admin/class-rest-cache.php": 166,
+                    "Admin/class-rest-settings.php": 167,
+                    "Admin/class-rest.php": 165,
+                    "Admin/class-wppo-cli-command.php": 183,
                     "Assets/class-asset-manager.php": 125,
                     "Assets/class-css-combine.php": 135,
                     "Assets/class-css-safelist.php": 136,
-                    "Assets/class-google-fonts.php": 143,
-                    "Assets/class-script-strategy.php": 170,
+                    "Assets/class-google-fonts.php": 144,
+                    "Assets/class-script-strategy.php": 171,
                     "CSS/class-ccss-store.php": 134,
                     "CSS/class-critical-css.php": 133,
-                    "CSS/class-used-css.php": 177,
+                    "CSS/class-used-css.php": 178,
                     "Cache/class-advanced-cache-handler.php": 124,
                     "Cache/class-bfcache.php": 73,
                     "Cache/class-cache-invalidator.php": 127,
                     "Cache/class-cache-key.php": 128,
                     "Cache/class-cache.php": 126,
-                    "Cache/class-object-cache.php": 159,
+                    "Cache/class-object-cache.php": 160,
                     "Compatibility/class-core-tweaks.php": 132,
                     "Compatibility/class-llms.php": 71,
                     "Core/class-activate.php": 122,
-                    "Core/class-deactivate.php": 139,
+                    "Core/class-deactivate.php": 140,
                     "Core/class-hook-registry.php": 82,
-                    "Core/class-loader-map.php": 155,
-                    "Core/class-main.php": 157,
+                    "Core/class-loader-map.php": 156,
+                    "Core/class-main.php": 158,
                     "Core/class-wp-version.php": 67,
-                    "Database/class-database-cleanup.php": 138,
+                    "Database/class-database-cleanup.php": 139,
                     "Edge/class-cdn-purger.php": 130,
                     "Edge/class-cdn.php": 80,
                     "Edge/class-cloudflare-purger.php": 131,
                     "Edge/class-edge-cache.php": 77,
                     "Edge/class-edge-purger.php": 79,
                     "Edge/class-header-emitter.php": 69,
-                    "Edge/class-htaccess-handler.php": 146,
+                    "Edge/class-htaccess-handler.php": 147,
                     "Edge/class-server-rules.php": 68,
-                    "Images/class-image-optimisation.php": 148,
-                    "Images/class-img-converter.php": 149,
-                    "Images/class-lcp-preload.php": 150,
+                    "Images/class-image-optimisation.php": 149,
+                    "Images/class-img-converter.php": 150,
+                    "Images/class-lcp-preload.php": 151,
                     "Insight/class-ai-adaptive.php": 75,
                     "Insight/class-ai-anomaly.php": 76,
                     "Insight/class-od-bridge.php": 72,
-                    "Insight/class-pagespeed.php": 161,
-                    "Insight/class-rum.php": 167,
-                    "Insight/class-suggestion-engine.php": 174,
-                    "Insight/class-system-info.php": 175,
-                    "Insight/class-telemetry.php": 176,
+                    "Insight/class-pagespeed.php": 162,
+                    "Insight/class-rum.php": 168,
+                    "Insight/class-suggestion-engine.php": 175,
+                    "Insight/class-system-info.php": 176,
+                    "Insight/class-telemetry.php": 177,
                     "Integrations/class-builder-purge-watcher.php": 81,
                     "Integrations/class-litespeed-crawler.php": 98,
                     "Integrations/class-litespeed-esi.php": 99,
                     "Integrations/class-litespeed-integration.php": 70,
-                    "Integrations/class-woo-detect.php": 180,
+                    "Integrations/class-woo-detect.php": 181,
                     "Scheduler/class-cron.php": 137,
-                    "Scheduler/class-scheduler.php": 169,
-                    "Settings/class-sandbox-preview.php": 168,
-                    "Settings/class-settings-migrations.php": 172,
-                    "Settings/class-settings-store.php": 173,
-                    "Support/class-filesystem.php": 142,
-                    "Support/class-http.php": 147,
-                    "Support/class-log.php": 156,
-                    "Support/class-url.php": 178,
+                    "Scheduler/class-job-registry.php": 138,
+                    "Scheduler/class-scheduler.php": 170,
+                    "Settings/class-sandbox-preview.php": 169,
+                    "Settings/class-settings-migrations.php": 173,
+                    "Settings/class-settings-store.php": 174,
+                    "Support/class-filesystem.php": 143,
+                    "Support/class-http.php": 148,
+                    "Support/class-log.php": 157,
+                    "Support/class-url.php": 179,
                     "Support/trait-purge-logger.php": 78
                 },
                 "external_classes": [],
                 "external_functions": {
-                    "basename": 259,
+                    "basename": 260,
                     "class_exists": 26,
-                    "count": 245,
+                    "count": 246,
                     "defined": 22,
-                    "explode": 244,
-                    "in_array": 252,
-                    "ltrim": 281,
-                    "strlen": 285,
-                    "strpos": 235,
-                    "substr": 285
+                    "explode": 245,
+                    "in_array": 253,
+                    "ltrim": 282,
+                    "strlen": 286,
+                    "strpos": 236,
+                    "substr": 286
                 },
                 "wordpress_functions": [],
                 "filesystem_dependencies": {
-                    "basename": 259
+                    "basename": 260
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -12261,7 +12370,7 @@
             "compatibility_dependencies": [],
             "loader_dependencies": [],
             "documentation_references": {
-                "PerformanceOptimise\\Inc\\Cache": 269
+                "PerformanceOptimise\\Inc\\Cache": 270
             },
             "delegating_methods": [],
             "hooks": [],
@@ -12278,7 +12387,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 1,
                 "boundary_violations": 0,
-                "strongly_connected_component": 7
+                "strongly_connected_component": 8
             }
         },
         "PerformanceOptimise\\Inc\\Log": {
@@ -17580,7 +17689,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 2,
                 "boundary_violations": 0,
-                "strongly_connected_component": 8
+                "strongly_connected_component": 9
             }
         },
         "PerformanceOptimise\\Inc\\Script_Strategy": {
@@ -18550,7 +18659,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 4,
                 "boundary_violations": 0,
-                "strongly_connected_component": 9
+                "strongly_connected_component": 10
             }
         },
         "PerformanceOptimise\\Inc\\Suggestion_Engine": {
@@ -21378,7 +21487,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 4,
                 "boundary_violations": 0,
-                "strongly_connected_component": 10
+                "strongly_connected_component": 11
             }
         },
         "WP_Object_Cache": {
@@ -21787,7 +21896,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 0,
                 "boundary_violations": 0,
-                "strongly_connected_component": 11
+                "strongly_connected_component": 12
             }
         },
         "file:includes/Support/redis-connect-helper.php": {
@@ -21964,7 +22073,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 0,
                 "boundary_violations": 0,
-                "strongly_connected_component": 12
+                "strongly_connected_component": 13
             }
         },
         "file:performance-optimisation.php": {
@@ -22129,7 +22238,7 @@
                 "loader_fan_out": 2,
                 "cross_domain_edges": 4,
                 "boundary_violations": 0,
-                "strongly_connected_component": 13
+                "strongly_connected_component": 14
             }
         },
         "file:templates/perf-translations.php": {
@@ -22198,7 +22307,7 @@
                 "loader_fan_out": 0,
                 "cross_domain_edges": 0,
                 "boundary_violations": 0,
-                "strongly_connected_component": 14
+                "strongly_connected_component": 15
             }
         },
         "file:uninstall.php": {
@@ -22209,7 +22318,7 @@
             "file": "uninstall.php",
             "domain": "Lifecycle",
             "namespace": "",
-            "lines": 790,
+            "lines": 761,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -22221,161 +22330,165 @@
             "top_level_functions": [
                 {
                     "name": "wppo_cleanup_network_files",
-                    "line": 31
+                    "line": 36
                 },
                 {
                     "name": "wppo_cleanup_dropin_artifacts",
-                    "line": 120
+                    "line": 125
                 },
                 {
                     "name": "wppo_cleanup_redis_state_files",
-                    "line": 159
+                    "line": 164
                 },
                 {
                     "name": "wppo_cleanup_redis_config_htaccess_block",
-                    "line": 241
+                    "line": 246
                 },
                 {
                     "name": "wppo_remove_htaccess_rules",
-                    "line": 326
+                    "line": 331
                 },
                 {
                     "name": "wppo_cleanup_htaccess_artifacts",
-                    "line": 383
+                    "line": 388
                 },
                 {
                     "name": "wppo_clear_scheduled_jobs",
-                    "line": 416
+                    "line": 419
                 },
                 {
                     "name": "wppo_cleanup_site",
-                    "line": 519
+                    "line": 490
                 },
                 {
                     "name": "wppo_delete_directory",
-                    "line": 682
+                    "line": 653
                 }
             ],
             "largest_methods": [],
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Object_Cache::get_uninstall_sidecar_paths": 164,
-                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 91
+                    "PerformanceOptimise\\Inc\\Job_Registry::all_action_scheduler_hooks": 460,
+                    "PerformanceOptimise\\Inc\\Job_Registry::all_cron_hooks": 426,
+                    "PerformanceOptimise\\Inc\\Object_Cache::get_uninstall_sidecar_paths": 169,
+                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 96
                 },
                 "instance_calls": {
-                    "$wpdb->esc_like": 604,
-                    "$wpdb->query": 524
+                    "$wpdb->esc_like": 575,
+                    "$wpdb->query": 495
                 },
                 "new_expressions": [],
                 "class_references": [],
                 "class_constant_references": {
-                    "PerformanceOptimise\\Inc\\Object_Cache": 248
+                    "PerformanceOptimise\\Inc\\Job_Registry": 470,
+                    "PerformanceOptimise\\Inc\\Object_Cache": 253
                 },
                 "class_string_references": {
-                    "PerformanceOptimise\\Inc\\Object_Cache": 90
+                    "PerformanceOptimise\\Inc\\Object_Cache": 95
                 },
                 "class_exists": {
-                    "PerformanceOptimise\\Inc\\Object_Cache": 90
+                    "PerformanceOptimise\\Inc\\Object_Cache": 95
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\Object_Cache::get_uninstall_sidecar_paths": 162,
-                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 90
+                    "PerformanceOptimise\\Inc\\Object_Cache::get_uninstall_sidecar_paths": 167,
+                    "PerformanceOptimise\\Inc\\Object_Cache::is_own_dropin_content": 95
                 },
                 "interface_exists": [],
                 "trait_exists": [],
                 "reflection": [],
                 "loader_references": [],
                 "file_references": {
-                    "/advanced-cache.php": 67,
-                    "/object-cache.php": 83,
-                    "/wppo-redis-config.php": 49,
-                    "<dynamic>": 269,
-                    "wp-admin/includes/misc.php": 267
+                    "/advanced-cache.php": 72,
+                    "/includes/Scheduler/class-job-registry.php": 16,
+                    "/object-cache.php": 88,
+                    "/wppo-redis-config.php": 54,
+                    "<dynamic>": 18,
+                    "wp-admin/includes/misc.php": 272
                 },
                 "external_classes": [],
                 "external_functions": {
-                    "as_unschedule_all_actions": 492,
-                    "class_exists": 90,
-                    "count": 776,
+                    "as_unschedule_all_actions": 463,
+                    "class_exists": 95,
+                    "count": 747,
                     "defined": 12,
-                    "delete_metadata": 633,
-                    "delete_option": 596,
-                    "delete_post_meta_by_key": 608,
-                    "delete_transient": 636,
-                    "file_exists": 50,
-                    "file_get_contents": 69,
-                    "file_put_contents": 297,
-                    "filesize": 85,
-                    "function_exists": 18,
-                    "get_current_blog_id": 535,
-                    "get_home_path": 329,
-                    "get_sites": 767,
-                    "glob": 126,
-                    "insert_with_markers": 273,
-                    "is_array": 127,
-                    "is_dir": 721,
-                    "is_file": 129,
-                    "is_link": 685,
-                    "is_multisite": 535,
-                    "is_readable": 84,
-                    "is_string": 89,
-                    "is_writable": 296,
-                    "ltrim": 294,
-                    "method_exists": 90,
-                    "preg_match": 699,
-                    "realpath": 703,
-                    "restore_current_blog": 785,
-                    "rmdir": 753,
-                    "rtrim": 190,
-                    "scandir": 725,
-                    "strpos": 70,
-                    "substr": 286,
-                    "switch_to_blog": 779,
-                    "trailingslashit": 693,
-                    "trim": 288,
-                    "unlink": 686,
-                    "wp_clear_scheduled_hook": 454,
-                    "wp_delete_file": 51,
-                    "wp_next_scheduled": 460,
-                    "wp_normalize_path": 188,
-                    "wp_unschedule_event": 464,
-                    "wp_unschedule_hook": 450
+                    "delete_metadata": 604,
+                    "delete_option": 567,
+                    "delete_post_meta_by_key": 579,
+                    "delete_transient": 607,
+                    "file_exists": 55,
+                    "file_get_contents": 74,
+                    "file_put_contents": 302,
+                    "filesize": 90,
+                    "function_exists": 23,
+                    "get_current_blog_id": 506,
+                    "get_home_path": 334,
+                    "get_sites": 738,
+                    "glob": 131,
+                    "insert_with_markers": 278,
+                    "is_array": 132,
+                    "is_dir": 692,
+                    "is_file": 134,
+                    "is_link": 656,
+                    "is_multisite": 506,
+                    "is_readable": 17,
+                    "is_string": 94,
+                    "is_writable": 301,
+                    "ltrim": 299,
+                    "method_exists": 95,
+                    "preg_match": 670,
+                    "realpath": 674,
+                    "restore_current_blog": 756,
+                    "rmdir": 724,
+                    "rtrim": 195,
+                    "scandir": 696,
+                    "strpos": 75,
+                    "substr": 291,
+                    "switch_to_blog": 750,
+                    "trailingslashit": 664,
+                    "trim": 293,
+                    "unlink": 657,
+                    "wp_clear_scheduled_hook": 434,
+                    "wp_delete_file": 56,
+                    "wp_next_scheduled": 440,
+                    "wp_normalize_path": 193,
+                    "wp_unschedule_event": 444,
+                    "wp_unschedule_hook": 430
                 },
                 "wordpress_functions": {
-                    "delete_metadata": 633,
-                    "delete_option": 596,
-                    "delete_transient": 636,
-                    "get_current_blog_id": 535,
-                    "get_home_path": 329,
-                    "is_multisite": 535,
-                    "trailingslashit": 693,
-                    "wp_clear_scheduled_hook": 454,
-                    "wp_delete_file": 51,
-                    "wp_next_scheduled": 460,
-                    "wp_normalize_path": 188,
-                    "wp_unschedule_event": 464,
-                    "wp_unschedule_hook": 450
+                    "delete_metadata": 604,
+                    "delete_option": 567,
+                    "delete_transient": 607,
+                    "get_current_blog_id": 506,
+                    "get_home_path": 334,
+                    "is_multisite": 506,
+                    "trailingslashit": 664,
+                    "wp_clear_scheduled_hook": 434,
+                    "wp_delete_file": 56,
+                    "wp_next_scheduled": 440,
+                    "wp_normalize_path": 193,
+                    "wp_unschedule_event": 444,
+                    "wp_unschedule_hook": 430
                 },
                 "filesystem_dependencies": {
-                    "file_exists": 50,
-                    "file_get_contents": 69,
-                    "file_put_contents": 297,
-                    "filesize": 85,
-                    "glob": 126,
-                    "is_dir": 721,
-                    "is_file": 129,
-                    "is_link": 685,
-                    "is_readable": 84,
-                    "is_writable": 296,
-                    "realpath": 703,
-                    "rmdir": 753,
-                    "unlink": 686
+                    "file_exists": 55,
+                    "file_get_contents": 74,
+                    "file_put_contents": 302,
+                    "filesize": 90,
+                    "glob": 131,
+                    "is_dir": 692,
+                    "is_file": 134,
+                    "is_link": 656,
+                    "is_readable": 17,
+                    "is_writable": 301,
+                    "realpath": 674,
+                    "rmdir": 724,
+                    "unlink": 657
                 },
                 "network_dependencies": [],
                 "database_dependencies": {
-                    "$wpdb->esc_like": 604,
-                    "$wpdb->query": 524
+                    "$wpdb->esc_like": 575,
+                    "$wpdb->query": 495
                 },
                 "dynamic_references": []
             },
@@ -22383,6 +22496,7 @@
             "implements": [],
             "trait_usage": [],
             "runtime_dependencies": [
+                "PerformanceOptimise\\Inc\\Job_Registry",
                 "PerformanceOptimise\\Inc\\Object_Cache"
             ],
             "compatibility_dependencies": [
@@ -22394,18 +22508,18 @@
             "hooks": [],
             "metrics": {
                 "fan_in": 0,
-                "fan_out": 1,
+                "fan_out": 2,
                 "incoming_reference_evidence": 0,
-                "outgoing_reference_evidence": 6,
+                "outgoing_reference_evidence": 9,
                 "runtime_fan_in": 0,
-                "runtime_fan_out": 1,
+                "runtime_fan_out": 2,
                 "compatibility_fan_in": 0,
                 "compatibility_fan_out": 1,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 1,
+                "cross_domain_edges": 2,
                 "boundary_violations": 0,
-                "strongly_connected_component": 15
+                "strongly_connected_component": 16
             }
         }
     },
@@ -25052,14 +25166,14 @@
                 "static_call"
             ],
             "lines": [
-                223,
-                224,
+                227,
                 228,
-                229,
-                231,
                 232,
-                1694,
-                1695
+                233,
+                235,
+                236,
+                1667,
+                1668
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -25082,8 +25196,8 @@
                 "static_call"
             ],
             "lines": [
-                650,
-                653
+                626,
+                629
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -25103,7 +25217,7 @@
                 "static_call"
             ],
             "lines": [
-                1819
+                1792
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -25124,13 +25238,39 @@
                 "static_call"
             ],
             "lines": [
-                1715,
-                1717,
-                1738,
-                1744
+                1688,
+                1690,
+                1711,
+                1717
             ],
             "evidence_count": 4,
             "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Cron",
+            "to": "PerformanceOptimise\\Inc\\Job_Registry",
+            "from_file": "includes/Scheduler/class-cron.php",
+            "to_file": "includes/Scheduler/class-job-registry.php",
+            "from_domain": "Scheduler",
+            "to_domain": "Scheduler",
+            "classifications": [
+                "compatibility",
+                "runtime"
+            ],
+            "kinds": [
+                "class_constant_reference",
+                "class_exists",
+                "static_call"
+            ],
+            "lines": [
+                20,
+                397,
+                408,
+                1270
+            ],
+            "evidence_count": 4,
+            "cross_domain": false,
             "boundary_violation": ""
         },
         {
@@ -25150,14 +25290,14 @@
                 "static_call"
             ],
             "lines": [
-                1380,
-                1381,
-                1540,
-                1541,
-                1579,
-                1580,
-                1628,
-                1629
+                1353,
+                1354,
+                1513,
+                1514,
+                1552,
+                1553,
+                1601,
+                1602
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -25180,8 +25320,8 @@
                 "static_call"
             ],
             "lines": [
-                1380,
-                1540
+                1353,
+                1513
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -25204,8 +25344,8 @@
                 "static_call"
             ],
             "lines": [
-                633,
-                634
+                609,
+                610
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -25225,7 +25365,7 @@
                 "static_call"
             ],
             "lines": [
-                1429
+                1402
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -25248,10 +25388,10 @@
                 "new_expression"
             ],
             "lines": [
-                578,
-                583,
-                611,
-                615
+                554,
+                559,
+                587,
+                591
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -25271,7 +25411,7 @@
                 "static_call"
             ],
             "lines": [
-                714
+                690
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -25291,7 +25431,7 @@
                 "class_string_reference"
             ],
             "lines": [
-                472
+                448
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -25311,19 +25451,19 @@
                 "static_call"
             ],
             "lines": [
-                301,
+                305,
+                507,
+                515,
+                517,
+                519,
+                522,
+                528,
                 531,
-                539,
-                541,
-                543,
-                546,
-                552,
-                555,
-                562,
-                896,
-                909,
-                910,
-                972
+                538,
+                872,
+                885,
+                886,
+                948
             ],
             "evidence_count": 13,
             "cross_domain": false,
@@ -25343,7 +25483,7 @@
                 "new_expression"
             ],
             "lines": [
-                1272
+                1248
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -25368,69 +25508,69 @@
                 "static_call"
             ],
             "lines": [
-                526,
+                502,
+                581,
+                584,
+                594,
                 605,
-                608,
-                618,
-                629,
+                621,
                 645,
-                669,
-                688,
-                739,
-                759,
-                762,
-                842,
-                844,
-                867,
-                876,
+                664,
+                715,
+                735,
+                738,
+                818,
+                820,
+                843,
+                852,
+                889,
+                912,
                 913,
-                936,
-                937,
-                939,
-                940,
-                953,
-                1005,
-                1007,
-                1018,
-                1019,
-                1022,
-                1034,
-                1035,
-                1051,
-                1052,
-                1067,
-                1068,
+                915,
+                916,
+                929,
+                981,
+                983,
+                994,
+                995,
+                998,
+                1010,
+                1011,
+                1027,
+                1028,
+                1043,
+                1044,
+                1056,
+                1062,
                 1080,
-                1086,
-                1104,
-                1106,
-                1126,
-                1127,
-                1137,
-                1261,
-                1264,
-                1267,
-                1275,
-                1306,
-                1307,
-                1308,
-                1452,
-                1453,
-                1575,
-                1587,
-                1606,
-                1650,
-                1651,
-                1654,
-                1660,
-                1708,
-                1711,
-                1714,
-                1774,
+                1082,
+                1102,
+                1103,
+                1113,
+                1237,
+                1240,
+                1243,
+                1251,
+                1279,
+                1280,
+                1281,
+                1425,
+                1426,
+                1548,
+                1560,
+                1579,
+                1623,
+                1624,
+                1627,
+                1633,
+                1681,
+                1684,
+                1687,
+                1747,
+                1760,
                 1787,
-                1814,
-                1817,
-                1825
+                1790,
+                1798
             ],
             "evidence_count": 63,
             "cross_domain": true,
@@ -25743,10 +25883,10 @@
                 "static_call"
             ],
             "lines": [
-                70,
-                279,
-                282,
-                283
+                74,
+                283,
+                286,
+                287
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -25766,7 +25906,7 @@
                 "static_call"
             ],
             "lines": [
-                136
+                140
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -25783,14 +25923,12 @@
                 "runtime"
             ],
             "kinds": [
-                "class_constant_reference",
                 "static_call"
             ],
             "lines": [
-                212,
-                234
+                216
             ],
-            "evidence_count": 2,
+            "evidence_count": 1,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -25808,8 +25946,8 @@
                 "class_string_reference"
             ],
             "lines": [
-                185,
-                186
+                189,
+                190
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -25833,15 +25971,38 @@
                 "static_call"
             ],
             "lines": [
-                119,
-                121,
-                252,
-                255,
+                123,
+                125,
                 256,
                 259,
-                260
+                260,
+                263,
+                264
             ],
             "evidence_count": 7,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Deactivate",
+            "to": "PerformanceOptimise\\Inc\\Job_Registry",
+            "from_file": "includes/Core/class-deactivate.php",
+            "to_file": "includes/Scheduler/class-job-registry.php",
+            "from_domain": "Core",
+            "to_domain": "Scheduler",
+            "classifications": [
+                "compatibility",
+                "runtime"
+            ],
+            "kinds": [
+                "class_exists",
+                "static_call"
+            ],
+            "lines": [
+                18,
+                238
+            ],
+            "evidence_count": 2,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -25859,7 +26020,7 @@
                 "static_call"
             ],
             "lines": [
-                54
+                58
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -25879,8 +26040,8 @@
                 "static_call"
             ],
             "lines": [
-                133,
-                135
+                137,
+                139
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -25901,15 +26062,15 @@
                 "static_call"
             ],
             "lines": [
-                163,
                 167,
-                168,
+                171,
                 172,
-                173,
-                174,
-                175,
                 176,
-                177
+                177,
+                178,
+                179,
+                180,
+                181
             ],
             "evidence_count": 9,
             "cross_domain": false,
@@ -25932,8 +26093,8 @@
                 "static_call"
             ],
             "lines": [
-                94,
-                95
+                98,
+                99
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -25954,8 +26115,8 @@
                 "static_call"
             ],
             "lines": [
-                60,
-                61
+                64,
+                65
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -25978,11 +26139,11 @@
                 "static_call"
             ],
             "lines": [
-                55,
-                78,
-                303,
-                343,
-                344
+                59,
+                82,
+                307,
+                347,
+                348
             ],
             "evidence_count": 5,
             "cross_domain": true,
@@ -32133,6 +32294,29 @@
         },
         {
             "from": "file:uninstall.php",
+            "to": "PerformanceOptimise\\Inc\\Job_Registry",
+            "from_file": "uninstall.php",
+            "to_file": "includes/Scheduler/class-job-registry.php",
+            "from_domain": "Lifecycle",
+            "to_domain": "Scheduler",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "class_constant_reference",
+                "static_call"
+            ],
+            "lines": [
+                426,
+                460,
+                470
+            ],
+            "evidence_count": 3,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "file:uninstall.php",
             "to": "PerformanceOptimise\\Inc\\Object_Cache",
             "from_file": "uninstall.php",
             "to_file": "includes/Cache/class-object-cache.php",
@@ -32150,12 +32334,12 @@
                 "static_call"
             ],
             "lines": [
-                90,
-                91,
-                162,
-                164,
-                247,
-                248
+                95,
+                96,
+                167,
+                169,
+                252,
+                253
             ],
             "evidence_count": 6,
             "cross_domain": true,
@@ -32197,6 +32381,7 @@
             "PerformanceOptimise\\Inc\\Http": 1,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 4,
             "PerformanceOptimise\\Inc\\Img_Converter": 9,
+            "PerformanceOptimise\\Inc\\Job_Registry": 3,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 1,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 5,
@@ -32258,11 +32443,11 @@
             "PerformanceOptimise\\Inc\\Cloudflare_Purger": 0,
             "PerformanceOptimise\\Inc\\Core_Tweaks": 1,
             "PerformanceOptimise\\Inc\\Critical_CSS": 8,
-            "PerformanceOptimise\\Inc\\Cron": 14,
+            "PerformanceOptimise\\Inc\\Cron": 15,
             "PerformanceOptimise\\Inc\\Css_Combine": 8,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 2,
-            "PerformanceOptimise\\Inc\\Deactivate": 11,
+            "PerformanceOptimise\\Inc\\Deactivate": 12,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 4,
             "PerformanceOptimise\\Inc\\Filesystem": 4,
@@ -32273,6 +32458,7 @@
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 4,
             "PerformanceOptimise\\Inc\\Img_Converter": 2,
+            "PerformanceOptimise\\Inc\\Job_Registry": 0,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 4,
@@ -32313,7 +32499,7 @@
             "file:includes/Support/redis-connect-helper.php": 0,
             "file:performance-optimisation.php": 4,
             "file:templates/perf-translations.php": 0,
-            "file:uninstall.php": 1
+            "file:uninstall.php": 2
         },
         "incoming_reference_evidence": {
             "PerformanceOptimise\\Inc\\AI_Adaptive": 20,
@@ -32334,7 +32520,7 @@
             "PerformanceOptimise\\Inc\\Cloudflare_Purger": 6,
             "PerformanceOptimise\\Inc\\Core_Tweaks": 1,
             "PerformanceOptimise\\Inc\\Critical_CSS": 50,
-            "PerformanceOptimise\\Inc\\Cron": 15,
+            "PerformanceOptimise\\Inc\\Cron": 14,
             "PerformanceOptimise\\Inc\\Css_Combine": 1,
             "PerformanceOptimise\\Inc\\Css_Safelist": 8,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 64,
@@ -32349,6 +32535,7 @@
             "PerformanceOptimise\\Inc\\Http": 8,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 11,
             "PerformanceOptimise\\Inc\\Img_Converter": 36,
+            "PerformanceOptimise\\Inc\\Job_Registry": 9,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 12,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 18,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 15,
@@ -32410,11 +32597,11 @@
             "PerformanceOptimise\\Inc\\Cloudflare_Purger": 0,
             "PerformanceOptimise\\Inc\\Core_Tweaks": 1,
             "PerformanceOptimise\\Inc\\Critical_CSS": 157,
-            "PerformanceOptimise\\Inc\\Cron": 111,
+            "PerformanceOptimise\\Inc\\Cron": 115,
             "PerformanceOptimise\\Inc\\Css_Combine": 43,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 31,
-            "PerformanceOptimise\\Inc\\Deactivate": 37,
+            "PerformanceOptimise\\Inc\\Deactivate": 38,
             "PerformanceOptimise\\Inc\\Edge_Cache": 7,
             "PerformanceOptimise\\Inc\\Edge_Purger": 10,
             "PerformanceOptimise\\Inc\\Filesystem": 7,
@@ -32425,6 +32612,7 @@
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 59,
             "PerformanceOptimise\\Inc\\Img_Converter": 39,
+            "PerformanceOptimise\\Inc\\Job_Registry": 0,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 67,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 29,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 27,
@@ -32465,7 +32653,7 @@
             "file:includes/Support/redis-connect-helper.php": 0,
             "file:performance-optimisation.php": 6,
             "file:templates/perf-translations.php": 0,
-            "file:uninstall.php": 6
+            "file:uninstall.php": 9
         },
         "runtime_fan_in": {
             "PerformanceOptimise\\Inc\\AI_Adaptive": 5,
@@ -32501,6 +32689,7 @@
             "PerformanceOptimise\\Inc\\Http": 1,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 4,
             "PerformanceOptimise\\Inc\\Img_Converter": 9,
+            "PerformanceOptimise\\Inc\\Job_Registry": 3,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 1,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 5,
@@ -32562,11 +32751,11 @@
             "PerformanceOptimise\\Inc\\Cloudflare_Purger": 0,
             "PerformanceOptimise\\Inc\\Core_Tweaks": 1,
             "PerformanceOptimise\\Inc\\Critical_CSS": 8,
-            "PerformanceOptimise\\Inc\\Cron": 14,
+            "PerformanceOptimise\\Inc\\Cron": 15,
             "PerformanceOptimise\\Inc\\Css_Combine": 8,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 2,
-            "PerformanceOptimise\\Inc\\Deactivate": 11,
+            "PerformanceOptimise\\Inc\\Deactivate": 12,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 4,
             "PerformanceOptimise\\Inc\\Filesystem": 4,
@@ -32577,6 +32766,7 @@
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 4,
             "PerformanceOptimise\\Inc\\Img_Converter": 2,
+            "PerformanceOptimise\\Inc\\Job_Registry": 0,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 4,
@@ -32617,7 +32807,7 @@
             "file:includes/Support/redis-connect-helper.php": 0,
             "file:performance-optimisation.php": 4,
             "file:templates/perf-translations.php": 0,
-            "file:uninstall.php": 1
+            "file:uninstall.php": 2
         },
         "compatibility_fan_in": {
             "PerformanceOptimise\\Inc\\AI_Adaptive": 5,
@@ -32653,6 +32843,7 @@
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 1,
             "PerformanceOptimise\\Inc\\Img_Converter": 3,
+            "PerformanceOptimise\\Inc\\Job_Registry": 2,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 0,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 5,
@@ -32714,11 +32905,11 @@
             "PerformanceOptimise\\Inc\\Cloudflare_Purger": 0,
             "PerformanceOptimise\\Inc\\Core_Tweaks": 0,
             "PerformanceOptimise\\Inc\\Critical_CSS": 7,
-            "PerformanceOptimise\\Inc\\Cron": 7,
+            "PerformanceOptimise\\Inc\\Cron": 8,
             "PerformanceOptimise\\Inc\\Css_Combine": 6,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 1,
-            "PerformanceOptimise\\Inc\\Deactivate": 4,
+            "PerformanceOptimise\\Inc\\Deactivate": 5,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 1,
@@ -32729,6 +32920,7 @@
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 2,
             "PerformanceOptimise\\Inc\\Img_Converter": 0,
+            "PerformanceOptimise\\Inc\\Job_Registry": 0,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 4,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 3,
@@ -32805,6 +32997,7 @@
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 0,
             "PerformanceOptimise\\Inc\\Img_Converter": 0,
+            "PerformanceOptimise\\Inc\\Job_Registry": 0,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 0,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 0,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 0,
@@ -32881,6 +33074,7 @@
             "PerformanceOptimise\\Inc\\Http": 0,
             "PerformanceOptimise\\Inc\\Image_Optimisation": 0,
             "PerformanceOptimise\\Inc\\Img_Converter": 0,
+            "PerformanceOptimise\\Inc\\Job_Registry": 0,
             "PerformanceOptimise\\Inc\\Lcp_Preload": 0,
             "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 0,
             "PerformanceOptimise\\Inc\\LiteSpeed_ESI": 0,
@@ -33002,6 +33196,9 @@
             ],
             [
                 "PerformanceOptimise\\Inc\\Http"
+            ],
+            [
+                "PerformanceOptimise\\Inc\\Job_Registry"
             ],
             [
                 "PerformanceOptimise\\Inc\\Loader_Map"
@@ -41673,13 +41870,13 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Cron",
                 "file": "includes/Scheduler/class-cron.php",
-                "score": 44.83,
+                "score": 45.8,
                 "fan_in": 5,
-                "fan_out": 14,
+                "fan_out": 15,
                 "compatibility_in": 3,
                 "cross_domain": 18,
                 "static_state": false,
-                "lines": 1830
+                "lines": 1803
             },
             {
                 "node": "PerformanceOptimise\\Inc\\Hook_Registry",
@@ -41838,13 +42035,13 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Deactivate",
                 "file": "includes/Core/class-deactivate.php",
-                "score": 23.37,
+                "score": 25.37,
                 "fan_in": 1,
-                "fan_out": 11,
+                "fan_out": 12,
                 "compatibility_in": 0,
-                "cross_domain": 11,
+                "cross_domain": 12,
                 "static_state": false,
-                "lines": 368
+                "lines": 372
             }
         ],
         "cross_domain_edges": [
@@ -44222,14 +44419,14 @@
                     "static_call"
                 ],
                 "lines": [
-                    223,
-                    224,
+                    227,
                     228,
-                    229,
-                    231,
                     232,
-                    1694,
-                    1695
+                    233,
+                    235,
+                    236,
+                    1667,
+                    1668
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -44253,8 +44450,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    650,
-                    653
+                    626,
+                    629
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -44275,7 +44472,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    1819
+                    1792
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -44297,10 +44494,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    1715,
-                    1717,
-                    1738,
-                    1744
+                    1688,
+                    1690,
+                    1711,
+                    1717
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -44324,14 +44521,14 @@
                     "static_call"
                 ],
                 "lines": [
-                    1380,
-                    1381,
-                    1540,
-                    1541,
-                    1579,
-                    1580,
-                    1628,
-                    1629
+                    1353,
+                    1354,
+                    1513,
+                    1514,
+                    1552,
+                    1553,
+                    1601,
+                    1602
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -44355,8 +44552,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    1380,
-                    1540
+                    1353,
+                    1513
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -44380,8 +44577,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    633,
-                    634
+                    609,
+                    610
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -44402,7 +44599,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    1429
+                    1402
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -44426,10 +44623,10 @@
                     "new_expression"
                 ],
                 "lines": [
-                    578,
-                    583,
-                    611,
-                    615
+                    554,
+                    559,
+                    587,
+                    591
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -44450,7 +44647,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    714
+                    690
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -44471,7 +44668,7 @@
                     "class_string_reference"
                 ],
                 "lines": [
-                    472
+                    448
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -44492,7 +44689,7 @@
                     "new_expression"
                 ],
                 "lines": [
-                    1272
+                    1248
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -44518,69 +44715,69 @@
                     "static_call"
                 ],
                 "lines": [
-                    526,
+                    502,
+                    581,
+                    584,
+                    594,
                     605,
-                    608,
-                    618,
-                    629,
+                    621,
                     645,
-                    669,
-                    688,
-                    739,
-                    759,
-                    762,
-                    842,
-                    844,
-                    867,
-                    876,
+                    664,
+                    715,
+                    735,
+                    738,
+                    818,
+                    820,
+                    843,
+                    852,
+                    889,
+                    912,
                     913,
-                    936,
-                    937,
-                    939,
-                    940,
-                    953,
-                    1005,
-                    1007,
-                    1018,
-                    1019,
-                    1022,
-                    1034,
-                    1035,
-                    1051,
-                    1052,
-                    1067,
-                    1068,
+                    915,
+                    916,
+                    929,
+                    981,
+                    983,
+                    994,
+                    995,
+                    998,
+                    1010,
+                    1011,
+                    1027,
+                    1028,
+                    1043,
+                    1044,
+                    1056,
+                    1062,
                     1080,
-                    1086,
-                    1104,
-                    1106,
-                    1126,
-                    1127,
-                    1137,
-                    1261,
-                    1264,
-                    1267,
-                    1275,
-                    1306,
-                    1307,
-                    1308,
-                    1452,
-                    1453,
-                    1575,
-                    1587,
-                    1606,
-                    1650,
-                    1651,
-                    1654,
-                    1660,
-                    1708,
-                    1711,
-                    1714,
-                    1774,
+                    1082,
+                    1102,
+                    1103,
+                    1113,
+                    1237,
+                    1240,
+                    1243,
+                    1251,
+                    1279,
+                    1280,
+                    1281,
+                    1425,
+                    1426,
+                    1548,
+                    1560,
+                    1579,
+                    1623,
+                    1624,
+                    1627,
+                    1633,
+                    1681,
+                    1684,
+                    1687,
+                    1747,
+                    1760,
                     1787,
-                    1814,
-                    1817,
-                    1825
+                    1790,
+                    1798
                 ],
                 "evidence_count": 63,
                 "cross_domain": true,
@@ -44878,10 +45075,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    70,
-                    279,
-                    282,
-                    283
+                    74,
+                    283,
+                    286,
+                    287
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -44902,7 +45099,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    136
+                    140
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -44920,14 +45117,12 @@
                     "runtime"
                 ],
                 "kinds": [
-                    "class_constant_reference",
                     "static_call"
                 ],
                 "lines": [
-                    212,
-                    234
+                    216
                 ],
-                "evidence_count": 2,
+                "evidence_count": 1,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -44946,8 +45141,8 @@
                     "class_string_reference"
                 ],
                 "lines": [
-                    185,
-                    186
+                    189,
+                    190
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -44972,15 +45167,39 @@
                     "static_call"
                 ],
                 "lines": [
-                    119,
-                    121,
-                    252,
-                    255,
+                    123,
+                    125,
                     256,
                     259,
-                    260
+                    260,
+                    263,
+                    264
                 ],
                 "evidence_count": 7,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Deactivate",
+                "to": "PerformanceOptimise\\Inc\\Job_Registry",
+                "from_file": "includes/Core/class-deactivate.php",
+                "to_file": "includes/Scheduler/class-job-registry.php",
+                "from_domain": "Core",
+                "to_domain": "Scheduler",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_exists",
+                    "static_call"
+                ],
+                "lines": [
+                    18,
+                    238
+                ],
+                "evidence_count": 2,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -44999,7 +45218,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    54
+                    58
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -45020,8 +45239,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    133,
-                    135
+                    137,
+                    139
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -45045,8 +45264,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    94,
-                    95
+                    98,
+                    99
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -45068,8 +45287,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    60,
-                    61
+                    64,
+                    65
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -45093,11 +45312,11 @@
                     "static_call"
                 ],
                 "lines": [
-                    55,
-                    78,
-                    303,
-                    343,
-                    344
+                    59,
+                    82,
+                    307,
+                    347,
+                    348
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -50789,6 +51008,30 @@
             },
             {
                 "from": "file:uninstall.php",
+                "to": "PerformanceOptimise\\Inc\\Job_Registry",
+                "from_file": "uninstall.php",
+                "to_file": "includes/Scheduler/class-job-registry.php",
+                "from_domain": "Lifecycle",
+                "to_domain": "Scheduler",
+                "classifications": [
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_constant_reference",
+                    "static_call"
+                ],
+                "lines": [
+                    426,
+                    460,
+                    470
+                ],
+                "evidence_count": 3,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "file:uninstall.php",
                 "to": "PerformanceOptimise\\Inc\\Object_Cache",
                 "from_file": "uninstall.php",
                 "to_file": "includes/Cache/class-object-cache.php",
@@ -50806,12 +51049,12 @@
                     "static_call"
                 ],
                 "lines": [
-                    90,
-                    91,
-                    162,
-                    164,
-                    247,
-                    248
+                    95,
+                    96,
+                    167,
+                    169,
+                    252,
+                    253
                 ],
                 "evidence_count": 6,
                 "cross_domain": true,
@@ -53367,14 +53610,14 @@
                     "static_call"
                 ],
                 "lines": [
-                    223,
-                    224,
+                    227,
                     228,
-                    229,
-                    231,
                     232,
-                    1694,
-                    1695
+                    233,
+                    235,
+                    236,
+                    1667,
+                    1668
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -53397,11 +53640,37 @@
                     "static_call"
                 ],
                 "lines": [
-                    650,
-                    653
+                    626,
+                    629
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
+                "boundary_violation": ""
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Cron",
+                "to": "PerformanceOptimise\\Inc\\Job_Registry",
+                "from_file": "includes/Scheduler/class-cron.php",
+                "to_file": "includes/Scheduler/class-job-registry.php",
+                "from_domain": "Scheduler",
+                "to_domain": "Scheduler",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_constant_reference",
+                    "class_exists",
+                    "static_call"
+                ],
+                "lines": [
+                    20,
+                    397,
+                    408,
+                    1270
+                ],
+                "evidence_count": 4,
+                "cross_domain": false,
                 "boundary_violation": ""
             },
             {
@@ -53421,14 +53690,14 @@
                     "static_call"
                 ],
                 "lines": [
-                    1380,
-                    1381,
-                    1540,
-                    1541,
-                    1579,
-                    1580,
-                    1628,
-                    1629
+                    1353,
+                    1354,
+                    1513,
+                    1514,
+                    1552,
+                    1553,
+                    1601,
+                    1602
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -53451,8 +53720,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    1380,
-                    1540
+                    1353,
+                    1513
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -53475,8 +53744,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    633,
-                    634
+                    609,
+                    610
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -53499,10 +53768,10 @@
                     "new_expression"
                 ],
                 "lines": [
-                    578,
-                    583,
-                    611,
-                    615
+                    554,
+                    559,
+                    587,
+                    591
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -53527,69 +53796,69 @@
                     "static_call"
                 ],
                 "lines": [
-                    526,
+                    502,
+                    581,
+                    584,
+                    594,
                     605,
-                    608,
-                    618,
-                    629,
+                    621,
                     645,
-                    669,
-                    688,
-                    739,
-                    759,
-                    762,
-                    842,
-                    844,
-                    867,
-                    876,
+                    664,
+                    715,
+                    735,
+                    738,
+                    818,
+                    820,
+                    843,
+                    852,
+                    889,
+                    912,
                     913,
-                    936,
-                    937,
-                    939,
-                    940,
-                    953,
-                    1005,
-                    1007,
-                    1018,
-                    1019,
-                    1022,
-                    1034,
-                    1035,
-                    1051,
-                    1052,
-                    1067,
-                    1068,
+                    915,
+                    916,
+                    929,
+                    981,
+                    983,
+                    994,
+                    995,
+                    998,
+                    1010,
+                    1011,
+                    1027,
+                    1028,
+                    1043,
+                    1044,
+                    1056,
+                    1062,
                     1080,
-                    1086,
-                    1104,
-                    1106,
-                    1126,
-                    1127,
-                    1137,
-                    1261,
-                    1264,
-                    1267,
-                    1275,
-                    1306,
-                    1307,
-                    1308,
-                    1452,
-                    1453,
-                    1575,
-                    1587,
-                    1606,
-                    1650,
-                    1651,
-                    1654,
-                    1660,
-                    1708,
-                    1711,
-                    1714,
-                    1774,
+                    1082,
+                    1102,
+                    1103,
+                    1113,
+                    1237,
+                    1240,
+                    1243,
+                    1251,
+                    1279,
+                    1280,
+                    1281,
+                    1425,
+                    1426,
+                    1548,
+                    1560,
+                    1579,
+                    1623,
+                    1624,
+                    1627,
+                    1633,
+                    1681,
+                    1684,
+                    1687,
+                    1747,
+                    1760,
                     1787,
-                    1814,
-                    1817,
-                    1825
+                    1790,
+                    1798
                 ],
                 "evidence_count": 63,
                 "cross_domain": true,
@@ -53829,10 +54098,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    70,
-                    279,
-                    282,
-                    283
+                    74,
+                    283,
+                    286,
+                    287
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -53852,7 +54121,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    136
+                    140
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -53876,15 +54145,38 @@
                     "static_call"
                 ],
                 "lines": [
-                    119,
-                    121,
-                    252,
-                    255,
+                    123,
+                    125,
                     256,
                     259,
-                    260
+                    260,
+                    263,
+                    264
                 ],
                 "evidence_count": 7,
+                "cross_domain": true,
+                "boundary_violation": ""
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Deactivate",
+                "to": "PerformanceOptimise\\Inc\\Job_Registry",
+                "from_file": "includes/Core/class-deactivate.php",
+                "to_file": "includes/Scheduler/class-job-registry.php",
+                "from_domain": "Core",
+                "to_domain": "Scheduler",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_exists",
+                    "static_call"
+                ],
+                "lines": [
+                    18,
+                    238
+                ],
+                "evidence_count": 2,
                 "cross_domain": true,
                 "boundary_violation": ""
             },
@@ -53903,15 +54195,15 @@
                     "static_call"
                 ],
                 "lines": [
-                    163,
                     167,
-                    168,
+                    171,
                     172,
-                    173,
-                    174,
-                    175,
                     176,
-                    177
+                    177,
+                    178,
+                    179,
+                    180,
+                    181
                 ],
                 "evidence_count": 9,
                 "cross_domain": false,
@@ -53934,8 +54226,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    94,
-                    95
+                    98,
+                    99
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -53958,11 +54250,11 @@
                     "static_call"
                 ],
                 "lines": [
-                    55,
-                    78,
-                    303,
-                    343,
-                    344
+                    59,
+                    82,
+                    307,
+                    347,
+                    348
                 ],
                 "evidence_count": 5,
                 "cross_domain": true,
@@ -58321,12 +58613,12 @@
                     "static_call"
                 ],
                 "lines": [
-                    90,
-                    91,
-                    162,
-                    164,
-                    247,
-                    248
+                    95,
+                    96,
+                    167,
+                    169,
+                    252,
+                    253
                 ],
                 "evidence_count": 6,
                 "cross_domain": true,
