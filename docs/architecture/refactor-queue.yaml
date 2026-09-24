@@ -587,7 +587,7 @@ phase3_items:
 
   - id: P3-002
     title: 'Scheduler job ownership registry and teardown parity'
-    status: audit-pending
+    status: active
     priority: high
     type: architecture
     problem: 'Builder drift and upgrade purge hooks are scheduled outside Cron::AS_HOOKS; deactivation omits both, while standalone uninstall clears the owned Action Scheduler group but omits the upgrade purge WP-Cron fallback.'
@@ -612,6 +612,20 @@ phase3_items:
       - 'Builder, RUM, Object Cache, Scheduler, and Cron regression suites.'
     ratchet: 'Owned Action Scheduler hooks missing from registry: 2 -> 0; owned WP-Cron fallback hooks missing from teardown: 1 -> 0; teardown parity: 100%.'
     wordpress_verification: 'Inspect Action Scheduler queue before/after deactivation smoke; wp wppo verify; cron hook parity.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 1d69360d4db62c8bb637d4c0ab827d65354f9681
+      evidence:
+        - 'Cron::SCHEDULED_HOOKS contains 16 owned WP-Cron hooks; the legacy wppo_img_conversation spelling is cleaned separately.'
+        - 'Cron::AS_HOOKS contains 7 owned Action Scheduler hooks; Builder_Purge_Watcher::DRIFT_PURGE_HOOK and UPGRADE_PURGE_HOOK are scheduled through Util::enqueue_unique_async_action but absent from the list.'
+        - 'Builder_Purge_Watcher schedules wppo_builder_drift_purge and wppo_upgrade_purge as WP-Cron single-event fallbacks outside Cron::clear_cron_jobs; uninstall currently clears the drift fallback but omits the upgrade fallback.'
+        - 'Uninstall explicitly mirrors both registries and then clears the owned performance_optimisation Action Scheduler group; Deactivate only consumes Cron lists and cannot see standalone uninstall.'
+        - 'Existing SchedulerBoundaryTest, SchedulerCronPrimitivesTest, UninstallSchedulerCleanupTest, and ActionSchedulerUniquePurge1310Test provide the regression baseline.'
+      invariants:
+        - 'Preserve PageSpeed non-unique enqueue behavior and the legacy Action Scheduler API fallback.'
+        - 'Preserve performance_optimisation group ownership and never clear foreign hooks/groups.'
+        - 'Preserve builder transient locks and unique/non-unique scheduling semantics.'
+      decision: 'Proceed test-first with one standalone-safe hook manifest/registry consumed by Cron, Deactivate, Builder_Purge_Watcher, and uninstall; do not bulk-create later queue issues.'
 
   - id: P3-003
     title: 'Preload target and redirect transport policy'
