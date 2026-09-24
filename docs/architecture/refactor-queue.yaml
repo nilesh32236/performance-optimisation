@@ -699,11 +699,25 @@ phase3_items:
 
   - id: P3-004
     title: 'Blog-scoped runtime state and reset registry'
-    status: active
+    status: merged
     priority: high
     github_issue: 1572
     github_pr: 1573
     implementation_commit: 0db8e550b7029bf8ae05e92b838324f0d76a442c
+    merge_commit: bd8ee641eb1a0459d1f553e07e4bc256315cc9ce
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      runtime_state: 'loaded; six owners; reset_all and synthetic switch_blog dispatch succeeded'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      cron: 'owned events remain scheduled; no orphan-hook warning'
+      object_cache: 'template parity; mode 0644; owner nobody:nogroup'
+      architecture_graph: '74 inventory files / 77 nodes / 345 edges; generator check passed'
     type: architecture
     problem: 'RUM, AI, System Info, LiteSpeed, Object Cache, and Database Cleanup hold site-sensitive static memos without a complete production switch_blog reset contract.'
     target_owner: 'Runtime_State reset/keying boundary with feature-owned memos'
@@ -733,7 +747,7 @@ phase3_items:
 
   - id: P3-005
     title: 'Cache capacity and eviction accounting owner'
-    status: queued
+    status: audit-pending
     priority: high
     type: architecture
     problem: 'Cache carries an 839-line statistics, cap, and eviction tail with one accounting contract and callers in Cron, REST, Main, and CLI.'
