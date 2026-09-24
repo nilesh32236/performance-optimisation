@@ -343,8 +343,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * instead of eagerly in the constructor. Null until the first read.
 		 * Frontend/read paths must use the accessor so `switch_to_blog()`
 		 * re-resolution and post-save invalidation apply; only the
-		 * `maybe_migrate_*()` admin routines touch this property directly
-		 * (same-blog, read-then-persist by design).
+		 * `maybe_migrate_*()` admin routines sync this memo through the narrow
+		 * {@see self::sync_migration_memo()} port (same-blog, read-then-persist by design).
 		 *
 		 * @var   array|null
 		 * @since 1.0.0
@@ -1133,26 +1133,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			new Abilities();
 		}
 		/**
-		 * Direct reference to the in-memory options memo (ARCH-004 internal bridge).
+		 * Sync one migrated section/key pair into the live request memo (P3-016 narrow port).
 		 *
 		 * Gives {@see Settings_Migrations} the same same-blog direct memo touch
 		 * the `maybe_migrate_*()` bodies had on `Main`: reads stay per-site via
 		 * `get_option()`, persists via `Util::save_settings()`, and this memo
-		 * syncs the current request only — never a new write path. Multisite
-		 * `switch_to_blog()` re-resolution still applies because migrations only
-		 * ever sync the live request memo.
+		 * syncs the current request only — never a new write path. Overwrites
+		 * the single pair (creating the section when needed); callers enforce
+		 * retain-unless-absent guards from the reader snapshot. Multisite
+		 * `switch_to_blog()` re-resolution still applies because migrations
+		 * only ever sync the live request memo; a direct injection with no
+		 * blog tag adopts the current blog so the memo stays coherent.
 		 *
-		 * Audit note: only `Settings_Migrations` calls this (verified by
-		 * searching callers — no other runtime or test caller exists). Do not
-		 * call from new code; the public visibility exists solely for the
-		 * extraction bridge.
-		 *
-		 * @internal
-		 * @since 2.4.0
-		 * @return array|null Reference to the options memo (null until resolved).
+		 * @since NEXT
+		 * @param string $section Settings section.
+		 * @param string $key     Settings key.
+		 * @param mixed  $value   Value to store.
+		 * @return void
 		 */
-		public function &migration_options_ref(): ?array {
-			return $this->options;
+		public function sync_migration_memo( string $section, string $key, $value ): void {
+			if ( ! is_array( $this->options ) ) {
+				$this->options = array();
+			}
+			if ( ! isset( $this->options[ $section ] ) || ! is_array( $this->options[ $section ] ) ) {
+				$this->options[ $section ] = array();
+			}
+			$this->options[ $section ][ $key ] = $value;
+			if ( null === $this->options_blog_id ) {
+				$this->options_blog_id = Settings_Store::current_blog_id();
+			}
 		}
 
 		/**
@@ -1160,14 +1169,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Single owner for the 17 migration backfills; every
 		 * `maybe_migrate_*()` proxy delegates here so `Hook_Registry`
-		 * callback identity is unchanged.
+		 * callback identity is unchanged. Wired through narrow reader/sync
+		 * ports (P3-016) so the runner holds no `Main` reference.
 		 *
 		 * @since 2.4.0
+		 * @since NEXT Wired through narrow reader/sync ports (no Main bridge).
 		 * @return Settings_Migrations Migration runner bound to this instance.
 		 */
 		private function migrations(): Settings_Migrations {
 			if ( null === $this->settings_migrations ) {
-				$this->settings_migrations = new Settings_Migrations( $this );
+				$this->settings_migrations = new Settings_Migrations(
+					null,
+					fn(): array => $this->get_options(),
+					function ( string $section, string $key, $value ): void {
+						$this->sync_migration_memo( $section, $key, $value );
+					}
+				);
 			}
 			return $this->settings_migrations;
 		}

@@ -78,29 +78,44 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Build a migration runner bound to a Main with a seeded options memo.
+	 * Build a migration runner bound to an array-backed memo (P3-016).
 	 *
-	 * @param array $memo In-memory options memo to seed on the Main instance.
-	 * @return array Tuple of (Settings_Migrations runner, Main instance).
+	 * The runner holds narrow reader/sync ports only — no Main reference —
+	 * so these tests prove options/invalidation semantics without the
+	 * Settings-to-Main bridge.
+	 *
+	 * @param array $memo In-memory options memo to seed.
+	 * @return array Tuple of (Settings_Migrations runner, memo box holding ->memo).
 	 */
 	private function make_runner( array $memo = array() ): array {
-		$main = ( new ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
+		$box       = new \stdClass();
+		$box->memo = $memo;
 
-		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		$options_prop->setValue( $main, $memo );
+		$reader = static function () use ( $box ): ?array {
+			return is_array( $box->memo ) ? $box->memo : null;
+		};
 
-		return array( new Settings_Migrations( $main ), $main );
+		$sync = static function ( string $section, string $key, $value ) use ( $box ): void {
+			if ( ! is_array( $box->memo ) ) {
+				$box->memo = array();
+			}
+			if ( ! isset( $box->memo[ $section ] ) || ! is_array( $box->memo[ $section ] ) ) {
+				$box->memo[ $section ] = array();
+			}
+			$box->memo[ $section ][ $key ] = $value;
+		};
+
+		return array( new Settings_Migrations( null, $reader, $sync ), $box );
 	}
 
 	/**
-	 * Read the seeded options memo back off a Main instance.
+	 * Read the array-backed memo back off a memo box.
 	 *
-	 * @param Main $main Main instance.
+	 * @param \stdClass $box Memo box from make_runner().
 	 * @return mixed Memo value.
 	 */
-	private function read_memo( Main $main ) {
-		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		return $options_prop->getValue( $main );
+	private function read_memo( $box ) {
+		return $box->memo;
 	}
 
 	/**
