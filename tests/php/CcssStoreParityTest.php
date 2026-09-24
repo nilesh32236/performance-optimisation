@@ -104,6 +104,8 @@ class CcssStoreParityTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
+		Ccss_Store::set_status_cache_reader( null );
+		Ccss_Store::reset_ccss_memo();
 		global $wpdb, $wp_filesystem;
 		$wpdb          = $this->original_wpdb; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 		$wp_filesystem = $this->original_filesystem; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
@@ -453,6 +455,52 @@ class CcssStoreParityTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotEmpty( $exists_prop->getValue() );
 		Critical_CSS::reset_ccss_memo();
 		$this->assertSame( array(), $exists_prop->getValue() );
+	}
+
+	/**
+	 * Canonical constants stay single-sourced (FUT-001 review).
+	 *
+	 * CCSS_DIR / TEMPLATE_HASH_PATTERN live only on Ccss_Store;
+	 * VIEWPORT_VARIANTS keeps a BC alias on Critical_CSS pinned equal.
+	 *
+	 * @return void
+	 */
+	public function test_constant_parity(): void {
+		$this->assertSame( '/cache/wppo/ccss', Ccss_Store::CCSS_DIR );
+		$this->assertSame( '/^[A-Za-z0-9_\\-]{1,128}$/', Ccss_Store::TEMPLATE_HASH_PATTERN );
+		$this->assertSame( Ccss_Store::VIEWPORT_VARIANTS, Critical_CSS::VIEWPORT_VARIANTS );
+		$this->assertSame( array( 'mobile', 'desktop' ), Ccss_Store::VIEWPORT_VARIANTS );
+
+		// Critical_CSS no longer duplicates the storage constants.
+		$this->assertFalse( ( new \ReflectionClass( Critical_CSS::class ) )->hasConstant( 'CCSS_DIR' ) );
+		$this->assertFalse( ( new \ReflectionClass( Critical_CSS::class ) )->hasConstant( 'TEMPLATE_HASH_PATTERN' ) );
+	}
+
+	/**
+	 * Injected status-cache reader breaks the store -> facade edge.
+	 *
+	 * @return void
+	 */
+	public function test_status_cache_reader_seam(): void {
+		$this->use_fs( $this->make_fs() );
+		Ccss_Store::set_status_cache_reader(
+			static function ( string $hash ): string {
+				unset( $hash );
+				return 'queued';
+			}
+		);
+		try {
+			$all = Ccss_Store::get_status_all();
+			$this->assertNotEmpty( $all );
+			foreach ( $all as $entry ) {
+				$this->assertSame( 'queued', $entry['status'] );
+			}
+		} finally {
+			Ccss_Store::set_status_cache_reader( null );
+		}
+		// Default bridge still resolves without the seam.
+		$all = Ccss_Store::get_status_all();
+		$this->assertNotEmpty( $all );
 	}
 
 	/**

@@ -12,6 +12,17 @@
  * changes; multisite isolation via get_current_blog_id() in the template
  * hash and blog-aware transient keys is preserved.
  *
+ * Load order: both classes resolve each other lazily inside method bodies
+ * only (never at file scope or in constant expressions), so either class
+ * may load first via Loader_Map without a circular-include failure. The
+ * generation-status read additionally supports an injected callable seam
+ * ({@see set_status_cache_reader()}) so unit tests can break the
+ * Ccss_Store -> Critical_CSS edge entirely.
+ *
+ * @since convention: methods moved verbatim from Critical_CSS retain their
+ * original @since tags to preserve history; only new store infrastructure
+ * (class, memos, constants, seams) uses @since NEXT.
+ *
  * @package PerformanceOptimise\Inc
  * @since NEXT
  */
@@ -36,29 +47,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		/**
 		 * Directory for CCSS files.
 		 *
-		 * Mirrors Critical_CSS::CCSS_DIR (kept there for remaining callers).
+		 * Canonical single source (FUT-001 review): Critical_CSS no longer
+		 * declares its own copy; remaining callers resolve via
+		 * {@see get_ccss_dir()} / {@see get_ccss_url()}.
 		 *
 		 * @var string
 		 * @since NEXT
 		 */
-		private const CCSS_DIR = '/cache/wppo/ccss';
+		public const CCSS_DIR = '/cache/wppo/ccss';
 
 		/**
 		 * Shared traversal-guard pattern for template hashes.
 		 *
-		 * Mirrors Critical_CSS::TEMPLATE_HASH_PATTERN (kept there for
-		 * remaining callers).
+		 * Canonical single source (FUT-001 review): Critical_CSS no longer
+		 * declares its own copy; validation flows through
+		 * {@see is_valid_template_hash()} / {@see get_ccss_file()}.
 		 *
 		 * @since NEXT
 		 * @var string
 		 */
-		private const TEMPLATE_HASH_PATTERN = '/^[A-Za-z0-9_\-]{1,128}$/';
+		public const TEMPLATE_HASH_PATTERN = '/^[A-Za-z0-9_\-]{1,128}$/';
 
 		/**
 		 * Viewport-split variant slugs.
 		 *
-		 * Mirrors Critical_CSS::VIEWPORT_VARIANTS (kept there for remaining
-		 * callers).
+		 * Canonical single source (FUT-001 review). Critical_CSS keeps a
+		 * public BC alias with the identical value (pinned by
+		 * CcssStoreParityTest) while its generation code reads this
+		 * constant directly.
 		 *
 		 * @since NEXT
 		 * @var string[]
@@ -110,10 +126,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 		private static ?array $templates_memo = null;
 
 		/**
+		 * Injected generation-status reader (FUT-001 review).
+		 *
+		 * Breaks the Ccss_Store -> Critical_CSS static edge for unit
+		 * isolation: when set, {@see get_status_all()} calls this instead
+		 * of Critical_CSS::get_status_cache_for_store(). Production leaves
+		 * it null so the salted/transient source of truth stays
+		 * single-sourced on Critical_CSS. Not cleared by
+		 * {@see reset_ccss_memo()} — reset explicitly with null.
+		 *
+		 * @since NEXT
+		 * @var callable|null
+		 */
+		private static $status_cache_reader = null;
+
+		/**
+		 * Inject (or clear) the generation-status reader.
+		 *
+		 * @internal Test seam to break the Ccss_Store -> Critical_CSS edge.
+		 * Pass null to restore the default Critical_CSS bridge.
+		 *
+		 * @since NEXT
+		 * @param callable|null $reader Status reader: fn( string $hash ): string|false.
+		 * @return void
+		 */
+		public static function set_status_cache_reader( $reader ): void {
+			self::$status_cache_reader = is_callable( $reader ) ? $reader : null;
+		}
+
+		/**
 		 * Get the CCSS directory path.
 		 *
 		 * @return string
-		 * @since 2.0.0
+		 * @since 2.0.0 Moved verbatim from Critical_CSS (FUT-001); original tag retained.
 		 */
 		public static function get_ccss_dir(): string {
 			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === WP_CONTENT_DIR ) {
@@ -830,7 +875,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ccss_Store' ) ) {
 						'truncated' => $meta['truncated'],
 					);
 				} else {
-					$cache_status = Critical_CSS::get_status_cache_for_store( $hash );
+					$reader       = self::$status_cache_reader;
+					$cache_status = is_callable( $reader ) ? $reader( $hash ) : Critical_CSS::get_status_cache_for_store( $hash );
 					if ( ! is_string( $cache_status ) || ! in_array( $cache_status, $allowed, true ) ) {
 						$cache_status = 'none';
 					} elseif ( 'ready' === $cache_status ) {

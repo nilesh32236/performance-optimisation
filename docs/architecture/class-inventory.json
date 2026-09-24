@@ -240,10 +240,10 @@
     {
         "file": "includes/CSS/class-ccss-store.php",
         "class": null,
-        "lines": 996,
-        "methods": 23,
+        "lines": 1042,
+        "methods": 24,
         "hooks": [],
-        "static_state": false,
+        "static_state": true,
         "refs": [
             "CDN",
             "Critical_CSS",
@@ -254,7 +254,7 @@
     {
         "file": "includes/CSS/class-critical-css.php",
         "class": null,
-        "lines": 6964,
+        "lines": 6950,
         "methods": 138,
         "hooks": [],
         "static_state": false,

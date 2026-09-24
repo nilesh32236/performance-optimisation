@@ -28,14 +28,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 	class Critical_CSS {
 
 		/**
-		 * Directory for CCSS files.
-		 *
-		 * @var string
-		 * @since 2.0.0
-		 */
-		private const CCSS_DIR = '/cache/wppo/ccss';
-
-		/**
 		 * Option key of the generation-status cache salt (WP 6.9+ salted
 		 * object cache; issue #882). Bumped by clear_all() so every salted
 		 * status entry invalidates at once without enumerating hashes.
@@ -333,17 +325,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const CCSS_AS_GROUP = 'wppo-ccss';
 
 		/**
-		 * Shared traversal-guard pattern for template hashes (issue #1235 review).
-		 *
-		 * Single source so get_ccss_file(), is_valid_template_hash() and
-		 * get_ccss_variant_file() can never drift on charset/length.
-		 *
-		 * @since 2.2.0
-		 * @var string
-		 */
-		private const TEMPLATE_HASH_PATTERN = '/^[A-Za-z0-9_\-]{1,128}$/';
-
-		/**
 		 * Option holding the last full-regeneration timestamp (issue #1462).
 		 *
 		 * Gives regenerate_all() the same 18000s full-regen cooldown the
@@ -482,6 +463,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 		/**
 		 * Viewport-split variant slugs (issue #1164).
+		 *
+		 * BC alias: the canonical value lives on
+		 * {@see \PerformanceOptimise\Inc\Ccss_Store::VIEWPORT_VARIANTS};
+		 * generation code reads the store constant directly. Pinned equal
+		 * by CcssStoreParityTest so the alias can never drift.
 		 *
 		 * Stored as `{hash}.{variant}.css` next to the single `{hash}.css`
 		 * variant. Missing or stale variant files fall back to the single
@@ -5741,7 +5727,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Variant mirrors stay best-effort and are skipped past expiry.
 			if ( ! $stage_only && ! self::generation_expired( $deadline ) && self::is_viewport_variants_enabled() ) {
 				try {
-					foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+					foreach ( Ccss_Store::VIEWPORT_VARIANTS as $variant ) {
 						$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
 						if ( '' !== $variant_file && $filesystem ) {
 							Util::atomic_file_put_contents( $filesystem, $variant_file, $critical_css );
@@ -6229,7 +6215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					if ( is_string( $main ) && '' !== $main ) {
 						$files[] = $main;
 					}
-					foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+					foreach ( Ccss_Store::VIEWPORT_VARIANTS as $variant ) {
 						$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
 						if ( is_string( $variant_file ) && '' !== $variant_file ) {
 							$files[] = $variant_file;
