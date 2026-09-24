@@ -1133,41 +1133,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			new Abilities();
 		}
 		/**
-		 * Direct reference to the in-memory options memo (ARCH-004 internal bridge).
-		 *
-		 * Gives {@see Settings_Migrations} the same same-blog direct memo touch
-		 * the `maybe_migrate_*()` bodies had on `Main`: reads stay per-site via
-		 * `get_option()`, persists via `Util::save_settings()`, and this memo
-		 * syncs the current request only — never a new write path. Multisite
-		 * `switch_to_blog()` re-resolution still applies because migrations only
-		 * ever sync the live request memo.
-		 *
-		 * Audit note: only `Settings_Migrations` calls this (verified by
-		 * searching callers — no other runtime or test caller exists). Do not
-		 * call from new code; the public visibility exists solely for the
-		 * extraction bridge.
-		 *
-		 * @internal
-		 * @since 2.4.0
-		 * @return array|null Reference to the options memo (null until resolved).
-		 */
-		public function &migration_options_ref(): ?array {
-			return $this->options;
-		}
-
-		/**
-		 * Lazily-created settings-migration runner (ARCH-004).
+		 * Lazily-created settings-migration runner (ARCH-004, P3-016).
 		 *
 		 * Single owner for the 17 migration backfills; every
 		 * `maybe_migrate_*()` proxy delegates here so `Hook_Registry`
-		 * callback identity is unchanged.
+		 * callback identity is unchanged. The runner receives only the
+		 * effective-options reader and invalidation command it needs.
 		 *
 		 * @since 2.4.0
-		 * @return Settings_Migrations Migration runner bound to this instance.
+		 * @return Settings_Migrations Migration runner bound to this application seam.
 		 */
 		private function migrations(): Settings_Migrations {
 			if ( null === $this->settings_migrations ) {
-				$this->settings_migrations = new Settings_Migrations( $this );
+				$this->settings_migrations = new Settings_Migrations(
+					function (): array {
+						return $this->get_options();
+					},
+					function ( array $settings ): void {
+						$effective = array_replace_recursive( $this->get_options(), $settings );
+						$this->refresh_options( $effective );
+					}
+				);
 			}
 			return $this->settings_migrations;
 		}

@@ -130,6 +130,7 @@ The schema-v2 inventory tracks 85 files: 81 runtime plugin files under `includes
 | `Cache/class-redis-config-policy.php` | Redis key manifest, value normalization, host/node safety, bounds, enums, and password precedence |
 | `Cache/class-cache-coordinator.php` | Cache construction and `wppo_cache_instance` filter/injection coordination; Main retains the public factory facade |
 | `Settings/class-settings-store.php` | Schema/defaults, effective options resolution, blog-keyed raw/resolved memos, writes, invalidation, and snapshots |
+| `Settings/class-settings-migrations.php` | One-time settings backfills; P3-016 issue #1597 keeps migration state behind callable effective-options/invalidation contracts with no `Main` owner reference |
 | `Settings/class-settings-command.php` | Bounded settings write orchestration; validation, snapshots, and memo policy remain in Settings_Store |
 | `Cache/class-dropin-registry.php` | Neutral drop-in mutation invalidation bridge; System_Info remains reporting/storage owner |
 | `Cache/class-advanced-cache-handler.php` | `advanced-cache.php` drop-in (create/detect/remove) |

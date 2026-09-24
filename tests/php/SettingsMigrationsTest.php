@@ -78,9 +78,9 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Build a migration runner bound to a Main with a seeded options memo.
+	 * Build a migration runner with callable settings contracts and a seeded Main facade.
 	 *
-	 * @param array $memo In-memory options memo to seed on the Main instance.
+	 * @param array $memo Initial effective options snapshot for the facade.
 	 * @return array Tuple of (Settings_Migrations runner, Main instance).
 	 */
 	private function make_runner( array $memo = array() ): array {
@@ -89,18 +89,27 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
 		$options_prop->setValue( $main, $memo );
 
-		return array( new Settings_Migrations( $main ), $main );
+		return array(
+			new Settings_Migrations(
+				static function () use ( $main ): array {
+					return $main->get_options();
+				},
+				static function ( array $settings ) use ( $main ): void {
+					$main->refresh_options( $settings );
+				}
+			),
+			$main,
+		);
 	}
 
 	/**
-	 * Read the seeded options memo back off a Main instance.
+	 * Read the effective options exposed by the Main facade.
 	 *
 	 * @param Main $main Main instance.
-	 * @return mixed Memo value.
+	 * @return array Effective options.
 	 */
-	private function read_memo( Main $main ) {
-		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		return $options_prop->getValue( $main );
+	private function read_memo( Main $main ): array {
+		return $main->get_options();
 	}
 
 	/**
@@ -760,7 +769,7 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 		$this->assertCount( 1, $persisted );
 		$this->assertSame( 20480, $persisted[0][1]['file_optimisation']['ccssMaxSize'] );
 
-		$memo = $options_prop->getValue( $main );
+		$memo = $main->get_options();
 		$this->assertSame( 20480, $memo['file_optimisation']['ccssMaxSize'] );
 
 		// Block-assets proxy forwards the core probe (false in unit tests:

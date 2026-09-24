@@ -1,32 +1,30 @@
 <?php
 /**
- * Settings migrations — one-time settings backfills extracted from Main.
+ * Settings migrations — one-time settings backfills extracted from the orchestrator.
  *
  * ARCH-004: the 17 public `maybe_migrate_*()` one-time settings backfills
  * plus the `migrate_block_assets_setting()` helper previously lived on the
- * `Main` orchestrator (`Main::maybe_migrate_*()`). They share one
- * responsibility (settings schema migration), one trigger (`admin_init` at
- * priority 10, registration order owned by `Hook_Registry`), one state (the
- * `Main` in-memory options memo, same-blog direct touch by design), and one
- * ordering constraint — so they live here, in the Settings domain.
+ * orchestrator. They share one responsibility (settings schema migration), one
+ * trigger (`admin_init` at priority 10, registration order owned by
+ * `Hook_Registry`), one settings state, and one ordering constraint — so they
+ * live here, in the Settings domain.
  *
- * `Main` keeps thin `maybe_migrate_*()` proxies (facade rule) delegating to
- * a lazy instance of this class, so `Hook_Registry` hook registrations stay
- * byte-identical (no hook churn, callback identity unchanged).
- * `Settings_Store` is unchanged: migrations call the same persist path as
- * before (`Util::save_settings()`).
+ * The orchestrator keeps thin `maybe_migrate_*()` proxies (facade rule)
+ * delegating to a lazy instance of this class, so `Hook_Registry` hook
+ * registrations stay byte-identical (no hook churn, callback identity
+ * unchanged). The service receives only a callable effective-options reader
+ * and a callable invalidation command; it never stores or names the
+ * orchestrator. `Settings_Store` remains the persistence and settings-memo
+ * owner.
  *
  * Every routine is an idempotent key-presence backfill: guard
  * key-presence → default → persist. Steady-state requests perform zero
  * migration writes. Only `migrate_rum_sample_rate()` (besides the
  * pre-existing `migrate_object_cache_outage_flag()` / `migrate_ai_*()`
- * guards) short-circuits on the already-loaded `Main` memo: the memo is
- * eagerly resolved with in-memory backfills in `Main::__construct()`, so a
- * memo key-presence guard on a backfilled key would always hit and
- * permanently disable the stored-row backfill (including partial-row
- * healing) that `Util::get_settings()` readers depend on.
- * `rum_sample_rate` has no in-memory backfill, so memo presence there
- * implies stored presence and the fast path is sound. All reads use
+ * guards) short-circuits on the already-loaded effective options. The
+ * options reader is intentionally a narrow callable contract: migrations
+ * read the current effective snapshot, then issue the explicit invalidation
+ * command after a successful or concurrently-completed write. All reads use
  * per-site `get_option( 'wppo_settings' )`
  * so multisite sites migrate independently with no cross-site leakage, and
  * fresh installs with no stored option are skipped (constructor defaults
@@ -46,35 +44,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 	/**
 	 * Class Settings_Migrations
 	 *
-	 * Owns all one-time settings schema migrations. Constructed with the
-	 * `Main` instance so the in-memory options sync keeps the exact
-	 * same-blog semantics the bodies had on `Main` (direct memo touch via
-	 * {@see Main::migration_options_ref()}, never a new write path).
+	 * Owns all one-time settings schema migrations. It receives only the
+	 * effective-options reader and invalidation command required by the
+	 * migration cluster, with no orchestrator dependency.
 	 *
 	 * @since 2.4.0
+	 * @since NEXT Uses callable options and invalidation contracts (P3-016).
 	 */
 	final class Settings_Migrations {
 
 		/**
-		 * Main instance whose in-memory options memo migrations sync.
+		 * Narrow callable returning the current effective options snapshot.
 		 *
-		 * Held by reference target (not a copy) so `$memo` writes land on
-		 * the live request memo exactly as `$this->options` writes did
-		 * before the extraction.
-		 *
-		 * @since 2.4.0
-		 * @var   Main
+		 * @var callable():array
+		 * @since NEXT
 		 */
-		private Main $main;
+		private $options_reader;
+
+		/**
+		 * Explicit command invalidating the orchestrator's effective snapshot.
+		 *
+		 * @var callable():void
+		 * @since NEXT
+		 */
+		private $options_invalidator;
 
 		/**
 		 * Constructor.
 		 *
 		 * @since 2.4.0
-		 * @param Main $main Main instance (options-memo owner).
+		 * @since NEXT Accepts callable settings contracts (P3-016).
+		 * @param callable $options_reader     Returns current effective options.
+		 * @param callable $options_invalidator Invalidates the owner snapshot.
 		 */
-		public function __construct( Main $main ) {
-			$this->main = $main;
+		public function __construct( callable $options_reader, callable $options_invalidator ) {
+			$this->options_reader      = $options_reader;
+			$this->options_invalidator = $options_invalidator;
+		}
+
+		/**
+		 * Read the current effective options through the narrow contract.
+		 *
+		 * @since NEXT
+		 * @return array Effective options snapshot.
+		 */
+		private function read_options(): array {
+			$options = call_user_func( $this->options_reader );
+			return is_array( $options ) ? $options : array();
+		}
+
+		/**
+		 * Invalidate the owner snapshot after a persisted settings change.
+		 *
+		 * @since NEXT
+		 * @param array $settings Persisted migrated options to adopt.
+		 * @return void
+		 */
+		private function invalidate_options( array $settings ): void {
+			call_user_func( $this->options_invalidator, $settings );
 		}
 
 		/**
@@ -100,7 +127,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_block_assets_setting( bool $loads_separate_core_block_assets_on_demand ): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			if ( ! $loads_separate_core_block_assets_on_demand ) {
 				return;
 			}
@@ -120,11 +147,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 			if ( ! array_key_exists( 'blockAssetsOnDemand', $file ) ) {
 				$stored['file_optimisation'] = $file + array( 'blockAssetsOnDemand' => true );
 				Util::save_settings( $stored );
+				$this->invalidate_options( $stored );
 
-				if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-					$memo['file_optimisation'] = array();
-				}
-				$memo['file_optimisation']['blockAssetsOnDemand'] = true;
 				Util::set_settings_cache( $stored );
 
 				Log::add( __( 'Enabled on-demand block asset loading to match the WordPress 6.9 default.', 'performance-optimisation' ) );
@@ -149,7 +173,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_ccss_max_size(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
@@ -166,11 +190,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 			$stored['file_optimisation'] = $file + array( 'ccssMaxSize' => 20480 );
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-				$memo['file_optimisation'] = array();
-			}
-			$memo['file_optimisation']['ccssMaxSize'] = 20480;
 			Util::set_settings_cache( $stored );
 
 			Log::add( __( 'Added default Critical CSS size cap (20 KB).', 'performance-optimisation' ) );
@@ -195,7 +216,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_ccss_safelist(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
@@ -212,11 +233,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 			$stored['file_optimisation'] = $file + array( 'ccssSafelistExtra' => '' );
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-				$memo['file_optimisation'] = array();
-			}
-			$memo['file_optimisation']['ccssSafelistExtra'] = '';
 			Util::set_settings_cache( $stored );
 
 			Log::add( __( 'Added default Critical CSS safelist (empty, current behaviour kept).', 'performance-optimisation' ) );
@@ -245,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_css_queue_defaults(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
@@ -279,15 +297,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 			$stored['file_optimisation'] = $file;
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-				$memo['file_optimisation'] = array();
-			}
-			foreach ( $defaults as $key => $default ) {
-				if ( ! array_key_exists( $key, $memo['file_optimisation'] ) ) {
-					$memo['file_optimisation'][ $key ] = $default;
-				}
-			}
 			Util::set_settings_cache( $stored );
 
 			Log::add( __( 'Added default RUM-weighted CSS queue settings, CCSS generation timeout (25s, single-variant behaviour kept), 14 KB inline budget, commerce exclusion, and checksum regen.', 'performance-optimisation' ) );
@@ -312,7 +323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_speculation_top_urls(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
@@ -330,13 +341,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 			$preload['speculationTopUrlsLimit'] = 2;
 			$stored['preload_settings']         = $preload;
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['preload_settings'] ) || ! is_array( $memo['preload_settings'] ) ) {
-				$memo['preload_settings'] = array();
-			}
-			if ( ! array_key_exists( 'speculationTopUrlsLimit', $memo['preload_settings'] ) ) {
-				$memo['preload_settings']['speculationTopUrlsLimit'] = 2;
-			}
 			Util::set_settings_cache( $stored );
 
 			Log::add( __( 'Added default RUM-weighted top-URL prefetch limit (2 URLs, prerender stays guarded).', 'performance-optimisation' ) );
@@ -361,7 +367,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_speculation_prerender_list(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
 				return;
 			}
@@ -382,13 +388,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 			$preload['speculationPrerenderList'] = false;
 			$stored['preload_settings']          = $preload;
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['preload_settings'] ) || ! is_array( $memo['preload_settings'] ) ) {
-				$memo['preload_settings'] = array();
-			}
-			if ( ! array_key_exists( 'speculationPrerenderList', $memo['preload_settings'] ) ) {
-				$memo['preload_settings']['speculationPrerenderList'] = false;
-			}
 			Util::set_settings_cache( $stored );
 
 			Log::add( __( 'Added default high-value prerender list toggle (off, current prefetch behavior kept).', 'performance-optimisation' ) );
@@ -414,7 +415,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_rum_sample_rate(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// Cheap early-return through the already-loaded memo: after
 			// migration completes this avoids one extra option read per
 			// admin page.
@@ -440,13 +441,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 			$audit['rum_sample_rate']    = $default_rate;
 			$stored['performance_audit'] = $audit;
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['performance_audit'] ) || ! is_array( $memo['performance_audit'] ) ) {
-				$memo['performance_audit'] = array();
-			}
-			if ( ! array_key_exists( 'rum_sample_rate', $memo['performance_audit'] ) ) {
-				$memo['performance_audit']['rum_sample_rate'] = $default_rate;
-			}
 			Util::set_settings_cache( $stored );
 
 			Log::add( __( 'Added default RUM beacon sample rate (100 percent, unsampled current behavior kept).', 'performance-optimisation' ) );
@@ -473,7 +469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_image_alt_edge_defaults(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
@@ -500,11 +496,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 			$stored['image_optimisation'] = $image;
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['image_optimisation'] ) || ! is_array( $memo['image_optimisation'] ) ) {
-				$memo['image_optimisation'] = array();
-			}
-			$memo['image_optimisation'] = array_merge( $memo['image_optimisation'], $image );
 			Util::set_settings_cache( $stored );
 
 			Log::add( __( 'Added default image alt autofill and longest-edge cap settings.', 'performance-optimisation' ) );
@@ -530,7 +523,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_safe_mode(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
@@ -547,11 +540,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 			$stored['file_optimisation'] = $file + array( 'safeMode' => false );
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-				$memo['file_optimisation'] = array();
-			}
-			$memo['file_optimisation']['safeMode'] = false;
 			Util::set_settings_cache( $stored );
 		}
 
@@ -568,7 +558,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_elementor_safe_mode(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array".
 			$stored = get_option( 'wppo_settings' );
@@ -581,10 +571,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 			}
 			$stored['file_optimisation'] = $file + array( 'elementorSafeMode' => true );
 			Util::save_settings( $stored );
-			if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-				$memo['file_optimisation'] = array();
-			}
-			$memo['file_optimisation']['elementorSafeMode'] = true;
+			$this->invalidate_options( $stored );
 			Util::set_settings_cache( $stored );
 		}
 
@@ -606,7 +593,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_preload_auto_defaults(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
 			// "no stored row" (false) from "stored array", which Util::get_settings()
 			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
@@ -633,11 +620,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 			$stored['preload_settings'] = $preload;
 			Util::save_settings( $stored );
+			$this->invalidate_options( $stored );
 
-			if ( ! isset( $memo['preload_settings'] ) || ! is_array( $memo['preload_settings'] ) ) {
-				$memo['preload_settings'] = array();
-			}
-			$memo['preload_settings'] = array_merge( $memo['preload_settings'], $preload );
 			Util::set_settings_cache( $stored );
 
 			Log::add( __( 'Added default automatic LCP preload and font discovery settings (both off; manual lists keep winning).', 'performance-optimisation' ) );
@@ -659,7 +643,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_object_cache_outage_flag(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			try {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
@@ -686,11 +670,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 				$stored['object_cache'] = $oc + array( 'outage_bypassed' => false );
 				Util::save_settings( $stored );
+				$this->invalidate_options( $stored );
 
-				if ( ! isset( $memo['object_cache'] ) || ! is_array( $memo['object_cache'] ) ) {
-					$memo['object_cache'] = array();
-				}
-				$memo['object_cache']['outage_bypassed'] = false;
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
@@ -719,7 +700,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_ai_speculation_autotune(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			try {
 				if ( ! function_exists( 'get_option' ) ) {
 					return;
@@ -762,19 +743,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 				$stored['ai_adaptive'] = $ai;
 				Util::save_settings( $stored );
+				$this->invalidate_options( $stored );
 
-				if ( ! isset( $memo['ai_adaptive'] ) || ! is_array( $memo['ai_adaptive'] ) ) {
-					$memo['ai_adaptive'] = array();
-				}
-				foreach ( array(
-					'speculation_autotune_enabled' => false,
-					'speculation_min_samples'      => 20,
-					'speculation_max_urls'         => 5,
-				) as $key => $default ) {
-					if ( ! array_key_exists( $key, $memo['ai_adaptive'] ) ) {
-						$memo['ai_adaptive'][ $key ] = $default;
-					}
-				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
@@ -804,7 +774,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_ai_anomaly_v2(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			try {
 				if ( ! function_exists( 'get_option' ) ) {
 					return;
@@ -844,19 +814,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 				$stored['ai_adaptive'] = $ai;
 				Util::save_settings( $stored );
+				$this->invalidate_options( $stored );
 
-				if ( ! isset( $memo['ai_adaptive'] ) || ! is_array( $memo['ai_adaptive'] ) ) {
-					$memo['ai_adaptive'] = array();
-				}
-				foreach ( array(
-					'anomaly_band_window'   => 10,
-					'anomaly_recovery_days' => 3,
-					'deploy_notes'          => array(),
-				) as $key => $default ) {
-					if ( ! array_key_exists( $key, $memo['ai_adaptive'] ) ) {
-						$memo['ai_adaptive'][ $key ] = $default;
-					}
-				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
@@ -885,7 +844,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_comment_image_hardening(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			try {
 				// Capability-gated: the migration performs a settings
 				// write plus full local + edge cache purges, so it must
@@ -918,6 +877,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 
 				$stored['image_optimisation'] = $image + array( 'hardenCommentImages' => true );
 				Util::save_settings( $stored );
+				$this->invalidate_options( $stored );
 
 				// Keep the in-request settings memo in parity (sibling
 				// migration paths call set_settings_cache(); without it a
@@ -950,11 +910,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				} catch ( \Throwable $edge_error ) {
 					unset( $edge_error );
 				}
-
-				if ( ! isset( $memo['image_optimisation'] ) || ! is_array( $memo['image_optimisation'] ) ) {
-					$memo['image_optimisation'] = array();
-				}
-				$memo['image_optimisation']['hardenCommentImages'] = true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -977,7 +932,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_builder_watcher(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			try {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
@@ -1028,27 +983,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 					$refreshed = get_option( 'wppo_settings' );
 					$re_file   = is_array( $refreshed ) && isset( $refreshed['file_optimisation'] ) && is_array( $refreshed['file_optimisation'] ) ? $refreshed['file_optimisation'] : array();
 					if ( is_array( $refreshed ) && array_key_exists( 'builderPurgeWatcher', $re_file ) && array_key_exists( 'builderPurgeDriftLog', $re_file ) ) {
-						if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-							$memo['file_optimisation'] = array();
-						}
-						$memo['file_optimisation'] = array_merge(
-							$memo['file_optimisation'],
-							array(
-								'builderPurgeWatcher'  => $re_file['builderPurgeWatcher'],
-								'builderPurgeDriftLog' => $re_file['builderPurgeDriftLog'],
-							)
-						);
 						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 							Util::set_settings_cache( $refreshed );
 						}
+						$this->invalidate_options( $refreshed );
 					}
 					return;
 				}
 
-				if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-					$memo['file_optimisation'] = array();
-				}
-				$memo['file_optimisation'] = array_merge( $memo['file_optimisation'], $file );
+				$this->invalidate_options( $stored );
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
@@ -1072,7 +1015,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @return void
 		 */
 		public function migrate_third_party_auto(): void {
-			$memo =& $this->main->migration_options_ref();
+			$memo = $this->read_options();
 			try {
 				// Capability-gated like sibling migrations: the migration
 				// performs a settings write, so it must only run for
@@ -1128,30 +1071,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 					$re_auto   = is_array( $re_file ) && isset( $re_file['delayJSThirdPartyAuto'] ) && is_bool( $re_file['delayJSThirdPartyAuto'] );
 					$re_preset = is_array( $re_file ) && isset( $re_file['delayJSPreset'] ) && is_string( $re_file['delayJSPreset'] ) && in_array( strtolower( trim( $re_file['delayJSPreset'] ) ), array( 'safe', 'balanced', 'aggressive' ), true );
 					if ( is_array( $refreshed ) && $re_auto && $re_preset ) {
-						if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-							$memo['file_optimisation'] = array();
-						}
-						$memo['file_optimisation']['delayJSThirdPartyAuto'] = $re_file['delayJSThirdPartyAuto'];
-						$memo['file_optimisation']['delayJSPreset']         = $re_file['delayJSPreset'];
 						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 							Util::set_settings_cache( $refreshed );
 						}
+						$this->invalidate_options( $refreshed );
 					}
 					return;
 				}
 
-				if ( ! isset( $memo['file_optimisation'] ) || ! is_array( $memo['file_optimisation'] ) ) {
-					$memo['file_optimisation'] = array();
-				}
-				if ( ! $auto_ok ) {
-					$memo['file_optimisation']['delayJSThirdPartyAuto'] = false;
-				}
-				if ( ! $preset_ok ) {
-					$memo['file_optimisation']['delayJSPreset'] = 'safe';
-				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
+				$this->invalidate_options( $stored );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
