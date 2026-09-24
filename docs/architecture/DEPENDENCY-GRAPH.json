@@ -10267,7 +10267,7 @@
             "file": "includes/Scheduler/class-job-registry.php",
             "domain": "Scheduler",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 122,
+            "lines": 124,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -10280,8 +10280,8 @@
             "largest_methods": [
                 {
                     "name": "all_cron_hooks",
-                    "line": 101,
-                    "end_line": 111,
+                    "line": 102,
+                    "end_line": 112,
                     "lines": 11,
                     "visibility": "public",
                     "static": true,
@@ -10289,8 +10289,8 @@
                 },
                 {
                     "name": "all_action_scheduler_hooks",
-                    "line": 118,
-                    "end_line": 120,
+                    "line": 120,
+                    "end_line": 122,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -10304,7 +10304,7 @@
                 "new_expressions": [],
                 "class_references": [],
                 "class_constant_references": {
-                    "self": 105
+                    "self": 106
                 },
                 "class_string_references": [],
                 "class_exists": {
@@ -10318,9 +10318,9 @@
                 "file_references": [],
                 "external_classes": [],
                 "external_functions": {
-                    "array_merge": 104,
-                    "array_unique": 103,
-                    "array_values": 102,
+                    "array_merge": 105,
+                    "array_unique": 104,
+                    "array_values": 103,
                     "class_exists": 14,
                     "defined": 10
                 },

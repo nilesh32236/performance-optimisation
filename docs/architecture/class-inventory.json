@@ -3870,14 +3870,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Scheduler",
-        "lines": 122,
+        "lines": 124,
         "methods": 2,
         "public_methods": 2,
         "large_methods": 0,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "all_cron_hooks",
-            "line": 101,
+            "line": 102,
             "lines": 11
         },
         "method_prefixes": {
