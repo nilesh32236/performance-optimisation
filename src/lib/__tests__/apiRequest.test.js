@@ -1233,7 +1233,7 @@ describe( 'API Request library', () => {
 
 			await apiCall( action, {} );
 
-			expect( global.wppoSettings.settings ).toBe( map );
+			expect( global.wppoSettings.settings ).toEqual( map );
 		} );
 
 		it( 'commits nested settings for apply_preset', async () => {
@@ -1245,7 +1245,7 @@ describe( 'API Request library', () => {
 
 			await apiCall( 'apply_preset', { preset: 'balanced' } );
 
-			expect( global.wppoSettings.settings ).toBe( map );
+			expect( global.wppoSettings.settings ).toEqual( map );
 		} );
 
 		it( 'leaves the cache untouched for non-settings actions', async () => {

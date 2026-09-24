@@ -546,7 +546,7 @@ describe( 'PluginSetting', () => {
 			).toBeInTheDocument()
 		);
 		// P3-019: the full-map server payload reaches the shared global.
-		expect( global.wppoSettings.settings ).toBe( serverMap );
+		expect( global.wppoSettings.settings ).toEqual( serverMap );
 	} );
 
 	it( 'redacts generic *_key names on export', () => {

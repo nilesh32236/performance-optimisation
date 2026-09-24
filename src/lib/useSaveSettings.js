@@ -107,7 +107,10 @@ export const useSaveSettings = ( tab, options = {} ) => {
 					return undefined;
 				}
 				if ( ! mountedRef.current ) {
-					throw saveError;
+					// Fail-safe: the save path already returned via
+					// run()/isStale and no caller can handle a post-unmount
+					// throw, so swallow instead of rejecting.
+					return undefined;
 				}
 				console.error(
 					`Save ${ tab } settings failed:`,

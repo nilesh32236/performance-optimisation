@@ -874,6 +874,10 @@ const PluginSetting = ( { options } ) => {
 					typeof AbortController !== 'undefined'
 						? new AbortController()
 						: null;
+				// Capture the per-import controller: a second import (or
+				// unmount) must not lose its abort handle when the first
+				// import settles and clears the shared ref.
+				const importController = importControllerRef.current;
 
 				apiCall(
 					'import_settings',
@@ -882,12 +886,12 @@ const PluginSetting = ( { options } ) => {
 						settings: fileData,
 					},
 					'POST',
-					importControllerRef.current?.signal
+					importController?.signal
 				)
 					.then( ( data ) => {
 						if (
 							cancelledRef.current ||
-							importControllerRef.current?.signal?.aborted
+							importController?.signal?.aborted
 						) {
 							return;
 						}
@@ -924,7 +928,7 @@ const PluginSetting = ( { options } ) => {
 						if (
 							cancelledRef.current ||
 							importError?.name === 'AbortError' ||
-							importControllerRef.current?.signal?.aborted
+							importController?.signal?.aborted
 						) {
 							return;
 						}
@@ -937,7 +941,14 @@ const PluginSetting = ( { options } ) => {
 						} );
 					} )
 					.finally( () => {
-						importControllerRef.current = null;
+						// Only clear when still current: a first import
+						// settling after a second import started must not
+						// null the second import's abort handle.
+						if (
+							importControllerRef.current === importController
+						) {
+							importControllerRef.current = null;
+						}
 						if ( ! cancelledRef.current ) {
 							setIsImporting( false );
 						}

@@ -122,6 +122,6 @@ export const commitSettingsResponse = ( action, data ) => {
 	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
 		return false;
 	}
-	wppoSettings.settings = Object.freeze( payload );
+	wppoSettings.settings = Object.freeze( { ...payload } );
 	return true;
 };

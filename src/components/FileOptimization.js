@@ -2253,6 +2253,10 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch ( err ) {
+			// Abort is silent (retrigger/unmount), never a failure banner.
+			if ( err?.name === 'AbortError' ) {
+				return;
+			}
 			console.error( errorMessage, getErrorLogMessage( err ) );
 			notify( {
 				type: 'error',
@@ -2278,7 +2282,8 @@ const FileOptimization = ( {
 			typeof AbortController !== 'undefined'
 				? new AbortController()
 				: null;
-		const regenSignal = ccssRegenAbortRef.current?.signal;
+		const regenController = ccssRegenAbortRef.current;
+		const regenSignal = regenController?.signal;
 		try {
 			await withNotification(
 				( async () => {
@@ -2289,7 +2294,12 @@ const FileOptimization = ( {
 						regenSignal
 					);
 					if ( regenSignal?.aborted ) {
-						return { success: false, message: '' };
+						// Abort must stay silent: withNotification
+						// swallows AbortError instead of rendering a
+						// failure banner for a retrigger/unmount.
+						const aborted = new Error( 'Aborted' );
+						aborted.name = 'AbortError';
+						throw aborted;
 					}
 					if ( res?.success && onCcssRefresh ) {
 						onCcssRefresh();
@@ -2306,7 +2316,9 @@ const FileOptimization = ( {
 				)
 			);
 		} finally {
-			ccssRegenAbortRef.current = null;
+			if ( ccssRegenAbortRef.current === regenController ) {
+				ccssRegenAbortRef.current = null;
+			}
 		}
 	};
 
@@ -2403,8 +2415,17 @@ const FileOptimization = ( {
 				durationMs: 3000,
 			} );
 		} finally {
-			usedCssRegenAbortRef.current = null;
-			setIsRegenerating( false );
+			// Only clear when still current so a first regen settling
+			// after a retrigger cannot null the second run's handle,
+			// and never touch the busy flag after abort/unmount (the
+			// abort-on-unmount cleanup marks the signal aborted, and a
+			// retrigger leaves the flag owned by the newer run).
+			if ( usedCssRegenAbortRef.current?.signal === regenSignal ) {
+				usedCssRegenAbortRef.current = null;
+			}
+			if ( ! regenSignal?.aborted ) {
+				setIsRegenerating( false );
+			}
 		}
 	};
 

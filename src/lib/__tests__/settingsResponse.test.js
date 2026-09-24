@@ -90,10 +90,13 @@ describe( 'settingsResponse', () => {
 			expect( commitSettingsResponse( 'import_settings', map ) ).toBe(
 				true
 			);
-			expect( global.wppoSettings.settings ).toBe( map );
+			expect( global.wppoSettings.settings ).toEqual( map );
 			expect( Object.isFrozen( global.wppoSettings.settings ) ).toBe(
 				true
 			);
+			// The commit freezes a copy, never the caller's payload.
+			expect( global.wppoSettings.settings ).not.toBe( map );
+			expect( Object.isFrozen( map ) ).toBe( false );
 		} );
 
 		it( 'commits sandbox_promote, safe_mode and restore full maps', () => {
@@ -126,7 +129,8 @@ describe( 'settingsResponse', () => {
 					diff: [],
 				} )
 			).toBe( true );
-			expect( global.wppoSettings.settings ).toBe( map );
+			expect( global.wppoSettings.settings ).toEqual( map );
+			expect( global.wppoSettings.settings ).not.toBe( map );
 		} );
 
 		it( 'hydrates sibling tabs so cross-tab reads see the commit', () => {

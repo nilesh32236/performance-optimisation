@@ -90,7 +90,7 @@ describe( 'useSaveSettings', () => {
 
 		// The shared contract wins; the request echo must not clobber it.
 		expect( patchSettingsCache ).not.toHaveBeenCalled();
-		expect( global.wppoSettings.settings ).toBe( serverMap );
+		expect( global.wppoSettings.settings ).toEqual( serverMap );
 		expect( notify ).toHaveBeenCalledWith(
 			expect.objectContaining( { type: 'success' } )
 		);

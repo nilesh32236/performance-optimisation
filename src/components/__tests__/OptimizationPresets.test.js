@@ -167,7 +167,7 @@ describe( 'OptimizationPresets', () => {
 			).toBeInTheDocument()
 		);
 		// P3-019: the nested server settings reach the shared global.
-		expect( global.wppoSettings.settings ).toBe( serverMap );
+		expect( global.wppoSettings.settings ).toEqual( serverMap );
 	} );
 
 	it( 'announces failure when the apply call fails', async () => {
