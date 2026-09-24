@@ -1,7 +1,7 @@
 # Load Order and Autoload Boundaries
 
 Phase 3 verification baseline: 2026-09-24
-Runtime source: `origin/master` commit `72818289c9745ed58c17bf3ab418f4d20953b657`
+Runtime source: `origin/master` commit `33711d11e41614fb7661e3a1b2c6bdb0330a743d`
 Loader owner: `includes/Core/class-loader-map.php`
 
 The plugin uses two autoload mechanisms:
@@ -72,7 +72,7 @@ Action Scheduler remains a deliberate direct require outside `Loader_Map` path d
 
 ## 3. Lazy class loading
 
-`Loader_Map::fallback_map()` maps 68 `PerformanceOptimise\Inc` class names to canonical files under:
+`Loader_Map::fallback_map()` maps 69 `PerformanceOptimise\Inc` class names to canonical files under:
 
 ```text
 includes/<Domain>/class-<name>.php

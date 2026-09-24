@@ -510,6 +510,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		}
 
 		/**
+		 * Reset per-request system information memos without mutating site data.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_state(): void {
+			self::$litespeed_request_cache = null;
+		}
+
+		/**
 		 * Get infrastructure environment details.
 		 *
 		 * @since  1.6.0

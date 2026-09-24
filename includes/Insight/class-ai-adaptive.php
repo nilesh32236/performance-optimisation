@@ -105,6 +105,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Reset all AI-owned per-blog request memos.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_state(): void {
+			self::reset_model_memo();
+			Ai_Anomaly::reset_rum_anomaly_digest_memo();
+		}
+
+		/**
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::reset_rum_anomaly_digest_memo}.
 		 *

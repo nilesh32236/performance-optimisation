@@ -461,6 +461,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Reset all per-blog Object Cache runtime memos.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_state(): void {
+			self::reset_circuit_memo_for_tests();
+			self::clear_nginx_probe_cache();
+			self::$outage_bypassed = false;
+			self::$outage_blog_id  = 0;
+			self::$outage_error    = null;
+		}
+
+		/**
 		 * Read the merged circuit-breaker state.
 		 *
 		 * Sources (first non-empty wins per field): the CIRCUIT_OPTION mirror

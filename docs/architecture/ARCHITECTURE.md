@@ -48,12 +48,12 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 76 files: 72 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 77 files: 73 class-like nodes and 4 procedural nodes.
 
 | Signal | Baseline |
 |---|---:|
-| Unique edges | 344 |
-| Runtime / compatibility / loader edges | 343 / 194 / 3 |
+| Unique edges | 345 |
+| Runtime / compatibility / loader edges | 344 / 194 / 3 |
 | Cross-domain / feature-to-feature edges | 302 / 47 |
 | Boundary violations | 16 |
 | Bridge candidates | 229 |
@@ -97,6 +97,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Settings_Store` | Settings memo, validation map, snapshots, write/invalidation | Make it the only settings write owner; adapt REST, CLI, and Abilities |
 | `Scheduler` / `Job_Registry` | Action Scheduler primitives, locks, and owned hook manifest | Keep registry-backed scheduling and teardown; no duplicate hook lists |
 | `Preload_Transport` | Same-host URL validation and bounded non-following redirects for Cron warmup | Keep all three Cron fetch seams on the transport policy; preserve LiteSpeed bypass |
+| `Runtime_State` | Central switch_blog reset registry for six site-sensitive static-state owners | Keep reset methods feature-owned; classify the remaining 25 static owners |
 | `Object_Cache` | Redis backend, config state, drop-in management | Move full config normalization here or into a Redis policy boundary |
 | `Critical_CSS` / `Ccss_Store` | Generation plus storage/status | Keep storage in the store; move remaining generation clusters by policy |
 | `Used_CSS` | Generation, storage, parsing, delivery, rollout | Split storage and generation only after Used CSS owns no cache purge policy |
@@ -107,7 +108,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 ## High-value findings
 
 1. **Preload transport:** Cron warmup requests need one bounded, same-host redirect policy across page, sitemap, and arbitrary URL fetches.
-2. **Runtime state:** 31 owners hold static state, while production switch-blog reset coverage remains partial.
+2. **Runtime state:** 31 owners hold static state; the six site-sensitive owners now reset centrally, while the remaining 25 need classification.
 3. **`Util` hub:** 56 source nodes and 1,145 executable occurrences still depend on it.
 4. **`Main` hub:** 34 outgoing class dependencies and 17 feature dependencies remain.
 5. **Cache capacity:** an 839-line statistics, cap, and eviction cluster has one clear contract.

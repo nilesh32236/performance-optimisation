@@ -125,18 +125,18 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 69 | 68 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 70 | 69 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 73 | Generated schema-v2 inventory |
+| Total class inventory | 74 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 76 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 77 nodes.
 
 ## Ownership by directory
 
 ### Core
 
-`Core` owns bootstrap, loader coordination, hook registration, runtime version gates, and lifecycle callbacks. `Main` may depend on lower layers. Lower layers do not depend on `Main` private implementation; current reverse edges are recorded as bridge debt.
+`Core` owns bootstrap, loader coordination, hook registration, runtime version gates, and lifecycle callbacks. `Runtime_State` owns the production switch_blog reset registry while feature owners retain their reset methods. `Main` may depend on lower layers. Lower layers do not depend on `Main` private implementation; current reverse edges are recorded as bridge debt.
 
 ### Cache
 

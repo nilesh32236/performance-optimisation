@@ -3085,6 +3085,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		private static $defer_counts_invalidation = false;
 
 		/**
+		 * Reset per-blog cleanup health and deferral memos.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_state(): void {
+			self::$health_memo               = null;
+			self::$health_memo_time          = 0.0;
+			self::$defer_counts_invalidation = false;
+		}
+
+		/**
 		 * Invalidate the DB cleanup counts cache by incrementing the salt or deleting the transient.
 		 *
 		 * @since 2.0.0
