@@ -1238,13 +1238,23 @@ phase3_items:
 
   - id: P3-016
     title: 'Main and service bridge cleanup'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1597
     type: epic
     problem: 'Extracted services still hold Main owner state through @internal bridges and reverse edges.'
     target_owner: 'Explicit service state or narrow application contracts'
     exact_scope: 'One bridge family per item; no broad namespace rewrite.'
     ratchet: 'Bridge candidates and domain-to-Main violations down.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: a216ad71
+      evidence:
+        - 'Settings_Migrations stores a Main reference solely to read effective options and invalidate/retain the settings memo, creating a direct Settings-to-Main bridge.'
+        - 'The migration service already owns a bounded migration map; replacing the Main object with a callable options reader and explicit invalidation command can remove that reverse edge without changing migration behavior.'
+        - 'Other reverse bridges (CSS Combine, Script_Strategy, Image_Optimisation, Hook_Registry) are separate families and remain queued for later bounded items.'
+        - 'No endpoint, option schema, migration ordering, multisite, or LiteSpeed behavior should change.'
+      decision: 'Proceed test-first with the Settings_Migrations Main bridge only; preserve public constructor compatibility through a narrow options/invalidation adapter and all migration callbacks.'
 
   - id: P3-017
     title: 'Util external caller migration and facade reduction'
