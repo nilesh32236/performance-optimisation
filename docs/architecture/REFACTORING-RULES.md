@@ -248,8 +248,8 @@ The current Phase 3 baseline records the starting metrics in `ARCHITECTURE-BASEL
 | `Main` lines / methods | 10,790 / 235 | Do not grow without a documented extraction path |
 | `Main` methods at least 80 lines | 20 | Target down |
 | `Main` fan-out / feature dependencies | 37 / 17 | Reduce delegated edges in P3-014/P3-016 |
-| `Util` lines / methods | 5,006 / 156 | Target down through caller migration |
-| `Util` fan-in / incoming evidence | 58 / 1,139 | Target down |
+| `Util` lines / methods | 4,791 / 156 | Target down through caller migration |
+| `Util` fan-in / incoming evidence | 57 / 1,138 | Target down |
 | `Cache` lines / methods | 5,077 / 167 | Target down with cohesive extractions |
 | `Image_Optimisation` lines / methods | 8,999 / 183 | Target down with media or state owners |
 | `Critical_CSS` lines / methods | 6,950 / 138 | Target down with generation owners |

@@ -47,14 +47,14 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 | Named methods | 2,518 |
 | Methods spanning 80 lines or more | 236 |
 | Static properties | 143 across 32 nodes |
-| Unique dependency edges | 374 |
-| Runtime-classified edges | 373 |
+| Unique dependency edges | 373 |
+| Runtime-classified edges | 372 |
 | Compatibility-classified edges | 196 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 316 |
+| Cross-domain edges | 315 |
 | Feature-to-feature edges | 46 |
 | Strict boundary violations | 16 |
-| Bridge candidates | 234 |
+| Bridge candidates | 233 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -62,7 +62,7 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 68 class-like nodes and 332 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 65 class-like nodes and 320 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
@@ -91,7 +91,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Image_Optimisation` | 8,999 | 183 | 13 | 7 | 30 | 4/4 | 11 | 3 | `add_delay_load_img` 476 |
 | `Critical_CSS` | 6,950 | 138 | 12 | 11 | 11 | 9/8 | 50 | 5 | `generate` 267 |
 | `Cache` | 5,643 | 161 | 8 | 4 | 29 | 14/13 | 71 | 8 | `maybe_store_cache` 177 |
-| `Util` | 5,006 | 156 | 6 | 4 | 4 | 56/9 | 1,145 | 3 | `get_default_settings` 218 |
+| `Util` | 4,791 | 156 | 5 | 4 | 4 | 57/9 | 1,138 | 3 | `get_with_stampede_lock` 197 |
 | `Used_CSS` | 4,961 | 94 | 8 | 1 | 11 | 10/8 | 39 | 5 | `regenerate_all` 291 |
 | `Lcp_Preload` | 4,434 | 74 | 8 | 4 | 6 | 1/4 | 12 | 3 | `apply_occlusion_fetchpriority_low` 163 |
 | `Img_Converter` | 4,077 | 66 | 8 | 4 | 8 | 9/2 | 36 | 0 | `convert_image` 691 |
@@ -106,6 +106,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Redis_Config_Policy` | 183 | 3 | 0 | 0 | 0 | 3/0 | 6 | 0 | `sanitize_value` 58 |
 | `Edge_Purge_Coordinator` | 150 | 4 | 0 | 0 | 0 | 1/2 | 1 | 0 | `purge_after_cache_clear` 27 |
 | `Cache_Coordinator` | 56 | 1 | 0 | 0 | 0 | 1/1 | 1 | 0 | `create` 15 |
+| `Settings_Store` | 1,666 | 25 | 3 | 4 | 2 | 6/0 | 37 | 0 | `sanitize_settings_recursively` 401 |
 | `LiteSpeed_Integration` | 2,797 | 58 | 4 | 17 | 17 | 17/7 | 95 | 5 | `get_litespeed_ttl` 216 |
 | `WPPO_CLI_Command` | 2,362 | 27 | 7 | 0 | 0 | 1/14 | 2 | 11 | `settings` 224 |
 | `Builder_Purge_Watcher` | 2,110 | 45 | 2 | 7 | 7 | 4/6 | 19 | 3 | `on_any_upgrade` 103 |
@@ -154,7 +155,7 @@ These counts come from method names, call sites, tests, and history. They approx
 
 ### Util remains a dependency hub
 
-The graph records 58 incoming source nodes and 1,139 incoming executable occurrences. `Main`, `Used_CSS`, `Critical_CSS`, `Cache`, and `Cron` account for most calls. The facade still contains canonical helpers, so callers must migrate by method ownership rather than replace every `Util::` call mechanically.
+The graph records 57 incoming source nodes and 1,138 incoming executable occurrences. `Main`, `Used_CSS`, `Critical_CSS`, `Cache`, and `Cron` account for most calls. The facade still contains canonical helpers, so callers must migrate by method ownership rather than replace every `Util::` call mechanically.
 
 ### Main still owns feature policy
 
@@ -194,7 +195,7 @@ P3-011 adds the 60-line, one-method dependency-light `Admin_Auth` policy. `Rest:
 
 P3-012 adds the 150-line, four-method `Edge_Purge_Coordinator`. `Hook_Registry` now registers one priority-10 `wppo_after_cache_clear` listener that calls the unchanged `CDN_Purger` and `Edge_Purger` adapters in their historic order. For a full clear, temporary `pre_http_request` / `http_api_debug` seams reuse the first response only when an identical Cloudflare purge_everything request repeats in that event, reducing overlapping Cloudflare transport from up to two calls to one while retaining separate Bunny and Varnish paths. LiteSpeed sync, single-page Cloudflare files, edge locks, provider-specific failure logging, invalid-payload TypeError behavior, and successful no-data behavior remain with their existing owners. The generated inventory contains 82 files, 85 graph nodes, and 369 edges; the coordinator has one incoming and two outgoing feature edges, no static state, and no feature-to-feature change.
 
-P3-013 moves the effective-options policy and all 180 historical backfill assignments from `Main::get_options()` to `Settings_Store::get_resolved_settings()`. Raw and resolved options are memoized by blog ID; add/update/delete and command writes invalidate the resolved snapshot so same-request reads reapply backfills without persisting them. `Main` retains its public facade, injectable local snapshot, Hook_Registry callback identities, and unchanged settings-update side effects. Its one rollback write now routes through `Settings_Command`, so Main owns no direct `wppo_settings` write. The one bounded cache cluster is the 56-line, one-method `Cache_Coordinator`: `Main::create_cache()` remains the unchanged static facade while construction, collaborator injection, and `wppo_cache_instance` filtering move together. The generated inventory contains 83 files, 86 graph nodes, and 374 edges; Main drops from 11,091 to 10,790 lines and from 21 to 20 methods at least 80 lines, while feature dependencies remain 17.
+P3-013 moves the canonical defaults, effective-options policy, and all 180 historical backfill assignments from `Util`/`Main::get_options()` to `Settings_Store`. Raw and resolved options are memoized by blog ID; add/update/delete and command writes invalidate the resolved snapshot so same-request reads reapply backfills without persisting them. `Util::get_default_settings()` remains its unchanged facade, while `Main` retains its public options facade, injectable local snapshot, Hook_Registry callback identities, and settings-update side effects. Main's one rollback write now routes through `Settings_Command`, so Main owns no direct `wppo_settings` write. The one bounded cache cluster is the 56-line, one-method `Cache_Coordinator`: `Main::create_cache()` remains the unchanged static facade while construction, collaborator injection, and `wppo_cache_instance` filtering move together. The generated inventory contains 83 files, 86 graph nodes, and 373 edges; Main drops from 11,091 to 10,790 lines and from 21 to 20 methods at least 80 lines, Util drops from 5,006 to 4,791 lines, the runtime SCC grows only from 64 to 65 nodes, and Main feature dependencies remain 17.
 
 ## Static state
 

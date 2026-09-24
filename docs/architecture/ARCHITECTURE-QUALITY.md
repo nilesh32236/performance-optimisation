@@ -181,8 +181,8 @@ P3-005 through P3-013 record these baselines:
 | Largest compatibility SCC | 21 nodes | Reduce after caller migration |
 | Boundary violations | 16 | Reduce; final target 0 or explicit protected exceptions |
 | Bridge candidates | 233 | Reduce after caller migration |
-| `Util` unique fan-in | 58 | Reduce |
-| `Util` incoming executable evidence | 1,139 | Reduce |
+| `Util` unique fan-in | 57 | Reduce |
+| `Util` incoming executable evidence | 1,138 | Reduce |
 | `Main` unique fan-out | 37 | Reduce after delegated bridges settle |
 | `Main` feature dependencies | 17 | Reduce |
 | `Main` methods at least 80 lines | 20 | Reduce |
@@ -194,7 +194,7 @@ P3-005 through P3-013 record these baselines:
 
 A pull request may increase a metric for a documented bridge. It must name the follow-up item and removal condition. An unexplained increase fails the ratchet.
 
-P3-013 trades three explicit `Main` owner edges for a 301-line and one-large-method reduction. P3-014 owns the remaining asset/minification/speculation fan-out reduction; P3-016 reviews service-to-Main bridges. `Settings_Store` adds two blog-keyed resolved-memo properties, while incoming executable `Util` evidence falls 1,142 to 1,139.
+P3-013 trades three explicit `Main` owner edges for a 301-line and one-large-method reduction. P3-014 owns the remaining asset/minification/speculation fan-out reduction; P3-016 reviews service-to-Main bridges. `Settings_Store` adds two blog-keyed resolved-memo properties, while incoming executable `Util` evidence falls 1,142 to 1,138. Moving the canonical defaults into the dependency-light Store prevents a new Store-to-Util edge; the runtime SCC grows only from 64 to 65 nodes.
 
 ## SOLID policy
 

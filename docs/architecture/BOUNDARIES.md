@@ -33,7 +33,7 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | `Woo_Detect` | Woo detection and exclusion policy | Cache invalidation actions | `Util` still calls it, keeping a shared-facade edge |
 | `Log` | Activity persistence and logging calls | Feature decisions | Fan-in 27; deliberate infrastructure hub, not a god class |
 | `Loader_Map` | Eager files, fallback map, CLI path | Feature behavior | Three loader edges; stale-classmap safety remains required |
-| `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 58 and 1,139 incoming executable occurrences |
+| `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 57 and 1,138 incoming executable occurrences; defaults are now a Store facade |
 
 ## Domain boundaries
 
