@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 	 * `Util` proxies back at call time only (autoloader, no load-time
 	 * cycle).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Filesystem {
 
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * per-request memo for host normalization lives here now.
 		 *
 		 * @var array<string, string>
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static array $normalized_host_cache = array();
 
@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * on large multisite networks.
 		 *
 		 * @var array<int, string[]>
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static array $minify_roots_cache = array();
 
@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Moved with its owner from `Util` (REF-012).
 		 *
 		 * @var array<int, bool>
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static array $purge_fallback_memo = array();
 
@@ -109,7 +109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param int|null $blog_id Optional blog ID to clear. Null clears all.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function clear_purge_fallback_memo( $blog_id = null ): void {
 			if ( null !== $blog_id && is_int( $blog_id ) ) {
@@ -124,7 +124,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $cache_dir Path to the cache directory.
 		 * @return bool True if created or exists, false otherwise.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function prepare_cache_dir( $cache_dir ): bool {
 			$fs = self::init_filesystem();
@@ -177,7 +177,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Initializes the WP_Filesystem API.
 		 *
 		 * @return mixed WP_Filesystem_Base|false The filesystem object or false on failure.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function init_filesystem() {
 			global $wp_filesystem;
@@ -198,7 +198,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $url The URL to process.
 		 * @return string The local file path.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function get_local_path( string $url ): string {
 			// Reject NUL bytes and stream wrappers before URL parsing so
@@ -283,7 +283,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * convention — filtered output may be context-dependent.
 		 *
 		 * @return string[] Normalized absolute root paths.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function get_minify_allowed_roots(): array {
 			$has_filter = function_exists( 'has_filter' ) ? has_filter( 'wppo_minify_allowed_roots' ) : false;
@@ -367,7 +367,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * test-isolation entry point keeps clearing per-blog state when
 		 * `switch_to_blog()` fixtures change the uploads basedir mid-suite.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function reset_minify_roots_cache(): void {
@@ -390,7 +390,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param mixed $path Candidate filesystem path.
 		 * @return bool True when the path resolves inside an allowed root.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function is_minify_path_allowed( $path ): bool {
 			return '' !== self::validate_minify_path( $path );
@@ -404,7 +404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param mixed $path Candidate filesystem path.
 		 * @return string Resolved allowed path, or '' when rejected.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function validate_minify_path( $path ): string {
 			if ( ! is_string( $path ) || '' === $path ) {
@@ -469,7 +469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Gets the number of minified JS and CSS files.
 		 *
 		 * @return array Associative array with counts for JS and CSS files.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function get_js_css_minified_file() {
 			$filesystem = self::init_filesystem();
@@ -526,7 +526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $raw_host Raw host value (e.g. $_SERVER['HTTP_HOST'] or a home_url() host).
 		 * @return string Normalized lowercase host, or '' when invalid.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function normalize_cache_host( string $raw_host ): string {
 			// Static memo: hot callers (sanitize loops, invalidation fan-out)
@@ -601,7 +601,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string $raw_host Raw input key.
 		 * @param string $normalized Normalized result.
 		 * @return string The normalized result (passthrough for `return` sites).
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static function memoize_normalized_host( string $raw_host, string $normalized ): string {
 			if ( count( self::$normalized_host_cache ) > 64 ) {
@@ -617,7 +617,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Called from `Util::reset_cached_home_urls()` so the existing
 		 * test-isolation entry point keeps clearing host-related state.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function reset_normalized_host_cache(): void {
@@ -655,7 +655,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string|null $allowed_host Optional canonical host (alias: $domain / $canonical_host at call-sites);
 		 *                                  same-host absolute URLs map to their path, others refuse.
 		 * @return string Sanitized relative path or empty string.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function sanitize_cache_url_path( ?string $url_path, ?string $allowed_host = null ): string {
 			$raw_input = (string) $url_path;
@@ -792,7 +792,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string $domain Canonical domain directory segment.
 		 * @param string $path Absolute file or directory path to check.
 		 * @return bool True when contained.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function is_cache_path_contained( string $cache_root_dir, string $domain, string $path ): bool {
 			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
@@ -859,7 +859,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string $domain Canonical domain directory segment.
 		 * @param string $path Absolute file or directory path to check.
 		 * @return bool True when contained.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function is_realpath_contained( string $cache_root_dir, string $domain, string $path ): bool {
 			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
@@ -972,7 +972,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $lexical_path Normalized absolute path to resolve.
 		 * @return string|null Resolved absolute path, or null when unresolvable.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function resolve_realpath( string $lexical_path ): ?string {
 			if ( '' === $lexical_path || ! function_exists( 'realpath' ) || ! function_exists( 'dirname' ) ) {
@@ -1029,7 +1029,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string $domain Canonical domain directory segment.
 		 * @param string $path Absolute file path to validate.
 		 * @return bool True when the target may be written.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function validate_cache_write_path( string $cache_root_dir, string $domain, string $path ): bool {
 			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
@@ -1059,7 +1059,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $htaccess_file Absolute .htaccess path candidate.
 		 * @return bool True when the target may be written.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function is_htaccess_path_allowed( string $htaccess_file ): bool {
 			if ( '' === $htaccess_file ) {
@@ -1153,7 +1153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string|null $url_path_or_url Raw URL path or URL.
 		 * @param string      $filename File name (e.g. `index.html`).
 		 * @return string Contained absolute path, or '' when refused.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function sanitize_cache_path( string $cache_root_dir, string $domain, $url_path_or_url, string $filename ): string {
 			if ( '' === $cache_root_dir || '' === $filename ) {
@@ -1237,7 +1237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $final_path Final file path the tmp sits beside.
 		 * @return string Tmp sibling path ('' when input is empty).
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function atomic_tmp_path( string $final_path ): string {
 			if ( '' === $final_path ) {
@@ -1270,7 +1270,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string $path Final file path.
 		 * @param string $contents File contents.
 		 * @return bool True on success.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function atomic_file_put_contents( $fs, string $path, string $contents ): bool {
 			if ( '' === $path || ! is_object( $fs ) || ! method_exists( $fs, 'put_contents' ) || ! method_exists( $fs, 'move' ) || ! method_exists( $fs, 'delete' ) ) {
@@ -1319,7 +1319,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string $code PHP source to check.
 		 * @param string $tmp_file_for_lint Optional tmp file holding $code for `php -l`.
 		 * @return bool True when the code looks parseable.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function verify_php_syntax( string $code, string $tmp_file_for_lint = '' ): bool {
 			if ( '' === $code ) {
@@ -1411,7 +1411,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param array $tokens Token stream from `PhpToken::tokenize()`.
 		 * @return bool True when every bracket type is balanced and ordered.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static function php_brackets_balanced( array $tokens ): bool {
 			$pairs = array(
@@ -1469,7 +1469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string        $contents New file contents.
 		 * @param callable|null $expect Optional assertion receiving contents, returning bool.
 		 * @return bool|null True on verified success, false on verified failure, null when unsupported.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function atomic_write_php_verified( $fs, string $path, string $contents, $expect = null ): ?bool {
 			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
@@ -1582,7 +1582,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param string $original In-memory original contents ('' when none).
 		 * @param int    $chmod File mode for a direct-write restore.
 		 * @return bool True when a restore write/copy was issued.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static function restore_php_backup( $fs, string $path, string $original, int $chmod ): bool {
 			try {
@@ -1620,7 +1620,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param mixed  $fs Filesystem object.
 		 * @param string $path Final file path (backup is `$path.wppo-bak`).
 		 * @return void
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private static function delete_php_backup( $fs, string $path ): void {
 			try {
@@ -1645,7 +1645,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * remains as a facade proxy.
 		 *
 		 * @return bool True when purge-fallback retention/serving is active.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function is_purge_fallback_enabled(): bool {
 			$bid = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
@@ -1711,7 +1711,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $file_path Absolute derived-asset path.
 		 * @return string Sibling fallback path, or '' when not applicable.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function get_purge_fallback_path_for( string $file_path ): string {
 			try {
@@ -1795,7 +1795,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @param string   $file_path  The derived file about to be deleted.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function retain_purge_fallback_file( $fs, callable $is_allowed, string $file_path ): void {
 			try {
@@ -1893,7 +1893,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param object $fs       Filesystem exposing size()/get_contents().
 		 * @param string $fallback Absolute fallback path.
 		 * @return bool True when the fallback exists with non-empty content.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function is_purge_fallback_payload_valid( $fs, string $fallback ): bool {
 			try {
@@ -1944,7 +1944,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $file_path Absolute live derived-file path.
 		 * @return string Sibling staged path, or '' when not applicable.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function get_staged_path_for( string $file_path ): string {
 			try {
@@ -2024,7 +2024,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @param string   $live_path Absolute live derived-file path.
 		 * @return bool True when the staged file replaced the live file.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function promote_staged_file( $fs, callable $is_allowed, string $live_path ): bool {
 			try {
@@ -2101,7 +2101,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
 		 * @param string   $live_path Absolute live derived-file path.
 		 * @return bool True when the fallback payload replaced the live file.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function restore_fallback_file( $fs, callable $is_allowed, string $live_path ): bool {
 			try {
@@ -2153,7 +2153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param object $fs        Filesystem exposing exists()/size()/get_contents().
 		 * @param string $live_path Absolute live derived-file path.
 		 * @return array{live_bytes: int, live_checksum: string, staged: bool, staged_bytes: int, staged_checksum: string, staged_changed: bool, fallback: bool} Slot description.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function describe_rollout_slot( $fs, string $live_path ): array {
 			$empty = array(
@@ -2254,7 +2254,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * remains as a facade proxy.
 		 *
 		 * @return bool True when the caller should write its log row.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function purge_fallback_should_log(): bool {
 			try {
@@ -2285,7 +2285,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 *
 		 * @param string $path Absolute path to the CSS file.
 		 * @return bool True when the file is usable.
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function css_file_valid( string $path ): bool {
 			if ( '' !== $path ) {
@@ -2309,7 +2309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param array  $handles Handles preserved by the fallback.
 		 * @param string $context 'combine' or 'usedcss' — selects the log-key prefix and message.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		public static function log_css_fallback( string $reason, array $handles, string $context ): void {
 			if ( ! in_array( $context, array( 'combine', 'usedcss' ), true ) ) {
@@ -2358,7 +2358,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Bypassed whenever the `home_url` filter is present (context-dependent
 		 * output must never be memoized).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var array<int, string>
 		 */
 		private static array $home_url_cache = array();
@@ -2366,7 +2366,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		/**
 		 * Resolve the untrailed home URL with a per-blog memo.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Untrailed home URL, or '' when unavailable.
 		 */
 		private static function home_url_for_local_path(): string {
@@ -2398,7 +2398,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Called from `Url::reset_cached_home_urls()` so the existing
 		 * test-isolation entry point keeps clearing per-blog state.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function reset_home_url_cache(): void {
@@ -2412,7 +2412,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * by design (decoupling — the asset-dir helpers stay owned by `Util`);
 		 * keep in sync.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Normalized absolute path to the site-scoped min cache dir.
 		 */
 		private static function min_cache_dir_for_counts(): string {

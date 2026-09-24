@@ -361,7 +361,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Settings_Store` memo is blog-keyed for the same reason.
 		 *
 		 * @var   int|null
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private ?int $options_blog_id = null;
 
@@ -374,7 +374,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * until the first migration proxy runs.
 		 *
 		 * @var   Settings_Migrations|null
-		 * @since NEXT
+		 * @since 2.4.0
 		 */
 		private ?Settings_Migrations $settings_migrations = null;
 
@@ -384,7 +384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Single owner for the defer/delay cluster; every script-strategy
 		 * proxy delegates here so `Hook_Registry` callback identity is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Script_Strategy|null
 		 */
 		private ?Script_Strategy $script_strategy = null;
@@ -477,7 +477,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * lifecycle change). Deferring those collaborators would change the
 		 * hook-registration lifecycle and is out of scope.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array Resolved plugin options.
 		 */
 		public function get_options(): array {
@@ -791,7 +791,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * adopts it directly (avoids a re-read); omitting it drops the memo so
 		 * the next {@see self::get_options()} call re-resolves (with backfills).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array|null $settings Optional resolved settings to adopt. Null drops the memo.
 		 * @return void
 		 */
@@ -819,7 +819,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * rest of the request. Registered in
 		 * {@see Hook_Registry::register_invalidation_hooks()}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $option Option name.
 		 * @param mixed  $value  Option value.
 		 * @return void
@@ -843,7 +843,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * construction cost for collaborators they never touch.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Accepts optional collaborator overrides for constructor injection.
+		 * @since 2.4.0 Accepts optional collaborator overrides for constructor injection.
 		 * @param array                   $options            Plugin options passed to Cache.
 		 * @param Image_Optimisation|null $image_optimisation Live collaborator, or null to build the equivalent lazily from the resolved options.
 		 * @param Google_Fonts|null       $google_fonts       Live collaborator, or null to build the equivalent lazily from the resolved options.
@@ -1208,7 +1208,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *           force recreates (first site), default keeps an existing
 		 *           instance (second site).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param bool $force Whether to recreate even when a cache exists.
 		 * @return mixed Cache instance (or filtered stub).
 		 */
@@ -1229,7 +1229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *           exclusion-list preparation previously inline in
 		 *           setup_hooks() (registration itself lives in the registry).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $kind Either 'js' or 'css'.
 		 * @return void
 		 */
@@ -1267,7 +1267,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *           Runs at the exact original position so filter firing
 		 *           order is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array $staged_for_registration Staged sandbox settings widening registration.
 		 * @return void
 		 */
@@ -1435,7 +1435,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array|null Reference to the options memo (null until resolved).
 		 */
 		public function &migration_options_ref(): ?array {
@@ -1449,7 +1449,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `maybe_migrate_*()` proxy delegates here so `Hook_Registry`
 		 * callback identity is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return Settings_Migrations Migration runner bound to this instance.
 		 */
 		private function migrations(): Settings_Migrations {
@@ -1467,7 +1467,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Script_Strategy` (static methods) so `Hook_Registry` callback
 		 * identity is unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return Script_Strategy Strategy runner bound to this instance.
 		 */
 		private function script_strategy(): Script_Strategy {
@@ -1487,7 +1487,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_exclude_defer_js() {
@@ -1504,7 +1504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_exclude_delay_js() {
@@ -1521,7 +1521,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_resolved_delay_exclusions() {
@@ -1538,7 +1538,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_page_preset_opt_out_remove() {
@@ -1555,7 +1555,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_delay_js_default_strategy() {
@@ -1572,7 +1572,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_delay_js_idle_list() {
@@ -1589,7 +1589,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_delay_js_viewport_list() {
@@ -1606,7 +1606,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_delay_js_per_page_interaction() {
@@ -1623,7 +1623,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_delay_js_priority() {
@@ -1640,7 +1640,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_delay_disabled_for_page() {
@@ -1657,7 +1657,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_defer_disabled_for_page() {
@@ -1674,7 +1674,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * extraction bridge.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return mixed Reference to the live state.
 		 */
 		public function &script_state_deferred_handles() {
@@ -1689,7 +1689,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * calls this.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool True when optimisation applies to the current viewer.
 		 */
 		public function script_should_optimise_for_logged_in(): bool {
@@ -1701,7 +1701,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Facade proxy (ARCH-004): logic lives in {@see Settings_Migrations};
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_block_assets_setting(): void {
@@ -1720,7 +1720,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * and external reflective callers may do the same. Do not remove in
 		 * dead-code sweeps.
 		 *
-		 * @since NEXT Delegates to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Delegates to Settings_Migrations (ARCH-004).
 		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active.
 		 * @return void
 		 */
@@ -1735,7 +1735,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_ccss_max_size(): void {
@@ -1749,7 +1749,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_ccss_safelist(): void {
@@ -1764,7 +1764,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @since 2.2.0 Also backfills the 25s `ccssGenTimeout` generation budget.
 		 * @since 2.3.0 Also backfills the #1388 keys (`ccssInlineBudgetKb`, `ccssCommerceExclude`, `ccssChecksumRegen`).
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_css_queue_defaults(): void {
@@ -1778,7 +1778,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_speculation_top_urls(): void {
@@ -1792,7 +1792,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_speculation_prerender_list(): void {
@@ -1806,7 +1806,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_rum_sample_rate(): void {
@@ -1820,7 +1820,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_image_alt_edge_defaults(): void {
@@ -1834,7 +1834,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_safe_mode(): void {
@@ -1912,7 +1912,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_elementor_safe_mode(): void {
@@ -2234,7 +2234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_preload_auto_defaults(): void {
@@ -2248,7 +2248,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_object_cache_outage_flag(): void {
@@ -2262,7 +2262,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.3.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_ai_speculation_autotune(): void {
@@ -2276,7 +2276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.3.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_ai_anomaly_v2(): void {
@@ -2290,7 +2290,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_comment_image_hardening(): void {
@@ -2304,7 +2304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_builder_watcher(): void {
@@ -2318,7 +2318,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `Hook_Registry` hook registrations stay byte-identical.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Proxied to Settings_Migrations (ARCH-004).
+		 * @since 2.4.0 Proxied to Settings_Migrations (ARCH-004).
 		 * @return void
 		 */
 		public function maybe_migrate_third_party_auto(): void {
@@ -2486,7 +2486,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param mixed $old_value The old option value.
 		 * @param mixed $value     The new option value.
 		 * @since 1.2.0
-		 * @since NEXT Invalidates the get_options() memo on the live instance.
+		 * @since 2.4.0 Invalidates the get_options() memo on the live instance.
 		 */
 		public static function on_settings_update( $old_value, $value ) {
 			if ( null !== self::$instance ) {
@@ -4301,7 +4301,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @since 1.0.0
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::remove_woocommerce_scripts}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function remove_woocommerce_scripts() {
 			return $this->script_strategy()->remove_woocommerce_scripts();
@@ -4385,7 +4385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return bool True when the native defer strategy path is allowed.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::supports_native_defer_strategy}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function supports_native_defer_strategy(): bool {
 			return Script_Strategy::supports_native_defer_strategy();
@@ -4410,7 +4410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return bool True when the native fetchpriority path is allowed.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::supports_native_script_fetchpriority}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function supports_native_script_fetchpriority(): bool {
 			return Script_Strategy::supports_native_script_fetchpriority();
@@ -4454,7 +4454,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *                             per top-level evaluation.
 		 * @return bool True when the handle may receive strategy defer.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::is_defer_eligible_for_handle}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function is_defer_eligible_for_handle( object $wp_scripts, string $handle, array $intended = array(), array &$checked = array() ): bool {
 			return $this->script_strategy()->is_defer_eligible_for_handle( $wp_scripts, $handle, $intended, $checked );
@@ -4484,7 +4484,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return bool True when the core template-enhancement buffer path is allowed.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::should_use_core_template_buffer}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function should_use_core_template_buffer(): bool {
 			return Script_Strategy::should_use_core_template_buffer();
@@ -4506,7 +4506,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $handle Script handle or module id.
 		 * @return string Validated 'high'|'low'|'auto', or '' to suppress.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_filtered_deferred_fetchpriority}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function get_filtered_deferred_fetchpriority( string $handle ): string {
 			return $this->script_strategy()->get_filtered_deferred_fetchpriority( $handle );
@@ -4525,7 +4525,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $handle Script handle or module id.
 		 * @return bool True when the handle should be footer-bound.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::should_move_deferred_to_footer}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function should_move_deferred_to_footer( string $handle ): bool {
 			return $this->script_strategy()->should_move_deferred_to_footer( $handle );
@@ -4554,7 +4554,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return void
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::add_defer_strategy}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function add_defer_strategy(): void {
 			$this->script_strategy()->add_defer_strategy();
@@ -4578,7 +4578,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $tag The script tag markup.
 		 * @return bool True when the tag may be delay-rewritten.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::is_executable_script_type}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function is_executable_script_type( string $tag ): bool {
 			return $this->script_strategy()->is_executable_script_type( $tag );
@@ -4593,7 +4593,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param  string $handle The script's registered handle.
 		 * @return string Modified script tag with defer attribute.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::add_defer_attribute}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function add_defer_attribute( $tag, $handle ): string {
 			return $this->script_strategy()->add_defer_attribute( $tag, $handle );
@@ -4621,7 +4621,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param  string $handle The script's registered handle.
 		 * @return string Modified script tag with the defer attribute.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::add_defer_attribute_legacy}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function add_defer_attribute_legacy( $tag, $handle ): string {
 			return $this->script_strategy()->add_defer_attribute_legacy( $tag, $handle );
@@ -4643,7 +4643,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $pattern The configured pattern (handle or URL).
 		 * @return bool True if the handle matches the pattern.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::matches_delay_pattern}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function matches_delay_pattern( string $handle, string $pattern ): bool {
 			return $this->script_strategy()->matches_delay_pattern( $handle, $pattern );
@@ -4656,7 +4656,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string[] $patterns Pattern list.
 		 * @return string Empty string when no usable patterns; otherwise a ready regex.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_patterns_regex}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function get_delay_patterns_regex( array $patterns ): string {
 			return Script_Strategy::get_delay_patterns_regex( $patterns );
@@ -4673,7 +4673,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string[] $patterns Pattern list.
 		 * @return bool True on match.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::matches_any_delay_pattern}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function matches_any_delay_pattern( string $handle, array $patterns ): bool {
 			return $this->script_strategy()->matches_any_delay_pattern( $handle, $patterns );
@@ -4693,7 +4693,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $handle The script's registered handle.
 		 * @return bool True when the handle must stay un-delayed.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::is_delay_excluded_handle}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function is_delay_excluded_handle( string $handle ): bool {
 			return $this->script_strategy()->is_delay_excluded_handle( $handle );
@@ -4716,7 +4716,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return array<int, string>
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function get_delay_exclusions(): array {
 			return $this->script_strategy()->get_delay_exclusions();
@@ -4748,7 +4748,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return bool True when delay must be skipped for this request.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::is_delay_excluded_context}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function is_delay_excluded_context(): bool {
 			return Script_Strategy::is_delay_excluded_context();
@@ -4765,7 +4765,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return string Signature string.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::delay_context_request_signature}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function delay_context_request_signature(): string {
 			return Script_Strategy::delay_context_request_signature();
@@ -4777,7 +4777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return void
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::reset_delay_context_memo}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function reset_delay_context_memo(): void {
 			Script_Strategy::reset_delay_context_memo();
@@ -4789,7 +4789,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return bool True when delay must be skipped for this request.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::compute_delay_excluded_context}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function compute_delay_excluded_context(): bool {
 			return Script_Strategy::compute_delay_excluded_context();
@@ -4810,7 +4810,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $local_path Request path with a leading slash.
 		 * @return bool True when the path is a Woo page path.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::matches_woo_page_path}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function matches_woo_page_path( string $local_path ): bool {
 			return Script_Strategy::matches_woo_page_path( $local_path );
@@ -4834,7 +4834,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param bool|null $is_auto_matched Optional precomputed auto-candidate verdict.
 		 * @return string The strategy: 'interaction', 'idle', or 'viewport'.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_strategy_for_handle}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function get_delay_strategy_for_handle( string $handle, string $tag = '', ?bool $is_auto_matched = null ): string {
 			return $this->script_strategy()->get_delay_strategy_for_handle( $handle, $tag, $is_auto_matched );
@@ -4848,7 +4848,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $handle The script handle.
 		 * @return string The priority: 'high', 'normal', or 'low'.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_priority_for_handle}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function get_delay_priority_for_handle( string $handle ): string {
 			return $this->script_strategy()->get_delay_priority_for_handle( $handle );
@@ -4864,7 +4864,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return void
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::apply_per_page_delay_config}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function apply_per_page_delay_config(): void {
 			$this->script_strategy()->apply_per_page_delay_config();
@@ -4886,7 +4886,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_builder_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_builder_exclusions(): array {
 			return Script_Strategy::get_delay_js_builder_exclusions();
@@ -4902,7 +4902,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_commerce_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_commerce_exclusions(): array {
 			return Script_Strategy::get_delay_js_commerce_exclusions();
@@ -4917,7 +4917,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_slider_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_slider_exclusions(): array {
 			return Script_Strategy::get_delay_js_slider_exclusions();
@@ -4935,7 +4935,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_interaction_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_interaction_exclusions(): array {
 			return Script_Strategy::get_delay_js_interaction_exclusions();
@@ -4951,7 +4951,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.3.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_preset_levels}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_preset_levels(): array {
 			return Script_Strategy::get_delay_js_preset_levels();
@@ -4970,7 +4970,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $level Preset level (safe|balanced|aggressive).
 		 * @return array<string, bool>
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_preset_level_settings}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_preset_level_settings( string $level ): array {
 			return Script_Strategy::get_delay_js_preset_level_settings( $level );
@@ -4992,7 +4992,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $level Preset level (safe|balanced|aggressive).
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_preset_level_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_preset_level_exclusions( string $level ): array {
 			return Script_Strategy::get_delay_js_preset_level_exclusions( $level );
@@ -5012,7 +5012,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string[] $preset Curated preset exclusions.
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::filter_compat_preset_list}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function filter_compat_preset_list( string $filter, array $preset ): array {
 			return Script_Strategy::filter_compat_preset_list( $filter, $preset );
@@ -5031,7 +5031,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_consent_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_consent_exclusions(): array {
 			return Script_Strategy::get_delay_js_consent_exclusions();
@@ -5049,7 +5049,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_analytics_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_analytics_exclusions(): array {
 			return Script_Strategy::get_delay_js_analytics_exclusions();
@@ -5067,7 +5067,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_gallery_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_gallery_exclusions(): array {
 			return Script_Strategy::get_delay_js_gallery_exclusions();
@@ -5086,7 +5086,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_jquery_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_jquery_exclusions(): array {
 			return Script_Strategy::get_delay_js_jquery_exclusions();
@@ -5101,7 +5101,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return array<string, string>
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_compat_preset_map}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_compat_preset_map(): array {
 			return Script_Strategy::get_delay_js_compat_preset_map();
@@ -5118,7 +5118,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $slug Preset slug (consent|analytics|gallery|jquery).
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_compat_preset_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_compat_preset_exclusions( string $slug ): array {
 			return Script_Strategy::get_delay_js_compat_preset_exclusions( $slug );
@@ -6219,7 +6219,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_third_party_denylist}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_third_party_denylist(): array {
 			return Script_Strategy::get_delay_js_third_party_denylist();
@@ -6240,7 +6240,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param array $file_opt Effective file_optimisation slice.
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_third_party_allowlist_for_slice}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_third_party_allowlist_for_slice( array $file_opt ): array {
 			return Script_Strategy::get_delay_js_third_party_allowlist_for_slice( $file_opt );
@@ -6257,7 +6257,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_third_party_allowlist}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function get_delay_js_third_party_allowlist(): array {
 			return $this->script_strategy()->get_delay_js_third_party_allowlist();
@@ -6281,7 +6281,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $handle Script handle.
 		 * @return bool True when the script should be delayed in third-party mode.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::is_delay_third_party_candidate}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function is_delay_third_party_candidate( string $tag, string $handle ): bool {
 			return $this->script_strategy()->is_delay_third_party_candidate( $tag, $handle );
@@ -6306,7 +6306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $b Second host.
 		 * @return bool True when both hosts belong to the same site.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::is_same_site_script_host}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function is_same_site_script_host( string $a, string $b ): bool {
 			return Script_Strategy::is_same_site_script_host( $a, $b );
@@ -6326,7 +6326,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.3.0
 		 * @return array<string, string[]>
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_third_party_auto_categories}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_third_party_auto_categories(): array {
 			return Script_Strategy::get_delay_js_third_party_auto_categories();
@@ -6346,7 +6346,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $src_or_handle Script src URL, tag markup, or handle.
 		 * @return string Category label or empty string.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_third_party_auto_label}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_third_party_auto_label( string $src_or_handle ): string {
 			return Script_Strategy::get_delay_js_third_party_auto_label( $src_or_handle );
@@ -6358,7 +6358,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return void
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::reset_delay_third_party_auto_cache}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function reset_delay_third_party_auto_cache(): void {
 			Script_Strategy::reset_delay_third_party_auto_cache();
@@ -6383,7 +6383,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_third_party_auto_patterns}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_third_party_auto_patterns(): array {
 			return Script_Strategy::get_delay_js_third_party_auto_patterns();
@@ -6406,7 +6406,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $tag    Script tag markup or src URL.
 		 * @return bool True on match.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::matches_third_party_auto_pattern}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function matches_third_party_auto_pattern( string $handle, string $tag ): bool {
 			return Script_Strategy::matches_third_party_auto_pattern( $handle, $tag );
@@ -6427,7 +6427,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $handle Script handle.
 		 * @return bool True when the script should be delayed in auto mode.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::is_delay_third_party_auto_candidate}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function is_delay_third_party_auto_candidate( string $tag, string $handle ): bool {
 			return $this->script_strategy()->is_delay_third_party_auto_candidate( $tag, $handle );
@@ -6447,7 +6447,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $insert Attribute string including trailing space, e.g. 'fetchpriority="low" '.
 		 * @return string Tag with the attributes injected.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::inject_delay_script_attr}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function inject_delay_script_attr( string $tag, string $insert ): string {
 			return Script_Strategy::inject_delay_script_attr( $tag, $insert );
@@ -6465,7 +6465,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.2.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_base_preset_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public static function get_delay_js_base_preset_exclusions(): array {
 			return Script_Strategy::get_delay_js_base_preset_exclusions();
@@ -6485,7 +6485,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param array $file_opt file_optimisation settings slice.
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_protected_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private static function get_delay_js_protected_exclusions( array $file_opt ): array {
 			return Script_Strategy::get_delay_js_protected_exclusions( $file_opt );
@@ -6501,7 +6501,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return string[]
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::get_delay_js_preset_exclusions}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		private function get_delay_js_preset_exclusions(): array {
 			return $this->script_strategy()->get_delay_js_preset_exclusions();
@@ -6518,7 +6518,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 * @return bool True when Delay-JS must be skipped.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::is_delay_js_safe_context}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function is_delay_js_safe_context(): bool {
 			return $this->script_strategy()->is_delay_js_safe_context();
@@ -6541,7 +6541,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param  string $handle The script's registered handle.
 		 * @return string Modified script tag with fetchpriority.
 		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::add_fetchpriority_to_deferred}.
-		 * @since NEXT Proxied to Script_Strategy (ARCH-005).
+		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
 		 */
 		public function add_fetchpriority_to_deferred( $tag, $handle ): string {
 			return $this->script_strategy()->add_fetchpriority_to_deferred( $tag, $handle );

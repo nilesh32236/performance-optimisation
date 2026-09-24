@@ -5,7 +5,7 @@
  * logged-in user cache settings. State + save flow stay in Dashboard;
  * this card only renders props and forwards callbacks.
  *
- * @since NEXT
+ * @since 2.4.0
  * @param {Object}   props               Component props.
  * @param {boolean}  props.enabled       Whether logged-in cache is enabled.
  * @param {string[]} props.selectedRoles Selected role slugs.

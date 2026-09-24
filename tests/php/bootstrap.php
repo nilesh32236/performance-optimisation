@@ -373,7 +373,7 @@ trait WPPO_Test_Bootstrap {
 	 * pipeline should prefer explicitly-built collaborators shared by
 	 * identity instead of relying on the lazy in-class fallback.
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 * @param array $options Plugin options passed to Cache and collaborators.
 	 * @return \PerformanceOptimise\Inc\Cache Fully-initialized Cache instance.
 	 */

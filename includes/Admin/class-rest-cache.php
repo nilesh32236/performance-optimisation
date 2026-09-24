@@ -48,14 +48,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Cache' ) ) {
 	 * Always call via the `Rest` facade proxies, never directly on this
 	 * service (route registration stays on `Rest` by design).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Rest_Cache {
 
 		/**
 		 * Owning registrar (shared-infra owner: throttle, responses, cache dir).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var Rest
 		 */
 		private Rest $owner;
@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Cache' ) ) {
 		/**
 		 * Constructor.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param Rest $owner Owning registrar (shared-infra owner).
 		 */
 		public function __construct( Rest $owner ) {

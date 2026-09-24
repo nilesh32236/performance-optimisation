@@ -71,7 +71,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 	 * stays on the owner as the single source of truth, accessed through
 	 * the `@internal` `lcp_*()` bridges — never a new write path).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Lcp_Preload {
 
@@ -83,7 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * the live request state exactly as `$this->prop` accesses did before
 		 * the extraction.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Image_Optimisation
 		 */
 		private Image_Optimisation $owner;
@@ -91,7 +91,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		/**
 		 * Constructor.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param Image_Optimisation $owner Image_Optimisation instance (options + memo + collaborator owner).
 		 */
 		public function __construct( Image_Optimisation $owner ) {
@@ -197,7 +197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * Invoked from `Image_Optimisation::clear_runtime_caches()` (wired to
 		 * `switch_blog` and `wppo_after_cache_clear`); never call directly.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function clear_lcp_preload_caches(): void {
@@ -213,7 +213,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * Invoked from `Image_Optimisation::clear_instance_lcp_memo()`;
 		 * never call directly.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function clear_heuristic_lcp_memo(): void {
@@ -230,7 +230,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * isolating sites. Internal key only; emitted markup is unchanged.
 		 * Fail-open to the unprefixed hash.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $buffer HTML buffer.
 		 * @return string Memo key.
 		 */

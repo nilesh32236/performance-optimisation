@@ -48,7 +48,7 @@ export const SECRET_KEY_PATTERN =
  * a string masks them (only non-empty string values are masked; non-string
  * secrets are still deleted so a future non-string credential cannot leak).
  *
- * @since NEXT
+ * @since 2.4.0
  * @param {*}           value Value to walk.
  * @param {string|null} mask  Mask string or null for delete mode.
  * @return {*} Walked clone.
@@ -102,7 +102,7 @@ export const stripSensitiveKeys = ( value ) => walkSensitiveKeys( value, null );
  * Shared with PluginSetting.js so the export-redaction path and the
  * preset-strip path share one walker and one pattern.
  *
- * @since NEXT
+ * @since 2.4.0
  * @param {*}      value  Value to redact.
  * @param {string} [mask] Mask string.
  * @return {*} Redacted clone.

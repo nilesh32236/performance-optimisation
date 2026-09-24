@@ -5,7 +5,7 @@
  * previously copied in Dashboard.js and FileOptimization.js. A new field
  * (e.g. a lastPurge alias) fixed here reaches both tabs.
  *
- * @since NEXT
+ * @since 2.4.0
  */
 import { __, sprintf } from '@wordpress/i18n';
 import { isSafeHttpUrl } from '../../lib/urls';
@@ -13,7 +13,7 @@ import { isSafeHttpUrl } from '../../lib/urls';
 /**
  * Upgrade purge status banner.
  *
- * @since NEXT
+ * @since 2.4.0
  * @param {Object} props              Component props.
  * @param {Object} props.upgradePurge Normalised { last_purge, safe_preview_url } slice.
  * @return {*} Banner element or null when there is nothing to show.

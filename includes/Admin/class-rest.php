@@ -44,7 +44,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Cache-administration service (ARCH-011 extraction owner).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var Rest_Cache
 		 */
 		private Rest_Cache $rest_cache;
@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Settings-administration service (ARCH-011 extraction owner).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var Rest_Settings
 		 */
 		private Rest_Settings $rest_settings;
@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * must use this bridge — never a new write path.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $endpoint Endpoint slug.
 		 * @param int    $limit    Max hits per window.
 		 * @param int    $window   Window in seconds.
@@ -94,7 +94,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * a new write path.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param mixed       $data The data to return in the response.
 		 * @param bool        $success Indicates whether the request was successful.
 		 * @param int         $status_code The HTTP status code.
@@ -112,7 +112,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * base stays owned by Rest.
 		 *
 		 * @internal
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Cache directory path.
 		 */
 		public function rest_cache_dir(): string {

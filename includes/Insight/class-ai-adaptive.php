@@ -108,7 +108,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::reset_rum_anomaly_digest_memo}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function reset_rum_anomaly_digest_memo(): void {
@@ -1672,7 +1672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::get_deploy_notes}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array Result (see Ai_Anomaly).
 		 */
 		public static function get_deploy_notes(): array {
@@ -1683,7 +1683,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::add_deploy_note}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string   $note Parameter (see Ai_Anomaly).
 		 * @param int|null $ts Parameter (see Ai_Anomaly).
 		 * @return bool Result (see Ai_Anomaly).
@@ -1696,7 +1696,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::find_deploy_note_near}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param int $breach_ts Parameter (see Ai_Anomaly).
 		 * @return string Result (see Ai_Anomaly).
 		 */
@@ -1708,7 +1708,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::get_breach_state}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return array Result (see Ai_Anomaly).
 		 */
 		public static function get_breach_state(): array {
@@ -1719,7 +1719,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::set_breach_state}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array $state Parameter (see Ai_Anomaly).
 		 * @return void
 		 */
@@ -1731,7 +1731,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::detect_recoveries}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array|null $trends Parameter (see Ai_Anomaly).
 		 * @param int|null   $now Parameter (see Ai_Anomaly).
 		 * @return array Result (see Ai_Anomaly).
@@ -1744,7 +1744,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::get_last_anomaly_alarm}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return int Result (see Ai_Anomaly).
 		 */
 		public static function get_last_anomaly_alarm(): int {
@@ -1755,7 +1755,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::set_last_anomaly_alarm}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param int $ts Parameter (see Ai_Anomaly).
 		 * @return void
 		 */
@@ -1767,7 +1767,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::is_anomaly_cooled_down}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param int|null $now Parameter (see Ai_Anomaly).
 		 * @return bool Result (see Ai_Anomaly).
 		 */
@@ -1779,7 +1779,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::get_rum_anomaly_digest}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array|null $rum Parameter (see Ai_Anomaly).
 		 * @param int|null   $now Parameter (see Ai_Anomaly).
 		 * @return array Result (see Ai_Anomaly).
@@ -1792,7 +1792,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::detect_anomalies}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array|null $trends Parameter (see Ai_Anomaly).
 		 * @param array|null $rum Parameter (see Ai_Anomaly).
 		 * @param int|null   $now Parameter (see Ai_Anomaly).
@@ -1806,7 +1806,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::is_css_refresh_enabled}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return bool Result (see Ai_Anomaly).
 		 */
 		public static function is_css_refresh_enabled(): bool {
@@ -1817,7 +1817,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::css_refresh_cooldown_days}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return int Result (see Ai_Anomaly).
 		 */
 		public static function css_refresh_cooldown_days(): int {
@@ -1828,7 +1828,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::resolve_anomaly_url}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $trend_key Parameter (see Ai_Anomaly).
 		 * @return string Result (see Ai_Anomaly).
 		 */
@@ -1840,7 +1840,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::is_homepage_url}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url Parameter (see Ai_Anomaly).
 		 * @return bool Result (see Ai_Anomaly).
 		 */
@@ -1852,7 +1852,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::resolve_front_page_post_id}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return int Result (see Ai_Anomaly).
 		 */
 		public static function resolve_front_page_post_id(): int {
@@ -1863,7 +1863,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::resolve_anomaly_post_id}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url Parameter (see Ai_Anomaly).
 		 * @return int Result (see Ai_Anomaly).
 		 */
@@ -1875,7 +1875,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::get_css_refresh_snapshot}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $url Parameter (see Ai_Anomaly).
 		 * @return array Result (see Ai_Anomaly).
 		 */
@@ -1887,7 +1887,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::maybe_queue_css_refresh}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array    $anomaly Parameter (see Ai_Anomaly).
 		 * @param int|null $now Parameter (see Ai_Anomaly).
 		 * @return array Result (see Ai_Anomaly).
@@ -1900,7 +1900,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::get_anomaly_provisional_state}.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param array|null $trends Parameter (see Ai_Anomaly).
 		 * @param array|null $rum Parameter (see Ai_Anomaly).
 		 * @param int|null   $now Parameter (see Ai_Anomaly).

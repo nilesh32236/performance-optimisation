@@ -7,7 +7,7 @@
  * read-only upgrade_purge_status GET refresh. Fail-open: a failed fetch
  * keeps the seed.
  *
- * @since NEXT
+ * @since 2.4.0
  */
 
 import { useState, useCallback } from '@wordpress/element';
@@ -16,7 +16,7 @@ import { apiCall, getErrorLogMessage, getWppoSettings } from './apiRequest';
 /**
  * Normalise a raw upgrade-purge payload (PHP snake_case or camelCase alias).
  *
- * @since NEXT
+ * @since 2.4.0
  * @param {*} raw Raw seed or endpoint payload.
  * @return {{ last_purge: ?Object, safe_preview_url: string }} Normalised slice.
  */
@@ -33,7 +33,7 @@ export const normalizeUpgradePurge = ( raw ) => {
 /**
  * Upgrade-purge status state + manual refresh.
  *
- * @since NEXT
+ * @since 2.4.0
  * @return {{ upgradePurge: Object, refreshUpgradePurgeStatus: Function, setUpgradePurge: Function }} Status slice + refresh + raw setter (for optimistic purge updates).
  */
 export const useUpgradePurgeStatus = () => {

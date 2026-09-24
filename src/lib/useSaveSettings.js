@@ -6,7 +6,7 @@
  * setSaving + dismiss + apiCall('update_settings') + patchSettingsCache +
  * notify success/error + console.error + setSaving finally.
  *
- * @since NEXT
+ * @since 2.4.0
  */
 
 import { useState, useCallback } from '@wordpress/element';
@@ -16,7 +16,7 @@ import { apiCall, getErrorLogMessage, patchSettingsCache } from './apiRequest';
 /**
  * Save hook for a single settings tab.
  *
- * @since NEXT
+ * @since 2.4.0
  * @param {string}   tab                      Settings tab key (e.g. 'llms_txt').
  * @param {Object}   [options]                Hook options.
  * @param {Function} [options.notify]         useNotice notify callback.

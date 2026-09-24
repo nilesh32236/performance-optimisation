@@ -54,7 +54,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 	 * call for the guard toggle and TTL policy. `Util` proxies back at call
 	 * time only (autoloader, no load-time cycle).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Scheduler {
 
@@ -353,7 +353,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 		 * share one choke point instead of hand-rolling `function_exists()`
 		 * guards (ARCH-012). Read-only: never schedules.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $hook Cron hook name.
 		 * @param array  $args Optional event args.
 		 * @return int|false Timestamp of the next run, or false when unscheduled/unavailable.
@@ -379,7 +379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 		 * WP-Cron API is missing or throws. Hook name, timestamp,
 		 * recurrence, and args pass through unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $hook       Cron hook name.
 		 * @param int    $timestamp  First run timestamp (e.g. `time()`).
 		 * @param string $recurrence Schedule recurrence (e.g. `daily`).
@@ -412,7 +412,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Scheduler' ) ) {
 		 * {@see next_scheduled()} first (e.g. `wppo_page_cron_batch`).
 		 * Fail-open false when the WP-Cron API is missing or throws.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param int    $timestamp When the event will run.
 		 * @param string $hook      Cron hook name.
 		 * @param array  $args      Optional event args.

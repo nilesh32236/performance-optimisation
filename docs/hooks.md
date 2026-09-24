@@ -77,7 +77,7 @@ add_action( 'wppo_database_cleanup_completed', function( $type, $count ) {
 ---
 
 ### `wppo_purge_failed_actions`
-Filters whether failed Action Scheduler actions older than the retention bound are purged (issue #1310). Default off (failed-action debug history is retained unless the site opts in); the `database_cleanup.purgeFailedActions` setting value is passed as the default so either path enables the purge. The purge lifespan is `min( filtered failed-action retention, 3-month cap )` floored at one day, so a rogue retention filter returning 0 cannot destroy just-failed history. @since NEXT.
+Filters whether failed Action Scheduler actions older than the retention bound are purged (issue #1310). Default off (failed-action debug history is retained unless the site opts in); the `database_cleanup.purgeFailedActions` setting value is passed as the default so either path enables the purge. The purge lifespan is `min( filtered failed-action retention, 3-month cap )` floored at one day, so a rogue retention filter returning 0 cannot destroy just-failed history. @since 2.2.0.
 
 **Parameters:**
 - `$enabled` *(bool)* — Whether the failed-action purge is enabled. Default from `database_cleanup.purgeFailedActions` (`false`).
@@ -90,7 +90,7 @@ add_filter( 'wppo_purge_failed_actions', '__return_true' );
 ---
 
 ### `wppo_action_scheduler_cleanup_enabled`
-Filters whether the plugin may delegate to Action Scheduler's queue cleaner (`ActionScheduler_QueueCleaner::delete_old_actions()`) for terminal (complete/canceled, plus failed when upstream enables it) actions past retention (issue #1310). Cautious operators can return `false` to narrow the scope to a no-op (visibility only); site-specific narrowing beyond that should use the upstream `action_scheduler_*` filters. @since NEXT.
+Filters whether the plugin may delegate to Action Scheduler's queue cleaner (`ActionScheduler_QueueCleaner::delete_old_actions()`) for terminal (complete/canceled, plus failed when upstream enables it) actions past retention (issue #1310). Cautious operators can return `false` to narrow the scope to a no-op (visibility only); site-specific narrowing beyond that should use the upstream `action_scheduler_*` filters. @since 2.1.0.
 
 **Parameters:**
 - `$enabled` *(bool)* — Whether AS cleanup delegation is enabled. Default `true`.
@@ -208,7 +208,7 @@ add_filter( 'wppo_object_cache_probe_interval', function() {
 ---
 
 ### `wppo_nginx_probe_clear_sites`
-Bounds how many sites the nginx config-exposure probe-clear fans out to on multisite (audit #1338 review). Sibling verdicts self-expire in 1–2h by design, so a smaller sweep only delays freshness, never correctness. @since NEXT.
+Bounds how many sites the nginx config-exposure probe-clear fans out to on multisite (audit #1338 review). Sibling verdicts self-expire in 1–2h by design, so a smaller sweep only delays freshness, never correctness. @since 2.2.0.
 
 **Parameters:**
 - `$limit` *(int)* — Maximum site IDs to sweep. Default `500`, minimum `1`.
@@ -244,7 +244,7 @@ add_filter( 'wppo_woo_cacheable', function( $cacheable, $request_uri ) {
 ---
 
 ### `wppo_woo_faceted_query_params`
-Filters additional faceted layered-nav query param names treated as WooCommerce dynamic by `Util::is_woo_faceted_query()` (issue #1256). The built-in set (`filter_*`, `query_type_*`, `min_price`, `max_price`, `rating_filter`, `orderby`, `product_cat`, `pa_*`, `attribute_*`, `gpf_*`) always applies; names added here are matched case-insensitively as exact param names. Guarded by `has_filter()` — the filter only runs when a listener is present. @since NEXT.
+Filters additional faceted layered-nav query param names treated as WooCommerce dynamic by `Util::is_woo_faceted_query()` (issue #1256). The built-in set (`filter_*`, `query_type_*`, `min_price`, `max_price`, `rating_filter`, `orderby`, `product_cat`, `pa_*`, `attribute_*`, `gpf_*`) always applies; names added here are matched case-insensitively as exact param names. Guarded by `has_filter()` — the filter only runs when a listener is present. @since 2.1.0.
 
 **Parameters:**
 - `$params` *(string[])* — Additional lowercase param names (e.g. `array( 'filter_brand' )` is redundant — `filter_*` already covers it; use for custom params like `'my_layer'`).
@@ -322,7 +322,7 @@ add_filter( 'wppo_used_css_safelist', function( $safelist ) {
 ---
 
 ### `wppo_css_preview_fetch_timeout`
-Filters the dry-run preview fetch timeout in seconds (issue #1348). Bounds the permalink fetch inside `Used_CSS::generate_preview_for_post()` — shorter than the 15s background-job fetch since an operator is waiting on the preview response. Clamped to 1–60s; failures return `staged => false` with a reason. @since NEXT.
+Filters the dry-run preview fetch timeout in seconds (issue #1348). Bounds the permalink fetch inside `Used_CSS::generate_preview_for_post()` — shorter than the 15s background-job fetch since an operator is waiting on the preview response. Clamped to 1–60s; failures return `staged => false` with a reason. @since 2.3.0.
 
 **Parameters:**
 - `$timeout` *(int)* — Fetch timeout in seconds. Default 10.
@@ -337,7 +337,7 @@ add_filter( 'wppo_css_preview_fetch_timeout', function() {
 ---
 
 ### `wppo_used_css_regen_cooldown`
-Filters the used-CSS full-regeneration cooldown in seconds (issue #1107). Bounds how often `Used_CSS::regenerate_all()` may queue site-wide work when not forced (default 5 hours, matching the `wppo_used_css_cron` schedule). Explicit operator paths (builder purge after a wipe, manual REST/ability triggers) pass `$force` and bypass the cooldown; per-post freshness still applies. @since NEXT.
+Filters the used-CSS full-regeneration cooldown in seconds (issue #1107). Bounds how often `Used_CSS::regenerate_all()` may queue site-wide work when not forced (default 5 hours, matching the `wppo_used_css_cron` schedule). Explicit operator paths (builder purge after a wipe, manual REST/ability triggers) pass `$force` and bypass the cooldown; per-post freshness still applies. @since 2.1.0.
 
 **Parameters:**
 - `$cooldown` *(int)* — Cooldown in seconds. Default 5 hours.
@@ -352,7 +352,7 @@ add_filter( 'wppo_used_css_regen_cooldown', function() {
 ---
 
 ### `wppo_used_css_strict_csp`
-Return true when a Content-Security-Policy without `unsafe-inline` is enforced outside PHP (`.htaccess`/Nginx/hosting or edge headers), which the automatic detection (`headers_list()` plus a `<meta http-equiv>` scan) cannot see. Forces the async/delay used-CSS delivery modes to downgrade to the blocking file mode, since the async `onload` swap and the delay-mode inline loader would otherwise be blocked and leave stylesheets never applied. @since NEXT.
+Return true when a Content-Security-Policy without `unsafe-inline` is enforced outside PHP (`.htaccess`/Nginx/hosting or edge headers), which the automatic detection (`headers_list()` plus a `<meta http-equiv>` scan) cannot see. Forces the async/delay used-CSS delivery modes to downgrade to the blocking file mode, since the async `onload` swap and the delay-mode inline loader would otherwise be blocked and leave stylesheets never applied. @since 2.1.0.
 
 **Parameters:**
 - `$strict_csp` *(bool)* — Whether a server/edge-level strict CSP is active. Default false.
@@ -367,7 +367,7 @@ add_filter( 'wppo_used_css_strict_csp', function() {
 ---
 
 ### `wppo_critical_css_strict_csp`
-Return true when a Content-Security-Policy without `unsafe-inline` is enforced outside PHP (`.htaccess`/Nginx/hosting or edge headers), which the automatic `headers_list()` detection cannot see. Forces the short-CCSS async loadCSS fallback to downgrade to the blocking per-template file variant (or nothing, deferring to the full stylesheet), since the raw inline loader would otherwise be blocked. A nonce is never baked because this output enters the static page cache. @since NEXT.
+Return true when a Content-Security-Policy without `unsafe-inline` is enforced outside PHP (`.htaccess`/Nginx/hosting or edge headers), which the automatic `headers_list()` detection cannot see. Forces the short-CCSS async loadCSS fallback to downgrade to the blocking per-template file variant (or nothing, deferring to the full stylesheet), since the raw inline loader would otherwise be blocked. A nonce is never baked because this output enters the static page cache. @since 2.2.0.
 
 **Parameters:**
 - `$strict_csp` *(bool)* — Whether a server/edge-level strict CSP is active. Default false.
@@ -398,7 +398,7 @@ add_action( 'wppo_builder_drift_requeue', function( $post_id = 0 ) {
 ---
 
 ### `wppo_elementor_safe_mode_enabled`
-Filters whether Elementor-safe mode is active (issue #1259). When on (default), Combine CSS and combined-CSS inlining step aside on Elementor-built pages. @since NEXT.
+Filters whether Elementor-safe mode is active (issue #1259). When on (default), Combine CSS and combined-CSS inlining step aside on Elementor-built pages. @since 2.1.0.
 
 **Parameters:**
 - `$enabled` *(bool)* — Whether safe mode is on. Default follows the `file_optimisation.elementorSafeMode` setting (absent key = enabled).
@@ -418,7 +418,7 @@ add_filter( 'wppo_elementor_safe_mode_enabled', function( $enabled ) {
 ---
 
 ### `wppo_is_elementor_page`
-Filters the Elementor-built verdict for the current request (issue #1259). Return a non-null bool to force the verdict — the escape hatch for Elementor Theme Builder (header/footer/archive/popup), translated copies, and loop contexts that single-post meta detection does not cover. @since NEXT.
+Filters the Elementor-built verdict for the current request (issue #1259). Return a non-null bool to force the verdict — the escape hatch for Elementor Theme Builder (header/footer/archive/popup), translated copies, and loop contexts that single-post meta detection does not cover. @since 2.1.0.
 
 **Parameters:**
 - `$verdict` *(bool|null)* — Forced verdict. Default `null` (run built-in detection).
@@ -439,7 +439,7 @@ add_filter( 'wppo_is_elementor_page', function( $verdict, $post_id ) {
 ---
 
 ### `wppo_builder_used_css_full_regen`
-Restores the legacy forced full used-CSS requeue after a builder purge (issue #1259). By default the watcher runs a cooldown-gated targeted regen (`Used_CSS::request_targeted_regen()`) so a burst of builder updates cannot flood the scheduler; return `true` to wipe all variants and requeue site-wide instead. @since NEXT.
+Restores the legacy forced full used-CSS requeue after a builder purge (issue #1259). By default the watcher runs a cooldown-gated targeted regen (`Used_CSS::request_targeted_regen()`) so a burst of builder updates cannot flood the scheduler; return `true` to wipe all variants and requeue site-wide instead. @since 2.1.0.
 
 **Parameters:**
 - `$full` *(bool)* — Whether to force a full requeue. Default `false` (targeted).
@@ -454,7 +454,7 @@ add_filter( 'wppo_builder_used_css_full_regen', '__return_true' );
 ### `wppo_exclude_delay_js`
 Filters the list of script handles or URL substrings excluded from JavaScript delay loading. Applied to the resolved exclusion list after preset merging, so entries added here win over preset contents and per-page preset opt-outs are subtracted afterwards (filter-then-subtract).
 
-Exclusions apply to both halves of delay loading: the handle-level strategy assigned in `Main`, and the HTML rewrite that swaps a `<script>` to `type="wppo/javascript"` with the real source in `wppo-src`. A script is only genuinely eager when neither path rewrites it, so entries added here suppress both. @since 2.0.0; @since NEXT the HTML rewrite honours this filter.
+Exclusions apply to both halves of delay loading: the handle-level strategy assigned in `Main`, and the HTML rewrite that swaps a `<script>` to `type="wppo/javascript"` with the real source in `wppo-src`. A script is only genuinely eager when neither path rewrites it, so entries added here suppress both. @since 2.0.0; @since 2.1.0 the HTML rewrite honours this filter.
 
 **Parameters:**
 - `$exclusions` *(array)* — Array of excluded script handles/URLs.
@@ -521,7 +521,7 @@ add_filter( 'wppo_exclude_defer_js', function( $exclusions ) {
 ---
 
 ### `wppo_safe_mode_enabled`
-Filters the unified safe-mode kill switch (issue #1098). When truthy, Delay-JS + Defer-JS + Remove-Unused-CSS (and Critical-CSS stylesheet deferral) are all disabled in one click while the underlying `delayJS` / `deferJS` / `removeUnusedCSS` settings are preserved untouched — turn safe mode back off to restore the previous configuration (one-click recovery). Guarded by `has_filter()` — the filter is only applied when a listener is present. @since NEXT.
+Filters the unified safe-mode kill switch (issue #1098). When truthy, Delay-JS + Defer-JS + Remove-Unused-CSS (and Critical-CSS stylesheet deferral) are all disabled in one click while the underlying `delayJS` / `deferJS` / `removeUnusedCSS` settings are preserved untouched — turn safe mode back off to restore the previous configuration (one-click recovery). Guarded by `has_filter()` — the filter is only applied when a listener is present. @since 2.1.0.
 
 **Parameters:**
 - `$enabled` *(bool)* — Whether safe mode is on. Default from `file_optimisation.safeMode` (`false`).
@@ -541,7 +541,7 @@ add_filter( 'wppo_safe_mode_enabled', function( $enabled ) {
 ---
 
 ### `wppo_defer_js_preset_exclusions`
-Filters the defer-JS preset exclusions (jQuery, Elementor/Divi, WooCommerce handles). The built-in preset stays un-deferred by default so carts, checkouts, and builders never break. Guarded by `has_filter()` — returns the built-in preset verbatim when no listener is present. Merged via `array_unique` with user `excludeDeferJS`. @since NEXT.
+Filters the defer-JS preset exclusions (jQuery, Elementor/Divi, WooCommerce handles). The built-in preset stays un-deferred by default so carts, checkouts, and builders never break. Guarded by `has_filter()` — returns the built-in preset verbatim when no listener is present. Merged via `array_unique` with user `excludeDeferJS`. @since 2.1.0.
 
 **Parameters:**
 - `$preset` *(string[])* — Preset exclusion patterns.
@@ -557,7 +557,7 @@ add_filter( 'wppo_defer_js_preset_exclusions', function( $preset ) {
 ---
 
 ### `wppo_fragile_handle_map`
-Filters the fragile-handle map used by the auto-exclude detector (`safe_mode_detect` REST route → `Main::detect_fragile_handles()`). Each key is a lowercase handle fragment; each value carries the exclude `fields` (subset of `excludeDeferJS` / `excludeDelayJS`) and a human-readable `reason`. Guarded by `has_filter()` — returns the built-in map when no listener is present; non-array results fall back to the built-in map and entries are sanitized (empty fragments skipped, empty `fields` default to both exclude lists). @since NEXT.
+Filters the fragile-handle map used by the auto-exclude detector (`safe_mode_detect` REST route → `Main::detect_fragile_handles()`). Each key is a lowercase handle fragment; each value carries the exclude `fields` (subset of `excludeDeferJS` / `excludeDelayJS`) and a human-readable `reason`. Guarded by `has_filter()` — returns the built-in map when no listener is present; non-array results fall back to the built-in map and entries are sanitized (empty fragments skipped, empty `fields` default to both exclude lists). @since 2.3.0.
 
 **Parameters:**
 - `$map` *(array)* — Fragment => `array( 'fields' => string[], 'reason' => string )` map.
@@ -655,7 +655,7 @@ add_filter( 'wppo_exclude_randomized_from_combine', function( $excluded, $handle
 ---
 
 ### `wppo_minify_allowed_roots`
-Filters the allow-listed filesystem roots for minify/combine file serving (issue #1179). Every combine source path is canonicalized with `realpath()` and must resolve inside one of these roots (trailing-slash boundary) before any file bytes are read; out-of-root, symlink-escaped, wrapper-based, NUL-bearing, `..`-bearing, and `.php` targets are rejected and the asset degrades to its uncombined form. Guarded by `has_filter()` — the filter only runs when a listener is present; invalid or empty filtered values fall back to the defaults. @since NEXT.
+Filters the allow-listed filesystem roots for minify/combine file serving (issue #1179). Every combine source path is canonicalized with `realpath()` and must resolve inside one of these roots (trailing-slash boundary) before any file bytes are read; out-of-root, symlink-escaped, wrapper-based, NUL-bearing, `..`-bearing, and `.php` targets are rejected and the asset degrades to its uncombined form. Guarded by `has_filter()` — the filter only runs when a listener is present; invalid or empty filtered values fall back to the defaults. @since 2.1.0.
 
 **Parameters:**
 - `$roots` *(string[])* — Allowed root paths. Defaults: `ABSPATH`, `WP_CONTENT_DIR`, and the current site's uploads basedir (multisite-safe, resolves per blog).
@@ -671,7 +671,7 @@ add_filter( 'wppo_minify_allowed_roots', function( $roots ) {
 ---
 
 ### `wppo_allow_hidden_block_asset`
-Filters whether a hidden core block asset should be kept instead of omitted (issue #1147). On singular frontend views, `Main::omit_hidden_block_assets()` dequeues per-block `wp-block-*` stylesheets whose block type is absent from the current post content (hidden by default); return a truthy value to re-enable the asset for that block. On WP 6.9+ core's canonical `enqueue_empty_block_content_assets` filter takes precedence — a handle it keeps (returns `true` for the block name) is never omitted. The filter is only applied when a listener is registered (`has_filter()` guard). The omission pass only runs when on-demand block assets are enabled (`blockAssetsOnDemand` on, `loadAllCoreBlockAssets` off), only on singular views (archives and other composite views are never touched), only for handles verifiably registered as core block styles, and never when WordPress 6.9+ core block-asset hoisting owns the output via the template-enhancement buffer — in that case this filter does not run. The pass additionally bails out entirely when the post content references out-of-content block sources (reusable blocks, patterns, template parts, shortcodes), and keeps every asset when singular cannot be verified. A throwing listener fails open (the asset is kept). @since NEXT.
+Filters whether a hidden core block asset should be kept instead of omitted (issue #1147). On singular frontend views, `Main::omit_hidden_block_assets()` dequeues per-block `wp-block-*` stylesheets whose block type is absent from the current post content (hidden by default); return a truthy value to re-enable the asset for that block. On WP 6.9+ core's canonical `enqueue_empty_block_content_assets` filter takes precedence — a handle it keeps (returns `true` for the block name) is never omitted. The filter is only applied when a listener is registered (`has_filter()` guard). The omission pass only runs when on-demand block assets are enabled (`blockAssetsOnDemand` on, `loadAllCoreBlockAssets` off), only on singular views (archives and other composite views are never touched), only for handles verifiably registered as core block styles, and never when WordPress 6.9+ core block-asset hoisting owns the output via the template-enhancement buffer — in that case this filter does not run. The pass additionally bails out entirely when the post content references out-of-content block sources (reusable blocks, patterns, template parts, shortcodes), and keeps every asset when singular cannot be verified. A throwing listener fails open (the asset is kept). @since 2.1.0.
 
 **Parameters:**
 - `$allowed` *(bool)* — Whether to keep the asset. Default `false` (omit).
@@ -708,7 +708,7 @@ add_filter( 'wppo_cache_page_html', function( $html, $url ) {
 ---
 
 ### `wppo_cache_query_allowlist`
-Filters the list of cache-neutral (tracking/marketing) query params used by the query-poisoning guard (issue #1141). Guarded by `has_filter()` — the filter only runs when a listener is present. A request whose query params are all in this list (or carry the `utm_` prefix) may still be served from the clean-URL cache entry, but its response is never stored over the clean file; any other param (including the legacy `s`, `ver`, `v`, which always force dynamic even if added here) forces a dynamic uncached response. @since NEXT.
+Filters the list of cache-neutral (tracking/marketing) query params used by the query-poisoning guard (issue #1141). Guarded by `has_filter()` — the filter only runs when a listener is present. A request whose query params are all in this list (or carry the `utm_` prefix) may still be served from the clean-URL cache entry, but its response is never stored over the clean file; any other param (including the legacy `s`, `ver`, `v`, which always force dynamic even if added here) forces a dynamic uncached response. @since 2.1.0.
 
 **Parameters:**
 - `$allowlist` *(string[])* — Lowercase cache-neutral param names (defaults: `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `utm_id`, `gclid`, `gbraid`, `wbraid`, `fbclid`, `msclkid`, `ttclid`, `li_fat_id`, `mc_cid`, `mc_eid`, `igshid`, `dclid`, `yclid`, `gclsrc`, `_ga`, `_gl`, `pk_campaign`, `pk_kwd`, `piwik_kwd`, `matomo`, plus Facebook `fb_action_ids`/`fb_action_types`/`fb_source`).
@@ -1060,7 +1060,7 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
 ---
 
 ### `wppo_occlusion_fetchpriority_low_enabled`
-Filters whether OD-measured occluded (CSS-hidden but in-viewport) images are demoted to `fetchpriority=low`. Additive `image_optimisation.occlusionFetchpriorityLow` flag, default off. The true-LCP node is never demoted and `loading` is never touched, so the single-high and never-lazy+high invariants hold. @since NEXT.
+Filters whether OD-measured occluded (CSS-hidden but in-viewport) images are demoted to `fetchpriority=low`. Additive `image_optimisation.occlusionFetchpriorityLow` flag, default off. The true-LCP node is never demoted and `loading` is never touched, so the single-high and never-lazy+high invariants hold. @since 2.3.0.
 
 **Parameters:**
 - `$enabled` *(bool)* — Whether occlusion demotion is enabled.
@@ -1073,7 +1073,7 @@ add_filter( 'wppo_occlusion_fetchpriority_low_enabled', '__return_true' );
 ---
 
 ### `wppo_occlusion_fetchpriority_low_urls`
-Filters the occluded image URL list before `fetchpriority=low` demotion. @since NEXT.
+Filters the occluded image URL list before `fetchpriority=low` demotion. @since 2.3.0.
 
 **Parameters:**
 - `$occluded_urls` *(string[])* — Occluded image URLs.
@@ -1089,7 +1089,7 @@ add_filter( 'wppo_occlusion_fetchpriority_low_urls', function( $urls, $buffer ) 
 ---
 
 ### `wppo_computed_css_hero_url`
-Passes a server-side computed CSS-hero background URL (e.g. derived from enqueued stylesheets where no inline `style=""` exists). Validated as an image on an allowed origin (same-origin or configured CDN); anything else is ignored. @since NEXT.
+Passes a server-side computed CSS-hero background URL (e.g. derived from enqueued stylesheets where no inline `style=""` exists). Validated as an image on an allowed origin (same-origin or configured CDN); anything else is ignored. @since 2.2.0.
 
 **Parameters:**
 - `$url` *(string)* — Computed hero URL (default `''`).
@@ -1233,9 +1233,9 @@ Filters the RUM-ranked top URLs for the gated speculation list rule (issue #1061
 ---
 
 ### `wppo_ai_anomaly_detected`
-Filters the detected performance anomalies (LCP +30% relative or CLS +0.05 absolute delta, RUM-corroborated, 7-day cooldown; plus the local RUM anomaly digest covering LCP/INP +30% relative and CLS +0.05 absolute delta as recent-window medians vs baseline with min-sample gate + tolerance band, @since NEXT). @since 2.0.0.
+Filters the detected performance anomalies (LCP +30% relative or CLS +0.05 absolute delta, RUM-corroborated, 7-day cooldown; plus the local RUM anomaly digest covering LCP/INP +30% relative and CLS +0.05 absolute delta as recent-window medians vs baseline with min-sample gate + tolerance band, @since 2.1.0). @since 2.0.0.
 
-At most one anomaly is passed; return an empty array to suppress the banner. The legacy `wppo_ai_lcp_regression` filter still runs for LCP anomalies. Digest entries (source `rum-digest`, @since NEXT) carry the trend shape plus `path`, `recent`, `window` (e.g. `recent 2026-09-10 vs baseline 2026-09-01 to 2026-09-09`), `samples`, and `source` so the alert can link the affected path and window; the `metric` may be `lcp`, `inp` (digest only — lab trends carry no INP snapshots), or `cls`.
+At most one anomaly is passed; return an empty array to suppress the banner. The legacy `wppo_ai_lcp_regression` filter still runs for LCP anomalies. Digest entries (source `rum-digest`, @since 2.1.0) carry the trend shape plus `path`, `recent`, `window` (e.g. `recent 2026-09-10 vs baseline 2026-09-01 to 2026-09-09`), `samples`, and `source` so the alert can link the affected path and window; the `metric` may be `lcp`, `inp` (digest only — lab trends carry no INP snapshots), or `cls`.
 
 **Parameters:**
 - `$anomalies` *(array[])* — At most one anomaly array (`key`, `metric` (`lcp`|`cls`, plus `inp` for digest entries), `baseline`, `current`, plus `change_pct` for LCP/INP or `change_abs` for CLS; digest entries add `path`, `recent`, `window`, `samples`, `source`).
@@ -1267,7 +1267,7 @@ Filters the minimum numeric samples before an anomaly arm may fire (trend arm an
 ---
 
 ### `wppo_ai_css_refresh_enabled`
-Filters whether RUM-triggered CSS refresh may queue jobs (issue #1407). @since NEXT. Default off/suggest-only via `ai_adaptive.css_refresh_on_lcp_regression`; fail-open to false.
+Filters whether RUM-triggered CSS refresh may queue jobs (issue #1407). @since 2.3.0. Default off/suggest-only via `ai_adaptive.css_refresh_on_lcp_regression`; fail-open to false.
 
 **Parameters:**
 - `$enabled` *(bool)* — Whether the CSS-refresh opt-in is on.
@@ -1280,7 +1280,7 @@ add_filter( 'wppo_ai_css_refresh_enabled', '__return_true' );
 ---
 
 ### `wppo_ai_css_refresh_cooldown_days`
-Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since NEXT. Non-numeric or negative values fail open to the current setting.
+Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since 2.3.0. Non-numeric or negative values fail open to the current setting.
 
 **Parameters:**
 - `$days` *(int)* — Cooldown days (default 7, from `ai_adaptive.css_refresh_cooldown_days`; values below 1 are normalized up to 1).
@@ -1288,7 +1288,7 @@ Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since NE
 ---
 
 ### `wppo_ai_css_refresh_queued`
-Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since NEXT. In-repo consumer `Main::on_ai_css_refresh_queued()` regenerates the matching critical-CSS template (`home`/`page`/`single`); third parties may hook additional template refreshes without coupling the bridge to template mapping.
+Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since 2.3.0. In-repo consumer `Main::on_ai_css_refresh_queued()` regenerates the matching critical-CSS template (`home`/`page`/`single`); third parties may hook additional template refreshes without coupling the bridge to template mapping.
 
 **Parameters:**
 - `$url` *(string)* — Regressed URL.
@@ -1298,7 +1298,7 @@ Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since NE
 ---
 
 ### `wppo_ai_anomaly_tolerance_pct`
-Filters the relative tolerance band (percent) above a relative digest arm threshold (issue #1445). The LCP/INP digest arm fires only when the recent-window median clears `baseline * 1.3 * (1 + tolerance/100)`, so borderline wobble inside the band stays silent. @since NEXT.
+Filters the relative tolerance band (percent) above a relative digest arm threshold (issue #1445). The LCP/INP digest arm fires only when the recent-window median clears `baseline * 1.3 * (1 + tolerance/100)`, so borderline wobble inside the band stays silent. @since 2.3.0.
 
 **Parameters:**
 - `$tolerance` *(float)* — Tolerance percent (default 5.0, from `ai_adaptive.anomaly_tolerance_pct`, clamped 0–50).
@@ -1306,7 +1306,7 @@ Filters the relative tolerance band (percent) above a relative digest arm thresh
 ---
 
 ### `wppo_ai_anomaly_tolerance_abs`
-Filters the absolute tolerance band added to the CLS digest threshold (issue #1445). The CLS digest arm fires only when the recent-window median clears `baseline + 0.05 + tolerance`, so borderline wobble inside the band stays silent. @since NEXT.
+Filters the absolute tolerance band added to the CLS digest threshold (issue #1445). The CLS digest arm fires only when the recent-window median clears `baseline + 0.05 + tolerance`, so borderline wobble inside the band stays silent. @since 2.3.0.
 
 **Parameters:**
 - `$tolerance` *(float)* — Absolute tolerance (default 0.01, from `ai_adaptive.anomaly_tolerance_abs`, clamped 0–1).
@@ -1314,7 +1314,7 @@ Filters the absolute tolerance band added to the CLS digest threshold (issue #14
 ---
 
 ### `wppo_ai_anomaly_persistence_windows`
-Filters the number of trailing windows that must each breach the ratio/delta gate before an anomaly may page (single noisy windows never page). @since NEXT. Values are clamped to 1–29 (trend history holds 30 snapshots and detection needs persistence+1 samples for a non-empty baseline, so 29 keeps every admittable value reachable).
+Filters the number of trailing windows that must each breach the ratio/delta gate before an anomaly may page (single noisy windows never page). @since 2.3.0. Values are clamped to 1–29 (trend history holds 30 snapshots and detection needs persistence+1 samples for a non-empty baseline, so 29 keeps every admittable value reachable).
 
 **Parameters:**
 - `$windows` *(int)* — Trailing windows (default 3, from `ai_adaptive.anomaly_persistence_windows`).
@@ -1322,7 +1322,7 @@ Filters the number of trailing windows that must each breach the ratio/delta gat
 ---
 
 ### `wppo_ai_anomaly_p75_min_samples`
-Filters the minimum RUM samples before field data may corroborate a trend anomaly (enforced per metric arm). @since NEXT. Values are clamped to 1–30.
+Filters the minimum RUM samples before field data may corroborate a trend anomaly (enforced per metric arm). @since 2.3.0. Values are clamped to 1–30.
 
 **Parameters:**
 - `$min` *(int)* — Minimum RUM samples (default 10, from `ai_adaptive.anomaly_p75_min_samples`).
@@ -1361,7 +1361,7 @@ Trusted-code-only: a non-array return falls back to the pre-filter rules and non
 ---
 
 ### `wppo_speculation_prerender_list_urls`
-Filters the high-value prerender list URLs before the dedicated prerender rule is registered/appended. @since NEXT.
+Filters the high-value prerender list URLs before the dedicated prerender rule is registered/appended. @since 2.1.0.
 
 Emitted as a `{"source":"list"}` prerender rule with `moderate` eagerness via `Main::wppo_register_speculation_rules()` (WP 6.8+ object path and legacy array path) when `preload_settings.enableSpeculationRules` and the opt-in `preload_settings.speculationPrerenderList` are on, the static-cache + RUM-qualified gate passes, and the visitor is not logged-in/commerce. Post-filter output is re-validated (same-origin, no commerce/query), deduped, and re-sliced to `speculationTopUrlsLimit`.
 
@@ -1371,7 +1371,7 @@ Emitted as a `{"source":"list"}` prerender rule with `moderate` eagerness via `M
 ---
 
 ### `wppo_speculation_prerender_list_rule`
-Filters the high-value prerender list rule before it is registered/appended. @since NEXT.
+Filters the high-value prerender list rule before it is registered/appended. @since 2.1.0.
 
 Post-filter validation enforces `source: list`, an allowlisted eagerness (invalid values fall back to `moderate`), and re-validated/re-sliced `urls`; a rule with the wrong source or no valid URLs is dropped (input returned unchanged).
 
@@ -1381,7 +1381,7 @@ Post-filter validation enforces `source: list`, an allowlisted eagerness (invali
 ---
 
 ### `wppo_speculation_prerender_list_rules`
-Filters the speculation rules after the high-value prerender list rule is appended (legacy array path only; the WP 6.8+ object path registers via `add_rule()` instead). @since NEXT.
+Filters the speculation rules after the high-value prerender list rule is appended (legacy array path only; the WP 6.8+ object path registers via `add_rule()` instead). @since 2.1.0.
 
 Trusted-code-only: a non-array return falls back to the pre-filter rules and non-array entries are dropped.
 
@@ -1497,7 +1497,7 @@ add_filter( 'wppo_server_timing_enabled', function( $enabled ) {
 ---
 
 ### `wppo_rum_throttle_threshold`
-Filters the per-minute collection volume that engages the RUM high-traffic auto-throttle (issue #1214). When the site-wide beacon count for the current minute (the windowed `wppo_rum_global` bucket, so no new transient writes) reaches this threshold, the effective sample rate halves (floored at 1) for the rest of the minute. A non-positive value disables the throttle. Non-numeric filter returns fall back to the default (fail-open). @since NEXT.
+Filters the per-minute collection volume that engages the RUM high-traffic auto-throttle (issue #1214). When the site-wide beacon count for the current minute (the windowed `wppo_rum_global` bucket, so no new transient writes) reaches this threshold, the effective sample rate halves (floored at 1) for the rest of the minute. A non-positive value disables the throttle. Non-numeric filter returns fall back to the default (fail-open). @since 2.1.0.
 
 **Parameters:**
 - `$threshold` *(int)* — Beacons per minute that engage the throttle. Default `60` (`RUM::RUM_THROTTLE_THRESHOLD_DEFAULT`).
@@ -1512,7 +1512,7 @@ add_filter( 'wppo_rum_throttle_threshold', function() {
 ---
 
 ### `wppo_rum_effective_sample_rate`
-Filters the final RUM effective sample rate after the high-traffic auto-throttle (issue #1214). Out-of-range values (outside 1–100) fall back to the unfiltered effective rate. Sampling is a lossy hint only: the client (`src/rum.js`) and the server (`RUM::store_sample()`) each roll independently at this rate, so stored volume is approximately rate²/100. @since NEXT.
+Filters the final RUM effective sample rate after the high-traffic auto-throttle (issue #1214). Out-of-range values (outside 1–100) fall back to the unfiltered effective rate. Sampling is a lossy hint only: the client (`src/rum.js`) and the server (`RUM::store_sample()`) each roll independently at this rate, so stored volume is approximately rate²/100. @since 2.1.0.
 
 **Parameters:**
 - `$effective` *(int)* — Effective rate in 1–100 (configured rate, halved under throttle).
@@ -1676,7 +1676,7 @@ Filters the delay-JS first-click interaction preset exclusions (popup/dialog, mo
 ---
 
 ### `wppo_delay_js_consent_exclusions`
-Filters the delay-JS consent compatibility preset exclusions (CookieYes, Cookiebot, Complianz, Borlabs, OneTrust, etc.). Opt-in via the `delayJSConsentPreset` setting; merged additively with manual exclusions. @since NEXT.
+Filters the delay-JS consent compatibility preset exclusions (CookieYes, Cookiebot, Complianz, Borlabs, OneTrust, etc.). Opt-in via the `delayJSConsentPreset` setting; merged additively with manual exclusions. @since 2.2.0.
 
 **Parameters:**
 - `$preset` *(string[])* — Consent preset exclusion patterns.
@@ -1684,7 +1684,7 @@ Filters the delay-JS consent compatibility preset exclusions (CookieYes, Cookieb
 ---
 
 ### `wppo_delay_js_analytics_exclusions`
-Filters the delay-JS analytics compatibility preset exclusions (GA4 gtag, Matomo, Plausible, etc.). Opt-in via the `delayJSAnalyticsPreset` setting; merged additively with manual exclusions. @since NEXT.
+Filters the delay-JS analytics compatibility preset exclusions (GA4 gtag, Matomo, Plausible, etc.). Opt-in via the `delayJSAnalyticsPreset` setting; merged additively with manual exclusions. @since 2.2.0.
 
 **Parameters:**
 - `$preset` *(string[])* — Analytics preset exclusion patterns.
@@ -1692,7 +1692,7 @@ Filters the delay-JS analytics compatibility preset exclusions (GA4 gtag, Matomo
 ---
 
 ### `wppo_delay_js_gallery_exclusions`
-Filters the delay-JS gallery compatibility preset exclusions (PhotoSwipe, Fancybox, Envira, FooGallery, etc.). Opt-in via the `delayJSGalleryPreset` setting; merged additively with manual exclusions. @since NEXT.
+Filters the delay-JS gallery compatibility preset exclusions (PhotoSwipe, Fancybox, Envira, FooGallery, etc.). Opt-in via the `delayJSGalleryPreset` setting; merged additively with manual exclusions. @since 2.2.0.
 
 **Parameters:**
 - `$preset` *(string[])* — Gallery preset exclusion patterns.
@@ -1700,7 +1700,7 @@ Filters the delay-JS gallery compatibility preset exclusions (PhotoSwipe, Fancyb
 ---
 
 ### `wppo_delay_js_jquery_exclusions`
-Filters the delay-JS jQuery legacy preset exclusions (jQuery UI and legacy jQuery plugins; shops stay covered by the commerce preset). Opt-in via the `delayJSJqueryPreset` setting; merged additively with manual exclusions. @since NEXT.
+Filters the delay-JS jQuery legacy preset exclusions (jQuery UI and legacy jQuery plugins; shops stay covered by the commerce preset). Opt-in via the `delayJSJqueryPreset` setting; merged additively with manual exclusions. @since 2.2.0.
 
 **Parameters:**
 - `$preset` *(string[])* — jQuery preset exclusion patterns.
@@ -1708,7 +1708,7 @@ Filters the delay-JS jQuery legacy preset exclusions (jQuery UI and legacy jQuer
 ---
 
 ### `wppo_delay_js_third_party_denylist`
-Filters the curated one-click third-party delay denylist (analytics, ads, social, chat, embeds). Payment gateways (Stripe, PayPal) and consent-management banners (Cookiebot, OneTrust, TrustArc, Quantcast) are intentionally excluded from the preset so one-click mode keeps them eager; add them via the extra-denylist textarea if desired. @since NEXT.
+Filters the curated one-click third-party delay denylist (analytics, ads, social, chat, embeds). Payment gateways (Stripe, PayPal) and consent-management banners (Cookiebot, OneTrust, TrustArc, Quantcast) are intentionally excluded from the preset so one-click mode keeps them eager; add them via the extra-denylist textarea if desired. @since 2.1.0.
 
 **Parameters:**
 - `$preset` *(string[])* — Third-party denylist patterns.
@@ -1716,7 +1716,7 @@ Filters the curated one-click third-party delay denylist (analytics, ads, social
 ---
 
 ### `wppo_delay_js_third_party_allowlist`
-Filters the user third-party allowlist that always wins over the denylist (scripts that must stay eager). @since NEXT.
+Filters the user third-party allowlist that always wins over the denylist (scripts that must stay eager). @since 2.1.0.
 
 **Parameters:**
 - `$list` *(string[])* — Allowlist patterns, pre-populated from the `delayJSThirdPartyAllowlist` textarea setting. Callbacks should merge/append (e.g. `array_merge( $list, [...] )`) rather than replace, so user entries are preserved.
@@ -1724,7 +1724,7 @@ Filters the user third-party allowlist that always wins over the denylist (scrip
 ---
 
 ### `wppo_delay_js_third_party_auto_patterns`
-Filters the curated known-vendor URL patterns used by the opt-in auto third-party delay mode (`delayJSThirdPartyAuto`). Auto-matched scripts delay until the browser is idle (load-when-idle parity with the manual idle list). Fail-open: non-array or throwing callbacks fall back to the built-in preset; a valid empty array is honored and disables auto mode. Guarded with `has_filter()` so requests without a registered callback never pay for the filter. Matching is src-substring on both output paths; handle matching (pre-slash segment, word-boundary) applies on the `script_loader_tag` path only — the buffered path has no handle. Callbacks should merge/append (e.g. `$patterns[] = 'cdn.example.com/tracker';`) rather than replace, so built-in vendors are preserved. @since NEXT.
+Filters the curated known-vendor URL patterns used by the opt-in auto third-party delay mode (`delayJSThirdPartyAuto`). Auto-matched scripts delay until the browser is idle (load-when-idle parity with the manual idle list). Fail-open: non-array or throwing callbacks fall back to the built-in preset; a valid empty array is honored and disables auto mode. Guarded with `has_filter()` so requests without a registered callback never pay for the filter. Matching is src-substring on both output paths; handle matching (pre-slash segment, word-boundary) applies on the `script_loader_tag` path only — the buffered path has no handle. Callbacks should merge/append (e.g. `$patterns[] = 'cdn.example.com/tracker';`) rather than replace, so built-in vendors are preserved. @since 2.2.0.
 
 **Parameters:**
 - `$preset` *(string[])* — Auto third-party URL patterns.
@@ -1840,7 +1840,7 @@ Filters whether smart quality mapping is applied to image conversion. Return fal
 ---
 
 ### `wppo_smart_quality_value`
-Filters the resolved smart quality value before size/role offsets are applied. Return an int (or numeric string) in 1-100 to override the heuristic outright; booleans and out-of-range values fail open to the base quality. @since NEXT.
+Filters the resolved smart quality value before size/role offsets are applied. Return an int (or numeric string) in 1-100 to override the heuristic outright; booleans and out-of-range values fail open to the base quality. @since 2.3.0.
 
 **Parameters:**
 - `$quality` *(int)* — Base quality before size/role offsets.
@@ -1859,7 +1859,7 @@ add_filter( 'wppo_smart_quality_value', function ( $quality, $mime, $size, $sour
 ---
 
 ### `wppo_smart_pipeline_enabled`
-Kill-switch filter for the size-compare smart-compress + local LQIP placeholder pipeline. Return falsy to disable both features: oversized converted siblings are kept (legacy behaviour) and native-lazy images receive no placeholder attributes. Server-side only — zero external HTTP either way. @since NEXT.
+Kill-switch filter for the size-compare smart-compress + local LQIP placeholder pipeline. Return falsy to disable both features: oversized converted siblings are kept (legacy behaviour) and native-lazy images receive no placeholder attributes. Server-side only — zero external HTTP either way. @since 2.1.0.
 
 **Parameters:**
 - `$enabled` *(bool)* — Default from the `image_optimisation.discardOversizedSibling` setting (`true`).
@@ -1867,7 +1867,7 @@ Kill-switch filter for the size-compare smart-compress + local LQIP placeholder 
 ---
 
 ### `wppo_discard_oversized_sibling`
-Filters whether a converted sibling at or above its source byte size is discarded (source kept, status recorded as `skipped`). Return falsy to keep the sibling. Fail-open: missing/unreadable files are never discarded. @since NEXT.
+Filters whether a converted sibling at or above its source byte size is discarded (source kept, status recorded as `skipped`). Return falsy to keep the sibling. Fail-open: missing/unreadable files are never discarded. @since 2.1.0.
 
 **Parameters:**
 - `$discard` *(bool)* — Whether to discard the sibling.
@@ -1927,7 +1927,7 @@ Filters the generated size-adjust fallback CSS for a font family. @since 2.0.0.
 ---
 
 ### `wppo_font_display`
-Filters the `font-display` value injected into self-hosted Google Fonts CSS and combined CSS (default `swap`). Return a falsy value to skip injection (opt-out). Unknown values fall back to `swap`. @since NEXT.
+Filters the `font-display` value injected into self-hosted Google Fonts CSS and combined CSS (default `swap`). Return a falsy value to skip injection (opt-out). Unknown values fall back to `swap`. @since 2.1.0.
 
 **Parameters:**
 - `$display` *(string)* — Desired value (`swap|block|fallback|optional|auto`).
@@ -2000,7 +2000,7 @@ Filters how long a Critical CSS source checksum is kept. @since 2.0.0.
 ---
 
 ### `wppo_ccss_generation_timeout`
-Filters the wall-clock budget in seconds for one Critical CSS generation run (fetch plus parse). On expiry the run aborts fail-open: the previously stored CSS is left untouched, no partial output is stored or inlined, and a retry is scheduled with exponential backoff (5min, 10min, 20min, 40min steps, escalating to `failed` once generic + timeout failures combined reach the `ccssMaxRetries` cap; only the escalation is logged). Below the cap the status is `queued` (1h TTL) while terminal outcomes are `failed` (1-day TTL). Stored values heal to the default `25` when missing, non-numeric, zero, or negative; in-range stored values and valid filter output clamp to 1–120. Non-numeric filter output is ignored and the stored budget is kept. Default `25` (stored `file_optimisation.ccssGenTimeout`). @since NEXT.
+Filters the wall-clock budget in seconds for one Critical CSS generation run (fetch plus parse). On expiry the run aborts fail-open: the previously stored CSS is left untouched, no partial output is stored or inlined, and a retry is scheduled with exponential backoff (5min, 10min, 20min, 40min steps, escalating to `failed` once generic + timeout failures combined reach the `ccssMaxRetries` cap; only the escalation is logged). Below the cap the status is `queued` (1h TTL) while terminal outcomes are `failed` (1-day TTL). Stored values heal to the default `25` when missing, non-numeric, zero, or negative; in-range stored values and valid filter output clamp to 1–120. Non-numeric filter output is ignored and the stored budget is kept. Default `25` (stored `file_optimisation.ccssGenTimeout`). @since 2.1.0.
 
 **Parameters:**
 - `$timeout` *(int)* — Budget in seconds. Default `25`.
@@ -2014,7 +2014,7 @@ add_filter( 'wppo_ccss_generation_timeout', static function() { return 45; } );
 ---
 
 ### `wppo_ccss_queue_cap`
-Filters how many RUM-worst-first Critical CSS templates are queued per regeneration run. Templates are ordered slowest-p75-first, so the budget lands on worst pages first; the next cron run picks up the remainder. Stored values heal to the default `5` when missing; non-numeric or non-positive stored values mean uncapped (current behaviour). Valid filter output clamps to 1–100; non-numeric filter output is ignored and the stored cap is kept. Default `5` (stored `file_optimisation.ccssQueueCap`). @since NEXT.
+Filters how many RUM-worst-first Critical CSS templates are queued per regeneration run. Templates are ordered slowest-p75-first, so the budget lands on worst pages first; the next cron run picks up the remainder. Stored values heal to the default `5` when missing; non-numeric or non-positive stored values mean uncapped (current behaviour). Valid filter output clamps to 1–100; non-numeric filter output is ignored and the stored cap is kept. Default `5` (stored `file_optimisation.ccssQueueCap`). @since 2.1.0.
 
 **Parameters:**
 - `$cap` *(int)* — Per-run cap. Default `5`.
@@ -2028,7 +2028,7 @@ add_filter( 'wppo_ccss_queue_cap', static function() { return 10; } );
 ---
 
 ### `wppo_ccss_regen_cooldown`
-Filters the full-regeneration cooldown in seconds for Critical CSS (`Critical_CSS::regenerate_all()`). Repeat non-forced callers inside the window return `0` without re-scanning; explicit operator paths bypass it via `$force`. Non-numeric or non-positive filter output is ignored and the `18000` default is kept, so a rogue filter can never disable the cooldown. Default `18000`. @since NEXT.
+Filters the full-regeneration cooldown in seconds for Critical CSS (`Critical_CSS::regenerate_all()`). Repeat non-forced callers inside the window return `0` without re-scanning; explicit operator paths bypass it via `$force`. Non-numeric or non-positive filter output is ignored and the `18000` default is kept, so a rogue filter can never disable the cooldown. Default `18000`. @since 2.3.0.
 
 **Parameters:**
 - `$cooldown` *(int)* — Cooldown in seconds. Default `18000`.
@@ -2042,7 +2042,7 @@ add_filter( 'wppo_ccss_regen_cooldown', static function() { return 3600; } );
 ---
 
 ### `wppo_ccss_inline_budget`
-Filters the gzipped inline budget in bytes for Critical CSS output (issue #1388). Over-budget output is never inlined: the prior good file is kept, no inline CSS is emitted, and stylesheet deferral is skipped for the request (deferred full stylesheet plus used CSS only). The over-budget warning is throttled to once per template per 12h. Stored values heal to the default `14` KB when missing or out of range; valid filter output clamps to 1–100 KB (`MIN..MAX_CCSS_INLINE_BUDGET_BYTES`); non-numeric filter output is ignored and the stored budget is kept. Default `14 * 1024` (stored `file_optimisation.ccssInlineBudgetKb`). @since NEXT.
+Filters the gzipped inline budget in bytes for Critical CSS output (issue #1388). Over-budget output is never inlined: the prior good file is kept, no inline CSS is emitted, and stylesheet deferral is skipped for the request (deferred full stylesheet plus used CSS only). The over-budget warning is throttled to once per template per 12h. Stored values heal to the default `14` KB when missing or out of range; valid filter output clamps to 1–100 KB (`MIN..MAX_CCSS_INLINE_BUDGET_BYTES`); non-numeric filter output is ignored and the stored budget is kept. Default `14 * 1024` (stored `file_optimisation.ccssInlineBudgetKb`). @since 2.3.0.
 
 **Parameters:**
 - `$budget` *(int)* — Budget in bytes. Default `14336`.
@@ -2056,7 +2056,7 @@ add_filter( 'wppo_ccss_inline_budget', static function() { return 20 * 1024; } )
 ---
 
 ### `wppo_ccss_targeted_cooldown`
-Filters the burst-throttle window in seconds for targeted Critical CSS regens (`Critical_CSS::request_targeted_regen()`). Repeat builder/theme saves inside the window queue nothing, so a burst of saves collapses into one bounded pass (max 20 templates); the stamp is written only when at least one job was queued. Return `0` to disable the throttle. Non-numeric or negative filter output is ignored and the `3600` default is kept. Default `3600`. @since NEXT.
+Filters the burst-throttle window in seconds for targeted Critical CSS regens (`Critical_CSS::request_targeted_regen()`). Repeat builder/theme saves inside the window queue nothing, so a burst of saves collapses into one bounded pass (max 20 templates); the stamp is written only when at least one job was queued. Return `0` to disable the throttle. Non-numeric or negative filter output is ignored and the `3600` default is kept. Default `3600`. @since 2.3.0.
 
 **Parameters:**
 - `$cooldown` *(int)* — Cooldown in seconds. Default `3600`.
@@ -2070,7 +2070,7 @@ add_filter( 'wppo_ccss_targeted_cooldown', static function() { return 600; } );
 ---
 
 ### `wppo_committed_inline_bytes`
-Filters the bytes already committed to inline `<style>` output on this request, for the coordinated used-CSS / critical-CSS inline budget (`Critical_CSS::get_effective_ccss_budget()`). The default is the request-global ledger (`Util::get_committed_inline_bytes()`, fed by `inline_ccss()`; normally `0` because used CSS ships as an external file in every delivery mode). The filter wins over the ledger when a listener is registered, so operators can account for bytes committed outside the plugin. Non-numeric or non-positive output is ignored. Default `0`. @since NEXT.
+Filters the bytes already committed to inline `<style>` output on this request, for the coordinated used-CSS / critical-CSS inline budget (`Critical_CSS::get_effective_ccss_budget()`). The default is the request-global ledger (`Util::get_committed_inline_bytes()`, fed by `inline_ccss()`; normally `0` because used CSS ships as an external file in every delivery mode). The filter wins over the ledger when a listener is registered, so operators can account for bytes committed outside the plugin. Non-numeric or non-positive output is ignored. Default `0`. @since 2.3.0.
 
 **Parameters:**
 - `$committed` *(int)* — Committed inline bytes. Default `0`.
@@ -2084,7 +2084,7 @@ add_filter( 'wppo_committed_inline_bytes', static function() { return 4800; } );
 ---
 
 ### `wppo_builder_ccss_full_regen`
-Restores the legacy forced full critical-CSS requeue after a builder purge. Default `false` (targeted regen, max 20 RUM-worst-first templates); return `true` to force the full requeue (bypasses the `18000`s full-regen cooldown via `$force`). @since NEXT.
+Restores the legacy forced full critical-CSS requeue after a builder purge. Default `false` (targeted regen, max 20 RUM-worst-first templates); return `true` to force the full requeue (bypasses the `18000`s full-regen cooldown via `$force`). @since 2.3.0.
 
 **Parameters:**
 - `$full` *(bool)* — Whether to force a full requeue. Default `false`.
@@ -2098,7 +2098,7 @@ add_filter( 'wppo_builder_ccss_full_regen', '__return_true' );
 ---
 
 ### `wppo_ccss_excluded_post_types`
-Filters post types skipped by Critical CSS and Used CSS generation. The filter is always ADDITIVE over the built-in builder defaults (`fl-builder-template`, `elementor_library`): returned slugs are merged with the defaults, and an empty (or all-invalid) return is ignored so builder-template protection cannot be silently disabled — there is no opt-out. Backed by the additive `file_optimisation.ccssExcludedPostTypes` setting (one post type per line; empty or all-invalid keeps the defaults). Shared contract: the CCSS-named key/filter intentionally serves both pipelines for backward compatibility. Used-CSS retries are intentionally out of scope — excluded posts are never queued, so no retry counter exists there. Fail-open: non-array/non-string output is ignored and the setting-derived list is kept. Filter accepts string[] or a newline/comma-delimited string (parsed via the shared parser). @since NEXT.
+Filters post types skipped by Critical CSS and Used CSS generation. The filter is always ADDITIVE over the built-in builder defaults (`fl-builder-template`, `elementor_library`): returned slugs are merged with the defaults, and an empty (or all-invalid) return is ignored so builder-template protection cannot be silently disabled — there is no opt-out. Backed by the additive `file_optimisation.ccssExcludedPostTypes` setting (one post type per line; empty or all-invalid keeps the defaults). Shared contract: the CCSS-named key/filter intentionally serves both pipelines for backward compatibility. Used-CSS retries are intentionally out of scope — excluded posts are never queued, so no retry counter exists there. Fail-open: non-array/non-string output is ignored and the setting-derived list is kept. Filter accepts string[] or a newline/comma-delimited string (parsed via the shared parser). @since 2.1.0.
 
 **Parameters:**
 - `$excluded` *(string[])* — Excluded post type slugs. Default from `file_optimisation.ccssExcludedPostTypes`.
@@ -2115,7 +2115,7 @@ add_filter( 'wppo_ccss_excluded_post_types', static function( $excluded ) {
 ---
 
 ### `wppo_ccss_max_retries`
-Filters how many consecutive generation failures (generic + timeout combined) a Critical CSS template tolerates before escalating to the terminal `failed` state. Below the cap the template stays `queued` with a retry scheduled (exponential backoff); `0` means fail fast with no retries. Only the escalation is logged — retries below the cap stay silent. Stored values heal to the default `5` when missing or non-numeric; stored and filter values clamp to 0–5; non-numeric filter output is ignored and the stored cap is kept. Default `5` (stored `file_optimisation.ccssMaxRetries`). @since NEXT.
+Filters how many consecutive generation failures (generic + timeout combined) a Critical CSS template tolerates before escalating to the terminal `failed` state. Below the cap the template stays `queued` with a retry scheduled (exponential backoff); `0` means fail fast with no retries. Only the escalation is logged — retries below the cap stay silent. Stored values heal to the default `5` when missing or non-numeric; stored and filter values clamp to 0–5; non-numeric filter output is ignored and the stored cap is kept. Default `5` (stored `file_optimisation.ccssMaxRetries`). @since 2.1.0.
 
 **Parameters:**
 - `$cap` *(int)* — Retry cap. Default `5`.
@@ -2129,7 +2129,7 @@ add_filter( 'wppo_ccss_max_retries', static function() { return 3; } );
 ---
 
 ### `wppo_ccss_field_lcp_preload`
-Filters whether the Critical-CSS path emits the field-measured LCP image preload (`<link rel="preload" as="image" fetchpriority="high">` at `wp_head:0`). The candidate is the RUM field-LCP winner for the page (above the sample gate and freshness TTL) falling back to the stored PageSpeed heuristic; same-origin and image-type guards always apply. @since NEXT.
+Filters whether the Critical-CSS path emits the field-measured LCP image preload (`<link rel="preload" as="image" fetchpriority="high">` at `wp_head:0`). The candidate is the RUM field-LCP winner for the page (above the sample gate and freshness TTL) falling back to the stored PageSpeed heuristic; same-origin and image-type guards always apply. @since 2.1.0.
 
 **Independence note:** this hint belongs to the critical-CSS feature and fires independently of the image-pipeline LCP toggles (`fieldLcpOverride`, `autoPreloadLCP`, `prioritizeLCPImages`, `autoLcpPreload`). When the image pipeline's auto-LCP path is enabled it owns the hint (with responsive `imagesrcset`/`imagesizes`) and the Critical-CSS path yields, so at most one preload prints per hero either way. Return `false` to disable the Critical-CSS-path hint without disabling critical CSS itself. Default `true`.
 
@@ -2153,7 +2153,7 @@ Filters whether `nproc` may be probed (via `shell_exec`) as a fallback for CPU-c
 ---
 
 ### `wppo_allow_php_lint`
-Filters whether `Util::verify_php_syntax()` may shell out to `php -l` (via `exec()`) against the on-disk tmp file when publishing the Redis config / object-cache drop-in (audit #1490). Both argv parts are `escapeshellarg()`'d and `disable_functions` is respected; return `false` on locked-down hosts to disable the system call entirely — the token-based bracket check stays primary either way. @since NEXT.
+Filters whether `Util::verify_php_syntax()` may shell out to `php -l` (via `exec()`) against the on-disk tmp file when publishing the Redis config / object-cache drop-in (audit #1490). Both argv parts are `escapeshellarg()`'d and `disable_functions` is respected; return `false` on locked-down hosts to disable the system call entirely — the token-based bracket check stays primary either way. @since 2.3.0.
 
 **Parameters:**
 - `$allow` *(bool)* — Default `true`.
@@ -2462,7 +2462,7 @@ jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
 ---
 
 ### `wppo_autoload_critical_threshold`
-Filters the critical autoload payload threshold in bytes (issue #1461). The audit flags `is_critical` when total autoload bytes meet or exceed this value. Default `819200` (800 KB per the WordPress 6.6 guidance). Non-numeric, zero, or negative filter output falls back to the default (fail-open). @since NEXT.
+Filters the critical autoload payload threshold in bytes (issue #1461). The audit flags `is_critical` when total autoload bytes meet or exceed this value. Default `819200` (800 KB per the WordPress 6.6 guidance). Non-numeric, zero, or negative filter output falls back to the default (fail-open). @since 2.3.0.
 
 **Parameters:**
 - `$threshold` *(int)* — Threshold in bytes.

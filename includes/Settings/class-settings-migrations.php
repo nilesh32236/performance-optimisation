@@ -51,7 +51,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 	 * same-blog semantics the bodies had on `Main` (direct memo touch via
 	 * {@see Main::migration_options_ref()}, never a new write path).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Settings_Migrations {
 
@@ -62,7 +62,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * the live request memo exactly as `$this->options` writes did
 		 * before the extraction.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Main
 		 */
 		private Main $main;
@@ -70,7 +70,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		/**
 		 * Constructor.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param Main $main Main instance (options-memo owner).
 		 */
 		public function __construct( Main $main ) {
@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * marker), so no extra option row is ever allocated — fresh installs create zero
 		 * migration rows and steady-state requests perform zero migration writes.
 		 *
-		 * @since NEXT Relocated verbatim from Main::migrate_block_assets_setting() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::migrate_block_assets_setting() (ARCH-004).
 		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
 		 *                                                        (core loads separate core
 		 *                                                        block assets on demand).
@@ -145,7 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * observes the backfilled value.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_ccss_max_size() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_ccss_max_size() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_ccss_max_size(): void {
@@ -191,7 +191,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * multisite sites migrate independently with no cross-site leakage.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_ccss_safelist() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_ccss_safelist() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_ccss_safelist(): void {
@@ -241,7 +241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @since 2.2.0 Also backfills the 25s `ccssGenTimeout` generation budget.
 		 * @since 2.3.0 Also backfills the #1388 keys (`ccssInlineBudgetKb`,
 		 *        `ccssCommerceExclude`, `ccssChecksumRegen`).
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_css_queue_defaults() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_css_queue_defaults() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_css_queue_defaults(): void {
@@ -308,7 +308,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * multisite sites migrate independently with no cross-site leakage.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_speculation_top_urls() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_speculation_top_urls() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_speculation_top_urls(): void {
@@ -357,7 +357,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * multisite sites migrate independently with no cross-site leakage.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_speculation_prerender_list() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_speculation_prerender_list() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_speculation_prerender_list(): void {
@@ -410,7 +410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_rum_sample_rate() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_rum_sample_rate() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_rum_sample_rate(): void {
@@ -469,7 +469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * independently with no cross-site leakage.
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_image_alt_edge_defaults() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_image_alt_edge_defaults() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_image_alt_edge_defaults(): void {
@@ -526,7 +526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_safe_mode() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_safe_mode() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_safe_mode(): void {
@@ -564,7 +564,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * get_option() so sites migrate independently.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_elementor_safe_mode() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_elementor_safe_mode() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_elementor_safe_mode(): void {
@@ -602,7 +602,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * sites migrate independently with no cross-site leakage.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_preload_auto_defaults() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_preload_auto_defaults() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_preload_auto_defaults(): void {
@@ -655,7 +655,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * with no cross-site leakage.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_object_cache_outage_flag() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_object_cache_outage_flag() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_object_cache_outage_flag(): void {
@@ -715,7 +715,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * with no cross-site leakage.
 		 *
 		 * @since 2.3.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_ai_speculation_autotune() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_ai_speculation_autotune() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_ai_speculation_autotune(): void {
@@ -800,7 +800,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @since 2.3.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_ai_anomaly_v2() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_ai_anomaly_v2() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_ai_anomaly_v2(): void {
@@ -881,7 +881,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_comment_image_hardening() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_comment_image_hardening() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_comment_image_hardening(): void {
@@ -973,7 +973,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_builder_watcher() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_builder_watcher() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_builder_watcher(): void {
@@ -1068,7 +1068,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * independently. Fail-open: never fatals.
 		 *
 		 * @since 2.2.0
-		 * @since NEXT Relocated verbatim from Main::maybe_migrate_third_party_auto() (ARCH-004).
+		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_third_party_auto() (ARCH-004).
 		 * @return void
 		 */
 		public function migrate_third_party_auto(): void {

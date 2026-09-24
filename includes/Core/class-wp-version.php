@@ -45,7 +45,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 	 * Depends on nothing else in the plugin; features depend on this class,
 	 * never the reverse.
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Wp_Version {
 
@@ -59,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 		 * matter how many gates run (defer + fetchpriority + template buffer
 		 * + script strategy).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var string|null
 		 */
 		private static ?string $memo = null;
@@ -67,7 +67,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 		/**
 		 * Whether $memo holds a resolved value (it may legitimately be '').
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var bool
 		 */
 		private static bool $memo_ready = false;
@@ -80,7 +80,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 		 * `$GLOBALS['wp_version']` / `get_bloginfo()` fixture changes stay
 		 * fresh. Production never calls this (one version per request).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return void
 		 */
 		public static function reset_memo(): void {
@@ -106,7 +106,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 		 * string), so the central gate adopts the majority spelling and the
 		 * parity test pins the documented outcome.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @return string Version string, or '' when unknown.
 		 */
 		public static function current(): string {
@@ -146,7 +146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 		 * `supports_native_script_fetchpriority()`,
 		 * `should_use_core_template_buffer()`, `supports_script_strategy()`).
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $version  Minimum version (e.g. '6.3-alpha').
 		 * @param bool   $fallback Result when the version is unknown.
 		 * @return bool True when core is at least $version.
@@ -170,7 +170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Wp_Version' ) ) {
 		 * global — even `''` — is compared as-is, exactly like the historic
 		 * `isset()`-guarded `version_compare()` spellings.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param string $version  Minimum version (e.g. '6.9-alpha').
 		 * @param bool   $fallback Result when the global is absent.
 		 * @return bool True when the global reads at least $version.

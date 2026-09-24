@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 	 * source of truth, accessed through the `@internal` `combine_*()`
 	 * bridges — never a new write path).
 	 *
-	 * @since NEXT
+	 * @since 2.4.0
 	 */
 	final class Css_Combine {
 
@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 		 * the live request state exactly as `$this->prop` accesses did before
 		 * the extraction.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @var   Cache
 		 */
 		private Cache $cache;
@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 		/**
 		 * Constructor.
 		 *
-		 * @since NEXT
+		 * @since 2.4.0
 		 * @param Cache $cache Cache instance (memo + settings + policy owner).
 		 */
 		public function __construct( Cache $cache ) {

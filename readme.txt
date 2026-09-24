@@ -4,7 +4,7 @@ Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
-Stable tag: 2.3.0
+Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -99,6 +99,12 @@ After activation, you can manage the following from the settings tabs:
 - **Tools** — Import/export settings for quick deployment across multiple sites.
 
 == Changelog ==
+
+= 2.4.0 (2026-09-24) =
+* Improvement: under-the-hood architecture modernization — the plugin's internals are now organized by responsibility (cache, settings, assets, images, CSS, database, edge delivery, integrations) behind a centralized loader, with no settings changes required and all existing behavior preserved. Includes focused services for settings migrations, script defer/delay strategy, CSS combining, cache invalidation, LCP/hero preloading, anomaly detection, critical-CSS storage, REST cache/settings handlers, and scheduler primitives, plus the first File Optimisation settings card extraction.
+* Improvement: critical-CSS file lifecycle (stage, promote, rollback, health) consolidated with byte-identical output and expanded regression coverage.
+* Improvement: delay-JS exclusion verdicts are now multisite-aware, and settings-migration save paths verify before syncing memos.
+* Improvement: translation template refresh and rebuilt admin assets.
 
 = 2.3.0 (2026-09-22) =
 * New: safe CSS rollout for used CSS and critical CSS — dry-run preview staged to a `.staged` sibling (bytes/checksum/changed-vs-live), staged promote with last-good retention, explicit last-good rollback, and a post-apply health gate that auto-restores with reason logging. Regenerate endpoints accept `dry_run`/`promote`/`rollback`/`health` flags (scoped validation: flags without a post/template return 400), status payloads expose the read-only rollout slot, and the admin UI shows staged/health badges plus Preview/Promote/Restore actions. Preview fetch timeout filterable via `wppo_css_preview_fetch_timeout`.
