@@ -80,15 +80,16 @@ Do not split `Image_Optimisation` by arbitrary file size. Test output markup, MI
 
 | Owner | Current scope | Next ownership move |
 |---|---|---|
-| `Telemetry` | Local performance scan and salted audit cache | Expose one read/invalidate contract for REST, Abilities, and CLI |
-| `Pagespeed` | PageSpeed transport, scan jobs, trends, LCP storage | Keep transport separate from analysis |
+| `Telemetry` | Local performance scan and salted audit cache | Own the cache read/invalidate contract; Insight_Query delegates to it |
+| `Pagespeed` | PageSpeed transport, scan jobs, trends, LCP storage | Keep result reads, transport, jobs, and storage together |
+| `Insight_Query` | Cached telemetry/PageSpeed read models and deterministic PageSpeed suggestion projection | Stay read-only; do not execute scans or invoke AI/RUM side effects |
 | `RUM` | Collection, queue, aggregation, persistence, admin reads | Split blog-scoped state and admin projection |
 | `AI_Adaptive` | Suggestion, model persistence/learning, speculation autotune | Keep model writes behind an explicit owner; move reaction side effects out of anomaly code |
 | `Ai_Anomaly` | Math, thresholds, breach state, RUM digest | Keep; use its blog-aware memo pattern as the reset precedent |
 | `Suggestion_Engine` | Cross-source recommendations | Call canonical telemetry/PageSpeed/RUM contracts |
 | `System_Info` | Environment and infrastructure facts, drop-in path/ownership detection, memo/transient/salt storage | Keep reporting and storage ownership; mutators invalidate only through `Dropin_Registry` |
 
-Fetch, persist, analyze, schedule, and display should not share one new “Service” class. Create narrow use-case owners only when the graph shows repeated calls or misplaced writes.
+Fetch, persist, analyze, schedule, and display should not share one new “Service” class. `Insight_Query` is deliberately narrower: it projects existing domain reads for multiple adapters and owns no fetch, persistence, scan, RUM, or AI behavior. Create other narrow use-case owners only when the graph shows repeated calls or misplaced writes.
 
 ### Database
 

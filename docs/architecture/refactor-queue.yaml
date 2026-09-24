@@ -928,14 +928,35 @@ phase3_items:
 
   - id: P3-009
     title: 'Canonical insight read model'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1582
+    github_pr: 1584
+    implementation_commit: 737f860f2ada5303ed96e8f15d1597b6688a61a4
     type: architecture
     problem: 'REST and Abilities read telemetry/PageSpeed results through different cache and augmentation paths.'
     target_owner: 'Insight_Query/Insight_Report read boundary'
     target_direction: 'REST/Abilities/CLI -> insight query -> Telemetry/PageSpeed/RUM/AI readers'
     tests: 'Salted/transient parity, PageSpeed augmentation, and explicit AI side-effect tests.'
     ratchet: 'Direct audit-cache readers outside Telemetry: 2 -> 0.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 7fde1293
+      evidence:
+        - 'Rest::get_suggestions reads the wppo_audit_ URL transient directly, including salted object-cache fallback and transient fallback.'
+        - 'Rest::pagespeed_results reads PageSpeed result transients directly and augments them with local state.'
+        - 'Abilities/CLI telemetry and PageSpeed paths repeat read/cache shapes instead of sharing one insight read boundary.'
+        - 'Telemetry::scan and Pagespeed readers remain the domain owners; Insight_Query can centralize cache lookup and augmentation without changing scan side effects.'
+      decision: 'Proceed test-first with a narrow Insight_Query read boundary; preserve salted/transient parity, PageSpeed augmentation, RUM/AI side-effect boundaries, REST security, and CLI/Abilities response shapes.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'includes/Insight/class-insight-query.php'
+        adapters: 'Rest telemetry/PageSpeed, Abilities telemetry/PageSpeed, and WPPO_CLI_Command PageSpeed reads delegate through Insight_Query; Telemetry::scan, Pagespeed::queue_scan, RUM, and AI calls remain with their domain owners'
+        compatibility: 'Telemetry owns salted audit-cache read/invalidate and transient fallback; Pagespeed owns strategy allowlisting, pending/result/failure storage, and result keys; PageSpeed report adds deterministic Suggestion_Engine output; REST nonce/capability gates, public RUM collection, AI suggestion side effects, and raw CLI/Abilities response shapes are unchanged'
+        loader: 'Loader_Map::fallback_map()["Insight_Query"] with explicit PHPUnit bootstrap loading for stale local classmaps'
+        graph_delta: '79 inventory files / 82 graph nodes / 361 edges; compatibility 195; bridge candidates 231; feature-to-feature edges remain 46; direct audit-cache readers outside Telemetry 2->0'
+        tests: 'InsightQueryTest plus Rest, Abilities, Telemetry, TelemetryTransientIndex, PagespeedTrends, and Rum focused regressions'
+        verification: 'RED: InsightQueryTest failed 7 errors + 1 failure before the owner; GREEN: focused REST/Abilities/Telemetry/TelemetryTransientIndex/PagespeedTrends/Rum/InsightQuery set passes 143 tests / 655 assertions; query/loader/architecture set passes 28 tests / 13596 assertions; full PHPUnit passes 2715 tests / 24797 assertions (9 skipped, 7 existing deprecations); full PHPCS passes via vendor/bin/phpcs because Composer is unavailable in PATH; focused PHPStan on Insight_Query passes; generator --check and git diff --check pass'
 
   - id: P3-010
     title: 'Database cleanup application runner'

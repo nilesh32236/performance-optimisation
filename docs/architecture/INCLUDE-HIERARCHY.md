@@ -72,6 +72,7 @@ includes/
   Insight/
     class-telemetry.php
     class-pagespeed.php
+    class-insight-query.php
     class-suggestion-engine.php
     class-system-info.php
     class-rum.php
@@ -126,12 +127,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 74 | 73 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 75 | 74 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 78 | Generated schema-v2 inventory |
+| Total class inventory | 79 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 81 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 82 nodes.
 
 ## Ownership by directory
 
@@ -173,7 +174,7 @@ The dependency graph adds three procedural runtime files: the plugin entry, `uni
 
 ### Insight
 
-`Insight` owns telemetry, PageSpeed, RUM, AI, suggestions, system facts, and Optimization Detective adaptation. Fetch, storage, analysis, scheduling, and presentation still overlap in several classes and form future queue work.
+`Insight` owns telemetry, PageSpeed, RUM, AI, suggestions, system facts, and Optimization Detective adaptation. `Insight_Query` is the narrow read-only projection consumed by REST, Abilities, and CLI; it delegates cached telemetry/PageSpeed reads to their domain owners and never executes scans or owns AI/RUM side effects. Fetch, storage, analysis, scheduling, and presentation still overlap in several classes and form future queue work.
 
 ### Edge
 
