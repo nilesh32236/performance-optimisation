@@ -176,6 +176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Script_Strategy'        => 'Assets/class-script-strategy.php',
 				'Server_Rules'           => 'Edge/class-server-rules.php',
 				'Settings_Migrations'    => 'Settings/class-settings-migrations.php',
+				'Settings_Command'       => 'Settings/class-settings-command.php',
 				'Settings_Store'         => 'Settings/class-settings-store.php',
 				'Suggestion_Engine'      => 'Insight/class-suggestion-engine.php',
 				'System_Info'            => 'Insight/class-system-info.php',

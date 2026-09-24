@@ -126,12 +126,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 73 | 72 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 74 | 73 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 77 | Generated schema-v2 inventory |
+| Total class inventory | 78 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 80 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 81 nodes.
 
 ## Ownership by directory
 

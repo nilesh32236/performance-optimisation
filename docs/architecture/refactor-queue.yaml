@@ -884,14 +884,33 @@ phase3_items:
 
   - id: P3-008
     title: 'Settings write command and direct-write cleanup'
-    status: audit-pending
+    status: active
     priority: high
+    github_issue: 1580
     type: architecture
     problem: 'Rest_Settings and REST safe-mode paths write wppo_settings outside Settings_Store.'
     target_owner: 'Settings_Store plus narrow Settings_Command'
     target_direction: 'REST/CLI/Abilities -> Settings_Command -> Settings_Store'
     tests: 'Partial-save, redaction, snapshot/restore, safe-mode, import, and memo parity.'
     ratchet: 'Direct settings writes outside Settings_Store: 3+ -> 0.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 048535db
+      evidence:
+        - 'Rest_Settings has direct update_option(wppo_settings) calls for partial settings and safe-mode snapshot restore.'
+        - 'Rest has a direct update_option(wppo_settings) call in the safe-mode path outside Settings_Store.'
+        - 'Settings_Store already owns validation, snapshots, memoization, and canonical writes; callers need one command seam rather than duplicate write behavior.'
+        - 'A dependency-light Settings_Command can route writes through Settings_Store while preserving partial-save, redaction, snapshot/restore, and safe-mode semantics.'
+      decision: 'Proceed test-first with a narrow Settings_Command owner; move only direct write orchestration, keep Settings_Store validation/memo/snapshot ownership, and leave REST permissions/CLI/import behavior unchanged.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'includes/Settings/class-settings-command.php'
+        adapters: 'Rest_Settings partial save/import and REST safe-mode fallback delegate through Settings_Command; no direct runtime update_option(wppo_settings) remains outside Settings_Store'
+        compatibility: 'Settings_Store retains validation, memoization, snapshot, and canonical persistence; partial-save, redaction, import, safe-mode, REST permission, and CLI behavior remain unchanged'
+        loader: 'Loader_Map::fallback_map()["Settings_Command"] with explicit PHPUnit bootstrap loading for stale local classmaps'
+        graph_delta: '78 inventory files / 81 graph nodes / 355 edges; compatibility edges 194->195 and bridge candidates 230->231; direct settings writes outside Settings_Store 3->0'
+        tests: 'SettingsCommandTest, SettingsStoreTest, SettingsSnapshotTest, REST settings parity, LoaderMapTest, and ArchitectureInventoryTest'
+        verification: 'RED: SettingsCommandTest failed before command owner; GREEN: focused settings/store/snapshot/loader/architecture set passes; full PHPUnit passes 2706 tests / 24685 assertions (9 skipped, 7 existing deprecations); full PHPCS passes; focused PHPStan on Settings_Command passes; generator --check and git diff --check pass'
 
   - id: P3-009
     title: 'Canonical insight read model'

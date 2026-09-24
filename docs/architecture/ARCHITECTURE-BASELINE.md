@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `b71350ab43d0bccfbcb355d1f632d9e940885950`
+Source: `origin/master` commit `048535dbaeebcd63d57f21d6179f313a66a4862c`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 80 first-party runtime files:
+The tokenizer scans 81 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 72 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 73 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,21 +40,21 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 77 |
-| Inventory source lines | 126,179 |
-| Class-like graph nodes | 76 |
+| Inventory files | 78 |
+| Inventory source lines | 126,223 |
+| Class-like graph nodes | 77 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,496 |
-| Methods spanning 80 lines or more | 237 |
+| Named methods | 2,498 |
+| Methods spanning 80 lines or more | 236 |
 | Static properties | 141 across 32 nodes |
-| Unique dependency edges | 352 |
-| Runtime-classified edges | 351 |
-| Compatibility-classified edges | 194 |
+| Unique dependency edges | 355 |
+| Runtime-classified edges | 354 |
+| Compatibility-classified edges | 195 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 304 |
+| Cross-domain edges | 306 |
 | Feature-to-feature edges | 46 |
 | Strict boundary violations | 16 |
-| Bridge candidates | 230 |
+| Bridge candidates | 231 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
