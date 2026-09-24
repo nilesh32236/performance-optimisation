@@ -507,8 +507,9 @@ phase2_items:
 future_items:
   - id: FUT-001
     title: 'Critical_CSS storage/staging cluster extraction (Ccss_Store)'
-    status: issue-created
+    status: pr-created
     github_issue: 1560
+    pull_request: 1561
     priority: medium
     notes:
       - 'Largest untouched god class (7594 lines / 137 methods). Scoped 2026-09-24: storage/staging/health/status cluster (~20 methods) first; generation/parsing/retry/budget/exclusions stay for follow-up.'
