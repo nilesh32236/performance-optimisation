@@ -76,7 +76,7 @@ The largest hub scores are:
 | 6 | `Used_CSS` | 52.96 | 10 | 8 | 6 | 17 |
 | 7 | `Critical_CSS` | 52.95 | 9 | 8 | 7 | 14 |
 | 8 | `RUM` | 50.35 | 14 | 2 | 9 | 12 |
-| 9 | `Rest` | 47.75 | 1 | 22 | 0 | 21 |
+| 9 | `Rest` | 51.74 | 1 | 24 | 0 | 23 |
 | 10 | `Cron` | 46.79 | 5 | 16 | 3 | 18 |
 
 The score formula lives in the graph metadata. It ranks review pressure; it does not grade code quality.
