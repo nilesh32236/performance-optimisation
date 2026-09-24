@@ -76,6 +76,7 @@ class DatabaseCleanupGuardTest extends \PHPUnit\Framework\TestCase {
 	 */
 	#[\PHPUnit\Framework\Attributes\DataProvider( 'invalid_method_provider' )]
 	public function test_invalid_method_values_return_wp_error( $method ): void {
+		Functions\stubs( array( 'wp_json_encode' ) );
 		$res = Database_Cleanup::invoke_cleanup_method( $method );
 
 		$this->assertInstanceOf( WP_Error::class, $res );

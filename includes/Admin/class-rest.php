@@ -1695,43 +1695,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$params = $request->get_params();
 			$type   = isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : '';
+			$result = Database_Cleanup_Runner::run( $type, Database_Cleanup_Runner::SOURCE_REST );
 
-			$valid_types = Database_Cleanup::get_valid_cleanup_types();
-
-			if ( ! in_array( $type, $valid_types, true ) ) {
+			if ( ! $result['valid'] ) {
 				return $this->send_response( null, false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
 			}
 
-			if ( 'all' === $type ) {
-				$results  = Database_Cleanup::clean_all();
-				$total    = 0;
-				$failures = array();
-
-				foreach ( $results as $key => $value ) {
-					if ( is_wp_error( $value ) ) {
-						$failures[ $key ] = sprintf(
+			if ( 'all' === $result['canonical_type'] ) {
+				if ( ! empty( $result['failures'] ) ) {
+					$failures = array();
+					foreach ( $result['failures'] as $cleanup_type => $error ) {
+						$failures[ $cleanup_type ] = sprintf(
 							/* translators: %s: Cleanup type */
 							__( 'Failed to clean %s.', 'performance-optimisation' ),
-							$key
+							$cleanup_type
 						);
-					} else {
-						$total += (int) $value;
 					}
-				}
-
-				Log::add(
-					sprintf(
-						/* translators: %d: Number of items cleaned */
-						__( 'Database cleanup (all): %d items removed', 'performance-optimisation' ),
-						$total
-					)
-				);
-
-				if ( ! empty( $failures ) ) {
 					return $this->send_response(
 						array(
 							'failures' => $failures,
-							'deleted'  => $total,
+							'deleted'  => $result['deleted'],
 						),
 						false,
 						500,
@@ -1741,73 +1724,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 				return $this->send_response(
 					array(
-						'results' => $results,
-						'deleted' => $total,
+						'results' => $result['results'],
+						'deleted' => $result['deleted'],
 					)
 				);
 			}
 
-			// Standalone Action Scheduler branch: delegates to the AS cleaner,
-			// never a raw DELETE (issue #1106). Kept out of CLEANUP_METHOD_MAP.
-			// clean_action_scheduler() returns int only (fail-open 0), so there
-			// is no false/WP_Error branch here; availability is surfaced
-			// explicitly so a 0 does not read as a silent success.
-			$as_available = null;
-			if ( Database_Cleanup::ACTION_SCHEDULER_TYPE === $type ) {
-				$result       = Database_Cleanup::clean_action_scheduler();
-				$as_available = Database_Cleanup::is_action_scheduler_available();
-			} else {
-				$method_map = Database_Cleanup::CLEANUP_METHOD_MAP;
-
-				$method = $method_map[ $type ] ?? null;
-
-				if ( ! $method ) {
-					return $this->send_response( array( 'deleted' => false ), false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
-				}
-
-				if ( 'revisions' === $type ) {
-					list( $max_age, $keep_latest ) = Database_Cleanup::get_revision_defaults();
-					$result                        = Database_Cleanup::invoke_cleanup_method( $method, $max_age, $keep_latest );
-				} else {
-					$result = Database_Cleanup::invoke_cleanup_method( $method );
-				}
-			}
-
-			if ( is_wp_error( $result ) ) {
+			if ( $result['result'] instanceof \WP_Error ) {
 				return $this->send_response( null, false, 500, __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
 
-			// Skip the success log line when the AS cleaner ran with nothing
-			// available to purge (AS absent or opted out via
-			// `wppo_action_scheduler_cleanup_enabled`) — logging
-			// "0 items removed" there reads as a completed cleanup.
-			$is_as_unavailable = Database_Cleanup::ACTION_SCHEDULER_TYPE === $type && false === $as_available;
-			if ( ! $is_as_unavailable ) {
-				Log::add(
-					sprintf(
-					/* translators: %1$s: Cleanup type, %2$d: Number of items */
-						__( 'Database cleanup (%1$s): %2$d items removed', 'performance-optimisation' ),
-						$type,
-						(int) $result
-					)
-				);
-			}
-
-			// Optimize affected tables after successful individual cleanup.
-			if ( (int) $result > 0 && isset( Database_Cleanup::TABLE_MAP[ $type ] ) ) {
-				Database_Cleanup::maybe_optimize_tables(
-					Database_Cleanup::TABLE_MAP[ $type ],
-					true
-				);
-			}
-
 			$response = array(
-				'type'    => $type,
-				'deleted' => (int) $result,
+				'type'    => $result['type'],
+				'deleted' => $result['deleted'],
 			);
-			if ( Database_Cleanup::ACTION_SCHEDULER_TYPE === $type ) {
-				$response['action_scheduler_available'] = (bool) $as_available;
-				if ( ! $as_available ) {
+			if ( Database_Cleanup::ACTION_SCHEDULER_TYPE === $result['canonical_type'] ) {
+				$available                              = (bool) $result['action_scheduler_available'];
+				$response['action_scheduler_available'] = $available;
+				if ( ! $available ) {
 					$response['note'] = __( 'Action Scheduler is not available or cleanup is disabled; nothing was purged.', 'performance-optimisation' );
 				}
 			}

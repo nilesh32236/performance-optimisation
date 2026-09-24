@@ -269,18 +269,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			$type = $assoc_args['type'] ?? 'all';
 
-			// --dry-run preview for cleanup (before any DELETE): reuse get_counts().
+			// --dry-run preview for cleanup (before any DELETE).
 			if ( $dry_run ) {
-				$counts = Database_Cleanup::get_counts();
-				if ( 'all' === $type ) {
-					$payload = array( 'would_delete' => $counts );
-				} elseif ( isset( $counts[ $type ] ) ) {
-					$payload = array( 'would_delete' => array( $type => $counts[ $type ] ) );
-				} else {
-					// Unknown or alias type — show full preview.
-					$payload = array( 'would_delete' => $counts );
-				}
-				self::log_json( $payload );
+				self::log_json( Database_Cleanup_Runner::preview( (string) $type ) );
 				WP_CLI::warning( __( 'Dry run — no rows deleted.', 'performance-optimisation' ) );
 				return;
 			}
@@ -304,8 +295,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 						WP_CLI::confirm( __( 'Are you sure you want to run database cleanup for all types?', 'performance-optimisation' ) );
 					}
 				}
-				$results = Database_Cleanup::clean_all();
-				$total   = 0;
+				$result  = Database_Cleanup_Runner::run( (string) $type, Database_Cleanup_Runner::SOURCE_CLI );
+				$results = $result['results'];
+				$total   = $result['deleted'];
 
 				foreach ( $results as $key => $val ) {
 					if ( is_wp_error( $val ) ) {
@@ -313,87 +305,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 						WP_CLI::warning( sprintf( __( ' - %1$s: %2$s', 'performance-optimisation' ), sanitize_text_field( (string) $key ), $val->get_error_message() ) );
 						continue;
 					}
-					$count  = (int) $val;
-					$total += $count;
+					$count = (int) $val;
 					/* translators: 1: cleanup key, 2: cleaned count. */
 					WP_CLI::log( sprintf( __( ' - %1$s: %2$d cleaned', 'performance-optimisation' ), sanitize_text_field( (string) $key ), $count ) );
 				}
 
-				/* translators: %d: Total items removed */
-				Log::add( sprintf( __( 'Database cleanup (all via WP-CLI): %d items removed', 'performance-optimisation' ), $total ) );
 				/* translators: 1: Cleanup type, 2: Total items removed */
 				WP_CLI::success( sprintf( __( 'Database cleanup completed (%1$s): %2$d total items removed.', 'performance-optimisation' ), $type, $total ) );
 				return;
 			}
 
-			$cleaned_count = 0;
+			$result        = Database_Cleanup_Runner::run( (string) $type, Database_Cleanup_Runner::SOURCE_CLI );
+			$cleaned_count = $result['result'];
 
-			switch ( $type ) {
-				case 'revisions':
-					$cleaned_count = Database_Cleanup::clean_revisions();
-					break;
-				case 'auto_drafts':
-				case 'drafts':
-					$cleaned_count = Database_Cleanup::clean_auto_drafts();
-					break;
-				case 'trashed_posts':
-				case 'trash':
-					$cleaned_count = Database_Cleanup::clean_trashed_posts();
-					break;
-				case 'spam_comments':
-				case 'spam':
-					$cleaned_count = Database_Cleanup::clean_spam_comments();
-					break;
-				case 'trashed_comments':
-				case 'trashed':
-					$cleaned_count = Database_Cleanup::clean_trashed_comments();
-					break;
-				case 'expired_transients':
-				case 'transients':
-					$cleaned_count = Database_Cleanup::clean_expired_transients();
-					break;
-				case 'orphan_postmeta':
-				case 'orphans':
-					$cleaned_count = Database_Cleanup::clean_orphan_postmeta();
-					break;
-				case 'unattached_media':
-				case 'unattached':
-					$cleaned_count = Database_Cleanup::clean_unattached_media();
-					break;
-				case 'oembed_cache':
-				case 'oembed':
-					$cleaned_count = Database_Cleanup::clean_oembed_cache();
-					break;
-				case 'action_scheduler':
-					$cleaned_count = Database_Cleanup::clean_action_scheduler();
-					break;
-				default:
-					/* translators: %s: Cleanup type */
-					WP_CLI::error( sprintf( __( 'Invalid cleanup type "%s".', 'performance-optimisation' ), $type ) );
-					return;
+			if ( ! $result['valid'] ) {
+				/* translators: %s: Cleanup type */
+				WP_CLI::error( sprintf( __( 'Invalid cleanup type "%s".', 'performance-optimisation' ), $type ) );
+				return;
 			}
-
 			if ( is_wp_error( $cleaned_count ) ) {
 				WP_CLI::error( $cleaned_count->get_error_message() );
 				return;
 			}
 
-			if ( false === $cleaned_count ) {
-				/* translators: %s: Cleanup type */
-				WP_CLI::error( sprintf( __( 'Database cleanup failed for type "%s".', 'performance-optimisation' ), $type ) );
-				return;
-			}
-
-			/* translators: 1: Cleanup type, 2: Number of items removed */
-			Log::add( sprintf( __( 'Database cleanup (%1$s via WP-CLI): %2$d items removed', 'performance-optimisation' ), $type, (int) $cleaned_count ) );
-			/**
-			 * Fires after a per-type database cleanup completes.
-			 *
-			 * @since 2.0.0
-			 * @param string $type  Cleanup type.
-			 * @param int    $count Number of rows deleted.
-			 */
-			do_action( 'wppo_database_cleanup_completed', $type, (int) $cleaned_count );
 			/* translators: 1: Cleanup type, 2: Number of items removed */
 			WP_CLI::success( sprintf( __( 'Database cleanup completed for %1$s (%2$d items removed).', 'performance-optimisation' ), $type, (int) $cleaned_count ) );
 		}

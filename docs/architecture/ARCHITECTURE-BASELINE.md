@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `7fde12939476f87a5d250362722883c58085f7eb`
+Source: `origin/master` commit `86e264b3b7f72b5f3f1a477fb26fc66217a57248`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 82 first-party runtime files:
+The tokenizer scans 83 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 74 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 75 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,18 +40,18 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 79 |
-| Inventory source lines | 126,330 |
-| Class-like graph nodes | 78 |
+| Inventory files | 80 |
+| Inventory source lines | 126,492 |
+| Class-like graph nodes | 79 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,503 |
+| Named methods | 2,510 |
 | Methods spanning 80 lines or more | 236 |
 | Static properties | 141 across 32 nodes |
-| Unique dependency edges | 361 |
-| Runtime-classified edges | 360 |
+| Unique dependency edges | 366 |
+| Runtime-classified edges | 365 |
 | Compatibility-classified edges | 195 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 309 |
+| Cross-domain edges | 313 |
 | Feature-to-feature edges | 46 |
 | Strict boundary violations | 16 |
 | Bridge candidates | 231 |
@@ -62,7 +62,7 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 62 class-like nodes and 312 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 63 class-like nodes and 317 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
@@ -98,7 +98,8 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Script_Strategy` | 3,859 | 56 | 12 | 11 | 12 | 1/4 | 35 | 1 | `add_defer_attribute` 203 |
 | `AI_Adaptive` | 3,989 | 76 | 8 | 2 | 2 | 5/5 | 20 | 4 | `get_suggestions` 761 |
 | `Rest` | 3,750 | 76 | 9 | 0 | 3 | 1/22 | 1 | 17 | `optimise_image` 310 |
-| `Database_Cleanup` | 3,353 | 58 | 9 | 3 | 3 | 6/2 | 64 | 0 | `get_action_scheduler_health` 220 |
+| `Database_Cleanup` | 3,365 | 59 | 9 | 3 | 3 | 6/2 | 64 | 0 | `get_action_scheduler_health` 220 |
+| `Database_Cleanup_Runner` | 323 | 7 | 0 | 0 | 0 | 3/2 | 6 | 1 | `run` 68 |
 | `RUM` | 3,348 | 63 | 7 | 7 | 7 | 14/2 | 98 | 1 | `flush_queue` 328 |
 | `Object_Cache` | 3,215 | 55 | 11 | 6 | 11 | 8/5 | 33 | 3 | `trip_circuit_on_outage` 174 |
 | `Dropin_Registry` | 45 | 1 | 0 | 0 | 0 | 2/1 | 12 | 1 | `invalidate` 7 |
@@ -180,6 +181,8 @@ P3-007 adds the dependency-light `Dropin_Registry` as the single neutral invalid
 P3-009 adds the 74-line, three-method `Insight_Query` read boundary. REST, Abilities, and CLI no longer read audit or PageSpeed result storage directly: `Telemetry` remains the salted/transient audit-cache owner, `Pagespeed` remains the result-key and pending/result reader, and `Suggestion_Engine` remains the deterministic PageSpeed projection. AI suggestion and RUM next-action calls remain at their adapter side-effect boundaries, while administrative `manage_options`/nonce gates and the public token/rate-limited RUM beacon remain unchanged. The generated inventory contains 79 files, 82 graph nodes, and 361 edges; direct audit-cache readers outside Telemetry fall from two to zero and feature-to-feature edges remain 46.
 
 `Rest_Settings` and the REST safe-mode path still write `wppo_settings` outside `Settings_Store`; that remains queued for the later settings-command item.
+
+P3-010 adds the 323-line, seven-method `Database_Cleanup_Runner` application boundary. REST, Abilities, and WP-CLI now delegate canonical validation, all/Action Scheduler dispatch, revision defaults, legacy CLI aliases, dry-run previews, logging/hooks, and REST table optimization through it; `Database_Cleanup` remains the SQL/map/counts/health owner, and Cron still calls `auto_clean()` directly. The generated inventory contains 80 files, 83 graph nodes, and 366 edges; the runner has three incoming feature edges and no static state.
 
 ## Static state
 
