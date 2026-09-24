@@ -1193,11 +1193,13 @@ phase3_items:
 
   - id: P3-015
     title: 'Main preload and cache-buffer coordination cleanup'
-    status: autofix-running
+    status: merged
     priority: medium
     github_issue: 1595
     github_pr: 1596
     implementation_commit: 5196aeac11546f7ac9b27d81a94e12782964a204
+    merge_commit: a11bcc0a
+    merged_at: '2026-09-24'
     head_branch: 'p3/preload-buffer'
     type: epic
     problem: 'Main coordinates preload, resource hints, and cache/image/CSS output ordering.'
@@ -1223,10 +1225,20 @@ phase3_items:
         tests: 'PreloadBufferCoordinatorParityTest plus existing BufferCharacterization, CacheWp69Buffer, HookRegistryParity, LoaderMap, preload/cache/image/frontend suites'
         graph_delta: '85 inventory files / 88 graph nodes / 383 edges; Main 10,461 to 10,225 lines and 20 to 17 large methods while its 236 public/private compatibility methods remain'
         verification: 'Focused buffer/preload/cache/loader/hook/architecture set passes 74 tests / 14,061 assertions; full PHPUnit passes 2,765 tests / 25,361 assertions (9 skipped, 7 existing deprecations); vendor/bin/phpcs passes; focused PHPStan on Preload_Buffer_Coordinator passes; npm run lint:js passes with 2 existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing warnings; npm run build passes with existing entrypoint-size warning; generator --check and git diff --check pass'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      preload_buffer_coordinator: 'loaded; Main process_used_css_only/start_lcp_priority_buffer facades present; no buffer, cache, preload, or scheduler mutation performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '85 inventory files / 88 graph nodes / 383 edges; generator check passed'
 
   - id: P3-016
     title: 'Main and service bridge cleanup'
-    status: queued
+    status: audit-pending
     priority: medium
     type: epic
     problem: 'Extracted services still hold Main owner state through @internal bridges and reverse edges.'
