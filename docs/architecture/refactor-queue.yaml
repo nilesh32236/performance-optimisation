@@ -844,6 +844,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1578
+    github_pr: 1579
     implementation_commit: 9e008a85567eb762cae8f65b57c71e6d126f2ed1
     type: architecture
     problem: 'System_Info reports drop-ins while Cache and Advanced_Cache mutators call System_Info invalidation methods.'
@@ -866,7 +867,7 @@ phase3_items:
         loader: 'Loader_Map::fallback_map()["Dropin_Registry"] with explicit PHPUnit bootstrap loading for stale local classmaps'
         graph_delta: '77 inventory files / 80 graph nodes / 352 edges; direct Advanced/Object-to-SystemInfo invalidation sources 2->0, feature-to-feature edges 47->46, compatibility-only SCCs 2->1, and bridge candidates remain 230'
         tests: 'DropinRegistryTest behavior/source boundary coverage, AdvancedCacheHandlerTest, ObjectCache/System_Info/SaltedCache suites, LoaderMapTest, and ArchitectureInventoryTest'
-        verification: 'Pending final focused/full verification on the working tree.'
+        verification: 'RED: DropinRegistryTest failed 3/3 before owner creation; GREEN: focused Cache/Advanced/ObjectCache/System_Info/registry/loader/architecture set passes 542 tests / 15239 assertions; full PHPUnit passes 2701 tests / 24608 assertions (9 skipped, 7 existing deprecations); full PHPCS passes; focused PHPStan on Dropin_Registry passes; generator --check and git diff --check pass.'
 
   - id: P3-008
     title: 'Settings write command and direct-write cleanup'
