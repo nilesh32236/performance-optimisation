@@ -1181,8 +1181,6 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		$prop->setValue( $main, new Image_Optimisation( $options ) );
 		$prop = new \ReflectionProperty( Main::class, 'google_fonts' );
 		$prop->setValue( $main, new Google_Fonts( $options ) );
-		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
-		$prop->setValue( $main, false );
 
 		$method = new \ReflectionMethod( Main::class, 'setup_hooks' );
 		$method->invoke( $main );

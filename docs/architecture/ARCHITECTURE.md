@@ -17,7 +17,7 @@ performance-optimisation.php
   ├─ Loader_Map
   └─ Main
       ├─ Core and lifecycle
-      │   Hook_Registry, Wp_Version, Activate, Deactivate
+      │   Hook_Registry, Preload_Buffer_Coordinator, Wp_Version, Activate, Deactivate
       ├─ Settings and scheduler
       │   Settings_Store, Settings_Migrations, Sandbox_Preview,
       │   Scheduler, Cron
@@ -48,17 +48,17 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 87 files: 83 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 88 files: 84 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 378 |
-| Runtime / compatibility / loader edges | 377 / 198 / 3 |
-| Cross-domain / feature-to-feature edges | 318 / 46 |
-| Boundary violations | 19 |
-| Bridge candidates | 237 |
+| Unique edges | 383 |
+| Runtime / compatibility / loader edges | 382 / 199 / 3 |
+| Cross-domain / feature-to-feature edges | 321 / 46 |
+| Boundary violations | 20 |
+| Bridge candidates | 238 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 66 nodes, 325 runtime-classified internal edges |
+| Largest runtime SCC | 67 nodes, 329 runtime-classified internal edges |
 | Static state | 143 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 
@@ -91,7 +91,8 @@ Cross-domain edges require review. An edge can represent a real product interact
 
 | Owner | Current responsibility | Phase 3 direction |
 |---|---|---|
-| `Main` | Bootstrap, options, assets, minification, speculation, preload, cache coordination, feature bridges | Keep construction, lifecycle, registration, and coordination; move remaining independent policy |
+| `Main` | Bootstrap, assets, speculation/resource hints, public compatibility facades, feature bridges | Keep construction, lifecycle, registration, and callback identity; move remaining independent policy |
+| `Preload_Buffer_Coordinator` | Core template-enhancement routing, legacy used-CSS/LCP lifecycle, cache-aware scheduling seams | Keep dependency-light and bounded; do not absorb hook registration, speculation, image serving, or LiteSpeed lanes |
 | `Util` | Compatibility proxies and residual canonical helpers | Give each method an owner, migrate callers, then thin or remove the facade |
 | `Cache` | HTML cache policy, storage, invalidation facade, CSS-combine facade | Keep lifecycle and buffer orchestration; capacity/accounting is delegated to `Cache_Capacity` |
 | `Cache_Capacity` | Static cache statistics, cap settings, single-walk byte/file accounting, randomized-query guard, oldest eviction | Keep the accounting contract narrow; retain only the bridges required for Cache filesystem, containment, and deletion policy |
@@ -117,7 +118,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 1. **Preload transport:** Cron warmup now shares one bounded, same-host redirect policy; future fetch callers must use the owner rather than implicit redirects.
 2. **Runtime state:** 32 owners hold static state; the six site-sensitive owners now reset centrally, while the remaining 26 need classification.
 3. **`Util` hub:** 56 source nodes and 1,145 executable occurrences still depend on it.
-4. **`Main` hub:** 34 outgoing class dependencies and 17 feature dependencies remain.
+4. **`Main` hub:** 37 outgoing class dependencies and 18 feature dependencies remain; P3-015 reduces large methods and owned cluster lines behind a named coordinator.
 5. **Cache capacity:** `Cache_Capacity` now owns the statistics, cap, and eviction contract; `Cache` remains the public facade and lifecycle owner.
 6. **Settings writes:** `Settings_Command` now routes REST partial/import/safe-mode writes through `Settings_Store`; no direct runtime `update_option('wppo_settings')` remains outside the canonical store.
 7. **Redis policy:** `Redis_Config_Policy` now owns the full key manifest and value sanitizer used by REST and CLI; `Object_Cache::ALLOWED_KEYS` remains a compatibility alias.

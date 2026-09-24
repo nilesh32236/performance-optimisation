@@ -173,12 +173,26 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 		$prop = new \ReflectionProperty( Main::class, 'options' );
 		$prop->setValue( $main, $options );
-		$prop = new \ReflectionProperty( Main::class, 'image_optimisation' );
-		$prop->setValue( $main, new Image_Optimisation( $options ) );
+		$image_optimisation = new Image_Optimisation( $options );
+		$google_fonts       = new Google_Fonts( $options );
+		$prop               = new \ReflectionProperty( Main::class, 'image_optimisation' );
+		$prop->setValue( $main, $image_optimisation );
 		$prop = new \ReflectionProperty( Main::class, 'google_fonts' );
-		$prop->setValue( $main, new Google_Fonts( $options ) );
-		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
-		$prop->setValue( $main, false );
+		$prop->setValue( $main, $google_fonts );
+		$prop = new \ReflectionProperty( Main::class, 'preload_buffer_coordinator' );
+		$prop->setValue(
+			$main,
+			new \PerformanceOptimise\Inc\Preload_Buffer_Coordinator(
+				static fn(): array => $options,
+				$image_optimisation,
+				$google_fonts,
+				static function ( array $file_optimisation ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+					unset( $file_optimisation );
+					return false;
+				},
+				static fn(): bool => false
+			)
+		);
 		return $main;
 	}
 

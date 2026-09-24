@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 87 first-party runtime files:
+The tokenizer scans 88 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 78 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 79 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 4 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,21 +40,21 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 84 |
-| Inventory source lines | 126,843 |
-| Class-like graph nodes | 83 |
+| Inventory files | 85 |
+| Inventory source lines | 127,012 |
+| Class-like graph nodes | 84 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,528 |
-| Methods spanning 80 lines or more | 234 |
+| Named methods | 2,539 |
+| Methods spanning 80 lines or more | 233 |
 | Static properties | 143 across 32 nodes |
-| Unique dependency edges | 378 |
-| Runtime-classified edges | 377 |
-| Compatibility-classified edges | 198 |
+| Unique dependency edges | 383 |
+| Runtime-classified edges | 382 |
+| Compatibility-classified edges | 199 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 318 |
+| Cross-domain edges | 321 |
 | Feature-to-feature edges | 46 |
-| Strict boundary violations | 19 |
-| Bridge candidates | 237 |
+| Strict boundary violations | 20 |
+| Bridge candidates | 238 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -62,14 +62,14 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 66 class-like nodes and 325 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 67 class-like nodes and 329 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
 | Rank | Node | Score | Fan-in | Fan-out | Compatibility fan-in | Cross-domain |
 |---:|---|---:|---:|---:|---:|---:|
 | 1 | `Util` | 216.01 | 57 | 9 | 39 | 66 |
-| 2 | `Main` | 120.09 | 15 | 34 | 8 | 43 |
+| 2 | `Main` | 126.23 | 16 | 37 | 8 | 46 |
 | 3 | `Log` | 83.25 | 27 | 1 | 14 | 26 |
 | 4 | `LiteSpeed_Integration` | 79.80 | 17 | 7 | 16 | 20 |
 | 5 | `Cache` | 78.08 | 15 | 14 | 9 | 25 |
@@ -87,7 +87,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 
 | Class | Lines | Methods | 80+ | Static | Private state | Fan in/out | Evidence in | Feature deps | Largest method |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| `Main` | 10,790 | 235 | 20 | 12 | 38 | 15/37 | 131 | 17 | `enqueue_scripts` 203 |
+| `Main` | 10,225 | 236 | 17 | 12 | 39 | 16/37 | 133 | 18 | `enqueue_scripts` 203 |
 | `Image_Optimisation` | 8,999 | 183 | 13 | 7 | 30 | 4/4 | 11 | 3 | `add_delay_load_img` 476 |
 | `Critical_CSS` | 6,950 | 138 | 12 | 11 | 11 | 9/8 | 50 | 5 | `generate` 267 |
 | `Cache` | 5,643 | 161 | 8 | 4 | 29 | 14/13 | 71 | 8 | `maybe_store_cache` 177 |
@@ -106,6 +106,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Redis_Config_Policy` | 183 | 3 | 0 | 0 | 0 | 3/0 | 6 | 0 | `sanitize_value` 58 |
 | `Edge_Purge_Coordinator` | 150 | 4 | 0 | 0 | 0 | 1/2 | 1 | 0 | `purge_after_cache_clear` 27 |
 | `Cache_Coordinator` | 56 | 1 | 0 | 0 | 0 | 1/1 | 1 | 0 | `create` 15 |
+| `Preload_Buffer_Coordinator` | 406 | 11 | 0 | 0 | 1 | 2/3 | 2 | 1 | `queue_crawler_warm_after_cache_invalidation` 31 |
 | `Settings_Store` | 1,666 | 25 | 3 | 4 | 2 | 6/0 | 37 | 0 | `sanitize_settings_recursively` 401 |
 | `LiteSpeed_Integration` | 2,797 | 58 | 4 | 17 | 17 | 17/7 | 95 | 5 | `get_litespeed_ttl` 216 |
 | `WPPO_CLI_Command` | 2,362 | 27 | 7 | 0 | 0 | 1/14 | 2 | 11 | `settings` 224 |
@@ -149,6 +150,7 @@ These counts come from method names, call sites, tests, and history. They approx
 | `Admin_Auth` | 1 | Administrative capability, REST header canonicalization, legacy nonce fallback, and wp_rest verification |
 | `Edge_Purge_Coordinator` | 1 | One cache-clear fan-out and per-event identical Cloudflare transport de-duplication |
 | `Cache_Coordinator` | 1 | Cache construction plus the unchanged injection-filter contract; Main retains the public facade |
+| `Preload_Buffer_Coordinator` | 1 | WP 6.9 template-enhancement routing, legacy used-CSS/LCP lifecycle, and cache-aware scheduling seams |
 | `Settings_Store` effective-read policy | 1 | Canonical defaults/stored replacement, historical in-memory backfills, and blog-keyed resolved memo invalidation |
 
 ## Coupling findings
@@ -159,7 +161,7 @@ The graph records 57 incoming source nodes and 1,138 incoming executable occurre
 
 ### Main still owns feature policy
 
-`Main` has 37 outgoing class dependencies, 17 feature dependencies, 20 large methods, and direct service-to-owner bridges. P3-013 removes the 300-line options resolver and cache-construction policy, reducing Main by 301 lines and one large method. The three added owner edges (`Settings_Store`, `Settings_Command`, and `Cache_Coordinator`) are explicit delegation contracts; asset policy, preload, speculation, and minification remain queued for P3-014/P3-015.
+`Main` has 37 outgoing class dependencies, 18 feature dependencies, 17 large methods, and direct service-to-owner bridges. P3-013 removed the options resolver and cache-construction policy; P3-014 moved bounded minification behind `Minify_Policy`; P3-015 moves the bounded preload/buffer lifecycle and cache-aware scheduling seams behind `Preload_Buffer_Coordinator`. The owner edges are explicit delegation contracts; speculation, resource hints, image serving, and unrelated feature policy remain on Main.
 
 ### Cache has a cohesive capacity tail
 
@@ -198,6 +200,8 @@ P3-012 adds the 150-line, four-method `Edge_Purge_Coordinator`. `Hook_Registry` 
 P3-013 moves the canonical defaults, effective-options policy, and all 180 historical backfill assignments from `Util`/`Main::get_options()` to `Settings_Store`. Raw and resolved options are memoized by blog ID; add/update/delete and command writes invalidate the resolved snapshot so same-request reads reapply backfills without persisting them. `Util::get_default_settings()` remains its unchanged facade, while `Main` retains its public options facade, injectable local snapshot, Hook_Registry callback identities, and settings-update side effects. Main's one rollback write now routes through `Settings_Command`, so Main owns no direct `wppo_settings` write. The one bounded cache cluster is the 56-line, one-method `Cache_Coordinator`: `Main::create_cache()` remains the unchanged static facade while construction, collaborator injection, and `wppo_cache_instance` filtering move together. The generated inventory contains 83 files, 86 graph nodes, and 373 edges; Main drops from 11,091 to 10,790 lines and from 21 to 20 methods at least 80 lines, Util drops from 5,006 to 4,791 lines, the runtime SCC grows only from 64 to 65 nodes, and Main feature dependencies remain 17.
 
 P3-014 adds the 385-line, eight-method `Minify_Policy` for the bounded Main minification cluster. `Main` retains public `minify_queued_styles`, `minify_css`, and `minify_js` facades plus callback identity and narrow state bridges; the policy owns queue detection, CSS/JS tag transformation, minified-name/file checks, randomized-query guard, containment, and fail-open behavior. Speculation/resource-hint policy remains outside this item. The generated inventory contains 84 files, 87 graph nodes, and 378 edges; Main's public minify cluster is reduced while feature-to-feature edges remain 46.
+
+P3-015 adds the 406-line, eleven-method `Preload_Buffer_Coordinator` for one bounded coordination cluster. `Main` retains the used-CSS/LCP callback methods, static core-buffer predicate, post-save scheduling callbacks, Hook_Registry callback targets, cache (10) → used CSS (20) → LCP (30) enhancement order, and legacy priority-20 LCP start. The coordinator owns core availability routing, legacy buffer guards and one-shot used-CSS lifecycle, post-save crawler-warm and used-CSS enqueue gates, and fail-open mixed-version Woo URL checks. Speculation/resource hints, image serving, LiteSpeed crawler/ESI behavior, Redis/drop-ins, and data remain unchanged. Main drops from the branch baseline of 10,461 lines / 236 methods / 20 large methods to 10,225 / 236 / 17; the generated inventory contains 85 files, 88 graph nodes, and 383 edges. The explicit owner edge adds one bridge candidate and one Core-to-domain boundary finding; feature-to-feature edges remain 46.
 
 ## Static state
 

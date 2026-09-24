@@ -41,8 +41,9 @@ require_once __DIR__ . '/../../includes/Insight/class-insight-query.php';
 require_once __DIR__ . '/../../includes/Database/class-database-cleanup-runner.php';
 require_once __DIR__ . '/../../includes/Admin/class-admin-auth.php';
 require_once __DIR__ . '/../../includes/Edge/class-edge-purge-coordinator.php';
-// P3-014: keep local test loading deterministic when the Composer classmap predates Minify_Policy.
+// P3-014/P3-015: keep local test loading deterministic when the Composer classmap predates new owners.
 require_once __DIR__ . '/../../includes/minify/class-minify-policy.php';
+require_once __DIR__ . '/../../includes/Core/class-preload-buffer-coordinator.php';
 
 // Load the object-cache drop-in template early so wp_cache_set() and friends
 // are declared as real PHP functions BEFORE any Brain Monkey test can

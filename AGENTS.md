@@ -116,11 +116,12 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 84 files: 80 runtime plugin files under `includes/` (79 class-like nodes plus the Redis helper), 4 protected minify boundary files, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 85 files: 81 runtime plugin files under `includes/` (80 class-like nodes plus the Redis helper), 4 protected minify boundary files, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
-| `Core/class-main.php` | Hook/admin/enqueue orchestration and public compatibility facades; effective settings resolution is delegated to Settings_Store; minification callbacks delegate to Minify_Policy |
+| `Core/class-main.php` | Hook/admin/enqueue orchestration and public compatibility facades; effective settings resolution is delegated to Settings_Store; minification callbacks delegate to Minify_Policy; preload/buffer callbacks delegate to Preload_Buffer_Coordinator |
+| `Core/class-preload-buffer-coordinator.php` | WP 6.9+ template-enhancement routing, legacy used-CSS/LCP buffer lifecycle, and cache-aware used-CSS/crawler-warm scheduling seams; Main keeps hook callback identity |
 | `Core/class-runtime-state.php` | Blog-switch registry for six site-sensitive static-state owners |
 | `minify/class-minify-policy.php` | Dependency-light CSS/JS queue, tag-rewrite, minified-file, and containment policy; Main keeps public hook facades |
 | `Cache/class-cache.php` | Static HTML cache (generate, invalidate, clear, CSS combine, CDN rewrite) |

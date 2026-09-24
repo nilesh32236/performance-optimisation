@@ -401,27 +401,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private ?Minify\Minify_Policy $minify_policy = null;
 
 		/**
+		 * Lazily-created preload/buffer coordination owner (P3-015).
+		 *
+		 * Main keeps every public callback signature and Hook_Registry callback
+		 * identity while the bounded buffer lifecycle and scheduling seams live
+		 * behind a dependency-light coordinator.
+		 *
+		 * @var   Preload_Buffer_Coordinator|null
+		 * @since NEXT
+		 */
+		private ?Preload_Buffer_Coordinator $preload_buffer_coordinator = null;
+
+		/**
 		 * Timestamp (microtime) when the front-end template render started.
 		 *
 		 * @var   float
 		 * @since 1.9.0
 		 */
 		private float $server_timing_template_start = 0.0;
-
-		/**
-		 * Whether the used-CSS buffer pipeline ran this request.
-		 *
-		 * Nesting balance guard (issue #881): the WP 6.9+ enhancement filter
-		 * ({@see process_used_css_only()}) and the legacy fallback buffer
-		 * ({@see process_used_css_capture()}) share the used-CSS pipeline;
-		 * when both are registered a mid-request flip of
-		 * `wp_should_output_buffer_template_for_enhancement` could otherwise
-		 * run it twice. One-shot per request.
-		 *
-		 * @var   bool
-		 * @since 2.0.0
-		 */
-		private bool $used_css_buffer_enhanced = false;
 
 		/**
 		 * The most recently constructed Main instance.
@@ -605,8 +602,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$options = $this->get_options();
 
 			$this->includes();
-			$this->image_optimisation = new Image_Optimisation( $options );
-			$this->google_fonts       = new Google_Fonts( $options );
+			$this->image_optimisation         = new Image_Optimisation( $options );
+			$this->google_fonts               = new Google_Fonts( $options );
+			$this->preload_buffer_coordinator = new Preload_Buffer_Coordinator(
+				fn(): array => $this->get_options(),
+				$this->image_optimisation,
+				$this->google_fonts,
+				static fn( array $file_optimisation ): bool => self::is_safe_mode_active( $file_optimisation ),
+				static fn(): bool => self::is_aggressive_bypass_active()
+			);
 			$this->setup_hooks();
 			$this->filesystem = Util::init_filesystem();
 			if ( ! $this->filesystem ) {
@@ -2611,94 +2615,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Crawler warm on smart purge when preloadSitemap enabled (P4).
-			$options = Util::get_settings();
-			if ( ! empty( $options['preload_settings']['preloadSitemap'] ) && function_exists( 'as_enqueue_async_action' ) && function_exists( 'as_has_scheduled_action' ) ) {
-				$url = get_permalink( $post_id );
-				if ( is_string( $url ) && '' !== $url ) {
-					// Never schedule preload work for Woo dynamic routes.
-					// Single source: Util::is_woo_excluded_url() covers cart /
-					// checkout / account + custom slugs (safe-mode gated) plus
-					// Store API / wc-ajax / add-to-cart / faceted /
-					// functional-query URLs (unconditional), so warm-path and
-					// serve-path verdicts cannot drift. Fail-closed: any
-					// detection failure skips scheduling (never warm dynamic).
-					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_excluded_url' ) ) {
-						try {
-							if ( Util::is_woo_excluded_url( $url ) ) {
-								return;
-							}
-						} catch ( \Throwable $e ) {
-							unset( $e );
-							return;
-						}
-					} else {
-						// Mixed-version fallback: mirror the Cron batch
-						// fallback — unconditional Store API / wc-ajax /
-						// faceted / generic-query guards plus safe-mode-gated
-						// dynamic-path, so a stale Util can never warm
-						// faceted or wc-ajax URLs.
-						try {
-							$warm_path       = (string) wp_parse_url( $url, PHP_URL_PATH );
-							$warm_qs         = (string) wp_parse_url( $url, PHP_URL_QUERY );
-							$warm_rest_route = '';
-							if ( '' !== $warm_qs ) {
-								$warm_params = array();
-								parse_str( $warm_qs, $warm_params );
-								if ( isset( $warm_params['rest_route'] ) && is_string( $warm_params['rest_route'] ) ) {
-									$warm_rest_route = $warm_params['rest_route'];
-								}
-							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
-								if ( Util::is_woo_store_api_request( $warm_path, $warm_qs, '' ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_request( $warm_path, '', $warm_rest_route ) ) ) {
-									return;
-								}
-							} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && ( Util::is_woo_store_api_path( $warm_path ) || ( '' !== $warm_rest_route && Util::is_woo_store_api_path( $warm_rest_route ) ) ) ) {
-								return;
-							} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $warm_path, '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $warm_qs ) ) ) ) {
-								return;
-							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_ajax_request' ) ) {
-								if ( Util::is_woo_ajax_request( $warm_path, $warm_qs ) ) {
-									return;
-								}
-							} elseif ( (bool) preg_match( '#(^|/)wc-ajax(/|$)#i', '/' . ltrim( (string) rawurldecode( $warm_path ), '/' ) ) || ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])wc-ajax(?:=|&|;|$)/i', $warm_qs ) ) ) {
-								return;
-							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
-								if ( '' !== $warm_qs && Util::is_woo_faceted_query( $warm_qs ) ) {
-									return;
-								}
-							} elseif ( '' !== $warm_qs && (bool) preg_match( '/(?:^|[&;])(?:filter_[^=&]*|query_type_[^=&]*|min_price|max_price|rating_filter|orderby|product_cat|pa_[^=&]*|attribute_[^=&]*|gpf_[^=&]*)(?:=|&|;|$)/i', $warm_qs ) ) {
-								return;
-							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) ) {
-								if ( '' !== $warm_qs && Util::has_uncacheable_query( $warm_qs ) ) {
-									return;
-								}
-							} elseif ( '' !== $warm_qs ) {
-								return;
-							}
-							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
-								if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( $warm_path ) ) {
-									return;
-								}
-							}
-						} catch ( \Throwable $e ) {
-							unset( $e );
-							return;
-						}
-					}
-					$url = esc_url_raw( $url );
-					// Atomic unique enqueue (issue #1310) closes the
-					// check-then-act race. Util ships in-repo: called
-					// directly (issue #1310 review) — its internal
-					// function_exists + supports_* + try/catch already fails
-					// open, so no method_exists/legacy branch is needed.
-					if ( '' !== $url ) {
-						Util::enqueue_unique_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
-					}
-				}
-			}
+			// P3-015: the cache-aware scheduling seam is owned by the dependency-
+			// light coordinator; invalidation and callback identity stay on Main.
+			$this->preload_buffer_coordinator->queue_crawler_warm_after_cache_invalidation( (int) $post_id );
 		}
 
 		/**
@@ -2806,23 +2725,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			$options = Util::get_settings();
-			if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
-				return;
-			}
-
-			if ( ! function_exists( 'as_has_scheduled_action' ) || ! function_exists( 'as_enqueue_async_action' ) ) {
-				return;
-			}
-
-			// Util ships in-repo: called directly (issue #1310 review) — its
-			// internal function_exists + supports_* + try/catch already
-			// fails open, so no method_exists/legacy branch is needed.
-			Util::enqueue_unique_async_action(
-				'wppo_used_css_generate',
-				array( 'post_id' => $post_id ),
-				'performance_optimisation'
-			);
+			// P3-015: preserve the post-save callback and critical-CSS order while
+			// delegating the setting/Action Scheduler seam to the coordinator.
+			$this->preload_buffer_coordinator->queue_used_css_regeneration( (int) $post_id );
 		}
 
 		/**
@@ -2889,51 +2794,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function process_used_css_only( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			// Mid-template cancel safety (issue #1386): a cancelled core
-			// buffer can deliver a non-string into the filter. Fail open —
-			// never fatal, never white-screen. Prefer the raw $output when
-			// it carries page HTML so a cancelled $filtered_output can never
-			// collapse the chain to a blank page.
-			if ( ! is_string( $filtered_output ) ) {
-				if ( is_string( $output ) && '' !== $output ) {
-					return $output;
-				}
-				return '';
-			}
-			try {
-				if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
-					return $filtered_output;
-				}
-				// Safe-mode kill switch + nocache bypass (issue #1098): fail open
-				// to the full stylesheet, settings preserved.
-				if ( self::is_safe_mode_active( $this->get_options()['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
-					return $filtered_output;
-				}
-
-				// Nesting balance (issue #881): run the used-CSS pipeline at most
-				// once per request (see Main::$used_css_buffer_enhanced).
-				if ( $this->used_css_buffer_enhanced ) {
-					return $filtered_output;
-				}
-				$this->used_css_buffer_enhanced = true;
-
-				if ( ! empty( $this->get_options()['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
-					$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
-				}
-
-				$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->get_options() );
-				$result   = $used_css->process_buffer( $filtered_output );
-				return is_string( $result ) ? $result : $filtered_output;
-			} catch ( \Throwable $e ) {
-				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed.', array( 'exception' => $e ) );
-				if ( is_string( $filtered_output ) && '' !== $filtered_output ) {
-					return $filtered_output;
-				}
-				if ( is_string( $output ) && '' !== $output ) {
-					return $output;
-				}
-				return '';
-			}
+			return $this->preload_buffer_coordinator->process_used_css_only( $filtered_output, $output );
 		}
 
 		/**
@@ -3135,40 +2996,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function start_used_css_buffer() {
-			// Single-buffer routing (issue #1386): when the core
-			// template-enhancement buffer is available (WP 6.9+), core owns
-			// output capture and the 6.9+ filter path
-			// (process_used_css_only) is responsible. Never open a private
-			// buffer on 6.9+ — a runtime opt-out degrades to uncached
-			// streaming output.
-			try {
-				if ( self::should_use_core_template_buffer() ) {
-					return;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			// Nesting guard (issue #881, pre-6.9 defense in depth): when
-			// the core buffer is already active for this request, the
-			// filter path owns used-CSS and a private buffer must not
-			// stack on top.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
-				try {
-					if ( wp_should_output_buffer_template_for_enhancement() ) {
-						return;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
-				return;
-			}
-			// Safe-mode kill switch + nocache bypass (issue #1098).
-			if ( self::is_safe_mode_active( $this->get_options()['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
-				return;
-			}
-			ob_start( array( $this, 'process_used_css_capture' ) );
+			$this->preload_buffer_coordinator->start_used_css_buffer();
 		}
 
 		/**
@@ -3187,39 +3015,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function start_lcp_priority_buffer() {
-			// Single-buffer routing (issue #1386): when the core
-			// template-enhancement buffer is available (WP 6.9+), the 6.9+
-			// filter path (prioritize_lcp_in_buffer on
-			// wp_template_enhancement_output_buffer) is responsible.
-			// Never open a private buffer on 6.9+ — a runtime opt-out
-			// degrades to uncached streaming output.
-			try {
-				if ( self::should_use_core_template_buffer() ) {
-					return;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			// Nesting guard (issue #881, pre-6.9 defense in depth): when
-			// the core buffer is already active for this request, the
-			// filter path owns LCP prioritization and a private buffer
-			// must not stack on top.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
-				try {
-					if ( wp_should_output_buffer_template_for_enhancement() ) {
-						return;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
-				return;
-			}
-			if ( is_feed() || is_robots() || is_trackback() || is_preview() || is_embed() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
-				return;
-			}
-			ob_start( array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ) );
+			$this->preload_buffer_coordinator->start_lcp_priority_buffer();
 		}
 
 		/**
@@ -3236,40 +3032,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function process_used_css_capture( $buffer ) {
-			// Mid-template cancel safety (issue #1386): an output-buffer
-			// callback must always return a string — a non-string input
-			// (false/null from a cancelled buffer) fails open to ''.
-			if ( ! is_string( $buffer ) ) {
-				return '';
-			}
-			if ( '' === $buffer ) {
-				return $buffer;
-			}
-
-			// Fail open returns the PRISTINE input — stash it before mutation.
-			$original = $buffer;
-			try {
-				// Nesting balance (issue #881): run the used-CSS pipeline at
-				// most once per request (see Main::$used_css_buffer_enhanced).
-				if ( $this->used_css_buffer_enhanced ) {
-					return $original;
-				}
-				$this->used_css_buffer_enhanced = true;
-
-				if ( ! empty( $this->get_options()['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
-					$buffer = $this->google_fonts->process_buffer( $buffer );
-				}
-
-				$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->get_options() );
-				$result   = $used_css->process_buffer( $buffer );
-				return is_string( $result ) ? $result : $original;
-			} catch ( \Throwable $e ) {
-				// Fail open: return the unprocessed buffer rather than dropping
-				// the page content. Mirrors the wppo_debug_log convention used by
-				// the HTML minifier and Cloudflare purger.
-				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed.', array( 'exception' => $e ) );
-				return $original;
-			}
+			return $this->preload_buffer_coordinator->process_used_css_capture( $buffer );
 		}
 
 		/**
@@ -4251,11 +4014,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.3.0
 		 *
 		 * @return bool True when the core template-enhancement buffer path is allowed.
-		 * Facade proxy (ARCH-005): logic lives in {@see Script_Strategy::should_use_core_template_buffer}.
+		 * Facade proxy (P3-015): logic lives in {@see Preload_Buffer_Coordinator::should_use_core_template_buffer}.
 		 * @since 2.4.0 Proxied to Script_Strategy (ARCH-005).
+		 * @since NEXT Proxied to Preload_Buffer_Coordinator (P3-015).
 		 */
 		public static function should_use_core_template_buffer(): bool {
-			return Script_Strategy::should_use_core_template_buffer();
+			return Preload_Buffer_Coordinator::should_use_core_template_buffer();
 		}
 
 		/**

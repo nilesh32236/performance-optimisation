@@ -493,20 +493,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 		 * @since 2.3.0
 		 *
 		 * @return bool True when the core template-enhancement buffer path is allowed.
-		 * Relocated from Main::should_use_core_template_buffer() (ARCH-005).
+		 * Relocated to Preload_Buffer_Coordinator in P3-015; retained as a
+		 * compatibility proxy for existing Script_Strategy callers.
 		 */
 		public static function should_use_core_template_buffer(): bool {
-			try {
-				// Version floor lives in Wp_Version (REF-010); the API
-				// probe below stays byte-identical.
-				if ( ! Wp_Version::is_at_least( '6.9-alpha' ) ) {
-					return false;
-				}
-				return function_exists( 'wp_should_output_buffer_template_for_enhancement' );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+			return Preload_Buffer_Coordinator::should_use_core_template_buffer();
 		}
 
 		/**

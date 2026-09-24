@@ -170,29 +170,29 @@ The generated metrics act as signals. Reviewers combine them with source and run
 
 ## Phase 3 ratchet
 
-P3-005 through P3-014 record these baselines:
+P3-005 through P3-015 record these baselines:
 
 | Metric | Baseline | Direction |
 |---|---:|---|
 | Runtime SCCs | 1 | Reduce; final target 0 or a documented protected residue |
-| Largest runtime SCC | 66 nodes | Reduce |
-| Compatibility-classified edges | 198 | Explain and reduce only through explicit compatibility ownership |
+| Largest runtime SCC | 67 nodes | Reduce |
+| Compatibility-classified edges | 199 | Explain and reduce only through explicit compatibility ownership |
 | Compatibility SCCs | 1 | Reduce; retain only documented stable adapters |
 | Largest compatibility SCC | 21 nodes | Reduce after caller migration |
-| Boundary violations | 19 | Reduce; final target 0 or explicit protected exceptions |
-| Bridge candidates | 237 | Reduce after caller migration |
+| Boundary violations | 20 | Reduce; final target 0 or explicit protected exceptions |
+| Bridge candidates | 238 | Reduce after caller migration |
 | `Util` unique fan-in | 57 | Reduce |
 | `Util` incoming executable evidence | 1,138 | Reduce |
 | `Main` unique fan-out | 37 | Reduce after delegated bridges settle |
-| `Main` feature dependencies | 17 | Reduce |
-| `Main` methods at least 80 lines | 20 | Reduce |
+| `Main` feature dependencies | 18 | Reduce after delegated bridges settle |
+| `Main` methods at least 80 lines | 17 | Reduce |
 | Static-state nodes | 32 | Classify, then reduce or document |
 | Static properties | 143 | Classify, then reduce or document |
 | Exact duplicate groups | 17 | Review; reduce only semantic duplicates |
 | Feature-to-feature edges | 46 | Keep only deliberate interactions |
 | Independent admin-auth implementations | 1 | Reduce to 0 outside `Admin_Auth` |
 
-P3-014 moves the bounded Main minification cluster behind `Minify_Policy`; generated boundary/bridge ratchets are documented in the queue, and speculation/resource-hint ownership remains deferred.
+P3-014 moves the bounded Main minification cluster behind `Minify_Policy`; P3-015 moves legacy/core buffer routing, used-CSS lifecycle, and cache-aware scheduling seams behind `Preload_Buffer_Coordinator`. Speculation/resource-hint, image-serving, and LiteSpeed ownership remain deferred.
 
 A pull request may increase a metric for a documented bridge. It must name the follow-up item and removal condition. An unexplained increase fails the ratchet.
 
