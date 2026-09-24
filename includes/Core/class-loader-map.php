@@ -140,6 +140,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Preload_Transport'      => 'Scheduler/class-preload-transport.php',
 				'Database_Cleanup'       => 'Database/class-database-cleanup.php',
 				'Deactivate'             => 'Core/class-deactivate.php',
+				'Dropin_Registry'        => 'Cache/class-dropin-registry.php',
 				'Edge_Cache'             => 'Edge/class-edge-cache.php',
 				'Edge_Purger'            => 'Edge/class-edge-purger.php',
 				'Filesystem'             => 'Support/class-filesystem.php',

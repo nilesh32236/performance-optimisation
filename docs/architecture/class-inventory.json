@@ -1089,7 +1089,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 948,
+        "lines": 950,
         "methods": 13,
         "public_methods": 10,
         "large_methods": 2,
@@ -1097,7 +1097,7 @@
         "largest_method": {
             "name": "create",
             "line": 435,
-            "lines": 413
+            "lines": 415
         },
         "method_prefixes": {
             "get": 2,
@@ -1133,10 +1133,10 @@
         "runtime_fan_out": 3,
         "compatibility_fan_in": 4,
         "compatibility_fan_out": 2,
-        "cross_domain_edges": 9,
+        "cross_domain_edges": 8,
         "refs": [
+            "Dropin_Registry",
             "Log",
-            "System_Info",
             "Util"
         ]
     },
@@ -1489,6 +1489,53 @@
         ]
     },
     {
+        "file": "includes/Cache/class-dropin-registry.php",
+        "class": "Dropin_Registry",
+        "fqcn": "PerformanceOptimise\\Inc\\Dropin_Registry",
+        "kind": "class",
+        "scope": "runtime",
+        "domain": "Cache",
+        "lines": 45,
+        "methods": 1,
+        "public_methods": 1,
+        "large_methods": 0,
+        "large_method_threshold_lines": 80,
+        "largest_method": {
+            "name": "invalidate",
+            "line": 37,
+            "lines": 7
+        },
+        "method_prefixes": {
+            "invalidate": 1
+        },
+        "hooks": [],
+        "static_state": false,
+        "static_properties": 0,
+        "private_state_properties": 0,
+        "protected_state_properties": 0,
+        "public_state_properties": 0,
+        "external_dependencies": 3,
+        "wordpress_dependencies": 0,
+        "filesystem_dependencies": 0,
+        "network_dependencies": 0,
+        "database_dependencies": 0,
+        "feature_dependencies": 1,
+        "compat_facade_methods": 0,
+        "duplicate_code_candidates": 0,
+        "fan_in": 2,
+        "fan_out": 1,
+        "incoming_reference_evidence": 12,
+        "outgoing_reference_evidence": 2,
+        "runtime_fan_in": 2,
+        "runtime_fan_out": 1,
+        "compatibility_fan_in": 1,
+        "compatibility_fan_out": 0,
+        "cross_domain_edges": 1,
+        "refs": [
+            "System_Info"
+        ]
+    },
+    {
         "file": "includes/Cache/class-object-cache.php",
         "class": "Object_Cache",
         "fqcn": "PerformanceOptimise\\Inc\\Object_Cache",
@@ -1559,12 +1606,12 @@
         "runtime_fan_out": 5,
         "compatibility_fan_in": 5,
         "compatibility_fan_out": 2,
-        "cross_domain_edges": 12,
+        "cross_domain_edges": 11,
         "refs": [
+            "Dropin_Registry",
             "Log",
             "Redis_Config_Policy",
             "Server_Rules",
-            "System_Info",
             "Util"
         ]
     },
@@ -2006,7 +2053,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 318,
+        "lines": 319,
         "methods": 8,
         "public_methods": 8,
         "large_methods": 0,
@@ -2014,7 +2061,7 @@
         "largest_method": {
             "name": "fallback_map",
             "line": 119,
-            "lines": 75
+            "lines": 76
         },
         "method_prefixes": {
             "base": 1,
@@ -3487,15 +3534,15 @@
         "feature_dependencies": 6,
         "compat_facade_methods": 0,
         "duplicate_code_candidates": 0,
-        "fan_in": 7,
+        "fan_in": 6,
         "fan_out": 7,
-        "incoming_reference_evidence": 18,
+        "incoming_reference_evidence": 8,
         "outgoing_reference_evidence": 23,
-        "runtime_fan_in": 7,
+        "runtime_fan_in": 6,
         "runtime_fan_out": 7,
-        "compatibility_fan_in": 1,
+        "compatibility_fan_in": 0,
         "compatibility_fan_out": 6,
-        "cross_domain_edges": 14,
+        "cross_domain_edges": 13,
         "refs": [
             "Advanced_Cache_Handler",
             "LiteSpeed_Crawler",

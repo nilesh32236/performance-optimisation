@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 79 first-party runtime files:
+The tokenizer scans 80 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 71 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 72 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,19 +40,19 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 76 |
-| Inventory source lines | 126,131 |
-| Class-like graph nodes | 75 |
+| Inventory files | 77 |
+| Inventory source lines | 126,179 |
+| Class-like graph nodes | 76 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,495 |
+| Named methods | 2,496 |
 | Methods spanning 80 lines or more | 237 |
 | Static properties | 141 across 32 nodes |
-| Unique dependency edges | 351 |
-| Runtime-classified edges | 350 |
+| Unique dependency edges | 352 |
+| Runtime-classified edges | 351 |
 | Compatibility-classified edges | 194 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 305 |
-| Feature-to-feature edges | 47 |
+| Cross-domain edges | 304 |
+| Feature-to-feature edges | 46 |
 | Strict boundary violations | 16 |
 | Bridge candidates | 230 |
 | Exact-shape duplicate groups | 17 |
@@ -62,22 +62,22 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 60 class-like nodes and 305 runtime-classified internal edges. Two compatibility-only SCCs cover 21 nodes and one System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 61 class-like nodes and 306 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
 | Rank | Node | Score | Fan-in | Fan-out | Compatibility fan-in | Cross-domain |
 |---:|---|---:|---:|---:|---:|---:|
-| 1 | `Util` | 212.01 | 56 | 9 | 38 | 65 |
+| 1 | `Util` | 216.01 | 57 | 9 | 39 | 66 |
 | 2 | `Main` | 120.09 | 15 | 34 | 8 | 43 |
 | 3 | `Log` | 83.25 | 27 | 1 | 14 | 26 |
 | 4 | `LiteSpeed_Integration` | 79.80 | 17 | 7 | 16 | 20 |
-| 5 | `Cache` | 76.64 | 14 | 13 | 9 | 25 |
+| 5 | `Cache` | 78.08 | 15 | 14 | 9 | 25 |
 | 6 | `Used_CSS` | 52.96 | 10 | 8 | 6 | 17 |
 | 7 | `Critical_CSS` | 52.95 | 9 | 8 | 7 | 14 |
 | 8 | `RUM` | 50.35 | 14 | 2 | 9 | 12 |
-| 9 | `Cron` | 46.79 | 5 | 16 | 3 | 18 |
-| 10 | `Rest` | 45.88 | 1 | 21 | 0 | 20 |
+| 9 | `Rest` | 47.75 | 1 | 22 | 0 | 21 |
+| 10 | `Cron` | 46.79 | 5 | 16 | 3 | 18 |
 
 The score formula lives in the graph metadata. It ranks review pressure; it does not grade code quality.
 
@@ -101,6 +101,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Database_Cleanup` | 3,353 | 58 | 9 | 3 | 3 | 6/2 | 64 | 0 | `get_action_scheduler_health` 220 |
 | `RUM` | 3,348 | 63 | 7 | 7 | 7 | 14/2 | 98 | 1 | `flush_queue` 328 |
 | `Object_Cache` | 3,215 | 55 | 11 | 6 | 11 | 8/5 | 33 | 3 | `trip_circuit_on_outage` 174 |
+| `Dropin_Registry` | 45 | 1 | 0 | 0 | 0 | 2/1 | 12 | 1 | `invalidate` 7 |
 | `Redis_Config_Policy` | 183 | 3 | 0 | 0 | 0 | 3/0 | 6 | 0 | `sanitize_value` 58 |
 | `LiteSpeed_Integration` | 2,797 | 58 | 4 | 17 | 17 | 17/7 | 95 | 5 | `get_litespeed_ttl` 216 |
 | `WPPO_CLI_Command` | 2,362 | 27 | 7 | 0 | 0 | 1/14 | 2 | 11 | `settings` 224 |
@@ -133,6 +134,7 @@ These counts come from method names, call sites, tests, and history. They approx
 | `WPPO_CLI_Command` | 9 | Eight command families plus shared CLI validation/formatting |
 | `RUM` | 7 | Collection, validation, queue, aggregation, persistence, admin reads, lifecycle/reset |
 | `Object_Cache` | 6 | Connection, reads/writes, flush, circuit state, drop-in management, diagnostics |
+| `Dropin_Registry` | 1 | Neutral forwarding seam for post-mutation drop-in cache invalidation |
 | `Redis_Config_Policy` | 1 | Redis key manifest and value normalization |
 | `LiteSpeed_Integration` | 7 | Detection, coexistence, headers, TTL, purge, private/vary policy, server compatibility |
 | `Cron` | 6 | Recurring scheduling, sitemap discovery, queue progress, URL/page fetch, image/preload/insight jobs, teardown |
@@ -172,11 +174,13 @@ The three adapters duplicate parts of permission checks, database dispatch, sett
 
 P3-006 moves the complete Redis key manifest and value sanitizer from `Rest` into the dependency-light `Redis_Config_Policy`. REST and both CLI construction paths now call the same builder; `Object_Cache::ALLOWED_KEYS` remains as a public compatibility alias. The generated inventory contains 76 files, 79 graph nodes, and 351 edges. The policy has three public methods, no feature dependencies, and no connection, persistence, circuit, drop-in, flush, multisite, permission, or command-registration changes. Bridge candidates fell from 231 to 230 while the compatibility-edge count fell from 195 to 194.
 
+P3-007 adds the dependency-light `Dropin_Registry` as the single neutral invalidation seam. `Advanced_Cache_Handler` routes its two create/remove invalidations through it, and `Object_Cache` routes all four enable/disable/circuit invalidations through it; all existing success conditions, loadability guards, and Throwable wrappers remain in place. `System_Info` remains the owner of drop-in reporting, path resolution, ownership detection, its request memo, transient deletion, and salted-cache salt bumps. The registry has one seven-line method, no state, two incoming feature edges, and one guarded outgoing bridge to `System_Info`. Direct Advanced/Object-to-System-Info invalidation edges fall from two to zero. The generated inventory now contains 77 files, 80 graph nodes, and 352 edges; feature-to-feature edges fall from 47 to 46, the compatibility-only SCC count falls from two to one, and bridge candidates remain 230.
+
 `Rest_Settings` and the REST safe-mode path still write `wppo_settings` outside `Settings_Store`; that remains queued for the later settings-command item.
 
 ## Static state
 
-The old regex found 12 stateful files. The tokenizer finds 141 static properties across 31 nodes. The largest owners are:
+The old regex found 12 stateful files. The tokenizer finds 141 static properties across 32 nodes. The largest owners are:
 
 | Node | Static properties | Review finding |
 |---|---:|---|
@@ -267,4 +271,4 @@ Phase 3 should record a reviewed PHPStan baseline after the first ownership extr
 
 P3-001 establishes the measurement system. P3-002 will centralize Action Scheduler and WP-Cron job ownership, including builder drift and upgrade purge teardown. That item improves dependency direction, removes duplicate lifecycle lists, fixes a pending-job leak, and gives later scheduler migrations one canonical registry.
 
-Util migration, settings writes, REST/CLI application boundaries, CSS and image decompositions, and React card extraction remain queued. Cache capacity, runtime-state reset ownership, and Redis configuration policy are implemented in this phase.
+Util migration, settings writes, REST/CLI application boundaries, CSS and image decompositions, and React card extraction remain queued. Cache capacity, runtime-state reset ownership, Redis configuration policy, and neutral drop-in invalidation are implemented in this phase.

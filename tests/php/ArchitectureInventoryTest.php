@@ -133,11 +133,11 @@ final class ArchitectureInventoryTest extends TestCase {
 		$graph = $this->read_json( 'DEPENDENCY-GRAPH.json' );
 		$this->assertSame( 2, $graph['schema_version'] );
 		$this->assertStringContainsString( 'PhpToken', $graph['analysis_method'] );
-		$this->assertSame( 79, $graph['summary']['files'] );
-		$this->assertSame( 75, $graph['summary']['class_like_nodes'] );
+		$this->assertSame( 80, $graph['summary']['files'] );
+		$this->assertSame( 76, $graph['summary']['class_like_nodes'] );
 		$this->assertSame( 4, $graph['summary']['procedural_nodes'] );
-		$this->assertSame( 351, $graph['summary']['edges'] );
-		$this->assertSame( 350, $graph['summary']['runtime_edges'] );
+		$this->assertSame( 352, $graph['summary']['edges'] );
+		$this->assertSame( 351, $graph['summary']['runtime_edges'] );
 		$this->assertSame( 194, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
@@ -289,11 +289,11 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertArrayHasKey( 'high_risk_hubs', $graph['metrics'] );
 		$this->assertArrayHasKey( 'boundary_violations', $graph['metrics'] );
 		$this->assertSame( 1, $graph['summary']['runtime_cyclic_components'] );
-		$this->assertSame( 2, $graph['summary']['compatibility_cyclic_components'] );
+		$this->assertSame( 1, $graph['summary']['compatibility_cyclic_components'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['runtime'] );
-		$this->assertCount( 60, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
-		$this->assertCount( 305, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
-		$this->assertCount( 2, $graph['metrics']['cycles_by_classification']['compatibility'] );
+		$this->assertCount( 61, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
+		$this->assertCount( 306, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
+		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['compatibility'] );
 
 		$candidates = $graph['duplicate_candidates'];
 		$this->assertCount( 17, $candidates );

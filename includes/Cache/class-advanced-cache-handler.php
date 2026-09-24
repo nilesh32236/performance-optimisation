@@ -838,9 +838,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$written = self::atomic_write_dropin( $handler_code );
 
 			// The drop-in changed — System Info's cached ownership verdict is
-			// stale (audit #888 finding 25).
-			if ( $written && is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
-				System_Info::flush_dropin_cache();
+			// stale (audit #888 finding 25). The neutral registry preserves the
+			// existing loadability guard without coupling this mutator to the
+			// reporter implementation.
+			if ( $written && is_callable( array( 'PerformanceOptimise\Inc\Dropin_Registry', 'invalidate' ) ) ) {
+				Dropin_Registry::invalidate();
 			}
 
 			return $written;
@@ -881,10 +883,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			}
 
 			// The drop-in changed — System Info's cached ownership verdict is
-			// stale (audit #888 finding 25). Only flush on a successful delete,
-			// mirroring create().
-			if ( $deleted && class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
-				System_Info::flush_dropin_cache();
+			// stale (audit #888 finding 25). Only invalidate on a successful
+			// delete, mirroring create() while retaining the class guard.
+			if ( $deleted && class_exists( 'PerformanceOptimise\Inc\Dropin_Registry' ) ) {
+				Dropin_Registry::invalidate();
 			}
 		}
 
