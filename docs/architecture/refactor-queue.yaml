@@ -1385,9 +1385,9 @@ phase3_items:
 
   - id: P3-019
     title: 'React settings-response and async lifecycle correctness'
-    status: audit-pending
-    status: queued
+    status: active
     priority: medium
+    github_issue: 1606
     type: epic
     problem: 'Import, sandbox promote, and preset responses can miss the global settings cache; deferred saves and abort paths can clobber or strand state.'
     target_owner: 'apiRequest response mapper plus narrow async workflow hooks'
@@ -1395,6 +1395,15 @@ phase3_items:
     non_goals: 'No router, global store, or polling framework.'
     tests: 'Cross-tab cache, deferred edit, abort/unmount, and response-shape Jest coverage.'
     ratchet: 'Global settings response misses: 3 -> 0; known async state races: 4 -> 0.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 5b66dc19
+      evidence:
+        - 'Import, sandbox promote, and preset workflows write settings-related responses through different async paths and can miss the global wppoSettings cache.'
+        - 'Deferred saves and abort/unmount paths need one response commit/mapper contract before changing component state.'
+        - 'No router, global store, or polling framework is needed; narrow response and async lifecycle hooks are sufficient.'
+        - 'The issue must preserve existing request/response shapes, REST security, and cross-tab settings behavior.'
+      decision: 'Proceed test-first with one response-commit and deferred-save lifecycle cluster; keep hydration/abort follow-ups bounded and explicit.'
 
   - id: P3-020
     title: 'React card and polling isolation'
