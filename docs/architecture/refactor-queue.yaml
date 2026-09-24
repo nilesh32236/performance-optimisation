@@ -1108,11 +1108,24 @@ phase3_items:
 
   - id: P3-013
     title: 'Main options and lifecycle ownership cleanup'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1591
     github_pr: 1592
     implementation_commit: cd3850ed49284706c392ff21a169c670ee1bc5a6
+    merge_commit: 388a9954
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      settings_store: 'loaded; resolved settings read returned 14 tabs; no settings write or cache mutation performed'
+      cache_coordinator: 'loaded; constructor seam available; no cache clear or external purge performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '83 inventory files / 86 nodes / 373 edges; generator check passed'
     type: epic
     problem: 'Main still owns options backfills, settings invalidation, cache coordination, and collaborator construction.'
     target_owner: 'Settings_Store/Cache coordination contracts with Main as orchestrator'
@@ -1139,7 +1152,7 @@ phase3_items:
 
   - id: P3-014
     title: 'Main asset, minification, and speculation cleanup'
-    status: queued
+    status: audit-pending
     priority: medium
     type: epic
     problem: 'Main still owns asset policy, minification, resource hints, and speculation in addition to orchestration.'
