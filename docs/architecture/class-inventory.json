@@ -2207,14 +2207,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 10225,
+        "lines": 10211,
         "methods": 236,
         "public_methods": 151,
         "large_methods": 17,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "enqueue_scripts",
-            "line": 3351,
+            "line": 3337,
             "lines": 203
         },
         "method_prefixes": {
@@ -4644,26 +4644,28 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Settings",
-        "lines": 1160,
-        "methods": 18,
+        "lines": 1091,
+        "methods": 20,
         "public_methods": 18,
-        "large_methods": 2,
+        "large_methods": 0,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "migrate_third_party_auto",
-            "line": 1074,
-            "lines": 85
+            "line": 1017,
+            "lines": 73
         },
         "method_prefixes": {
-            "migrate": 17
+            "migrate": 17,
+            "read": 1,
+            "invalidate": 1
         },
         "hooks": [],
         "static_state": false,
         "static_properties": 0,
-        "private_state_properties": 1,
+        "private_state_properties": 2,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 16,
+        "external_dependencies": 15,
         "wordpress_dependencies": 2,
         "filesystem_dependencies": 0,
         "network_dependencies": 0,

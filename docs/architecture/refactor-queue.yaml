@@ -1241,6 +1241,8 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1597
+    github_pr: 1598
+    implementation_commit: 84b820a7f732b1aa954a2684727410e0e7039be5
     type: epic
     problem: 'Extracted services still hold Main owner state through @internal bridges and reverse edges.'
     target_owner: 'Explicit service state or narrow application contracts'
@@ -1255,6 +1257,15 @@ phase3_items:
         - 'Other reverse bridges (CSS Combine, Script_Strategy, Image_Optimisation, Hook_Registry) are separate families and remain queued for later bounded items.'
         - 'No endpoint, option schema, migration ordering, multisite, or LiteSpeed behavior should change.'
       decision: 'Proceed test-first with the Settings_Migrations Main bridge only; preserve public constructor compatibility through a narrow options/invalidation adapter and all migration callbacks.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'Settings_Migrations owns migration payloads and uses injected callable effective-options reader plus explicit invalidation command; Settings_Store remains persistence and memo owner'
+        compatibility: 'Main keeps all 17 public maybe_migrate_* proxies, Hook_Registry callback targets, migration ordering, per-site reads, and same-request resolved-settings parity'
+        non_goals: 'CSS Combine, Script_Strategy, Image_Optimisation, Hook_Registry, LiteSpeed, REST, schemas, migration data, and multisite behavior remain unchanged'
+        loader: 'Existing Settings_Migrations Loader_Map fallback entry remains sufficient; no new runtime file or bootstrap entry required'
+        tests: 'SettingsMigrationsBridgeTest source/parity coverage plus existing SettingsMigrations and MainSettingsOwnership suites'
+        graph_delta: 'Generated inventory remains 85 files / 88 graph nodes / 383 edges; Settings_Migrations no longer depends on Main'
+        verification: 'Focused settings/migration suites pass (158 tests / 14,311 assertions); full PHPUnit passes 2,767 tests / 25,370 assertions (9 skipped, 7 existing deprecations); focused Settings_Migrations PHPStan passes; full PHPCS passes; npm run lint:js passes with 2 existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing warnings; npm run build passes with existing entrypoint-size warning; generator --check and git diff --check pass'
 
   - id: P3-017
     title: 'Util external caller migration and facade reduction'

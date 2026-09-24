@@ -196,7 +196,7 @@ P3-014 moves the bounded Main minification cluster behind `Minify_Policy`; P3-01
 
 A pull request may increase a metric for a documented bridge. It must name the follow-up item and removal condition. An unexplained increase fails the ratchet.
 
-P3-013 trades three explicit `Main` owner edges for a 301-line and one-large-method reduction. P3-014 owns the remaining asset/minification/speculation fan-out reduction; P3-016 reviews service-to-Main bridges. `Settings_Store` adds two blog-keyed resolved-memo properties, while incoming executable `Util` evidence falls 1,142 to 1,138. Moving the canonical defaults into the dependency-light Store prevents a new Store-to-Util edge; the runtime SCC grows only from 64 to 65 nodes.
+P3-013 trades three explicit `Main` owner edges for a 301-line and one-large-method reduction. P3-014 owns the remaining asset/minification/speculation fan-out reduction; P3-016 now replaces the `Settings_Migrations` → `Main` owner-state bridge with callable effective-options and invalidation contracts. `Settings_Store` adds two blog-keyed resolved-memo properties, while incoming executable `Util` evidence falls 1,142 to 1,138. Moving the canonical defaults into the dependency-light Store prevents a new Store-to-Util edge; the runtime SCC grows only from 64 to 65 nodes.
 
 ## SOLID policy
 
