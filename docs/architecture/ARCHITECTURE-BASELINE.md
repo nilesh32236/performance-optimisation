@@ -47,14 +47,14 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 | Named methods | 2,539 |
 | Methods spanning 80 lines or more | 233 |
 | Static properties | 143 across 32 nodes |
-| Unique dependency edges | 383 |
-| Runtime-classified edges | 382 |
-| Compatibility-classified edges | 199 |
+| Unique dependency edges | 385 |
+| Runtime-classified edges | 384 |
+| Compatibility-classified edges | 201 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 321 |
+| Cross-domain edges | 323 |
 | Feature-to-feature edges | 46 |
 | Strict boundary violations | 20 |
-| Bridge candidates | 238 |
+| Bridge candidates | 240 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -62,7 +62,7 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 67 class-like nodes and 329 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 67 class-like nodes and 331 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
@@ -204,6 +204,8 @@ P3-014 adds the 385-line, eight-method `Minify_Policy` for the bounded Main mini
 P3-015 adds the 406-line, eleven-method `Preload_Buffer_Coordinator` for one bounded coordination cluster. `Main` retains the used-CSS/LCP callback methods, static core-buffer predicate, post-save scheduling callbacks, Hook_Registry callback targets, cache (10) → used CSS (20) → LCP (30) enhancement order, and legacy priority-20 LCP start. The coordinator owns core availability routing, legacy buffer guards and one-shot used-CSS lifecycle, post-save crawler-warm and used-CSS enqueue gates, and fail-open mixed-version Woo URL checks. Speculation/resource hints, image serving, LiteSpeed crawler/ESI behavior, Redis/drop-ins, and data remain unchanged. Main drops from the branch baseline of 10,461 lines / 236 methods / 20 large methods to 10,225 / 236 / 17; the generated inventory contains 85 files, 88 graph nodes, and 383 edges. The explicit owner edge adds one bridge candidate and one Core-to-domain boundary finding; feature-to-feature edges remain 46.
 
 P3-016 (issue #1597) removes the `Settings_Migrations` → `Main` owner-state bridge. The migration service now receives a callable effective-options reader and an explicit invalidation command, while `Main` retains all public migration proxies and Hook_Registry callback identities. `Settings_Store` remains the settings persistence and raw/resolved memo owner; migration ordering, per-site option reads, callbacks, data, REST, schemas, and multisite behavior are unchanged. The generated inventory remains 85 files, 88 graph nodes, and 383 edges, with the migration node no longer dependent on `Main`.
+
+P3-017 (issue #1599) migrates the warm-path Woo caller cluster from `Util` proxies to `Woo_Detect`. `Cron::is_woo_excluded_url()` (fast path plus granular Store API / wc-ajax / faceted / safe-mode / dynamic-path fallbacks) and `Preload_Buffer_Coordinator::queue_crawler_warm_after_cache_invalidation()` plus its legacy fallback now call `Woo_Detect` directly, keeping `method_exists()` guards, try/catch fail-open behavior, and byte-identical mixed-version regex fallbacks. All `Util::is_woo_*()` proxies remain public compatibility shims; `has_uncacheable_query()` and `is_editor_preview_url()` stay canonical on `Util`. The generated inventory remains 85 files and 88 graph nodes with 385 edges: the two new `Cron`/`Preload_Buffer_Coordinator` → `Woo_Detect` owner edges add two bridge candidates, incoming executable `Util` evidence falls 1,138 to 1,110, and `Woo_Detect` fan-in grows 1 to 3. Serve-path, cache, settings, LiteSpeed, multisite, and data behavior are unchanged.
 
 ## Static state
 

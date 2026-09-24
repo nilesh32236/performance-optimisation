@@ -136,9 +136,9 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertSame( 88, $graph['summary']['files'] );
 		$this->assertSame( 84, $graph['summary']['class_like_nodes'] );
 		$this->assertSame( 4, $graph['summary']['procedural_nodes'] );
-		$this->assertSame( 383, $graph['summary']['edges'] );
-		$this->assertSame( 382, $graph['summary']['runtime_edges'] );
-		$this->assertSame( 199, $graph['summary']['compatibility_edges'] );
+		$this->assertSame( 385, $graph['summary']['edges'] );
+		$this->assertSame( 384, $graph['summary']['runtime_edges'] );
+		$this->assertSame( 201, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
 		$this->assertNotEmpty( $graph['edges'] );
@@ -292,7 +292,7 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertSame( 1, $graph['summary']['compatibility_cyclic_components'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['runtime'] );
 		$this->assertCount( 67, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
-		$this->assertCount( 329, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
+		$this->assertCount( 331, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['compatibility'] );
 
 		$candidates = $graph['duplicate_candidates'];

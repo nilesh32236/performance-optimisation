@@ -31,14 +31,14 @@
         "files": 88,
         "class_like_nodes": 84,
         "procedural_nodes": 4,
-        "edges": 383,
-        "runtime_edges": 382,
-        "compatibility_edges": 199,
+        "edges": 385,
+        "runtime_edges": 384,
+        "compatibility_edges": 201,
         "loader_edges": 3,
-        "cross_domain_edges": 321,
+        "cross_domain_edges": 323,
         "feature_to_feature_edges": 46,
         "boundary_violations": 20,
-        "bridge_candidates": 238,
+        "bridge_candidates": 240,
         "cyclic_components": 1,
         "runtime_cyclic_components": 1,
         "compatibility_cyclic_components": 1,
@@ -6124,24 +6124,24 @@
                     "PerformanceOptimise\\Inc\\Scheduler::schedule_single_event": 309,
                     "PerformanceOptimise\\Inc\\Util::cached_home_url": 668,
                     "PerformanceOptimise\\Inc\\Util::get_settings": 506,
-                    "PerformanceOptimise\\Inc\\Util::get_woo_excluded_paths": 920,
                     "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 1048,
                     "PerformanceOptimise\\Inc\\Util::init_filesystem": 1622,
                     "PerformanceOptimise\\Inc\\Util::is_cache_path_contained": 1616,
                     "PerformanceOptimise\\Inc\\Util::is_editor_preview_url": 1107,
                     "PerformanceOptimise\\Inc\\Util::is_url_excluded": 856,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_ajax_request": 1015,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_dynamic_path": 1086,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_excluded_url": 987,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_faceted_query": 1032,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 917,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_path": 1002,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_request": 999,
                     "PerformanceOptimise\\Inc\\Util::memoized_permalink": 847,
                     "PerformanceOptimise\\Inc\\Util::normalize_cache_host": 1612,
                     "PerformanceOptimise\\Inc\\Util::process_urls": 824,
                     "PerformanceOptimise\\Inc\\Util::sanitize_cache_url_path": 1613,
                     "PerformanceOptimise\\Inc\\Util::transient_key": 585,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::get_woo_excluded_paths": 920,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_ajax_request": 1015,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_dynamic_path": 1086,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_excluded_url": 987,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_faceted_query": 1032,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_safe_mode_enabled": 917,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_store_api_path": 1002,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_store_api_request": 999,
                     "self::get_preload_queue": 121,
                     "self::init_preload_queue": 963,
                     "self::mark_preload_done": 1345,
@@ -6197,7 +6197,8 @@
                     "PerformanceOptimise\\Inc\\Llms": 613,
                     "PerformanceOptimise\\Inc\\Object_Cache": 558,
                     "PerformanceOptimise\\Inc\\RUM": 452,
-                    "PerformanceOptimise\\Inc\\Util": 916
+                    "PerformanceOptimise\\Inc\\Util": 1047,
+                    "PerformanceOptimise\\Inc\\Woo_Detect": 916
                 },
                 "class_exists": {
                     "Job_Registry": 20,
@@ -6215,16 +6216,16 @@
                     "PerformanceOptimise\\Inc\\Cache::get_cache_file_count": 239,
                     "PerformanceOptimise\\Inc\\Cache::get_cache_size_bytes": 236,
                     "PerformanceOptimise\\Inc\\Critical_CSS::is_deferral_suspended_by_js": 630,
-                    "PerformanceOptimise\\Inc\\Util::get_woo_excluded_paths": 919,
                     "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 1047,
                     "PerformanceOptimise\\Inc\\Util::is_editor_preview_url": 1106,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_ajax_request": 1014,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_dynamic_path": 1060,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_excluded_url": 985,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_faceted_query": 1031,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 916,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_path": 1002,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_request": 998
+                    "PerformanceOptimise\\Inc\\Woo_Detect::get_woo_excluded_paths": 919,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_ajax_request": 1014,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_dynamic_path": 1060,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_excluded_url": 985,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_faceted_query": 1031,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_safe_mode_enabled": 916,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_store_api_path": 1002,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_store_api_request": 998
                 },
                 "interface_exists": [],
                 "trait_exists": [],
@@ -6367,7 +6368,8 @@
                 "PerformanceOptimise\\Inc\\RUM",
                 "PerformanceOptimise\\Inc\\Scheduler",
                 "PerformanceOptimise\\Inc\\Used_CSS",
-                "PerformanceOptimise\\Inc\\Util"
+                "PerformanceOptimise\\Inc\\Util",
+                "PerformanceOptimise\\Inc\\Woo_Detect"
             ],
             "compatibility_dependencies": [
                 "PerformanceOptimise\\Inc\\Cache",
@@ -6378,7 +6380,8 @@
                 "PerformanceOptimise\\Inc\\Llms",
                 "PerformanceOptimise\\Inc\\Object_Cache",
                 "PerformanceOptimise\\Inc\\Preload_Transport",
-                "PerformanceOptimise\\Inc\\Util"
+                "PerformanceOptimise\\Inc\\Util",
+                "PerformanceOptimise\\Inc\\Woo_Detect"
             ],
             "loader_dependencies": [],
             "documentation_references": [],
@@ -6440,16 +6443,16 @@
             },
             "metrics": {
                 "fan_in": 5,
-                "fan_out": 16,
+                "fan_out": 17,
                 "incoming_reference_evidence": 14,
                 "outgoing_reference_evidence": 120,
                 "runtime_fan_in": 5,
-                "runtime_fan_out": 16,
+                "runtime_fan_out": 17,
                 "compatibility_fan_in": 3,
-                "compatibility_fan_out": 9,
+                "compatibility_fan_out": 10,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 18,
+                "cross_domain_edges": 19,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -17004,13 +17007,13 @@
                     "PerformanceOptimise\\Inc\\Util::get_settings": 266,
                     "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 388,
                     "PerformanceOptimise\\Inc\\Util::is_cache_eligible_for_current_user": 341,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_ajax_request": 374,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_dynamic_path": 395,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_excluded_url": 276,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_faceted_query": 381,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 395,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_path": 368,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_request": 365,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_ajax_request": 374,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_dynamic_path": 395,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_excluded_url": 276,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_faceted_query": 381,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_safe_mode_enabled": 395,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_store_api_path": 368,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_store_api_request": 365,
                     "PerformanceOptimise\\Inc\\Wp_Version::is_at_least": 127,
                     "self::should_use_core_template_buffer": 317
                 },
@@ -17029,20 +17032,21 @@
                 "class_constant_references": [],
                 "class_string_references": {
                     "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator": 20,
-                    "PerformanceOptimise\\Inc\\Util": 274
+                    "PerformanceOptimise\\Inc\\Util": 387,
+                    "PerformanceOptimise\\Inc\\Woo_Detect": 274
                 },
                 "class_exists": {
                     "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator": 20
                 },
                 "method_exists": {
                     "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 387,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_ajax_request": 373,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_dynamic_path": 394,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_excluded_url": 274,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_faceted_query": 380,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 394,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_path": 368,
-                    "PerformanceOptimise\\Inc\\Util::is_woo_store_api_request": 364
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_ajax_request": 373,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_dynamic_path": 394,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_excluded_url": 274,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_faceted_query": 380,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_safe_mode_enabled": 394,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_store_api_path": 368,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_store_api_request": 364
                 },
                 "interface_exists": [],
                 "trait_exists": [],
@@ -17100,10 +17104,12 @@
             "runtime_dependencies": [
                 "PerformanceOptimise\\Inc\\Used_CSS",
                 "PerformanceOptimise\\Inc\\Util",
+                "PerformanceOptimise\\Inc\\Woo_Detect",
                 "PerformanceOptimise\\Inc\\Wp_Version"
             ],
             "compatibility_dependencies": [
-                "PerformanceOptimise\\Inc\\Util"
+                "PerformanceOptimise\\Inc\\Util",
+                "PerformanceOptimise\\Inc\\Woo_Detect"
             ],
             "loader_dependencies": [],
             "documentation_references": [],
@@ -17111,16 +17117,16 @@
             "hooks": [],
             "metrics": {
                 "fan_in": 2,
-                "fan_out": 3,
+                "fan_out": 4,
                 "incoming_reference_evidence": 3,
                 "outgoing_reference_evidence": 20,
                 "runtime_fan_in": 2,
-                "runtime_fan_out": 3,
+                "runtime_fan_out": 4,
                 "compatibility_fan_in": 0,
-                "compatibility_fan_out": 1,
+                "compatibility_fan_out": 2,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 3,
+                "cross_domain_edges": 4,
                 "boundary_violations": 1,
                 "strongly_connected_component": 0
             }
@@ -22553,7 +22559,7 @@
             "metrics": {
                 "fan_in": 59,
                 "fan_out": 9,
-                "incoming_reference_evidence": 1138,
+                "incoming_reference_evidence": 1110,
                 "outgoing_reference_evidence": 116,
                 "runtime_fan_in": 59,
                 "runtime_fan_out": 9,
@@ -23200,17 +23206,17 @@
             "delegating_methods": [],
             "hooks": [],
             "metrics": {
-                "fan_in": 1,
+                "fan_in": 3,
                 "fan_out": 3,
-                "incoming_reference_evidence": 11,
+                "incoming_reference_evidence": 39,
                 "outgoing_reference_evidence": 10,
-                "runtime_fan_in": 1,
+                "runtime_fan_in": 3,
                 "runtime_fan_out": 3,
-                "compatibility_fan_in": 0,
+                "compatibility_fan_in": 2,
                 "compatibility_fan_out": 1,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 4,
+                "cross_domain_edges": 6,
                 "boundary_violations": 1,
                 "strongly_connected_component": 0
             }
@@ -27536,26 +27542,9 @@
                 847,
                 856,
                 893,
-                916,
-                917,
-                919,
-                920,
                 933,
-                985,
-                987,
-                998,
-                999,
-                1002,
-                1014,
-                1015,
-                1031,
-                1032,
                 1047,
                 1048,
-                1060,
-                1066,
-                1084,
-                1086,
                 1106,
                 1107,
                 1117,
@@ -27584,7 +27573,46 @@
                 1779,
                 1787
             ],
-            "evidence_count": 63,
+            "evidence_count": 46,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Cron",
+            "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+            "from_file": "includes/Scheduler/class-cron.php",
+            "to_file": "includes/Integrations/class-woo-detect.php",
+            "from_domain": "Scheduler",
+            "to_domain": "Integrations",
+            "classifications": [
+                "compatibility",
+                "runtime"
+            ],
+            "kinds": [
+                "class_string_reference",
+                "method_exists",
+                "static_call"
+            ],
+            "lines": [
+                916,
+                917,
+                919,
+                920,
+                985,
+                987,
+                998,
+                999,
+                1002,
+                1014,
+                1015,
+                1031,
+                1032,
+                1060,
+                1066,
+                1084,
+                1086
+            ],
+            "evidence_count": 17,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -31838,10 +31866,34 @@
             "lines": [
                 113,
                 266,
-                274,
-                276,
                 302,
                 341,
+                387,
+                388
+            ],
+            "evidence_count": 6,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator",
+            "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+            "from_file": "includes/Core/class-preload-buffer-coordinator.php",
+            "to_file": "includes/Integrations/class-woo-detect.php",
+            "from_domain": "Core",
+            "to_domain": "Integrations",
+            "classifications": [
+                "compatibility",
+                "runtime"
+            ],
+            "kinds": [
+                "class_string_reference",
+                "method_exists",
+                "static_call"
+            ],
+            "lines": [
+                274,
+                276,
                 364,
                 365,
                 368,
@@ -31849,12 +31901,10 @@
                 374,
                 380,
                 381,
-                387,
-                388,
                 394,
                 395
             ],
-            "evidence_count": 17,
+            "evidence_count": 11,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -35084,7 +35134,7 @@
             "PerformanceOptimise\\Inc\\Used_CSS": 11,
             "PerformanceOptimise\\Inc\\Util": 59,
             "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 1,
-            "PerformanceOptimise\\Inc\\Woo_Detect": 1,
+            "PerformanceOptimise\\Inc\\Woo_Detect": 3,
             "PerformanceOptimise\\Inc\\Wp_Version": 6,
             "WP_Object_Cache": 0,
             "file:includes/Support/redis-connect-helper.php": 0,
@@ -35114,7 +35164,7 @@
             "PerformanceOptimise\\Inc\\Cloudflare_Purger": 0,
             "PerformanceOptimise\\Inc\\Core_Tweaks": 1,
             "PerformanceOptimise\\Inc\\Critical_CSS": 8,
-            "PerformanceOptimise\\Inc\\Cron": 16,
+            "PerformanceOptimise\\Inc\\Cron": 17,
             "PerformanceOptimise\\Inc\\Css_Combine": 8,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 2,
@@ -35151,7 +35201,7 @@
             "PerformanceOptimise\\Inc\\Object_Cache": 5,
             "PerformanceOptimise\\Inc\\Pagespeed": 4,
             "PerformanceOptimise\\Inc\\Perf_Translations": 1,
-            "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator": 3,
+            "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator": 4,
             "PerformanceOptimise\\Inc\\Preload_Transport": 0,
             "PerformanceOptimise\\Inc\\Purge_Logger": 2,
             "PerformanceOptimise\\Inc\\RUM": 2,
@@ -35262,9 +35312,9 @@
             "PerformanceOptimise\\Inc\\Telemetry": 18,
             "PerformanceOptimise\\Inc\\Url": 23,
             "PerformanceOptimise\\Inc\\Used_CSS": 39,
-            "PerformanceOptimise\\Inc\\Util": 1138,
+            "PerformanceOptimise\\Inc\\Util": 1110,
             "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 2,
-            "PerformanceOptimise\\Inc\\Woo_Detect": 11,
+            "PerformanceOptimise\\Inc\\Woo_Detect": 39,
             "PerformanceOptimise\\Inc\\Wp_Version": 16,
             "WP_Object_Cache": 0,
             "file:includes/Support/redis-connect-helper.php": 0,
@@ -35444,7 +35494,7 @@
             "PerformanceOptimise\\Inc\\Used_CSS": 11,
             "PerformanceOptimise\\Inc\\Util": 59,
             "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 1,
-            "PerformanceOptimise\\Inc\\Woo_Detect": 1,
+            "PerformanceOptimise\\Inc\\Woo_Detect": 3,
             "PerformanceOptimise\\Inc\\Wp_Version": 6,
             "WP_Object_Cache": 0,
             "file:includes/Support/redis-connect-helper.php": 0,
@@ -35474,7 +35524,7 @@
             "PerformanceOptimise\\Inc\\Cloudflare_Purger": 0,
             "PerformanceOptimise\\Inc\\Core_Tweaks": 1,
             "PerformanceOptimise\\Inc\\Critical_CSS": 8,
-            "PerformanceOptimise\\Inc\\Cron": 16,
+            "PerformanceOptimise\\Inc\\Cron": 17,
             "PerformanceOptimise\\Inc\\Css_Combine": 8,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 2,
@@ -35511,7 +35561,7 @@
             "PerformanceOptimise\\Inc\\Object_Cache": 5,
             "PerformanceOptimise\\Inc\\Pagespeed": 4,
             "PerformanceOptimise\\Inc\\Perf_Translations": 1,
-            "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator": 3,
+            "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator": 4,
             "PerformanceOptimise\\Inc\\Preload_Transport": 0,
             "PerformanceOptimise\\Inc\\Purge_Logger": 2,
             "PerformanceOptimise\\Inc\\RUM": 2,
@@ -35624,7 +35674,7 @@
             "PerformanceOptimise\\Inc\\Used_CSS": 6,
             "PerformanceOptimise\\Inc\\Util": 40,
             "PerformanceOptimise\\Inc\\WPPO_CLI_Command": 1,
-            "PerformanceOptimise\\Inc\\Woo_Detect": 0,
+            "PerformanceOptimise\\Inc\\Woo_Detect": 2,
             "PerformanceOptimise\\Inc\\Wp_Version": 0,
             "WP_Object_Cache": 0,
             "file:includes/Support/redis-connect-helper.php": 0,
@@ -35654,7 +35704,7 @@
             "PerformanceOptimise\\Inc\\Cloudflare_Purger": 0,
             "PerformanceOptimise\\Inc\\Core_Tweaks": 0,
             "PerformanceOptimise\\Inc\\Critical_CSS": 7,
-            "PerformanceOptimise\\Inc\\Cron": 9,
+            "PerformanceOptimise\\Inc\\Cron": 10,
             "PerformanceOptimise\\Inc\\Css_Combine": 6,
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 1,
@@ -35691,7 +35741,7 @@
             "PerformanceOptimise\\Inc\\Object_Cache": 2,
             "PerformanceOptimise\\Inc\\Pagespeed": 0,
             "PerformanceOptimise\\Inc\\Perf_Translations": 0,
-            "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator": 1,
+            "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator": 2,
             "PerformanceOptimise\\Inc\\Preload_Transport": 0,
             "PerformanceOptimise\\Inc\\Purge_Logger": 1,
             "PerformanceOptimise\\Inc\\RUM": 2,
@@ -37410,6 +37460,19 @@
                         ]
                     },
                     {
+                        "from": "PerformanceOptimise\\Inc\\Cron",
+                        "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                        "classifications": [
+                            "compatibility",
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_string_reference",
+                            "method_exists",
+                            "static_call"
+                        ]
+                    },
+                    {
                         "from": "PerformanceOptimise\\Inc\\Css_Combine",
                         "to": "PerformanceOptimise\\Inc\\CDN",
                         "classifications": [
@@ -39006,6 +39069,19 @@
                         ],
                         "kinds": [
                             "class_reference",
+                            "class_string_reference",
+                            "method_exists",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator",
+                        "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                        "classifications": [
+                            "compatibility",
+                            "runtime"
+                        ],
+                        "kinds": [
                             "class_string_reference",
                             "method_exists",
                             "static_call"
@@ -41483,6 +41559,19 @@
                             ]
                         },
                         {
+                            "from": "PerformanceOptimise\\Inc\\Cron",
+                            "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                            "classifications": [
+                                "compatibility",
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_string_reference",
+                                "method_exists",
+                                "static_call"
+                            ]
+                        },
+                        {
                             "from": "PerformanceOptimise\\Inc\\Css_Combine",
                             "to": "PerformanceOptimise\\Inc\\CDN",
                             "classifications": [
@@ -43075,6 +43164,19 @@
                             ]
                         },
                         {
+                            "from": "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator",
+                            "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                            "classifications": [
+                                "compatibility",
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_string_reference",
+                                "method_exists",
+                                "static_call"
+                            ]
+                        },
+                        {
                             "from": "PerformanceOptimise\\Inc\\Purge_Logger",
                             "to": "PerformanceOptimise\\Inc\\Log",
                             "classifications": [
@@ -44194,7 +44296,8 @@
                         "PerformanceOptimise\\Inc\\Suggestion_Engine",
                         "PerformanceOptimise\\Inc\\Used_CSS",
                         "PerformanceOptimise\\Inc\\Util",
-                        "PerformanceOptimise\\Inc\\WPPO_CLI_Command"
+                        "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
+                        "PerformanceOptimise\\Inc\\Woo_Detect"
                     ],
                     "edges": [
                         {
@@ -44510,6 +44613,19 @@
                             "kinds": [
                                 "class_constant_reference",
                                 "class_exists",
+                                "class_string_reference",
+                                "method_exists",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Cron",
+                            "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                            "classifications": [
+                                "compatibility",
+                                "runtime"
+                            ],
+                            "kinds": [
                                 "class_string_reference",
                                 "method_exists",
                                 "static_call"
@@ -45131,6 +45247,19 @@
                                 "method_exists",
                                 "static_call"
                             ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Woo_Detect",
+                            "to": "PerformanceOptimise\\Inc\\Util",
+                            "classifications": [
+                                "compatibility",
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_reference",
+                                "method_exists",
+                                "static_call"
+                            ]
                         }
                     ]
                 }
@@ -45240,11 +45369,11 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Cron",
                 "file": "includes/Scheduler/class-cron.php",
-                "score": 46.79,
+                "score": 48.79,
                 "fan_in": 5,
-                "fan_out": 16,
+                "fan_out": 17,
                 "compatibility_in": 3,
-                "cross_domain": 18,
+                "cross_domain": 19,
                 "static_state": false,
                 "lines": 1792
             },
@@ -48133,26 +48262,9 @@
                     847,
                     856,
                     893,
-                    916,
-                    917,
-                    919,
-                    920,
                     933,
-                    985,
-                    987,
-                    998,
-                    999,
-                    1002,
-                    1014,
-                    1015,
-                    1031,
-                    1032,
                     1047,
                     1048,
-                    1060,
-                    1066,
-                    1084,
-                    1086,
                     1106,
                     1107,
                     1117,
@@ -48181,7 +48293,47 @@
                     1779,
                     1787
                 ],
-                "evidence_count": 63,
+                "evidence_count": 46,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Cron",
+                "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                "from_file": "includes/Scheduler/class-cron.php",
+                "to_file": "includes/Integrations/class-woo-detect.php",
+                "from_domain": "Scheduler",
+                "to_domain": "Integrations",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_string_reference",
+                    "method_exists",
+                    "static_call"
+                ],
+                "lines": [
+                    916,
+                    917,
+                    919,
+                    920,
+                    985,
+                    987,
+                    998,
+                    999,
+                    1002,
+                    1014,
+                    1015,
+                    1031,
+                    1032,
+                    1060,
+                    1066,
+                    1084,
+                    1086
+                ],
+                "evidence_count": 17,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -51778,10 +51930,35 @@
                 "lines": [
                     113,
                     266,
-                    274,
-                    276,
                     302,
                     341,
+                    387,
+                    388
+                ],
+                "evidence_count": 6,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator",
+                "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                "from_file": "includes/Core/class-preload-buffer-coordinator.php",
+                "to_file": "includes/Integrations/class-woo-detect.php",
+                "from_domain": "Core",
+                "to_domain": "Integrations",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_string_reference",
+                    "method_exists",
+                    "static_call"
+                ],
+                "lines": [
+                    274,
+                    276,
                     364,
                     365,
                     368,
@@ -51789,12 +51966,10 @@
                     374,
                     380,
                     381,
-                    387,
-                    388,
                     394,
                     395
                 ],
-                "evidence_count": 17,
+                "evidence_count": 11,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -57726,26 +57901,9 @@
                     847,
                     856,
                     893,
-                    916,
-                    917,
-                    919,
-                    920,
                     933,
-                    985,
-                    987,
-                    998,
-                    999,
-                    1002,
-                    1014,
-                    1015,
-                    1031,
-                    1032,
                     1047,
                     1048,
-                    1060,
-                    1066,
-                    1084,
-                    1086,
                     1106,
                     1107,
                     1117,
@@ -57774,7 +57932,46 @@
                     1779,
                     1787
                 ],
-                "evidence_count": 63,
+                "evidence_count": 46,
+                "cross_domain": true,
+                "boundary_violation": ""
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Cron",
+                "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                "from_file": "includes/Scheduler/class-cron.php",
+                "to_file": "includes/Integrations/class-woo-detect.php",
+                "from_domain": "Scheduler",
+                "to_domain": "Integrations",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_string_reference",
+                    "method_exists",
+                    "static_call"
+                ],
+                "lines": [
+                    916,
+                    917,
+                    919,
+                    920,
+                    985,
+                    987,
+                    998,
+                    999,
+                    1002,
+                    1014,
+                    1015,
+                    1031,
+                    1032,
+                    1060,
+                    1066,
+                    1084,
+                    1086
+                ],
+                "evidence_count": 17,
                 "cross_domain": true,
                 "boundary_violation": ""
             },
@@ -60567,10 +60764,34 @@
                 "lines": [
                     113,
                     266,
-                    274,
-                    276,
                     302,
                     341,
+                    387,
+                    388
+                ],
+                "evidence_count": 6,
+                "cross_domain": true,
+                "boundary_violation": ""
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Preload_Buffer_Coordinator",
+                "to": "PerformanceOptimise\\Inc\\Woo_Detect",
+                "from_file": "includes/Core/class-preload-buffer-coordinator.php",
+                "to_file": "includes/Integrations/class-woo-detect.php",
+                "from_domain": "Core",
+                "to_domain": "Integrations",
+                "classifications": [
+                    "compatibility",
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_string_reference",
+                    "method_exists",
+                    "static_call"
+                ],
+                "lines": [
+                    274,
+                    276,
                     364,
                     365,
                     368,
@@ -60578,12 +60799,10 @@
                     374,
                     380,
                     381,
-                    387,
-                    388,
                     394,
                     395
                 ],
-                "evidence_count": 17,
+                "evidence_count": 11,
                 "cross_domain": true,
                 "boundary_violation": ""
             },
