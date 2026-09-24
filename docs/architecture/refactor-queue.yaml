@@ -841,11 +841,24 @@ phase3_items:
 
   - id: P3-007
     title: 'Neutral drop-in registry and invalidation'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1578
     github_pr: 1579
     implementation_commit: 9e008a85567eb762cae8f65b57c71e6d126f2ed1
+    merge_commit: 53afd388d33e39579f2dbfc044d664da69b26d72
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      registry: 'loaded; Dropin_Registry::invalidate() completed without error'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only; drop-ins ours'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      object_cache: 'template parity; mode 0644; owner nobody:nogroup'
+      architecture_graph: '77 inventory files / 80 nodes / 352 edges; generator check passed'
     type: architecture
     problem: 'System_Info reports drop-ins while Cache and Advanced_Cache mutators call System_Info invalidation methods.'
     target_owner: 'Dropin_Registry under Cache/Support boundary'
@@ -871,7 +884,7 @@ phase3_items:
 
   - id: P3-008
     title: 'Settings write command and direct-write cleanup'
-    status: queued
+    status: audit-pending
     priority: high
     type: architecture
     problem: 'Rest_Settings and REST safe-mode paths write wppo_settings outside Settings_Store.'
