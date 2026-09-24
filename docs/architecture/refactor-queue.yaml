@@ -1196,6 +1196,7 @@ phase3_items:
     status: autofix-running
     priority: medium
     github_issue: 1595
+    github_pr: 1596
     implementation_commit: 5196aeac11546f7ac9b27d81a94e12782964a204
     head_branch: 'p3/preload-buffer'
     type: epic
