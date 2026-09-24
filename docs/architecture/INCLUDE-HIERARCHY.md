@@ -125,12 +125,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 68 | 67 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 69 | 68 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 72 | Generated schema-v2 inventory |
+| Total class inventory | 73 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 75 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 76 nodes.
 
 ## Ownership by directory
 
@@ -148,7 +148,7 @@ The dependency graph adds three procedural runtime files: the plugin entry, `uni
 
 ### Scheduler
 
-`Scheduler` owns shared enqueue, schedule, and lock primitives. `Job_Registry` owns the canonical WP-Cron, fallback, legacy, and Action Scheduler hook sets; `Cron` owns job registration and payloads. Deactivation and uninstall consume the registry without duplicating hook lists.
+`Scheduler` owns shared enqueue, schedule, and lock primitives. `Job_Registry` owns the canonical WP-Cron, fallback, legacy, and Action Scheduler hook sets; `Preload_Transport` owns bounded same-host redirect handling for Cron warmup. `Cron` owns job registration and payloads. Deactivation and uninstall consume the registry without duplicating hook lists.
 
 ### Support
 

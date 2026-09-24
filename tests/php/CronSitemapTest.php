@@ -53,6 +53,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 				'wp_remote_get',
 				'wp_remote_retrieve_body',
 				'wp_remote_retrieve_response_code',
+				'wp_http_validate_url',
 				'esc_url_raw',
 			)
 		);
@@ -65,6 +66,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
 		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 
 		$urls = $this->invoke_private( $cron, 'get_sitemap_urls', 500 );
 
@@ -85,6 +87,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 				'wp_remote_get',
 				'wp_remote_retrieve_body',
 				'wp_remote_retrieve_response_code',
+				'wp_http_validate_url',
 				'esc_url_raw',
 			)
 		);
@@ -97,6 +100,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
 		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 
 		$urls = $this->invoke_private( $cron, 'get_sitemap_urls', 500 );
 
@@ -117,6 +121,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 				'wp_remote_get',
 				'wp_remote_retrieve_body',
 				'wp_remote_retrieve_response_code',
+				'wp_http_validate_url',
 				'esc_url_raw',
 			)
 		);
@@ -127,6 +132,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_remote_retrieve_body' )->justReturn( '' );
 		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 500 );
 		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 
 		$urls = $this->invoke_private( $cron, 'get_sitemap_urls', 500 );
 
@@ -146,6 +152,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 				'wp_remote_get',
 				'wp_remote_retrieve_body',
 				'wp_remote_retrieve_response_code',
+				'wp_http_validate_url',
 				'esc_url_raw',
 				'wp_next_scheduled',
 				'wp_schedule_single_event',
@@ -163,6 +170,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
 		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'untrailingslashit' )->alias(
 			static function ( $value ) {
@@ -201,12 +209,14 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 			array(
 				'esc_url_raw',
 				'wp_remote_retrieve_response_code',
+				'wp_http_validate_url',
 				'wp_parse_url',
 				'home_url',
 				'wp_http_validate_url',
 			)
 		);
 		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
@@ -234,6 +244,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 			)
 		);
 		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 		Functions\expect( 'wp_remote_get' )->never();
 
 		$cron->process_url( '' );

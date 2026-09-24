@@ -85,6 +85,7 @@ class SchedulerCronPrimitivesTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'apply_filters' )->returnArg( 2 );
 		Functions\when( 'wp_next_scheduled' )->justReturn( false );
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 		Functions\when( 'wp_schedule_event' )->alias(
 			function ( $timestamp, $recurrence, $hook ) {
 				$this->recurring[ (string) $hook ] = (string) $recurrence;

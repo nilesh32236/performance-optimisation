@@ -72,7 +72,7 @@ Action Scheduler remains a deliberate direct require outside `Loader_Map` path d
 
 ## 3. Lazy class loading
 
-`Loader_Map::fallback_map()` maps 67 `PerformanceOptimise\Inc` class names to canonical files under:
+`Loader_Map::fallback_map()` maps 68 `PerformanceOptimise\Inc` class names to canonical files under:
 
 ```text
 includes/<Domain>/class-<name>.php

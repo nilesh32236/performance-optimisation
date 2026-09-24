@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `d4e0f948dcf69a80259946d13e9a6c1ad6d0a480`
+Source: `origin/master` commit `14e3ad0cc06422db777105037de5ef2cf0e0bc12`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 75 first-party runtime files:
+The tokenizer scans 76 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 67 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 68 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,21 +40,21 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 72 |
-| Inventory source lines | 125,451 |
-| Class-like graph nodes | 71 |
+| Inventory files | 73 |
+| Inventory source lines | 125,619 |
+| Class-like graph nodes | 72 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,458 |
+| Named methods | 2,461 |
 | Methods spanning 80 lines or more | 238 |
 | Static properties | 141 across 31 nodes |
-| Unique dependency edges | 343 |
-| Runtime-classified edges | 342 |
-| Compatibility-classified edges | 193 |
+| Unique dependency edges | 344 |
+| Runtime-classified edges | 343 |
+| Compatibility-classified edges | 194 |
 | Loader-classified edges | 3 |
 | Cross-domain edges | 302 |
 | Feature-to-feature edges | 47 |
 | Strict boundary violations | 16 |
-| Bridge candidates | 228 |
+| Bridge candidates | 229 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -76,8 +76,8 @@ The largest hub scores are:
 | 6 | `Used_CSS` | 52.96 | 10 | 8 | 6 | 17 |
 | 7 | `Critical_CSS` | 52.95 | 9 | 8 | 7 | 14 |
 | 8 | `RUM` | 50.35 | 14 | 2 | 9 | 12 |
-| 9 | `Rest` | 45.88 | 1 | 21 | 0 | 20 |
-| 10 | `Cron` | 45.80 | 5 | 15 | 3 | 18 |
+| 9 | `Cron` | 46.79 | 5 | 16 | 3 | 18 |
+| 10 | `Rest` | 45.88 | 1 | 21 | 0 | 20 |
 
 The score formula lives in the graph metadata. It ranks review pressure; it does not grade code quality.
 
@@ -104,7 +104,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `LiteSpeed_Integration` | 2,797 | 58 | 4 | 17 | 17 | 17/7 | 95 | 5 | `get_litespeed_ttl` 216 |
 | `WPPO_CLI_Command` | 2,372 | 27 | 7 | 0 | 0 | 1/13 | 2 | 10 | `settings` 224 |
 | `Builder_Purge_Watcher` | 2,110 | 45 | 2 | 7 | 7 | 4/6 | 19 | 3 | `on_any_upgrade` 103 |
-| `Cron` | 1,830 | 37 | 3 | 0 | 0 | 5/14 | 15 | 10 | `schedule_page_cron_jobs` 159 |
+| `Cron` | 1,792 | 37 | 2 | 0 | 0 | 5/16 | 14 | 10 | `schedule_page_cron_jobs` 159 |
 | `Scheduler` | 636 | 16 | 0 | 2 | 2 | 2/1 | 29 | 0 | largest under 80 lines |
 
 Protected classes also need visibility:
@@ -133,6 +133,9 @@ These counts come from method names, call sites, tests, and history. They approx
 | `RUM` | 7 | Collection, validation, queue, aggregation, persistence, admin reads, lifecycle/reset |
 | `Object_Cache` | 7 | Config policy, connection, reads/writes, flush, circuit state, drop-in management, diagnostics |
 | `LiteSpeed_Integration` | 7 | Detection, coexistence, headers, TTL, purge, private/vary policy, server compatibility |
+| `Cron` | 6 | Recurring scheduling, sitemap discovery, queue progress, URL/page fetch, image/preload/insight jobs, teardown |
+| `Job_Registry` | 1 | Canonical WP-Cron/Action Scheduler hook ownership and teardown unions |
+| `Preload_Transport` | 1 | Same-host target validation and bounded non-following redirect transport |
 
 ## Coupling findings
 
