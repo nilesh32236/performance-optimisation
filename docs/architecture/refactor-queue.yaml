@@ -537,11 +537,25 @@ phase3:
 phase3_items:
   - id: P3-001
     title: 'Fresh architecture baseline, tokenizer graph, quality model, and documentation reconciliation'
-    status: pr-review-running
+    status: merged
     priority: high
     github_issue: 1566
     github_pr: 1567
-    head_commit: 8c0343a4279dcf966908509769a0e7459fe7bf28
+    head_commit: 1d69360d4db62c8bb637d4c0ab827d65354f9681
+    merge_commit: 1d69360d4db62c8bb637d4c0ab827d65354f9681
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      rest_patterns: 48
+      cli_commands: 8
+      wppo_verify: '6/7; cache-root nobody-owned warning only'
+      object_cache: 'deployed template parity; helper path repaired'
+      frontend: 'HTTP 200'
+      admin: 'HTTP 302 login redirect'
+      rest_boundary: 'namespace root 200; system_info unauthenticated 401'
+      architecture_graph: '74 nodes / 340 edges; generator check passed'
     type: architecture
     source: 'Phase 3 startup audit at origin/master@72818289'
     scope:
@@ -573,7 +587,7 @@ phase3_items:
 
   - id: P3-002
     title: 'Scheduler job ownership registry and teardown parity'
-    status: queued
+    status: audit-pending
     priority: high
     type: architecture
     problem: 'Builder drift and upgrade purge hooks are scheduled outside Cron::AS_HOOKS; deactivation omits both, while standalone uninstall clears the owned Action Scheduler group but omits the upgrade purge WP-Cron fallback.'
