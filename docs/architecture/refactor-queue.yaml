@@ -1155,6 +1155,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1593
+    github_pr: 1594
     implementation_commit: 14b42afc1fb6ec68112cf2252051143857f50b0a
     type: epic
     problem: 'Main still owns asset policy, minification, resource hints, and speculation in addition to orchestration.'
