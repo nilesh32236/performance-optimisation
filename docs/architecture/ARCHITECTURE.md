@@ -25,7 +25,7 @@ performance-optimisation.php
       │   Filesystem, Url, Http, Cache_Key, Woo_Detect, Log, Purge_Logger
       ├─ Cache and edge delivery
       │   Cache, Cache_Invalidator, Advanced_Cache_Handler, Bfcache,
-      │   Object_Cache, CDN, CDN_Purger, Cloudflare_Purger, Edge_Cache,
+      │   Object_Cache, Redis_Config_Policy, CDN, CDN_Purger, Cloudflare_Purger, Edge_Cache,
       │   Edge_Purger, Server_Rules, Htaccess_Handler, Header_Emitter,
       │   LiteSpeed_Integration, LiteSpeed_Crawler, LiteSpeed_ESI
       ├─ Assets, images, and CSS
@@ -48,18 +48,18 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 78 files: 74 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 79 files: 75 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 348 |
-| Runtime / compatibility / loader edges | 347 / 195 / 3 |
-| Cross-domain / feature-to-feature edges | 303 / 47 |
+| Unique edges | 351 |
+| Runtime / compatibility / loader edges | 350 / 194 / 3 |
+| Cross-domain / feature-to-feature edges | 305 / 47 |
 | Boundary violations | 16 |
-| Bridge candidates | 231 |
+| Bridge candidates | 230 |
 | Runtime SCCs | 1 |
 | Largest runtime SCC | 60 nodes, 305 runtime-classified internal edges |
-| Static state | 142 properties across 32 nodes |
+| Static state | 141 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 
 The runtime SCC shows reciprocal reach across major subsystems. It does not prove that one extraction will fix the whole component. Each queue item must identify a smaller owner and dependency path.
@@ -99,7 +99,8 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Scheduler` / `Job_Registry` | Action Scheduler primitives, locks, and owned hook manifest | Keep registry-backed scheduling and teardown; no duplicate hook lists |
 | `Preload_Transport` | Same-host URL validation and bounded non-following redirects for Cron warmup | Keep all three Cron fetch seams on the transport policy; preserve LiteSpeed bypass |
 | `Runtime_State` | Central switch_blog reset registry for six site-sensitive static-state owners | Keep reset methods feature-owned; classify the remaining 25 static owners |
-| `Object_Cache` | Redis backend, config state, drop-in management | Move full config normalization here or into a Redis policy boundary |
+| `Redis_Config_Policy` | Complete Redis key manifest and value normalization | Keep REST and CLI on this narrow security policy; leave connection and persistence in `Object_Cache` |
+| `Object_Cache` | Redis backend, connection, circuit state, drop-in management | Keep lifecycle and drop-in behavior; expose the policy key constant for compatibility |
 | `Critical_CSS` / `Ccss_Store` | Generation plus storage/status | Keep storage in the store; move remaining generation clusters by policy |
 | `Used_CSS` | Generation, storage, parsing, delivery, rollout | Split storage and generation only after Used CSS owns no cache purge policy |
 | `Image_Optimisation` | Image markup, lazy loading, media transforms, conversion bridge | Extract cohesive media/metadata or conversion-state clusters with parity tests |
@@ -114,7 +115,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 4. **`Main` hub:** 34 outgoing class dependencies and 17 feature dependencies remain.
 5. **Cache capacity:** `Cache_Capacity` now owns the statistics, cap, and eviction contract; `Cache` remains the public facade and lifecycle owner.
 6. **Settings writes:** REST adapters still write `wppo_settings` outside `Settings_Store`.
-7. **Redis policy:** REST owns the full sanitizer while CLI and `Object_Cache` use weaker validation.
+7. **Redis policy:** `Redis_Config_Policy` now owns the full key manifest and value sanitizer used by REST and CLI; `Object_Cache::ALLOWED_KEYS` remains a compatibility alias.
 8. **CSS and image cycles:** storage owners exist, but policy and bridges keep the larger SCC connected.
 9. **REST and CLI duplication:** adapters duplicate permissions, dispatch, settings, telemetry, and diagnostics.
 10. **React async ownership:** cache commits, deferred saves, abort guards, and polling state need bounded fixes.

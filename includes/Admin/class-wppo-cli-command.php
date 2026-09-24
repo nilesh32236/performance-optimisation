@@ -975,20 +975,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Build a Redis config array from CLI associative arguments.
 		 *
-		 * Uses Object_Cache::ALLOWED_KEYS as single source (converged 6→10+).
+		 * Uses Redis_Config_Policy as the complete key and value source.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Delegates construction to Redis_Config_Policy::build().
 		 * @param array $assoc_args The associative arguments from the command.
 		 * @return array<string, mixed> Redis connection configuration.
 		 */
 		private static function get_redis_config_from_assoc( array $assoc_args ): array {
-			$config = array();
-			foreach ( Object_Cache::ALLOWED_KEYS as $key ) {
-				if ( isset( $assoc_args[ $key ] ) ) {
-					$config[ $key ] = $assoc_args[ $key ];
-				}
-			}
-			return $config;
+			return Redis_Config_Policy::build( $assoc_args );
 		}
 
 		/**
@@ -1351,23 +1346,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		}
 
 		/**
-		 * Build a Redis config array from stored settings (ALLOWED_KEYS allowlist).
+		 * Build a Redis config array from stored settings.
 		 *
-		 * Same key list WPPO_CLI_Command::get_redis_config_from_assoc() uses.
+		 * Uses the same complete key and value policy as CLI arguments.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Delegates construction to Redis_Config_Policy::build().
 		 * @param array $stored Raw wppo_settings array.
 		 * @return array<string, mixed> Redis connection configuration.
 		 */
 		public static function build_redis_config_from_settings( array $stored ): array {
-			$config = array();
-			$oc     = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
-			foreach ( Object_Cache::ALLOWED_KEYS as $key ) {
-				if ( isset( $oc[ $key ] ) ) {
-					$config[ $key ] = $oc[ $key ];
-				}
-			}
-			return $config;
+			$object_cache = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
+			return Redis_Config_Policy::build( $object_cache );
 		}
 
 		/**

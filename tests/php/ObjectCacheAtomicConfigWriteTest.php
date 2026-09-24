@@ -921,9 +921,10 @@ class ObjectCacheAtomicConfigWriteTest extends \PHPUnit\Framework\TestCase {
 			$manager = new WPPO_Atomic_Enable_Cache();
 			$result  = $manager->enable(
 				array(
-					'host' => '127.0.0.1',
-					'port' => 6379,
-					'mode' => 'standalone',
+					'host'     => '127.0.0.1',
+					'port'     => 6379,
+					'mode'     => 'standalone',
+					'password' => 'connection-only-secret',
 				)
 			);
 		} finally {
@@ -932,6 +933,7 @@ class ObjectCacheAtomicConfigWriteTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertTrue( $result, 'enable() must succeed with a reachable Redis and a working filesystem.' );
 		$this->assertStringContainsString( "'host' => '127.0.0.1'", $fs->live );
+		$this->assertStringNotContainsString( 'connection-only-secret', $fs->live, 'Redis passwords must never be persisted in the generated config.' );
 		$this->assertStringContainsString( 'return', $fs->live );
 		$this->assertTrue( Util::verify_php_syntax( $fs->live ), 'Published config must pass the PHP syntax check.' );
 		$this->assert_source_includes_to_array( $fs->live );

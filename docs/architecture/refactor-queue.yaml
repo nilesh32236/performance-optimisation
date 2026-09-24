@@ -795,14 +795,36 @@ phase3_items:
 
   - id: P3-006
     title: 'Redis configuration value policy'
-    status: audit-pending
+    status: active
     priority: high
+    github_issue: 1576
+    github_pr: 1577
+    implementation_commit: 261272ba7cde0de984bed5f3be1bfaf48e560eea
     type: security-architecture
     problem: 'REST owns the complete Redis value sanitizer while CLI and Object_Cache carry weaker key-level validation.'
     target_owner: 'Redis_Config_Policy under Cache/'
     target_direction: 'REST and CLI adapters -> one value policy -> Object_Cache'
     tests: 'REST/CLI parity for host, userinfo, nodes, port, database, timeout, prefix, compression, mode, TLS, and password precedence.'
     ratchet: 'Sanitizer owner copies: 1 -> 1; raw CLI config path: 1 -> 0.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 7805eb2e
+      evidence:
+        - 'Rest::build_redis_config and sanitize_redis_config_value own the complete value allowlist, host/userinfo rejection, node normalization, numeric bounds, boolean policy, prefix charset, compression, TLS, and password precedence.'
+        - 'Object_Cache::get_redis_config and ping accept filtered arrays but rely on adapter-specific validation; CLI paths do not share the REST sanitizer.'
+        - 'ALLOWED_KEYS is already a shared key manifest, but the value policy remains duplicated outside REST.'
+        - 'A dependency-light Redis_Config_Policy can preserve Object_Cache::ALLOWED_KEYS and expose one public value normalizer without changing connection/storage behavior.'
+      decision: 'Proceed test-first with a Cache/Redis_Config_Policy owner; route REST and CLI config construction through it, preserve password precedence, fail-safe host/node rejection, and leave Object_Cache connection and drop-in writes unchanged.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'includes/Cache/class-redis-config-policy.php'
+        adapters: 'Rest::build_redis_config plus both WPPO_CLI_Command Redis config builders delegate through Redis_Config_Policy; historic private REST sanitizer/node methods remain same-signature compatibility proxies'
+        compatibility: 'Object_Cache::ALLOWED_KEYS aliases the complete 12-key policy manifest; REST and CLI command registration, Object_Cache connection/circuit/flush/drop-in/multisite behavior, and no-password-persistence are unchanged'
+        security: 'host/master_name and nodes reject schemes, userinfo, unsafe host forms, and out-of-range ports; numeric bounds/types, enums, prefix charset/length, booleans, node indexing/filtering, defaults, and WPPO_REDIS_PASSWORD/filter precedence are pinned'
+        loader: 'Loader_Map::fallback_map()["Redis_Config_Policy"]'
+        graph_delta: '76 inventory files / 79 graph nodes / 351 edges; bridge candidates 231->230 and compatibility edges 195->194; Redis_Config_Policy has 3 fan-in, 0 fan-out, and no feature dependencies'
+        tests: 'RedisConfigPolicyTest, RestTest password-precedence cases, ObjectCacheCircuitBreakerTest merge/default parity, ObjectCacheAtomicConfigWriteTest password non-persistence, WppoCliVerifyTest allowlist, LoaderMapTest, and ArchitectureInventoryTest'
+        verification: 'RED: RedisConfigPolicyTest failed 8/8 before owner creation; GREEN: focused REST/CLI/ObjectCache/config suites pass; full PHPUnit 2697 tests / 24557 assertions passes (9 skipped, 7 existing deprecations); PHPCS on changed PHP, focused PHPStan, generator --check, and git diff --check pass'
 
   - id: P3-007
     title: 'Neutral drop-in registry and invalidation'

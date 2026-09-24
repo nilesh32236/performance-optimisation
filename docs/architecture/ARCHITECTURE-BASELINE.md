@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 78 first-party runtime files:
+The tokenizer scans 79 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 70 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 71 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,21 +40,21 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 75 |
-| Inventory source lines | 126,083 |
-| Class-like graph nodes | 74 |
+| Inventory files | 76 |
+| Inventory source lines | 126,131 |
+| Class-like graph nodes | 75 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,492 |
+| Named methods | 2,495 |
 | Methods spanning 80 lines or more | 237 |
 | Static properties | 141 across 32 nodes |
-| Unique dependency edges | 348 |
-| Runtime-classified edges | 347 |
-| Compatibility-classified edges | 195 |
+| Unique dependency edges | 351 |
+| Runtime-classified edges | 350 |
+| Compatibility-classified edges | 194 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 303 |
+| Cross-domain edges | 305 |
 | Feature-to-feature edges | 47 |
 | Strict boundary violations | 16 |
-| Bridge candidates | 231 |
+| Bridge candidates | 230 |
 | Exact-shape duplicate groups | 17 |
 | Multi-node runtime SCCs | 1 |
 
@@ -62,7 +62,7 @@ Classifications can overlap on one edge. A guarded call can have both runtime an
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 59 class-like nodes and 302 runtime-classified internal edges. Two compatibility-only SCCs cover 21 nodes and one System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component with 60 class-like nodes and 305 runtime-classified internal edges. Two compatibility-only SCCs cover 21 nodes and one System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
 
 The largest hub scores are:
 
@@ -97,12 +97,13 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Img_Converter` | 4,077 | 66 | 8 | 4 | 8 | 9/2 | 36 | 0 | `convert_image` 691 |
 | `Script_Strategy` | 3,859 | 56 | 12 | 11 | 12 | 1/4 | 35 | 1 | `add_defer_attribute` 203 |
 | `AI_Adaptive` | 3,989 | 76 | 8 | 2 | 2 | 5/5 | 20 | 4 | `get_suggestions` 761 |
-| `Rest` | 3,877 | 76 | 9 | 0 | 3 | 1/21 | 1 | 16 | `optimise_image` 310 |
+| `Rest` | 3,750 | 76 | 9 | 0 | 3 | 1/22 | 1 | 17 | `optimise_image` 310 |
 | `Database_Cleanup` | 3,353 | 58 | 9 | 3 | 3 | 6/2 | 64 | 0 | `get_action_scheduler_health` 220 |
 | `RUM` | 3,348 | 63 | 7 | 7 | 7 | 14/2 | 98 | 1 | `flush_queue` 328 |
-| `Object_Cache` | 3,200 | 54 | 11 | 6 | 11 | 8/4 | 36 | 2 | `trip_circuit_on_outage` 174 |
+| `Object_Cache` | 3,215 | 55 | 11 | 6 | 11 | 8/5 | 33 | 3 | `trip_circuit_on_outage` 174 |
+| `Redis_Config_Policy` | 183 | 3 | 0 | 0 | 0 | 3/0 | 6 | 0 | `sanitize_value` 58 |
 | `LiteSpeed_Integration` | 2,797 | 58 | 4 | 17 | 17 | 17/7 | 95 | 5 | `get_litespeed_ttl` 216 |
-| `WPPO_CLI_Command` | 2,372 | 27 | 7 | 0 | 0 | 1/13 | 2 | 10 | `settings` 224 |
+| `WPPO_CLI_Command` | 2,362 | 27 | 7 | 0 | 0 | 1/14 | 2 | 11 | `settings` 224 |
 | `Builder_Purge_Watcher` | 2,110 | 45 | 2 | 7 | 7 | 4/6 | 19 | 3 | `on_any_upgrade` 103 |
 | `Cron` | 1,792 | 37 | 2 | 0 | 0 | 5/16 | 14 | 10 | `schedule_page_cron_jobs` 159 |
 | `Scheduler` | 636 | 16 | 0 | 2 | 2 | 2/1 | 29 | 0 | largest under 80 lines |
@@ -131,7 +132,8 @@ These counts come from method names, call sites, tests, and history. They approx
 | `Rest` | 8 | Registration/auth, cache/settings adapters, images, CSS, database, telemetry/insight, RUM, sandbox/preload |
 | `WPPO_CLI_Command` | 9 | Eight command families plus shared CLI validation/formatting |
 | `RUM` | 7 | Collection, validation, queue, aggregation, persistence, admin reads, lifecycle/reset |
-| `Object_Cache` | 7 | Config policy, connection, reads/writes, flush, circuit state, drop-in management, diagnostics |
+| `Object_Cache` | 6 | Connection, reads/writes, flush, circuit state, drop-in management, diagnostics |
+| `Redis_Config_Policy` | 1 | Redis key manifest and value normalization |
 | `LiteSpeed_Integration` | 7 | Detection, coexistence, headers, TTL, purge, private/vary policy, server compatibility |
 | `Cron` | 6 | Recurring scheduling, sitemap discovery, queue progress, URL/page fetch, image/preload/insight jobs, teardown |
 | `Job_Registry` | 1 | Canonical WP-Cron/Action Scheduler hook ownership and teardown unions |
@@ -166,9 +168,11 @@ P3-005 implementation update: `Cache_Capacity` now owns that statistics/cap/olde
 
 The three adapters duplicate parts of permission checks, database dispatch, settings writes, telemetry reads, same-site URL validation, image paths, and response formatting. Later work should create narrow application services only where two or three adapters share the same policy.
 
-### Settings and Redis have misplaced policy owners
+### Redis configuration policy moved out of REST
 
-`Rest_Settings` and the REST safe-mode path write `wppo_settings` outside `Settings_Store`. REST owns the full Redis config sanitizer while CLI and `Object_Cache` carry weaker key-level validation. Both cases have clear canonical owners and parity-test paths.
+P3-006 moves the complete Redis key manifest and value sanitizer from `Rest` into the dependency-light `Redis_Config_Policy`. REST and both CLI construction paths now call the same builder; `Object_Cache::ALLOWED_KEYS` remains as a public compatibility alias. The generated inventory contains 76 files, 79 graph nodes, and 351 edges. The policy has three public methods, no feature dependencies, and no connection, persistence, circuit, drop-in, flush, multisite, permission, or command-registration changes. Bridge candidates fell from 231 to 230 while the compatibility-edge count fell from 195 to 194.
+
+`Rest_Settings` and the REST safe-mode path still write `wppo_settings` outside `Settings_Store`; that remains queued for the later settings-command item.
 
 ## Static state
 
@@ -263,4 +267,4 @@ Phase 3 should record a reviewed PHPStan baseline after the first ownership extr
 
 P3-001 establishes the measurement system. P3-002 will centralize Action Scheduler and WP-Cron job ownership, including builder drift and upgrade purge teardown. That item improves dependency direction, removes duplicate lifecycle lists, fixes a pending-job leak, and gives later scheduler migrations one canonical registry.
 
-Cache capacity, runtime-state reset ownership, Util migration, Redis configuration policy, settings writes, REST/CLI application boundaries, CSS and image decompositions, and React card extraction remain queued behind that lifecycle owner.
+Util migration, settings writes, REST/CLI application boundaries, CSS and image decompositions, and React card extraction remain queued. Cache capacity, runtime-state reset ownership, and Redis configuration policy are implemented in this phase.

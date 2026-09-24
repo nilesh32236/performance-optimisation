@@ -160,6 +160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Main'                   => 'Core/class-main.php',
 				'Metabox'                => 'Admin/class-metabox.php',
 				'Object_Cache'           => 'Cache/class-object-cache.php',
+				'Redis_Config_Policy'    => 'Cache/class-redis-config-policy.php',
 				'OD_Bridge'              => 'Insight/class-od-bridge.php',
 				'Pagespeed'              => 'Insight/class-pagespeed.php',
 				'Perf_Translations'      => 'Admin/class-perf-translations.php',

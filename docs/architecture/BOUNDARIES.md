@@ -45,7 +45,8 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | `Cache_Capacity` | Static cache statistics, cap settings, byte/file accounting, randomized-query guard, oldest eviction | Keep narrow owner bridges for Cache filesystem, containment, and sibling-aware deletion |
 | `Cache_Key` | Key derivation | Keep as infrastructure |
 | `Advanced_Cache_Handler` | `advanced-cache.php` drop-in lifecycle | Protect early-load contract |
-| `Object_Cache` | Redis config, connection, reads/writes, circuit, drop-in management | Move full config normalization into a Redis policy owner |
+| `Redis_Config_Policy` | Complete Redis key manifest, host/node safety, value bounds and enums, password precedence | Keep dependency-light; do not connect, persist, flush, or publish drop-ins |
+| `Object_Cache` | Redis connection, reads/writes, circuit, drop-in management, config key compatibility constant | Keep lifecycle and storage behavior; route adapter construction through `Redis_Config_Policy` |
 | `Bfcache` | Logged-in no-store policy | Keep narrow |
 
 The 839-line `Cache` tail previously owned statistics, cap settings, capacity checks, and eviction. `Cache_Capacity` now owns that one accounting contract; `Cache` retains only the public facade and lifecycle/storage policy. The owner reaches Cache through narrow filesystem, root/domain, containment, and deletion bridges.
@@ -111,7 +112,7 @@ The next REST step should extract a narrow application command or response mappe
 
 ### WP-CLI
 
-`WPPO_CLI_Command` owns eight subcommands, including `verify`. It also contains filesystem, drop-in, Redis, LiteSpeed, cron, and system diagnostics. Treat it as a transport and diagnostics surface, not a thin adapter.
+`WPPO_CLI_Command` owns eight subcommands, including `verify`. It also contains filesystem, drop-in, LiteSpeed, cron, and system diagnostics. Redis argument and stored-settings construction delegates to `Redis_Config_Policy`. Treat it as a transport and diagnostics surface, not a thin adapter.
 
 ### Abilities
 
@@ -136,7 +137,7 @@ A feature should not read another feature's internal settings paths. `Settings_S
 Two high-value corrections:
 
 1. Move `Rest_Settings` and REST safe-mode direct writes behind `Settings_Store`.
-2. Move the full Redis config sanitizer out of REST so REST, CLI, and `Object_Cache` share one policy.
+2. Keep Redis config construction on `Redis_Config_Policy`; REST, CLI, and `Object_Cache::ALLOWED_KEYS` share its manifest without moving connection or persistence into the policy.
 
 Do not introduce a configuration framework or DTO for every array. Use value objects only where stable shape and invariants already repeat.
 

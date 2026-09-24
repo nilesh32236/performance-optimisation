@@ -2040,42 +2040,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.4.0
 		 * @since 2.0.0 Request-supplied passwords are ignored when WPPO_REDIS_PASSWORD is defined, unless the `wppo_redis_allow_request_password` filter returns true.
 		 * @since 2.0.0 Added the $defaults parameter for circuit-breaker recovery.
+		 * @since NEXT Delegates value normalization to Redis_Config_Policy.
 		 * @return array Sanitized Redis config.
 		 */
 		private function build_redis_config( $params, $defaults = array() ) {
-			// Single source of truth: Object_Cache::ALLOWED_KEYS (local
-			// fallback only when the class is unavailable, e.g. unit stubs).
-			$allowed_keys = class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ? Object_Cache::ALLOWED_KEYS : array( 'mode', 'host', 'port', 'password', 'database', 'timeout', 'prefix', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
-			$config       = array();
-
-			foreach ( $allowed_keys as $key ) {
-				if ( ! isset( $params[ $key ] ) ) {
-					continue;
-				}
-
-				$config[ $key ] = $this->sanitize_redis_config_value( $key, $params[ $key ] );
-			}
-
-			// Stored-config fallback for keys the request omits (used by the
-			// circuit-breaker recover action, which typically sends only the
-			// mode). Merged values run through the same sanitizers (including
-			// the WPPO_REDIS_PASSWORD precedence guard), so a recover can
-			// never smuggle a raw stored password past the constant.
-			// Explicit request keys always win.
-			if ( is_array( $defaults ) && ! empty( $defaults ) ) {
-				foreach ( $allowed_keys as $key ) {
-					if ( ! array_key_exists( $key, $config ) && array_key_exists( $key, $defaults ) ) {
-						$config[ $key ] = $this->sanitize_redis_config_value( $key, $defaults[ $key ] );
-					}
-				}
-			}
-
-			// Defaults for missing keys.
-			$config['mode'] = $config['mode'] ?? 'standalone';
-			$config['host'] = $config['host'] ?? '127.0.0.1';
-			$config['port'] = $config['port'] ?? 6379;
-
-			return $config;
+			return Redis_Config_Policy::build( (array) $params, (array) $defaults );
 		}
 
 		/**
@@ -2088,122 +2057,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param string $key Config key (one of the build_redis_config() allowlist).
 		 * @param mixed  $value Raw value.
 		 * @since 2.0.0
+		 * @since NEXT Delegates to Redis_Config_Policy::sanitize_value().
 		 * @return mixed Sanitized value.
 		 */
 		private function sanitize_redis_config_value( $key, $value ) {
-			switch ( $key ) {
-				case 'host':
-				case 'master_name':
-					$host = sanitize_text_field( (string) $value );
-					$host = strtolower( trim( $host ) );
-					// Host allowlist: hostname/IP/socket path — no URL schemes or userinfo.
-					if ( '' !== $host && 1 !== preg_match( '/^(?:[a-z0-9](?:[a-z0-9\-\.]{0,251}[a-z0-9])?|\/[\w\/\.\-]+)$/', $host ) ) {
-						return '';
-					}
-					return substr( $host, 0, 255 );
-				case 'compression':
-					$compression = sanitize_text_field( (string) $value );
-					return in_array( $compression, array( '', 'none', 'lz4', 'zstd' ), true ) ? $compression : '';
-				case 'mode':
-					$mode = sanitize_text_field( (string) $value );
-					return in_array( $mode, array( 'standalone', 'sentinel', 'cluster' ), true ) ? $mode : 'standalone';
-				case 'port':
-					return max( 1, min( 65535, (int) $value ) );
-				case 'database':
-					return max( 0, min( 15, (int) $value ) );
-				case 'timeout':
-					// Clamp to a sane float range: an array/object here
-					// would otherwise flow raw into connect calls and
-					// var_export'ed config (type confusion downstream).
-					if ( is_array( $value ) || is_object( $value ) ) {
-						return 1.0;
-					}
-					return max( 0.1, min( 30.0, (float) $value ) );
-				case 'prefix':
-					// Redis key prefix: charset + length sanitized so it
-					// cannot smuggle whitespace/control sequences into keys
-					// or the var_export'ed drop-in config.
-					if ( ! is_string( $value ) && ! is_numeric( $value ) ) {
-						return '';
-					}
-					$prefix = sanitize_text_field( (string) $value );
-					$prefix = (string) preg_replace( '/[^A-Za-z0-9_\-:]/', '', $prefix );
-					return substr( $prefix, 0, 64 );
-				case 'password':
-					// When WPPO_REDIS_PASSWORD is defined the constant takes
-					// precedence: supplied passwords are dropped unless
-					// the wppo_redis_allow_request_password escape hatch returns true.
-					if ( defined( 'WPPO_REDIS_PASSWORD' ) && ! apply_filters( 'wppo_redis_allow_request_password', false ) ) {
-						return '';
-					}
-					// Audit #1453: no tag-stripping on passwords (mangles strong
-					// secrets) — string cast + length clamp only. Never
-					// persisted (unset/flag-only downstream); HTTPS-only for
-					// admin REST calls carrying a password.
-					if ( ! is_string( $value ) && ! is_numeric( $value ) ) {
-						return '';
-					}
-					return substr( (string) $value, 0, 512 );
-				case 'use_tls':
-				case 'persistent':
-					return (bool) $value;
-				case 'nodes':
-					return $this->sanitize_nodes( $value );
-				default:
-					return $value;
-			}
+			return Redis_Config_Policy::sanitize_value( $key, $value );
 		}
 
 		/**
 		 * Normalize and sanitize Redis node entries into an indexed array of non-empty strings.
 		 *
-		 * When given an array, each element is sanitized, empty values are removed, and the result is reindexed.
-		 * When given a scalar, it is cast to string, sanitized, and returned as a single-element array if non-empty.
+		 * Compatibility proxy for callers and tests that exercised the historic
+		 * private REST helper. Policy behavior now lives in Redis_Config_Policy.
 		 *
 		 * @param string|array $nodes Node or list of nodes to sanitize and normalize.
 		 * @since 1.4.0
+		 * @since NEXT Delegates to Redis_Config_Policy::sanitize_nodes().
 		 * @return string[] An indexed array of sanitized, non-empty node strings.
 		 */
 		private function sanitize_nodes( $nodes ) {
-			$sanitize_node = static function ( $node ) {
-				if ( ! is_string( $node ) && ! is_numeric( $node ) ) {
-					return '';
-				}
-				$candidate = strtolower( trim( sanitize_text_field( (string) $node ) ) );
-				if ( '' === $candidate ) {
-					return '';
-				}
-				// Strip URL schemes and userinfo so entries like
-				// http://169.254.169.254:6379 or user:pass@host cannot pass
-				// to ping()/enable() connection attempts (SSRF/port-scan
-				// inconsistency vs the host/master_name allowlist).
-				if ( false !== strpos( $candidate, '://' ) ) {
-					$parts     = explode( '://', $candidate, 2 );
-					$candidate = $parts[1] ?? '';
-				}
-				if ( false !== strpos( $candidate, '@' ) ) {
-					$parts     = explode( '@', $candidate );
-					$candidate = end( $parts );
-				}
-				$candidate = trim( $candidate, '/' );
-				// Same host allowlist as host/master_name: hostname/IP/socket
-				// path with optional :port — no schemes or userinfo.
-				if ( 1 === preg_match( '/^(?:[a-z0-9](?:[a-z0-9\-\.]{0,251}[a-z0-9])?|\/[\w\/\.\-]+)(?::([0-9]{1,5}))?$/', $candidate, $m ) ) {
-					if ( isset( $m[1] ) && '' !== $m[1] ) {
-						$port = (int) $m[1];
-						if ( $port < 1 || $port > 65535 ) {
-							return '';
-						}
-					}
-					return substr( $candidate, 0, 255 );
-				}
-				return '';
-			};
-			if ( is_array( $nodes ) ) {
-				return array_values( array_filter( array_map( $sanitize_node, $nodes ) ) );
-			}
-			$single = $sanitize_node( $nodes );
-			return '' !== $single ? array( $single ) : array();
+			return Redis_Config_Policy::sanitize_nodes( $nodes );
 		}
 
 		/**
