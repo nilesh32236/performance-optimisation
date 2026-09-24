@@ -1193,13 +1193,24 @@ phase3_items:
 
   - id: P3-015
     title: 'Main preload and cache-buffer coordination cleanup'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1595
     type: epic
     problem: 'Main coordinates preload, resource hints, and cache/image/CSS output ordering.'
     target_owner: 'Preload_Transport/Cache/Image coordination contracts'
+    exact_scope: 'One bounded preload/buffer coordination cluster; preserve callback identity, buffer order, and frontend output.'
     non_goals: 'Do not merge LiteSpeed crawler lanes or change image buffer order.'
     ratchet: 'Main feature dependencies and cross-domain edges down.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: eae54bb5
+      evidence:
+        - 'Main coordinates legacy used-CSS/LCP output buffers with core template-enhancement routing, Google Fonts/Used CSS/Image Optimization callbacks, and cache-aware URL scheduling.'
+        - 'The preload/link emission and resource-hint policy spans Main, Util, and Image_Optimisation, while speculation remains a distinct policy cluster.'
+        - 'A bounded Preload_Buffer_Coordinator can own buffer routing/lifecycle and scheduling seams without changing the established image buffer order or LiteSpeed lanes.'
+        - 'Speculation configuration, LiteSpeed crawler/ESI behavior, and cache/image serving contracts remain outside this item.'
+      decision: 'Proceed test-first with one Preload_Buffer_Coordinator extraction for buffer routing/lifecycle and preload scheduling coordination; preserve all public Main facades and order.'
 
   - id: P3-016
     title: 'Main and service bridge cleanup'
