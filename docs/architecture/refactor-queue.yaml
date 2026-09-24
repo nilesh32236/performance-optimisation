@@ -702,6 +702,7 @@ phase3_items:
     status: active
     priority: high
     github_issue: 1572
+    github_pr: 1573
     implementation_commit: 0db8e550b7029bf8ae05e92b838324f0d76a442c
     type: architecture
     problem: 'RUM, AI, System Info, LiteSpeed, Object Cache, and Database Cleanup hold site-sensitive static memos without a complete production switch_blog reset contract.'
