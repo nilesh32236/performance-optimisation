@@ -661,8 +661,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			self::$circuit_state_memo     = null;
 			self::$circuit_state_memo_set = false;
 
-			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
-				System_Info::flush_dropin_cache();
+			if ( is_callable( array( 'PerformanceOptimise\Inc\Dropin_Registry', 'invalidate' ) ) ) {
+				Dropin_Registry::invalidate();
 			}
 
 			Log::add( __( 'Object Cache circuit breaker tripped — drop-in auto-disabled after repeated Redis failures.', 'performance-optimisation' ) );
@@ -1570,8 +1570,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				self::$circuit_state_memo_set = false;
 
 				try {
-					if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
-						System_Info::flush_dropin_cache();
+					if ( is_callable( array( 'PerformanceOptimise\Inc\Dropin_Registry', 'invalidate' ) ) ) {
+						Dropin_Registry::invalidate();
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -2396,8 +2396,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25). is_callable also covers a partially
 			// loaded class (Part 2 review round 2).
-			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
-				System_Info::flush_dropin_cache();
+			if ( is_callable( array( 'PerformanceOptimise\Inc\Dropin_Registry', 'invalidate' ) ) ) {
+				Dropin_Registry::invalidate();
 			}
 
 			// A successful enable closes the circuit: drop the parked
@@ -2461,8 +2461,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25). is_callable also covers a partially
 			// loaded class (Part 2 review round 2).
-			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
-				System_Info::flush_dropin_cache();
+			if ( is_callable( array( 'PerformanceOptimise\Inc\Dropin_Registry', 'invalidate' ) ) ) {
+				Dropin_Registry::invalidate();
 			}
 
 			return true;

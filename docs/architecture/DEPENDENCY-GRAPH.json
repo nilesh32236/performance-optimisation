@@ -28,20 +28,20 @@
         "high_risk_hub_score": "fan_in + fan_out + 2*compatibility_fan_in + cross_domain_edges + static_state + lines/1000."
     },
     "summary": {
-        "files": 79,
-        "class_like_nodes": 75,
+        "files": 80,
+        "class_like_nodes": 76,
         "procedural_nodes": 4,
-        "edges": 351,
-        "runtime_edges": 350,
+        "edges": 352,
+        "runtime_edges": 351,
         "compatibility_edges": 194,
         "loader_edges": 3,
-        "cross_domain_edges": 305,
-        "feature_to_feature_edges": 47,
+        "cross_domain_edges": 304,
+        "feature_to_feature_edges": 46,
         "boundary_violations": 16,
         "bridge_candidates": 230,
         "cyclic_components": 1,
         "runtime_cyclic_components": 1,
-        "compatibility_cyclic_components": 2,
+        "compatibility_cyclic_components": 1,
         "duplicate_candidate_groups": 17,
         "static_state_nodes": 32
     },
@@ -1337,7 +1337,7 @@
             "file": "includes/Cache/class-advanced-cache-handler.php",
             "domain": "Cache",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 948,
+            "lines": 950,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -1351,8 +1351,8 @@
                 {
                     "name": "create",
                     "line": 435,
-                    "end_line": 847,
-                    "lines": 413,
+                    "end_line": 849,
+                    "lines": 415,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
@@ -1386,8 +1386,8 @@
                 },
                 {
                     "name": "cleanup_dropin_artifacts",
-                    "line": 915,
-                    "end_line": 946,
+                    "line": 917,
+                    "end_line": 948,
                     "lines": 32,
                     "visibility": "private",
                     "static": true,
@@ -1395,8 +1395,8 @@
                 },
                 {
                     "name": "remove",
-                    "line": 859,
-                    "end_line": 889,
+                    "line": 861,
+                    "end_line": 891,
                     "lines": 31,
                     "visibility": "public",
                     "static": true,
@@ -1442,8 +1442,8 @@
             "imports": [],
             "references": {
                 "static_calls": {
+                    "PerformanceOptimise\\Inc\\Dropin_Registry::invalidate": 845,
                     "PerformanceOptimise\\Inc\\Log::add": 61,
-                    "PerformanceOptimise\\Inc\\System_Info::flush_dropin_cache": 843,
                     "PerformanceOptimise\\Inc\\Util::get_canonical_host": 476,
                     "PerformanceOptimise\\Inc\\Util::get_settings": 488,
                     "PerformanceOptimise\\Inc\\Util::get_woo_excluded_paths": 516,
@@ -1452,7 +1452,7 @@
                     "PerformanceOptimise\\Inc\\Util::normalize_cache_host": 478,
                     "PerformanceOptimise\\Inc\\Util::transient_key": 56,
                     "self::atomic_write_dropin": 838,
-                    "self::cleanup_dropin_artifacts": 869,
+                    "self::cleanup_dropin_artifacts": 871,
                     "self::foreign_dropin_present": 439,
                     "self::get_dropin_backup_path": 308,
                     "self::get_dropin_path": 83,
@@ -1464,7 +1464,7 @@
                     "$e->getMessage": 106,
                     "$wp_filesystem->copy": 356,
                     "$wp_filesystem->delete": 330,
-                    "$wp_filesystem->dirlist": 934,
+                    "$wp_filesystem->dirlist": 936,
                     "$wp_filesystem->exists": 96,
                     "$wp_filesystem->get_contents": 100,
                     "$wp_filesystem->move": 364,
@@ -1477,12 +1477,12 @@
                 },
                 "class_string_references": {
                     "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 17,
-                    "PerformanceOptimise\\Inc\\System_Info": 842,
+                    "PerformanceOptimise\\Inc\\Dropin_Registry": 844,
                     "PerformanceOptimise\\Inc\\Util": 498
                 },
                 "class_exists": {
                     "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 17,
-                    "PerformanceOptimise\\Inc\\System_Info": 886
+                    "PerformanceOptimise\\Inc\\Dropin_Registry": 888
                 },
                 "method_exists": {
                     "PerformanceOptimise\\Inc\\Util::is_woo_safe_mode_enabled": 498
@@ -1511,7 +1511,7 @@
                     "implode": 525,
                     "in_array": 520,
                     "is_array": 500,
-                    "is_callable": 842,
+                    "is_callable": 844,
                     "is_object": 90,
                     "is_string": 112,
                     "ltrim": 292,
@@ -1548,7 +1548,7 @@
                 "filesystem_dependencies": {
                     "$wp_filesystem->copy": 356,
                     "$wp_filesystem->delete": 330,
-                    "$wp_filesystem->dirlist": 934,
+                    "$wp_filesystem->dirlist": 936,
                     "$wp_filesystem->exists": 96,
                     "$wp_filesystem->get_contents": 100,
                     "$wp_filesystem->move": 364,
@@ -1562,12 +1562,12 @@
             "implements": [],
             "trait_usage": [],
             "runtime_dependencies": [
+                "PerformanceOptimise\\Inc\\Dropin_Registry",
                 "PerformanceOptimise\\Inc\\Log",
-                "PerformanceOptimise\\Inc\\System_Info",
                 "PerformanceOptimise\\Inc\\Util"
             ],
             "compatibility_dependencies": [
-                "PerformanceOptimise\\Inc\\System_Info",
+                "PerformanceOptimise\\Inc\\Dropin_Registry",
                 "PerformanceOptimise\\Inc\\Util"
             ],
             "loader_dependencies": [],
@@ -1585,7 +1585,7 @@
                 "compatibility_fan_out": 2,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 9,
+                "cross_domain_edges": 8,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -7304,6 +7304,96 @@
                 "strongly_connected_component": 4
             }
         },
+        "PerformanceOptimise\\Inc\\Dropin_Registry": {
+            "id": "PerformanceOptimise\\Inc\\Dropin_Registry",
+            "name": "Dropin_Registry",
+            "fqcn": "PerformanceOptimise\\Inc\\Dropin_Registry",
+            "kind": "class",
+            "file": "includes/Cache/class-dropin-registry.php",
+            "domain": "Cache",
+            "namespace": "PerformanceOptimise\\Inc",
+            "lines": 45,
+            "property_count": 0,
+            "static_property_count": 0,
+            "public_property_count": 0,
+            "protected_property_count": 0,
+            "private_property_count": 0,
+            "static_state": false,
+            "method_count": 1,
+            "top_level_function_count": 0,
+            "top_level_functions": [],
+            "largest_methods": [
+                {
+                    "name": "invalidate",
+                    "line": 37,
+                    "end_line": 43,
+                    "lines": 7,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                }
+            ],
+            "imports": [],
+            "references": {
+                "static_calls": {
+                    "PerformanceOptimise\\Inc\\System_Info::flush_dropin_cache": 42
+                },
+                "instance_calls": [],
+                "new_expressions": [],
+                "class_references": [],
+                "class_constant_references": [],
+                "class_string_references": {
+                    "PerformanceOptimise\\Inc\\Dropin_Registry": 19,
+                    "PerformanceOptimise\\Inc\\System_Info": 38
+                },
+                "class_exists": {
+                    "PerformanceOptimise\\Inc\\Dropin_Registry": 19
+                },
+                "method_exists": [],
+                "interface_exists": [],
+                "trait_exists": [],
+                "reflection": [],
+                "loader_references": [],
+                "file_references": [],
+                "external_classes": [],
+                "external_functions": {
+                    "class_exists": 19,
+                    "defined": 15,
+                    "is_callable": 38
+                },
+                "wordpress_functions": [],
+                "filesystem_dependencies": [],
+                "network_dependencies": [],
+                "database_dependencies": [],
+                "dynamic_references": []
+            },
+            "extends": [],
+            "implements": [],
+            "trait_usage": [],
+            "runtime_dependencies": [
+                "PerformanceOptimise\\Inc\\System_Info"
+            ],
+            "compatibility_dependencies": [],
+            "loader_dependencies": [],
+            "documentation_references": [],
+            "delegating_methods": [],
+            "hooks": [],
+            "metrics": {
+                "fan_in": 2,
+                "fan_out": 1,
+                "incoming_reference_evidence": 12,
+                "outgoing_reference_evidence": 2,
+                "runtime_fan_in": 2,
+                "runtime_fan_out": 1,
+                "compatibility_fan_in": 1,
+                "compatibility_fan_out": 0,
+                "loader_fan_in": 0,
+                "loader_fan_out": 0,
+                "cross_domain_edges": 1,
+                "boundary_violations": 0,
+                "strongly_connected_component": 0
+            }
+        },
         "PerformanceOptimise\\Inc\\Edge_Cache": {
             "id": "PerformanceOptimise\\Inc\\Edge_Cache",
             "name": "Edge_Cache",
@@ -12405,7 +12495,7 @@
             "file": "includes/Core/class-loader-map.php",
             "domain": "Core",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 318,
+            "lines": 319,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -12419,16 +12509,16 @@
                 {
                     "name": "fallback_map",
                     "line": 119,
-                    "end_line": 193,
-                    "lines": 75,
+                    "end_line": 194,
+                    "lines": 76,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
                     "name": "file_path",
-                    "line": 236,
-                    "end_line": 272,
+                    "line": 237,
+                    "end_line": 273,
                     "lines": 37,
                     "visibility": "public",
                     "static": true,
@@ -12436,8 +12526,8 @@
                 },
                 {
                     "name": "path_for",
-                    "line": 285,
-                    "end_line": 306,
+                    "line": 286,
+                    "end_line": 307,
                     "lines": 22,
                     "visibility": "public",
                     "static": true,
@@ -12454,8 +12544,8 @@
                 },
                 {
                     "name": "allowed_dirs",
-                    "line": 204,
-                    "end_line": 221,
+                    "line": 205,
+                    "end_line": 222,
                     "lines": 18,
                     "visibility": "public",
                     "static": true,
@@ -12481,8 +12571,8 @@
                 },
                 {
                     "name": "cli_file",
-                    "line": 314,
-                    "end_line": 316,
+                    "line": 315,
+                    "end_line": 317,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -12492,10 +12582,10 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "self::allowed_dirs": 257,
-                    "self::base_dir": 267,
-                    "self::fallback_map": 296,
-                    "self::file_path": 301
+                    "self::allowed_dirs": 258,
+                    "self::base_dir": 268,
+                    "self::fallback_map": 297,
+                    "self::file_path": 302
                 },
                 "instance_calls": [],
                 "new_expressions": [],
@@ -12515,36 +12605,37 @@
                 "file_references": {
                     "Admin/class-abilities.php": 121,
                     "Admin/class-admin-notices.php": 123,
-                    "Admin/class-metabox.php": 161,
+                    "Admin/class-metabox.php": 162,
                     "Admin/class-perf-translations.php": 74,
-                    "Admin/class-rest-cache.php": 170,
-                    "Admin/class-rest-settings.php": 171,
-                    "Admin/class-rest.php": 168,
-                    "Admin/class-wppo-cli-command.php": 187,
+                    "Admin/class-rest-cache.php": 171,
+                    "Admin/class-rest-settings.php": 172,
+                    "Admin/class-rest.php": 169,
+                    "Admin/class-wppo-cli-command.php": 188,
                     "Assets/class-asset-manager.php": 125,
                     "Assets/class-css-combine.php": 136,
                     "Assets/class-css-safelist.php": 137,
-                    "Assets/class-google-fonts.php": 146,
-                    "Assets/class-script-strategy.php": 175,
+                    "Assets/class-google-fonts.php": 147,
+                    "Assets/class-script-strategy.php": 176,
                     "CSS/class-ccss-store.php": 135,
                     "CSS/class-critical-css.php": 134,
-                    "CSS/class-used-css.php": 182,
+                    "CSS/class-used-css.php": 183,
                     "Cache/class-advanced-cache-handler.php": 124,
                     "Cache/class-bfcache.php": 73,
                     "Cache/class-cache-capacity.php": 127,
                     "Cache/class-cache-invalidator.php": 128,
                     "Cache/class-cache-key.php": 129,
                     "Cache/class-cache.php": 126,
-                    "Cache/class-object-cache.php": 162,
-                    "Cache/class-redis-config-policy.php": 163,
+                    "Cache/class-dropin-registry.php": 143,
+                    "Cache/class-object-cache.php": 163,
+                    "Cache/class-redis-config-policy.php": 164,
                     "Compatibility/class-core-tweaks.php": 133,
                     "Compatibility/class-llms.php": 71,
                     "Core/class-activate.php": 122,
                     "Core/class-deactivate.php": 142,
                     "Core/class-hook-registry.php": 82,
-                    "Core/class-loader-map.php": 158,
-                    "Core/class-main.php": 160,
-                    "Core/class-runtime-state.php": 169,
+                    "Core/class-loader-map.php": 159,
+                    "Core/class-main.php": 161,
+                    "Core/class-runtime-state.php": 170,
                     "Core/class-wp-version.php": 67,
                     "Database/class-database-cleanup.php": 141,
                     "Edge/class-cdn-purger.php": 131,
@@ -12553,53 +12644,53 @@
                     "Edge/class-edge-cache.php": 77,
                     "Edge/class-edge-purger.php": 79,
                     "Edge/class-header-emitter.php": 69,
-                    "Edge/class-htaccess-handler.php": 149,
+                    "Edge/class-htaccess-handler.php": 150,
                     "Edge/class-server-rules.php": 68,
-                    "Images/class-image-optimisation.php": 151,
-                    "Images/class-img-converter.php": 152,
-                    "Images/class-lcp-preload.php": 153,
+                    "Images/class-image-optimisation.php": 152,
+                    "Images/class-img-converter.php": 153,
+                    "Images/class-lcp-preload.php": 154,
                     "Insight/class-ai-adaptive.php": 75,
                     "Insight/class-ai-anomaly.php": 76,
                     "Insight/class-od-bridge.php": 72,
-                    "Insight/class-pagespeed.php": 165,
-                    "Insight/class-rum.php": 172,
-                    "Insight/class-suggestion-engine.php": 179,
-                    "Insight/class-system-info.php": 180,
-                    "Insight/class-telemetry.php": 181,
+                    "Insight/class-pagespeed.php": 166,
+                    "Insight/class-rum.php": 173,
+                    "Insight/class-suggestion-engine.php": 180,
+                    "Insight/class-system-info.php": 181,
+                    "Insight/class-telemetry.php": 182,
                     "Integrations/class-builder-purge-watcher.php": 81,
                     "Integrations/class-litespeed-crawler.php": 98,
                     "Integrations/class-litespeed-esi.php": 99,
                     "Integrations/class-litespeed-integration.php": 70,
-                    "Integrations/class-woo-detect.php": 185,
+                    "Integrations/class-woo-detect.php": 186,
                     "Scheduler/class-cron.php": 138,
                     "Scheduler/class-job-registry.php": 139,
                     "Scheduler/class-preload-transport.php": 140,
-                    "Scheduler/class-scheduler.php": 174,
-                    "Settings/class-sandbox-preview.php": 173,
-                    "Settings/class-settings-migrations.php": 177,
-                    "Settings/class-settings-store.php": 178,
-                    "Support/class-filesystem.php": 145,
-                    "Support/class-http.php": 150,
-                    "Support/class-log.php": 159,
-                    "Support/class-url.php": 183,
+                    "Scheduler/class-scheduler.php": 175,
+                    "Settings/class-sandbox-preview.php": 174,
+                    "Settings/class-settings-migrations.php": 178,
+                    "Settings/class-settings-store.php": 179,
+                    "Support/class-filesystem.php": 146,
+                    "Support/class-http.php": 151,
+                    "Support/class-log.php": 160,
+                    "Support/class-url.php": 184,
                     "Support/trait-purge-logger.php": 78
                 },
                 "external_classes": [],
                 "external_functions": {
-                    "basename": 264,
+                    "basename": 265,
                     "class_exists": 26,
-                    "count": 250,
+                    "count": 251,
                     "defined": 22,
-                    "explode": 249,
-                    "in_array": 257,
-                    "ltrim": 286,
-                    "strlen": 290,
-                    "strpos": 240,
-                    "substr": 290
+                    "explode": 250,
+                    "in_array": 258,
+                    "ltrim": 287,
+                    "strlen": 291,
+                    "strpos": 241,
+                    "substr": 291
                 },
                 "wordpress_functions": [],
                 "filesystem_dependencies": {
-                    "basename": 264
+                    "basename": 265
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -12612,7 +12703,7 @@
             "compatibility_dependencies": [],
             "loader_dependencies": [],
             "documentation_references": {
-                "PerformanceOptimise\\Inc\\Cache": 274
+                "PerformanceOptimise\\Inc\\Cache": 275
             },
             "delegating_methods": [],
             "hooks": [],
@@ -15161,9 +15252,9 @@
             "imports": [],
             "references": {
                 "static_calls": {
+                    "PerformanceOptimise\\Inc\\Dropin_Registry::invalidate": 665,
                     "PerformanceOptimise\\Inc\\Log::add": 668,
                     "PerformanceOptimise\\Inc\\Server_Rules::get_server_type": 2847,
-                    "PerformanceOptimise\\Inc\\System_Info::flush_dropin_cache": 665,
                     "PerformanceOptimise\\Inc\\Util::atomic_tmp_path": 1881,
                     "PerformanceOptimise\\Inc\\Util::atomic_write_php_verified": 1853,
                     "PerformanceOptimise\\Inc\\Util::get_settings": 1268,
@@ -15251,9 +15342,9 @@
                     "self": 239
                 },
                 "class_string_references": {
+                    "PerformanceOptimise\\Inc\\Dropin_Registry": 664,
                     "PerformanceOptimise\\Inc\\Object_Cache": 17,
                     "PerformanceOptimise\\Inc\\Server_Rules": 2847,
-                    "PerformanceOptimise\\Inc\\System_Info": 664,
                     "PerformanceOptimise\\Inc\\Util": 1267
                 },
                 "class_exists": {
@@ -15431,10 +15522,10 @@
             "implements": [],
             "trait_usage": [],
             "runtime_dependencies": [
+                "PerformanceOptimise\\Inc\\Dropin_Registry",
                 "PerformanceOptimise\\Inc\\Log",
                 "PerformanceOptimise\\Inc\\Redis_Config_Policy",
                 "PerformanceOptimise\\Inc\\Server_Rules",
-                "PerformanceOptimise\\Inc\\System_Info",
                 "PerformanceOptimise\\Inc\\Util"
             ],
             "compatibility_dependencies": [
@@ -15460,7 +15551,7 @@
                 "compatibility_fan_out": 2,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 12,
+                "cross_domain_edges": 11,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -19785,17 +19876,17 @@
             "delegating_methods": [],
             "hooks": [],
             "metrics": {
-                "fan_in": 7,
+                "fan_in": 6,
                 "fan_out": 7,
-                "incoming_reference_evidence": 18,
+                "incoming_reference_evidence": 8,
                 "outgoing_reference_evidence": 23,
-                "runtime_fan_in": 7,
+                "runtime_fan_in": 6,
                 "runtime_fan_out": 7,
-                "compatibility_fan_in": 1,
+                "compatibility_fan_in": 0,
                 "compatibility_fan_out": 6,
                 "loader_fan_in": 0,
                 "loader_fan_out": 0,
-                "cross_domain_edges": 14,
+                "cross_domain_edges": 13,
                 "boundary_violations": 0,
                 "strongly_connected_component": 0
             }
@@ -24097,6 +24188,32 @@
         },
         {
             "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
+            "to": "PerformanceOptimise\\Inc\\Dropin_Registry",
+            "from_file": "includes/Cache/class-advanced-cache-handler.php",
+            "to_file": "includes/Cache/class-dropin-registry.php",
+            "from_domain": "Cache",
+            "to_domain": "Cache",
+            "classifications": [
+                "compatibility",
+                "runtime"
+            ],
+            "kinds": [
+                "class_exists",
+                "class_string_reference",
+                "static_call"
+            ],
+            "lines": [
+                844,
+                845,
+                888,
+                889
+            ],
+            "evidence_count": 4,
+            "cross_domain": false,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
             "to": "PerformanceOptimise\\Inc\\Log",
             "from_file": "includes/Cache/class-advanced-cache-handler.php",
             "to_file": "includes/Support/class-log.php",
@@ -24112,32 +24229,6 @@
                 61
             ],
             "evidence_count": 1,
-            "cross_domain": true,
-            "boundary_violation": ""
-        },
-        {
-            "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-            "to": "PerformanceOptimise\\Inc\\System_Info",
-            "from_file": "includes/Cache/class-advanced-cache-handler.php",
-            "to_file": "includes/Insight/class-system-info.php",
-            "from_domain": "Cache",
-            "to_domain": "Insight",
-            "classifications": [
-                "compatibility",
-                "runtime"
-            ],
-            "kinds": [
-                "class_exists",
-                "class_string_reference",
-                "static_call"
-            ],
-            "lines": [
-                842,
-                843,
-                886,
-                887
-            ],
-            "evidence_count": 4,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -24168,7 +24259,7 @@
                 498,
                 500,
                 516,
-                864
+                866
             ],
             "evidence_count": 11,
             "cross_domain": true,
@@ -26860,6 +26951,28 @@
                 348
             ],
             "evidence_count": 5,
+            "cross_domain": true,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Dropin_Registry",
+            "to": "PerformanceOptimise\\Inc\\System_Info",
+            "from_file": "includes/Cache/class-dropin-registry.php",
+            "to_file": "includes/Insight/class-system-info.php",
+            "from_domain": "Cache",
+            "to_domain": "Insight",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "class_string_reference",
+                "static_call"
+            ],
+            "lines": [
+                38,
+                42
+            ],
+            "evidence_count": 2,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -29896,6 +30009,34 @@
         },
         {
             "from": "PerformanceOptimise\\Inc\\Object_Cache",
+            "to": "PerformanceOptimise\\Inc\\Dropin_Registry",
+            "from_file": "includes/Cache/class-object-cache.php",
+            "to_file": "includes/Cache/class-dropin-registry.php",
+            "from_domain": "Cache",
+            "to_domain": "Cache",
+            "classifications": [
+                "runtime"
+            ],
+            "kinds": [
+                "class_string_reference",
+                "static_call"
+            ],
+            "lines": [
+                664,
+                665,
+                1573,
+                1574,
+                2399,
+                2400,
+                2464,
+                2465
+            ],
+            "evidence_count": 8,
+            "cross_domain": false,
+            "boundary_violation": ""
+        },
+        {
+            "from": "PerformanceOptimise\\Inc\\Object_Cache",
             "to": "PerformanceOptimise\\Inc\\Log",
             "from_file": "includes/Cache/class-object-cache.php",
             "to_file": "includes/Support/class-log.php",
@@ -29958,34 +30099,6 @@
                 2847
             ],
             "evidence_count": 1,
-            "cross_domain": true,
-            "boundary_violation": ""
-        },
-        {
-            "from": "PerformanceOptimise\\Inc\\Object_Cache",
-            "to": "PerformanceOptimise\\Inc\\System_Info",
-            "from_file": "includes/Cache/class-object-cache.php",
-            "to_file": "includes/Insight/class-system-info.php",
-            "from_domain": "Cache",
-            "to_domain": "Insight",
-            "classifications": [
-                "runtime"
-            ],
-            "kinds": [
-                "class_string_reference",
-                "static_call"
-            ],
-            "lines": [
-                664,
-                665,
-                1573,
-                1574,
-                2399,
-                2400,
-                2464,
-                2465
-            ],
-            "evidence_count": 8,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -33162,6 +33275,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 2,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 6,
             "PerformanceOptimise\\Inc\\Deactivate": 1,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 3,
@@ -33204,7 +33318,7 @@
             "PerformanceOptimise\\Inc\\Settings_Migrations": 1,
             "PerformanceOptimise\\Inc\\Settings_Store": 4,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 3,
-            "PerformanceOptimise\\Inc\\System_Info": 7,
+            "PerformanceOptimise\\Inc\\System_Info": 6,
             "PerformanceOptimise\\Inc\\Telemetry": 6,
             "PerformanceOptimise\\Inc\\Url": 2,
             "PerformanceOptimise\\Inc\\Used_CSS": 10,
@@ -33243,6 +33357,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 2,
             "PerformanceOptimise\\Inc\\Deactivate": 12,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 4,
             "PerformanceOptimise\\Inc\\Filesystem": 4,
@@ -33324,6 +33439,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 8,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 64,
             "PerformanceOptimise\\Inc\\Deactivate": 1,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 12,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 4,
             "PerformanceOptimise\\Inc\\Filesystem": 36,
@@ -33366,7 +33482,7 @@
             "PerformanceOptimise\\Inc\\Settings_Migrations": 1,
             "PerformanceOptimise\\Inc\\Settings_Store": 26,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 9,
-            "PerformanceOptimise\\Inc\\System_Info": 18,
+            "PerformanceOptimise\\Inc\\System_Info": 8,
             "PerformanceOptimise\\Inc\\Telemetry": 17,
             "PerformanceOptimise\\Inc\\Url": 23,
             "PerformanceOptimise\\Inc\\Used_CSS": 39,
@@ -33405,6 +33521,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 31,
             "PerformanceOptimise\\Inc\\Deactivate": 38,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 7,
             "PerformanceOptimise\\Inc\\Edge_Purger": 10,
             "PerformanceOptimise\\Inc\\Filesystem": 7,
@@ -33486,6 +33603,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 2,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 6,
             "PerformanceOptimise\\Inc\\Deactivate": 1,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 2,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 2,
@@ -33528,7 +33646,7 @@
             "PerformanceOptimise\\Inc\\Settings_Migrations": 1,
             "PerformanceOptimise\\Inc\\Settings_Store": 4,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 3,
-            "PerformanceOptimise\\Inc\\System_Info": 7,
+            "PerformanceOptimise\\Inc\\System_Info": 6,
             "PerformanceOptimise\\Inc\\Telemetry": 6,
             "PerformanceOptimise\\Inc\\Url": 2,
             "PerformanceOptimise\\Inc\\Used_CSS": 10,
@@ -33567,6 +33685,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 2,
             "PerformanceOptimise\\Inc\\Deactivate": 12,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 4,
             "PerformanceOptimise\\Inc\\Filesystem": 4,
@@ -33648,6 +33767,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 2,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 0,
             "PerformanceOptimise\\Inc\\Deactivate": 0,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 1,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 1,
@@ -33690,7 +33810,7 @@
             "PerformanceOptimise\\Inc\\Settings_Migrations": 0,
             "PerformanceOptimise\\Inc\\Settings_Store": 0,
             "PerformanceOptimise\\Inc\\Suggestion_Engine": 2,
-            "PerformanceOptimise\\Inc\\System_Info": 1,
+            "PerformanceOptimise\\Inc\\System_Info": 0,
             "PerformanceOptimise\\Inc\\Telemetry": 3,
             "PerformanceOptimise\\Inc\\Url": 0,
             "PerformanceOptimise\\Inc\\Used_CSS": 6,
@@ -33729,6 +33849,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 1,
             "PerformanceOptimise\\Inc\\Deactivate": 5,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
             "PerformanceOptimise\\Inc\\Edge_Purger": 2,
             "PerformanceOptimise\\Inc\\Filesystem": 1,
@@ -33810,6 +33931,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 0,
             "PerformanceOptimise\\Inc\\Deactivate": 0,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
             "PerformanceOptimise\\Inc\\Edge_Purger": 0,
             "PerformanceOptimise\\Inc\\Filesystem": 0,
@@ -33891,6 +34013,7 @@
             "PerformanceOptimise\\Inc\\Css_Safelist": 0,
             "PerformanceOptimise\\Inc\\Database_Cleanup": 0,
             "PerformanceOptimise\\Inc\\Deactivate": 0,
+            "PerformanceOptimise\\Inc\\Dropin_Registry": 0,
             "PerformanceOptimise\\Inc\\Edge_Cache": 0,
             "PerformanceOptimise\\Inc\\Edge_Purger": 0,
             "PerformanceOptimise\\Inc\\Filesystem": 0,
@@ -33969,6 +34092,7 @@
                 "PerformanceOptimise\\Inc\\Cron",
                 "PerformanceOptimise\\Inc\\Css_Combine",
                 "PerformanceOptimise\\Inc\\Database_Cleanup",
+                "PerformanceOptimise\\Inc\\Dropin_Registry",
                 "PerformanceOptimise\\Inc\\Edge_Cache",
                 "PerformanceOptimise\\Inc\\Edge_Purger",
                 "PerformanceOptimise\\Inc\\Filesystem",
@@ -34091,6 +34215,7 @@
                     "PerformanceOptimise\\Inc\\Cron",
                     "PerformanceOptimise\\Inc\\Css_Combine",
                     "PerformanceOptimise\\Inc\\Database_Cleanup",
+                    "PerformanceOptimise\\Inc\\Dropin_Registry",
                     "PerformanceOptimise\\Inc\\Edge_Cache",
                     "PerformanceOptimise\\Inc\\Edge_Purger",
                     "PerformanceOptimise\\Inc\\Filesystem",
@@ -34569,17 +34694,7 @@
                     },
                     {
                         "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                        "to": "PerformanceOptimise\\Inc\\Log",
-                        "classifications": [
-                            "runtime"
-                        ],
-                        "kinds": [
-                            "static_call"
-                        ]
-                    },
-                    {
-                        "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                        "to": "PerformanceOptimise\\Inc\\System_Info",
+                        "to": "PerformanceOptimise\\Inc\\Dropin_Registry",
                         "classifications": [
                             "compatibility",
                             "runtime"
@@ -34587,6 +34702,16 @@
                         "kinds": [
                             "class_exists",
                             "class_string_reference",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
+                        "to": "PerformanceOptimise\\Inc\\Log",
+                        "classifications": [
+                            "runtime"
+                        ],
+                        "kinds": [
                             "static_call"
                         ]
                     },
@@ -35515,6 +35640,17 @@
                             "class_exists",
                             "class_string_reference",
                             "method_exists",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Dropin_Registry",
+                        "to": "PerformanceOptimise\\Inc\\System_Info",
+                        "classifications": [
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_string_reference",
                             "static_call"
                         ]
                     },
@@ -36732,6 +36868,17 @@
                     },
                     {
                         "from": "PerformanceOptimise\\Inc\\Object_Cache",
+                        "to": "PerformanceOptimise\\Inc\\Dropin_Registry",
+                        "classifications": [
+                            "runtime"
+                        ],
+                        "kinds": [
+                            "class_string_reference",
+                            "static_call"
+                        ]
+                    },
+                    {
+                        "from": "PerformanceOptimise\\Inc\\Object_Cache",
                         "to": "PerformanceOptimise\\Inc\\Log",
                         "classifications": [
                             "runtime"
@@ -36749,17 +36896,6 @@
                         ],
                         "kinds": [
                             "class_exists",
-                            "class_string_reference",
-                            "static_call"
-                        ]
-                    },
-                    {
-                        "from": "PerformanceOptimise\\Inc\\Object_Cache",
-                        "to": "PerformanceOptimise\\Inc\\System_Info",
-                        "classifications": [
-                            "runtime"
-                        ],
-                        "kinds": [
                             "class_string_reference",
                             "static_call"
                         ]
@@ -37897,6 +38033,7 @@
                         "PerformanceOptimise\\Inc\\Cron",
                         "PerformanceOptimise\\Inc\\Css_Combine",
                         "PerformanceOptimise\\Inc\\Database_Cleanup",
+                        "PerformanceOptimise\\Inc\\Dropin_Registry",
                         "PerformanceOptimise\\Inc\\Edge_Cache",
                         "PerformanceOptimise\\Inc\\Edge_Purger",
                         "PerformanceOptimise\\Inc\\Filesystem",
@@ -38375,17 +38512,7 @@
                         },
                         {
                             "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                            "to": "PerformanceOptimise\\Inc\\Log",
-                            "classifications": [
-                                "runtime"
-                            ],
-                            "kinds": [
-                                "static_call"
-                            ]
-                        },
-                        {
-                            "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                            "to": "PerformanceOptimise\\Inc\\System_Info",
+                            "to": "PerformanceOptimise\\Inc\\Dropin_Registry",
                             "classifications": [
                                 "compatibility",
                                 "runtime"
@@ -38393,6 +38520,16 @@
                             "kinds": [
                                 "class_exists",
                                 "class_string_reference",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
+                            "to": "PerformanceOptimise\\Inc\\Log",
+                            "classifications": [
+                                "runtime"
+                            ],
+                            "kinds": [
                                 "static_call"
                             ]
                         },
@@ -39321,6 +39458,17 @@
                                 "class_exists",
                                 "class_string_reference",
                                 "method_exists",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Dropin_Registry",
+                            "to": "PerformanceOptimise\\Inc\\System_Info",
+                            "classifications": [
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_string_reference",
                                 "static_call"
                             ]
                         },
@@ -40528,6 +40676,17 @@
                         },
                         {
                             "from": "PerformanceOptimise\\Inc\\Object_Cache",
+                            "to": "PerformanceOptimise\\Inc\\Dropin_Registry",
+                            "classifications": [
+                                "runtime"
+                            ],
+                            "kinds": [
+                                "class_string_reference",
+                                "static_call"
+                            ]
+                        },
+                        {
+                            "from": "PerformanceOptimise\\Inc\\Object_Cache",
                             "to": "PerformanceOptimise\\Inc\\Log",
                             "classifications": [
                                 "runtime"
@@ -40545,17 +40704,6 @@
                             ],
                             "kinds": [
                                 "class_exists",
-                                "class_string_reference",
-                                "static_call"
-                            ]
-                        },
-                        {
-                            "from": "PerformanceOptimise\\Inc\\Object_Cache",
-                            "to": "PerformanceOptimise\\Inc\\System_Info",
-                            "classifications": [
-                                "runtime"
-                            ],
-                            "kinds": [
                                 "class_string_reference",
                                 "static_call"
                             ]
@@ -42633,40 +42781,6 @@
                             ]
                         }
                     ]
-                },
-                {
-                    "members": [
-                        "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                        "PerformanceOptimise\\Inc\\System_Info"
-                    ],
-                    "edges": [
-                        {
-                            "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                            "to": "PerformanceOptimise\\Inc\\System_Info",
-                            "classifications": [
-                                "compatibility",
-                                "runtime"
-                            ],
-                            "kinds": [
-                                "class_exists",
-                                "class_string_reference",
-                                "static_call"
-                            ]
-                        },
-                        {
-                            "from": "PerformanceOptimise\\Inc\\System_Info",
-                            "to": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                            "classifications": [
-                                "compatibility",
-                                "runtime"
-                            ],
-                            "kinds": [
-                                "class_exists",
-                                "class_string_reference",
-                                "static_call"
-                            ]
-                        }
-                    ]
                 }
             ],
             "loader": []
@@ -42796,11 +42910,11 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Object_Cache",
                 "file": "includes/Cache/class-object-cache.php",
-                "score": 39.22,
+                "score": 38.22,
                 "fan_in": 8,
                 "fan_out": 5,
                 "compatibility_in": 5,
-                "cross_domain": 12,
+                "cross_domain": 11,
                 "static_state": true,
                 "lines": 3215
             },
@@ -42860,17 +42974,6 @@
                 "lines": 4077
             },
             {
-                "node": "PerformanceOptimise\\Inc\\System_Info",
-                "file": "includes/Insight/class-system-info.php",
-                "score": 32,
-                "fan_in": 7,
-                "fan_out": 7,
-                "compatibility_in": 1,
-                "cross_domain": 14,
-                "static_state": true,
-                "lines": 999
-            },
-            {
                 "node": "PerformanceOptimise\\Inc\\Builder_Purge_Watcher",
                 "file": "includes/Integrations/class-builder-purge-watcher.php",
                 "score": 31.11,
@@ -42915,15 +43018,15 @@
                 "lines": 1780
             },
             {
-                "node": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                "file": "includes/Cache/class-advanced-cache-handler.php",
-                "score": 26.95,
+                "node": "PerformanceOptimise\\Inc\\System_Info",
+                "file": "includes/Insight/class-system-info.php",
+                "score": 28,
                 "fan_in": 6,
-                "fan_out": 3,
-                "compatibility_in": 4,
-                "cross_domain": 9,
-                "static_state": false,
-                "lines": 948
+                "fan_out": 7,
+                "compatibility_in": 0,
+                "cross_domain": 13,
+                "static_state": true,
+                "lines": 999
             },
             {
                 "node": "PerformanceOptimise\\Inc\\Image_Optimisation",
@@ -42935,6 +43038,17 @@
                 "cross_domain": 6,
                 "static_state": true,
                 "lines": 8999
+            },
+            {
+                "node": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
+                "file": "includes/Cache/class-advanced-cache-handler.php",
+                "score": 25.95,
+                "fan_in": 6,
+                "fan_out": 3,
+                "compatibility_in": 4,
+                "cross_domain": 8,
+                "static_state": false,
+                "lines": 950
             },
             {
                 "node": "PerformanceOptimise\\Inc\\Deactivate",
@@ -43815,33 +43929,6 @@
             },
             {
                 "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                "to": "PerformanceOptimise\\Inc\\System_Info",
-                "from_file": "includes/Cache/class-advanced-cache-handler.php",
-                "to_file": "includes/Insight/class-system-info.php",
-                "from_domain": "Cache",
-                "to_domain": "Insight",
-                "classifications": [
-                    "compatibility",
-                    "runtime"
-                ],
-                "kinds": [
-                    "class_exists",
-                    "class_string_reference",
-                    "static_call"
-                ],
-                "lines": [
-                    842,
-                    843,
-                    886,
-                    887
-                ],
-                "evidence_count": 4,
-                "cross_domain": true,
-                "boundary_violation": "",
-                "feature_to_feature": true
-            },
-            {
-                "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
                 "to": "PerformanceOptimise\\Inc\\Util",
                 "from_file": "includes/Cache/class-advanced-cache-handler.php",
                 "to_file": "includes/class-util.php",
@@ -43867,7 +43954,7 @@
                     498,
                     500,
                     516,
-                    864
+                    866
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,
@@ -46250,6 +46337,29 @@
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
+            },
+            {
+                "from": "PerformanceOptimise\\Inc\\Dropin_Registry",
+                "to": "PerformanceOptimise\\Inc\\System_Info",
+                "from_file": "includes/Cache/class-dropin-registry.php",
+                "to_file": "includes/Insight/class-system-info.php",
+                "from_domain": "Cache",
+                "to_domain": "Insight",
+                "classifications": [
+                    "runtime"
+                ],
+                "kinds": [
+                    "class_string_reference",
+                    "static_call"
+                ],
+                "lines": [
+                    38,
+                    42
+                ],
+                "evidence_count": 2,
+                "cross_domain": true,
+                "boundary_violation": "",
+                "feature_to_feature": true
             },
             {
                 "from": "PerformanceOptimise\\Inc\\Edge_Cache",
@@ -48982,35 +49092,6 @@
                     2847
                 ],
                 "evidence_count": 1,
-                "cross_domain": true,
-                "boundary_violation": "",
-                "feature_to_feature": true
-            },
-            {
-                "from": "PerformanceOptimise\\Inc\\Object_Cache",
-                "to": "PerformanceOptimise\\Inc\\System_Info",
-                "from_file": "includes/Cache/class-object-cache.php",
-                "to_file": "includes/Insight/class-system-info.php",
-                "from_domain": "Cache",
-                "to_domain": "Insight",
-                "classifications": [
-                    "runtime"
-                ],
-                "kinds": [
-                    "class_string_reference",
-                    "static_call"
-                ],
-                "lines": [
-                    664,
-                    665,
-                    1573,
-                    1574,
-                    2399,
-                    2400,
-                    2464,
-                    2465
-                ],
-                "evidence_count": 8,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": true
@@ -53098,11 +53179,11 @@
             },
             {
                 "from": "PerformanceOptimise\\Inc\\Advanced_Cache_Handler",
-                "to": "PerformanceOptimise\\Inc\\System_Info",
+                "to": "PerformanceOptimise\\Inc\\Dropin_Registry",
                 "from_file": "includes/Cache/class-advanced-cache-handler.php",
-                "to_file": "includes/Insight/class-system-info.php",
+                "to_file": "includes/Cache/class-dropin-registry.php",
                 "from_domain": "Cache",
-                "to_domain": "Insight",
+                "to_domain": "Cache",
                 "classifications": [
                     "compatibility",
                     "runtime"
@@ -53113,13 +53194,13 @@
                     "static_call"
                 ],
                 "lines": [
-                    842,
-                    843,
-                    886,
-                    887
+                    844,
+                    845,
+                    888,
+                    889
                 ],
                 "evidence_count": 4,
-                "cross_domain": true,
+                "cross_domain": false,
                 "boundary_violation": ""
             },
             {
@@ -53149,7 +53230,7 @@
                     498,
                     500,
                     516,
-                    864
+                    866
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,

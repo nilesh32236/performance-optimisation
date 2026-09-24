@@ -116,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 76 files: 72 runtime plugin files under `includes/` (71 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `Util` stays at the includes root. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 77 files: 73 runtime plugin files under `includes/` (72 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `Util` stays at the includes root. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -126,6 +126,7 @@ The schema-v2 inventory tracks 76 files: 72 runtime plugin files under `includes
 | `Cache/class-cache-capacity.php` | Static cache statistics, cap settings, byte/file accounting, randomized-query guard, oldest eviction |
 | `Cache/class-object-cache.php` | Redis Object Cache (standalone/sentinel/cluster, enable/disable/flush/status) |
 | `Cache/class-redis-config-policy.php` | Redis key manifest, value normalization, host/node safety, bounds, enums, and password precedence |
+| `Cache/class-dropin-registry.php` | Neutral drop-in mutation invalidation bridge; System_Info remains reporting/storage owner |
 | `Cache/class-advanced-cache-handler.php` | `advanced-cache.php` drop-in (create/detect/remove) |
 | `Edge/class-htaccess-handler.php` | `.htaccess` Gzip + Expires rules via `insert_with_markers()` |
 | `Edge/class-server-rules.php` | Nginx rules (gzip, browser caching), server type detection |

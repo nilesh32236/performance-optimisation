@@ -841,13 +841,31 @@ phase3_items:
 
   - id: P3-007
     title: 'Neutral drop-in registry and invalidation'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1578
     type: architecture
     problem: 'System_Info reports drop-ins while Cache and Advanced_Cache mutators call System_Info invalidation methods.'
     target_owner: 'Dropin_Registry under Cache/Support boundary'
     target_direction: 'Reporters read registry; mutators invalidate registry; no Cache -> System_Info edge'
     ratchet: 'Cache/Advanced-to-SystemInfo invalidation edges: 2 -> 0.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 86c027b0
+      evidence:
+        - 'Advanced_Cache_Handler and Object_Cache call System_Info::flush_dropin_cache() after advanced-cache/object-cache mutations, creating feature-to-report edges.'
+        - 'System_Info owns drop-in reporting and request memo invalidation but should not be called directly by Cache mutators.'
+        - 'A neutral Dropin_Registry::invalidate() can preserve the existing System_Info call and all fail-open guards while removing Cache/Advanced direct edges.'
+      decision: 'Proceed test-first with a dependency-light Dropin_Registry; route only drop-in mutation invalidation calls through it and leave System_Info reporting/storage semantics unchanged.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'includes/Cache/class-dropin-registry.php'
+        adapters: 'Advanced_Cache_Handler create/remove and Object_Cache auto-disable/outage-trip/enable/disable retain their success guards, loadability guards, and Throwable wrappers while calling Dropin_Registry::invalidate()'
+        compatibility: 'System_Info remains the reporter and sole owner of path resolution, ownership detection, request memo, transient, and salted-cache invalidation; no storage or mutation semantics changed'
+        loader: 'Loader_Map::fallback_map()["Dropin_Registry"] with explicit PHPUnit bootstrap loading for stale local classmaps'
+        graph_delta: '77 inventory files / 80 graph nodes / 352 edges; direct Advanced/Object-to-SystemInfo invalidation sources 2->0, feature-to-feature edges 47->46, compatibility-only SCCs 2->1, and bridge candidates remain 230'
+        tests: 'DropinRegistryTest behavior/source boundary coverage, AdvancedCacheHandlerTest, ObjectCache/System_Info/SaltedCache suites, LoaderMapTest, and ArchitectureInventoryTest'
+        verification: 'Pending final focused/full verification on the working tree.'
 
   - id: P3-008
     title: 'Settings write command and direct-write cleanup'
