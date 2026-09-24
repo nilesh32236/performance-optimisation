@@ -268,7 +268,7 @@ This plugin has autonomous AI agent workflows. See `.agents/AGENTS.md` for agent
 ### Automation rules
 - **Merge gate**: AI confidence must be >= 95% AND all verification checks must pass
 - **All changes must maintain backward compatibility**: Use `function_exists()`, `has_filter()`, and version-gated fallbacks
-- **AI fixer authorization (issue #1564, PENDING ENFORCEMENT — workflow gate not yet applied)**: `/fix` comment triggers in `wppo-ai-review.yml` (`fix-issue`, `autofix`) MUST accept only `OWNER`/`MEMBER`/`COLLABORATOR` via `github.event.comment.author_association` once the maintainer applies the pending workflow gate; until then any commenter can trigger them, so #1564 must stay open. Label triggers (`autofix-trigger`, `autofix`) are maintainer-controlled via label permission. Never widen a write-capable (`mode: fix`) path to untrusted commenters.
+- **AI fixer authorization (issue #1564)**: `/fix` comment triggers in `wppo-ai-review.yml` (`fix-issue`, `autofix`) accept only `OWNER`/`MEMBER`/`COLLABORATOR` via `github.event.comment.author_association`; untrusted commenters cannot invoke a write-capable fixer. Label triggers (`autofix-trigger`, `autofix`) remain maintainer-controlled via label permission. Never widen a write-capable (`mode: fix`) path to untrusted commenters.
 - **Scripts**: `.github/scripts/` contains setup/utility scripts for CI (setup-opencode, gather-context, etc.)
 
 ## Required GitHub Secrets

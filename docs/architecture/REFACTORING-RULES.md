@@ -29,16 +29,13 @@
   → `review` + `autofix` loop → `autofix:ready` → auto-merge consideration.
 - Campaign issues are created **without** `autofix-trigger` so design review happens
   first. The label (or `/fix`) is added only when analysis questions are resolved.
-- **Security policy (issue #1564, PENDING ENFORCEMENT — workflow gate not yet applied):** every `/fix` comment trigger on `fix-issue`
-  (plain issue) and `autofix` (PR comment) MUST allow only trusted
+- **Security policy (issue #1564):** every `/fix` comment trigger on `fix-issue`
+  (plain issue) and `autofix` (PR comment) allows only trusted
   `github.event.comment.author_association` values `OWNER`, `MEMBER`, or
-  `COLLABORATOR` once the maintainer applies the required job-level `if` patch.
-  Until then the workflow remains ungated, so untrusted associations (`NONE`,
-  `CONTRIBUTOR`, `FIRST_TIMER`, `FIRST_TIME_CONTRIBUTOR`, `MANNEQUIN`) can still
-  trigger the jobs and #1564 must stay open. The gate must fail the job-level
-  `if` before any secret-bearing step runs. Label triggers (`issues.labeled` +
-  `autofix-trigger`, `pull_request.labeled` + `autofix`) stay maintainer-controlled
-  because applying labels requires triage/write permission.
+  `COLLABORATOR`; the job-level `if` rejects all other associations before any
+  secret-bearing step runs. Label triggers (`issues.labeled` + `autofix-trigger`,
+  `pull_request.labeled` + `autofix`) remain maintainer-controlled because applying
+  labels requires triage/write permission.
 - **Merge gate:** branch loop idle (all workflows, not just one) + CI clean +
   manual diff review. Never merge mid-loop. Build-asset conflicts: keep `--ours`,
   rebuild, commit, push with lease.
