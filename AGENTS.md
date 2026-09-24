@@ -153,6 +153,7 @@ The schema-v2 inventory tracks 85 files: 81 runtime plugin files under `includes
 | `Admin/class-metabox.php` | Per-page preload images + Asset Manager |
 | `Compatibility/class-core-tweaks.php` | Disable emojis/embeds/dashicons/XML-RPC, Heartbeat control |
 | `Core/class-activate.php` / `Core/class-deactivate.php` | Activation/deactivation hooks |
+| `Integrations/class-woo-detect.php` | Canonical WooCommerce safe-mode, Store API, wc-ajax, faceted-query, dynamic-path, and cache self-test detection; `Util::is_woo_*()` and related public proxies remain compatibility-only |
 | `Integrations/class-litespeed-integration.php` | LiteSpeed/OLS coexistence modes (auto/wppo/litespeed/standalone), header protocol (X-LiteSpeed-*), TTL, purge sync |
 | `Integrations/class-litespeed-crawler.php` | curl_multi cache preloader (variant matrix, concurrency, load-limit) |
 | `Integrations/class-litespeed-esi.php` | ESI bridge (LSWS Enterprise only; OLS → disabled) |

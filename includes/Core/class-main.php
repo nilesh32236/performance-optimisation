@@ -7180,14 +7180,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				);
 
 				// Canonical Woo exclusion list (issue #1383): inherit
-				// Util::get_woo_excluded_paths() so custom/nested/translated
+				// Woo_Detect::get_woo_excluded_paths() so custom/nested/translated
 				// slugs resolved via wc_get_page_id() (e.g. shop/basket) stay
 				// out of speculation rules. Fail-open: resolution failure keeps
 				// the hardcoded seed above (never fatal, 0 queries when Woo is
 				// absent). Multisite-safe: per-site page resolution only.
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_woo_excluded_paths' ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'get_woo_excluded_paths' ) ) {
 					try {
-						foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
+						foreach ( Woo_Detect::get_woo_excluded_paths() as $woo_path ) {
 							$candidate = strtolower( trim( (string) $woo_path, '/' ) );
 							if ( '' === $candidate ) {
 								continue;

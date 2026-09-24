@@ -1285,6 +1285,8 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1599
+    github_pr: 1600
+    implementation_commit: ad431292eb83d0c417b2bce830ed58c4d14a9c0f
     type: epic
     problem: 'Util has 56 incoming source nodes and 1,145 executable occurrences while retaining canonical helpers and compatibility proxies.'
     target_owner: 'Method-specific Settings_Store, Filesystem, Url, Cache_Key, Http, Woo_Detect, and domain owners'
@@ -1299,6 +1301,15 @@ phase3_items:
         - 'Other Util clusters (settings snapshots, filesystem, URLs, cache keys, HTTP) remain separate bounded follow-up items.'
         - 'Woo safe-mode, Store API, wc-ajax, faceted-query, dynamic-path, and fail-open behavior must remain byte-equivalent.'
       decision: 'Proceed test-first with a Woo_Detect external-caller migration only; retain Util::is_woo_* public proxies for compatibility.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'Woo_Detect owns the complete Woo safe-mode, Store API, wc-ajax, faceted-query, dynamic-path, add-to-cart, URL exclusion, and self-test policy family'
+        compatibility: 'Util retains all 11 public Woo proxy signatures; REST remains unchanged; cache, preload, and frontend runtime callers now execute Woo_Detect directly'
+        non_goals: 'Settings snapshots, filesystem, URL, cache-key, HTTP, LiteSpeed, REST, data, schemas, hooks, and migration behavior remain unchanged'
+        loader: 'Existing Woo_Detect Loader_Map fallback entry remains sufficient; no new runtime file or bootstrap entry required'
+        tests: 'WooDetectCallerMigrationTest source/proxy-signature parity plus existing Woo_Detect, WooSafeMode, WooFacetedSelfTestProof, WooDynamicExclusionAudit, cache, preload, and frontend suites'
+        graph_delta: 'Direct ownership adds seven caller-to-Woo_Detect runtime edges; Util incoming reference evidence falls 1,138 to 1,084 while Util fan-in remains 59 because the same callers retain unrelated Util clusters'
+        verification: 'Focused Woo/cache/loader/architecture set passes in isolation (88 tests / 14,383 assertions; one pre-existing order-sensitive CacheWp69Buffer fixture when mixed with Woo tests); full PHPUnit passes 2,769 tests / 25,483 assertions (9 skipped, 7 existing deprecations); full PHPCS passes; npm run lint:js passes with 2 existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing warnings; npm run build passes with existing entrypoint-size warning; generator --check and git diff --check pass; focused PHPStan on changed legacy owners reports only pre-existing baseline findings'
 
   - id: P3-018
     title: 'Remaining image, CSS, and cache policy extraction'

@@ -2925,17 +2925,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function is_woo_store_api_request(): bool {
 			$path = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
-			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
+			if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_store_api_request' ) ) {
 				try {
-					return Util::is_woo_store_api_request( $path );
+					return Woo_Detect::is_woo_store_api_request( $path );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					return true;
 				}
 			}
-			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) ) {
+			if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_store_api_path' ) ) {
 				try {
-					if ( Util::is_woo_store_api_path( $path ) ) {
+					if ( Woo_Detect::is_woo_store_api_path( $path ) ) {
 						return true;
 					}
 				} catch ( \Throwable $e ) {
@@ -2945,7 +2945,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// newer request helper is unavailable (mixed-version deploys).
 				try {
 					$rest_route_fb = isset( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-					if ( '' !== $rest_route_fb && Util::is_woo_store_api_path( $rest_route_fb ) ) {
+					if ( '' !== $rest_route_fb && Woo_Detect::is_woo_store_api_path( $rest_route_fb ) ) {
 						return true;
 					}
 				} catch ( \Throwable $e ) {
@@ -2989,11 +2989,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			// Feature toggle: explicit false disables safe mode; absent key = true for BC.
-			// Unified on Util::is_woo_safe_mode_enabled() (absent = on,
+			// Unified on Woo_Detect::is_woo_safe_mode_enabled() (absent = on,
 			// malformed/non-scalar = on) so serve/store layers match Cron/Main.
-			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+			if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_safe_mode_enabled' ) ) {
 				try {
-					if ( ! Util::is_woo_safe_mode_enabled( is_array( $this->options ) ? $this->options : null ) ) {
+					if ( ! Woo_Detect::is_woo_safe_mode_enabled( is_array( $this->options ) ? $this->options : null ) ) {
 						return false;
 					}
 				} catch ( \Throwable $e ) {
@@ -3035,12 +3035,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
 					$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
 					$matched        = false;
-					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_dynamic_path' ) ) {
 						try {
 							// Canonical list: defaults + configured custom/nested
 							// Woo slugs (e.g. shop/basket). Store API already
 							// handled unconditionally above.
-							$matched = Util::is_woo_dynamic_path( $local_url_path );
+							$matched = Woo_Detect::is_woo_dynamic_path( $local_url_path );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 							$matched = true;
@@ -3095,12 +3095,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					// holds via the unconditional has_uncacheable_query() gate in
 					// is_not_cacheable() plus the any-query store refusal below.
 					try {
-						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
+						if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_faceted_query' ) ) {
 							$faceted_qs = (string) wp_parse_url( $this->request_uri, PHP_URL_QUERY );
 							if ( '' === $faceted_qs && ! empty( $_SERVER['QUERY_STRING'] ) ) {
 								$faceted_qs = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
 							}
-							if ( '' !== $faceted_qs && Util::is_woo_faceted_query( $faceted_qs ) ) {
+							if ( '' !== $faceted_qs && Woo_Detect::is_woo_faceted_query( $faceted_qs ) ) {
 								$excluded = true;
 							}
 						}
@@ -3795,12 +3795,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// via filter. Unconditional on safe mode — a filtered URL must never
 			// be persisted over the path-only clean file.
 			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_faceted_query' ) ) {
 					$faceted_store_qs = (string) wp_parse_url( $this->request_uri, PHP_URL_QUERY );
 					if ( '' === $faceted_store_qs && ! empty( $_SERVER['QUERY_STRING'] ) && function_exists( 'wp_unslash' ) && function_exists( 'sanitize_text_field' ) ) {
 						$faceted_store_qs = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
 					}
-					if ( '' !== $faceted_store_qs && Util::is_woo_faceted_query( $faceted_store_qs ) ) {
+					if ( '' !== $faceted_store_qs && Woo_Detect::is_woo_faceted_query( $faceted_store_qs ) ) {
 						return false;
 					}
 				}

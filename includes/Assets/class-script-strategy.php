@@ -1457,11 +1457,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 				// Unconditional on wooSafeMode, mirroring wc-ajax — checked
 				// first so safe-mode-off cannot re-allow delaying Store API.
 				// Covers plain permalinks via ?rest_route=/wc/store/... too.
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_store_api_request' ) ) {
 					try {
 						$uri_for_store = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '/'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
 						$store_path    = '/' . trim( rawurldecode( (string) wp_parse_url( $uri_for_store, PHP_URL_PATH ) ), '/' );
-						if ( Util::is_woo_store_api_request( $store_path ) ) {
+						if ( Woo_Detect::is_woo_store_api_request( $store_path ) ) {
 							return true;
 						}
 					} catch ( \Throwable $e ) {
@@ -1481,12 +1481,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 				}
 
 				// Single safe-mode toggle for the Woo page/endpoint branch below
-				// (unified with Cache/Cron via Util::is_woo_safe_mode_enabled();
+				// (unified with Cache/Cron via Woo_Detect::is_woo_safe_mode_enabled();
 				// absent = on, malformed = on). Store API above stays unconditional.
 				$woo_safe = true;
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_safe_mode_enabled' ) ) {
 					try {
-						$woo_safe = Util::is_woo_safe_mode_enabled();
+						$woo_safe = Woo_Detect::is_woo_safe_mode_enabled();
 					} catch ( \Throwable $e ) {
 						unset( $e );
 						$woo_safe = true;
@@ -1630,15 +1630,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 		 * Relocated from Main::matches_woo_page_path() (ARCH-005).
 		 */
 		private static function matches_woo_page_path( string $local_path ): bool {
-			// Canonical path list (issue #962): Util::get_woo_excluded_paths()
+			// Canonical path list (issue #962): Woo_Detect::get_woo_excluded_paths()
 			// merged with the cart/checkout/my-account defaults so custom /
 			// translated / nested slugs stay excluded. Anywhere-segment fail-safe
 			// semantics cover subdirectory installs and multisite sub-sites.
 			$slugs = array( 'cart', 'checkout', 'my-account' );
 
-			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_woo_excluded_paths' ) ) {
+			if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'get_woo_excluded_paths' ) ) {
 				try {
-					foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
+					foreach ( Woo_Detect::get_woo_excluded_paths() as $woo_path ) {
 						$candidate = strtolower( trim( (string) $woo_path, '/' ) );
 						if ( '' !== $candidate && ! in_array( $candidate, $slugs, true ) ) {
 							$slugs[] = $candidate;
