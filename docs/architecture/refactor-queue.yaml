@@ -1017,14 +1017,24 @@ phase3_items:
 
   - id: P3-011
     title: 'Admin authentication policy for REST and Abilities'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1587
     type: security-architecture
     problem: 'REST and Abilities independently implement capability and nonce checks.'
     target_owner: 'Admin_Auth policy'
     target_direction: 'REST/Abilities adapters -> Admin_Auth -> WordPress auth APIs'
     tests: 'Header, legacy server, missing/invalid nonce, capability, and public RUM exception vectors.'
     ratchet: 'Admin auth implementations: 2 -> 1; no nonce weakening.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 6d289c6a
+      evidence:
+        - 'Rest::permission_callback checks manage_options, canonicalizes X-WP-Nonce from WP_REST_Request, preserves the legacy $_SERVER fallback when no request is supplied, sanitizes, and verifies wp_rest.'
+        - 'Abilities::permission_check independently checks manage_options and reads the raw X-WP-Nonce server header before verifying wp_rest.'
+        - 'Public rum_collect intentionally uses __return_true and RUM token/IP rate limits; it must remain outside the admin policy.'
+        - 'A dependency-light Admin_Auth policy can accept an optional WP_REST_Request and preserve both request-header and legacy-server paths without weakening nonce enforcement.'
+      decision: 'Proceed test-first with an Admin_Auth policy; route REST and Abilities permission callbacks through it while keeping public RUM collection unchanged.'
 
   - id: P3-012
     title: 'Edge/CDN purge coordinator'
