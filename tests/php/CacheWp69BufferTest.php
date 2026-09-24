@@ -11,7 +11,10 @@
  */
 
 use PerformanceOptimise\Inc\Cache;
+use PerformanceOptimise\Inc\Google_Fonts;
+use PerformanceOptimise\Inc\Image_Optimisation;
 use PerformanceOptimise\Inc\Main;
+use PerformanceOptimise\Inc\Preload_Buffer_Coordinator;
 use Brain\Monkey\Functions;
 
 /**
@@ -79,6 +82,29 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 	private function invoke_private( Cache $cache, string $name, array $args = array() ) {
 		$method = new \ReflectionMethod( $cache, $name );
 		return $method->invokeArgs( $cache, $args );
+	}
+
+	/**
+	 * Attach the injected coordinator used by production Main construction.
+	 *
+	 * @param Main  $main    Main fixture.
+	 * @param array $options Options snapshot.
+	 * @return Preload_Buffer_Coordinator
+	 */
+	private function attach_coordinator( Main $main, array $options = array() ): Preload_Buffer_Coordinator {
+		$owner = new Preload_Buffer_Coordinator(
+			static fn(): array => $options,
+			new Image_Optimisation( $options ),
+			new Google_Fonts( $options ),
+			static function ( array $file_optimisation ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				unset( $file_optimisation );
+				return false;
+			},
+			static fn(): bool => false
+		);
+		$prop  = new \ReflectionProperty( Main::class, 'preload_buffer_coordinator' );
+		$prop->setValue( $main, $owner );
+		return $owner;
 	}
 
 	/**
@@ -319,7 +345,15 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 	public function test_start_used_css_buffer_refuses_when_enhancement_buffer_active(): void {
 		Functions\when( 'wp_should_output_buffer_template_for_enhancement' )->justReturn( true );
 
-		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
+		$main    = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
+		$options = array();
+		$prop    = new \ReflectionProperty( Main::class, 'options' );
+		$prop->setValue( $main, $options );
+		$prop = new \ReflectionProperty( Main::class, 'image_optimisation' );
+		$prop->setValue( $main, new Image_Optimisation( $options ) );
+		$prop = new \ReflectionProperty( Main::class, 'google_fonts' );
+		$prop->setValue( $main, new Google_Fonts( $options ) );
+		$this->attach_coordinator( $main, $options );
 		$main->start_used_css_buffer();
 
 		// Nothing opened: start_used_css_buffer would have opened a buffer when
@@ -334,7 +368,15 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 	public function test_start_lcp_priority_buffer_refuses_when_enhancement_buffer_active(): void {
 		Functions\when( 'wp_should_output_buffer_template_for_enhancement' )->justReturn( true );
 
-		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
+		$main    = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
+		$options = array();
+		$prop    = new \ReflectionProperty( Main::class, 'options' );
+		$prop->setValue( $main, $options );
+		$prop = new \ReflectionProperty( Main::class, 'image_optimisation' );
+		$prop->setValue( $main, new Image_Optimisation( $options ) );
+		$prop = new \ReflectionProperty( Main::class, 'google_fonts' );
+		$prop->setValue( $main, new Google_Fonts( $options ) );
+		$this->attach_coordinator( $main, $options );
 
 		$level_before = ob_get_level();
 		$main->start_lcp_priority_buffer();
@@ -352,31 +394,36 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 
 		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 
-		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
-		$prop->setValue( $main, true );
-
-		// should_optimise_for_logged_in() needs cache_settings; seed via reflection.
-		$prop = new \ReflectionProperty( Main::class, 'options' );
-		$prop->setValue(
-			$main,
-			array(
-				'cache_settings'    => array( 'enableLoggedInCache' => false ),
-				'file_optimisation' => array(),
-			)
+		$options = array(
+			'cache_settings'    => array( 'enableLoggedInCache' => false ),
+			'file_optimisation' => array(),
 		);
+		$prop    = new \ReflectionProperty( Main::class, 'options' );
+		$prop->setValue( $main, $options );
+		$prop = new \ReflectionProperty( Main::class, 'image_optimisation' );
+		$prop->setValue( $main, new Image_Optimisation( $options ) );
+		$prop = new \ReflectionProperty( Main::class, 'google_fonts' );
+		$prop->setValue( $main, new Google_Fonts( $options ) );
+
+		$owner = $this->attach_coordinator( $main, $options );
+		$this->assertInstanceOf( Preload_Buffer_Coordinator::class, $owner );
+		$prop = new \ReflectionProperty( Preload_Buffer_Coordinator::class, 'used_css_buffer_enhanced' );
+		$prop->setValue( $owner, true );
 
 		$this->assertSame( '<p>untouched</p>', $main->process_used_css_only( '<p>untouched</p>', '<p>raw</p>' ) );
 		$this->assertSame( '<p>untouched</p>', $main->process_used_css_capture( '<p>untouched</p>' ) );
 	}
 
 	/**
-	 * Read the Main::$used_css_buffer_enhanced flag.
+	 * Read the coordinator's one-shot used-CSS flag.
 	 *
 	 * @param Main $main Main instance.
 	 * @return bool
 	 */
 	private function used_css_buffer_flag( Main $main ): bool {
-		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
-		return (bool) $prop->getValue( $main );
+		$prop  = new \ReflectionProperty( Main::class, 'preload_buffer_coordinator' );
+		$owner = $prop->getValue( $main );
+		$prop  = new \ReflectionProperty( Preload_Buffer_Coordinator::class, 'used_css_buffer_enhanced' );
+		return (bool) $prop->getValue( $owner );
 	}
 }

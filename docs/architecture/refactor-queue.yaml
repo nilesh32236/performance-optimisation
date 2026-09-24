@@ -1193,9 +1193,10 @@ phase3_items:
 
   - id: P3-015
     title: 'Main preload and cache-buffer coordination cleanup'
-    status: active
+    status: autofix-running
     priority: medium
     github_issue: 1595
+    head_branch: 'p3/preload-buffer'
     type: epic
     problem: 'Main coordinates preload, resource hints, and cache/image/CSS output ordering.'
     target_owner: 'Preload_Transport/Cache/Image coordination contracts'
@@ -1211,6 +1212,15 @@ phase3_items:
         - 'A bounded Preload_Buffer_Coordinator can own buffer routing/lifecycle and scheduling seams without changing the established image buffer order or LiteSpeed lanes.'
         - 'Speculation configuration, LiteSpeed crawler/ESI behavior, and cache/image serving contracts remain outside this item.'
       decision: 'Proceed test-first with one Preload_Buffer_Coordinator extraction for buffer routing/lifecycle and preload scheduling coordination; preserve all public Main facades and order.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'Preload_Buffer_Coordinator owns WP 6.9 template-enhancement availability, legacy used-CSS/LCP buffer lifecycle, one-shot used-CSS state, and post-save crawler-warm/used-CSS scheduling gates through injected ports'
+        compatibility: 'Main keeps every public method signature and Hook_Registry callback target; core enhancement order remains cache 10, used CSS 20, LCP 30, with legacy LCP start at template_redirect priority 20'
+        non_goals: 'Speculation/resource hints, preload-link policy, image serving, LiteSpeed crawler/ESI lanes, Redis/drop-ins, and data remain unchanged'
+        loader: 'Loader_Map fallback entry plus deterministic PHPUnit bootstrap require for stale local classmaps'
+        tests: 'PreloadBufferCoordinatorParityTest plus existing BufferCharacterization, CacheWp69Buffer, HookRegistryParity, LoaderMap, preload/cache/image/frontend suites'
+        graph_delta: '85 inventory files / 88 graph nodes / 383 edges; Main 10,461 to 10,225 lines and 20 to 17 large methods while its 236 public/private compatibility methods remain'
+        verification: 'Focused buffer/preload/cache/loader/hook/architecture set passes 74 tests / 14,061 assertions; full PHPUnit passes 2,765 tests / 25,361 assertions (9 skipped, 7 existing deprecations); vendor/bin/phpcs passes; focused PHPStan on Preload_Buffer_Coordinator passes; npm run lint:js passes with 2 existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing warnings; npm run build passes with existing entrypoint-size warning; generator --check and git diff --check pass'
 
   - id: P3-016
     title: 'Main and service bridge cleanup'

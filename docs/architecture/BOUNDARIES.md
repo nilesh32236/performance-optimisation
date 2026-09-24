@@ -10,7 +10,7 @@ A boundary owns one decision or one external capability. Extraction does not cre
 
 | Layer | Current owners | Allowed direction |
 |---|---|---|
-| Bootstrap and Core | Plugin entry, `Loader_Map`, `Main`, `Hook_Registry`, `Wp_Version`, activation/deactivation | Calls application, domain, and infrastructure contracts |
+| Bootstrap and Core | Plugin entry, `Loader_Map`, `Main`, `Hook_Registry`, `Preload_Buffer_Coordinator`, `Wp_Version`, activation/deactivation | Calls application, domain, and infrastructure contracts |
 | Application coordination | `Scheduler`, `Cron`, `Settings_Migrations`, `Sandbox_Preview`, `Builder_Purge_Watcher` | Calls domain services and infrastructure; avoids presentation |
 | Domain | Assets, Cache, CSS, Database, Edge, Images, Insight, Integrations | Calls infrastructure and shared policy; avoids `Main`, Admin, and other feature internals |
 | Presentation | Rest, Abilities, Metabox, admin notices, WP-CLI, React | Calls application/domain contracts; owns transport and display only |
@@ -18,7 +18,7 @@ A boundary owns one decision or one external capability. Extraction does not cre
 | Infrastructure and compatibility | Support, Settings_Store, Cache_Key, `Util`, protected minify wrappers, drop-ins | Provides narrow shared services; avoids feature internals |
 | Lifecycle and integrations | Activate, Deactivate, uninstall, LiteSpeed stack, Woo detection | Adapts WordPress and external runtime contracts without becoming feature policy |
 
-The graph reports 16 strict violations against this model, plus compatibility-only cycles. A violation can be compatibility debt, protected complexity, or misplaced policy. Each executable queue issue must name which category it addresses; planning buckets are split before issue creation.
+The graph reports 20 strict violations against this model, plus compatibility-only cycles. A violation can be compatibility debt, protected complexity, or misplaced policy. Each executable queue issue must name which category it addresses; planning buckets are split before issue creation.
 
 ## Shared boundaries
 
@@ -35,8 +35,13 @@ The graph reports 16 strict violations against this model, plus compatibility-on
 | `Loader_Map` | Eager files, fallback map, CLI path | Feature behavior | Three loader edges; stale-classmap safety remains required |
 | `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 57 and 1,138 incoming executable occurrences; defaults are now a Store facade |
 | `Minify_Policy` | CSS/JS enqueue eligibility, tag rewrites, minified-file checks, and containment guards | Hook registration, speculation/resource hints, preload, cache output, or settings writes | P3-014 extraction under the existing `includes/minify/` boundary; Main retains public callback facades and exclusion state bridges |
+| `Preload_Buffer_Coordinator` | Core template-enhancement availability, legacy used-CSS/LCP buffer lifecycle, cache-aware post-save scheduling gates | Hook registration, speculation/resource hints, image serving, LiteSpeed lanes, Redis/drop-ins, or data migration | P3-015 dependency-light injected ports; Main retains public callback identities and ordering |
 
 ## Domain boundaries
+
+### Frontend preload and buffering
+
+`Preload_Buffer_Coordinator` owns the single bounded routing/lifecycle cluster behind Main's unchanged public callbacks. It selects the WP 6.9+ core template-enhancement path by availability, retains the pre-6.9 fallback guards, runs the used-CSS pipeline at most once per request, and coordinates post-save crawler-warm/used-CSS scheduling gates through injected ports. `Hook_Registry` remains the only hook registrar, so callback identity and cache (10) → used CSS (20) → LCP (30) order do not move. Speculation/resource hints, preload link policy, image serving markup, LiteSpeed crawler/ESI behavior, and data persistence remain outside this owner.
 
 ### Cache
 

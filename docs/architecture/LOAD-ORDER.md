@@ -87,7 +87,7 @@ includes/class-util.php
 - `cli_file()` for the WP-CLI command;
 - `allowed_dirs()` for the 14 runtime domain directories.
 
-The fallback autoloader covers the full Loader_Map-managed plugin class set, including `Admin_Auth` at `Admin/class-admin-auth.php`, `Dropin_Registry` at `Cache/class-dropin-registry.php`, `Insight_Query` at `Insight/class-insight-query.php`, and `Database_Cleanup_Runner` at `Database/class-database-cleanup-runner.php`. It does not own the three protected minify wrappers or the Redis drop-in class because WordPress or `Main` loads those through separate contracts.
+The fallback autoloader covers the full Loader_Map-managed plugin class set, including `Admin_Auth` at `Admin/class-admin-auth.php`, `Dropin_Registry` at `Cache/class-dropin-registry.php`, `Preload_Buffer_Coordinator` at `Core/class-preload-buffer-coordinator.php`, `Insight_Query` at `Insight/class-insight-query.php`, and `Database_Cleanup_Runner` at `Database/class-database-cleanup-runner.php`. It does not own the four protected minify wrappers/policy or the Redis drop-in class because WordPress or `Main` loads those through separate contracts.
 
 ## 4. Composer classmap
 
