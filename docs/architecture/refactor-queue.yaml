@@ -507,11 +507,12 @@ phase2_items:
 future_items:
   - id: FUT-001
     title: 'Critical_CSS storage/staging cluster extraction (Ccss_Store)'
-    status: issue-created
+    status: pr-created
     github_issue: 1560
     priority: medium
     notes:
       - 'Largest untouched god class (7594 lines / 137 methods). Scoped 2026-09-24: storage/staging/health/status cluster (~20 methods) first; generation/parsing/retry/budget/exclusions stay for follow-up.'
+      - '2026-09-24: implemented in working tree — new PerformanceOptimise\Inc\Ccss_Store (includes/CSS/class-ccss-store.php, CSS domain, @since NEXT) owns 23 storage/staging/health/status methods + 4 memos + 3 const mirrors verbatim (cross-domain reads via Critical_CSS::get_template_hash/get_ccss_max_size/is_viewport_variants_enabled/get_status_cache_for_store bridge); Critical_CSS keeps 23 same-signature proxies (visibility preserved) + 1 @internal bridge + 8 generation memos, reset_ccss_memo() clears both halves; Loader_Map fallback + inventory known-classes registered, class-inventory.json + DEPENDENCY-GRAPH.json regenerated (Critical 7594→6964 lines, 137→138 methods incl. bridge; Store 996 lines/23 methods); hierarchy mapping row added; new CcssStoreParityTest regression suite.'
   - id: FUT-002
     title: 'Bridge/cycle cleanup + Util external caller migration (~650 edges)'
     status: queued

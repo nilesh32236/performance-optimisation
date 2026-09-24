@@ -138,7 +138,8 @@ edge/cluster evidence; `[load]` = `LOAD-ORDER.md` loader/drop-in evidence.
 | `class-image-optimisation.php` | `Images/` | [sysmap:Asset pipeline] image serving/lazy/hero-preload; [hotspot] ARCH-008 extraction source; [graph] dense hub |
 | `class-lcp-preload.php` | `Images/` | LCP resolution + hero-preload emission + dedup/slot state extracted from `Image_Optimisation` (ARCH-008); `Image_Optimisation` keeps facades so hook/caller identity is unchanged; lazy via `Loader_Map` fallback map |
 | `class-img-converter.php` | `Images/` | [sysmap:Asset pipeline] `Img_Converter` (WebP/AVIF); image-domain service |
-| `class-critical-css.php` | `CSS/` | [sysmap:Asset pipeline] per-template critical CSS; [hotspot] ARCH-009 shared-storage owner candidate |
+| `class-critical-css.php` | `CSS/` | [sysmap:Asset pipeline] per-template critical CSS; [hotspot] ARCH-009 shared-storage owner candidate; [FUT-001] storage/staging/health/status cluster extracted to `Ccss_Store` (Critical keeps facade proxies + generation/parsing/output/exclusions) |
+| `class-ccss-store.php` | `CSS/` | [FUT-001] Critical-CSS file lifecycle + status store (dir/url/file/contain, stage/promote/rollback, rollout/health, variant files, content/meta, status_all/templates/sample_url, storage memos); `Critical_CSS` keeps same-signature proxies so callers/hooks/method_exists guards are identical |
 | `class-used-css.php` | `CSS/` | [sysmap:Asset pipeline] per-URL used CSS; [hotspot] ARCH-009 (`class_exists` cross-refs with Critical_CSS) |
 | `class-database-cleanup.php` | `Database/` | [sysmap:Data/insight] `Database_Cleanup` (9 cleanup ops); single-class domain |
 | `class-telemetry.php` | `Insight/` | [sysmap:Data/insight] local cURL performance scanner; insight source |

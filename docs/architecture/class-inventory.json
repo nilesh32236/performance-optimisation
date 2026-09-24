@@ -238,15 +238,29 @@
         ]
     },
     {
-        "file": "includes/CSS/class-critical-css.php",
+        "file": "includes/CSS/class-ccss-store.php",
         "class": null,
-        "lines": 7594,
-        "methods": 137,
+        "lines": 996,
+        "methods": 23,
         "hooks": [],
         "static_state": false,
         "refs": [
             "CDN",
+            "Critical_CSS",
+            "Log",
+            "Util"
+        ]
+    },
+    {
+        "file": "includes/CSS/class-critical-css.php",
+        "class": null,
+        "lines": 6964,
+        "methods": 138,
+        "hooks": [],
+        "static_state": false,
+        "refs": [
             "Cache",
+            "Ccss_Store",
             "Css_Safelist",
             "Image_Optimisation",
             "Log",
@@ -547,7 +561,7 @@
     {
         "file": "includes/Core/class-loader-map.php",
         "class": null,
-        "lines": 312,
+        "lines": 313,
         "methods": 8,
         "hooks": [],
         "static_state": false,
