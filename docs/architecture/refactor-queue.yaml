@@ -1329,6 +1329,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1602
+    implementation_commit: e07b36f3f0804b5429583ca9940273f38da7d04d
     type: epic
     problem: 'Image media/state, Used CSS storage, Critical CSS generation, and cache/CSS purge coordination remain broad.'
     target_owner: 'Cohesive media, CSS storage/generation, and purge coordination owners'
