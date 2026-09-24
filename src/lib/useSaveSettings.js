@@ -58,8 +58,13 @@ export const useSaveSettings = ( tab, options = {} ) => {
 			if ( typeof dismiss === 'function' ) {
 				dismiss();
 			}
+			// Newest-run-wins guard for the shared saving flag: rapid save()
+			// calls abort the previous run, and the stale run's finally must
+			// not clear the flag while the newer save is still in flight.
+			let taskIsStale = null;
 			try {
 				return await run( async ( { signal, isStale } ) => {
+					taskIsStale = isStale;
 					const response = await apiCall(
 						'update_settings',
 						{
@@ -121,7 +126,10 @@ export const useSaveSettings = ( tab, options = {} ) => {
 				}
 				throw saveError;
 			} finally {
-				if ( mountedRef.current ) {
+				if (
+					mountedRef.current &&
+					! ( taskIsStale && taskIsStale() )
+				) {
 					setSaving( false );
 				}
 			}

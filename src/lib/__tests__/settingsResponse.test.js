@@ -99,6 +99,26 @@ describe( 'settingsResponse', () => {
 			expect( Object.isFrozen( map ) ).toBe( false );
 		} );
 
+		it( 'detaches nested tab objects from the response envelope', () => {
+			const map = {
+				cache_settings: { enabled: true },
+				file_optimisation: { delayJS: true },
+			};
+			expect( commitSettingsResponse( 'update_settings', map ) ).toBe(
+				true
+			);
+			expect( global.wppoSettings.settings.file_optimisation ).not.toBe(
+				map.file_optimisation
+			);
+			// A later mutation of the envelope must not leak into the cache.
+			map.file_optimisation.delayJS = false;
+			map.cache_settings.enabled = false;
+			expect( global.wppoSettings.settings ).toEqual( {
+				cache_settings: { enabled: true },
+				file_optimisation: { delayJS: true },
+			} );
+		} );
+
 		it( 'commits sandbox_promote, safe_mode and restore full maps', () => {
 			expect(
 				commitSettingsResponse( 'sandbox_promote', {

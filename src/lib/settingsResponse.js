@@ -102,10 +102,47 @@ export const resolveSettingsPayload = ( action, data ) => {
 };
 
 /**
+ * Deep-clone a committable settings payload.
+ *
+ * The shared cache freezes only its top level, so committing the response
+ * envelope's nested tab objects by reference would let a later mutation of
+ * `response.data` silently mutate the frozen-top-level global. Cloning
+ * breaks that alias; `structuredClone` is preferred with a JSON round-trip
+ * fallback (payloads are REST JSON) and a shallow-copy last resort.
+ *
+ * @since NEXT
+ * @param {Object} payload Committable settings map.
+ * @return {Object} Detached clone of the payload.
+ */
+export const cloneSettingsPayload = ( payload ) => {
+	if ( payload && typeof payload === 'object' ) {
+		if (
+			typeof globalThis !== 'undefined' &&
+			typeof globalThis.structuredClone === 'function'
+		) {
+			try {
+				return globalThis.structuredClone( payload );
+			} catch {
+				// Non-cloneable value: fall through to the JSON clone below.
+			}
+		}
+		try {
+			return JSON.parse( JSON.stringify( payload ) );
+		} catch {
+			// Non-serializable value: fall back to a shallow copy.
+			return { ...payload };
+		}
+	}
+	return payload;
+};
+
+/**
  * Commit a settings response payload to the shared global cache.
  *
  * Replaces `wppoSettings.settings` (frozen, like commitSettingsCache) so
  * every component reading the live global lands on the same snapshot.
+ * The payload is deep-cloned before freezing so later mutations of the
+ * response envelope cannot alias into the global cache.
  * Returns whether a commit happened so callers can skip their
  * request-echo tab patch when the server payload won.
  *
@@ -122,6 +159,6 @@ export const commitSettingsResponse = ( action, data ) => {
 	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
 		return false;
 	}
-	wppoSettings.settings = Object.freeze( { ...payload } );
+	wppoSettings.settings = Object.freeze( cloneSettingsPayload( payload ) );
 	return true;
 };

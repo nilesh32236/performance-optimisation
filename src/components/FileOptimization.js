@@ -1216,8 +1216,12 @@ const FileOptimization = ( {
 	const handleSandboxSave = async () => {
 		setSandboxBusy( true );
 		dismissSandbox();
+		// Newest-run-wins: a stale (aborted/superseded) op must not clear
+		// the shared sandboxBusy flag while the newer op is still in flight.
+		let taskIsStale = null;
 		try {
 			await sandboxWorkflow.run( async ( { signal, isStale } ) => {
+				taskIsStale = isStale;
 				const res = await apiCall(
 					'sandbox_save',
 					{
@@ -1284,7 +1288,10 @@ const FileOptimization = ( {
 				),
 			} );
 		} finally {
-			if ( isSandboxMountedRef.current ) {
+			if (
+				isSandboxMountedRef.current &&
+				! ( taskIsStale && taskIsStale() )
+			) {
 				setSandboxBusy( false );
 			}
 		}
@@ -1292,8 +1299,11 @@ const FileOptimization = ( {
 	const handleSandboxPromote = async () => {
 		setSandboxBusy( true );
 		dismissSandbox();
+		// Newest-run-wins: see handleSandboxSave.
+		let taskIsStale = null;
 		try {
 			await sandboxWorkflow.run( async ( { signal, isStale } ) => {
+				taskIsStale = isStale;
 				const res = await apiCall(
 					'sandbox_promote',
 					{},
@@ -1389,7 +1399,10 @@ const FileOptimization = ( {
 				message: __( 'Could not promote.', 'performance-optimisation' ),
 			} );
 		} finally {
-			if ( isSandboxMountedRef.current ) {
+			if (
+				isSandboxMountedRef.current &&
+				! ( taskIsStale && taskIsStale() )
+			) {
 				setSandboxBusy( false );
 			}
 		}
@@ -1397,8 +1410,11 @@ const FileOptimization = ( {
 	const handleSandboxDiscard = async () => {
 		setSandboxBusy( true );
 		dismissSandbox();
+		// Newest-run-wins: see handleSandboxSave.
+		let taskIsStale = null;
 		try {
 			await sandboxWorkflow.run( async ( { signal, isStale } ) => {
+				taskIsStale = isStale;
 				const res = await apiCall(
 					'sandbox_discard',
 					{},
@@ -1442,7 +1458,10 @@ const FileOptimization = ( {
 				message: __( 'Could not discard.', 'performance-optimisation' ),
 			} );
 		} finally {
-			if ( isSandboxMountedRef.current ) {
+			if (
+				isSandboxMountedRef.current &&
+				! ( taskIsStale && taskIsStale() )
+			) {
 				setSandboxBusy( false );
 			}
 		}

@@ -151,6 +151,44 @@ describe( 'useSaveSettings', () => {
 		expect( result.current.saving ).toBe( false );
 	} );
 
+	it( 'keeps the saving flag while a newer save is still in flight', async () => {
+		let resolveFirst, resolveSecond;
+		const first = new Promise( ( resolve ) => {
+			resolveFirst = resolve;
+		} );
+		const second = new Promise( ( resolve ) => {
+			resolveSecond = resolve;
+		} );
+		apiCall.mockReturnValueOnce( first ).mockReturnValueOnce( second );
+		const { result } = renderHook( () =>
+			useSaveSettings( 'llms_txt', {
+				notify: jest.fn(),
+				dismiss: jest.fn(),
+			} )
+		);
+
+		let firstPromise, secondPromise;
+		await act( async () => {
+			firstPromise = result.current.save( { enabled: true } );
+			secondPromise = result.current.save( { enabled: false } );
+		} );
+		expect( result.current.saving ).toBe( true );
+
+		// The stale first run settles while the second is still pending:
+		// its finally must not clear the shared flag (no busy flicker).
+		await act( async () => {
+			resolveFirst( { success: true } );
+			await firstPromise;
+		} );
+		expect( result.current.saving ).toBe( true );
+
+		await act( async () => {
+			resolveSecond( { success: true } );
+			await secondPromise;
+		} );
+		expect( result.current.saving ).toBe( false );
+	} );
+
 	it( 'swallows AbortError without notifying and resets the flag', async () => {
 		const abortError = new Error( 'Aborted' );
 		abortError.name = 'AbortError';
