@@ -32,11 +32,11 @@ baseline:
   Dashboard_lines_max: 2240
   inventory: docs/architecture/class-inventory.json
 automation:
-  trigger: 'label autofix-trigger on the issue, or /fix comment by OWNER/MEMBER/COLLABORATOR (fires fix-issue job in wppo-ai-review.yml)'
+  trigger: 'label autofix-trigger on the issue, or /fix comment by OWNER/MEMBER/COLLABORATOR (policy, PENDING workflow gate — currently any commenter can trigger fix-issue job in wppo-ai-review.yml until #1564 enforcement merges)'
   note: 'No standalone issue-analysis workflow exists; design review happens on the
     issue itself, then fix-issue produces the plan + PR, then review/autofix loop.
-    Security policy (issue #1564): /fix comments from NONE/CONTRIBUTOR/FIRST_TIMER/FIRST_TIME_CONTRIBUTOR
-    must not trigger fix-issue/autofix; label triggers stay maintainer-controlled via triage permission.'
+    Security policy (issue #1564, PENDING ENFORCEMENT): /fix comments from NONE/CONTRIBUTOR/FIRST_TIMER/FIRST_TIME_CONTRIBUTOR/MANNEQUIN
+    must not trigger fix-issue/autofix once the maintainer gates the job-level if; label triggers stay maintainer-controlled via triage permission.'
 
 items:
   - id: REF-001
