@@ -656,6 +656,7 @@ phase3_items:
     status: active
     priority: high
     github_issue: 1570
+    github_pr: 1571
     implementation_commit: cb9630883c0c8989ef35613bd16110a817e84df1
     type: security-architecture
     problem: 'Arbitrary Cron preload URLs enforce a same-host sink check but still use implicit redirect-following transport; sitemap discovery remains host-only, while crawler and telemetry paths validate redirects explicitly.'
