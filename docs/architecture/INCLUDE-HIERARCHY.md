@@ -125,12 +125,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 70 | 69 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 71 | 70 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 74 | Generated schema-v2 inventory |
+| Total class inventory | 75 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 77 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 78 nodes.
 
 ## Ownership by directory
 
@@ -254,7 +254,7 @@ Comments and docblocks appear only in `documentation_references`. They never cre
 
 The fresh audit does not justify a broad directory reshuffle. The existing domain directories match the code's primary ownership axes. Phase 3 should:
 
-- add `Cache_Capacity` under `Cache/` only when the scheduler and runtime-state foundations are ready;
+- `Cache_Capacity` now lives under `Cache/`; it owns statistics, cap settings, byte/file accounting, randomized-query detection, and oldest eviction while `Cache` keeps the public facade;
 - add a runtime-state owner under `Core/` or `Support/` only after its lifecycle contract is proven;
 - add narrow application services near their adapter or domain boundary, not in a generic `Services/` folder;
 - keep REST, CLI, React, protected integrations, and drop-ins at their current edges.

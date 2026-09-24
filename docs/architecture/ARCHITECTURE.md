@@ -48,18 +48,18 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 77 files: 73 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 78 files: 74 class-like nodes and 4 procedural nodes.
 
-| Signal | Baseline |
+| Signal | Current |
 |---|---:|
-| Unique edges | 345 |
-| Runtime / compatibility / loader edges | 344 / 194 / 3 |
-| Cross-domain / feature-to-feature edges | 302 / 47 |
+| Unique edges | 348 |
+| Runtime / compatibility / loader edges | 347 / 195 / 3 |
+| Cross-domain / feature-to-feature edges | 303 / 47 |
 | Boundary violations | 16 |
-| Bridge candidates | 229 |
+| Bridge candidates | 231 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 59 nodes, 302 runtime-classified internal edges |
-| Static state | 141 properties across 31 nodes |
+| Largest runtime SCC | 60 nodes, 305 runtime-classified internal edges |
+| Static state | 142 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 
 The runtime SCC shows reciprocal reach across major subsystems. It does not prove that one extraction will fix the whole component. Each queue item must identify a smaller owner and dependency path.
@@ -93,7 +93,8 @@ Cross-domain edges require review. An edge can represent a real product interact
 |---|---|---|
 | `Main` | Bootstrap, options, assets, minification, speculation, preload, cache coordination, feature bridges | Keep construction, lifecycle, registration, and coordination; move remaining independent policy |
 | `Util` | Compatibility proxies and residual canonical helpers | Give each method an owner, migrate callers, then thin or remove the facade |
-| `Cache` | HTML cache policy, storage, invalidation facade, CSS-combine facade, capacity | Extract capacity/accounting; keep cache lifecycle and buffer orchestration coherent |
+| `Cache` | HTML cache policy, storage, invalidation facade, CSS-combine facade | Keep lifecycle and buffer orchestration; capacity/accounting is delegated to `Cache_Capacity` |
+| `Cache_Capacity` | Static cache statistics, cap settings, single-walk byte/file accounting, randomized-query guard, oldest eviction | Keep the accounting contract narrow; retain only the bridges required for Cache filesystem, containment, and deletion policy |
 | `Settings_Store` | Settings memo, validation map, snapshots, write/invalidation | Make it the only settings write owner; adapt REST, CLI, and Abilities |
 | `Scheduler` / `Job_Registry` | Action Scheduler primitives, locks, and owned hook manifest | Keep registry-backed scheduling and teardown; no duplicate hook lists |
 | `Preload_Transport` | Same-host URL validation and bounded non-following redirects for Cron warmup | Keep all three Cron fetch seams on the transport policy; preserve LiteSpeed bypass |
@@ -107,11 +108,11 @@ Cross-domain edges require review. An edge can represent a real product interact
 
 ## High-value findings
 
-1. **Preload transport:** Cron warmup requests need one bounded, same-host redirect policy across page, sitemap, and arbitrary URL fetches.
-2. **Runtime state:** 31 owners hold static state; the six site-sensitive owners now reset centrally, while the remaining 25 need classification.
+1. **Preload transport:** Cron warmup now shares one bounded, same-host redirect policy; future fetch callers must use the owner rather than implicit redirects.
+2. **Runtime state:** 32 owners hold static state; the six site-sensitive owners now reset centrally, while the remaining 26 need classification.
 3. **`Util` hub:** 56 source nodes and 1,145 executable occurrences still depend on it.
 4. **`Main` hub:** 34 outgoing class dependencies and 17 feature dependencies remain.
-5. **Cache capacity:** an 839-line statistics, cap, and eviction cluster has one clear contract.
+5. **Cache capacity:** `Cache_Capacity` now owns the statistics, cap, and eviction contract; `Cache` remains the public facade and lifecycle owner.
 6. **Settings writes:** REST adapters still write `wppo_settings` outside `Settings_Store`.
 7. **Redis policy:** REST owns the full sanitizer while CLI and `Object_Cache` use weaker validation.
 8. **CSS and image cycles:** storage owners exist, but policy and bridges keep the larger SCC connected.

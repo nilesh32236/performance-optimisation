@@ -250,15 +250,15 @@ The current Phase 3 baseline records the starting metrics in `ARCHITECTURE-BASEL
 | `Main` fan-out / feature dependencies | 34 / 17 | Target down |
 | `Util` lines / methods | 5,006 / 156 | Target down through caller migration |
 | `Util` fan-in / incoming evidence | 56 / 1,145 | Target down |
-| `Cache` lines / methods | 5,643 / 161 | Target down with cohesive extractions |
+| `Cache` lines / methods | 5,077 / 167 | Target down with cohesive extractions |
 | `Image_Optimisation` lines / methods | 8,999 / 183 | Target down with media or state owners |
 | `Critical_CSS` lines / methods | 6,950 / 138 | Target down with generation owners |
 | Largest runtime SCC | 59 nodes | Target down |
-| Compatibility-classified edges | 194 | Explain and reduce through explicit compatibility ownership |
+| Compatibility-classified edges | 195 | Explain and reduce through explicit compatibility ownership |
 | Compatibility SCCs / largest | 2 / 21 nodes | Reduce; retain only documented stable adapters |
 | Boundary violations | 16 | Target zero or protected exception |
-| Bridge candidates | 229 | Target down |
-| Static properties / owners | 141 / 31 | Classify, then reduce or document |
+| Bridge candidates | 231 | Target down |
+| Static properties / owners | 141 / 32 | Classify, then reduce or document |
 | `FileOptimization.js` | 6,114 | Target down one card at a time |
 | `Dashboard.js` | 2,168 | Target down one card or hook at a time |
 

@@ -29,6 +29,9 @@ if ( file_exists( $patchwork_path ) ) {
 }
 
 require_once __DIR__ . '/../../vendor/autoload.php';
+// P3-005: the local Composer classmap may predate the new owner in a dirty
+// development checkout; production loading is owned by Loader_Map/Composer.
+require_once __DIR__ . '/../../includes/Cache/class-cache-capacity.php';
 
 // Load the object-cache drop-in template early so wp_cache_set() and friends
 // are declared as real PHP functions BEFORE any Brain Monkey test can
