@@ -798,6 +798,7 @@ phase3_items:
     status: active
     priority: high
     github_issue: 1576
+    github_pr: 1577
     implementation_commit: 261272ba7cde0de984bed5f3be1bfaf48e560eea
     type: security-architecture
     problem: 'REST owns the complete Redis value sanitizer while CLI and Object_Cache carry weaker key-level validation.'
