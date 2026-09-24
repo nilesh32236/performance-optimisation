@@ -750,6 +750,7 @@ phase3_items:
     status: active
     priority: high
     github_issue: 1574
+    implementation_commit: bc4d4a68b55ae6b98cee99f75c83e0e9226fc78a
     type: architecture
     problem: 'Cache carries an 839-line statistics, cap, and eviction tail with one accounting contract and callers in Cron, REST, Main, and CLI.'
     target_owner: 'Cache_Capacity under Cache/'
