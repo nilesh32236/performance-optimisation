@@ -2384,6 +2384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.6.0
+		 * @since NEXT Reads the augmented PageSpeed model through Insight_Query.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_pagespeed_results( \WP_REST_Request $request ): \WP_REST_Response {
@@ -2403,7 +2404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$strategy = 'mobile';
 			}
 
-			$results = Pagespeed::get_results( $url, $strategy );
+			$results = Insight_Query::get_pagespeed_report( $url, $strategy );
 
 			if ( false === $results ) {
 				$response = $this->send_response( array( 'status' => 'not_ready' ), true, 202 );
@@ -2433,9 +2434,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				\PerformanceOptimise\Inc\Pagespeed::store_lcp_image_url( $url, $results, $strategy );
 			}
 
-			// Append Suggestion_Engine output so the React UI gets everything in one call.
-			$results['suggestions'] = Suggestion_Engine::from_pagespeed( $results );
-
+			// Insight_Query added the deterministic Suggestion_Engine projection.
 			return $this->send_response( $results );
 		}
 
@@ -2496,6 +2495,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.6.0
+		 * @since NEXT Reads cached telemetry through Insight_Query.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_suggestions( \WP_REST_Request $request ): \WP_REST_Response {
@@ -2510,17 +2510,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
 			}
 
-			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
-			// Mirror Telemetry::scan() read path: the salted object-cache
-			// layer is authoritative when a persistent cache exists.
-			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
-				$telemetry = wp_cache_get_salted( $transient_key, 'wppo', Util::cache_salt( 'wppo_audit_salt' ) );
-				if ( false === $telemetry ) {
-					$telemetry = get_transient( $transient_key );
-				}
-			} else {
-				$telemetry = get_transient( $transient_key );
-			}
+			$telemetry = Insight_Query::get_telemetry( $url );
 
 			if ( false === $telemetry ) {
 				return $this->send_response(

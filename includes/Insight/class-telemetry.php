@@ -79,11 +79,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			// (issue #882 review).
 			$has_salted = function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
 
-			$get_cached = function ( string $k ) use ( $cache_key, $has_salted ): mixed {
-				if ( $has_salted ) {
-					return wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ) );
-				}
-				return get_transient( $k );
+			$get_cached = function ( string $k ) use ( $url, $has_salted ): mixed {
+				return self::read_cached_audit( $url, $k, $has_salted );
 			};
 			$set_cached = function ( string $k, mixed $v, int $t ) use ( $cache_key, $has_salted ): bool {
 				if ( $has_salted ) {
@@ -227,6 +224,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				return $result;
 			}
 			return $result;
+		}
+
+		/**
+		 * Read a cached telemetry result without executing a scan.
+		 *
+		 * A matching salted object-cache value is authoritative. Transient
+		 * storage remains the fallback both without an external object cache
+		 * and when a salted lookup misses or has a stale salt.
+		 *
+		 * @since NEXT
+		 * @param string $url Scanned URL.
+		 * @return mixed Cached telemetry payload, or false when absent.
+		 */
+		public static function get_cached_result( string $url ) {
+			$cache_key  = Util::transient_key( 'wppo_audit_' . md5( $url ) );
+			$has_salted = function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
+			return self::read_cached_audit( $url, $cache_key, $has_salted );
+		}
+
+		/**
+		 * Read an audit cache entry for scan and query callers.
+		 *
+		 * The optional lookup key is the stampede callback's fresh/stale key.
+		 * Existing behavior intentionally reads the canonical salted key while
+		 * transient mode reads the callback-provided key.
+		 *
+		 * @since NEXT
+		 * @param string $url Scanned URL.
+		 * @param string $lookup_key Cache key to read.
+		 * @param bool   $has_salted Whether the salted cache layer is available.
+		 * @return mixed Cached telemetry payload, or false when absent.
+		 */
+		private static function read_cached_audit( string $url, string $lookup_key, bool $has_salted ): mixed {
+			if ( ! $has_salted ) {
+				return get_transient( $lookup_key );
+			}
+
+			$cache_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
+			$telemetry = wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ) );
+			if ( false === $telemetry ) {
+				return get_transient( $lookup_key );
+			}
+			return $telemetry;
 		}
 
 		/**

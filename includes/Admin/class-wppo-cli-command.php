@@ -1014,6 +1014,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *     # Get PageSpeed results
 		 *     wp wppo pagespeed results --url=https://example.com
 		 *
+		 * @since NEXT Reads PageSpeed results through Insight_Query.
 		 * @when after_wp_load
 		 * @subcommand pagespeed
 		 * @param array $args Command positional arguments.
@@ -1040,7 +1041,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			}
 
 			if ( 'results' === $action ) {
-				$results = Pagespeed::get_results( $url, $strategy );
+				$results = Insight_Query::get_pagespeed( $url, $strategy );
 				if ( false === $results ) {
 					WP_CLI::warning( __( 'No PageSpeed results found for the given URL and strategy.', 'performance-optimisation' ) );
 					return;

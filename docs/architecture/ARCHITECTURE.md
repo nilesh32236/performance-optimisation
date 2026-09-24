@@ -33,8 +33,8 @@ performance-optimisation.php
       │   Google_Fonts, Image_Optimisation, Lcp_Preload, Img_Converter,
       │   Critical_CSS, Ccss_Store, Used_CSS
       ├─ Database and insight
-      │   Database_Cleanup, Telemetry, Pagespeed, Suggestion_Engine,
-      │   System_Info, RUM, AI_Adaptive, Ai_Anomaly, OD_Bridge
+      │   Database_Cleanup, Telemetry, Pagespeed, Insight_Query,
+      │   Suggestion_Engine, System_Info, RUM, AI_Adaptive, Ai_Anomaly, OD_Bridge
       ├─ Admin and compatibility surfaces
       │   Rest, Rest_Cache, Rest_Settings, Abilities, Metabox,
       │   Admin_Notices, Perf_Translations, WPPO_CLI_Command,
@@ -48,17 +48,17 @@ performance-optimisation.php
 
 ## Current graph
 
-The schema-v2 tokenizer graph covers 81 files: 77 class-like nodes and 4 procedural nodes.
+The schema-v2 tokenizer graph covers 82 files: 78 class-like nodes and 4 procedural nodes.
 
 | Signal | Current |
 |---|---:|
-| Unique edges | 355 |
-| Runtime / compatibility / loader edges | 354 / 195 / 3 |
-| Cross-domain / feature-to-feature edges | 306 / 46 |
+| Unique edges | 361 |
+| Runtime / compatibility / loader edges | 360 / 195 / 3 |
+| Cross-domain / feature-to-feature edges | 309 / 46 |
 | Boundary violations | 16 |
 | Bridge candidates | 231 |
 | Runtime SCCs | 1 |
-| Largest runtime SCC | 61 nodes, 306 runtime-classified internal edges |
+| Largest runtime SCC | 62 nodes, 312 runtime-classified internal edges |
 | Static state | 141 properties across 32 nodes |
 | Exact duplicate candidates | 17 |
 
@@ -106,6 +106,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Critical_CSS` / `Ccss_Store` | Generation plus storage/status | Keep storage in the store; move remaining generation clusters by policy |
 | `Used_CSS` | Generation, storage, parsing, delivery, rollout | Split storage and generation only after Used CSS owns no cache purge policy |
 | `Image_Optimisation` | Image markup, lazy loading, media transforms, conversion bridge | Extract cohesive media/metadata or conversion-state clusters with parity tests |
+| `Insight_Query` | Cached telemetry/PageSpeed read models and PageSpeed suggestion projection | Keep read-only; leave scans, storage, AI, and RUM side effects with domain owners |
 | `Rest` / CLI / Abilities | Transport and route/command registration | Add narrow application commands and response mappers; keep transport thin |
 | React cards | Local presentation and workflow state | Extract one card or hook at a time; keep `useState` and `wppoSettings` |
 

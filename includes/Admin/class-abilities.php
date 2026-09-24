@@ -875,9 +875,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Get PageSpeed Results (operational).
 		 *
-		 * Delegates to Pagespeed::get_results().
+		 * Delegates to Insight_Query::get_pagespeed().
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Routes the raw result read through Insight_Query.
 		 *
 		 * @param array $input Input data (url, strategy).
 		 * @return array PageSpeed results.
@@ -888,16 +889,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				return array( 'error' => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
 			}
 			$format  = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
-			$results = Pagespeed::get_results( $url, $format );
+			$results = Insight_Query::get_pagespeed( $url, $format );
 			return is_array( $results ) ? $results : array();
 		}
 
 		/**
 		 * Execute callback: Get Suggestions (operational).
 		 *
-		 * Delegates to Suggestion_Engine::from_telemetry() using cached scan data.
+		 * Delegates to Insight_Query and Suggestion_Engine::from_telemetry() using cached scan data.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Routes the telemetry read through Insight_Query.
 		 *
 		 * @param array $input Input data (url).
 		 * @return array{suggestions: array} Suggestions.
@@ -910,8 +912,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'error'       => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ),
 				);
 			}
-			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
-			$telemetry     = get_transient( $transient_key );
+			$telemetry = Insight_Query::get_telemetry( $url );
 			if ( false === $telemetry ) {
 				return array( 'suggestions' => array() );
 			}

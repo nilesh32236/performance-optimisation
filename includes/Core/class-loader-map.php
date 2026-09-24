@@ -150,6 +150,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Htaccess_Handler'       => 'Edge/class-htaccess-handler.php',
 				'Http'                   => 'Support/class-http.php',
 				'Image_Optimisation'     => 'Images/class-image-optimisation.php',
+				'Insight_Query'          => 'Insight/class-insight-query.php',
 				'Img_Converter'          => 'Images/class-img-converter.php',
 				'Lcp_Preload'            => 'Images/class-lcp-preload.php',
 				'LiteSpeed_Crawler'      => 'Integrations/class-litespeed-crawler.php',

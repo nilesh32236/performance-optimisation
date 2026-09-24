@@ -116,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 78 files: 74 runtime plugin files under `includes/` (73 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `Util` stays at the includes root. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 79 files: 75 runtime plugin files under `includes/` (74 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -137,6 +137,7 @@ The schema-v2 inventory tracks 78 files: 74 runtime plugin files under `includes
 | `Images/class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
 | `Admin/class-rest.php` | REST registrar for 47 concrete endpoints (48 registered patterns including the namespace root) |
 | `Insight/class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
+| `Insight/class-insight-query.php` | Read-only cached telemetry/PageSpeed models; salted-transient fallback and PageSpeed suggestion augmentation |
 | `Insight/class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
 | `Insight/class-telemetry.php` | Local cURL-based performance scanner |
 | `Insight/class-system-info.php` | PHP/DB/WP/Server/Cache/Infrastructure info |
