@@ -972,14 +972,24 @@ phase3_items:
 
   - id: P3-010
     title: 'Database cleanup application runner'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1583
     type: architecture
     problem: 'REST, Abilities, CLI, and Cron duplicate cleanup orchestration around the canonical Database_Cleanup map.'
     target_owner: 'Database_Cleanup_Runner'
     target_direction: 'Adapters -> runner -> Database_Cleanup domain map'
     tests: 'Type, counts, dry-run, confirmation, AS availability, logging, legacy aliases, and result parity.'
     ratchet: 'Independent adapter orchestrators: 3 -> 1; legacy adapter calls: 1 -> 0.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 86e264b3
+      evidence:
+        - 'Rest::database_cleanup, Abilities::execute_database_cleanup, and WPPO_CLI_Command::database_cleanup each duplicate valid-type, all, Action Scheduler, revision defaults, method-map dispatch, and logging orchestration around Database_Cleanup.'
+        - 'Cron::database_cleanup_cron also calls Database_Cleanup::auto_clean directly and must remain the scheduled adapter boundary.'
+        - 'Database_Cleanup already owns CLEANUP_METHOD_MAP, counts, Action Scheduler health, table optimization, and cleanup execution; a Database_Cleanup_Runner can centralize only application dispatch/orchestration.'
+        - 'A dependency-light runner can preserve REST/Abilities/CLI response shapes, confirmation/dry-run semantics, Action Scheduler availability, legacy aliases, and cron scheduling.'
+      decision: 'Proceed test-first with a narrow Database_Cleanup_Runner application runner; keep Database_Cleanup domain methods, Cron scheduling, and adapter security/formatting outside the runner.'
 
   - id: P3-011
     title: 'Admin authentication policy for REST and Abilities'
