@@ -1017,11 +1017,24 @@ phase3_items:
 
   - id: P3-011
     title: 'Admin authentication policy for REST and Abilities'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1587
     github_pr: 1588
     implementation_commit: 8e2c3073e1499b6495ac04bd15c351ecf2af45cb
+    merge_commit: 14d3f8276ae7ec2e1aa2361c6921c8e79ab6157a
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      admin_auth: 'loaded; REST and Abilities facades active; no admin settings or site data mutation performed'
+      public_rum: 'route registered; tokenless POST rejected 401; token/IP/rate-limit path unchanged'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401; tokenless rum_collect 401'
+      architecture_graph: '81 inventory files / 84 nodes / 368 edges; generator check passed'
     type: security-architecture
     problem: 'REST and Abilities independently implement capability and nonce checks.'
     target_owner: 'Admin_Auth policy'
@@ -1050,7 +1063,7 @@ phase3_items:
 
   - id: P3-012
     title: 'Edge/CDN purge coordinator'
-    status: queued
+    status: audit-pending
     priority: medium
     type: architecture
     problem: 'CDN_Purger and Edge_Purger can both issue Cloudflare transport for one cache-clear event when settings overlap.'
