@@ -1326,13 +1326,23 @@ phase3_items:
 
   - id: P3-018
     title: 'Remaining image, CSS, and cache policy extraction'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1602
     type: epic
     problem: 'Image media/state, Used CSS storage, Critical CSS generation, and cache/CSS purge coordination remain broad.'
     target_owner: 'Cohesive media, CSS storage/generation, and purge coordination owners'
     exact_scope: 'Choose one bounded cluster from the fresh graph after P3-002 through P3-017.'
     ratchet: 'Feature-to-feature edges, responsibility density, and runtime SCC down.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 242f1b88
+      evidence:
+        - 'The remaining broad policy surface spans Image_Optimisation/Lcp_Preload, Critical_CSS/Used_CSS, Ccss_Store, and Cache CSS/purge paths; selecting more than one would break the one-cluster rule.'
+        - 'Critical_CSS generation and Ccss_Store status are a cohesive storage/generation boundary, while image and cache purge policy remain separate future items.'
+        - 'A fresh graph and characterization pass must choose the smallest extractable CSS generation/status cluster before issue implementation.'
+        - 'Public admin/REST surfaces, generation status, cache keys, output, and data contracts must remain stable.'
+      decision: 'Re-audit the fresh graph and implement one cohesive CSS generation/status extraction only; defer image media and cache purge policy.'
 
   - id: P3-024
     title: 'AI model persistence and learning ownership'
