@@ -884,11 +884,23 @@ phase3_items:
 
   - id: P3-008
     title: 'Settings write command and direct-write cleanup'
-    status: active
+    status: merged
     priority: high
     github_issue: 1580
     github_pr: 1581
     implementation_commit: eb52fa35a43d9ac46ca9b90cb004827531188b0d
+    merge_commit: cd5291c12b66751d470329dc812b39a9c39229d2
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      settings_command: 'loaded; live settings read completed; no production settings mutation performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '78 inventory files / 81 nodes / 355 edges; generator check passed'
     type: architecture
     problem: 'Rest_Settings and REST safe-mode paths write wppo_settings outside Settings_Store.'
     target_owner: 'Settings_Store plus narrow Settings_Command'
@@ -916,7 +928,7 @@ phase3_items:
 
   - id: P3-009
     title: 'Canonical insight read model'
-    status: queued
+    status: audit-pending
     priority: medium
     type: architecture
     problem: 'REST and Abilities read telemetry/PageSpeed results through different cache and augmentation paths.'
