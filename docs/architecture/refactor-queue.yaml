@@ -974,7 +974,7 @@ phase3_items:
     title: 'Database cleanup application runner'
     status: active
     priority: medium
-    github_issue: 1583
+    github_issue: 1585
     type: architecture
     problem: 'REST, Abilities, CLI, and Cron duplicate cleanup orchestration around the canonical Database_Cleanup map.'
     target_owner: 'Database_Cleanup_Runner'
