@@ -1282,13 +1282,23 @@ phase3_items:
 
   - id: P3-017
     title: 'Util external caller migration and facade reduction'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1599
     type: epic
     problem: 'Util has 56 incoming source nodes and 1,145 executable occurrences while retaining canonical helpers and compatibility proxies.'
     target_owner: 'Method-specific Settings_Store, Filesystem, Url, Cache_Key, Http, Woo_Detect, and domain owners'
     exact_scope: 'Migrate callers by method cluster; retain public proxies until compatibility permits removal.'
     ratchet: 'Util fan-in, incoming evidence, facade count, and cross-domain edges down.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 99202e6c
+      evidence:
+        - 'Woo_Detect already owns the complete is_woo_* method family, while Util retains one-line compatibility proxies and multiple external callers still invoke the proxy.'
+        - 'Migrating only Woo external callers to Woo_Detect removes a coherent method cluster without changing the public Util proxy contract or dynamic-route policy.'
+        - 'Other Util clusters (settings snapshots, filesystem, URLs, cache keys, HTTP) remain separate bounded follow-up items.'
+        - 'Woo safe-mode, Store API, wc-ajax, faceted-query, dynamic-path, and fail-open behavior must remain byte-equivalent.'
+      decision: 'Proceed test-first with a Woo_Detect external-caller migration only; retain Util::is_woo_* public proxies for compatibility.'
 
   - id: P3-018
     title: 'Remaining image, CSS, and cache policy extraction'
