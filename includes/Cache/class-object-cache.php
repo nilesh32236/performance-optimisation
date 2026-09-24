@@ -110,9 +110,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * to prevent silent drops for Sentinel/Cluster/TLS options.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Aliases Redis_Config_Policy::ALLOWED_KEYS.
 		 * @var string[]
 		 */
-		public const ALLOWED_KEYS = array( 'mode', 'host', 'port', 'password', 'database', 'timeout', 'prefix', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
+		public const ALLOWED_KEYS = Redis_Config_Policy::ALLOWED_KEYS;
 
 		/**
 		 * Marker used for the wp-content/.htaccess deny block shielding the

@@ -125,12 +125,12 @@ templates/
 
 | Scope | Inventory entries | Loader treatment |
 |---|---:|---|
-| Runtime plugin source under `includes/` | 71 | 70 class-like nodes plus the Redis helper; Loader_Map completeness applies |
+| Runtime plugin source under `includes/` | 72 | 71 class-like nodes plus the Redis helper; Loader_Map completeness applies |
 | Protected minify wrappers | 3 | Loaded through Main/Composer use paths; excluded from Loader_Map completeness |
 | Redis object-cache drop-in | 1 | WordPress early-load contract; excluded from Loader_Map completeness |
-| Total class inventory | 75 | Generated schema-v2 inventory |
+| Total class inventory | 76 | Generated schema-v2 inventory |
 
-The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 78 nodes.
+The dependency graph adds three procedural runtime files: the plugin entry, `uninstall.php`, and `templates/perf-translations.php`. Combined with the Redis helper, the graph has 79 nodes.
 
 ## Ownership by directory
 
@@ -140,7 +140,7 @@ The dependency graph adds three procedural runtime files: the plugin entry, `uni
 
 ### Cache
 
-`Cache` owns static HTML cache policy, storage, buffer orchestration, and the capacity/accounting tail. `Cache_Invalidator` owns invalidation and purge fallback. `Cache_Key` stays an infrastructure primitive even though it lives here. `Object_Cache` owns the Redis manager and drop-in lifecycle.
+`Cache` owns static HTML cache policy, storage, buffer orchestration, and the capacity/accounting tail. `Cache_Invalidator` owns invalidation and purge fallback. `Cache_Key` stays an infrastructure primitive even though it lives here. `Object_Cache` owns Redis connection, circuit, persistence, and drop-in lifecycle; `Redis_Config_Policy` owns the complete key manifest and value normalization used by REST and CLI.
 
 ### Settings
 
