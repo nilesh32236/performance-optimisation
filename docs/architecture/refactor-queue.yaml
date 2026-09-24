@@ -1066,6 +1066,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1589
+    github_pr: 1590
     implementation_commit: 64d46876deac9f958caae72f4189694f8b3f18b3
     type: architecture
     problem: 'CDN_Purger and Edge_Purger can both issue Cloudflare transport for one cache-clear event when settings overlap.'
