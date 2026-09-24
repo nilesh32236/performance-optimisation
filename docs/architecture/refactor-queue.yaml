@@ -498,6 +498,7 @@ phase2_items:
     pull_request: 1559
     merge_commit: f8205cfe
     post_merge_result: 'wp wppo verify 6/7 identical. Review Yes (4/5); arithmetic nit fixed. Queue carries 6 future items (FUT-001..006). Campaign complete.'
+    release_2_4_0: 'Released 2026-09-24: PR #1562 (NEXT->2.4.0 incl. hooks.md version archaeology), tag v2.4.0, GitHub Release + ZIP, wordpress.org SVN r3710362. Browser matrix green pre-release (7 tabs, 14 endpoints, save, purge cycle, 0 console errors).'
     priority: medium
     responsibility: 'BEFORE/AFTER comparison per campaign section 36; classify remainders as resolved/intentional/future/protected/acceptable.'
     dependencies: [ARCH-013, ARCH-014, ARCH-015]
