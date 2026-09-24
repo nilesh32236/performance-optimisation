@@ -288,7 +288,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		 * namespace returns null.
 		 *
 		 * @since 2.4.0
-		 * @param string $class_name Short or fully-qualified class name.
+		 * @param string $class_name Short, single-namespace, or fully-qualified class name.
 		 * @return string|null Absolute file path, or null when unmapped/undefined base.
 		 */
 		public static function path_for( string $class_name ): ?string {
@@ -298,16 +298,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 			if ( 0 === strpos( $class_name, $prefix ) ) {
 				$short = substr( $class_name, strlen( $prefix ) );
 			} elseif ( false !== strpos( $class_name, '\\' ) ) {
-				return null;
+				// A single nested namespace (for example Minify\\Minify_Policy)
+				// is a valid map key; deeper namespaces remain unmapped below.
+				$short = $class_name;
 			}
 			static $map = null;
 			if ( null === $map ) {
 				$map = self::fallback_map();
 			}
-			if ( ! isset( $map[ $short ] ) ) {
+			$map_key = $short;
+			if ( ! isset( $map[ $map_key ] ) && 0 === strpos( $map_key, 'Minify\\' ) ) {
+				$parts   = explode( '\\', $map_key );
+				$map_key = (string) end( $parts );
+			}
+			if ( ! isset( $map[ $map_key ] ) ) {
 				return null;
 			}
-			$path = self::file_path( $map[ $short ] );
+			$path = self::file_path( $map[ $map_key ] );
 			if ( '' === $path ) {
 				return null;
 			}

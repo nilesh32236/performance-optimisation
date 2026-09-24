@@ -346,6 +346,9 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFileExists( (string) $path );
 		// Fully-qualified name resolves identically (autoloader passes FQCNs).
 		$this->assertSame( $path, Loader_Map::path_for( 'PerformanceOptimise\\Inc\\Cache' ) );
+		$minify_path = Loader_Map::path_for( 'PerformanceOptimise\\Inc\\Minify\\Minify_Policy' );
+		$this->assertNotNull( $minify_path );
+		$this->assertStringEndsWith( 'includes/minify/class-minify-policy.php', (string) $minify_path );
 	}
 
 	/**
@@ -357,6 +360,7 @@ class LoaderMapTest extends \PHPUnit\Framework\TestCase {
 		$this->load_loader_map();
 		$this->assertNull( Loader_Map::path_for( 'No_Such_Class' ) );
 		$this->assertNull( Loader_Map::path_for( 'Some\\Other\\Cache' ) );
+		$this->assertNull( Loader_Map::path_for( 'PerformanceOptimise\\Inc\\Some\\Other\\Cache' ) );
 	}
 
 	/**
