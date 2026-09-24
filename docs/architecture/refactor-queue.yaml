@@ -931,6 +931,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1582
+    github_pr: 1584
     implementation_commit: 737f860f2ada5303ed96e8f15d1597b6688a61a4
     type: architecture
     problem: 'REST and Abilities read telemetry/PageSpeed results through different cache and augmentation paths.'
