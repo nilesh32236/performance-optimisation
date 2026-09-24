@@ -1238,11 +1238,13 @@ phase3_items:
 
   - id: P3-016
     title: 'Main and service bridge cleanup'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1597
     github_pr: 1598
     implementation_commit: 84b820a7f732b1aa954a2684727410e0e7039be5
+    merge_commit: 052bb1ba
+    merged_at: '2026-09-24'
     type: epic
     problem: 'Extracted services still hold Main owner state through @internal bridges and reverse edges.'
     target_owner: 'Explicit service state or narrow application contracts'
@@ -1267,9 +1269,20 @@ phase3_items:
         graph_delta: 'Generated inventory remains 85 files / 88 graph nodes / 383 edges; Settings_Migrations no longer depends on Main'
         verification: 'Focused settings/migration suites pass (158 tests / 14,311 assertions); full PHPUnit passes 2,767 tests / 25,370 assertions (9 skipped, 7 existing deprecations); focused Settings_Migrations PHPStan passes; full PHPCS passes; npm run lint:js passes with 2 existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing warnings; npm run build passes with existing entrypoint-size warning; generator --check and git diff --check pass'
 
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      settings_migrations: 'loaded; no Main property; callable options reader present; no settings migration/write performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '85 inventory files / 88 graph nodes / 383 edges; generator check passed'
+
   - id: P3-017
     title: 'Util external caller migration and facade reduction'
-    status: queued
+    status: audit-pending
     priority: medium
     type: epic
     problem: 'Util has 56 incoming source nodes and 1,145 executable occurrences while retaining canonical helpers and compatibility proxies.'
