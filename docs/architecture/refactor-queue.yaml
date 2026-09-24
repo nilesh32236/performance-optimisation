@@ -975,6 +975,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1585
+    github_pr: 1586
     implementation_commit: a5fc10eca353b19338346c0b23f3726563448ac7
     type: architecture
     problem: 'REST, Abilities, CLI, and Cron duplicate cleanup orchestration around the canonical Database_Cleanup map.'
