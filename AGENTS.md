@@ -116,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 72 files: 68 runtime plugin files under `includes/` (67 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `Util` stays at the includes root. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 73 files: 69 runtime plugin files under `includes/` (68 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `Util` stays at the includes root. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|

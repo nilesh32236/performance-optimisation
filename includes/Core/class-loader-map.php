@@ -136,6 +136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Css_Safelist'           => 'Assets/class-css-safelist.php',
 				'Cron'                   => 'Scheduler/class-cron.php',
 				'Job_Registry'           => 'Scheduler/class-job-registry.php',
+				'Preload_Transport'      => 'Scheduler/class-preload-transport.php',
 				'Database_Cleanup'       => 'Database/class-database-cleanup.php',
 				'Deactivate'             => 'Core/class-deactivate.php',
 				'Edge_Cache'             => 'Edge/class-edge-cache.php',

@@ -21,6 +21,10 @@ if ( ! class_exists( __NAMESPACE__ . '\\Job_Registry', false ) ) {
 	require_once __DIR__ . '/class-job-registry.php';
 }
 
+if ( ! class_exists( __NAMESPACE__ . '\\Preload_Transport', false ) ) {
+	require_once __DIR__ . '/class-preload-transport.php';
+}
+
 if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 	/**
 	 * Class Cron
@@ -1329,17 +1333,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( '' === $url ) {
 				return;
 			}
-			if ( function_exists( 'wp_http_validate_url' ) && ! wp_http_validate_url( $url ) ) {
+			// The transport owner re-validates the initial target and every
+			// redirect target with the same wp_http_validate_url/host policy.
+			if ( ! Preload_Transport::is_allowed_url( $url ) ) {
 				return;
-			}
-			// Same-host re-check at the sink: a scheduled URL must never turn
-			// into an off-host server-side GET.
-			if ( function_exists( 'wp_parse_url' ) && function_exists( 'home_url' ) ) {
-				$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
-				if ( ( wp_parse_url( $url, PHP_URL_HOST ) ) !== $home_host ) {
-					self::mark_preload_done( $url );
-					return;
-				}
 			}
 
 			// Defensive Woo skip (issue #962): never warm dynamic routes.
@@ -1356,17 +1353,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				return;
 			}
 
-			// The same-host check above is the SSRF control. Do NOT also set
-			// reject_unsafe_urls: WP's validator rejects every private,
-			// loopback and non-dotted host, so cache warming would silently
-			// stop on localhost/staging installs and on any site whose own
-			// hostname resolves to a private address.
-			$response = wp_remote_get(
-				$url,
-				array(
-					'timeout' => 30,
-				)
-			);
+			// The transport owner keeps the existing validator/same-host policy
+			// and performs bounded, non-following redirects explicitly.
+			$response = Preload_Transport::get( $url, 30 );
 			if ( is_wp_error( $response ) ) {
 				$clean_error = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
 				if ( '' === $clean_error ) {
@@ -1442,7 +1431,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					break;
 				}
 
-				$response = wp_remote_get( $current, array( 'timeout' => 5 ) );
+				$response = Preload_Transport::get( $current, 5 );
 				if ( is_wp_error( $response ) ) {
 					continue;
 				}
@@ -1514,7 +1503,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				LiteSpeed_Crawler::crawl_single( $permalink );
 				return;
 			}
-			$response = wp_remote_get( $permalink, array( 'timeout' => 30 ) );
+			$response = Preload_Transport::get( $permalink, 30 );
 			if ( is_wp_error( $response ) ) {
 				$clean_err = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

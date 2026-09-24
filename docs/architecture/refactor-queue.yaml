@@ -653,8 +653,9 @@ phase3_items:
 
   - id: P3-003
     title: 'Preload target and redirect transport policy'
-    status: audit-pending
+    status: active
     priority: high
+    github_issue: 1570
     type: security-architecture
     problem: 'Arbitrary Cron preload URLs enforce a same-host sink check but still use implicit redirect-following transport; sitemap discovery remains host-only, while crawler and telemetry paths validate redirects explicitly.'
     target_owner: 'Preload_Transport under Scheduler/Support boundary'
@@ -664,6 +665,21 @@ phase3_items:
     compatibility_constraints: 'Preserve the current wp_http_validate_url plus same-host sink behavior; any localhost/private-staging allowance restoration requires an explicit compatibility decision, while redirects become bounded and non-following.'
     tests: 'Off-host, port, redirect-chain, current localhost/private rejection, sitemap cap, and 15-second discovery deadline vectors.'
     ratchet: 'Implicit-follow Cron preload fetches: 3 -> 0; host-only-only gates: 1 -> 0.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 14e3ad0c
+      evidence:
+        - 'Cron::process_url applies wp_http_validate_url and a same-host sink check before wp_remote_get, but the request follows redirects without a post-redirect host/port policy.'
+        - 'Cron::get_sitemap_urls validates discovered <loc> hosts but its sitemap fetches use wp_remote_get without a URL validator, redirect bound, or same-host transport check.'
+        - 'Cron::load_page fetches permalink targets with wp_remote_get and has no redirect policy.'
+        - 'CronSitemapTest covers direct collection, off-site filtering, fetch failure, scheduling, and a direct valid URL, but has no redirect-chain, port, private/localhost, or sitemap transport vectors.'
+      decision: 'Proceed test-first with a small Preload_Transport adapter; preserve existing wp_http_validate_url and same-host sink semantics, make redirects bounded/non-following, and leave LiteSpeed variant throttles and progress accounting unchanged.'
+      implementation:
+        owner: 'includes/Scheduler/class-preload-transport.php'
+        fetch_seams: 'Cron::process_url, Cron::get_sitemap_urls, Cron::load_page'
+        redirect_policy: 'redirection=0, maximum 5 explicit same-host hops, 301/302/303/307/308 only'
+        graph_delta: '73 inventory files / 76 graph nodes / 344 edges; compatibility 194; bridge candidates 229'
+        ratchet_result: 'Implicit-follow Cron preload fetches 3 -> 0; host-only-only gates 1 -> 0'
 
   - id: P3-004
     title: 'Blog-scoped runtime state and reset registry'
