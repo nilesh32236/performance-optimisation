@@ -374,6 +374,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 			// Flush Image_Optimisation per-request stat caches (file_exists + image
 			// sizes) on blog switches and after cache clears so paths from another
 			// site or pre-clear state are re-verified (audit #888 finding 7).
+			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Runtime_State', 'on_switch_blog' ), 10, 2 );
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_font_preload_emitted' ) );
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_image_lcp_memos' ), 10, 2 );

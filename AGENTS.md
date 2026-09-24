@@ -116,11 +116,12 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 73 files: 69 runtime plugin files under `includes/` (68 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `Util` stays at the includes root. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 74 files: 70 runtime plugin files under `includes/` (69 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `Util` stays at the includes root. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
 | `Core/class-main.php` | Hooks, admin page, enqueue, minification, preload, WooCommerce cleanup |
+| `Core/class-runtime-state.php` | Blog-switch registry for six site-sensitive static-state owners |
 | `Cache/class-cache.php` | Static HTML cache (generate, invalidate, clear, CSS combine, CDN rewrite) |
 | `Cache/class-object-cache.php` | Redis Object Cache (standalone/sentinel/cluster, enable/disable/flush/status) |
 | `Cache/class-advanced-cache-handler.php` | `advanced-cache.php` drop-in (create/detect/remove) |

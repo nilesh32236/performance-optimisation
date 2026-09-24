@@ -170,7 +170,7 @@ The generated metrics act as signals. Reviewers combine them with source and run
 
 ## Phase 3 ratchet
 
-P3-003 records these baselines:
+P3-004 records these baselines:
 
 | Metric | Baseline | Direction |
 |---|---:|---|

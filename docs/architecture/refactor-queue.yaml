@@ -699,8 +699,11 @@ phase3_items:
 
   - id: P3-004
     title: 'Blog-scoped runtime state and reset registry'
-    status: audit-pending
+    status: active
     priority: high
+    github_issue: 1572
+    github_pr: 1573
+    implementation_commit: 0db8e550b7029bf8ae05e92b838324f0d76a442c
     type: architecture
     problem: 'RUM, AI, System Info, LiteSpeed, Object Cache, and Database Cleanup hold site-sensitive static memos without a complete production switch_blog reset contract.'
     target_owner: 'Runtime_State reset/keying boundary with feature-owned memos'
@@ -709,6 +712,24 @@ phase3_items:
     non_goals: 'Do not make Util depend on features; do not alter RUM security or AI opt-in behavior.'
     tests: 'Blog A/B memo isolation, switch_blog reset, existing RUM/AI/LS/ObjectCache/Database suites.'
     ratchet: 'Site-sensitive static owners without production key/reset: 6 -> 0; registered owner coverage: 100%.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: 33711d11
+      evidence:
+        - 'RUM has field-LCP/score/top-url static memos and a public clear_field_lcp_cache(), but no production switch_blog registration.'
+        - 'AI_Adaptive model memo and Ai_Anomaly digest memo have reset methods; the anomaly memo carries a blog ID guard, but neither is centrally dispatched on switch_blog.'
+        - 'System_Info has a static LiteSpeed request cache and drop-in ownership memo; flush_dropin_cache() is not a complete blog reset.'
+        - 'LiteSpeed_Integration::reset_cache() clears its request memos but is test/manual-only and is not registered on switch_blog.'
+        - 'Object_Cache has circuit/nginx/outage static state; reset_circuit_memo_for_tests() is test-named and does not provide a complete runtime reset.'
+        - 'Database_Cleanup has health and deferred-counts static state without a public runtime reset contract.'
+        - 'Hook_Registry currently registers switch_blog resets for Util, Image_Optimisation, and Main only; the six owners are outside the production reset boundary.'
+      decision: 'Proceed test-first with a small Runtime_State registry that delegates feature-owned reset methods, registers one switch_blog hook, and leaves feature security/opt-in behavior unchanged.'
+      implementation:
+        owner: 'includes/Core/class-runtime-state.php'
+        registered_owners: 'RUM, AI_Adaptive, System_Info, LiteSpeed_Integration, Object_Cache, Database_Cleanup'
+        hook_seam: 'Hook_Registry switch_blog -> Runtime_State::on_switch_blog -> feature reset method'
+        graph_delta: '74 inventory files / 77 graph nodes / 345 edges; compatibility 194; bridge candidates 229'
+        ratchet_result: 'Site-sensitive static owners without production key/reset 6 -> 0; registered owner coverage 100%'
 
   - id: P3-005
     title: 'Cache capacity and eviction accounting owner'

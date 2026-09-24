@@ -164,6 +164,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Perf_Translations'      => 'Admin/class-perf-translations.php',
 				'Purge_Logger'           => 'Support/trait-purge-logger.php',
 				'Rest'                   => 'Admin/class-rest.php',
+				'Runtime_State'          => 'Core/class-runtime-state.php',
 				'Rest_Cache'             => 'Admin/class-rest-cache.php',
 				'Rest_Settings'          => 'Admin/class-rest-settings.php',
 				'RUM'                    => 'Insight/class-rum.php',

@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `14e3ad0cc06422db777105037de5ef2cf0e0bc12`
+Source: `origin/master` commit `33711d11e41614fb7661e3a1b2c6bdb0330a743d`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 76 first-party runtime files:
+The tokenizer scans 77 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 68 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 69 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,15 +40,15 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 73 |
-| Inventory source lines | 125,619 |
-| Class-like graph nodes | 72 |
+| Inventory files | 74 |
+| Inventory source lines | 125,734 |
+| Class-like graph nodes | 73 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,461 |
+| Named methods | 2,468 |
 | Methods spanning 80 lines or more | 238 |
 | Static properties | 141 across 31 nodes |
-| Unique dependency edges | 344 |
-| Runtime-classified edges | 343 |
+| Unique dependency edges | 345 |
+| Runtime-classified edges | 344 |
 | Compatibility-classified edges | 194 |
 | Loader-classified edges | 3 |
 | Cross-domain edges | 302 |
@@ -136,6 +136,7 @@ These counts come from method names, call sites, tests, and history. They approx
 | `Cron` | 6 | Recurring scheduling, sitemap discovery, queue progress, URL/page fetch, image/preload/insight jobs, teardown |
 | `Job_Registry` | 1 | Canonical WP-Cron/Action Scheduler hook ownership and teardown unions |
 | `Preload_Transport` | 1 | Same-host target validation and bounded non-following redirect transport |
+| `Runtime_State` | 1 | Six-owner blog-switch reset registry with feature-owned reset delegation |
 
 ## Coupling findings
 

@@ -221,6 +221,9 @@ trait WPPO_Test_Bootstrap {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
+		if ( class_exists( 'PerformanceOptimise\\Inc\\Runtime_State' ) ) {
+			\PerformanceOptimise\Inc\Runtime_State::reset_all();
+		}
 		if ( class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 			// Settings memo now lives in Settings_Store (REF-002); the proxy
 			// above already clears it, but reset the owner directly so the
