@@ -747,11 +747,25 @@ phase3_items:
 
   - id: P3-005
     title: 'Cache capacity and eviction accounting owner'
-    status: active
+    status: merged
     priority: high
     github_issue: 1574
     github_pr: 1575
     implementation_commit: bc4d4a68b55ae6b98cee99f75c83e0e9226fc78a
+    merge_commit: ccbe2372b7dd604b624c19d094e6c217bc54b5b8
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      capacity: 'Cache_Capacity loaded; cap defaults unchanged; live bytes/files and stats keys returned'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      cron: 'preload jobs remain scheduled; no orphan-hook warning'
+      object_cache: 'template parity; mode 0644; owner nobody:nogroup'
+      architecture_graph: '75 inventory files / 78 nodes / 348 edges; generator check passed'
     type: architecture
     problem: 'Cache carries an 839-line statistics, cap, and eviction tail with one accounting contract and callers in Cron, REST, Main, and CLI.'
     target_owner: 'Cache_Capacity under Cache/'
@@ -781,7 +795,7 @@ phase3_items:
 
   - id: P3-006
     title: 'Redis configuration value policy'
-    status: queued
+    status: audit-pending
     priority: high
     type: security-architecture
     problem: 'REST owns the complete Redis value sanitizer while CLI and Object_Cache carry weaker key-level validation.'
