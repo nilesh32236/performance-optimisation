@@ -1342,7 +1342,32 @@ phase3_items:
         - 'Critical_CSS generation and Ccss_Store status are a cohesive storage/generation boundary, while image and cache purge policy remain separate future items.'
         - 'A fresh graph and characterization pass must choose the smallest extractable CSS generation/status cluster before issue implementation.'
         - 'Public admin/REST surfaces, generation status, cache keys, output, and data contracts must remain stable.'
+      fresh_graph:
+        generated_at: '2026-09-24'
+        files: 88
+        nodes: 88
+        edges: 390
+        critical_css_lines: 6950
+        critical_css_methods: 138
+        ccss_store_lines: 1042
+        ccss_store_methods: 24
+        critical_to_budget_edges: 0
+        feature_to_feature_edges: 50
+        runtime_scc_members: 67
       decision: 'Re-audit the fresh graph and implement one cohesive CSS generation/status extraction only; defer image media and cache purge policy.'
+      selected_cluster: 'budget/cooldown gates (Option A): get_ccss_max_size, truncate_to_cap, get_full/targeted_regen_cooldown, is_full/targeted_regen_cooled_down, mark_full/targeted_regen, estimate_committed_inline_bytes, get_effective_ccss_budget, coordinate_inline_budgets, gzipped_size, is_over_inline_budget, get_ccss_inline_budget_label — pure plus settings/option/filter reads, zero Scheduler edges, smallest blast radius. Retry/scheduling (Option B) deferred to a follow-up.'
+      implementation:
+        implemented_at: '2026-09-24'
+        github_issue: 1602
+        new_owner: 'PerformanceOptimise\Inc\Ccss_Budget_Policy (includes/CSS/class-ccss-budget-policy.php, CSS domain, @since NEXT): 654 lines / 17 methods (15 moved verbatim + reset_ccss_memo seam + private styles-limit bridge); canonical budget/cooldown constants with BC aliases kept on Critical_CSS.'
+        facade: 'Critical_CSS 6950->6575 lines, 138 methods unchanged (15 bodies become same-signature proxies, 6 moved private constants removed, 2 public option keys kept as pinned BC aliases); reset_ccss_memo() clears store + policy halves; no hook/key/filesystem/output/REST change; no image/preload/purge/Util moves.'
+        post_graph:
+          files: 89
+          nodes: 89
+          edges: 392
+          runtime_scc_members: 68
+          feature_to_feature_edges: 50
+        tests: 'CcssBudgetPolicyParityTest (12 tests: proxy parity, cooldown round-trips, budget math, truncate, gzip gates, memo reset, const aliases); LoaderMapTest + ArchitectureInventoryTest pins advanced (80/81, 79/80, 88/89, 84/85, 390/392, 389/391, 205/206, 67-68/336-338).'
 
   - id: P3-024
     title: 'AI model persistence and learning ownership'

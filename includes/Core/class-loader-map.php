@@ -134,6 +134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 				'Cloudflare_Purger'          => 'Edge/class-cloudflare-purger.php',
 				'Core_Tweaks'                => 'Compatibility/class-core-tweaks.php',
 				'Critical_CSS'               => 'CSS/class-critical-css.php',
+				'Ccss_Budget_Policy'         => 'CSS/class-ccss-budget-policy.php',
 				'Ccss_Store'                 => 'CSS/class-ccss-store.php',
 				'Css_Combine'                => 'Assets/class-css-combine.php',
 				'Css_Safelist'               => 'Assets/class-css-safelist.php',

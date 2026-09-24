@@ -133,12 +133,12 @@ final class ArchitectureInventoryTest extends TestCase {
 		$graph = $this->read_json( 'DEPENDENCY-GRAPH.json' );
 		$this->assertSame( 2, $graph['schema_version'] );
 		$this->assertStringContainsString( 'PhpToken', $graph['analysis_method'] );
-		$this->assertSame( 88, $graph['summary']['files'] );
-		$this->assertSame( 84, $graph['summary']['class_like_nodes'] );
+		$this->assertSame( 89, $graph['summary']['files'] );
+		$this->assertSame( 85, $graph['summary']['class_like_nodes'] );
 		$this->assertSame( 4, $graph['summary']['procedural_nodes'] );
-		$this->assertSame( 390, $graph['summary']['edges'] );
-		$this->assertSame( 389, $graph['summary']['runtime_edges'] );
-		$this->assertSame( 205, $graph['summary']['compatibility_edges'] );
+		$this->assertSame( 392, $graph['summary']['edges'] );
+		$this->assertSame( 391, $graph['summary']['runtime_edges'] );
+		$this->assertSame( 206, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
 		$this->assertNotEmpty( $graph['edges'] );
@@ -291,8 +291,8 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertSame( 1, $graph['summary']['runtime_cyclic_components'] );
 		$this->assertSame( 1, $graph['summary']['compatibility_cyclic_components'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['runtime'] );
-		$this->assertCount( 67, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
-		$this->assertCount( 336, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
+		$this->assertCount( 68, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
+		$this->assertCount( 338, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['compatibility'] );
 		$this->assertCount( 22, $graph['metrics']['cycles_by_classification']['compatibility'][0]['members'] );
 		$this->assertCount( 72, $graph['metrics']['cycles_by_classification']['compatibility'][0]['edges'] );

@@ -170,7 +170,7 @@ The dependency graph adds four procedural runtime files: the plugin entry, `unin
 
 ### CSS
 
-`CSS` owns critical and used CSS generation, delivery, policy, and status. `Ccss_Store` owns critical CSS storage. Used CSS still owns a coupled purge path, which the graph records for later coordination.
+`CSS` owns critical and used CSS generation, delivery, policy, and status. `Ccss_Store` owns critical CSS storage. `Ccss_Budget_Policy` (P3-018) owns the critical-CSS inline-budget/cooldown-gate policy (size cap, truncation, regen cooldowns, budget coordination, gzip guard); `Critical_CSS` keeps thin proxies. Used CSS still owns a coupled purge path, which the graph records for later coordination.
 
 ### Database
 
