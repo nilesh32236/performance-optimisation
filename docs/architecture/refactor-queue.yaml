@@ -1326,11 +1326,13 @@ phase3_items:
 
   - id: P3-018
     title: 'Remaining image, CSS, and cache policy extraction'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1602
     github_pr: 1604
     implementation_commit: e07b36f3f0804b5429583ca9940273f38da7d04d
+    merge_commit: 662982e4
+    merged_at: '2026-09-24'
     type: epic
     problem: 'Image media/state, Used CSS storage, Critical CSS generation, and cache/CSS purge coordination remain broad.'
     target_owner: 'Cohesive media, CSS storage/generation, and purge coordination owners'
@@ -1357,6 +1359,17 @@ phase3_items:
         compatibility_edge_note: 'The new Critical_CSS→Ccss_Generator and Ccss_Store→Ccss_Generator owner edges are explicit lifecycle bridges; they remain until external callers can be migrated under a later approved compatibility-removal item.'
         verification: 'Focused Ccss_Generator/Critical_CSS/Ccss_Store/cache/loader/architecture set passes 125 tests / 14,631 assertions; full PHPUnit passes 2,776 tests / 25,757 assertions (9 skipped, 7 existing deprecations); full PHPCS passes; focused Ccss_Generator PHPStan passes; npm run lint:js passes with 2 existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing warnings; npm run build passes with existing entrypoint-size warning; generator --check and git diff --check pass'
 
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      css_lifecycle: 'Ccss_Generator, Critical_CSS, and Ccss_Store loaded via root namespace; no CSS generation, status write, purge, or scheduler mutation performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '86 inventory files / 89 graph nodes / 395 edges; generator check passed'
+
   - id: P3-024
     title: 'AI model persistence and learning ownership'
     status: queued
@@ -1372,6 +1385,7 @@ phase3_items:
 
   - id: P3-019
     title: 'React settings-response and async lifecycle correctness'
+    status: audit-pending
     status: queued
     priority: medium
     type: epic
