@@ -119,6 +119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Loader_Map' ) ) {
 		public static function fallback_map(): array {
 			return array(
 				'Abilities'               => 'Admin/class-abilities.php',
+				'Admin_Auth'              => 'Admin/class-admin-auth.php',
 				'Activate'                => 'Core/class-activate.php',
 				'Admin_Notices'           => 'Admin/class-admin-notices.php',
 				'Advanced_Cache_Handler'  => 'Cache/class-advanced-cache-handler.php',

@@ -1035,6 +1035,16 @@ phase3_items:
         - 'Public rum_collect intentionally uses __return_true and RUM token/IP rate limits; it must remain outside the admin policy.'
         - 'A dependency-light Admin_Auth policy can accept an optional WP_REST_Request and preserve both request-header and legacy-server paths without weakening nonce enforcement.'
       decision: 'Proceed test-first with an Admin_Auth policy; route REST and Abilities permission callbacks through it while keeping public RUM collection unchanged.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'includes/Admin/class-admin-auth.php'
+        adapters: 'Rest::permission_callback retains its optional WP_REST_Request signature and Abilities::permission_check retains its no-argument signature; both delegate to Admin_Auth::permission_check()'
+        security: 'Capability is checked first; supplied request headers use WP_REST_Request canonicalization and the first repeated value; only null-request callers use the wp_unslash legacy $_SERVER path; the sanitized nonce is verified for wp_rest'
+        exceptions: 'rum_collect remains __return_true; RUM token, IP, and global rate-limit validation remain untouched; no route, hook, option, multisite, or data-migration change'
+        loader: 'Loader_Map::fallback_map()["Admin_Auth"] with explicit PHPUnit bootstrap loading for stale local classmaps'
+        graph_delta: '81 inventory files / 84 graph nodes / 368 edges; independent admin-auth implementations 2->1; Admin_Auth has 2 incoming edges, 0 feature dependencies, 0 outgoing class edges, and no static state; runtime SCC remains 63 nodes / 317 internal edges'
+        tests: 'AdminAuthTest, RestTest, AbilitiesTest, LoaderMapTest, and ArchitectureInventoryTest'
+        verification: 'Focused auth/REST/Abilities/loader/architecture tests pass (86 tests / 13,990 assertions); full PHPCS passes via vendor/bin/phpcs because the composer executable is unavailable; focused PHPStan on Admin_Auth passes; generator --check and git diff --check pass; full PHPUnit passes 2,735 tests / 24,965 assertions (7 PHPUnit deprecations, 9 skipped; existing warning output); npm run lint:js passes with 2 pre-existing useUnsavedChanges warnings; npm test passes 56 suites / 789 tests with existing console warnings; npm run build passes with the existing entrypoint-size warning and no build diff.'
 
   - id: P3-012
     title: 'Edge/CDN purge coordinator'

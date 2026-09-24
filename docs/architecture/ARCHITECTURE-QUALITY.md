@@ -170,7 +170,7 @@ The generated metrics act as signals. Reviewers combine them with source and run
 
 ## Phase 3 ratchet
 
-P3-005 through P3-010 record these baselines:
+P3-005 through P3-011 record these baselines:
 
 | Metric | Baseline | Direction |
 |---|---:|---|
@@ -190,6 +190,7 @@ P3-005 through P3-010 record these baselines:
 | Static properties | 141 | Classify, then reduce or document |
 | Exact duplicate groups | 17 | Review; reduce only semantic duplicates |
 | Feature-to-feature edges | 46 | Keep only deliberate interactions |
+| Independent admin-auth implementations | 1 | Reduce to 0 outside `Admin_Auth` |
 
 A pull request may increase a metric for a documented bridge. It must name the follow-up item and removal condition. An unexplained increase fails the ratchet.
 

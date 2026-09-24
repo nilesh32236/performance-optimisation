@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 83 first-party runtime files:
+The tokenizer scans 84 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 75 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 76 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 3 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,15 +40,15 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 80 |
-| Inventory source lines | 126,492 |
-| Class-like graph nodes | 79 |
+| Inventory files | 81 |
+| Inventory source lines | 126,527 |
+| Class-like graph nodes | 80 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,510 |
+| Named methods | 2,511 |
 | Methods spanning 80 lines or more | 236 |
 | Static properties | 141 across 32 nodes |
-| Unique dependency edges | 366 |
-| Runtime-classified edges | 365 |
+| Unique dependency edges | 368 |
+| Runtime-classified edges | 367 |
 | Compatibility-classified edges | 195 |
 | Loader-classified edges | 3 |
 | Cross-domain edges | 313 |
@@ -97,7 +97,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Img_Converter` | 4,077 | 66 | 8 | 4 | 8 | 9/2 | 36 | 0 | `convert_image` 691 |
 | `Script_Strategy` | 3,859 | 56 | 12 | 11 | 12 | 1/4 | 35 | 1 | `add_defer_attribute` 203 |
 | `AI_Adaptive` | 3,989 | 76 | 8 | 2 | 2 | 5/5 | 20 | 4 | `get_suggestions` 761 |
-| `Rest` | 3,750 | 76 | 9 | 0 | 3 | 1/22 | 1 | 17 | `optimise_image` 310 |
+| `Rest` | 3,656 | 76 | 8 | 0 | 3 | 1/26 | 1 | 19 | `optimise_image` 310 |
 | `Database_Cleanup` | 3,365 | 59 | 9 | 3 | 3 | 6/2 | 64 | 0 | `get_action_scheduler_health` 220 |
 | `Database_Cleanup_Runner` | 323 | 7 | 0 | 0 | 0 | 3/2 | 6 | 1 | `run` 68 |
 | `RUM` | 3,348 | 63 | 7 | 7 | 7 | 14/2 | 98 | 1 | `flush_queue` 328 |
@@ -143,6 +143,7 @@ These counts come from method names, call sites, tests, and history. They approx
 | `Preload_Transport` | 1 | Same-host target validation and bounded non-following redirect transport |
 | `Runtime_State` | 1 | Six-owner blog-switch reset registry with feature-owned reset delegation |
 | `Insight_Query` | 1 | Cached telemetry/PageSpeed read models and deterministic PageSpeed suggestion augmentation |
+| `Admin_Auth` | 1 | Administrative capability, REST header canonicalization, legacy nonce fallback, and wp_rest verification |
 
 ## Coupling findings
 
@@ -183,6 +184,8 @@ P3-009 adds the 74-line, three-method `Insight_Query` read boundary. REST, Abili
 `Rest_Settings` and the REST safe-mode path still write `wppo_settings` outside `Settings_Store`; that remains queued for the later settings-command item.
 
 P3-010 adds the 323-line, seven-method `Database_Cleanup_Runner` application boundary. REST, Abilities, and WP-CLI now delegate canonical validation, all/Action Scheduler dispatch, revision defaults, legacy CLI aliases, dry-run previews, logging/hooks, and REST table optimization through it; `Database_Cleanup` remains the SQL/map/counts/health owner, and Cron still calls `auto_clean()` directly. The generated inventory contains 80 files, 83 graph nodes, and 366 edges; the runner has three incoming feature edges and no static state.
+
+P3-011 adds the 60-line, one-method dependency-light `Admin_Auth` policy. `Rest::permission_callback()` and `Abilities::permission_check()` retain their public signatures but delegate capability-first, request-header/legacy-server nonce handling, sanitization, and `wp_rest` verification to one owner. Public `rum_collect` remains `__return_true`, and RUM token, IP, and global rate-limit policy remains untouched. The generated inventory contains 81 files, 84 graph nodes, and 368 edges; `Admin_Auth` has two incoming edges, no feature dependencies, and no static state.
 
 ## Static state
 

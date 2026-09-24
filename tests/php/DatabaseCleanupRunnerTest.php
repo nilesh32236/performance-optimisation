@@ -291,6 +291,7 @@ final class DatabaseCleanupRunnerTest extends \PHPUnit\Framework\TestCase {
 		$abilities = (string) file_get_contents( $root . '/includes/Admin/class-abilities.php' );
 		$cli       = (string) file_get_contents( $root . '/includes/Admin/class-wppo-cli-command.php' );
 		$cron      = (string) file_get_contents( $root . '/includes/Scheduler/class-cron.php' );
+		$auth      = (string) file_get_contents( $root . '/includes/Admin/class-admin-auth.php' );
 		$runner    = (string) file_get_contents( $root . '/includes/Database/class-database-cleanup-runner.php' );
 		// phpcs:enable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 
@@ -304,7 +305,9 @@ final class DatabaseCleanupRunnerTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringNotContainsString( 'Database_Cleanup::clean_revisions(', $cli );
 		$this->assertStringContainsString( 'WP_CLI::confirm(', $cli );
 		$this->assertStringContainsString( 'REJECT --confirm alias', $cli );
-		$this->assertStringContainsString( 'current_user_can( \'manage_options\' )', $abilities );
+		$this->assertStringContainsString( 'current_user_can( \'manage_options\' )', $auth );
+		$this->assertStringNotContainsString( 'current_user_can( \'manage_options\' )', $abilities );
+		$this->assertStringContainsString( 'Admin_Auth::permission_check()', $abilities );
 		$this->assertStringContainsString( 'Database_Cleanup::auto_clean(', $cron );
 		$this->assertStringContainsString( "'permission_callback' => array( \$this, 'permission_callback' )", $rest );
 		$this->assertStringContainsString( 'Database_Cleanup::CLEANUP_METHOD_MAP', $runner );

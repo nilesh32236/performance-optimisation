@@ -116,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
-The schema-v2 inventory tracks 80 files: 76 runtime plugin files under `includes/` (75 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
+The schema-v2 inventory tracks 81 files: 77 runtime plugin files under `includes/` (76 class-like nodes plus the Redis helper), 3 protected minify wrappers, and the `templates/object-cache.php` drop-in. `docs/architecture/class-inventory.json` and `docs/architecture/ARCHITECTURE-BASELINE.md` are authoritative for current counts and responsibility evidence.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -137,6 +137,7 @@ The schema-v2 inventory tracks 80 files: 76 runtime plugin files under `includes
 | `Images/class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `Images/class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
 | `Admin/class-rest.php` | REST registrar for 47 concrete endpoints (48 registered patterns including the namespace root) |
+| `Admin/class-admin-auth.php` | Shared administrative capability and `wp_rest` nonce policy for REST and Abilities |
 | `Insight/class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `Insight/class-insight-query.php` | Read-only cached telemetry/PageSpeed models; salted-transient fallback and PageSpeed suggestion augmentation |
 | `Insight/class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
@@ -209,7 +210,7 @@ The schema-v2 inventory tracks 80 files: 76 runtime plugin files under `includes
 - PHPCS excludes: `vendor/*`, `node_modules/*`, `build/*`
 - Composer deps (7 packages): `voku/html-min`, `voku/simple_html_dom`, `matthiasmullie/minify`, `matthiasmullie/path-converter`, `symfony/css-selector`, `tedivm/jshrink`, `woocommerce/action-scheduler`
 - `wp wppo` WP-CLI commands registered (8 subcommands, including `verify` — see `includes/Admin/class-wppo-cli-command.php`)
-- REST routes require `manage_options` + `X-WP-Nonce` except public `rum_collect`, which keeps token, IP, and global rate-limit validation
+- REST routes and Abilities require `manage_options` + `X-WP-Nonce` through the shared `Admin_Auth` policy; public `rum_collect` keeps token, IP, and global rate-limit validation
 - Settings stored as serialized array in single `wppo_settings` option
 - **PHP 8.5 compat**: never call `Reflection::{Method,Property}::setAccessible()` (deprecated on PHP 8.5, no-op since PHP 8.1 — reflection works without it on the PHP 8.2+ floor); route resource teardown (`curl_close`, `curl_multi_close`, `curl_share_close`, `finfo_close`, `xml_parser_free`, `imagedestroy`) through the `Util` helpers (`close_curl_handle()`, `close_curl_multi_handle()`, `close_curl_share_handle()`, `close_finfo_handle()`, `free_xml_parser()`, `destroy_gd_image()`). Both rules are pinned by `tests/php/PhpDeprecationHygieneTest.php` (13-pattern scanner). See `docs/php-84-85-compat.md`.
 - **Filters**: `wppo_inline_combined_css` (return falsy to disable inlining of the combined/minified CSS via core `wp_maybe_inline_styles()` — e.g. when using a CDN for the combined file)

@@ -578,24 +578,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Permission callback for all abilities.
 		 *
-		 * Capability alone is CSRF-reachable over cookie-authenticated
-		 * transports, so the wp_rest nonce is required too (audit #1329),
-		 * mirroring Rest::permission_callback(). Abilities receive no
-		 * request object, so the nonce is read from the X-WP-Nonce header.
+		 * Delegates to the same administrative capability and REST nonce policy
+		 * used by Rest::permission_callback(). The no-argument callback
+		 * signature remains stable for the Abilities registry.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Delegates capability and nonce decisions to Admin_Auth.
 		 * @return bool Whether the current user can manage options with a valid nonce.
 		 */
 		public static function permission_check(): bool {
-			if ( ! current_user_can( 'manage_options' ) ) {
-				return false;
-			}
-			$nonce = '';
-			if ( isset( $_SERVER['HTTP_X_WP_NONCE'] ) ) {
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized on the next line; raw superglobal read mirrors Rest::permission_callback().
-				$nonce = (string) wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] );
-			}
-			return (bool) wp_verify_nonce( sanitize_text_field( $nonce ), 'wp_rest' );
+			return Admin_Auth::permission_check();
 		}
 
 		/**
