@@ -1063,11 +1063,23 @@ phase3_items:
 
   - id: P3-012
     title: 'Edge/CDN purge coordinator'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1589
     github_pr: 1590
     implementation_commit: 64d46876deac9f958caae72f4189694f8b3f18b3
+    merge_commit: da559ae94254a2b7d2b4977530bac05ec9447a71
+    merged_at: '2026-09-24'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      coordinator: 'loaded; single wppo_after_cache_clear listener registered; no external cache purge or site data mutation performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '82 inventory files / 85 nodes / 369 edges; generator check passed'
     type: architecture
     problem: 'CDN_Purger and Edge_Purger can both issue Cloudflare transport for one cache-clear event when settings overlap.'
     target_owner: 'Edge_Purge_Coordinator'
@@ -1096,7 +1108,7 @@ phase3_items:
 
   - id: P3-013
     title: 'Main options and lifecycle ownership cleanup'
-    status: queued
+    status: audit-pending
     priority: medium
     type: epic
     problem: 'Main still owns options backfills, settings invalidation, cache coordination, and collaborator construction.'
