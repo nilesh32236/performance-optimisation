@@ -1108,13 +1108,23 @@ phase3_items:
 
   - id: P3-013
     title: 'Main options and lifecycle ownership cleanup'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1591
     type: epic
     problem: 'Main still owns options backfills, settings invalidation, cache coordination, and collaborator construction.'
     target_owner: 'Settings_Store/Cache coordination contracts with Main as orchestrator'
     exact_scope: 'Options resolution, settings update invalidation, and one cache coordination cluster per item.'
     ratchet: 'Main feature dependencies, fan-out, and large methods down.'
+    re_audit:
+      audited_at: '2026-09-24'
+      source_commit: b9347c39
+      evidence:
+        - 'Main::get_options() owns a large historical in-memory backfill cluster and blog-aware memo resolution, while Settings_Store owns canonical validation and Settings_Command owns writes.'
+        - 'Main::refresh_options(), on_settings_add(), and on_settings_update() provide memo invalidation around the Main singleton rather than the Settings_Store memo owner.'
+        - 'Main::create_cache() and constructor collaborator wiring combine cache lifecycle with Main orchestration, leaving a bounded cache coordination contract available for extraction.'
+        - 'Existing Settings_Store/Settings_Command contracts can absorb options read/invalidation without moving asset, preload, or speculative policy into a new service.'
+      decision: 'Proceed test-first in one P3-013 issue: move options resolution/invalidation to the existing settings boundaries and extract only the smallest cache coordination cluster, keeping Main as orchestrator.'
 
   - id: P3-014
     title: 'Main asset, minification, and speculation cleanup'
