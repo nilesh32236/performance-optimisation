@@ -13104,7 +13104,7 @@
             "file": "includes/Core/class-loader-map.php",
             "domain": "Core",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 327,
+            "lines": 334,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -13136,8 +13136,8 @@
                 {
                     "name": "path_for",
                     "line": 294,
-                    "end_line": 315,
-                    "lines": 22,
+                    "end_line": 322,
+                    "lines": 29,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
@@ -13180,8 +13180,8 @@
                 },
                 {
                     "name": "cli_file",
-                    "line": 323,
-                    "end_line": 325,
+                    "line": 330,
+                    "end_line": 332,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -13193,8 +13193,8 @@
                 "static_calls": {
                     "self::allowed_dirs": 266,
                     "self::base_dir": 276,
-                    "self::fallback_map": 305,
-                    "self::file_path": 310
+                    "self::fallback_map": 307,
+                    "self::file_path": 317
                 },
                 "instance_calls": [],
                 "new_expressions": [],
@@ -13297,6 +13297,7 @@
                     "class_exists": 26,
                     "count": 259,
                     "defined": 22,
+                    "end": 312,
                     "explode": 258,
                     "in_array": 266,
                     "ltrim": 295,
