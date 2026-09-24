@@ -1241,6 +1241,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1597
+    implementation_commit: 84b820a7f732b1aa954a2684727410e0e7039be5
     type: epic
     problem: 'Extracted services still hold Main owner state through @internal bridges and reverse edges.'
     target_owner: 'Explicit service state or narrow application contracts'
