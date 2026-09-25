@@ -72,6 +72,14 @@
     "menu_order": 50
   },
   {
+    "file": "support.html",
+    "slug": "support",
+    "parent_slug": "performance-optimisation",
+    "title": "Support",
+    "excerpt": "How to reproduce, what redacted information to share, where to ask, and safe upgrade recovery.",
+    "menu_order": 55
+  },
+  {
     "file": "faq.html",
     "slug": "faq",
     "parent_slug": "performance-optimisation",

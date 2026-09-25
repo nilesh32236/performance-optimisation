@@ -1431,6 +1431,68 @@ const PluginSetting = ( { options } ) => {
 					) }
 				</FeatureCard>
 
+				{ /* Support and safe-upgrade guidance: redacted reports, recovery, docs links. */ }
+				<FeatureCard
+					title={ __(
+						'Support And Safe Upgrades',
+						'performance-optimisation'
+					) }
+				>
+					<p className="wppo-text-muted wppo-mb-16">
+						{ __(
+							'Before a major change, export your settings above so you can re-import them or use Undo. To report a problem, reproduce it on one URL with one recent setting change, then share WordPress/PHP/server versions, the exact steps, and redacted wp wppo system-info output. Never share passwords, API keys, cookies, or authorization headers.',
+							'performance-optimisation'
+						) }
+					</p>
+					<ul className="wppo-text-muted wppo-text-small">
+						<li>
+							<a
+								href="https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{ __(
+									'Support guide',
+									'performance-optimisation'
+								) }
+							</a>
+						</li>
+						<li>
+							<a
+								href="https://nileshportfolio.duckdns.org/docs/performance-optimisation/troubleshooting/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{ __(
+									'Troubleshooting',
+									'performance-optimisation'
+								) }
+							</a>
+						</li>
+						<li>
+							<a
+								href="https://nileshportfolio.duckdns.org/docs/performance-optimisation/compatibility/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{ __(
+									'Compatibility',
+									'performance-optimisation'
+								) }
+							</a>
+						</li>
+						<li>
+							<a
+								href="https://nileshportfolio.duckdns.org/docs/performance-optimisation/faq/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{ __( 'FAQ', 'performance-optimisation' ) }
+							</a>
+						</li>
+					</ul>
+				</FeatureCard>
+
 				<div className="wppo-grid-2-col">
 					{ /* Export */ }
 					<FeatureCard

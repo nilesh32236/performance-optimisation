@@ -26,7 +26,8 @@ Most performance plugins either cover only one job or bury the important control
  - **Core Web Vitals monitoring:** Measure LCP, INP, and CLS with PageSpeed Insights and optional first-party RUM.
  - **Image optimization:** Convert images to WebP and AVIF, lazy-load media, and preload important images.
  - **CSS and JavaScript optimization:** Minify and combine assets, defer or delay selected scripts, and remove WordPress bloat.
- - **Safe defaults:** Test one feature at a time; advanced defer, delay, and asset-removal options are off by default.
+ - **Safe defaults:** Test one feature at a time; advanced defer, delay, and asset-removal options are off by default. Every settings save keeps an automatic restore point (Undo via `restore_settings`) and a redacted JSON export, so recovery never needs credentials.
+ - **Free and open source:** GPLv2 or later, no premium version, no upsells, and no feature restrictions. Compatibility claims are safeguards, not blanket guarantees — see Compatibility, Troubleshooting, and FAQ below.
 
 = Core Performance Features =
 
@@ -159,6 +160,12 @@ Yes. Use the **Tools** tab to export your current configuration as a JSON file a
 
 = Is this plugin free? =
 Yes. Performance Optimisation is 100% free and open source. There is no premium version, no upsells, and no feature restrictions.
+
+= How do I start safely and undo a change? =
+Start Safe → Test → Review → Advanced only when needed: enable the Safe preset or one feature at a time, test logged-out, then review before touching Balanced or Aggressive options. Every save keeps an automatic restore point — use Undo (Dashboard preset card or Tools → Undo Last Settings Change) or re-import a previously exported redacted JSON backup. Export before major upgrades.
+
+= How do I get support without sharing private data? =
+Reproduce on one URL with one recent setting change, then report WordPress/PHP/server versions, the exact steps, and redacted `wp wppo system-info` (or `wp wppo verify`) output. Never include passwords, API keys, cookies, or authorization headers. See Troubleshooting (“How to get help”), Compatibility, FAQ, and the online support guide. There are no guaranteed scores, rankings, or timelines.
 
 == External Services ==
 

@@ -20,7 +20,13 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 **Requirements:** WordPress **6.2+** and PHP **8.2+** (same as the [WordPress.org](https://wordpress.org/plugins/performance-optimisation/) listing; the canonical requirements live in `readme.txt`).
 
-**Safe defaults:** Page caching and native lazy loading are available on a fresh install, while aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules) are **off** by default. LCP guardrails, WooCommerce safe mode, and bounded cache safeguards remain on.
+**Safe defaults:** Page caching and native lazy loading are available on a fresh install, while aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules) are **off** by default. LCP guardrails, WooCommerce safe mode, and bounded cache safeguards remain on. Every settings save keeps an automatic restore point (Undo) plus a redacted JSON export for recovery.
+
+**Free and open source:** GPLv2 or later, no premium version, no upsells, and no feature restrictions.
+
+**First run:** Start Safe → Test → Review → Advanced only when needed. Enable the Safe preset or one feature at a time, test logged-out, then review before Balanced/Aggressive. Export settings before major upgrades.
+
+**Support without private data:** reproduce on one URL with one recent change, then share WordPress/PHP/server versions, exact steps, and redacted `wp wppo system-info` (or `wp wppo verify`) output. Never share passwords, API keys, cookies, or authorization headers. See [Troubleshooting](https://nileshportfolio.duckdns.org/docs/performance-optimisation/troubleshooting/), [Compatibility](https://nileshportfolio.duckdns.org/docs/performance-optimisation/compatibility/), [FAQ](https://nileshportfolio.duckdns.org/docs/performance-optimisation/faq/), and the [Support guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/).
 
 ---
 
@@ -128,6 +134,9 @@ The maintained, code-accurate documentation is published at [nileshportfolio.duc
 - [Features Guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/features/)
 - [Configuration and developer reference](https://nileshportfolio.duckdns.org/docs/performance-optimisation/configuration/)
 - [Troubleshooting](https://nileshportfolio.duckdns.org/docs/performance-optimisation/troubleshooting/)
+- [Compatibility](https://nileshportfolio.duckdns.org/docs/performance-optimisation/compatibility/)
+- [FAQ](https://nileshportfolio.duckdns.org/docs/performance-optimisation/faq/)
+- [Support](https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/)
 - [Generated code reference](https://nileshportfolio.duckdns.org/docs/performance-optimisation/reference/)
 
 The source fragments live in [`docs/site/`](docs/site/), and the API reference is regenerated from the current recursive source tree. Documentation examples are operational guidance, not guaranteed performance scores.

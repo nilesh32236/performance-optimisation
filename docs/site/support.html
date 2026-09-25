@@ -1,0 +1,16 @@
+<h2>How support works</h2>
+<p>Performance Optimisation is free and open source (GPLv2 or later) with no premium version or upsells. Support is best-effort guidance for the current release: reproduce the problem, share a redacted report, and recover with Undo or a settings backup. There are no guaranteed scores, rankings, or timelines, and no request for credentials, cookies, API keys, or private data — ever.</p>
+<h2>Before you ask</h2>
+<ol><li><strong>Start Safe → Test → Review → Advanced only when needed.</strong> Enable the Safe preset or one feature at a time and test logged-out before Balanced or Aggressive.</li><li>Record a baseline: the failing URL, the exact setting changed, and a logged-out page load.</li><li>Run <code>wp wppo verify</code> and keep the output; it reports runtime, filesystem, cache, Redis, LiteSpeed, settings, cron, and uninstall-hygiene findings.</li><li>Export your settings (Tools → Export Configuration) so you can re-import them or use Undo Last Settings Change.</li></ol>
+<h2>Reproduce in five steps</h2>
+<ol><li>Note WordPress, PHP, server (Apache/nginx/LiteSpeed/OLS), theme, builder, WooCommerce, Redis, and CDN versions.</li><li>Change exactly one setting, save, and clear only the affected URL (<code>wp wppo cache clear --page=/sample-page/</code>).</li><li>Test logged-out, then logged-in, plus navigation and the main form; test cart and checkout when WooCommerce is active.</li><li>Capture response headers and the browser console message for that URL.</li><li>Undo or re-import the backup before trying the next change.</li></ol>
+<h2>What to include (redacted)</h2>
+<ul><li>WordPress/PHP/server versions and hosting context.</li><li>Exact reproduction URL and click-by-click steps.</li><li>The single feature changed (preset name or tab + key).</li><li>Redacted <code>wp wppo system-info</code> and <code>wp wppo verify</code> output.</li><li>Relevant console or PHP error-log lines with secrets removed.</li></ul>
+<h2>What to never share</h2>
+<p>Never include passwords, API keys, Redis credentials, Cloudflare/Bunny tokens, cookies, session IDs, authorization headers, full database dumps, or customer personal data. Exports from this plugin redact secret-shaped values automatically, but always re-check attachments before sending. If a secret was pasted accidentally, rotate it immediately.</p>
+<h2>Where to ask</h2>
+<ul><li><a href="https://wordpress.org/support/plugin/performance-optimisation/">WordPress.org support forum</a> for public questions.</li><li><a href="https://github.com/anomalyco/performance-optimisation/issues">GitHub issues</a> for reproducible bugs with versions and steps.</li></ul>
+<h2>Upgrades</h2>
+<p>Back up settings before every major upgrade. Deactivation removes owned cron events, owned drop-ins, and the created <code>WP_CACHE</code> guard; uninstall additionally removes options, activity data, generated cache files, converted-image copies, and post meta. Original Media Library uploads are never deleted by uninstall.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/troubleshooting/">Troubleshooting</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li><li><a href="/docs/performance-optimisation/faq/">FAQ</a></li><li><a href="/docs/performance-optimisation/installation/">Installation</a></li></ul>
