@@ -145,7 +145,7 @@ These counts come from method names, call sites, tests, and history. They approx
 | `Cron` | 6 | Recurring scheduling, sitemap discovery, queue progress, URL/page fetch, image/preload/insight jobs, teardown |
 | `Job_Registry` | 1 | Canonical WP-Cron/Action Scheduler hook ownership and teardown unions |
 | `Preload_Transport` | 1 | Same-host target validation and bounded non-following redirect transport |
-| `Runtime_State` | 1 | Six-owner blog-switch reset registry with feature-owned reset delegation |
+| `Runtime_State` | 1 | Seven-owner blog-switch reset registry (six site-sensitive + OD_Bridge request-local memo) with feature-owned reset delegation |
 | `Insight_Query` | 1 | Cached telemetry/PageSpeed read models and deterministic PageSpeed suggestion augmentation |
 | `Admin_Auth` | 1 | Administrative capability, REST header canonicalization, legacy nonce fallback, and wp_rest verification |
 | `Edge_Purge_Coordinator` | 1 | One cache-clear fan-out and per-event identical Cloudflare transport de-duplication |

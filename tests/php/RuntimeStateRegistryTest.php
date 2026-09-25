@@ -17,8 +17,10 @@ class RuntimeStateRegistryTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
 
 	/**
-	 * The registry names all six site-sensitive owners exactly once.
+	 * The registry names all seven owners (six site-sensitive plus one
+	 * classified request-local memo) exactly once.
 	 *
+	 * @since NEXT OD_Bridge request-local owner (P3-021).
 	 * @return void
 	 */
 	public function test_registry_declares_six_feature_owners(): void {
@@ -35,6 +37,7 @@ class RuntimeStateRegistryTest extends \PHPUnit\Framework\TestCase {
 				'LiteSpeed_Integration' => array( 'PerformanceOptimise\\Inc\\LiteSpeed_Integration', 'reset_cache' ),
 				'Object_Cache'          => array( 'PerformanceOptimise\\Inc\\Object_Cache', 'reset_runtime_state' ),
 				'Database_Cleanup'      => array( 'PerformanceOptimise\\Inc\\Database_Cleanup', 'reset_runtime_state' ),
+				'OD_Bridge'             => array( 'PerformanceOptimise\\Inc\\OD_Bridge', 'clear_request_memo' ),
 			),
 			Runtime_State::owners()
 		);

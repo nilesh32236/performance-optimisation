@@ -50,6 +50,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		/**
 		 * Per-request memo for OD lookups keyed by current URL.
 		 *
+		 * Request-local classification (P3-021): not site-sensitive — keys
+		 * are `raw:`, `lcp:`, and `stable:` prefixed current URLs, so entries
+		 * never leak across sites; URL-keyed and multisite-safe by
+		 * construction. Registered in {@see Runtime_State::owners()} for an
+		 * explicit blog-switch reset contract (idempotent with the indirect
+		 * `Image_Optimisation::clear_runtime_caches()` path).
+		 *
 		 * One page can resolve OD metrics up to 4-6x (preload, lazy
 		 * exclusion, hero stamp, fetchpriority filter); each scan fires
 		 * the `wppo_od_should_optimize` filter + `od_get_url_metrics()` +
@@ -62,6 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * multisite-safe by construction.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Registered in Runtime_State::owners() as a request-local owner.
 		 * @var array<string, mixed>
 		 */
 		private static array $request_memo = array();
@@ -70,9 +78,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * Reset the per-request OD memo.
 		 *
 		 * Called between pages in long-lived processes and in tests (via
-		 * `Image_Optimisation::clear_runtime_caches()`).
+		 * `Image_Optimisation::clear_runtime_caches()`). Also registered in
+		 * {@see Runtime_State::owners()} so `switch_blog` resets it directly.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Direct Runtime_State reset contract (P3-021).
 		 * @return void
 		 */
 		public static function clear_request_memo(): void {

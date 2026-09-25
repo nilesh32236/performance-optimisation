@@ -2471,14 +2471,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 66,
+        "lines": 71,
         "methods": 3,
         "public_methods": 3,
         "large_methods": 0,
         "large_method_threshold_lines": 80,
         "largest_method": {
-            "name": "reset_all",
-            "line": 42,
+            "name": "owners",
+            "line": 30,
             "lines": 11
         },
         "method_prefixes": {
@@ -3627,14 +3627,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Insight",
-        "lines": 1508,
+        "lines": 1518,
         "methods": 25,
         "public_methods": 8,
         "large_methods": 3,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "collect_raw_lcp_urls",
-            "line": 454,
+            "line": 464,
             "lines": 113
         },
         "method_prefixes": {

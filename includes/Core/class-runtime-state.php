@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 if ( ! class_exists( __NAMESPACE__ . '\\Runtime_State' ) ) {
 	/**
-	 * Delegates site-sensitive static state resets to feature owners.
+	 * Delegates site-sensitive and classified request-local static state resets to feature owners.
 	 *
 	 * @since NEXT
 	 */
@@ -21,6 +21,10 @@ if ( ! class_exists( __NAMESPACE__ . '\\Runtime_State' ) ) {
 		/**
 		 * Feature owners and their reset methods.
 		 *
+		 * Site-sensitive owners plus explicitly classified request-local memos
+		 * with a clear request lifecycle (P3-021: OD_Bridge URL-keyed memo).
+		 *
+		 * @since NEXT OD_Bridge request-local memo owner.
 		 * @return array<string,array{0:string,1:string}>
 		 */
 		public static function owners(): array {
@@ -31,6 +35,7 @@ if ( ! class_exists( __NAMESPACE__ . '\\Runtime_State' ) ) {
 				'LiteSpeed_Integration' => array( __NAMESPACE__ . '\\LiteSpeed_Integration', 'reset_cache' ),
 				'Object_Cache'          => array( __NAMESPACE__ . '\\Object_Cache', 'reset_runtime_state' ),
 				'Database_Cleanup'      => array( __NAMESPACE__ . '\\Database_Cleanup', 'reset_runtime_state' ),
+				'OD_Bridge'             => array( __NAMESPACE__ . '\\OD_Bridge', 'clear_request_memo' ),
 			);
 		}
 
