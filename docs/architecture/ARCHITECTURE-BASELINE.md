@@ -1,7 +1,7 @@
 # Phase 3 Architecture Baseline
 
 Captured: 2026-09-24 07:00 UTC
-Source: `origin/master` commit `85ed4122ecb523b2d728c6f78af90361e87c2050`
+Source: `origin/master` commit `e8f465ef97984a7fd03aa18ae181c1f176e463ee`
 Quality model: `ARCHITECTURE-QUALITY.md`
 
 This document records the Phase 3 starting point. The generator produced every count from current PHP syntax. Manual review adds responsibility and runtime findings that a tokenizer cannot infer.
@@ -24,11 +24,11 @@ The CI workflow runs the check command. `ArchitectureInventoryTest` checks the s
 
 ## Scope
 
-The tokenizer scans 88 first-party runtime files:
+The tokenizer scans 89 first-party runtime files:
 
 | Scope | Files | Inventory treatment |
 |---|---:|---|
-| Plugin classes and traits under `includes/` | 79 | Runtime inventory and loader coverage |
+| Plugin classes and traits under `includes/` | 80 | Runtime inventory and loader coverage |
 | Redis procedural helper | 1 | Procedural inventory entry |
 | Protected minify wrappers | 4 | `protected_vendor_adjacent` scope |
 | Redis object-cache drop-in | 1 | `drop_in` scope |
@@ -40,29 +40,29 @@ The graph excludes `build`, `docs`, `node_modules`, `scripts`, `tests`, and `ven
 
 | Metric | Baseline |
 |---|---:|
-| Inventory files | 85 |
-| Inventory source lines | 127,012 |
-| Class-like graph nodes | 84 |
+| Inventory files | 86 |
+| Inventory source lines | 126,843 |
+| Class-like graph nodes | 85 |
 | Procedural graph nodes | 4 |
-| Named methods | 2,539 |
-| Methods spanning 80 lines or more | 233 |
-| Static properties | 143 across 32 nodes |
-| Unique dependency edges | 383 |
-| Runtime-classified edges | 382 |
-| Compatibility-classified edges | 199 |
+| Named methods | 2,547 |
+| Methods spanning 80 lines or more | 229 |
+| Static properties | 143 across 33 nodes |
+| Unique dependency edges | 395 |
+| Runtime-classified edges | 394 |
+| Compatibility-classified edges | 206 |
 | Loader-classified edges | 3 |
-| Cross-domain edges | 321 |
-| Feature-to-feature edges | 46 |
+| Cross-domain edges | 330 |
+| Feature-to-feature edges | 50 |
 | Strict boundary violations | 20 |
-| Bridge candidates | 238 |
-| Exact-shape duplicate groups | 17 |
+| Bridge candidates | 247 |
+| Exact-shape duplicate groups | 18 |
 | Multi-node runtime SCCs | 1 |
 
 Classifications can overlap on one edge. A guarded call can have both runtime and compatibility evidence.
 
 ## Dependency graph
 
-The graph exposes one runtime strongly connected component with 67 class-like nodes and 329 runtime-classified internal edges. One compatibility-only SCC covers 21 nodes. P3-007 removed the separate compatibility-only System Info/drop-in pair. This is the campaign's central coupling finding. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can reach one another through executable references.
+The graph exposes one runtime strongly connected component and one compatibility-only component. The final hotspot classification explains the residual runtime SCC and all current compatibility residue; no major hotspot is unclassified. P3-007 removed the separate compatibility-only System Info/drop-in pair. `Main`, `Util`, cache, CSS, images, insight, admin surfaces, and integration adapters can still reach one another through executable references, which is documented future debt rather than an unexplained defect.
 
 The largest hub scores are:
 
@@ -320,7 +320,7 @@ These findings belong in small bug-safe queue items. They do not justify a route
 | `wp wppo verify` | 6/7 pass |
 | Known warning | Cache root belongs to `nobody` and is not writable by the CLI user |
 
-The installed `/wp-content/object-cache.php` still probes the pre-ARCH-013 flat Redis helper path. The repository template and `Object_Cache` loader use `includes/Support/redis-connect-helper.php`. The live drop-in logs `wppo_redis_connect() not found`; post-merge environment refresh must repair the deployed copy without touching unrelated site data.
+The final live probe on 2026-09-25 found the installed `/wp-content/object-cache.php` byte-identical to the repository template (matching SHA-256 `1463f80564cd62075c7169d7daeedce64b4c68e06699619574fa3467df11a7e2`). The deployed helper path is current; the P3-001 pre-ARCH-013 drift is resolved. The final WP-CLI probe also completed `wp wppo verify` and listed all eight subcommands; no Redis credentials or site data were changed.
 
 The stored `WPPO_VERSION` option remains `2.3.0` while the loaded plugin reports `2.4.0`. Treat this as installed-state drift and verify update behavior before changing runtime code.
 

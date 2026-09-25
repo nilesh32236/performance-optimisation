@@ -38,7 +38,7 @@ Do not add a DI container, an interface per class, inheritance for demonstration
 
 Public, static, hook-visible, and reflection-visible behavior keeps a proxy until callers migrate. Each facade method needs a target owner, caller census, removal condition, and release impact.
 
-`Util` remains a compatibility layer, not a home for new feature policy. The graph records 56 incoming source nodes and 1,145 executable references, so caller migration matters more than moving the file.
+`Util` remains a compatibility layer, not a home for new feature policy. The current graph records 60 incoming source nodes and 1,084 executable references, so caller migration matters more than moving the file.
 
 ## 5. DRY with semantic proof
 

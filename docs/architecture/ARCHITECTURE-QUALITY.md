@@ -170,25 +170,25 @@ The generated metrics act as signals. Reviewers combine them with source and run
 
 ## Phase 3 ratchet
 
-P3-005 through P3-018 record these current ratchet values:
+P3-023 records the final Phase 3 ratchet values:
 
 | Metric | Baseline | Direction |
 |---|---:|---|
 | Runtime SCCs | 1 | Reduce; final target 0 or a documented protected residue |
-| Largest runtime SCC | 67 nodes | Reduce |
+| Largest runtime SCC | 68 nodes | Reduce |
 | Compatibility-classified edges | 206 | Explain and reduce only through explicit compatibility ownership |
 | Compatibility SCCs | 1 | Reduce; retain only documented stable adapters |
 | Largest compatibility SCC | 22 nodes | Reduce after remaining facade callers migrate |
 | Boundary violations | 20 | Reduce; final target 0 or explicit protected exceptions |
 | Bridge candidates | 247 | Reduce as remaining `Util` clusters and temporary duplicate caller edges migrate |
-| `Util` unique fan-in | 59 | Reduce when callers finish unrelated `Util` clusters |
+| `Util` unique fan-in | 60 | Reduce when callers finish unrelated `Util` clusters |
 | `Util` incoming executable evidence | 1,084 | Reduce; P3-017 removes 54 Woo-proxy occurrences |
 | `Main` unique fan-out | 38 | Reduce after delegated bridges settle |
 | `Main` feature dependencies | 19 | Reduce after delegated bridges settle |
 | `Main` methods at least 80 lines | 17 | Reduce |
-| Static-state nodes | 32 | Classify, then reduce or document |
+| Static-state nodes | 33 | Classify, then reduce or document |
 | Static properties | 143 | Classify, then reduce or document |
-| Exact duplicate groups | 17 | Review; reduce only semantic duplicates |
+| Exact duplicate groups | 18 | Review; reduce only semantic duplicates |
 | Feature-to-feature edges | 50 | Keep only deliberate interactions; P3-017's four increases are direct cache/Core/Assets/Scheduler → Woo_Detect ownership edges; P3-018 stays inside CSS |
 | Independent admin-auth implementations | 1 | Reduce to 0 outside `Admin_Auth` |
 
