@@ -45,11 +45,8 @@ function findBadKeys( value, pattern, path, hits ) {
 export function scanPayload( payload, label, errors ) {
 	const credentialHits = [];
 	findBadKeys( payload, CREDENTIAL_KEY_PATTERN, '$', credentialHits );
-	// 'token' appears in the discovery note? No — filter exact benign keys.
-	const benign = new Set();
-	const real = credentialHits.filter( ( hit ) => ! benign.has( hit ) );
-	if ( real.length > 0 ) {
-		errors.push( `${ label }: credential-like keys stored (${ real.join( ', ' ) })` );
+	if ( credentialHits.length > 0 ) {
+		errors.push( `${ label }: credential-like keys stored (${ credentialHits.join( ', ' ) })` );
 	}
 	const payloadHits = [];
 	findBadKeys( payload, RAW_PAYLOAD_KEY_PATTERN, '$', payloadHits );

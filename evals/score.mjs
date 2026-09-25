@@ -219,6 +219,17 @@ function resultList( payload ) {
 function main() {
 	const args = parseArgs( process.argv.slice( 2 ) );
 
+	if ( ! Number.isFinite( args.margin ) || args.margin < 0 ) {
+		console.error( 'score: --margin must be a finite number >= 0' );
+		process.exitCode = 1;
+		return;
+	}
+	if ( ! Number.isInteger( args.minSamples ) || args.minSamples < 1 ) {
+		console.error( 'score: --min-samples must be an integer >= 1' );
+		process.exitCode = 1;
+		return;
+	}
+
 	let registry = null;
 	try {
 		registry = readJson( args.registry );
