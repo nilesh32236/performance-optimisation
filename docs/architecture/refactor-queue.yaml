@@ -1781,7 +1781,7 @@ growth_items:
 
   - id: F-001
     title: 'Trust and legitimate conversion'
-    status: active
+    status: merged
     priority: medium
     type: growth
     objective: 'Make the free/open-source product easier to trust, evaluate, install, onboard, recover, and support without new optimization behavior.'
@@ -1795,8 +1795,19 @@ growth_items:
     non_goals:
       - 'No fake reviews, ratings, support posts, installations, scores, guarantees, premium locks, or runtime optimization changes.'
     issue: 1639
-    pull_request: pending
-    status_note: 'Phase F is active; trust claims stay bounded to current code, docs, and observed evidence.'
+    pull_request: 1641
+    implementation_commit: 3a034d12
+    merge_commit: eeaaa492
+    merged_at: '2026-09-25'
+    post_merge_verification:
+      repository: 'Free/open-source readme positioning, safe staged WelcomePanel copy, Tools support card, support source page, and trust report merged'
+      ci: 'Exact-head CI, WPCS/Psalm, and AI review green'
+      local: 'Lint 0 errors/2 existing warnings; PHPCS binary pass; Jest 59 suites/833 tests; build pass with existing size warning; inventory and diff checks pass'
+      docs: '24 HTML pages / 24 manifest entries; internal-route and fragment checks passed'
+      playwright: 'Desktop and mobile Safe preview plus six secondary tabs passed; no console errors or overflow; live WelcomePanel already dismissed and was verified in focused Jest'
+      wordpress: 'Performance Optimisation active; all-in-one-wp-migration inactive; frontend 200; wp wppo verify 6/7; troubleshooting 200; source support page remains pending editor publishing sync'
+      runtime_scope: 'No runtime optimization, settings, REST, cache, database, or API behavior change'
+    status_note: 'Phase F is merged; trust claims stay bounded to current code, docs, and observed evidence.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
