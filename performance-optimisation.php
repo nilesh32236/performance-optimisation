@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       Performance Optimisation
- * Description:       Speed up WordPress with page caching, JS/CSS minify, lazy load, WebP/AVIF images, Redis object cache, and database cleanup. Simple and powerful.
+ * Description:       Free WordPress performance plugin: page caching, Core Web Vitals, WebP/AVIF images, lazy load, and CSS/JS optimization.
  * Requires at least: 6.2
  * Requires PHP:      8.2
  * Tested up to:      7.1

@@ -1575,6 +1575,27 @@ phase3_items:
       evidence: 'Generated graph/inventory, P3-022 architecture guards, full PHPUnit 2783/25808, PHPCS, generator --check, JavaScript gates, and post-merge WordPress verification.'
       protected_contracts: 'LiteSpeed ESI/coexistence/header contracts, manual loading/no PSR-4, REST/Abilities auth, public RUM exception, multisite/drop-in/cache isolation, and React no-routing architecture remain explicit.'
 
+  - id: GROWTH-A
+    title: 'Phase A: improve WordPress.org searchability (docs/metadata only)'
+    status: planning
+    priority: low
+    type: docs
+    github_issue: 1622
+    exact_scope:
+      - 'readme.txt (short description, tags, description hierarchy, FAQ compatibility wording)'
+      - 'performance-optimisation.php (header Description in sync with readme)'
+      - 'docs/growth/KEYWORD-MAP.md (NEW search-intent to feature map)'
+      - 'docs/growth/WORDPRESS-ORG.md (NEW listing audit and validation log)'
+    non_goals:
+      - 'No runtime functionality or API changes.'
+      - 'No build/src changes.'
+    compatibility_constraints:
+      - 'Tested up to 7.1 stays staged per docs/wordpress-7x-readiness.md gates; revert to last CI-proven release if 7.1 unproven.'
+    tests:
+      - 'readme.txt parse via WordPress.org validator when directory sync permits.'
+      - 'PHPCS untouched; no build needed.'
+    ratchet: 'Directory tags exactly 5; first-screen copy names free, page caching, Core Web Vitals, images, CSS/JS.'
+
 future_items:
   - id: P3-024
     title: 'AI model persistence and learning ownership'

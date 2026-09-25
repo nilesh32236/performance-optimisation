@@ -1,6 +1,6 @@
 === Performance Optimisation ===
 Contributors: nilesh912
-Tags: cache, performance, speed, pagespeed, minify
+Tags: cache, performance, optimization, lazy-load, minify
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
@@ -8,11 +8,11 @@ Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Speed up WordPress with page caching, JS/CSS minify, lazy load, WebP/AVIF images, Redis object cache, and database cleanup. Simple and powerful.
+Free WordPress performance plugin: page caching, Core Web Vitals, WebP/AVIF images, lazy load, and CSS/JS optimization.
 
 == Description ==
 
-**Performance Optimisation** is a free, all-in-one speed plugin that makes your WordPress site faster — without the complexity. Fully compatible with popular themes and page builders (Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, Rank Math). Page caching, file minification, image optimization, lazy loading, database cleanup, and Redis object cache — all from one clean dashboard.
+**Performance Optimisation** is a free, all-in-one speed plugin that makes your WordPress site faster — without the complexity. It targets Core Web Vitals (LCP, INP, CLS) with page caching, file minification, image optimization (WebP/AVIF, lazy loading), database cleanup, and Redis object cache — all from one clean dashboard. It is designed to work with popular themes and page builders (including Elementor, Divi, Astra, GeneratePress, Kadence) and is reported working with WooCommerce and SEO plugins (Yoast SEO, Rank Math); compatibility cannot be guaranteed for every theme/plugin combination, so per-page exclusions are available and issue reports are welcome.
 
 = Why choose Performance Optimisation? =
 
@@ -51,6 +51,10 @@ Collects anonymised field Web Vitals (LCP, INP, CLS) from real visitors and char
 
 **🤖 AI Adaptive Suggestions**
 Heuristic auto-tune that reads RUM trends and audit results to suggest safe next steps — read-only recommendations, never silent changes.
+
+= Advanced capabilities =
+
+The features below extend the core stack above for advanced setups. Each is optional and off by default or fail-safe where noted.
 
 **🔀 LiteSpeed Coexistence**
 Auto-detects LiteSpeed/OLS servers and LSCache: pick Auto, WPPO, LiteSpeed, or Standalone mode, with purge sync and header-protocol support so the two caches never fight.
@@ -333,22 +337,22 @@ Import/export settings tools.
 Install and activate the plugin, then visit the **Dashboard**. Start by enabling **Page Caching** for the biggest speed boost. Then enable **JS/CSS Minification** and **Lazy Loading** for images. Each feature can be turned on independently — enable one at a time and test your site.
 
 = Will this work with WooCommerce? =
-Yes. The plugin is fully compatible with WooCommerce. WooCommerce-specific asset removal is **optional** and off by default. If you enable it, the plugin shows a clear warning reminding you to test cart, checkout, and product pages.
+The plugin is designed to work with WooCommerce. Cart, checkout, and account pages are automatically excluded from full-page caching, and WooCommerce safe-mode plus per-page exclusions are available if a script or style needs to stay untouched. WooCommerce-specific asset removal is **optional** and off by default. If you enable it, the plugin shows a clear warning reminding you to test cart, checkout, and product pages, and issue reports are welcome.
 
 = Can I use this alongside another cache plugin? =
 You should only run **one** full-page caching solution at a time. If another plugin (WP Super Cache, LiteSpeed Cache, WP Rocket, etc.) already manages caching, this plugin will detect it and won't overwrite the existing setup. You can still use the minification, image optimization, and database cleanup features alongside most other plugins.
 
 = Does this plugin improve Core Web Vitals and PageSpeed scores? =
-Yes. The features below — static HTML caching, lazy loading, WebP/AVIF image conversion, font preloading, and script deferral — directly target the metrics measured by Core Web Vitals and PageSpeed Insights. In one internal example benchmark on a standard WordPress install (Astra theme, 5 images) we observed improvements in PageSpeed scores, Time to First Byte, LCP, and total page size, but **results vary** significantly with hosting, theme, plugin mix, and content, so your own before/after measurements are the only reliable guide.
+The features below — static HTML caching, lazy loading, WebP/AVIF image conversion, font preloading, and script deferral — target the metrics measured by Core Web Vitals and PageSpeed Insights, but results vary significantly with hosting, theme, plugin mix, and content. In one internal example benchmark on a standard WordPress install (Astra theme, 5 images) we observed improvements in PageSpeed scores, Time to First Byte, LCP, and total page size, but your own before/after measurements are the only reliable guide; no specific score improvement is promised.
 
 = Does this work on shared hosting? =
 Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS, dedicated servers, and managed WordPress hosts. Redis Object Cache requires Redis to be installed on your server, but all other features work everywhere.
 
 = Is this compatible with page builders like Elementor or Divi? =
-Yes. The plugin works with all major page builders including Elementor, Divi, Beaver Builder, and WPBakery. If you experience any layout issues after enabling minification, you can exclude specific files using the built-in exclusion rules.
+The plugin is designed to work with major page builders including Elementor, Divi, Beaver Builder, and WPBakery, and includes builder safe-mode handling (for example, Combine CSS steps aside on builder pages) plus per-page asset exclusions. If you experience any layout issues after enabling minification, exclude the affected files using the built-in exclusion rules and please report the conflict.
 
 = Is this plugin compatible with popular themes, WooCommerce, and SEO plugins? =
-Yes. It is fully tested and compatible with major themes (Astra, GeneratePress, Kadence, OceanWP, Blocksy, Twenty Twenty-Four), e-commerce (WooCommerce), and SEO plugins (Yoast SEO, Rank Math, All in One SEO, SEOPress). WooCommerce cart, checkout, and account pages are automatically excluded from full-page caching. If minification or deferral affects specific scripts or style handles, you can add them to the exclusion rules in the File Optimization tab.
+It is designed to work with, and has been reported working with, major themes (Astra, GeneratePress, Kadence, OceanWP, Blocksy, Twenty Twenty-Four), e-commerce (WooCommerce), and SEO plugins (Yoast SEO, Rank Math, All in One SEO, SEOPress). WooCommerce cart, checkout, and account pages are automatically excluded from full-page caching. If minification or deferral affects specific scripts or style handles, add them to the exclusion rules in the File Optimization tab (or use per-page exclusions / safe-mode toggles) and please report the conflict so compatibility handling can be improved.
 
 = How do I convert images to WebP or AVIF? =
 Go to the **Image Optimization** tab, enable image conversion, and choose your format (WebP, AVIF, or both). Click **Optimize Now** to start converting your existing images. New uploads are converted automatically in the background.
@@ -357,7 +361,7 @@ Go to the **Image Optimization** tab, enable image conversion, and choose your f
 Yes. In the **File Optimization** tab, you can list specific JavaScript or CSS files to exclude from minification, defer, or delay. This is useful for scripts that break when minified.
 
 = Does the plugin support lazy loading? =
-Yes. The plugin lazy loads images, iframes, and videos using an IntersectionObserver. You can use lightweight SVG placeholders for a better loading experience. A MutationObserver also catches dynamically injected content.
+Yes. Images, iframes, and videos lazy load with native `loading="lazy"` by default (above-the-fold/LCP content is never lazy-loaded); an opt-in JavaScript IntersectionObserver loader with lightweight SVG placeholders is available, and a MutationObserver also catches dynamically injected content.
 
 = How do I clean up my WordPress database? =
 Go to the **Database** tab. You can manually clean post revisions, auto-drafts, spam comments, expired transients, trashed posts, and orphaned metadata. You can also schedule automatic cleanups to run daily, weekly, or monthly.
