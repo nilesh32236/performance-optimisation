@@ -18,6 +18,7 @@ review-output.jsonl
 take_screenshot*.js
 take_wizard_390.js
 test-lab/
+test-results/
 
 # Local diagnostic / audit scratch scripts (not part of the plugin).
 # Root-anchored so same-named files elsewhere (e.g. tests/stubs/) stay visible.
