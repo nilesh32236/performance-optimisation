@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nileshportfolio.duckdns.org/model-intelligence/registry.schema.json",
+  "title": "Free model registry",
+  "type": "object",
+  "required": ["schema", "policy", "champion", "last_successful_discovery", "models"],
+  "properties": {
+    "schema": { "const": 1 },
+    "policy": { "const": "free-only" },
+    "champion": {
+      "type": "object",
+      "required": ["provider", "model_id", "model_ref"],
+      "properties": {
+        "provider": { "type": "string" },
+        "model_id": { "type": "string" },
+        "model_ref": { "type": "string" }
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["provider", "model_id", "pricing", "availability", "first_seen", "last_verified", "source", "evidence", "retired"],
+        "properties": {
+          "provider": { "type": "string" },
+          "model_id": { "type": "string" },
+          "pricing": {
+            "type": "object",
+            "required": ["input_per_million", "output_per_million", "free_status", "free_offer_status"],
+            "properties": {
+              "input_per_million": { "type": ["number", "null"] },
+              "output_per_million": { "type": ["number", "null"] },
+              "free_status": { "enum": ["verified_zero_catalog_price", "unknown"] },
+              "free_offer_status": { "enum": ["catalog_free_label", "unknown"] }
+            }
+          },
+          "availability": { "type": "string" },
+          "retired": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

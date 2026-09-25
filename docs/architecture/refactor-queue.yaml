@@ -1839,6 +1839,24 @@ growth_items:
       runtime_scope: 'No runtime optimization, settings, REST, cache, database, or API behavior change'
     status_note: 'Phase G is merged; monitoring remains public or repository-scoped, and causality is not inferred.'
 
+  - id: H-001
+    title: 'Free-model registry and evidence-based evaluation foundation'
+    status: active
+    priority: high
+    type: agent-intelligence
+    objective: 'Measure which currently available free OpenCode models fit each repository task type while keeping Muse Spark as the initial champion and preserving production routing safety.'
+    scope:
+      - 'verified free-model registry and dynamic catalog discovery'
+      - 'health, capability, and executable benchmark schemas'
+      - 'champion/challenger scoring with sample and hysteresis gates'
+      - 'twice-daily bounded discovery and optional probe workflow'
+      - 'Muse Spark baseline honesty and privacy documentation'
+    non_goals:
+      - 'No paid models, broad production replacement, one-run promotion, credential storage, provider flooding, or plugin runtime behavior change.'
+    issue: 1646
+    pull_request: pending
+    status_note: 'H-001 is active; catalog data remains separate from executable model-quality evidence.'
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'

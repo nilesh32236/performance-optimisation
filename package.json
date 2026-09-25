@@ -8,7 +8,15 @@
 		"start": "wp-scripts start",
 		"test": "wp-scripts test-unit-js",
 		"lint:js": "wp-scripts lint-js src",
-		"lint:js:fix": "wp-scripts lint-js src --fix"
+		"lint:js:fix": "wp-scripts lint-js src --fix",
+		"typecheck": "tsc --noEmit -p model-intelligence/tsconfig.json",
+		"lint": "npm run lint:js && node model-intelligence/check-syntax.mjs",
+		"doc:check": "node model-intelligence/check-docs.mjs",
+		"test:model-registry": "node --test model-intelligence/tests/*.test.mjs",
+		"benchmark:model": "node model-intelligence/benchmark.mjs",
+		"benchmark:model:run": "node model-intelligence/run-model-benchmark.mjs",
+		"model:refresh": "node model-intelligence/refresh.mjs --write",
+		"model:score": "node model-intelligence/score.mjs"
 	},
 	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
 	"license": "GPL-2.0-or-later",
@@ -18,7 +26,8 @@
 		"@wordpress/components": "^29.0.0",
 		"@wordpress/i18n": "^6.20.0",
 		"@wordpress/eslint-plugin": "^25.7.0",
-		"@wordpress/scripts": "^33.0.0"
+		"@wordpress/scripts": "^33.0.0",
+		"typescript": "^6.0.3"
 	},
 	"dependencies": {
 		"@fortawesome/free-solid-svg-icons": "^6.7.1",

@@ -1,0 +1,99 @@
+name: Free Model Intelligence
+
+on:
+  schedule:
+    - cron: "17 */12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refresh verified free-model registry
+        id: refresh
+        run: |
+          result="$(node model-intelligence/refresh.mjs --write)"
+          printf '%s\n' "$result" | tee /tmp/model-refresh.json
+          echo "material=$(printf '%s' "$result" | jq -r '.material')" >> "$GITHUB_OUTPUT"
+          echo "status=$(printf '%s' "$result" | jq -r '.status')" >> "$GITHUB_OUTPUT"
+        env:
+          MODEL_CATALOG_URL: ${{ vars.MODEL_CATALOG_URL }}
+
+      - name: Open material registry issue
+        if: steps.refresh.outputs.material == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+        run: |
+          if [ "$(jq -r '.material' /tmp/model-refresh.json)" != "true" ]; then
+            echo "No material registry change."
+            exit 0
+          fi
+          existing="$(gh issue list --state open --label model-registry --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "Material registry change already tracked in issue #$existing."
+            exit 0
+          fi
+          gh issue create --title "[Model intelligence] Free-model registry changed" --label model-registry --body "The verified free-model catalog changed. Review the registry diff and evidence. No production model was promoted."
+
+      - name: Commit registry report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add model-intelligence/registry
+          if git diff --cached --quiet; then
+            echo "No registry changes."
+            exit 0
+          fi
+          git commit -m "chore: refresh free-model registry"
+          git push
+
+  benchmark:
+    needs: discover
+    if: ${{ vars.ENABLE_LIVE_MODEL_PROBES == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run deterministic executable benchmark
+        run: node model-intelligence/benchmark.mjs
+      - name: Run bounded health and capability probes
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          MODEL_CHALLENGER_REFS: ${{ vars.MODEL_CHALLENGER_REFS }}
+        run: |
+          refs=(opencode/muse-spark-1.3-contributor-free)
+          count=0
+          if [ -n "${MODEL_CHALLENGER_REFS}" ]; then
+            IFS=',' read -ra configured <<< "$MODEL_CHALLENGER_REFS"
+            refs+=("${configured[@]}")
+          fi
+          for ref in "${refs[@]}"; do
+            if [ "$count" -ge 8 ]; then
+              echo "Model probe limit reached; remaining refs were skipped."
+              break
+            fi
+            count=$((count + 1))
+            MODEL_REF="$ref" MODEL_EVAL_MODE=health MODEL_RESULTS_PATH=model-intelligence/results/results.jsonl MODEL_MAX_RETRIES=1 node model-intelligence/evaluate.mjs || true
+            MODEL_REF="$ref" MODEL_EVAL_MODE=capability MODEL_RESULTS_PATH=model-intelligence/results/results.jsonl MODEL_MAX_RETRIES=1 node model-intelligence/evaluate.mjs || true
+          done
+      - name: Commit sanitized evaluation results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add model-intelligence/results/results.jsonl
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore: record free-model probes"
+          git push

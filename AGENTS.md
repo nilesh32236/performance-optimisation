@@ -317,3 +317,16 @@ opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3
 The `OPENCODE_API_KEY` secret is injected as both `OPENCODE_API_KEY` and
 `OPENAI_API_KEY` (the opencode gateway is OpenAI-compatible) for CLI steps, and
 as the action's `openai_api_key` input for `opencode-ai-reviewer`.
+
+## Free model intelligence
+
+The current production fallback remains `opencode/muse-spark-1.3-contributor-free`. Explicit `OPENCODE_MODEL` selection remains authoritative. The registry and evaluation foundation lives in `model-intelligence/`; it does not change production routing.
+
+- `pnpm typecheck` checks the registry types and model-intelligence sources.
+- `pnpm test:model-registry` runs registry, scoring, and redaction tests.
+- `pnpm benchmark:model` runs deterministic executable fixtures.
+- `pnpm doc:check` checks the model-intelligence safety and privacy documentation.
+- `pnpm model:refresh` refreshes positively verified free-model metadata. A failed catalog preserves the previous registry.
+- `pnpm model:score` reports evidence and never promotes from a single run.
+
+The model registry is data, not proof of health or coding quality. Promotion requires health, capability, and executable benchmark evidence. The scheduled workflow is bounded to one catalog request and optional probes use explicit opt-in, short timeouts, one retry budget, and no production route changes.

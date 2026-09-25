@@ -1,0 +1,231 @@
+{
+  "schema": 1,
+  "tasks": [
+    {
+      "id": "typescript-contract",
+      "task_type": "TypeScript",
+      "language": "TypeScript",
+      "framework": "Node",
+      "complexity": "small",
+      "prompt": "Create a typed model registry entry with provider, model ID, and availability.",
+      "seed_files": {
+        "src/model-registry.ts": "export type ModelEntry = { provider: string };\n"
+      },
+      "expected_contains": {
+        "src/model-registry.ts": [
+          "export type ModelEntry",
+          "provider: string",
+          "modelId: string"
+        ]
+      },
+      "solution_files": {
+        "src/model-registry.ts": "export type ModelEntry = { provider: string; modelId: string };\n"
+      }
+    },
+    {
+      "id": "javascript-tool-result",
+      "task_type": "JavaScript",
+      "language": "JavaScript",
+      "framework": "Node",
+      "complexity": "small",
+      "prompt": "Add a pure function that records a successful tool result without exposing credentials.",
+      "seed_files": {
+        "src/tool-result.mjs": "export function recordToolResult({ tool, ok }) { return { tool }; }\n"
+      },
+      "expected_contains": {
+        "src/tool-result.mjs": [
+          "export function recordToolResult",
+          "return { tool, ok }"
+        ]
+      },
+      "solution_files": {
+        "src/tool-result.mjs": "export function recordToolResult({ tool, ok }) { return { tool, ok }; }\n"
+      }
+    },
+    {
+      "id": "php-wordpress-safety",
+      "task_type": "PHP",
+      "language": "PHP",
+      "framework": "WordPress",
+      "complexity": "medium",
+      "prompt": "Create a small WordPress admin notice helper that escapes translated text.",
+      "seed_files": {
+        "includes/Support/ModelAdminNotice.php": "<?php\nfinal class Model_Admin_Notice { public static function text() { return ''; } }\n"
+      },
+      "expected_contains": {
+        "includes/Support/ModelAdminNotice.php": [
+          "final class Model_Admin_Notice",
+          "esc_html__",
+          "performance-optimisation"
+        ]
+      },
+      "solution_files": {
+        "includes/Support/ModelAdminNotice.php": "<?php\nfinal class Model_Admin_Notice { public static function text() { return esc_html__( 'Model registry', 'performance-optimisation' ); } }\n"
+      }
+    },
+    {
+      "id": "react-status-component",
+      "task_type": "React",
+      "language": "JavaScript",
+      "framework": "React",
+      "complexity": "medium",
+      "prompt": "Create an accessible model health status component with a text label.",
+      "seed_files": {
+        "src/components/ModelStatus.js": "export default function ModelStatus( { health } ) { return null; }\n"
+      },
+      "expected_contains": {
+        "src/components/ModelStatus.js": [
+          "export default function ModelStatus",
+          "role=\"status\""
+        ]
+      },
+      "solution_files": {
+        "src/components/ModelStatus.js": "export default function ModelStatus( { health } ) { return <span role=\"status\">{ health }</span>; }\n"
+      }
+    },
+    {
+      "id": "github-actions-permissions",
+      "task_type": "GitHub Actions",
+      "language": "YAML",
+      "framework": "GitHub Actions",
+      "complexity": "medium",
+      "prompt": "Create a workflow job with read-only contents permission and a bounded timeout.",
+      "seed_files": {
+        ".github/workflows/model-benchmark.yml": "name: Model benchmark\non: workflow_dispatch\njobs:\n  benchmark:\n    runs-on: ubuntu-latest\n    steps: []\n"
+      },
+      "expected_contains": {
+        ".github/workflows/model-benchmark.yml": [
+          "permissions:",
+          "contents: read",
+          "timeout-minutes: 10"
+        ]
+      },
+      "solution_files": {
+        ".github/workflows/model-benchmark.yml": "name: Model benchmark\non: workflow_dispatch\npermissions:\n  contents: read\njobs:\n  benchmark:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps: []\n"
+      }
+    },
+    {
+      "id": "refactor-model-default",
+      "task_type": "refactoring",
+      "language": "JavaScript",
+      "framework": "Node",
+      "complexity": "medium",
+      "prompt": "Refactor a repeated model fallback expression into a named exported constant without changing explicit selection behavior.",
+      "seed_files": {
+        "scripts/model-default.mjs": "export const MODEL_DEFAULT = 'opencode/muse-spark-1.3-contributor-free';\n"
+      },
+      "expected_contains": {
+        "scripts/model-default.mjs": [
+          "export const MODEL_DEFAULT",
+          "export function resolveModel",
+          "explicit || MODEL_DEFAULT"
+        ]
+      },
+      "solution_files": {
+        "scripts/model-default.mjs": "export const MODEL_DEFAULT = 'opencode/muse-spark-1.3-contributor-free';\nexport function resolveModel(explicit) { return explicit || MODEL_DEFAULT; }\n"
+      }
+    },
+    {
+      "id": "bugfix-timeout-budget",
+      "task_type": "bug fixing",
+      "language": "JavaScript",
+      "framework": "Node",
+      "complexity": "medium",
+      "prompt": "Fix a probe timeout bug so a timed-out child process returns a recorded timeout result.",
+      "seed_files": {
+        "model-intelligence/lib/probe.mjs": "export function normalizeProbeResult(result, timedOut) { return { ...result, timeout: false }; }\n"
+      },
+      "expected_contains": {
+        "model-intelligence/lib/probe.mjs": [
+          "timeout: timedOut",
+          "return { ...result"
+        ]
+      },
+      "solution_files": {
+        "model-intelligence/lib/probe.mjs": "export function normalizeProbeResult(result, timedOut) { return { ...result, timeout: timedOut }; }\n"
+      }
+    },
+    {
+      "id": "security-redact-result",
+      "task_type": "security",
+      "language": "JavaScript",
+      "framework": "Node",
+      "complexity": "medium",
+      "prompt": "Add a result redactor that removes API keys, cookies, authorization headers, and passwords before persistence.",
+      "seed_files": {
+        "model-intelligence/lib/redact.mjs": "const SECRET = /api[_-]?key/i;\nexport function redactResult(value) { return JSON.stringify(value); }\n"
+      },
+      "expected_contains": {
+        "model-intelligence/lib/redact.mjs": [
+          "api[_-]?key",
+          "authorization",
+          "password",
+          "[REDACTED]"
+        ]
+      },
+      "solution_files": {
+        "model-intelligence/lib/redact.mjs": "const SECRET = /api[_-]?key|cookie|authorization|password/i;\nexport function redactResult(value) { return JSON.stringify(value, (key, item) => SECRET.test(key) ? '[REDACTED]' : item); }\n"
+      }
+    },
+    {
+      "id": "tests-registry-preservation",
+      "task_type": "tests",
+      "language": "JavaScript",
+      "framework": "Node test runner",
+      "complexity": "medium",
+      "prompt": "Write a deterministic test proving catalog failure preserves the previous known-good registry.",
+      "seed_files": {
+        "model-intelligence/tests/fixture.mjs": "export const expected = 'pending';\n"
+      },
+      "expected_contains": {
+        "model-intelligence/tests/fixture.mjs": [
+          "previous registry preserved",
+          "export const expected"
+        ]
+      },
+      "solution_files": {
+        "model-intelligence/tests/fixture.mjs": "export const expected = 'previous registry preserved';\n"
+      }
+    },
+    {
+      "id": "documentation-runbook",
+      "task_type": "documentation",
+      "language": "Markdown",
+      "framework": "GitHub Actions",
+      "complexity": "small",
+      "prompt": "Document how a maintainer refreshes free models and why unknown price does not qualify a candidate.",
+      "seed_files": {
+        "docs/model-intelligence-runbook.md": "# Model intelligence runbook\n\nRefresh the registry.\n"
+      },
+      "expected_contains": {
+        "docs/model-intelligence-runbook.md": [
+          "current provider metadata",
+          "Unknown price is not free"
+        ]
+      },
+      "solution_files": {
+        "docs/model-intelligence-runbook.md": "# Model intelligence runbook\n\nRefresh the registry from current provider metadata. Unknown price is not free.\n"
+      }
+    },
+    {
+      "id": "wordpress-readiness",
+      "task_type": "WordPress",
+      "language": "PHP",
+      "framework": "WordPress",
+      "complexity": "small",
+      "prompt": "Document a WordPress/PHP compatibility boundary without changing runtime behavior.",
+      "seed_files": {
+        "docs/model-intelligence-compatibility.md": "Model discovery changes runtime behavior.\n"
+      },
+      "expected_contains": {
+        "docs/model-intelligence-compatibility.md": [
+          "does not change WordPress or PHP runtime behavior",
+          "Verify compatibility before promotion"
+        ]
+      },
+      "solution_files": {
+        "docs/model-intelligence-compatibility.md": "Model discovery does not change WordPress or PHP runtime behavior. Verify compatibility before promotion.\n"
+      }
+    }
+  ]
+}
