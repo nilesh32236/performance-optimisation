@@ -20,7 +20,7 @@ describe( 'GuidedNextStep', () => {
 		jest.clearAllMocks();
 	} );
 
-	it( 'renders a single RUM-driven next action with a fix button', async () => {
+	it( 'renders a single RUM-driven next action with a destination-named button', async () => {
 		apiCall.mockResolvedValueOnce( {
 			success: true,
 			data: {
@@ -47,8 +47,40 @@ describe( 'GuidedNextStep', () => {
 		// Server-type note is always displayed.
 		expect( screen.getByText( /Server: Nginx/ ) ).toBeInTheDocument();
 
-		fireEvent.click( screen.getByRole( 'button', { name: /Fix It/i } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Open Image Optimisation/i } )
+		);
 		expect( onNavigate ).toHaveBeenCalledWith( 'imageOptimization' );
+	} );
+
+	it( 'exposes the destination in the guided accessible name', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				next_action: {
+					metric: 'rum_lcp',
+					value: 4500,
+					unit: 'ms',
+					status: 'poor',
+					description: 'Real-user Largest Contentful Paint',
+					fix_action: 'open_preload_tab',
+				},
+				server_type: 'apache',
+			},
+		} );
+
+		const onNavigate = jest.fn();
+		render( <GuidedNextStep onNavigate={ onNavigate } /> );
+
+		const button = await screen.findByRole( 'button', {
+			name: /Open Preload/i,
+		} );
+		expect( button ).toHaveAttribute(
+			'aria-label',
+			expect.stringContaining( 'Real-user Largest Contentful Paint' )
+		);
+		fireEvent.click( button );
+		expect( onNavigate ).toHaveBeenCalledWith( 'preload' );
 	} );
 
 	it( 'renders the all-clear copy when there is no next action', async () => {

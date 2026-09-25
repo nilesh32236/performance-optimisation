@@ -1723,6 +1723,24 @@ growth_items:
       runtime_scope: 'No runtime, REST, cache, database, settings-persistence, navigation, router, or state-library changes'
     status_note: 'Phase C is merged; the current seven-tab IA is retained and advanced controls remain available.'
 
+  - id: D-001
+    title: 'Feature discoverability without behavior changes'
+    status: proposed
+    priority: medium
+    type: ux
+    objective: 'Make existing caching, LCP/CWV, image, CSS/JS, database, Redis, and CDN controls easier to find through a compact task map and destination-named actions without new optimization capabilities.'
+    scope:
+      - 'src/lib/taskMap.js CORE_TASKS (7 entries)'
+      - 'src/components/TaskMap.js dashboard card'
+      - 'SuggestionsPanel + GuidedNextStep destination labels'
+      - 'docs/growth/DISCOVERABILITY-D.md'
+      - 'viewport verification at 390x844, 768x800, 1280x800'
+    non_goals:
+      - 'No REST, API contract, settings persistence, cache, image, database, Redis, CDN, LiteSpeed, or runtime optimization behavior changes.'
+      - 'No new optimization functionality, navigation rewrite, router, or state store.'
+      - 'No fake telemetry or fabricated recommendations.'
+    issue: 1633
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'

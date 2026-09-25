@@ -44,6 +44,7 @@ import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import LoggedInCacheCard from './dashboard/LoggedInCacheCard';
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
+import TaskMap from './TaskMap';
 import { __, sprintf, _n } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
@@ -1264,6 +1265,9 @@ const Dashboard = ( {
 			/>
 
 			<WelcomePanel onNavigate={ onNavigate } />
+
+			{ /* Phase D — compact existing-control task map (NEXT, presentational only) */ }
+			<TaskMap onNavigate={ onNavigate } />
 
 			{ /* One-click presets with diff preview + restore-point undo (NEXT) */ }
 			<OptimizationPresets />

@@ -5,6 +5,8 @@ import React from 'react';
 import SuggestionsPanel, {
 	formatValue,
 	suggestionKey,
+	getFixActionLabel,
+	FIX_ACTION_TAB_MAP,
 } from '../SuggestionsPanel';
 
 describe( 'SuggestionsPanel Component', () => {
@@ -85,7 +87,7 @@ describe( 'SuggestionsPanel Component', () => {
 		).toBeInTheDocument();
 	} );
 
-	it( 'shows Fix It button for poor suggestions with valid fix_action', () => {
+	it( 'shows a destination-named button for poor suggestions with valid fix_action', () => {
 		const suggestions = [
 			{
 				metric: 'enable_gzip',
@@ -104,11 +106,11 @@ describe( 'SuggestionsPanel Component', () => {
 			/>
 		);
 		expect(
-			screen.getByRole( 'button', { name: /Fix It/i } )
+			screen.getByRole( 'button', { name: /Open Server Rules/i } )
 		).toBeInTheDocument();
 	} );
 
-	it( 'calls onNavigate with correct tab when Fix It is clicked', () => {
+	it( 'calls onNavigate with correct tab when the destination button is clicked', () => {
 		const suggestions = [
 			{
 				metric: 'enable_gzip',
@@ -126,8 +128,64 @@ describe( 'SuggestionsPanel Component', () => {
 				onNavigate={ onNavigate }
 			/>
 		);
-		fireEvent.click( screen.getByRole( 'button', { name: /Fix It/i } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Open Server Rules/i } )
+		);
 		expect( onNavigate ).toHaveBeenCalledWith( 'fileOptimization' );
+	} );
+
+	it( 'names every actionable destination and keeps navigation targets', () => {
+		const cases = [
+			[ 'open_object_cache_tab', 'Open Object Cache', 'objectCache' ],
+			[
+				'open_image_optimization_tab',
+				'Open Image Optimisation',
+				'imageOptimization',
+			],
+			[
+				'open_file_optimization_tab',
+				'Open File Optimisation',
+				'fileOptimization',
+			],
+			[ 'open_ccss_settings', 'Open Critical CSS', 'fileOptimization' ],
+			[ 'enable_server_rules', 'Open Server Rules', 'fileOptimization' ],
+			[ 'open_preload_tab', 'Open Preload', 'preload' ],
+		];
+		for ( const [ fixAction, label, tab ] of cases ) {
+			expect( getFixActionLabel( fixAction ) ).toMatch(
+				new RegExp( label, 'i' )
+			);
+			expect( FIX_ACTION_TAB_MAP[ fixAction ] ).toBe( tab );
+		}
+	} );
+
+	it( 'exposes the destination in the accessible name', () => {
+		const suggestions = [
+			{
+				metric: 'object_cache',
+				value: 'none',
+				unit: 'string',
+				status: 'poor',
+				description: 'Enable Redis object cache',
+				fix_action: 'open_object_cache_tab',
+			},
+		];
+
+		render(
+			<SuggestionsPanel
+				suggestions={ suggestions }
+				onNavigate={ onNavigate }
+			/>
+		);
+		const button = screen.getByRole( 'button', {
+			name: /Open Object Cache/i,
+		} );
+		expect( button ).toHaveAttribute(
+			'aria-label',
+			expect.stringContaining( 'Enable Redis object cache' )
+		);
+		fireEvent.click( button );
+		expect( onNavigate ).toHaveBeenCalledWith( 'objectCache' );
 	} );
 
 	it( 'shows Passing indicator for good status with no fix_action', () => {

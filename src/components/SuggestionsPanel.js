@@ -2,8 +2,9 @@
  * SuggestionsPanel component.
  *
  * Renders one card per suggestion returned by the Suggestion_Engine.
- * Cards with 'poor' or 'needs_improvement' status show a "Fix It" button
- * that navigates the user directly to the relevant WPPO tab.
+ * Cards with 'poor' or 'needs_improvement' status show a destination-named
+ * button (e.g. "Open Object Cache →") that navigates the user directly to
+ * the relevant WPPO tab.
  * Cards with 'good' status show a passing indicator instead.
  *
  * Sits inside the Dashboard tab, directly below <PerformanceAudit />,
@@ -42,6 +43,51 @@ export const FIX_ACTION_TAB_MAP = {
 	enable_server_rules: 'fileOptimization',
 	open_preload_tab: 'preload',
 	no_action_required: null,
+};
+
+/**
+ * Destination names for each fix_action, naming the existing feature the
+ * button navigates to instead of a generic "Fix It".
+ *
+ * Lazy getters so translations resolve at render time (module-scope __()
+ * would freeze the locale at import). Navigation targets stay identical:
+ * FIX_ACTION_TAB_MAP values are unchanged.
+ * Exported so GuidedNextStep labels its single RUM-driven action the same way.
+ *
+ * @since NEXT
+ * @type {Object.<string, Function>}
+ */
+export const FIX_ACTION_LABELS = {
+	open_object_cache_tab: () =>
+		__( 'Open Object Cache →', 'performance-optimisation' ),
+	open_image_optimization_tab: () =>
+		__( 'Open Image Optimisation →', 'performance-optimisation' ),
+	open_file_optimization_tab: () =>
+		__( 'Open File Optimisation →', 'performance-optimisation' ),
+	open_ccss_settings: () =>
+		__( 'Open Critical CSS →', 'performance-optimisation' ),
+	enable_server_rules: () =>
+		__( 'Open Server Rules →', 'performance-optimisation' ),
+	open_preload_tab: () => __( 'Open Preload →', 'performance-optimisation' ),
+};
+
+/**
+ * Resolve the destination-named button label for a fix_action.
+ *
+ * Falls back to the generic label for unknown actions (e.g. AI payloads
+ * carrying a fix_action outside VALID_FIX_ACTIONS that the engine already
+ * normalized to no_action_required — those rows never render a button).
+ *
+ * @since NEXT
+ * @param {string} fixAction fix_action value.
+ * @return {string} Localized destination label.
+ */
+export const getFixActionLabel = ( fixAction ) => {
+	const getLabel = FIX_ACTION_LABELS[ fixAction ];
+	if ( typeof getLabel === 'function' ) {
+		return getLabel();
+	}
+	return __( 'Fix It', 'performance-optimisation' );
 };
 
 /**
@@ -216,6 +262,7 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 	} = suggestion;
 	const targetTab = FIX_ACTION_TAB_MAP[ fixAction ] ?? null;
 	const canFix = status !== 'good' && targetTab !== null;
+	const fixLabel = getFixActionLabel( fixAction );
 
 	return (
 		<div
@@ -241,12 +288,13 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						className="wppo-button wppo-button--sm wppo-button--primary"
 						onClick={ () => onNavigate( targetTab ) }
 						aria-label={ sprintf(
-							/* translators: %s: suggestion description. */
-							__( 'Fix It: %s', 'performance-optimisation' ),
+							/* translators: 1: destination label, 2: suggestion description. */
+							__( '%1$s: %2$s', 'performance-optimisation' ),
+							fixLabel,
 							description
 						) }
 					>
-						{ __( 'Fix It', 'performance-optimisation' ) }
+						{ fixLabel }
 						<FontAwesomeIcon
 							icon={ faArrowRight }
 							className="wppo-ml-6"
