@@ -21,6 +21,10 @@
 /vendor/staabm/
 /vendor/theseer/
 /vendor/bin/
+# Composer dev-only packages added after the original list was written.
+/vendor/php-stubs/
+/vendor/phpstan/
+/vendor/szepeviktor/
 /vendor/matthiasmullie/minify/bin/
 /package.json
 /package-lock.json
@@ -75,3 +79,6 @@
 /.ignore
 /.distignore
 /.phpunit.cache/
+# Tracked internal agent artifacts that must not reach the public ZIP.
+/wppo-agent-rules.md
+/empty_commit.sh
