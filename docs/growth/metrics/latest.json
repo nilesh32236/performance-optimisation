@@ -1,0 +1,271 @@
+{
+  "schema": "docs/growth/metrics.schema.json",
+  "generated_at": "2026-09-25T10:00:02Z",
+  "slug": "performance-optimisation",
+  "repository": "nilesh32236/performance-optimisation",
+  "privacy": "public sources only; no visitor, owner, or authenticated site data collected",
+  "wordpress_org": {
+    "status": "ok",
+    "name": "Performance Optimisation",
+    "slug": "performance-optimisation",
+    "version": "2.4.0",
+    "last_updated": "2026-09-24 1:10am GMT",
+    "active_installs": 0,
+    "downloaded": "unavailable",
+    "rating_count": 4,
+    "rating_breakdown": {
+      "5": 4,
+      "4": 0,
+      "3": 0,
+      "2": 0,
+      "1": 0
+    },
+    "num_ratings": 4,
+    "support_threads": 0,
+    "support_threads_resolved": 0,
+    "rating": {
+      "status": "ok",
+      "score_100": 100,
+      "score_5": 5
+    },
+    "listing_http": "200",
+    "assets_http": {
+      "banner_1544x500": "404",
+      "icon_256x256": "404"
+    }
+  },
+  "github": {
+    "status": "ok",
+    "stars": 4,
+    "forks": 0,
+    "open_issues": 8,
+    "default_branch": "master",
+    "pushed_at": "2026-09-25T09:55:35Z",
+    "releases": {
+      "status": "ok",
+      "count_sampled": 5,
+      "latest_tag": "v2.4.0",
+      "latest_published_at": "2026-09-24T01:09:01Z",
+      "tags": [
+        "v2.4.0",
+        "v2.3.0",
+        "v2.2.0",
+        "v2.1.0",
+        "v2.0.0"
+      ]
+    },
+    "traffic": {
+      "status": "ok",
+      "views_count": 731,
+      "uniques": 7
+    }
+  },
+  "repository_evidence": {
+    "status": "ok",
+    "plugin_version": "2.4.0",
+    "readme_tags": "performance, cache, optimization, core-web-vitals, pagespeed",
+    "readme_stable_tag": "2.4.0"
+  },
+  "coverage": [
+    {
+      "feature": "Page Cache",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-builder-purge-watcher.php",
+        "includes/Integrations/class-litespeed-esi.php"
+      ]
+    },
+    {
+      "feature": "CSS",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-woo-detect.php",
+        "includes/Integrations/class-builder-purge-watcher.php"
+      ]
+    },
+    {
+      "feature": "JS",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/class-util.php",
+        "includes/Insight/class-telemetry.php"
+      ]
+    },
+    {
+      "feature": "HTML",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/minify/class-html.php",
+        "includes/Settings/class-sandbox-preview.php"
+      ]
+    },
+    {
+      "feature": "Images",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-litespeed-esi.php",
+        "includes/Integrations/class-litespeed-integration.php"
+      ]
+    },
+    {
+      "feature": "WebP",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-litespeed-integration.php",
+        "includes/Integrations/class-litespeed-crawler.php"
+      ]
+    },
+    {
+      "feature": "AVIF",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-litespeed-integration.php",
+        "includes/Integrations/class-litespeed-crawler.php"
+      ]
+    },
+    {
+      "feature": "Lazy Load",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Images/class-lcp-preload.php",
+        "includes/Images/class-image-optimisation.php"
+      ]
+    },
+    {
+      "feature": "Core Web Vitals",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Images/class-lcp-preload.php",
+        "includes/Images/class-image-optimisation.php"
+      ]
+    },
+    {
+      "feature": "PageSpeed",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/class-util.php",
+        "includes/Images/class-lcp-preload.php"
+      ]
+    },
+    {
+      "feature": "RUM",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/class-util.php",
+        "includes/Images/class-lcp-preload.php"
+      ]
+    },
+    {
+      "feature": "Redis",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-woo-detect.php",
+        "includes/Integrations/class-litespeed-esi.php"
+      ]
+    },
+    {
+      "feature": "Database",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/class-util.php",
+        "includes/Database/class-database-cleanup.php"
+      ]
+    },
+    {
+      "feature": "WooCommerce",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-woo-detect.php",
+        "includes/Integrations/class-litespeed-esi.php"
+      ]
+    },
+    {
+      "feature": "LiteSpeed",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-litespeed-esi.php",
+        "includes/Integrations/class-litespeed-integration.php"
+      ]
+    },
+    {
+      "feature": "CDN",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-litespeed-integration.php",
+        "includes/class-util.php"
+      ]
+    },
+    {
+      "feature": "Critical CSS",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-builder-purge-watcher.php",
+        "includes/class-util.php"
+      ]
+    },
+    {
+      "feature": "Used CSS",
+      "status": "covered",
+      "evidence": [
+        "readme.txt",
+        "includes/Integrations/class-woo-detect.php",
+        "includes/Integrations/class-builder-purge-watcher.php"
+      ]
+    }
+  ],
+  "operational": {
+    "open_issues_cli": "8",
+    "open_prs_cli": "2",
+    "recent_workflow_runs": [
+      {
+        "conclusion": "",
+        "createdAt": "2026-09-25T09:57:36Z",
+        "name": "AI Multi-Agent Review"
+      },
+      {
+        "conclusion": "cancelled",
+        "createdAt": "2026-09-25T09:57:36Z",
+        "name": "AI Multi-Agent Review"
+      },
+      {
+        "conclusion": "",
+        "createdAt": "2026-09-25T09:55:51Z",
+        "name": "AI Multi-Agent Review"
+      },
+      {
+        "conclusion": "",
+        "createdAt": "2026-09-25T09:54:38Z",
+        "name": "AI Multi-Agent Review"
+      },
+      {
+        "conclusion": "success",
+        "createdAt": "2026-09-25T09:50:00Z",
+        "name": "CI — JS & PHP"
+      }
+    ],
+    "status_note": "best-effort gh CLI evidence; unavailable outside authenticated runners"
+  },
+  "limits": [
+    "Public listing and repository data only; no ranking, conversion, or causality claims.",
+    "Daily fluctuations are noise; alerts use sustained thresholds in docs/growth/METRICS.md.",
+    "Traffic aggregates are unavailable without owner push access and are recorded as unavailable.",
+    "Change-impact language must not infer causality from post-change movement."
+  ]
+}

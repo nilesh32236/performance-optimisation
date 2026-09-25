@@ -1,0 +1,69 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Performance Optimisation growth metrics snapshot",
+	"description": "Public-source growth snapshot. No visitor, owner, or authenticated site data. Unavailable metrics use the string 'unavailable' or {status: 'unavailable'}.",
+	"type": "object",
+	"required": ["schema", "generated_at", "slug", "repository", "privacy", "wordpress_org", "github", "repository_evidence", "coverage", "operational", "limits"],
+	"additionalProperties": false,
+	"properties": {
+		"schema": { "type": "string" },
+		"generated_at": { "type": "string" },
+		"slug": { "type": "string", "const": "performance-optimisation" },
+		"repository": { "type": "string" },
+		"privacy": { "type": "string" },
+		"wordpress_org": {
+			"type": "object",
+			"required": ["status", "rating", "listing_http", "assets_http"],
+			"properties": {
+				"status": { "type": "string", "enum": ["ok", "unavailable"] },
+				"rating": { "type": "object" },
+				"listing_http": { "type": "string" },
+				"assets_http": { "type": "object" }
+			}
+		},
+		"github": {
+			"type": "object",
+			"required": ["status", "releases", "traffic"],
+			"properties": {
+				"status": { "type": "string", "enum": ["ok", "unavailable"] },
+				"releases": { "type": "object" },
+				"traffic": { "type": "object" }
+			}
+		},
+		"repository_evidence": {
+			"type": "object",
+			"required": ["status", "plugin_version", "readme_tags", "readme_stable_tag"],
+			"properties": {
+				"status": { "type": "string" },
+				"plugin_version": { "type": "string" },
+				"readme_tags": { "type": "string" },
+				"readme_stable_tag": { "type": "string" }
+			}
+		},
+		"coverage": {
+			"type": "array",
+			"minItems": 17,
+			"items": {
+				"type": "object",
+				"required": ["feature", "status", "evidence"],
+				"additionalProperties": false,
+				"properties": {
+					"feature": { "type": "string" },
+					"status": { "type": "string", "enum": ["covered", "gap"] },
+					"evidence": {
+						"anyOf": [
+							{ "type": "string" },
+							{ "type": "array", "items": { "type": "string" } }
+						]
+					}
+				}
+			}
+		},
+		"operational": { "type": "object" },
+		"limits": {
+			"type": "array",
+			"minItems": 1,
+			"items": { "type": "string" }
+		}
+	}
+}
