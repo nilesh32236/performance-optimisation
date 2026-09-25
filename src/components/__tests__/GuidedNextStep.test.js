@@ -47,7 +47,9 @@ describe( 'GuidedNextStep', () => {
 		// Server-type note is always displayed.
 		expect( screen.getByText( /Server: Nginx/ ) ).toBeInTheDocument();
 
-		fireEvent.click( screen.getByRole( 'button', { name: /Fix It/i } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Review Image Optimization/i } )
+		);
 		expect( onNavigate ).toHaveBeenCalledWith( 'imageOptimization' );
 	} );
 

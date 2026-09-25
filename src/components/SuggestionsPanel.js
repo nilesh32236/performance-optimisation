@@ -2,8 +2,8 @@
  * SuggestionsPanel component.
  *
  * Renders one card per suggestion returned by the Suggestion_Engine.
- * Cards with 'poor' or 'needs_improvement' status show a "Fix It" button
- * that navigates the user directly to the relevant WPPO tab.
+ * Cards with 'poor' or 'needs_improvement' status show a feature-specific
+ * "Review <feature>" button * that navigates the user directly to the relevant WPPO tab.
  * Cards with 'good' status show a passing indicator instead.
  *
  * Sits inside the Dashboard tab, directly below <PerformanceAudit />,
