@@ -1655,7 +1655,8 @@ growth_items:
       - 'No performance, cache, REST, database, admin UI, or feature behavior changes.'
       - 'No keyword stuffing, competitor names, unsupported compatibility claims, fake reviews, or active-install manipulation.'
     issue: 1622
-    pull_request: pending
+    pull_request: 1623
+    implementation_commit: ea26535a
     status_note: 'Research and implementation are active on phase-a/wordpress-searchability; directory publication remains unclaimed until post-merge sync verification.'
 
 notes:
