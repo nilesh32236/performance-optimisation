@@ -116,7 +116,6 @@ describe( 'useImageJobPolling', () => {
 		unmount();
 
 		expect( signal.aborted ).toBe( true );
-		expect( jest.getTimerCount() ).toBe( 0 );
 
 		await act( async () => {
 			resolveStatus( {
@@ -131,6 +130,7 @@ describe( 'useImageJobPolling', () => {
 			await statusResponse;
 		} );
 		await flushPromises();
+		expect( jest.getTimerCount() ).toBe( 0 );
 
 		expect( onImageInfo ).not.toHaveBeenCalled();
 		expect( notify ).not.toHaveBeenCalled();
