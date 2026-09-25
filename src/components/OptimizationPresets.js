@@ -25,6 +25,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import {
 	apiCall,
+	commitSettingsResponse,
 	fetchOptimizationPresets,
 	applyOptimizationPreset,
 	getErrorLogMessage,
@@ -201,6 +202,13 @@ const OptimizationPresets = () => {
 		takenAt: null,
 	} );
 	const { notice, notify, dismiss } = useNotice();
+	// P3-019: mounted guard so unmount mid-apply cannot setState/notify.
+	const presetsMountedRef = useRef( true );
+	useEffect( () => {
+		return () => {
+			presetsMountedRef.current = false;
+		};
+	}, [] );
 	// Preview request sequencing: rapid preset clicks abort the previous
 	// in-flight preview and bump the sequence so a slow earlier response
 	// can never overwrite the diff for the currently selected preset.
@@ -326,7 +334,14 @@ const OptimizationPresets = () => {
 		dismiss();
 		try {
 			const response = await applyOptimizationPreset( selected );
+			if ( ! presetsMountedRef.current ) {
+				return;
+			}
 			if ( response?.success ) {
+				// P3-019: commit the nested server settings via the shared
+				// contract (apiCall already commits for live transports;
+				// this covers mocked/divergent paths).
+				commitSettingsResponse( 'apply_preset', response.data );
 				const applied = Array.isArray( response.data?.diff )
 					? response.data.diff
 					: [];
@@ -355,6 +370,9 @@ const OptimizationPresets = () => {
 				} );
 			}
 		} catch ( applyError ) {
+			if ( ! presetsMountedRef.current ) {
+				return;
+			}
 			console.error(
 				'Error applying preset:',
 				getErrorLogMessage( applyError )
@@ -368,7 +386,9 @@ const OptimizationPresets = () => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setApplying( false );
+			if ( presetsMountedRef.current ) {
+				setApplying( false );
+			}
 		}
 	}, [ dismiss, notify, refreshSnapshot, selected ] );
 
@@ -377,7 +397,13 @@ const OptimizationPresets = () => {
 		dismiss();
 		try {
 			const response = await apiCall( 'restore_settings', {} );
+			if ( ! presetsMountedRef.current ) {
+				return;
+			}
 			if ( response?.success ) {
+				// P3-019: shared contract covers mocked transports (the
+				// live apiCall gate already committed the full map).
+				commitSettingsResponse( 'restore_settings', response.data );
 				setSnapshot( ( prev ) => ( {
 					...prev,
 					hasSnapshot: false,
@@ -406,6 +432,9 @@ const OptimizationPresets = () => {
 				} );
 			}
 		} catch ( restoreError ) {
+			if ( ! presetsMountedRef.current ) {
+				return;
+			}
 			console.error(
 				'Error restoring settings:',
 				getErrorLogMessage( restoreError )
@@ -419,7 +448,9 @@ const OptimizationPresets = () => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setRestoring( false );
+			if ( presetsMountedRef.current ) {
+				setRestoring( false );
+			}
 		}
 	}, [ dismiss, notify ] );
 

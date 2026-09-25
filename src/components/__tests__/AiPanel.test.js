@@ -73,7 +73,9 @@ describe( 'AiPanel Component', () => {
 						css_refresh_on_lcp_regression: true,
 						dismissed_suggestions: [],
 					},
-				} )
+				} ),
+				'POST',
+				expect.anything()
 			);
 		} );
 	} );
