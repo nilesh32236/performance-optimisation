@@ -1835,6 +1835,7 @@ growth_items:
       local: 'Lint 0 errors/2 existing warnings; PHPCS binary pass; Jest 59 suites/833 tests; build pass with existing size warning; repeated collection and snapshot checks pass'
       metrics: 'WordPress.org and GitHub baseline captured; unavailable downloads and operational series marked explicitly; repeated runs produce no false alert'
       privacy: 'No WordPress visitor/site-owner data or invasive analytics introduced; GitHub traffic recorded as aggregate repository metadata'
+      automation: 'Manual workflow run 36122905212 passed; GH_PAT traffic was available; clean comparison created no alert; commit identity fix verified'
       runtime_scope: 'No runtime optimization, settings, REST, cache, database, or API behavior change'
     status_note: 'Phase G is merged; monitoring remains public or repository-scoped, and causality is not inferred.'
 
