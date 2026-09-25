@@ -123,6 +123,62 @@ class SettingsCommandTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * WordPress reports "unchanged" with the same false as a failed write.
+	 *
+	 * A caller that treats every false as a failure would reject an idempotent
+	 * re-save, so the seam has to tell the two apart: the requested state is
+	 * already persisted, which is a success.
+	 *
+	 * @return void
+	 */
+	public function test_unchanged_save_is_reported_as_success(): void {
+		$this->load_command();
+		$this->install_option_stubs();
+		$current                        = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
+		$this->options['wppo_settings'] = $current;
+
+		// Model WordPress: re-saving an identical value is not a write.
+		Functions\when( 'update_option' )->alias(
+			function ( $name, $value ) {
+				if ( 'wppo_settings' === $name ) {
+					++$this->settings_writes;
+					if ( array_key_exists( $name, $this->options ) && $this->options[ $name ] === $value ) {
+						return false;
+					}
+				}
+				$this->options[ $name ] = $value;
+				return true;
+			}
+		);
+		Settings_Store::clear_settings_cache();
+
+		$this->assertTrue( Settings_Command::save( $current, $current ), 'an unchanged save is a success' );
+		$this->assertSame( 1, $this->settings_writes );
+		$this->assertSame( $current, Settings_Store::get_settings(), 'the memo must still describe the stored settings' );
+	}
+
+	/**
+	 * A failed write must not leave the memo describing an unsaved state.
+	 *
+	 * @return void
+	 */
+	public function test_failed_write_leaves_the_memo_on_the_stored_value(): void {
+		$this->load_command();
+		$this->install_option_stubs( true );
+		$stored                         = array( 'file_optimisation' => array( 'minifyHTML' => false ) );
+		$this->options['wppo_settings'] = $stored;
+		Settings_Store::clear_settings_cache();
+
+		$requested = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
+		$this->assertFalse( Settings_Command::save( $requested, $stored ) );
+		$this->assertSame(
+			$stored,
+			Settings_Store::get_settings(),
+			'the memo must describe what is stored, not what was requested'
+		);
+	}
+
+	/**
 	 * Runtime settings writes are owned by Settings_Store only.
 	 *
 	 * @return void

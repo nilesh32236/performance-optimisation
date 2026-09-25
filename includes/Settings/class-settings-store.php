@@ -1421,11 +1421,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		 * sit in alloptions. Refreshes the per-request memo on success so
 		 * same-request reads observe the write.
 		 *
+		 * update_option() returns false both when the value is already
+		 * identical and when the write failed, so a bare false could not tell
+		 * a caller whether the requested state is persisted. The pre-write
+		 * value is captured from the memoized accessor (the same
+		 * disambiguation restore_settings_snapshot() already uses) and the two
+		 * cases are told apart here, once, so REST, WP-CLI, safe mode and the
+		 * migrations all inherit a truthful answer.
+		 *
 		 * @since 2.4.0
+		 * @since NEXT Return true for an unchanged value, not only for a performed write.
 		 * @param array $settings Settings array to store.
-		 * @return bool True on success (mirrors update_option()).
+		 * @return bool True when the stored settings now equal $settings.
 		 */
 		public static function save_settings( array $settings ): bool {
+			$before = self::get_settings();
 			try {
 				$updated = update_option( 'wppo_settings', $settings, false );
 			} catch ( \Throwable $e ) {
@@ -1438,8 +1448,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+				return true;
 			}
-			return (bool) $updated;
+			// A failed write leaves the stored value at $before, so an identical
+			// pair means the requested state is already persisted (success) and
+			// a differing pair means the write failed. The memo is refreshed in
+			// both branches so same-request reads never describe a state the
+			// database does not hold.
+			try {
+				self::set_settings_cache( $before );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $before === $settings;
 		}
 
 		/**

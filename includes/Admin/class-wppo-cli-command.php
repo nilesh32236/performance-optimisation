@@ -637,7 +637,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				} catch ( \Throwable $snapshot_error ) {
 					unset( $snapshot_error );
 				}
-				Util::save_settings( $merged_settings );
+				// A write that did not persist must be reported, not announced as
+				// a success the operator cannot verify.
+				if ( ! Util::save_settings( $merged_settings ) ) {
+					WP_CLI::error( __( 'Failed to import settings: the database write did not persist.', 'performance-optimisation' ) );
+					return;
+				}
 
 				Log::add( __( 'Settings imported via WP-CLI', 'performance-optimisation' ) );
 				WP_CLI::success( __( 'Settings imported successfully.', 'performance-optimisation' ) );
@@ -739,7 +744,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				} catch ( \Throwable $snapshot_error ) {
 					unset( $snapshot_error );
 				}
-				Util::save_settings( $options );
+				// A write that did not persist must be reported, not announced as
+				// a success the operator cannot verify.
+				if ( ! Util::save_settings( $options ) ) {
+					/* translators: %s: Settings tab name */
+					WP_CLI::error( sprintf( __( 'Failed to update settings for tab "%s": the database write did not persist.', 'performance-optimisation' ), $tab ) );
+					return;
+				}
 
 				/* translators: %s: Settings tab name */
 				Log::add( sprintf( __( 'Updated plugin settings for tab %s via WP-CLI', 'performance-optimisation' ), $tab ) );

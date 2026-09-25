@@ -3577,7 +3577,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$options['file_optimisation']['safeMode'] = false;
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'save_settings' ) ) {
-					Util::save_settings( $options );
+					// Safe mode is the recovery action for a broken site: it must
+					// never be reported as applied when the write did not persist.
+					if ( ! Util::save_settings( $options ) ) {
+						return $this->send_response(
+							null,
+							false,
+							500,
+							__( 'Failed to update safe mode settings', 'performance-optimisation' )
+						);
+					}
 					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 						try {
 							Util::set_settings_cache( $options );

@@ -359,7 +359,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 625,
+        "lines": 631,
         "methods": 11,
         "public_methods": 9,
         "large_methods": 1,
@@ -367,7 +367,7 @@
         "largest_method": {
             "name": "update_settings",
             "line": 88,
-            "lines": 252
+            "lines": 258
         },
         "method_prefixes": {
             "get": 2,
@@ -418,7 +418,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 3656,
+        "lines": 3665,
         "methods": 76,
         "public_methods": 55,
         "large_methods": 8,
@@ -527,7 +527,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 2297,
+        "lines": 2308,
         "methods": 27,
         "public_methods": 17,
         "large_methods": 7,
@@ -535,7 +535,7 @@
         "largest_method": {
             "name": "settings",
             "line": 530,
-            "lines": 224
+            "lines": 235
         },
         "method_prefixes": {
             "check": 6,
@@ -4762,7 +4762,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Settings",
-        "lines": 1666,
+        "lines": 1687,
         "methods": 25,
         "public_methods": 24,
         "large_methods": 4,
