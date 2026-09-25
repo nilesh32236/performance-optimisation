@@ -1516,13 +1516,22 @@ phase3_items:
 
   - id: P3-022
     title: 'Architecture guardrails and dependency-direction enforcement'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1615
     type: tooling
     problem: 'The graph drift gate exists, but no guard prevents new forbidden boundary edges, unowned schedules, or static-state gaps.'
     target_owner: 'Architecture tests and CI checks'
     exact_scope: 'Executable token checks for schedules, static owners, boundary edges, and generated artifact drift.'
     ratchet: 'New unexplained edges or state owners: 0.'
+    re_audit:
+      audited_at: '2026-09-25'
+      source_commit: 2b5771a5
+      evidence:
+        - 'Generator drift is already enforced, but the queue has no executable guard for forbidden boundary edges, unowned schedules, or newly introduced static owners.'
+        - 'P3-021 and prior audit artifacts provide a concrete classification vocabulary to encode without changing runtime behavior.'
+        - 'Guardrails must remain token-based, deterministic, and compatible with manual Composer classmap loading.'
+      decision: 'Implement one architecture guard test/CI check cluster that reads the generated inventory/graph and rejects newly unexplained schedule or boundary violations.'
 
   - id: P3-023
     title: 'Final deep architecture audit'
