@@ -250,7 +250,7 @@ The graph never treats a duplicate candidate as a defect by itself.
 | File | Lines | Responsibility signal |
 |---|---:|---|
 | `FileOptimization.js` | 6,114 | Ten inline feature cards, async save/sandbox/regeneration flows, shared settings state |
-| `Dashboard.js` | 2,168 | Polling shell, two large inline cards, several mount-fetching child panels |
+| `Dashboard.js` | 2,011 | Polling shell, two large inline cards, several mount-fetching child panels; image-job polling delegates to `useImageJobPolling.js` |
 | `App.js` | 654 | Tab shell, guard/menu state, global activities and CCSS fetches, render dispatch |
 | `PluginSetting.js` | 1,513 | Import/export, snapshots, API key, activity tools |
 | `ImageOptimization.js` | 1,423 | Image settings, formats, dimensions, conversion status |
@@ -266,7 +266,7 @@ The React audit found four bounded families:
 1. Full settings responses from `sandbox_promote`, `apply_preset`, and `import_settings` did not all commit to the global `wppoSettings` cache. P3-019 now routes all settings-bearing responses through `settingsResponse.js`; full maps and nested preset settings are committed centrally, with empty/degraded payloads rejected fail-safe.
 2. Save flows could mark render-time settings clean after an await, clobbering edits made during the request. P3-019 adds server-payload-first saves and a shared sequence/abort/mounted workflow guard.
 3. Abort and unmount paths could leave hydration or polling guards stuck. P3-019 makes sandbox, used-CSS, CCSS, import, preset, and save async completions explicitly abort/stale/mount guarded.
-4. Dashboard and child panels duplicate polling constants and self-test transport; this remains a separate P3-020 queue item.
+4. Dashboard and child panels duplicate polling constants and self-test transport. P3-020 now isolates Dashboard's `image_job_status` polling boundary in `src/lib/useImageJobPolling.js`, reusing P3-019 `useAsyncWorkflow` for cancellation, stale-response rejection, and unmount cleanup. The hook preserves the existing 5s/60-attempt backoff, queued-job/savings projection, notices, action/auth/response contracts, and no-overlap scheduling. Woo self-test transport consolidation and FileOptimization card separation remain deferred follow-up boundaries.
 
 These findings belong in small bug-safe queue items. They do not justify a router, store, or polling framework.
 

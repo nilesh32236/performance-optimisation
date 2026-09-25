@@ -48,6 +48,7 @@ import { __, sprintf, _n } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
 import useUpgradePurgeStatus from '../lib/useUpgradePurgeStatus';
+import useImageJobPolling from '../lib/useImageJobPolling';
 import UpgradePurgeBanner from './common/UpgradePurgeBanner';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -60,41 +61,6 @@ import {
 	faBolt,
 	faGlobe,
 } from '@fortawesome/free-solid-svg-icons';
-
-/**
- * Polling interval for image_job_status ticks.
- */
-const POLL_INTERVAL_MS = 5000;
-
-/**
- * Maximum number of image_job_status poll attempts before giving up
- * (~5 minutes at 5s), matching PageSpeedPanel's cap.
- */
-const MAX_POLL_ATTEMPTS = 60;
-
-/**
- * Maximum delay between image_job_status poll ticks.
- *
- * Polling backs off (5s for the first 10 attempts, then +5s per 10
- * attempts) so deep queues do not hammer admin-ajax at the same rate as
- * near-complete ones.
- *
- * @since 2.3.0
- */
-const MAX_POLL_DELAY_MS = 15000;
-
-/**
- * Delay before the next poll tick, backing off with the attempt count.
- *
- * @since 2.3.0
- * @param {number} attempts 1-based poll attempt count.
- * @return {number} Milliseconds to wait before the next tick.
- */
-const getPollDelay = ( attempts ) =>
-	Math.min(
-		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
-		MAX_POLL_DELAY_MS
-	);
 
 /**
  * Coerce a TTL override select value to a finite number, or undefined when
@@ -421,13 +387,6 @@ const Dashboard = ( {
 		cacheSettings.varnishPurgeUrls,
 	] );
 
-	const [ bgProcessing, setBgProcessing ] = useState( false );
-	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
-	const [ imgSavings, setImgSavings ] = useState( null );
-	const pollingRef = useRef( null );
-	const pollAbortRef = useRef( null );
-	const pollRetryRef = useRef( 0 );
-	const pollAttemptsRef = useRef( 0 );
 	const submittingRef = useRef( false );
 	const wooAbortRef = useRef( null );
 	const wooTimedOutRef = useRef( false );
@@ -450,6 +409,25 @@ const Dashboard = ( {
 	const updateState = useCallback( ( updates ) => {
 		setState( ( prevState ) => ( { ...prevState, ...updates } ) );
 	}, [] );
+
+	const handlePolledImageInfo = useCallback(
+		( responseData ) => {
+			updateState( {
+				imageInfo: normalizeImageInfo( responseData ),
+			} );
+		},
+		[ updateState ]
+	);
+	const {
+		bgProcessing,
+		bgJobsQueued,
+		savings: imageJobSavings,
+		startPolling,
+		stopPolling,
+	} = useImageJobPolling( {
+		notify,
+		onImageInfo: handlePolledImageInfo,
+	} );
 
 	const handleLoading = useCallback( ( key, isLoading ) => {
 		setState( ( prevState ) => ( {
@@ -523,126 +501,9 @@ const Dashboard = ( {
 		}, 0 );
 	}, [ dbCounts ] );
 
-	const pollJobStatus = useCallback( async () => {
-		const currentTimeout = pollingRef.current;
-		pollAttemptsRef.current += 1;
-		if ( pollAttemptsRef.current >= MAX_POLL_ATTEMPTS ) {
-			setBgProcessing( false );
-			pollingRef.current = null;
-			notify( {
-				type: 'error',
-				message: __(
-					'Image optimisation timed out. Please try again.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-			return;
-		}
-		// Polls are strictly sequential: the next tick is only scheduled
-		// after the previous await settles, so there is no overlapping
-		// in-flight request to abort here. A fresh controller per tick lets
-		// the unmount cleanup cancel the current poll.
-		pollAbortRef.current = new AbortController();
-		const signal = pollAbortRef.current.signal;
-		try {
-			const response = await apiCall(
-				'image_job_status',
-				{},
-				'GET',
-				signal
-			);
-			// The unmount/stop cleanup may have aborted this tick while the
-			// request was in flight — bail before any setState/notify.
-			if ( signal.aborted ) {
-				return;
-			}
-			pollRetryRef.current = 0;
-			if ( ! response.success || ! response.data ) {
-				// Malformed payload: treat as a retryable failure with backoff
-				// instead of silently rescheduling until the 5-minute timeout.
-				throw new Error( response.message || 'Status check failed' );
-			}
-			// Coerce: the endpoint may omit queued_jobs or encode it as a
-			// string ("0"). Strict === 0 would then never detect completion
-			// and poll until MAX_POLL_ATTEMPTS; NaN stays retryable below.
-			const queuedJobs = Number( response.data.queued_jobs ?? NaN );
-			setBgJobsQueued( Number.isFinite( queuedJobs ) ? queuedJobs : 0 );
-			setImgSavings( response.data.savings ?? null );
-
-			// Reuse the mount/sync-path normalizer so array-of-paths payloads
-			// (like wppoSettings.image_info) never store an Array where a
-			// count is expected (which would coerce totals to strings).
-			updateState( {
-				imageInfo: normalizeImageInfo( response.data ),
-			} );
-
-			if ( Number.isFinite( queuedJobs ) && queuedJobs === 0 ) {
-				setBgProcessing( false );
-				notify( {
-					type: 'success',
-					message: __(
-						'Image optimisation completed.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
-				pollingRef.current = null;
-				pollAttemptsRef.current = 0;
-				return;
-			}
-		} catch ( error ) {
-			if ( signal.aborted || error?.name === 'AbortError' ) {
-				return;
-			}
-			console.error(
-				'Error polling job status:',
-				getErrorLogMessage( error )
-			);
-			pollRetryRef.current++;
-			if ( pollRetryRef.current >= 5 ) {
-				setBgProcessing( false );
-				pollingRef.current = null;
-				notify( {
-					type: 'error',
-					message: __(
-						'Status check stopped after repeated failures.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
-				return;
-			}
-			notify( {
-				type: 'error',
-				message: __(
-					'Status check failed. Retrying…',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-		}
-		if ( pollingRef.current === currentTimeout ) {
-			// Audit #1354 review: back off while hidden (mirrors PageSpeed).
-			const delay = getPollDelay( pollAttemptsRef.current );
-			pollingRef.current = setTimeout(
-				pollJobStatus,
-				typeof document !== 'undefined' && document.hidden
-					? Math.max( delay, 30000 )
-					: delay
-			);
-		}
-	}, [ updateState, notify ] );
-
 	useEffect( () => {
 		const pendingActions = actionControllersRef.current;
 		return () => {
-			if ( pollingRef.current ) {
-				clearTimeout( pollingRef.current );
-			}
-			if ( pollAbortRef.current ) {
-				pollAbortRef.current.abort();
-			}
 			pendingActions.forEach( ( c ) => c.abort() );
 			pendingActions.clear();
 		};
@@ -740,11 +601,7 @@ const Dashboard = ( {
 				}
 				if ( response.data?.background ) {
 					// Background (Action Scheduler) path.
-					setBgProcessing( true );
-					const jobsQueued = Number( response.data.jobs_queued ?? 0 );
-					setBgJobsQueued(
-						Number.isFinite( jobsQueued ) ? jobsQueued : 0
-					);
+					startPolling( response.data.jobs_queued ?? 0 );
 					notify( {
 						type: 'success',
 						message: __(
@@ -753,19 +610,9 @@ const Dashboard = ( {
 						),
 						durationMs: 5000,
 					} );
-					if ( pollingRef.current ) {
-						clearTimeout( pollingRef.current );
-					}
-					pollAttemptsRef.current = 0;
-					pollRetryRef.current = 0;
-					pollingRef.current = setTimeout(
-						pollJobStatus,
-						POLL_INTERVAL_MS
-					);
 				} else {
 					// Synchronous path (Action Scheduler unavailable).
-					setBgJobsQueued( 0 );
-					setBgProcessing( false );
+					stopPolling();
 
 					if ( response.success && response.data ) {
 						updateState( {
@@ -779,11 +626,6 @@ const Dashboard = ( {
 							),
 							durationMs: 5000,
 						} );
-					}
-
-					if ( pollingRef.current ) {
-						clearTimeout( pollingRef.current );
-						pollingRef.current = null;
 					}
 				}
 			} )
@@ -814,7 +656,8 @@ const Dashboard = ( {
 			} );
 	}, [
 		handleLoading,
-		pollJobStatus,
+		startPolling,
+		stopPolling,
 		updateState,
 		notify,
 		bgProcessing,
@@ -2131,7 +1974,7 @@ const Dashboard = ( {
 					bgProcessing={ bgProcessing }
 					bgJobsQueued={ bgJobsQueued }
 					loading={ loading }
-					savings={ imgSavings }
+					savings={ imageJobSavings }
 					pendingPathsCount={
 						( pending.webp || 0 ) + ( pending.avif || 0 )
 					}
