@@ -40,7 +40,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 /**
  * Preset metadata in display order.
  *
- * @type {Array.<{name:string,label:string,description:string}>}
+ * @type {Array.<{name:string,label:string,audience:string,description:string}>}
  */
 export const PRESET_ORDER = [
 	{
@@ -505,15 +505,19 @@ const OptimizationPresets = () => {
 					</button>
 				) ) }
 			</div>
-			<p
-				className="wppo-text-muted wppo-text-small"
-				id={ `wppo-preset-${ selected }-description` }
-			>
-				{
-					PRESET_ORDER.find( ( preset ) => preset.name === selected )
-						?.description
-				}
-			</p>
+			{ PRESET_ORDER.map( ( preset ) => (
+				<p
+					key={ preset.name }
+					className={
+						selected === preset.name
+							? 'wppo-text-muted wppo-text-small'
+							: 'wppo-screen-reader-text'
+					}
+					id={ `wppo-preset-${ preset.name }-description` }
+				>
+					{ preset.description }
+				</p>
+			) ) }
 			{ loadingDiff && (
 				<p className="wppo-text-muted">
 					<FontAwesomeIcon

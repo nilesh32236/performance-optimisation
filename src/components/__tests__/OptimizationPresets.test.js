@@ -52,9 +52,13 @@ describe( 'OptimizationPresets', () => {
 			screen.getByRole( 'button', { name: /^Safe Beginner$/ } )
 		).toHaveAttribute( 'aria-describedby', 'wppo-preset-safe-description' );
 		expect(
-			screen.getByText(
-				/More performance with compatibility considerations/
-			)
+			document.getElementById( 'wppo-preset-safe-description' )
+		).toBeInTheDocument();
+		expect(
+			document.getElementById( 'wppo-preset-balanced-description' )
+		).toBeInTheDocument();
+		expect(
+			document.getElementById( 'wppo-preset-aggressive-description' )
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole( 'button', { name: /Export JSON/i } )
