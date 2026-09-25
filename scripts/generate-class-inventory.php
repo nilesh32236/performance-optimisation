@@ -28,6 +28,7 @@ if ( PHP_SAPI !== 'cli' ) {
 
 require_once __DIR__ . '/architecture/class-source-analyzer.php';
 require_once __DIR__ . '/architecture/class-dependency-graph.php';
+require_once __DIR__ . '/architecture/class-architecture-guards.php';
 
 $plugin_root = dirname( __DIR__ );
 $check_mode  = in_array( '--check', $argv, true );
@@ -84,6 +85,25 @@ if ( $check_mode ) {
 	if ( ! file_exists( $graph_path ) || file_get_contents( $graph_path ) !== $graph_json ) {
 		fwrite( STDERR, "DEPENDENCY-GRAPH.json is stale; regenerate without --check.\n" );
 		$ok = false;
+	}
+	if ( $ok ) {
+		$guards = new PerformanceOptimise\Architecture\Architecture_Guards();
+		$result = $guards->evaluate( $inventory, $graph_payload );
+		if ( 'pass' !== $result['status'] ) {
+			foreach ( $result['violations'] as $violation ) {
+				fwrite(
+					STDERR,
+					sprintf(
+						"Architecture guard %s/%s: %s (%s)\n",
+						$violation['guard'],
+						$violation['code'],
+						$violation['subject'],
+						$violation['reason']
+					)
+				);
+			}
+			$ok = false;
+		}
 	}
 	exit( $ok ? 0 : 1 );
 }
