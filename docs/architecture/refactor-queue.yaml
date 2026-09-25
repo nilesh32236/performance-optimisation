@@ -1841,7 +1841,7 @@ growth_items:
 
   - id: H-001
     title: 'Free-model registry and evidence-based evaluation foundation'
-    status: active
+    status: merged
     priority: high
     type: agent-intelligence
     objective: 'Measure which currently available free OpenCode models fit each repository task type while keeping Muse Spark as the initial champion and preserving production routing safety.'
@@ -1854,8 +1854,18 @@ growth_items:
     non_goals:
       - 'No paid models, broad production replacement, one-run promotion, credential storage, provider flooding, or plugin runtime behavior change.'
     issue: 1646
-    pull_request: pending
-    status_note: 'H-001 is active; catalog data remains separate from executable model-quality evidence.'
+    pull_request: 1648
+    implementation_commit: 416028ef
+    merge_commit: 0e5b6894
+    merged_at: '2026-09-25'
+    post_merge_verification:
+      repository: 'Registry, dynamic discovery, fallback audit, bounded probes, executable benchmark, scoring, and twice-daily workflow merged without production model replacement'
+      ci: 'Exact-head CI, PHP syntax 8.2-8.5, PHPUnit, AI review, and Snyk checks green'
+      local: 'pnpm build, pnpm typecheck, pnpm test 59 suites/833 tests, pnpm lint, pnpm doc:check, 11 registry tests, and 11 deterministic benchmark fixtures passed'
+      evidence: 'Muse Spark health and capability probes passed; isolated coding baseline recorded 2/11 completed tasks, 3/11 verifications, one timeout, and one tool failure; no promotion decision'
+      privacy: 'No credentials, raw provider payloads, site-owner data, or invasive analytics stored or added; model-intelligence excluded from release ZIPs'
+      runtime_scope: 'No plugin runtime, settings, REST, cache, database, or production routing behavior change'
+    status_note: 'H-001 is merged; the registry and scoring foundation can measure challengers while Muse Spark remains champion until evidence gates pass.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
