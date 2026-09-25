@@ -20,6 +20,7 @@ import {
 	shouldShowWooFixCta,
 } from '../lib/wooSelfTest';
 import { useDbCounts } from '../lib/useDbCounts';
+import { normalizeImageInfo } from '../lib/useImageJobPoll';
 import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -121,27 +122,6 @@ const parseVarnishPurgeUrls = ( raw ) => {
 		.split( /\n|,/ )
 		.map( ( url ) => url.trim() )
 		.filter( ( url ) => url && isSafeHttpUrl( url ) );
-};
-
-/**
- * Normalize wppoSettings.image_info which stores arrays of file paths
- * into the {webp: count, avif: count} shape the component expects.
- * @param {Object} raw - Raw image info object.
- */
-const normalizeImageInfo = ( raw ) => {
-	const normalize = ( bucket ) => ( {
-		webp: Array.isArray( bucket?.webp )
-			? bucket.webp.length
-			: bucket?.webp || 0,
-		avif: Array.isArray( bucket?.avif )
-			? bucket.avif.length
-			: bucket?.avif || 0,
-	} );
-	return {
-		completed: normalize( raw?.completed ),
-		pending: normalize( raw?.pending ),
-		failed: normalize( raw?.failed ),
-	};
 };
 
 /**
@@ -389,7 +369,10 @@ const Dashboard = ( {
 	// Image-job polling lifecycle lives in the ImageJobCard boundary
 	// (P3-020); the shell keeps only a stats-strip mirror synced via
 	// handleImageStatus. The db-counts fetch lives in useDbCounts.
-	const { dbCounts } = useDbCounts( notify );
+	const { dbCounts, loadingDbCounts } = useDbCounts( notify );
+	// The stats strip renders synchronously with no skeleton today; the
+	// flag is kept wired so a future skeleton need not rediscover it.
+	void loadingDbCounts;
 
 	const {
 		imageInfo,
@@ -1754,7 +1737,7 @@ const Dashboard = ( {
 			{ /* Image optimization (P3-020 polling boundary) + activity log */ }
 			<div className="wppo-stacked-cards wppo-mt-20">
 				<ImageJobCard
-					initialImageInfo={ imageInfo }
+					defaultImageInfo={ imageInfo }
 					onStatus={ handleImageStatus }
 				/>
 

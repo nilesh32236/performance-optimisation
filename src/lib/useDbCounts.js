@@ -59,9 +59,11 @@ export const useDbCounts = ( notify ) => {
 					durationMs: 5000,
 				} );
 			} finally {
-				if ( ! isStale() ) {
-					setLoadingDbCounts( false );
-				}
+				// Always clear the loading flag: a stale resolution (remount /
+				// StrictMode double-effect) must not leave a remounted hook
+				// instance stuck on loading=true when no fetch is outstanding.
+				// Only setDbCounts/notify stay stale-guarded above.
+				setLoadingDbCounts( false );
 			}
 		} );
 	}, [ run ] );

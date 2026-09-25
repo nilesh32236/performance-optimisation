@@ -9,7 +9,7 @@
  *
  * @since NEXT
  * @param {Object}   props                  Component props.
- * @param {Object}   props.initialImageInfo Initial image info for card UI.
+ * @param {Object}   props.defaultImageInfo Mount-time image info snapshot (one-way: card owns state after mount).
  * @param {Function} props.onStatus         Called with normalized image info on each committed update.
  * @return {Element} Card element.
  */
@@ -21,7 +21,7 @@ import ImageOptimizationCard from '../ImageOptimizationCard';
 import ConfirmDialog from '../common/ConfirmDialog';
 import NoticeBanner from '../common/NoticeBanner';
 
-const ImageJobCard = ( { initialImageInfo, onStatus } ) => {
+const ImageJobCard = ( { defaultImageInfo, onStatus } ) => {
 	const { notice, notify, dismiss } = useNotice();
 	const {
 		bgProcessing,
@@ -32,7 +32,11 @@ const ImageJobCard = ( { initialImageInfo, onStatus } ) => {
 		removing,
 		optimizeImages,
 		removeImages,
-	} = useImageJobPoll( { initialImageInfo, onStatus, notify } );
+	} = useImageJobPoll( {
+		initialImageInfo: defaultImageInfo,
+		onStatus,
+		notify,
+	} );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { completed = {}, pending = {}, failed = {} } = imageInfo;
 

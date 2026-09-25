@@ -128,6 +128,7 @@ export const useImageJobPoll = ( {
 	const pollingRef = useRef( false );
 	const submittingRef = useRef( false );
 	const optimizingRef = useRef( false );
+	const removingRef = useRef( false );
 	// Latest callbacks without re-creating the tick chain (avoids timer
 	// resets when the parent re-renders the stats strip).
 	const callbacksRef = useRef( { onStatus, notify } );
@@ -419,6 +420,15 @@ export const useImageJobPoll = ( {
 	 * @since NEXT
 	 */
 	const removeImages = useCallback( () => {
+		if ( removingRef.current ) {
+			return undefined;
+		}
+		removingRef.current = true;
+		// Stop any in-flight poll chain first so a stale tick can never
+		// call onStatus with fresh image info after the reset to zeros.
+		// Unmount cleanup already calls the same teardown; stop() is the
+		// shared control (kept exported for external lifecycle control).
+		stop();
 		setRemoving( true );
 		return run( async ( { signal, isStale } ) => {
 			const data = await apiCall(
@@ -490,11 +500,12 @@ export const useImageJobPoll = ( {
 				} );
 			} )
 			.finally( () => {
+				removingRef.current = false;
 				if ( mountedRef.current ) {
 					setRemoving( false );
 				}
 			} );
-	}, [ run, mountedRef ] );
+	}, [ run, mountedRef, stop ] );
 
 	return {
 		bgProcessing,

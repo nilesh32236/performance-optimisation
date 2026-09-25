@@ -87,7 +87,7 @@ describe( 'ImageJobCard (P3-020 polling boundary)', () => {
 			const onStatus = jest.fn();
 
 			render(
-				<ImageJobCard initialImageInfo={ {} } onStatus={ onStatus } />
+				<ImageJobCard defaultImageInfo={ {} } onStatus={ onStatus } />
 			);
 			await flushMount();
 
@@ -158,7 +158,7 @@ describe( 'ImageJobCard (P3-020 polling boundary)', () => {
 					} ) );
 				}
 			);
-			render( <ImageJobCard initialImageInfo={ {} } /> );
+			render( <ImageJobCard defaultImageInfo={ {} } /> );
 			await flushMount();
 
 			const optimizeButton = screen.getByRole( 'button', {
@@ -226,7 +226,7 @@ describe( 'ImageJobCard (P3-020 polling boundary)', () => {
 			apiCall.mockResolvedValueOnce( { success: true } );
 			const onStatus = jest.fn();
 			render(
-				<ImageJobCard initialImageInfo={ {} } onStatus={ onStatus } />
+				<ImageJobCard defaultImageInfo={ {} } onStatus={ onStatus } />
 			);
 			await flushMount();
 
@@ -326,7 +326,7 @@ describe( 'ImageJobCard (P3-020 polling boundary)', () => {
 			);
 			const onStatus = jest.fn();
 			const { unmount } = render(
-				<ImageJobCard initialImageInfo={ {} } onStatus={ onStatus } />
+				<ImageJobCard defaultImageInfo={ {} } onStatus={ onStatus } />
 			);
 			await flushMount();
 
@@ -449,7 +449,7 @@ describe( 'ImageJobCard (P3-020 polling boundary)', () => {
 		apiCall.mockResolvedValueOnce( { success: true } );
 		const onStatus = jest.fn();
 		render(
-			<ImageJobCard initialImageInfo={ {} } onStatus={ onStatus } />
+			<ImageJobCard defaultImageInfo={ {} } onStatus={ onStatus } />
 		);
 		await flushMount();
 
