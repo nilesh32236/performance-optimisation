@@ -1546,6 +1546,7 @@ phase3_items:
     status: implemented-active
     priority: high
     github_issue: 1619
+    implementation_commit: f2025931
     type: audit
     problem: 'The campaign cannot finish on passing tests alone.'
     target_owner: 'Final audit artifacts and hotspot classification'
