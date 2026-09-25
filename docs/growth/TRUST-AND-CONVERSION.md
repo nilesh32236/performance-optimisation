@@ -81,13 +81,17 @@ the hosting and site setup; test one change at a time.
 ## New-user Playwright journey
 
 Spec: `tests/e2e/new-user-journey.spec.js` (requires a running WordPress
-with the plugin active; `@playwright/test` is the only new dev
-dependency and is never bundled).
+with the plugin active; `@playwright/test` is an external runner invoked
+via `npx playwright test` and is not a bundled npm dependency — no new
+package was added to `package.json`).
 
 Journey: install → activate → welcome panel shows the Start Safe intro →
 apply Safe preset with diff preview → verify cache/status → Undo via
-restore point → support/troubleshooting/compatibility pages reachable →
-assert zero unexplained browser console errors.
+restore point → Tools tab shows the Support And Safe Upgrades card with
+support/troubleshooting/compatibility links (HTTP reachability is probed
+only when `PLAYWRIGHT_DOCS_BASE_URL` is set, since published docs live on
+an external host, not the WP origin) → assert zero unexplained browser
+console errors.
 
 ### Friction report
 
