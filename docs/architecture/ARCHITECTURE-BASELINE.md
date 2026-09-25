@@ -20,7 +20,7 @@ The command writes:
 - `class-inventory.json`, the class and protected-runtime heat map.
 - `DEPENDENCY-GRAPH.json`, the schema-v2 tokenizer graph, SCCs, boundary findings, and duplicate candidates.
 
-The CI workflow runs the check command. `ArchitectureInventoryTest` checks the schema, file-set completeness, required reference categories, graph classifications, and drift.
+The CI workflow runs the check command. `ArchitectureInventoryTest` checks the schema, file-set completeness, required reference categories, graph classifications, and drift. `ArchitectureGuardrailsTest` (P3-022) ratchets the result: the 20 committed boundary violations are allowlisted, every `wppo_*` schedule-call literal under `includes/` must sit in the `Job_Registry` cron/AS union with `Cron::clear_cron_jobs()`/`Deactivate`/`uninstall.php` teardown coverage, and all 33 static-state owners must map to `Runtime_State::owners()`, the `Bfcache` shutdown seam, or the `BOUNDARIES.md` classifications. New unexplained edges or state owners fail PHPUnit.
 
 ## Scope
 

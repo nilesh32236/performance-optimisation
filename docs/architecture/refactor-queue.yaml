@@ -1532,6 +1532,16 @@ phase3_items:
         - 'P3-021 and prior audit artifacts provide a concrete classification vocabulary to encode without changing runtime behavior.'
         - 'Guardrails must remain token-based, deterministic, and compatible with manual Composer classmap loading.'
       decision: 'Implement one architecture guard test/CI check cluster that reads the generated inventory/graph and rejects newly unexplained schedule or boundary violations.'
+    implementation:
+      owner: 'tests/php/ArchitectureGuardrailsTest.php; token-based guards over committed class-inventory.json and DEPENDENCY-GRAPH.json'
+      lifecycle: 'Deterministic PHPUnit checks; no runtime change. Boundary guard pins the 20 committed violations in ALLOWED_BOUNDARY_EDGES; schedule guard token-scans includes/ schedule-call literals against the Job_Registry cron/AS union and pins Cron::clear_cron_jobs()/Deactivate/uninstall.php teardown coverage; static-state guard pins all 33 static_state owners to Runtime_State::owners(), Bfcache, or the BOUNDARIES.md cross-request/protected/request-memo lists.'
+      preserved_contracts: 'No runtime, REST, CLI, cron, multisite, or frontend behavior changes; generator output and graph metrics unchanged.'
+      tests: 'tests/php/ArchitectureGuardrailsTest.php pins 4 live guards (boundary edges, schedule ownership, teardown coverage, static-state owners) plus 3 pure-data fixture tests proving each guard fails shut on synthetic violations and passes on allowlisted evidence.'
+      documentation: 'refactor-queue.yaml, ARCHITECTURE-BASELINE.md, and ARCHITECTURE-QUALITY.md record the guard cluster and ratchet.'
+      ratchet_result: 'New unexplained boundary edges, unowned schedules, or unclassified static-state owners: 0; each now fails PHPUnit until removed or explicitly ratcheted.'
+      graph_delta: '86 inventory files / 89 graph nodes / 395 edges; no graph delta (test-only change); generator --check passed'
+      notes:
+        - '2026-09-25: Guard cluster implemented per plan Option A (JSON-allowlist guards); constant-indirected schedules stay pinned by JobRegistryTest/CronHookParityTest.'
 
   - id: P3-023
     title: 'Final deep architecture audit'

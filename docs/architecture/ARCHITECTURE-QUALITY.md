@@ -202,6 +202,8 @@ P3-018 moves one lifecycle axis rather than splitting parsing by file size. `Ccs
 
 P3-021's fresh inventory audit keeps the static-state change intentionally small. `Bfcache` is the one selected non-site-sensitive request cluster: its token-bearing script and duplicate-output guard are cleared by one named feature-owned reset at `shutdown`, with characterization tests for same-request duplicate suppression and next-request reset. Site-sensitive owners remain under the P3-004 `Runtime_State` contract; persisted options/files/queues and protected LiteSpeed ESI or immutable compatibility policy remain classified rather than moved. The ratchet is reset coverage for one cluster, not an unsafe attempt to remove all static properties.
 
+P3-022 adds executable guardrails with no runtime change. `ArchitectureGuardrailsTest` reads only the committed inventory/graph: the boundary guard fails on any `boundary_violations[]` from/to pair outside the 20-entry allowlist, the schedule guard token-scans `includes/` schedule-call literals against the `Job_Registry` cron/AS union and pins `Cron::clear_cron_jobs()`/`Deactivate`/`uninstall.php` teardown coverage, and the static-state guard requires all 33 `static_state` owners to sit in `Runtime_State::owners()`, the `Bfcache` shutdown seam, or the documented cross-request/protected/request-memo lists. Pure-data fixture tests prove each guard fails shut. The ratchet is zero new unexplained edges, schedules, or owners.
+
 ## SOLID policy
 
 ### Single responsibility
