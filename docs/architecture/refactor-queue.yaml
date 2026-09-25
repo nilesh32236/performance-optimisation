@@ -1433,6 +1433,7 @@ phase3_items:
     status: active
     priority: low
     github_issue: 1609
+    github_pr: 1610
     implementation_commit: 23fb5b67a7dc25fd35c2929000cb7f986f978333
     type: epic
     problem: 'FileOptimization, Dashboard, and App still combine many cards, polling effects, and shell fetches.'
