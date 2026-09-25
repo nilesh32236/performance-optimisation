@@ -86,4 +86,6 @@ function main() {
 	console.log( `docs OK: README + MODEL-PATHS present, ${ REQUIRED_AREAS.length } benchmark areas covered` );
 }
 
-main();
+if ( import.meta.url === `file://${ process.argv[ 1 ] }` ) {
+	main();
+}

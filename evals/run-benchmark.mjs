@@ -129,7 +129,11 @@ function main() {
 	for ( const file of files ) {
 		const full = resolve( FIXTURE_DIR, file );
 		const raw = readFileSync( full, 'utf8' );
-		if ( manifest?.fixtures?.[ file ] && sha256( raw ) !== manifest.fixtures[ file ] ) {
+		if ( ! manifest?.fixtures?.[ file ] ) {
+			errors.push( `${ file }: missing manifest entry (new fixtures must be hash-pinned)` );
+			continue;
+		}
+		if ( sha256( raw ) !== manifest.fixtures[ file ] ) {
 			errors.push( `${ file }: content hash drift vs manifest (determinism broken)` );
 			continue;
 		}
@@ -207,4 +211,6 @@ function main() {
 	);
 }
 
-main();
+if ( import.meta.url === `file://${ process.argv[ 1 ] }` ) {
+	main();
+}

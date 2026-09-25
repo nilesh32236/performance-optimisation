@@ -84,4 +84,6 @@ function main() {
 	console.log( `routing-safety OK: ${ sites } explicit-selection site(s), champion fallback preserved` );
 }
 
-main();
+if ( import.meta.url === `file://${ process.argv[ 1 ] }` ) {
+	main();
+}

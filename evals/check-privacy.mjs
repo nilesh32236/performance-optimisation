@@ -98,4 +98,6 @@ function main() {
 	console.log( `privacy OK: scanned ${ scanned.join( ', ' ) || 'registry only' }, artifacts git-ignored` );
 }
 
-main();
+if ( import.meta.url === `file://${ process.argv[ 1 ] }` ) {
+	main();
+}

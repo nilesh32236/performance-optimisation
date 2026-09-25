@@ -9,7 +9,7 @@
 		"test": "wp-scripts test-unit-js",
 		"lint:js": "wp-scripts lint-js src",
 		"lint:js:fix": "wp-scripts lint-js src --fix",
-		"typecheck": "node --check evals/check-registry.mjs && node --check evals/discover.mjs && node --check evals/run-benchmark.mjs && node --check evals/score.mjs && node --check evals/check-registry.mjs && node --check evals/check-routing-safety.mjs && node --check evals/check-privacy.mjs && node --check evals/check-docs.mjs && node --check evals/check-all.mjs && echo \"typecheck: ESM syntax OK (no TypeScript in this repo)\"",
+		"typecheck": "for f in evals/*.mjs; do node --check \"$f\" || exit 1; done && echo \"typecheck: ESM syntax OK (no TypeScript in this repo)\"",
 		"doc:check": "node evals/check-docs.mjs",
 		"eval:registry": "node evals/check-registry.mjs",
 		"eval:discover": "node evals/discover.mjs",

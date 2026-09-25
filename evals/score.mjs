@@ -122,9 +122,7 @@ export function decide( championResults, challengerResults, options = {} ) {
 	if ( ! challengerResults ) {
 		return {
 			verdict: champion.gatesPassed ? 'retain-champion' : 'insufficient-evidence',
-			reason: challengerResults
-				? 'gate failures'
-				: 'champion-only evidence; no challenger evaluated',
+			reason: 'champion-only evidence; no challenger evaluated',
 			champion,
 			challenger: null,
 			margin: 0,
@@ -279,4 +277,6 @@ function main() {
 	console.log( JSON.stringify( output, null, 2 ) );
 }
 
-main();
+if ( import.meta.url === `file://${ process.argv[ 1 ] }` ) {
+	main();
+}

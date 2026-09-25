@@ -15,6 +15,11 @@
  * Env:
  *   MODELS_DEV_URL  override catalog URL (tests)
  *   OFFLINE=1       skip network, reuse cache only
+ *
+ * Trust boundary: MODELS_DEV_URL and --out are trusted-operator inputs only.
+ * There is intentionally no URL allowlist or output confinement (local/CI
+ * tooling), so do not pass untrusted values. Discovery output is advisory
+ * and never rewrites registry.json.
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
@@ -84,13 +89,39 @@ async function fetchWithTimeout( url, { timeoutMs, etag } ) {
 }
 
 async function readBoundedBody( response ) {
-	const buffer = Buffer.from( await response.arrayBuffer() );
-	if ( buffer.length > BOUNDS.maxResponseBytes ) {
-		throw new Error(
-			`response exceeded ${ BOUNDS.maxResponseBytes } byte cap (${ buffer.length })`
-		);
+	// Incremental cap: stream the body and abort once the byte budget is
+	// exceeded, so an oversized catalog cannot spike memory before the cap.
+	if ( ! response.body || typeof response.body.getReader !== 'function' ) {
+		const fallback = Buffer.from( await response.arrayBuffer() );
+		if ( fallback.length > BOUNDS.maxResponseBytes ) {
+			throw new Error(
+				`response exceeded ${ BOUNDS.maxResponseBytes } byte cap (${ fallback.length })`
+			);
+		}
+		return fallback.toString( 'utf8' );
 	}
-	return buffer.toString( 'utf8' );
+	const reader = response.body.getReader();
+	const chunks = [];
+	let total = 0;
+	for ( ;; ) {
+		const { done, value } = await reader.read();
+		if ( done ) {
+			break;
+		}
+		total += value.byteLength;
+		if ( total > BOUNDS.maxResponseBytes ) {
+			try {
+				await reader.cancel();
+			} catch {
+				// Ignore cancel errors; the cap error below is authoritative.
+			}
+			throw new Error(
+				`response exceeded ${ BOUNDS.maxResponseBytes } byte cap (${ total }+)`
+			);
+		}
+		chunks.push( Buffer.from( value ) );
+	}
+	return Buffer.concat( chunks ).toString( 'utf8' );
 }
 
 /**
@@ -271,4 +302,6 @@ async function main() {
 	);
 }
 
-main();
+if ( import.meta.url === `file://${ process.argv[ 1 ] }` ) {
+	main();
+}

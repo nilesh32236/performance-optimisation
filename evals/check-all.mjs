@@ -27,20 +27,26 @@ const STEPS = [
 	[ 'docs', [ `${ here }/check-docs.mjs` ] ],
 ];
 
-let failed = false;
-for ( const [ name, argv ] of STEPS ) {
-	try {
-		execFileSync( 'node', argv, { stdio: 'inherit' } );
-	} catch {
-		console.error( `checks: step failed: ${ name }` );
-		failed = true;
-		break;
+function main() {
+	let failed = false;
+	for ( const [ name, argv ] of STEPS ) {
+		try {
+			execFileSync( 'node', argv, { stdio: 'inherit' } );
+		} catch {
+			console.error( `checks: step failed: ${ name }` );
+			failed = true;
+			break;
+		}
+	}
+
+	if ( failed ) {
+		process.exitCode = 1;
+	} else {
+		// eslint-disable-next-line no-console
+		console.log( 'checks OK: registry + benchmark + score + routing-safety + privacy + docs' );
 	}
 }
 
-if ( failed ) {
-	process.exitCode = 1;
-} else {
-	// eslint-disable-next-line no-console
-	console.log( 'checks OK: registry + benchmark + score + routing-safety + privacy + docs' );
+if ( import.meta.url === `file://${ process.argv[ 1 ] }` ) {
+	main();
 }
