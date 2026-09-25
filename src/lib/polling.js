@@ -40,10 +40,12 @@ export const MAX_POLL_DELAY_MS = 15000;
  * @param {number} attempts 1-based poll attempt count.
  * @return {number} Milliseconds to wait before the next tick.
  */
-export const getPollDelay = ( attempts ) =>
-	Math.min(
-		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
+export const getPollDelay = ( attempts ) => {
+	const safe = Number.isFinite( attempts ) ? attempts : 1;
+	return Math.min(
+		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( safe / 10 ) ),
 		MAX_POLL_DELAY_MS
 	);
+};
 
 export default getPollDelay;

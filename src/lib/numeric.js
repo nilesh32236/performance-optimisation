@@ -24,7 +24,7 @@
  * @return {*} Truncated + clamped integer, or fallback when unparseable.
  */
 export const parseGuardedInt = ( value, options = {} ) => {
-	const { min, max, fallback = 0 } = options;
+	const { min, max, fallback = 0 } = options ?? {};
 	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
 		return fallback;
 	}
