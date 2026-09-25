@@ -1556,8 +1556,9 @@ phase3_items:
 
   - id: P3-023
     title: 'Final deep architecture audit'
-    status: audit-pending
+    status: active
     priority: high
+    github_issue: 1619
     type: audit
     problem: 'The campaign cannot finish on passing tests alone.'
     target_owner: 'Final audit artifacts and hotspot classification'
