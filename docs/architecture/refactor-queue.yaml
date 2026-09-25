@@ -1476,6 +1476,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1613
+    implementation_commit: a77bdcd9a44c568c0c61f5327ac2a7e00d69df36
     type: architecture
     problem: '33 owners hold 143 generated static properties; P3-004 covers site-sensitive owners, while request, cross-request, and protected residues still need explicit lifecycle classification.'
     target_owner: 'Bfcache request-state owner for this item; feature-owned reset where lifecycle permits'
