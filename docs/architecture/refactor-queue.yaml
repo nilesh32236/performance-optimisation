@@ -1752,7 +1752,7 @@ growth_items:
 
   - id: E-001
     title: 'Beginner-first feature documentation and discoverability map'
-    status: active
+    status: merged
     priority: medium
     type: growth
     objective: 'Document the existing plugin with useful user questions, safe defaults, compatibility boundaries, troubleshooting, and natural internal links.'
@@ -1765,8 +1765,18 @@ growth_items:
     non_goals:
       - 'No runtime, API, settings, optimization, or public deployment changes; no thin keyword-only pages.'
     issue: 1636
-    pull_request: pending
-    status_note: 'Phase E is active; documentation claims remain bounded to current code and verification evidence.'
+    pull_request: 1637
+    implementation_commit: 4d0a4ef6
+    merge_commit: 7b9dbb7a
+    merged_at: '2026-09-25'
+    post_merge_verification:
+      repository: '23 docs/site pages match 23 manifest entries; new Core Web Vitals, CDN, and Compatibility guides merged'
+      content: 'Major pages lead with user task, safe default, enablement, changes, compatibility, verification, rollback, troubleshooting, and FAQ'
+      links: 'Manifest, required-section, HTML-fragment, and internal-route checks passed'
+      ci: 'Exact-head CI and AI review green; PHP 8.2-8.5 syntax and PHPUnit green'
+      local: 'Lint 0 errors/2 existing warnings; PHPCS binary pass; Jest 59 suites/833 tests; build pass with existing size warning; inventory and diff checks pass'
+      runtime_scope: 'No runtime, API, settings, optimization, or public documentation deployment changes'
+    status_note: 'Phase E is merged; source documentation is ready for the existing editor publishing pipeline, but public page sync is not claimed.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
