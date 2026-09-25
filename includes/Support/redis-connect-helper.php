@@ -168,7 +168,6 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 		$password     = $config['password'] ?? '';
 		$database     = isset( $config['database'] ) ? (int) $config['database'] : 0;
 		$timeout      = 0.5;
-		$retry        = 0;
 		$read_timeout = 0;
 		$errors       = array();
 
@@ -183,13 +182,25 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			}
 
 			try {
+				// phpredis 6.0 replaced the positional RedisSentinel constructor
+				// with a single options array; 5.x took six positional arguments.
+				// The version gate above already requires >= 6.0, so the legacy
+				// form could only ever raise ArgumentCountError, which the
+				// catch below converted into "Sentinel node connection failed."
+				// and finally into a sentinel_fail error. Object_Cache classified
+				// that as a *transient* outage, so a permanent misconfiguration
+				// armed the persistent outage flag and counted toward the circuit
+				// breaker: Sentinel mode could not work at all, and a site
+				// configured for it was driven permanently uncached.
 				$sentinel = new \RedisSentinel(
-					(string) $s_host,
-					(int) $s_port,
-					(float) $timeout,
-					'',
-					(int) $retry,
-					(float) $read_timeout
+					array(
+						'host'           => (string) $s_host,
+						'port'           => (int) $s_port,
+						'connectTimeout' => (float) $timeout,
+						'readTimeout'    => (float) $read_timeout,
+						'retryInterval'  => 0,
+						'persistent'     => false,
+					)
 				);
 				$address  = $sentinel->getMasterAddrByName( $master_name );
 

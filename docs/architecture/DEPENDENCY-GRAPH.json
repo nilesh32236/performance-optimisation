@@ -24002,7 +24002,7 @@
             "file": "includes/Support/redis-connect-helper.php",
             "domain": "Support",
             "namespace": "",
-            "lines": 623,
+            "lines": 634,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -24026,31 +24026,31 @@
                 },
                 {
                     "name": "wppo_redis_connect_standalone",
-                    "line": 254
+                    "line": 265
                 },
                 {
                     "name": "wppo_parse_redis_node",
-                    "line": 305
+                    "line": 316
                 },
                 {
                     "name": "wppo_normalize_redis_serializer_choice",
-                    "line": 362
+                    "line": 373
                 },
                 {
                     "name": "wppo_resolve_redis_serializer",
-                    "line": 410
+                    "line": 421
                 },
                 {
                     "name": "wppo_apply_redis_options",
-                    "line": 459
+                    "line": 470
                 },
                 {
                     "name": "wppo_validate_tls_ca_file",
-                    "line": 558
+                    "line": 569
                 },
                 {
                     "name": "wppo_parse_nodes",
-                    "line": 597
+                    "line": 608
                 }
             ],
             "largest_methods": [],
@@ -24058,27 +24058,27 @@
             "references": {
                 "static_calls": [],
                 "instance_calls": {
-                    "$redis-><dynamic>": 274,
-                    "$redis->auth": 204,
-                    "$redis->close": 205,
-                    "$redis->connect": 203,
-                    "$redis->select": 210,
-                    "$redis->setOption": 480,
-                    "$sentinel->getMasterAddrByName": 194
+                    "$redis-><dynamic>": 285,
+                    "$redis->auth": 215,
+                    "$redis->close": 216,
+                    "$redis->connect": 214,
+                    "$redis->select": 221,
+                    "$redis->setOption": 491,
+                    "$sentinel->getMasterAddrByName": 205
                 },
                 "new_expressions": {
-                    "\\Redis": 200,
+                    "\\Redis": 211,
                     "\\RedisCluster": 127,
-                    "\\RedisSentinel": 186,
+                    "\\RedisSentinel": 195,
                     "\\WP_Error": 89
                 },
                 "class_references": [],
                 "class_constant_references": {
-                    "\\Redis": 370
+                    "\\Redis": 381
                 },
                 "class_string_references": [],
                 "class_exists": {
-                    "Redis": 197,
+                    "Redis": 208,
                     "RedisCluster": 103,
                     "RedisSentinel": 153
                 },
@@ -24089,58 +24089,58 @@
                 "loader_references": [],
                 "file_references": [],
                 "external_classes": {
-                    "Redis": 197,
+                    "Redis": 208,
                     "RedisCluster": 103,
                     "RedisSentinel": 153,
-                    "\\Redis": 200,
+                    "\\Redis": 211,
                     "\\RedisCluster": 127,
-                    "\\RedisSentinel": 186,
+                    "\\RedisSentinel": 195,
                     "\\WP_Error": 89
                 },
                 "external_functions": {
-                    "\\Redis": 200,
+                    "\\Redis": 211,
                     "\\RedisCluster": 127,
-                    "\\RedisSentinel": 186,
+                    "\\RedisSentinel": 195,
                     "\\WP_Error": 89,
                     "__": 89,
-                    "array_filter": 610,
+                    "array_filter": 621,
                     "array_map": 114,
-                    "array_values": 609,
+                    "array_values": 620,
                     "class_exists": 103,
                     "defined": 11,
-                    "end": 237,
+                    "end": 248,
                     "error_log": 87,
-                    "extension_loaded": 414,
+                    "extension_loaded": 425,
                     "function_exists": 34,
                     "getenv": 63,
-                    "is_array": 605,
-                    "is_file": 569,
-                    "is_object": 460,
-                    "is_readable": 569,
-                    "is_string": 309,
-                    "ltrim": 565,
-                    "method_exists": 460,
+                    "is_array": 616,
+                    "is_file": 580,
+                    "is_object": 471,
+                    "is_readable": 580,
+                    "is_string": 320,
+                    "ltrim": 576,
+                    "method_exists": 471,
                     "phpversion": 162,
-                    "preg_match": 565,
-                    "preg_split": 599,
-                    "realpath": 568,
-                    "rtrim": 578,
-                    "sprintf": 213,
-                    "str_replace": 572,
+                    "preg_match": 576,
+                    "preg_split": 610,
+                    "realpath": 579,
+                    "rtrim": 589,
+                    "sprintf": 224,
+                    "str_replace": 583,
                     "strpos": 116,
-                    "strrpos": 323,
-                    "substr": 313,
-                    "substr_count": 319,
-                    "trim": 316,
+                    "strrpos": 334,
+                    "substr": 324,
+                    "substr_count": 330,
+                    "trim": 327,
                     "version_compare": 162
                 },
                 "wordpress_functions": {
                     "\\WP_Error": 89
                 },
                 "filesystem_dependencies": {
-                    "is_file": 569,
-                    "is_readable": 569,
-                    "realpath": 568
+                    "is_file": 580,
+                    "is_readable": 580,
+                    "realpath": 579
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
