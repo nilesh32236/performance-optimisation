@@ -21,6 +21,7 @@ import {
 	runPerformanceScan,
 	fetchSuggestions,
 	getErrorLogMessage,
+	getWppoSettings,
 } from '../lib/apiRequest';
 import { formatBytes } from '../lib/util';
 import { numericStatus, boolToStatus } from '../lib/status';
@@ -245,10 +246,7 @@ const MetricOverview = ( { result } ) => (
 );
 
 const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
-	const homeUrl =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings.performance_audit?.homeUrl ?? ''
-			: '';
+	const homeUrl = getWppoSettings( 'performance_audit.homeUrl', '' );
 
 	const [ url, setUrl ] = useState( homeUrl );
 	const [ scanning, setScanning ] = useState( false );

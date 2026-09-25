@@ -4,6 +4,7 @@ import {
 	commitSettingsResponse,
 	fetchRecentActivities,
 	getErrorLogMessage,
+	getWppoSettings,
 	isValidScanUrl,
 } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -50,15 +51,25 @@ const FALLBACK_ALLOWED_KEYS = [
 // Audit #1354: resolved lazily at call time — a module-load snapshot
 // goes stale when wppoSettings is localised after import.
 const getAllowedImportKeys = () => {
-	if (
-		typeof wppoSettings !== 'undefined' &&
-		Array.isArray( wppoSettings.allowedSettingsKeys ) &&
-		wppoSettings.allowedSettingsKeys.length
-	) {
-		return wppoSettings.allowedSettingsKeys;
+	const keys = getWppoSettings( 'allowedSettingsKeys', null );
+	if ( Array.isArray( keys ) && keys.length ) {
+		return keys;
 	}
 	return FALLBACK_ALLOWED_KEYS;
 };
+
+/**
+ * Read the performance_audit settings slice via the central typeof guard
+ * (audit #1628): the same 3-line slice was copy-pasted at three call
+ * sites, so a new audit default or tab-key rename needed three identical
+ * edits. One helper keeps the reads in sync.
+ *
+ * @since NEXT
+ * @param {Object} [fallback] Fallback when the global or slice is absent.
+ * @return {Object} The performance_audit settings slice (or fallback).
+ */
+const getAuditSettings = ( fallback = {} ) =>
+	getWppoSettings( 'settings.performance_audit', fallback );
 
 /**
  * Maximum accepted settings-file size (512KB). Real exports are <100KB;
@@ -368,9 +379,7 @@ const PluginSetting = ( { options } ) => {
 	// Phase 2 — PageSpeed API key state.
 	// Security: use boolean flag only, do not expose the actual key to the client.
 	const [ apiKeyConfigured, setApiKeyConfigured ] = useState(
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings.performance_audit?.pagespeedApiKeyConfigured ?? false
-			: false
+		getWppoSettings( 'performance_audit.pagespeedApiKeyConfigured', false )
 	);
 
 	const [ newApiKey, setNewApiKey ] = useState( '' );
@@ -383,17 +392,12 @@ const PluginSetting = ( { options } ) => {
 
 	// Phase 2 — auto PageSpeed re-scan frequency state.
 	const [ autoRescan, setAutoRescan ] = useState(
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings.performance_audit?.autoRescan ?? ''
-			: ''
+		getWppoSettings( 'performance_audit.autoRescan', '' )
 	);
 	const [ savingAutoRescan, setSavingAutoRescan ] = useState( false );
 
 	// Monitoring: Server-Timing header + high-value URLs for auto re-scan.
-	const storedAudit =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.performance_audit ?? {}
-			: {};
+	const storedAudit = getAuditSettings();
 	const [ serverTimingEnabled, setServerTimingEnabled ] = useState(
 		!! storedAudit.server_timing_enabled
 	);
@@ -410,10 +414,7 @@ const PluginSetting = ( { options } ) => {
 	// Audit #1420: resync when the global arrives late. Per-key deps so
 	// parent re-renders do not reset the form; saving guards so an
 	// in-progress edit is never clobbered.
-	const liveAudit =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.performance_audit ?? {}
-			: {};
+	const liveAudit = getAuditSettings();
 	useEffect( () => {
 		if ( ! savingMonitoring && ! savingAutoRescan ) {
 			setServerTimingEnabled( !! liveAudit.server_timing_enabled );
@@ -480,10 +481,7 @@ const PluginSetting = ( { options } ) => {
 		setSaving( true );
 		dismissApiKey();
 		try {
-			const currentSettings =
-				typeof wppoSettings !== 'undefined'
-					? wppoSettings?.settings?.performance_audit ?? {}
-					: {};
+			const currentSettings = getAuditSettings();
 			const response = await apiCall(
 				'update_settings',
 				{

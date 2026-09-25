@@ -11,9 +11,11 @@
  * @type {string[]}
  */
 /**
- * Reserved status vocabulary (audit #1401): currently no in-repo importer.
- * Kept (not deleted) as the documented contract for future panels and
- * external consumers — import this instead of inventing new level strings.
+ * Reserved status vocabulary (audit #1401, #1628): the only in-repo
+ * importer is the Jest contract test (src/lib/__tests__/status.test.js),
+ * which pins the frozen vocabulary. Kept (not deleted) as the documented
+ * contract for future panels and external consumers — import this instead
+ * of inventing new level strings.
  *
  * @since 2.3.0
  */

@@ -9,13 +9,17 @@ import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
 
-jest.mock( '../../lib/apiRequest', () => ( {
-	queuePageseedScan: jest.fn(),
-	queuePagespeedScan: jest.fn(),
-	getPagespeedResults: jest.fn(),
-	getErrorLogMessage: ( error ) =>
-		error instanceof Error ? error.message : String( error ),
-} ) );
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		queuePageseedScan: jest.fn(),
+		queuePagespeedScan: jest.fn(),
+		getPagespeedResults: jest.fn(),
+		getErrorLogMessage: ( error ) =>
+			error instanceof Error ? error.message : String( error ),
+	};
+} );
 
 jest.mock( '@fortawesome/react-fontawesome', () => ( {
 	FontAwesomeIcon: ( { icon, className, style, spin } ) => (

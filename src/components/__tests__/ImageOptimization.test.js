@@ -12,11 +12,15 @@ import ImageOptimization from '../ImageOptimization';
 import { apiCall } from '../../lib/apiRequest';
 
 // Mock the API request
-jest.mock( '../../lib/apiRequest', () => ( {
-	apiCall: jest.fn(),
-	getErrorLogMessage: ( error ) =>
-		error instanceof Error ? error.message : String( error ),
-} ) );
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		apiCall: jest.fn(),
+		getErrorLogMessage: ( error ) =>
+			error instanceof Error ? error.message : String( error ),
+	};
+} );
 
 describe( 'ImageOptimization Component', () => {
 	beforeEach( () => {

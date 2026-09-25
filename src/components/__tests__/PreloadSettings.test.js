@@ -4,12 +4,16 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import PreloadSettings from '../PreloadSettings';
 
-// Mock the API request
-jest.mock( '../../lib/apiRequest', () => ( {
-	apiCall: jest.fn(),
-	getErrorLogMessage: ( error ) =>
-		error instanceof Error ? error.message : String( error ),
-} ) );
+// Mock the API request (spread actual so getWppoSettings stays real).
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		apiCall: jest.fn(),
+		getErrorLogMessage: ( error ) =>
+			error instanceof Error ? error.message : String( error ),
+	};
+} );
 
 import { apiCall } from '../../lib/apiRequest';
 

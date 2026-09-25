@@ -1,7 +1,12 @@
 import { useState, useEffect, useContext, useMemo } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
-import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
+import { parseGuardedInt } from '../lib/numeric';
+import {
+	apiCall,
+	getErrorLogMessage,
+	getWppoSettings,
+} from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -52,7 +57,9 @@ const lcpSourceLabels = {
  * Coerce the longest-edge cap to a non-negative integer.
  *
  * Mirrors the PHP sanitizer (2560 default, 0 disables): negatives,
- * fractions, '' or non-numeric payloads never stay in state.
+ * fractions, '' or non-numeric payloads never stay in state. Thin wrapper
+ * over the shared parseGuardedInt helper (src/lib/numeric.js) so
+ * PHP-parity fixes land once.
  *
  * @since 2.0.0
  * @param {*}      value    Raw option value.
@@ -60,30 +67,11 @@ const lcpSourceLabels = {
  * @return {number} Coerced integer >= 0.
  */
 const coerceLongestEdge = ( value, fallback ) => {
-	if (
-		Array.isArray( value ) ||
-		typeof value === 'boolean' ||
-		value === null ||
-		value === undefined
-	) {
+	const parsed = parseGuardedInt( value, { fallback: null } );
+	if ( typeof parsed !== 'number' ) {
 		return fallback;
 	}
-	// Mirror PHP is_numeric(): whitespace-only strings are not numeric, and
-	// Number('   ') would otherwise coerce to 0 instead of the 2560 fallback.
-	if ( typeof value === 'string' && value.trim() === '' ) {
-		return fallback;
-	}
-	// PHP is_numeric() rejects hex/binary/octal literals while Number()
-	// parses them (Number('0x100') === 256), so guard explicitly to keep
-	// UI/server parity (see normalizeRetries in FileOptimization).
-	if ( typeof value === 'string' && /^0[xXoObB]/.test( value.trim() ) ) {
-		return fallback;
-	}
-	const num = Number( value );
-	if ( ! Number.isFinite( num ) ) {
-		return fallback;
-	}
-	return Math.max( 0, Math.trunc( num ) );
+	return Math.max( 0, parsed );
 };
 
 // Audit #1401: single placeholderType derivation (was copy-pasted in
@@ -912,9 +900,10 @@ const ImageOptimization = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
 					<div className="wppo-field-group">
-						{ ( typeof wppoSettings !== 'undefined'
-							? wppoSettings?.client_side_media_processing_enabled
-							: false ) === true &&
+						{ getWppoSettings(
+							'client_side_media_processing_enabled',
+							false
+						) === true &&
 							! settings.forceServerSideConversion && (
 								<NoticeBanner
 									type="info"

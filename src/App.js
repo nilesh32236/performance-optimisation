@@ -215,21 +215,14 @@ const App = () => {
 	}, [] );
 
 	const renderContent = () => {
-		const settings =
-			typeof wppoSettings !== 'undefined'
-				? wppoSettings?.settings ?? {}
-				: {};
+		const settings = getWppoSettings( 'settings', {} );
 		const components = {
 			dashboard: (
 				<Dashboard
 					activities={ recentActivities?.activities }
 					activitiesError={ activitiesError }
 					cacheSettings={ settings.cache_settings }
-					userRoles={
-						typeof wppoSettings !== 'undefined'
-							? wppoSettings?.userRoles ?? {}
-							: {}
-					}
+					userRoles={ getWppoSettings( 'userRoles', {} ) }
 					onNavigate={ handleTabChange }
 				/>
 			),

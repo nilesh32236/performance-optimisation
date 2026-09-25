@@ -42,6 +42,11 @@ export const getEffectiveMode = ( {
 /**
  * Whether WPPO optimizer should be disabled in the current LiteSpeed mode.
  *
+ * Audit #1628: the only in-repo importer is the Jest contract test
+ * (src/lib/__tests__/litespeed.test.js), which pins the PHP-mirrored
+ * behaviour. Kept as the tested pure-helper contract — import this
+ * instead of re-deriving the mode inline.
+ *
  * @param {Object} opts - Options.
  * @return {boolean} True if optimizer should be disabled.
  */
@@ -71,6 +76,10 @@ export const modeLabel = ( mode ) => {
 
 /**
  * Get vary env string for P2 groups.
+ *
+ * Audit #1628: the only in-repo importer is the Jest contract test
+ * (src/lib/__tests__/litespeed.test.js), which pins the serialisation.
+ * Kept as the tested pure-helper contract.
  *
  * @param {Object} varyGroups - {guest,mobile,webp,role}
  * @return {string} Vary env.

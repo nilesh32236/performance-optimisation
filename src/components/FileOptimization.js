@@ -21,6 +21,7 @@ import {
 	runPerformanceScan,
 } from '../lib/apiRequest';
 import { useAsyncWorkflow } from '../lib/useAbortableFetch';
+import { parseGuardedInt } from '../lib/numeric';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
@@ -90,36 +91,12 @@ const CCSS_EXCLUDED_DEFAULT = 'fl-builder-template\nelementor_library';
 
 // Normalize the max-retries input the same way PHP sanitizes it
 // (is_numeric whole-value check, (int) truncation, clamped 0..5,
-// fail-open to 5). Number() mirrors PHP is_numeric() except for
-// hex/binary/octal literals (e.g. '0x3'): PHP is_numeric() rejects
-// them, so they are guarded explicitly to fail open to 5.
-// Math.trunc() mirrors the (int) cast for values like '3.7'.
+// fail-open to 5). Thin wrapper over the shared parseGuardedInt helper
+// (src/lib/numeric.js) so PHP-parity fixes land once.
 // Exported for direct Jest coverage.
 // @since 2.3.0
-export const normalizeRetries = ( value ) => {
-	if ( typeof value === 'number' ) {
-		return Number.isFinite( value )
-			? Math.min( 5, Math.max( 0, Math.trunc( value ) ) )
-			: 5;
-	}
-	if ( Array.isArray( value ) ) {
-		return 5;
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s ) {
-		return 5;
-	}
-	// PHP is_numeric() rejects hex/binary/octal while Number() parses
-	// them, so guard explicitly to keep UI/server parity.
-	if ( /^0[xXoObB]/.test( s ) ) {
-		return 5;
-	}
-	const n = Number( s );
-	if ( ! Number.isFinite( n ) ) {
-		return 5;
-	}
-	return Math.min( 5, Math.max( 0, Math.trunc( n ) ) );
-};
+export const normalizeRetries = ( value ) =>
+	parseGuardedInt( value, { min: 0, max: 5, fallback: 5 } );
 
 // Normalize the used-CSS delivery mode the same way PHP sanitizes it
 // (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
@@ -527,53 +504,30 @@ export const stripCdnRowIds = ( source = {} ) => {
 // Numeric clamps mirroring the server-side sanitizers so a raw server value
 // can never reach state/submit verbatim (display/UX parity — the server
 // stays authoritative).
-// Audit #1401: shared guarded-number core behind the sibling
-// normalizers (idle/ccss/regression) so PHP-parity fixes land once.
-// Returns { ok, n }: ok=false means fail open to the caller default.
-// @since 2.3.0
-const parseGuardedNumber = ( value ) => {
-	if ( typeof value === 'boolean' || Array.isArray( value ) ) {
-		return { ok: false, n: 0 };
-	}
-	const s = String( value ?? '' ).trim();
-	if ( '' === s || /^0[xXoObB]/.test( s ) ) {
-		return { ok: false, n: 0 };
-	}
-	const n = typeof value === 'number' ? value : Number( s );
-	if ( ! Number.isFinite( n ) ) {
-		return { ok: false, n: 0 };
-	}
-	return { ok: true, n };
-};
-
 // Booleans/arrays fail open (true must not coerce to 1 via Number()), and
 // hex/octal/binary literals fail open to match PHP is_numeric() parity
 // (see normalizeRetries).
 // @since 2.3.0
 export const normalizeIdleTimeout = ( value ) => {
-	const { ok, n } = parseGuardedNumber( value );
-	if ( ! ok || n <= 0 ) {
+	const raw = parseGuardedInt( value, { fallback: null } );
+	if ( typeof raw !== 'number' || raw <= 0 ) {
 		return 3000;
 	}
-	return Math.min( 20000, Math.max( 500, Math.trunc( n ) ) );
+	return Math.min( 20000, Math.max( 500, raw ) );
 };
 // @since 2.3.0
 export const normalizeCcssMaxSize = ( value ) => {
-	const { ok, n } = parseGuardedNumber( value );
-	if ( ! ok || n <= 0 ) {
+	const raw = parseGuardedInt( value, { fallback: null } );
+	if ( typeof raw !== 'number' || raw <= 0 ) {
 		return 20480;
 	}
-	return Math.trunc( n );
+	return raw;
 };
 
 // @since 2.3.0
 export const normalizeRegressionThreshold = ( value ) => {
-	const { ok, n } = parseGuardedNumber( value );
-	if ( ! ok ) {
-		return 20;
-	}
-	const t = Math.trunc( n );
-	return t >= 5 && t <= 50 ? t : 20;
+	const t = parseGuardedInt( value, { fallback: null } );
+	return typeof t === 'number' && t >= 5 && t <= 50 ? t : 20;
 };
 // toTextLines() (after spread, so backend arrays win correctly), delivery
 // mode via the PHP-mirroring allowlist, CCSS retries clamped 0..5, blank
@@ -2167,16 +2121,14 @@ const FileOptimization = ( {
 	};
 
 	// LiteSpeed integration (Phase 1 — safe coexistence).
-	const litespeedInfo =
-		typeof wppoSettings !== 'undefined' ? wppoSettings?.litespeed : null;
+	const litespeedInfo = getWppoSettings( 'litespeed', null );
 	const isLiteSpeed = !! litespeedInfo?.detected;
 	const optimizerDisabled = !! litespeedInfo?.optimizer_disabled;
 	const effectiveMode = litespeedInfo?.effective_mode || 'standalone';
 	const lscacheActive = !! litespeedInfo?.lscache_active;
 	const liteSpeedModeFromSettings =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.litespeed_integration?.mode || 'auto'
-			: 'auto';
+		getWppoSettings( 'settings.litespeed_integration.mode', 'auto' ) ||
+		'auto';
 	const [ litespeedMode, setLitespeedMode ] = useState(
 		liteSpeedModeFromSettings
 	);

@@ -4,13 +4,17 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import PerformanceAudit from '../PerformanceAudit';
 
-// Mock API calls
-jest.mock( '../../lib/apiRequest', () => ( {
-	runPerformanceScan: jest.fn(),
-	fetchSuggestions: jest.fn(),
-	getErrorLogMessage: ( error ) =>
-		error instanceof Error ? error.message : String( error ),
-} ) );
+// Mock API calls (spread actual so getWppoSettings stays real).
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		runPerformanceScan: jest.fn(),
+		fetchSuggestions: jest.fn(),
+		getErrorLogMessage: ( error ) =>
+			error instanceof Error ? error.message : String( error ),
+	};
+} );
 
 import { runPerformanceScan, fetchSuggestions } from '../../lib/apiRequest';
 

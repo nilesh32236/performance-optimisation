@@ -9,7 +9,11 @@ import {
 } from '@wordpress/element';
 import { useIsMounted, runAbortable } from '../lib/useAbortableFetch';
 import { handleChange } from '../lib/util';
-import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
+import {
+	apiCall,
+	getErrorLogMessage,
+	getWppoSettings,
+} from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -232,10 +236,7 @@ const PreloadSettings = ( { options = {} } ) => {
 		}
 	};
 
-	const speculationRules =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings.speculation_rules || {}
-			: {};
+	const speculationRules = getWppoSettings( 'speculation_rules', {} );
 	const eagernessOverride = speculationRules.eagerness_override || null;
 	const modeOverride = speculationRules.mode_override || null;
 	const staticCacheActive = speculationRules.static_cache_active || false;
