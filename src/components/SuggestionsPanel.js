@@ -44,6 +44,37 @@ export const FIX_ACTION_TAB_MAP = {
 	no_action_required: null,
 };
 
+export const FIX_ACTION_LABELS = {
+	open_object_cache_tab: __(
+		'Review Redis Object Cache',
+		'performance-optimisation'
+	),
+	open_image_optimization_tab: __(
+		'Review Image Optimization',
+		'performance-optimisation'
+	),
+	open_file_optimization_tab: __(
+		'Review File Optimization',
+		'performance-optimisation'
+	),
+	open_ccss_settings: __(
+		'Review CSS Optimization',
+		'performance-optimisation'
+	),
+	enable_server_rules: __(
+		'Review Server Rules',
+		'performance-optimisation'
+	),
+	open_preload_tab: __(
+		'Review Advanced Preloading',
+		'performance-optimisation'
+	),
+};
+
+export const getFixActionLabel = ( fixAction ) =>
+	FIX_ACTION_LABELS[ fixAction ] ??
+	__( 'Review related settings', 'performance-optimisation' );
+
 /**
  * Status icon for a suggestion card.
  *
@@ -241,12 +272,13 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						className="wppo-button wppo-button--sm wppo-button--primary"
 						onClick={ () => onNavigate( targetTab ) }
 						aria-label={ sprintf(
-							/* translators: %s: suggestion description. */
-							__( 'Fix It: %s', 'performance-optimisation' ),
+							/* translators: 1: existing feature destination, 2: suggestion description. */
+							__( '%1$s: %2$s', 'performance-optimisation' ),
+							getFixActionLabel( fixAction ),
 							description
 						) }
 					>
-						{ __( 'Fix It', 'performance-optimisation' ) }
+						{ getFixActionLabel( fixAction ) }
 						<FontAwesomeIcon
 							icon={ faArrowRight }
 							className="wppo-ml-6"

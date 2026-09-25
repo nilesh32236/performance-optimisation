@@ -1723,6 +1723,24 @@ growth_items:
       runtime_scope: 'No runtime, REST, cache, database, settings-persistence, navigation, router, or state-library changes'
     status_note: 'Phase C is merged; the current seven-tab IA is retained and advanced controls remain available.'
 
+  - id: D-001
+    title: 'In-plugin feature discoverability'
+    status: active
+    priority: medium
+    type: growth
+    objective: 'Make existing caching, LCP, image, CSS/JS, database, Redis, and CDN controls easier to find through concise task paths and actionable suggestions.'
+    scope:
+      - 'Dashboard existing-control task map'
+      - 'Feature-specific suggestion action labels'
+      - 'responsive and RTL-safe task navigation'
+      - 'docs/growth/FEATURE-DISCOVERABILITY.md'
+      - 'Playwright seven-tab navigation checks'
+    non_goals:
+      - 'No new optimization functionality, telemetry, recommendation, REST, API, settings persistence, or backend-key changes.'
+    issue: 1633
+    pull_request: pending
+    status_note: 'Phase D is active; advanced controls remain available and the task map only navigates existing tabs.'
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'
