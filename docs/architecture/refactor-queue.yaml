@@ -1433,6 +1433,8 @@ phase3_items:
     status: active
     priority: low
     github_issue: 1609
+    github_pr: 1610
+    implementation_commit: 23fb5b67a7dc25fd35c2929000cb7f986f978333
     type: epic
     problem: 'FileOptimization, Dashboard, and App still combine many cards, polling effects, and shell fetches.'
     target_owner: 'Presentational cards and narrow workflow hooks'
@@ -1446,6 +1448,15 @@ phase3_items:
         - 'P3-019 provides tested abort/stale/mounted primitives, so one polling boundary can adopt them without changing REST contracts.'
         - 'No router, global store, or polling framework is permitted.'
       decision: 'Proceed with one bounded Dashboard polling/card extraction after characterization; leave FileOptimization card separation for a follow-up.'
+    implementation:
+      status: 'implemented-active'
+      owner: 'src/lib/useImageJobPolling.js; Dashboard delegates image_job_status polling and background status state to the hook'
+      compatibility: 'Preserve image_job_status GET action/auth/signal, optimise_image and delete_optimised_image request envelopes, 5s/60-attempt backoff, loading/error/status notices, queued-job/savings projection, and no-overlap scheduling; no router, store, polling framework, or FileOptimization extraction.'
+      exact_scope: 'Dashboard image_job_status polling lifecycle only: timer ownership, AbortController cancellation, stale/mounted response guards, retry/backoff, background queued-job state, and imageInfo callback.'
+      tests: 'useImageJobPolling Jest coverage for superseded response cancellation, unmount timer/request cleanup, and isolated card workflow state; existing Dashboard integration coverage remains green.'
+      ratchet: 'Dashboard polling responsibility cluster: 182 lines of inline timer/controller/retry/state logic -> one 221-line narrow hook; polling fetch count and action contract unchanged; FileOptimization card separation deferred.'
+      notes:
+        - '2026-09-25: implemented and verified locally on branch p3/dashboard-polling; P3-019 useAsyncWorkflow is reused without adding a polling framework.'
 
   - id: P3-021
     title: 'Static-state cleanup and runtime reset coverage'
