@@ -1388,6 +1388,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1606
+    github_pr: 1608
     implementation_commit: 31a22c87a4a75d8cb89ffbd1006669bc1528afe2
     type: epic
     problem: 'Import, sandbox promote, and preset responses can miss the global settings cache; deferred saves and abort paths can clobber or strand state.'
