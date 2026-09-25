@@ -1,6 +1,9 @@
 import { isAuthErrorCode } from './authErrors';
 import { redactLogSecrets } from './logSecrets';
-import { commitSettingsResponse } from './settingsResponse';
+import {
+	commitSettingsResponse,
+	cloneSettingsPayload,
+} from './settingsResponse';
 
 // Audit #1354: the raw lookup Set stays module-private in
 // authErrors.js — re-export only the frozen list and the lookup.
@@ -183,7 +186,9 @@ export const commitSettingsCache = ( payload ) => {
 		return;
 	}
 	if ( payload && typeof payload === 'object' ) {
-		wppoSettings.settings = Object.freeze( payload );
+		wppoSettings.settings = Object.freeze(
+			cloneSettingsPayload( payload )
+		);
 	}
 };
 
