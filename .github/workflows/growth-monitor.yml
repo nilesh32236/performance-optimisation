@@ -1,0 +1,70 @@
+name: Growth Metrics Monitor
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Collect public metrics and compare snapshot
+        id: metrics
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          result="$(python3 scripts/growth-monitor.py)"
+          printf '%s\n' "$result"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+
+      - name: Create material-change issue
+        if: steps.metrics.outputs.result != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          METRICS_RESULT: ${{ steps.metrics.outputs.result }}
+        run: |
+          material="$(printf '%s' "$METRICS_RESULT" | jq -r '.material')"
+          if [ "$material" != "true" ]; then
+            echo "No material change; no issue created."
+            exit 0
+          fi
+          existing="$(gh issue list --state open --label growth-monitor --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "Material change already tracked in issue #$existing."
+            exit 0
+          fi
+          body="$(python3 - <<'PY'
+          import json, os
+          payload = json.loads(os.environ['METRICS_RESULT'])
+          lines = ['## Public growth monitor alert', '']
+          lines.extend(f'- {reason}' for reason in payload['reasons'])
+          lines += ['', 'This is an aggregate public-signal alert. It does not establish causality.']
+          print('\n'.join(lines))
+          PY
+          )"
+          gh issue create --title "[Growth monitor] Material public-signal change" --label growth-monitor --body "$body"
+
+      - name: Commit updated report
+        run: |
+          git add docs/growth/METRICS.md docs/growth/metrics
+          if git diff --cached --quiet; then
+            echo "No report changes."
+            exit 0
+          fi
+          git commit -m "docs: update growth metrics snapshot"
+          git push
