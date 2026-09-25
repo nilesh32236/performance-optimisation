@@ -1637,6 +1637,28 @@ future_items:
     notes:
       - 'P3-001 now owns the replacement schema-v2 PhpToken graph, SCC analysis, boundary metrics, CI drift gate, and Phase 3 baseline docs; mark superseded after P3-001 merges.'
 
+
+growth_items:
+  - id: A-001
+    title: 'WordPress.org searchability and positioning'
+    status: active
+    priority: medium
+    type: growth
+    objective: 'Improve discoverability of existing functionality through evidence-based WordPress.org metadata, readme hierarchy, tags, and search-intent wording without runtime changes.'
+    scope:
+      - 'docs/growth/KEYWORD-MAP.md'
+      - 'docs/growth/WORDPRESS-ORG.md'
+      - 'readme.txt'
+      - 'performance-optimisation.php short description'
+      - 'WordPress.org listing verification after merge'
+    non_goals:
+      - 'No performance, cache, REST, database, admin UI, or feature behavior changes.'
+      - 'No keyword stuffing, competitor names, unsupported compatibility claims, fake reviews, or active-install manipulation.'
+    issue: 1622
+    pull_request: 1623
+    implementation_commit: ea26535a
+    status_note: 'Research and implementation are active on phase-a/wordpress-searchability; directory publication remains unclaimed until post-merge sync verification.'
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'
