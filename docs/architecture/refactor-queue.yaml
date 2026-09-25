@@ -1473,12 +1473,21 @@ phase3_items:
 
   - id: P3-021
     title: 'Static-state cleanup and runtime reset coverage'
-    status: audit-pending
+    status: active
     priority: medium
+    github_issue: 1613
     type: architecture
     problem: '31 owners hold 141 static properties; P3-004 covers site-sensitive owners, then request/cross-request residues remain.'
     target_owner: 'Feature-owned instance/request state where lifecycle permits'
     ratchet: 'Unclassified static properties: 141 -> 0; documented request/cross-request residues tracked.'
+    re_audit:
+      audited_at: '2026-09-25'
+      source_commit: 2be5b636
+      evidence:
+        - 'The graph reports 143 static properties across 33 nodes; P3-004 already covers site-sensitive owners, so this issue must select one non-site-sensitive request-state residue cluster.'
+        - 'Runtime reset and request/cross-request lifecycle tests are the required boundary; removing all state in one item would broaden the queue beyond one cluster.'
+        - 'The selected owner must remain behaviorally identical across ordinary requests, blog switches, and WordPress cron/REST entry points.'
+      decision: 'Run a fresh static-state audit, select one owner with a clear request lifecycle, and document any cross-request residue as protected follow-up debt.'
 
   - id: P3-022
     title: 'Architecture guardrails and dependency-direction enforcement'
