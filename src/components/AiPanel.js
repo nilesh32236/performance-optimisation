@@ -117,8 +117,10 @@ const AiPanel = () => {
 
 	useEffect( () => {
 		const controller = new AbortController();
-		fetchModel( controller.signal );
-		fetchSuggestions( controller.signal );
+		Promise.allSettled( [
+			fetchModel( controller.signal ),
+			fetchSuggestions( controller.signal ),
+		] );
 		return () => {
 			controller.abort();
 			if ( suggestRunRef.current ) {
