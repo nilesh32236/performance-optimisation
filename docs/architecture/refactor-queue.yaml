@@ -1519,6 +1519,7 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1615
+    github_pr: 1617
     implementation_commit: 63230423
     type: tooling
     problem: 'The graph drift gate exists, but no guard prevents new forbidden boundary edges, unowned schedules, or static-state gaps.'
