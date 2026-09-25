@@ -1685,7 +1685,7 @@ growth_items:
       - 'No fake screens, fabricated metrics, secrets, or unsupported visual claims.'
     issue: 1625
     pull_request: 1627
-    implementation_commit: d88f1e31
+    implementation_commit: 237ce25a
     status_note: 'Visual assets captured from the real live WordPress UI; directory publication remains unclaimed until post-merge sync verification.'
 
 notes:
