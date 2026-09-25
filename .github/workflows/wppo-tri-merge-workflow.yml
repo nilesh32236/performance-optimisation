@@ -118,8 +118,10 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
           GH_TOKEN_VALUE="${GH_TOKEN}"
+          OPENCODE_API_KEY_VALUE="${OPENCODE_API_KEY}"
+          OPENAI_API_KEY_VALUE="${OPENAI_API_KEY}"
+          unset GH_TOKEN OPENCODE_API_KEY OPENAI_API_KEY
           gh pr list --repo "${{ github.repository }}" --state open --json number,title,headRefName,baseRefName,mergeable,reviews,statusCheckRollup > /tmp/all-prs.json
-          unset GH_TOKEN
           AUTHENTICATED_REMOTE="https://x-access-token:${GH_TOKEN_VALUE}@github.com/${{ github.repository }}.git"
 
           READY_PRS=""
@@ -180,8 +182,8 @@ jobs:
                     PATH="$PATH" \
                     HOME="${HOME:-/tmp}" \
                     TMPDIR="${TMPDIR:-/tmp}" \
-                    OPENCODE_API_KEY="${OPENCODE_API_KEY}" \
-                    OPENAI_API_KEY="${OPENAI_API_KEY}" \
+                    OPENCODE_API_KEY="${OPENCODE_API_KEY_VALUE}" \
+                    OPENAI_API_KEY="${OPENAI_API_KEY_VALUE}" \
                     timeout 10m opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}" \
                     "Here is the conflicted file content:${NEWLINE}${NEWLINE}\`\`\`${NEWLINE}${CONTENT}${NEWLINE}\`\`\`${NEWLINE}${NEWLINE}${CONFLICT_PROMPT}" < /dev/null; then
                     echo "::error::OpenCode conflict resolution failed for ${CFILE} — aborting rebase"
