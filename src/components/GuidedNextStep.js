@@ -212,6 +212,7 @@ const GuidedNextStep = ( { onNavigate } ) => {
 								) }
 							>
 								{ fixLabel }
+								{ ' →' }
 								<FontAwesomeIcon
 									icon={ faArrowRight }
 									className="wppo-ml-6"

@@ -32,12 +32,25 @@ describe( 'TaskMap', () => {
 		render( <TaskMap onNavigate={ onNavigate } /> );
 		for ( const entry of CORE_TASKS ) {
 			const button = screen.getByRole( 'button', {
-				name: entry.getAction(),
+				name: new RegExp( entry.getAction(), 'i' ),
 			} );
 			fireEvent.click( button );
 			expect( onNavigate ).toHaveBeenCalledWith( entry.tab );
 		}
 		expect( onNavigate ).toHaveBeenCalledTimes( CORE_TASKS.length );
+	} );
+
+	it( 'exposes task context in each accessible name', () => {
+		render( <TaskMap onNavigate={ jest.fn() } /> );
+		for ( const entry of CORE_TASKS ) {
+			const button = screen.getByRole( 'button', {
+				name: new RegExp( entry.getAction(), 'i' ),
+			} );
+			expect( button ).toHaveAttribute(
+				'aria-label',
+				expect.stringContaining( entry.getTask() )
+			);
+		}
 	} );
 
 	it( 'only targets existing App.js tabs', () => {

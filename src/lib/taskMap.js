@@ -35,7 +35,7 @@ export const CORE_TASKS = [
 				'Static HTML on the Dashboard Page Cache card — the biggest win.',
 				'performance-optimisation'
 			),
-		getAction: () => __( 'Open Dashboard →', 'performance-optimisation' ),
+		getAction: () => __( 'Open Dashboard', 'performance-optimisation' ),
 	},
 	{
 		key: 'lcp',
@@ -47,7 +47,7 @@ export const CORE_TASKS = [
 				'Preload key fonts and CSS; diagnose first with the Dashboard audit.',
 				'performance-optimisation'
 			),
-		getAction: () => __( 'Open Preload →', 'performance-optimisation' ),
+		getAction: () => __( 'Open Preload', 'performance-optimisation' ),
 	},
 	{
 		key: 'images',
@@ -63,7 +63,7 @@ export const CORE_TASKS = [
 				'performance-optimisation'
 			),
 		getAction: () =>
-			__( 'Open Image Optimisation →', 'performance-optimisation' ),
+			__( 'Open Image Optimisation', 'performance-optimisation' ),
 	},
 	{
 		key: 'css-js',
@@ -79,7 +79,7 @@ export const CORE_TASKS = [
 				'performance-optimisation'
 			),
 		getAction: () =>
-			__( 'Open File Optimisation →', 'performance-optimisation' ),
+			__( 'Open File Optimisation', 'performance-optimisation' ),
 	},
 	{
 		key: 'database',
@@ -91,7 +91,7 @@ export const CORE_TASKS = [
 				'Batched cleanup of revisions, transients, and spam in Database.',
 				'performance-optimisation'
 			),
-		getAction: () => __( 'Open Database →', 'performance-optimisation' ),
+		getAction: () => __( 'Open Database', 'performance-optimisation' ),
 	},
 	{
 		key: 'redis',
@@ -106,8 +106,7 @@ export const CORE_TASKS = [
 				'Standalone, Sentinel, or Cluster status and controls in Object Cache.',
 				'performance-optimisation'
 			),
-		getAction: () =>
-			__( 'Open Object Cache →', 'performance-optimisation' ),
+		getAction: () => __( 'Open Object Cache', 'performance-optimisation' ),
 	},
 	{
 		key: 'cdn',
@@ -119,7 +118,6 @@ export const CORE_TASKS = [
 				'CDN hostname mapping in File Optimisation; edge purge on the Dashboard.',
 				'performance-optimisation'
 			),
-		getAction: () =>
-			__( 'Open CDN Settings →', 'performance-optimisation' ),
+		getAction: () => __( 'Open CDN Settings', 'performance-optimisation' ),
 	},
 ];

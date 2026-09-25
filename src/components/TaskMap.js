@@ -12,7 +12,7 @@
  * @since NEXT
  */
 
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCompass, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
@@ -37,31 +37,41 @@ const TaskMap = ( { onNavigate } = {} ) => (
 			) }
 		</p>
 		<ul className="wppo-taskmap">
-			{ CORE_TASKS.map( ( entry ) => (
-				<li key={ entry.key } className="wppo-taskmap__item">
-					<div className="wppo-taskmap__text">
-						<strong className="wppo-taskmap__task">
-							{ entry.getTask() }
-						</strong>
-						<span className="wppo-taskmap__blurb">
-							{ entry.getBlurb() }
-						</span>
-					</div>
-					<button
-						type="button"
-						className="wppo-button wppo-button--secondary wppo-button--sm"
-						onClick={ () => onNavigate?.( entry.tab ) }
-						aria-label={ entry.getAction() }
-					>
-						{ entry.getAction() }
-						<FontAwesomeIcon
-							icon={ faArrowRight }
-							className="wppo-ml-6"
-							aria-hidden="true"
-						/>
-					</button>
-				</li>
-			) ) }
+			{ CORE_TASKS.map( ( entry ) => {
+				const task = entry.getTask();
+				const action = entry.getAction();
+				return (
+					<li key={ entry.key } className="wppo-taskmap__item">
+						<div className="wppo-taskmap__text">
+							<strong className="wppo-taskmap__task">
+								{ task }
+							</strong>
+							<span className="wppo-taskmap__blurb">
+								{ entry.getBlurb() }
+							</span>
+						</div>
+						<button
+							type="button"
+							className="wppo-button wppo-button--secondary wppo-button--sm"
+							onClick={ () => onNavigate?.( entry.tab ) }
+							aria-label={ sprintf(
+								/* translators: 1: destination label, 2: task description. */
+								__( '%1$s: %2$s', 'performance-optimisation' ),
+								action,
+								task
+							) }
+						>
+							{ action }
+							{ ' →' }
+							<FontAwesomeIcon
+								icon={ faArrowRight }
+								className="wppo-ml-6"
+								aria-hidden="true"
+							/>
+						</button>
+					</li>
+				);
+			} ) }
 		</ul>
 	</FeatureCard>
 );

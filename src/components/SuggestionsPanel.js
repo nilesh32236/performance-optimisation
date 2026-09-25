@@ -59,16 +59,16 @@ export const FIX_ACTION_TAB_MAP = {
  */
 export const FIX_ACTION_LABELS = {
 	open_object_cache_tab: () =>
-		__( 'Open Object Cache →', 'performance-optimisation' ),
+		__( 'Open Object Cache', 'performance-optimisation' ),
 	open_image_optimization_tab: () =>
-		__( 'Open Image Optimisation →', 'performance-optimisation' ),
+		__( 'Open Image Optimisation', 'performance-optimisation' ),
 	open_file_optimization_tab: () =>
-		__( 'Open File Optimisation →', 'performance-optimisation' ),
+		__( 'Open File Optimisation', 'performance-optimisation' ),
 	open_ccss_settings: () =>
-		__( 'Open Critical CSS →', 'performance-optimisation' ),
+		__( 'Open Critical CSS', 'performance-optimisation' ),
 	enable_server_rules: () =>
-		__( 'Open Server Rules →', 'performance-optimisation' ),
-	open_preload_tab: () => __( 'Open Preload →', 'performance-optimisation' ),
+		__( 'Open Server Rules', 'performance-optimisation' ),
+	open_preload_tab: () => __( 'Open Preload', 'performance-optimisation' ),
 };
 
 /**
@@ -295,6 +295,7 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						) }
 					>
 						{ fixLabel }
+						{ ' →' }
 						<FontAwesomeIcon
 							icon={ faArrowRight }
 							className="wppo-ml-6"
