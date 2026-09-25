@@ -686,7 +686,12 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.click( regenerateButton );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'regenerate_ccss' );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'regenerate_ccss',
+				{},
+				'POST',
+				expect.anything()
+			);
 		} );
 
 		expect( apiCall ).toHaveBeenCalledTimes( 1 );
@@ -716,7 +721,12 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.click( regenerateButton );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'regenerate_ccss' );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'regenerate_ccss',
+				{},
+				'POST',
+				expect.anything()
+			);
 		} );
 
 		expect( apiCall ).toHaveBeenCalledTimes( 1 );
@@ -1363,7 +1373,9 @@ describe( 'FileOptimization Component', () => {
 		await waitFor( () => {
 			expect( apiCall ).toHaveBeenCalledWith(
 				'sandbox_save',
-				expect.objectContaining( { settings: expect.any( Object ) } )
+				expect.objectContaining( { settings: expect.any( Object ) } ),
+				'POST',
+				expect.anything()
 			);
 		} );
 		// Staged-exists note appears after staging.
@@ -1378,7 +1390,12 @@ describe( 'FileOptimization Component', () => {
 			);
 		} );
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'sandbox_promote', {} );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'sandbox_promote',
+				{},
+				'POST',
+				expect.anything()
+			);
 		} );
 		// Post-promote form sync: the promoted Delay JS value reaches the
 		// production form control and the staged-exists note clears.
@@ -1425,7 +1442,12 @@ describe( 'FileOptimization Component', () => {
 		} );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'sandbox_discard', {} );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'sandbox_discard',
+				{},
+				'POST',
+				expect.anything()
+			);
 		} );
 		// The stale preview link (nonce + staged values are gone) must be
 		// removed, along with the staged-exists note.
@@ -1473,7 +1495,9 @@ describe( 'FileOptimization Component', () => {
 						delayJSExternalOnly: expect.any( Boolean ),
 						minifyInlineJS: expect.any( Boolean ),
 					} ),
-				} )
+				} ),
+				'POST',
+				expect.anything()
 			);
 		} );
 	} );

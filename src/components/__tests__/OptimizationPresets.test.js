@@ -132,6 +132,44 @@ describe( 'OptimizationPresets', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'commits the apply_preset server settings to the shared cache', async () => {
+		const serverMap = {
+			cache_settings: {},
+			file_optimisation: { minifyHTML: true },
+		};
+		fetchOptimizationPresets.mockResolvedValueOnce( {
+			success: true,
+			data: { preset: 'balanced', diff: [] },
+		} );
+		applyOptimizationPreset.mockResolvedValueOnce( {
+			success: true,
+			message: 'Preset applied successfully.',
+			data: { preset: 'balanced', settings: serverMap, diff: [] },
+		} );
+
+		render( <OptimizationPresets /> );
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Balanced' } ) );
+		await waitFor( () =>
+			expect(
+				screen.getByText(
+					'This preset already matches your settings — nothing would change.'
+				)
+			).toBeInTheDocument()
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Apply Balanced/i } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Preset applied successfully.' )
+			).toBeInTheDocument()
+		);
+		// P3-019: the nested server settings reach the shared global.
+		expect( global.wppoSettings.settings ).toEqual( serverMap );
+	} );
+
 	it( 'announces failure when the apply call fails', async () => {
 		const consoleSpy = jest
 			.spyOn( console, 'error' )

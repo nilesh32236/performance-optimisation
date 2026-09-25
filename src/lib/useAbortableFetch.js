@@ -8,7 +8,7 @@
  *
  * @since 2.3.0
  */
-import { useEffect, useRef } from '@wordpress/element';
+import { useCallback, useEffect, useRef } from '@wordpress/element';
 
 /**
  * Mounted ref: false after unmount. Gate setState/notify behind it.
@@ -63,4 +63,73 @@ export const runAbortable = ( task ) => {
 			}
 		},
 	};
+};
+
+/**
+ * Sequenced async workflow for save/promote/discard-style handlers (P3-019).
+ *
+ * Bundles the three guards otherwise copied per handler: a fresh
+ * AbortController per run (previous run aborted first), a monotonic
+ * sequence so a slow earlier response can never overwrite a newer one,
+ * and a mounted ref so unmount mid-request cannot setState/notify.
+ *
+ * run() hands the task `{ signal, isStale }`; the task must thread
+ * `signal` into apiCall/fetch and check `isStale()` before committing
+ * state. Abort rejections propagate — callers swallow AbortError.
+ * Unmount aborts the in-flight run automatically.
+ *
+ * No router, no store, no polling — just the abort/seq/mounted contract.
+ *
+ * @since NEXT
+ * @return {{ run: Function, cancel: Function, mountedRef: Object }} Workflow controls.
+ */
+export const useAsyncWorkflow = () => {
+	const seqRef = useRef( 0 );
+	const controllerRef = useRef( null );
+	const mountedRef = useIsMounted();
+
+	const cancel = useCallback( () => {
+		if ( controllerRef.current ) {
+			controllerRef.current.abort();
+			controllerRef.current = null;
+		}
+	}, [] );
+
+	useEffect( () => {
+		return () => {
+			if ( controllerRef.current ) {
+				controllerRef.current.abort();
+				controllerRef.current = null;
+			}
+		};
+	}, [] );
+
+	const run = useCallback(
+		async ( task ) => {
+			if ( controllerRef.current ) {
+				controllerRef.current.abort();
+			}
+			const controller =
+				typeof AbortController !== 'undefined'
+					? new AbortController()
+					: null;
+			controllerRef.current = controller;
+			const seq = ++seqRef.current;
+			const signal = controller ? controller.signal : undefined;
+			const isStale = () =>
+				seq !== seqRef.current ||
+				!! controller?.signal?.aborted ||
+				! mountedRef.current;
+			try {
+				return await task( { signal, isStale, seq } );
+			} finally {
+				if ( controllerRef.current === controller ) {
+					controllerRef.current = null;
+				}
+			}
+		},
+		[ mountedRef ]
+	);
+
+	return { run, cancel, mountedRef };
 };

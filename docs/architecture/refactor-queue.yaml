@@ -1388,6 +1388,8 @@ phase3_items:
     status: active
     priority: medium
     github_issue: 1606
+    github_pr: 1608
+    implementation_commit: 31a22c87a4a75d8cb89ffbd1006669bc1528afe2
     type: epic
     problem: 'Import, sandbox promote, and preset responses can miss the global settings cache; deferred saves and abort paths can clobber or strand state.'
     target_owner: 'apiRequest response mapper plus narrow async workflow hooks'
@@ -1404,6 +1406,14 @@ phase3_items:
         - 'No router, global store, or polling framework is needed; narrow response and async lifecycle hooks are sufficient.'
         - 'The issue must preserve existing request/response shapes, REST security, and cross-tab settings behavior.'
       decision: 'Proceed test-first with one response-commit and deferred-save lifecycle cluster; keep hydration/abort follow-ups bounded and explicit.'
+      implementation:
+        status: 'implemented-active'
+        owner: 'apiRequest response mapper plus useAsyncWorkflow; useSaveSettings and bounded settings workflows consume the shared contract'
+        compatibility: 'REST slugs, request bodies, response envelopes, auth, wppoSettings cross-tab reads, component contracts, and settings persistence remain unchanged; no router/store/polling framework'
+        exact_scope: 'Full-map commits for update/import/restore/sandbox-promote/safe-mode, nested apply-preset commits, server-payload-first saves, deferred-edit sequence guards, and explicit abort/unmount/hydration guards'
+        tests: 'settingsResponse shape/cache/hydration tests; apiCall action-gate tests; useSaveSettings deferred-save/abort/unmount tests; useAsyncWorkflow cancel/unmount tests; component import/preset/sandbox regression coverage'
+        ratchet: 'Settings-response cache misses reduced from 3 to 0; selected stale-response and busy-flag races guarded through one workflow contract'
+        verification: 'npm run lint:js (0 errors, 2 existing useUnsavedChanges warnings); npm test (57 suites / 826 tests pass); npm run build (success, existing entrypoint-size warning); composer unavailable in environment (command not found); PHP/architecture gates not required for JS-only diff'
 
   - id: P3-020
     title: 'React card and polling isolation'

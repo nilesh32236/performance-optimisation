@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from '@wordpress/element';
 import {
 	apiCall,
+	commitSettingsResponse,
 	fetchRecentActivities,
 	getErrorLogMessage,
 	isValidScanUrl,
@@ -236,6 +237,9 @@ const PluginSetting = ( { options } ) => {
 	const readerRef = useRef( null );
 	const restoreControllerRef = useRef( null );
 	const saveAuditControllerRef = useRef( null );
+	// P3-019: abort-wire for the import apiCall so unmount (or a second
+	// import) cannot strand isImporting or commit a stale response.
+	const importControllerRef = useRef( null );
 	const settingsMountedRef = useRef( true );
 	useEffect( () => {
 		return () => {
@@ -245,6 +249,9 @@ const PluginSetting = ( { options } ) => {
 			}
 			if ( saveAuditControllerRef.current ) {
 				saveAuditControllerRef.current.abort();
+			}
+			if ( importControllerRef.current ) {
+				importControllerRef.current.abort();
 			}
 		};
 	}, [] );
@@ -857,13 +864,46 @@ const PluginSetting = ( { options } ) => {
 					return;
 				}
 
-				apiCall( 'import_settings', {
-					action: 'import_settings',
-					settings: fileData,
-				} )
+				// P3-019: abort-wire the import request — a second import
+				// aborts the previous one, unmount aborts via the effect
+				// cleanup, and the signal threads into apiCall.
+				if ( importControllerRef.current ) {
+					importControllerRef.current.abort();
+				}
+				importControllerRef.current =
+					typeof AbortController !== 'undefined'
+						? new AbortController()
+						: null;
+				// Capture the per-import controller: a second import (or
+				// unmount) must not lose its abort handle when the first
+				// import settles and clears the shared ref.
+				const importController = importControllerRef.current;
+
+				apiCall(
+					'import_settings',
+					{
+						action: 'import_settings',
+						settings: fileData,
+					},
+					'POST',
+					importController?.signal
+				)
 					.then( ( data ) => {
-						if ( cancelledRef.current ) {
+						if (
+							cancelledRef.current ||
+							importController?.signal?.aborted
+						) {
 							return;
+						}
+						// P3-019: commit the full-map server payload via the
+						// shared contract so sibling tabs see imported values
+						// without reload (apiCall already commits for live
+						// transports; this covers mocked/divergent paths).
+						if ( data?.success ) {
+							commitSettingsResponse(
+								'import_settings',
+								data.data
+							);
 						}
 						notifyImport( {
 							type: data.success ? 'success' : 'error',
@@ -884,8 +924,12 @@ const PluginSetting = ( { options } ) => {
 							setUndoAvailable( true );
 						}
 					} )
-					.catch( () => {
-						if ( cancelledRef.current ) {
+					.catch( ( importError ) => {
+						if (
+							cancelledRef.current ||
+							importError?.name === 'AbortError' ||
+							importController?.signal?.aborted
+						) {
 							return;
 						}
 						notifyImport( {
@@ -897,6 +941,14 @@ const PluginSetting = ( { options } ) => {
 						} );
 					} )
 					.finally( () => {
+						// Only clear when still current: a first import
+						// settling after a second import started must not
+						// null the second import's abort handle.
+						if (
+							importControllerRef.current === importController
+						) {
+							importControllerRef.current = null;
+						}
 						if ( ! cancelledRef.current ) {
 							setIsImporting( false );
 						}
