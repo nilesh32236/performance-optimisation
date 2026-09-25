@@ -1532,6 +1532,13 @@ phase3_items:
         - 'P3-021 and prior audit artifacts provide a concrete classification vocabulary to encode without changing runtime behavior.'
         - 'Guardrails must remain token-based, deterministic, and compatible with manual Composer classmap loading.'
       decision: 'Implement one architecture guard test/CI check cluster that reads the generated inventory/graph and rejects newly unexplained schedule or boundary violations.'
+    implementation:
+      status: 'implemented-active'
+      owner: 'scripts/architecture/class-architecture-guards.php; generator --check; tests/php/ArchitectureGuardTest.php'
+      guards: 'Classified current boundary findings; exact executable schedule-owner/API allowlist; P3-021 static-state lifecycle classification vocabulary. New unexplained evidence fails deterministically.'
+      fixtures: 'tests/php/fixtures/architecture-guard-violations.json proves forbidden boundary, unowned schedule, and unexplained static-state fixtures fail while current generated evidence passes.'
+      runtime: 'No plugin runtime files, Composer dependencies, or WordPress loading changed; guard tooling is excluded from runtime graph scope.'
+      verification: 'Generator --check, focused guard PHPUnit, full PHPUnit, PHPCS, focused PHPStan, and diff review required before merge.'
 
   - id: P3-023
     title: 'Final deep architecture audit'

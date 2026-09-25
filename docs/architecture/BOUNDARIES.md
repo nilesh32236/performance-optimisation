@@ -20,6 +20,8 @@ A boundary owns one decision or one external capability. Extraction does not cre
 
 The graph reports 20 strict violations against this model, plus compatibility-only cycles. A violation can be compatibility debt, protected complexity, or misplaced policy. Each executable queue issue must name which category it addresses; planning buckets are split before issue creation.
 
+P3-022 makes this vocabulary executable. `php scripts/generate-class-inventory.php --check` now runs `Architecture_Guards` against the generated inventory and graph. The 20 current findings are classified exceptions; a new boundary finding fails. Direct WP-Cron/Action Scheduler callers must match the classified schedule-owner set and layer, and every static-state owner must use the P3-021 lifecycle vocabulary. `tests/php/ArchitectureGuardTest.php` provides fixture failures for each guard. This is a development-only guard and does not change runtime loading or scheduling.
+
 ## Shared boundaries
 
 | Boundary | Owns | Must not own | Phase 3 evidence |

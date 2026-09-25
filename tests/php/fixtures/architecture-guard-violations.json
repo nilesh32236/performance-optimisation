@@ -1,0 +1,16 @@
+{
+  "boundary_edge": {
+    "from": "PerformanceOptimise\\Inc\\Rest",
+    "to": "PerformanceOptimise\\Inc\\Cache",
+    "reason": "domain_depends_on_presentation_or_orchestrator"
+  },
+  "schedule": {
+    "node": "PerformanceOptimise\\Inc\\Rest",
+    "function": "wp_schedule_event"
+  },
+  "static_state": {
+    "fqcn": "PerformanceOptimise\\Inc\\FixtureStaticOwner",
+    "file": "tests/php/fixtures/fixture-static-owner.php",
+    "static_property_count": 1
+  }
+}
