@@ -120,7 +120,10 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
+          GH_TOKEN_VALUE="${GH_TOKEN}"
           gh pr list --repo "${{ github.repository }}" --state open --json number,title,headRefName,baseRefName,mergeable,reviews,statusCheckRollup > /tmp/all-prs.json
+          unset GH_TOKEN
+          AUTHENTICATED_REMOTE="https://x-access-token:${GH_TOKEN_VALUE}@github.com/${{ github.repository }}.git"
 
           READY_PRS=""
           while read -r PR; do
@@ -143,16 +146,21 @@ jobs:
             if [ "$MERGEABLE" = "CONFLICTING" ]; then
               echo "Resolving merge conflicts on PR #${PR_NUM}..."
 
-              git remote add origin-temp "https://x-access-token:${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-              git fetch origin-temp
+              git fetch "${AUTHENTICATED_REMOTE}" \
+                "+refs/heads/${PR_HEAD}:refs/remotes/wppo-origin/pr-${PR_NUM}/head" \
+                "+refs/heads/${PR_BASE}:refs/remotes/wppo-origin/pr-${PR_NUM}/base"
+              EXPECTED_HEAD="$(git rev-parse "refs/remotes/wppo-origin/pr-${PR_NUM}/head")"
 
-              git checkout -b "${PR_HEAD}-resolve" "origin-temp/${PR_HEAD}"
+              git checkout -b "${PR_HEAD}-resolve" "refs/remotes/wppo-origin/pr-${PR_NUM}/head"
 
-              if git rebase "origin-temp/${PR_BASE}"; then
+              if git rebase "refs/remotes/wppo-origin/pr-${PR_NUM}/base"; then
                 echo "Rebase succeeded without conflicts"
-                git push origin-temp "${PR_HEAD}-resolve:${PR_HEAD}" --force-with-lease
+                git push "${AUTHENTICATED_REMOTE}" "${PR_HEAD}-resolve:${PR_HEAD}" --force-with-lease="refs/heads/${PR_HEAD}:${EXPECTED_HEAD}"
               else
                 echo "Rebase has conflicts. Resolving with AI..."
+                rm -f .git/FETCH_HEAD \
+                  ".git/logs/refs/remotes/wppo-origin/pr-${PR_NUM}/head" \
+                  ".git/logs/refs/remotes/wppo-origin/pr-${PR_NUM}/base"
                 CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
 
                 for CFILE in $CONFLICT_FILES; do
@@ -171,7 +179,13 @@ jobs:
                   # 10m per-file cap: several files fit inside the 30m job
                   # budget; any AI failure aborts the rebase and fails hard
                   # (no warning-swallow) so a half-resolved tree never pushes.
-                  if ! timeout 10m opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}" \
+                  if ! env -i \
+                    PATH="$PATH" \
+                    HOME="${HOME:-/tmp}" \
+                    TMPDIR="${TMPDIR:-/tmp}" \
+                    OPENCODE_API_KEY="${OPENCODE_API_KEY}" \
+                    OPENAI_API_KEY="${OPENAI_API_KEY}" \
+                    timeout 10m opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}" \
                     "Here is the conflicted file content:${NEWLINE}${NEWLINE}\`\`\`${NEWLINE}${CONTENT}${NEWLINE}\`\`\`${NEWLINE}${NEWLINE}${CONFLICT_PROMPT}" < /dev/null; then
                     echo "::error::OpenCode conflict resolution failed for ${CFILE} — aborting rebase"
                     git rebase --abort 2>/dev/null || true
@@ -199,14 +213,15 @@ jobs:
 
                 if git rebase --continue 2>/dev/null; then
                   echo "Rebase completed after conflict resolution"
-                  git push origin-temp "${PR_HEAD}-resolve:${PR_HEAD}" --force-with-lease
+                  git push "${AUTHENTICATED_REMOTE}" "${PR_HEAD}-resolve:${PR_HEAD}" --force-with-lease="refs/heads/${PR_HEAD}:${EXPECTED_HEAD}"
                 else
                   echo "::warning::Could not resolve all conflicts in PR #${PR_NUM}. Aborting rebase."
                   git rebase --abort 2>/dev/null || true
                 fi
               fi
 
-              git remote remove origin-temp
+              git update-ref -d "refs/remotes/wppo-origin/pr-${PR_NUM}/head" || true
+              git update-ref -d "refs/remotes/wppo-origin/pr-${PR_NUM}/base" || true
               echo "Conflicts resolved for PR #${PR_NUM}"
             fi
 

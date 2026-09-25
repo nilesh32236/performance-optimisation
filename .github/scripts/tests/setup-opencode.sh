@@ -58,6 +58,43 @@ if [[ "${#installer_workflows[@]}" -eq 0 ]]; then
 	echo "no direct OpenCode installer workflows found" >&2
 	exit 1
 fi
+assert_installer_checkouts_isolated() {
+	python3 - "$1" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+blocks = []
+current = None
+in_jobs = False
+for line in path.read_text().splitlines(keepends=True):
+    if line == "jobs:\n":
+        in_jobs = True
+        continue
+    if in_jobs and re.match(r"^\S", line):
+        in_jobs = False
+    if not in_jobs:
+        continue
+    match = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+    if match:
+        if current is not None:
+            blocks.append(current)
+        current = [match.group(1), [line]]
+    elif current is not None:
+        current[1].append(line)
+if current is not None:
+    blocks.append(current)
+
+call = re.compile(r"^\s*(?:run:\s*)?(?:\.github/scripts/setup-opencode\.sh|bash\s+\.github/scripts/setup-opencode\.sh)(?:\s|$)", re.MULTILINE)
+for name, lines in blocks:
+    text = "".join(lines)
+    if call.search(text) and "persist-credentials: false" not in text:
+        print(f"{path.name}: job {name} invokes the installer without isolated checkout credentials", file=sys.stderr)
+        raise SystemExit(1)
+PY
+}
+
 for workflow_path in "${installer_workflows[@]}"; do
 	installer_calls="$(grep -Ec "${installer_pattern}" "${workflow_path}")"
 	pinned_calls="$(awk -v version="${VERSION}" '$1 == "OPENCODE_VERSION:" && $2 == version { count += 1 } END { print count + 0 }' "${workflow_path}")"
@@ -65,11 +102,17 @@ for workflow_path in "${installer_workflows[@]}"; do
 		echo "workflow ${workflow_path##*/} has an installer call without the pinned version" >&2
 		exit 1
 	fi
-	if ! grep -q 'persist-credentials: false' "${workflow_path}"; then
+	if ! assert_installer_checkouts_isolated "${workflow_path}"; then
 		echo "workflow ${workflow_path##*/} can expose checkout credentials to the installer" >&2
 		exit 1
 	fi
 done
+
+tri_workflow="${ROOT_DIR}/.github/workflows/wppo-tri-merge-workflow.yml"
+if grep -q 'git remote add origin-temp' "${tri_workflow}" || ! grep -q 'env -i' "${tri_workflow}" || ! grep -q 'rm -f .git/FETCH_HEAD' "${tri_workflow}"; then
+	echo "tri-merge exposes repository credentials to its raw OpenCode process" >&2
+	exit 1
+fi
 
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/wppo-opencode-test.XXXXXX")"
 trap 'rm -rf "${TMP_ROOT}"' EXIT
