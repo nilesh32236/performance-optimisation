@@ -1,0 +1,31 @@
+<h2>What it does</h2>
+<p>Preload warms eligible cache files, prioritizes critical resources, and can emit conservative next-page hints. Speculation uses the WordPress Speculation Rules API when available. Each layer is bounded and opt-in.</p>
+<h2>When to use it</h2>
+<p>Use cache warm-up after Page Cache is stable. Use font, CSS, or LCP preloads when a measured resource blocks the main render. Use prefetch before prerender, and only when target pages are safe to load speculatively.</p>
+<h2>Safe default</h2>
+<p>Cache warm-up, sitemap discovery, speculative loading, automatic font discovery, and automatic LCP preload start disabled. When speculation is enabled, the default is prefetch with conservative eagerness. Dynamic WooCommerce routes remain excluded.</p>
+<h2>How to enable it</h2>
+<ol><li>Open <strong>Preload</strong> and confirm Page Cache works for anonymous requests.</li><li>Enable one hint at a time, beginning with fonts or the measured LCP image.</li><li>For cache warm-up, review excluded URLs before enabling sitemap discovery.</li><li>For speculation, keep prefetch and conservative eagerness for the first test.</li><li>Save, clear the page, and inspect the response HTML and queue status.</li></ol>
+<h2>What changes</h2>
+<p>The plugin schedules bounded warm-up batches, emits resource hints, or adds prefetch/prerender hints. The browser and server may fetch linked assets before the next navigation. Hints compete with the current page for bandwidth, so an unnecessary preload can make LCP worse.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>WordPress speculation APIs are feature-gated. Older WordPress versions may not emit the rules.</li><li>Prerender can execute JavaScript on hover and increase origin or analytics load. Test caching and exclusions first.</li><li>LiteSpeed crawler warm-up is a cache warmer, not synthetic traffic or a load test.</li><li>WooCommerce account, cart, checkout, and other dynamic routes stay excluded.</li></ul>
+<h2>How to verify</h2>
+<pre><code>wp wppo cache preload
+wp wppo cache status</code></pre>
+<p>Check the HTML for the expected <code>preload</code>, <code>preconnect</code>, or <code>prerender</code> relationship. Watch queue progress and confirm the URL still renders correctly after a warm-up.</p>
+<h2>How to undo or disable</h2>
+<p>Turn off the individual hint or speculative mode, save, and clear the affected page cache. Keep the queue excluded from dynamic paths. Pause a stalled queue rather than repeatedly resubmitting it.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>No preload appears:</strong> check the toggle, URL list, WordPress capability gate, and exclusions.</li><li><strong>LCP worsens:</strong> remove broad preloads and keep only the measured hero, font, or CSS resource.</li><li><strong>Preload queue stalls:</strong> inspect failed URLs and cache capacity, then use Resume Preload.</li><li><strong>Prerender causes double requests:</strong> switch to prefetch and verify the page is cacheable.</li></ul>
+<h2>FAQ</h2>
+<h3>Is preloading every asset useful?</h3>
+<p>No. Preloads compete for bandwidth. Start with the resource the browser needs first.</p>
+<h3>Should prerender be the default?</h3>
+<p>No. Prefetch with conservative eagerness is the safer first test.</p>
+<h3>Does cache warm-up generate traffic for a load test?</h3>
+<p>No. The crawler is bounded and intended to warm eligible cache variants.</p>
+<h2>Technical reference</h2>
+<table><thead><tr><th>Key</th><th>Default</th><th>Purpose</th></tr></thead><tbody><tr><td><code>enablePreloadCache</code></td><td><code>false</code></td><td>Schedule cache warm-up.</td></tr><tr><td><code>preloadSitemap</code></td><td><code>false</code></td><td>Add same-site sitemap URLs.</td></tr><tr><td><code>enableSpeculationRules</code></td><td><code>false</code></td><td>Enable speculation rules.</td></tr><tr><td><code>speculationMode</code></td><td><code>prefetch</code></td><td>Prefetch or prerender.</td></tr><tr><td><code>speculationEagerness</code></td><td><code>conservative</code></td><td>Choose when linked pages are requested.</td></tr><tr><td><code>autoLcpPreload</code>, <code>autoDiscoverFonts</code></td><td><code>false</code></td><td>Use measured LCP and font discovery.</td></tr></tbody></table>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/core-web-vitals/">Core Web Vitals</a></li><li><a href="/docs/performance-optimisation/features/page-cache/">Page Cache</a></li><li><a href="/docs/performance-optimisation/features/images-webp-avif/">Images and LCP</a></li><li><a href="/docs/performance-optimisation/litespeed/">LiteSpeed crawler and vary groups</a></li></ul>

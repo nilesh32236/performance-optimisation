@@ -1,0 +1,35 @@
+<h2>Getting started</h2>
+<h3>What should I enable first?</h3>
+<p>Start with Page Cache and keep the existing WooCommerce safe mode on. Record a baseline, then add one asset or image option at a time. The <a href="/docs/performance-optimisation/installation/">installation guide</a> gives the sequence.</p>
+<h3>Which preset should I choose?</h3>
+<p>Safe is the beginner baseline. Balanced is the recommended starting point after a baseline. Aggressive requires testing and should stay off until the site and critical interactions are stable.</p>
+<h2>Features</h2>
+<h3>What does Page Cache do?</h3>
+<p>It stores eligible rendered HTML and serves it before WordPress boots on a hit. See <a href="/docs/performance-optimisation/features/page-cache/">Page Cache</a>.</p>
+<h3>What does Image Optimization do?</h3>
+<p>It combines lazy loading, LCP protection, WebP/AVIF conversion, and delivery rules. See <a href="/docs/performance-optimisation/features/images-webp-avif/">Images, WebP, and AVIF</a>.</p>
+<h3>How do I improve Core Web Vitals?</h3>
+<p>Measure first, then map LCP, INP, or CLS to the matching feature. The <a href="/docs/performance-optimisation/core-web-vitals/">Core Web Vitals guide</a> explains the path.</p>
+<h3>What is Redis Object Cache?</h3>
+<p>It reduces repeated database reads when a request reaches PHP. See <a href="/docs/performance-optimisation/features/redis-object-cache/">Redis Object Cache</a>.</p>
+<h2>Safety and compatibility</h2>
+<h3>Does the plugin cache every page?</h3>
+<p>No. Admin, REST, feeds, errors, private requests, unsafe query strings, and dynamic WooCommerce routes bypass shared caching.</p>
+<h3>Can I run it beside another cache plugin?</h3>
+<p>Only with one page-cache owner. LiteSpeed has explicit modes; disable the competing page-cache module. Review the <a href="/docs/performance-optimisation/compatibility/">compatibility matrix</a>.</p>
+<h3>Is native lazy loading enabled by default?</h3>
+<p>Yes. The native browser path is preferred, and the legacy JavaScript observer is opt-in. LCP guardrails protect above-the-fold content.</p>
+<h3>What should I do if CSS or JavaScript breaks?</h3>
+<p>Disable the narrowest transform, save, clear the page cache, and keep the exact handle excluded. Start with the <a href="/docs/performance-optimisation/troubleshooting/">troubleshooting page</a>.</p>
+<h2>Credentials and data</h2>
+<h3>Where are credentials stored?</h3>
+<p>Use server-side constants, environment paths, or the supported connector surface. Exports redact secret-shaped values. Never paste passwords, API keys, authorization headers, or cookies into documentation or bug reports.</p>
+<h3>Does RUM store form values?</h3>
+<p>No. The beacon stores bounded performance metrics, not names, emails, form values, user IDs, or cookies with samples.</p>
+<h2>Reference and help</h2>
+<h3>What does <code>wp wppo verify</code> check?</h3>
+<p>It reports runtime, filesystem, cache, Redis, LiteSpeed, settings, cron, and uninstall-hygiene findings. Read the full result before treating a warning as a release blocker.</p>
+<h3>How do I report a problem?</h3>
+<p>Open an issue with versions, server software, reproduction URL, the exact setting, and a redacted <code>wp wppo system-info</code> output.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/">Documentation home</a></li><li><a href="/docs/performance-optimisation/installation/">Installation</a></li><li><a href="/docs/performance-optimisation/features/">Features Guide</a></li><li><a href="/docs/performance-optimisation/troubleshooting/">Troubleshooting</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li></ul>

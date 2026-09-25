@@ -1,0 +1,38 @@
+<h2>What it does</h2>
+<p>Core Web Vitals are user experience metrics: <strong>LCP</strong> measures when the main content appears, <strong>INP</strong> measures responsiveness, and <strong>CLS</strong> measures visual stability. Performance Optimisation does not replace these metrics with a proprietary score. Its cache, image, preload, CSS, and JavaScript features target the work behind them.</p>
+<h2>When to use it</h2>
+<p>Start when a real page shows slow main content, delayed interaction, or layout shifts. Measure the same URL, device class, and time window before and after each change. A lab score can improve while field data stays flat.</p>
+<h2>Safe default</h2>
+<ul><li>Page Cache starts enabled for eligible anonymous requests.</li><li>Native lazy loading and LCP guardrails are enabled.</li><li>RUM and scheduled PageSpeed scans start disabled.</li><li>Defer, delay JavaScript, critical CSS, used CSS, CDN edge templates, and speculative prerendering require an explicit opt-in.</li></ul>
+<h2>How to enable it</h2>
+<p>There is no global Core Web Vitals switch. Enable the existing feature that matches the metric you measured, then verify the result.</p>
+<h2>How to improve LCP</h2>
+<ol><li>Open <strong>Performance Audit</strong> and inspect the measured LCP element.</li><li>If the LCP resource is an image, review <strong>Image Optimization → LCP Preload</strong> and confirm the hero loads eagerly.</li><li>Review <strong>Preload → Critical Assets Preloading</strong> for the hero, fonts, and above-the-fold CSS.</li><li>Check Page Cache headers and make sure the response is not waiting on an uncached server path.</li><li>Run one PageSpeed test, then compare real-user data after enough visits accumulate.</li></ol>
+<h2>How to improve INP</h2>
+<p>Keep defer and delay JavaScript conservative. Exclude navigation, consent, payment, menu, modal, and builder scripts before moving more files to a delay strategy. Test the first click on touch and desktop. INP can worsen when a small file size hides a long task or a handler that arrives too late.</p>
+<h2>How to improve CLS</h2>
+<p>Review image dimensions, font loading, embedded media, and any CSS that reserves space late. Keep lazy-loading exclusions for logos and above-the-fold media. If a layout shifts only after an optimization, disable the narrow transform and keep its cached output until the page is repaired.</p>
+<h2>What changes</h2>
+<p>The plugin stores or serves a cached HTML file, rewrites eligible image and asset URLs, emits resource hints, or changes script delivery. It never silently applies a recommendation from the audit.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>Page builders can render CSS or JavaScript after the initial HTML. Use Elementor-safe mode, builder exclusions, and CSS safelists.</li><li>WooCommerce cart, checkout, account, Store API, and AJAX paths stay outside shared cache when safe mode applies.</li><li>LiteSpeed and CDN owners can add another cache layer. Keep one page-cache owner.</li><li>RUM requires an unobstructed first-party beacon. Privacy tools and network blockers can suppress samples.</li></ul>
+<h2>How to verify</h2>
+<pre><code>wp wppo pagespeed scan --url=https://example.com/ --strategy=mobile
+wp wppo pagespeed results --url=https://example.com/ --strategy=mobile
+wp wppo system-info</code></pre>
+<p>Record the LCP element, TTFB, page-cache status, and field sample count. Compare one change at a time. Do not treat a single lab run as proof.</p>
+<h2>How to undo or disable</h2>
+<p>Undo the specific feature you enabled. Preset changes keep an automatic restore point. Otherwise turn off the matching switch, save, clear the affected page cache, and reload in a logged-out window. Keep the feature disabled while the site is broken.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>LCP stays slow:</strong> check TTFB, the hero URL, cache eligibility, and whether the LCP image loads eagerly.</li><li><strong>INP worsens:</strong> disable delay JavaScript first, then restore one safe exclusion at a time.</li><li><strong>CLS appears:</strong> inspect fonts, images, embeds, and late CSS before changing multiple features.</li><li><strong>No field data:</strong> confirm RUM is enabled and the browser reaches the public beacon.</li></ul>
+<h2>FAQ</h2>
+<h3>Does the plugin guarantee a green Core Web Vitals score?</h3>
+<p>No. Hosting, theme code, plugins, content, and visitor networks affect the result. The plugin gives you bounded tools and evidence.</p>
+<h3>Should I enable every optimization at once?</h3>
+<p>No. One feature per test makes recovery and attribution clear.</p>
+<h3>Which metric should I fix first?</h3>
+<p>Fix the metric that affects the page and audience you measured. LCP work often starts with TTFB and the hero image; INP work starts with long tasks and delayed handlers.</p>
+<h2>Technical reference</h2>
+<p>See <a href="/docs/performance-optimisation/features/monitoring-rum/">Monitoring: PageSpeed and RUM</a> for collection settings and retention. Use the feature pages for cache, image, preload, CSS, and JavaScript controls.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/features/monitoring-rum/">Monitoring and RUM</a></li><li><a href="/docs/performance-optimisation/features/images-webp-avif/">Images, WebP, and AVIF</a></li><li><a href="/docs/performance-optimisation/features/preload-speculation/">Preload and speculation</a></li><li><a href="/docs/performance-optimisation/features/minify-combine/">CSS and JavaScript optimization</a></li><li><a href="/docs/performance-optimisation/features/page-cache/">Page Cache</a></li></ul>

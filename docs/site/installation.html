@@ -1,0 +1,22 @@
+<p>Performance Optimisation 2.4.0 supports WordPress 6.2+ and PHP 8.2+. Install it on staging first, especially when another cache plugin, a page builder, WooCommerce, or a CDN is already active.</p>
+<h2>Requirements</h2>
+<table><thead><tr><th>Requirement</th><th>Details</th></tr></thead><tbody><tr><td>WordPress</td><td>6.2 or newer.</td></tr><tr><td>PHP</td><td>8.2 or newer; the plugin pauses below the floor instead of fataling.</td></tr><tr><td>Filesystem</td><td>Write access to <code>wp-content</code> and, when page caching is used, <code>wp-config.php</code>.</td></tr><tr><td>Redis</td><td>Optional. Object Cache requires a reachable Redis service and the PhpRedis extension.</td></tr><tr><td>Server</td><td>Apache, nginx, LiteSpeed, or OpenLiteSpeed. Server-rule output is environment-specific.</td></tr></tbody></table>
+<h2>Install and activate</h2>
+<ol><li>Install from the WordPress Plugin Directory or upload the plugin ZIP through <strong>Plugins → Add New → Upload Plugin</strong>.</li><li>Activate <strong>Performance Optimisation</strong>.</li><li>Open the plugin Dashboard and read the system/server notices before changing settings.</li><li>Test a logged-out page, the block editor preview, and the main navigation after activation.</li></ol>
+<p>With WP-CLI, place the ZIP on the server and run:</p><pre><code>wp plugin install performance-optimisation.zip --activate</code></pre>
+<h2>What activation creates</h2>
+<ul><li>An owned <code>advanced-cache.php</code> drop-in when no foreign drop-in is present. The plugin recognizes its marker and will not overwrite another plugin's file.</li><li>A guarded <code>WP_CACHE</code> constant in <code>wp-config.php</code> when the file is writable and the edit is unambiguous.</li><li>The canonical <code>wppo_settings</code> defaults, including page cache enabled, native lazy loading, LCP guardrails, and WooCommerce safe mode.</li><li>The activity-log table used for cache, cleanup, and settings events.</li></ul>
+<p>Server rules are not enabled on a fresh install. The Redis <code>object-cache.php</code> drop-in is also installed on demand after a connection is tested; it is not written merely because the plugin is activated.</p>
+<h2>Recommended first-run sequence</h2>
+<ol><li><strong>Baseline:</strong> record a PageSpeed run, response headers, and a logged-out page load.</li><li><strong>Page cache:</strong> verify the drop-in, <code>WP_CACHE</code>, cache status, and a second request.</li><li><strong>Assets:</strong> enable HTML/CSS/JavaScript minification separately, then rebuild the cache.</li><li><strong>JavaScript delivery:</strong> test defer and delay with exclusions for navigation, consent, payment, and builder-critical scripts.</li><li><strong>Images:</strong> keep native lazy loading, then test LCP preloading and WebP/AVIF conversion.</li><li><strong>Infrastructure:</strong> add Redis, LiteSpeed, CDN, PageSpeed, RUM, or ESI one at a time.</li></ol>
+<h2>Server notes</h2>
+<p>Apache and LiteSpeed Enterprise can apply marked <code>.htaccess</code> changes at runtime. OpenLiteSpeed reads the file on server start, so restart LiteSpeed after rule changes. Nginx does not evaluate <code>.htaccess</code>; copy the generated rules from the dashboard into the server configuration instead.</p>
+<h2>Verify the install</h2>
+<pre><code>wp wppo verify
+wp wppo cache status
+curl -sI https://example.com/ | grep -iE 'x-litespeed-cache|etag|last-modified|vary|content-encoding'</code></pre>
+<p>A cache hit may be identified by the plugin's ETag/Last-Modified validators or by LiteSpeed's <code>X-LiteSpeed-Cache</code> header, depending on the selected cache owner. Confirm the exact behavior on the server you operate.</p>
+<h2>Deactivate and uninstall</h2>
+<p>Deactivation removes plugin-owned cron events, owned drop-ins, the Redis configuration file, and the <code>WP_CACHE</code> guard when it created them. Uninstall additionally removes plugin options, activity data, generated cache files, converted-image copies, and post meta. Original Media Library uploads are never deleted by the uninstall routine.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/">Performance Optimisation overview</a></li><li><a href="/docs/performance-optimisation/features/page-cache/">Page cache</a></li><li><a href="/docs/performance-optimisation/features/redis-object-cache/">Redis object cache</a></li><li><a href="/docs/performance-optimisation/troubleshooting/">Troubleshooting</a></li></ul>

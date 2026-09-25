@@ -1,0 +1,32 @@
+<h2>What it does</h2>
+<p>Monitoring combines explicit PageSpeed scans, first-party Web Vitals (RUM), local telemetry, and read-only suggestions. It helps you decide what to test next. It never applies a code or settings change by itself.</p>
+<h2>When to use it</h2>
+<p>Use PageSpeed for a repeatable lab check. Use RUM when you need field evidence from real visitors. Use the Dashboard suggestions to connect a measured issue to an existing control.</p>
+<h2>Safe default</h2>
+<p>PageSpeed needs an administrator-provided key and an explicit scan. RUM, scheduled rescans, and server timing start disabled. Suggestions remain read-only. Adaptive tuning and AI-client use remain gated and disabled by default.</p>
+<h2>How to enable monitoring</h2>
+<ol><li>Open <strong>Performance Audit</strong>.</li><li>Add a PageSpeed key through the secure Tools or settings surface if you want lab scans.</li><li>Choose a public URL and mobile or desktop strategy.</li><li>Run a scan and wait for the queued result.</li><li>Enable RUM only after you understand the first-party beacon and privacy implications.</li></ol>
+<h2>What changes</h2>
+<p>A scan sends the selected public URL and strategy to Google and stores a result for review. RUM posts bounded LCP, INP, and CLS samples to the site's public beacon. The suggestion engine reads evidence and produces a destination label; it does not call an optimization action.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>PageSpeed results depend on Google's service, quota, and the selected public URL.</li><li>Ad blockers, privacy tools, consent rules, and rate limits can suppress RUM samples.</li><li>Core Web Vitals are evaluated at the 75th percentile across real visits, not only at the median.</li><li>A lab score can improve while field LCP or INP worsens for one template or device class.</li></ul>
+<h2>How to verify</h2>
+<pre><code>wp wppo pagespeed scan --url=https://example.com/ --strategy=mobile
+wp wppo pagespeed results --url=https://example.com/ --strategy=mobile
+wp wppo system-info</code></pre>
+<p>Record the URL, device strategy, scan time, LCP element, TTFB, sample count, and the feature you plan to test. Never include an API key, beacon token, cookie, or authorization header in a report.</p>
+<h2>How to undo or disable</h2>
+<p>Disable RUM to stop collection. Remove the PageSpeed key through the secure settings surface if the integration is no longer needed. A scan result can remain as history; clear the scheduled scan list and stop auto-rescan if it is not useful.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>PageSpeed never finishes:</strong> check the queue, quota, key, and public URL.</li><li><strong>RUM has no samples:</strong> check the toggle, browser blockers, beacon reachability, and rate limits.</li><li><strong>Suggestions do not match the page:</strong> compare the same URL, device class, and time window before acting.</li><li><strong>A recommendation points to an unexpected tab:</strong> use the feature path in the documentation and report the mismatch.</li></ul>
+<h2>FAQ</h2>
+<h3>Does a PageSpeed score prove a real-user improvement?</h3>
+<p>No. Use it as a lab signal and compare RUM over a meaningful window.</p>
+<h3>Does RUM store form values or user IDs?</h3>
+<p>No. The beacon is designed around bounded metrics and does not store names, emails, form values, user IDs, or cookies with samples.</p>
+<h3>Can suggestions apply a fix?</h3>
+<p>No. They navigate you to the existing control so you can review and save it.</p>
+<h2>Technical reference</h2>
+<table><thead><tr><th>Key</th><th>Default</th><th>Purpose</th></tr></thead><tbody><tr><td><code>pagespeed_api_key</code></td><td><code>''</code></td><td>PageSpeed authentication; keep it out of exports and logs.</td></tr><tr><td><code>high_value_urls</code></td><td><code>[]</code></td><td>URLs for scheduled scans.</td></tr><tr><td><code>auto_rescan</code></td><td><code>''</code></td><td>Off, daily, or weekly.</td></tr><tr><td><code>rum_enabled</code></td><td><code>false</code></td><td>Enable the first-party field beacon.</td></tr><tr><td><code>rum_sample_rate</code></td><td><code>100</code></td><td>Client sampling percentage, subject to beacon limits.</td></tr></tbody></table>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/core-web-vitals/">Core Web Vitals</a></li><li><a href="/docs/performance-optimisation/features/images-webp-avif/">Images and LCP</a></li><li><a href="/docs/performance-optimisation/features/defer-delay-js/">JavaScript and INP</a></li><li><a href="/docs/performance-optimisation/configuration/rest-api/">REST monitoring routes</a></li></ul>

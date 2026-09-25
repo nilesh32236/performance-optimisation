@@ -16,6 +16,8 @@ Free WordPress performance plugin for faster sites with page caching, Core Web V
 
 Start with the features that match your hosting and site setup, then test changes one at a time. Aggressive options are opt-in and clearly explained.
 
+For the maintained, code-accurate guides, see the [Performance Optimisation documentation](https://nileshportfolio.duckdns.org/docs/performance-optimisation/), including installation, feature behavior, settings, WP-CLI, REST, troubleshooting, and the generated source reference.
+
 = Why choose Performance Optimisation? =
 
 Most performance plugins either cover only one job or bury the important controls in a large settings list. Performance Optimisation gives site owners a practical starting point:
