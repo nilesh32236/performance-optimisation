@@ -1010,44 +1010,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function is_editor_preview_request(): bool {
 			try {
-				if ( function_exists( 'is_admin' ) ) {
-					try {
-						if ( is_admin() ) {
+				$check_funcs = array( 'is_admin', 'is_preview', 'is_customize_preview', 'wp_doing_ajax', 'wp_is_json_request' );
+				foreach ( $check_funcs as $func ) {
+					if ( function_exists( $func ) ) {
+						try {
+							if ( call_user_func( $func ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
 							return true;
 						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return true;
-					}
-				}
-				if ( function_exists( 'is_preview' ) ) {
-					try {
-						if ( is_preview() ) {
-							return true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return true;
-					}
-				}
-				if ( function_exists( 'is_customize_preview' ) ) {
-					try {
-						if ( is_customize_preview() ) {
-							return true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return true;
-					}
-				}
-				if ( function_exists( 'wp_doing_ajax' ) ) {
-					try {
-						if ( wp_doing_ajax() ) {
-							return true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return true;
 					}
 				}
 				if ( ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
@@ -1055,16 +1028,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 				if ( ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) {
 					return true;
-				}
-				if ( function_exists( 'wp_is_json_request' ) ) {
-					try {
-						if ( wp_is_json_request() ) {
-							return true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return true;
-					}
 				}
 				// Elementor edit/preview mode (guarded for non-Elementor installs).
 				if ( class_exists( 'Elementor\Plugin', false ) ) {
