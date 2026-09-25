@@ -1,0 +1,89 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "WPPO free-model registry",
+	"description": "Positive free-price gate: every candidate must carry numeric price 0 evidence. Unknown price is not free and is rejected.",
+	"type": "object",
+	"required": [ "champion", "updatedAt", "candidates" ],
+	"additionalProperties": false,
+	"properties": {
+		"champion": {
+			"type": "string",
+			"minLength": 1
+		},
+		"updatedAt": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"notes": {
+			"type": "string"
+		},
+		"$schema": {
+			"type": "string"
+		},
+		"candidates": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"type": "object",
+				"required": [ "id", "provider", "status", "freeEvidence", "health", "capabilities" ],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"minLength": 1
+					},
+					"provider": {
+						"type": "string",
+						"minLength": 1
+					},
+					"status": {
+						"type": "string",
+						"enum": [ "champion", "challenger", "excluded" ]
+					},
+					"freeEvidence": {
+						"type": "object",
+						"required": [ "source", "price", "checkedAt" ],
+						"additionalProperties": false,
+						"properties": {
+							"source": {
+								"type": "string",
+								"minLength": 1
+							},
+							"price": {
+								"type": "number",
+								"const": 0,
+								"description": "Positive free-price verification: must be numeric 0. Unknown, null, string, or non-zero prices are rejected."
+							},
+							"priceCurrency": {
+								"type": "string"
+							},
+							"checkedAt": {
+								"type": "string",
+								"format": "date-time"
+							}
+						}
+					},
+					"health": {
+						"type": "object",
+						"required": [ "status" ],
+						"additionalProperties": true,
+						"properties": {
+							"status": {
+								"type": "string",
+								"enum": [ "unknown", "healthy", "degraded", "unreachable" ]
+							}
+						}
+					},
+					"capabilities": {
+						"type": "array",
+						"minItems": 1,
+						"items": {
+							"type": "string",
+							"minLength": 1
+						}
+					}
+				}
+			}
+		}
+	}
+}

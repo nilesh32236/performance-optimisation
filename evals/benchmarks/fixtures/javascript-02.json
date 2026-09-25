@@ -1,0 +1,15 @@
+{
+	"id": "javascript-02-chunk",
+	"area": "javascript",
+	"title": "Chunk an array without mutation",
+	"prompt": "Write a chunk(array, size) helper that never mutates its input and rejects non-positive sizes.",
+	"language": "javascript",
+	"timeoutMs": 30000,
+	"pinnedInput": "function chunk(a, s) { const out = []; for (let i = 0; i < a.length; i += s) out.push(a.slice(i, i + s)); return out; }",
+	"referenceOutput": "export function chunk(array, size) {\n\tif (!Array.isArray(array)) {\n\t\tthrow new TypeError('chunk expects an array');\n\t}\n\tif (!Number.isInteger(size) || size <= 0) {\n\t\tthrow new RangeError('chunk size must be a positive integer');\n\t}\n\tconst out = [];\n\tfor (let i = 0; i < array.length; i += size) {\n\t\tout.push(array.slice(i, i + size));\n\t}\n\treturn out;\n}",
+	"checks": [
+		{ "id": "no-mutation", "kind": "contains", "value": ".slice(" },
+		{ "id": "validates-size", "kind": "contains", "value": "RangeError" },
+		{ "id": "no-splice", "kind": "notContains", "value": "splice" }
+	]
+}

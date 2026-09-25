@@ -1,0 +1,15 @@
+{
+	"id": "react-05-notice",
+	"area": "react",
+	"title": "Accessible notice banner with dismiss",
+	"prompt": "Write a React notice banner with role=alert, aria-live, and a dismiss button wired to onDismiss.",
+	"language": "javascript",
+	"timeoutMs": 30000,
+	"pinnedInput": "const Notice = ({ m }) => <div>{m}</div>;",
+	"referenceOutput": "import { __ } from '@wordpress/i18n';\n\nexport function NoticeBanner({ type, message, onDismiss }) {\n\treturn (\n\t\t<div className={`wppo-notice wppo-notice--${type}`} role=\"alert\" aria-live={type === 'error' ? 'assertive' : 'polite'}>\n\t\t<span>{message}</span>\n\t\t{onDismiss && (\n\t\t\t<button type=\"button\" onClick={onDismiss} aria-label={__('Dismiss', 'performance-optimisation')}>\n\t\t\t\t{__('Dismiss', 'performance-optimisation')}\n\t\t\t</button>\n\t\t)}\n\t\t</div>\n\t);\n}",
+	"checks": [
+		{ "id": "role-alert", "kind": "contains", "value": "role=\"alert\"" },
+		{ "id": "aria-live", "kind": "contains", "value": "aria-live" },
+		{ "id": "dismiss", "kind": "contains", "value": "onDismiss" }
+	]
+}

@@ -1,0 +1,6 @@
+# Runtime artifacts stay out of git.
+results.json
+verdict.json
+discovery.json
+.cache/
+*.tmp.json

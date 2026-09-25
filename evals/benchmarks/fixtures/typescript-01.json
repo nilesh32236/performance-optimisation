@@ -1,0 +1,15 @@
+{
+	"id": "typescript-01-debounce",
+	"area": "typescript",
+	"title": "Type a generic debounce helper without any",
+	"prompt": "Write a TypeScript generic debounce(fn, waitMs) preserving argument and return types with no explicit any.",
+	"language": "typescript",
+	"timeoutMs": 30000,
+	"pinnedInput": "function debounce(fn, wait) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); }; }",
+	"referenceOutput": "export function debounce<T extends (...args: never[]) => unknown>(fn: T, waitMs: number): (...args: Parameters<T>) => void {\n\tlet timer: ReturnType<typeof setTimeout> | undefined;\n\treturn (...args: Parameters<T>): void => {\n\t\tif (timer !== undefined) {\n\t\t\tclearTimeout(timer);\n\t\t}\n\t\ttimer = setTimeout(() => { fn(...args); }, waitMs);\n\t};\n}",
+	"checks": [
+		{ "id": "generic-signature", "kind": "contains", "value": "Parameters<T>" },
+		{ "id": "no-any", "kind": "notContains", "value": "any" },
+		{ "id": "clears-timer", "kind": "contains", "value": "clearTimeout" }
+	]
+}

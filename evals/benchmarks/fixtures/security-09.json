@@ -1,0 +1,15 @@
+{
+	"id": "security-09-nonce",
+	"area": "security",
+	"title": "Capability plus nonce gate on a settings write",
+	"prompt": "Gate a settings-write REST handler on manage_options and a valid X-WP-Nonce.",
+	"language": "php",
+	"timeoutMs": 30000,
+	"pinnedInput": "function wppo_save($r) { return update_option('wppo_settings', $r->get_params()); }",
+	"referenceOutput": "function wppo_save_settings( $request ) {\n\tif ( ! current_user_can( 'manage_options' ) ) {\n\t\treturn new WP_Error( 'forbidden', 'Insufficient permissions.', array( 'status' => 403 ) );\n\t}\n\tif ( ! wp_verify_nonce( $request->get_header( 'X-WP-Nonce' ), 'wp_rest' ) ) {\n\t\treturn new WP_Error( 'invalid_nonce', 'Invalid nonce.', array( 'status' => 403 ) );\n\t}\n\treturn wppo_update_settings( $request->get_params() );\n}",
+	"checks": [
+		{ "id": "capability", "kind": "contains", "value": "current_user_can( 'manage_options' )" },
+		{ "id": "nonce", "kind": "contains", "value": "wp_verify_nonce" },
+		{ "id": "no-direct-write", "kind": "notContains", "value": "update_option('wppo_settings'" }
+	]
+}

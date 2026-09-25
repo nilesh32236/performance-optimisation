@@ -1,0 +1,15 @@
+{
+	"id": "wordpress-04-shortcode",
+	"area": "wordpress",
+	"title": "Escaped shortcode rendering",
+	"prompt": "Write a WordPress shortcode callback that escapes its title attribute and URL before printing.",
+	"language": "php",
+	"timeoutMs": 30000,
+	"pinnedInput": "add_shortcode('wppo_link', function($a) { return '<a href=\"' . $a['url'] . '\">' . $a['title'] . '</a>'; });",
+	"referenceOutput": "function wppo_link_shortcode( $atts ) {\n\t$atts = shortcode_atts( array( 'url' => '', 'title' => '' ), $atts, 'wppo_link' );\n\treturn sprintf( '<a href=\"%s\">%s</a>', esc_url( $atts['url'] ), esc_html( $atts['title'] ) );\n}\nadd_shortcode( 'wppo_link', 'wppo_link_shortcode' );",
+	"checks": [
+		{ "id": "escapes-url", "kind": "contains", "value": "esc_url" },
+		{ "id": "escapes-html", "kind": "contains", "value": "esc_html" },
+		{ "id": "defaults-atts", "kind": "contains", "value": "shortcode_atts" }
+	]
+}

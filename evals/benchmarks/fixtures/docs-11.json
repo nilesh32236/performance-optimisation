@@ -1,0 +1,15 @@
+{
+	"id": "docs-11-hooks-entry",
+	"area": "documentation",
+	"title": "Document a filter with params and example",
+	"prompt": "Write a docs/hooks.md entry for a filter: name, params table, and a short usage example.",
+	"language": "markdown",
+	"timeoutMs": 30000,
+	"pinnedInput": "Filter wppo_inline_combined_css disables CSS inlining.",
+	"referenceOutput": "### `wppo_inline_combined_css`\n\nReturn falsy to disable inlining of the combined CSS.\n\n| Param | Type | Description |\n| --- | --- | --- |\n| `$inline` | `bool` | Whether to inline the combined stylesheet. |\n\n```php\nadd_filter( 'wppo_inline_combined_css', '__return_false' );\n```",
+	"checks": [
+		{ "id": "filter-name", "kind": "contains", "value": "wppo_inline_combined_css" },
+		{ "id": "params-table", "kind": "matches", "value": "\\| Param \\|" },
+		{ "id": "example", "kind": "contains", "value": "add_filter" }
+	]
+}

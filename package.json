@@ -8,7 +8,14 @@
 		"start": "wp-scripts start",
 		"test": "wp-scripts test-unit-js",
 		"lint:js": "wp-scripts lint-js src",
-		"lint:js:fix": "wp-scripts lint-js src --fix"
+		"lint:js:fix": "wp-scripts lint-js src --fix",
+		"typecheck": "node --check evals/check-registry.mjs && node --check evals/discover.mjs && node --check evals/run-benchmark.mjs && node --check evals/score.mjs && node --check evals/check-registry.mjs && node --check evals/check-routing-safety.mjs && node --check evals/check-privacy.mjs && node --check evals/check-docs.mjs && node --check evals/check-all.mjs && echo \"typecheck: ESM syntax OK (no TypeScript in this repo)\"",
+		"doc:check": "node evals/check-docs.mjs",
+		"eval:registry": "node evals/check-registry.mjs",
+		"eval:discover": "node evals/discover.mjs",
+		"eval:benchmark": "node evals/run-benchmark.mjs",
+		"eval:score": "node evals/score.mjs",
+		"eval:checks": "node evals/check-all.mjs"
 	},
 	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
 	"license": "GPL-2.0-or-later",

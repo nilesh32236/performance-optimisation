@@ -1,0 +1,15 @@
+{
+	"id": "tests-10-chunk-test",
+	"area": "tests",
+	"title": "Unit test for the chunk helper",
+	"prompt": "Write a deterministic Jest test covering chunk() happy path and size validation.",
+	"language": "javascript",
+	"timeoutMs": 30000,
+	"pinnedInput": "test('chunk', () => { expect(chunk([1,2,3], 2)).toEqual([[1,2],[3]]); });",
+	"referenceOutput": "import { chunk } from '../chunk';\n\ndescribe('chunk', () => {\n\tit('splits evenly and keeps the tail batch', () => {\n\t\texpect(chunk([1, 2, 3], 2)).toEqual([[1, 2], [3]]);\n\t});\n\tit('rejects non-positive sizes', () => {\n\t\texpect(() => chunk([1], 0)).toThrow(RangeError);\n\t});\n});",
+	"checks": [
+		{ "id": "happy-path", "kind": "contains", "value": "toEqual([[1, 2], [3]])" },
+		{ "id": "sad-path", "kind": "contains", "value": "toThrow(RangeError)" },
+		{ "id": "no-snapshot", "kind": "notContains", "value": "toMatchSnapshot" }
+	]
+}

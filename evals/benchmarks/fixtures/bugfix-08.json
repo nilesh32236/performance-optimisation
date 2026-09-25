@@ -1,0 +1,14 @@
+{
+	"id": "bugfix-08-off-by-one",
+	"area": "bugfix",
+	"title": "Fix an off-by-one in batch paging",
+	"prompt": "Fix the off-by-one so the last partial batch of posts is processed.",
+	"language": "javascript",
+	"timeoutMs": 30000,
+	"pinnedInput": "for (let page = 0; page < total / size; page++) { process(page); }",
+	"referenceOutput": "const pages = Math.ceil(total / size);\nfor (let page = 0; page < pages; page++) {\n\tprocess(page);\n}",
+	"checks": [
+		{ "id": "ceil", "kind": "contains", "value": "Math.ceil" },
+		{ "id": "strict-bound", "kind": "contains", "value": "page < pages" }
+	]
+}

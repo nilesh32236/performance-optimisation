@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-09-25T10:44:30.761Z",
+  "fixtures": {
+    "bugfix-08.json": "df20004b6f90e275597bb05101bcb79e78b2a7740195fd5af6aed19f149f63f3",
+    "docs-11.json": "04930fe3ff85be673581e11ee5dab80646e104525296269a397cc5a14a323a36",
+    "github-actions-06.json": "2ed1935a27732ee716fd528dacc3e4e1e7732a1d9399b8edc001512e406dc4f2",
+    "javascript-02.json": "45f72639975449e150dba85941a1e69cdf5d73c8814de71862a79af9ee4b4f0e",
+    "php-03.json": "95c74f5b64aa49392631e0be355ef4f1300929d4b856d2919054de28ea59d6b0",
+    "react-05.json": "12c7d3b8eb9a9e03150b9b0da0a27702a103d9068dd011d226eb4c6d7c9a1f86",
+    "refactoring-07.json": "ab5bf2041d1118bd35baa71ffaaebb7bc0cf2dbf906eef336757a18b7d52a6e6",
+    "security-09.json": "874c58e386bf4a17613f2f07a5960bbd51061aae41eb8649abb0dba7d726ea73",
+    "tests-10.json": "d1bde216983af715d4e88e8f448b671ef0b5b7e7960e021be45c1c3389ea18a6",
+    "typescript-01.json": "dabc9328014f855a3257fbb067ffeb9a899a42bcc34b5260e6c7a289968c31d0",
+    "wordpress-04.json": "7a1193471dd6c580ff6fc19c001c1881cbd4aa2eb06dc7112419105d90850f76"
+  }
+}

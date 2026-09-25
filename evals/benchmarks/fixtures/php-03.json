@@ -1,0 +1,15 @@
+{
+	"id": "php-03-transient-helper",
+	"area": "php",
+	"title": "Cache an expensive computation in a transient",
+	"prompt": "Write a WordPress-coding-standards helper that caches an expensive callable result in a transient with a TTL.",
+	"language": "php",
+	"timeoutMs": 30000,
+	"pinnedInput": "function wppo_expensive() { return get_transient('wppo_x') ?: expensive(); }",
+	"referenceOutput": "function wppo_get_expensive_result() {\n\t$cached = get_transient( 'wppo_expensive_result' );\n\tif ( false !== $cached ) {\n\t\treturn $cached;\n\t}\n\t$result = wppo_compute_expensive_result();\n\tset_transient( 'wppo_expensive_result', $result, HOUR_IN_SECONDS );\n\treturn $result;\n}",
+	"checks": [
+		{ "id": "reads-transient", "kind": "contains", "value": "get_transient" },
+		{ "id": "writes-transient", "kind": "contains", "value": "set_transient" },
+		{ "id": "strict-compare", "kind": "contains", "value": "false !==" }
+	]
+}
