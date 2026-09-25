@@ -58,7 +58,7 @@ describe( 'PluginSetting', () => {
 		expect( screen.getByText( 'Need help?' ) ).toBeInTheDocument();
 		expect(
 			screen.getByRole( 'link', { name: 'Read the support checklist' } )
-		).toHaveAttribute( 'href', expect.stringContaining( '/support/' ) );
+		).toHaveAttribute( 'href', expect.stringContaining( '/support' ) );
 		expect(
 			screen.getByText( 'Optimisation Activity Log' )
 		).toBeInTheDocument();

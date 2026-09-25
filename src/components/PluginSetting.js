@@ -1162,7 +1162,7 @@ const PluginSetting = ( { options } ) => {
 						</li>
 						<li>
 							<a
-								href="https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/"
+								href="https://github.com/nilesh32236/performance-optimisation/blob/master/docs/site/support.html"
 								target="_blank"
 								rel="noopener noreferrer"
 							>

@@ -128,7 +128,7 @@ The maintained, code-accurate documentation is published at [nileshportfolio.duc
 - [Features Guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/features/)
 - [Configuration and developer reference](https://nileshportfolio.duckdns.org/docs/performance-optimisation/configuration/)
 - [Troubleshooting](https://nileshportfolio.duckdns.org/docs/performance-optimisation/troubleshooting/)
-- [Support and safe recovery](https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/)
+- [Support and safe recovery](https://github.com/nilesh32236/performance-optimisation/blob/master/docs/site/support.html)
 - [Compatibility](https://nileshportfolio.duckdns.org/docs/performance-optimisation/compatibility/)
 - [Generated code reference](https://nileshportfolio.duckdns.org/docs/performance-optimisation/reference/)
 

@@ -168,7 +168,7 @@ Yes. Performance Optimisation is 100% free and open source. There is no premium 
 
 == Support ==
 
-Before reporting a problem, disable the most recent advanced optimization, save, clear the affected page cache, and test the site again. The [Support and safe recovery guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/) explains the narrow rollback path.
+Before reporting a problem, disable the most recent advanced optimization, save, clear the affected page cache, and test the site again. The [Support and safe recovery guide](https://github.com/nilesh32236/performance-optimisation/blob/master/docs/site/support.html) explains the narrow rollback path.
 
 When you open a support issue, include the affected URL, exact steps, WordPress/PHP/server versions, cache owner, and the feature you changed. Add redacted output from `wp wppo system-info` and `wp wppo verify`. Never post passwords, API keys, cookies, bearer tokens, session IDs, private customer data, or database exports.
 
