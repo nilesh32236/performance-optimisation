@@ -635,11 +635,11 @@ const App = () => {
 					onConfirm={ confirmDiscard }
 					onCancel={ cancelGuard }
 					title={ __(
-						'Unsaved changes — Discard?',
+						'Discard unsaved changes?',
 						'performance-optimisation'
 					) }
 					message={ __(
-						'You have unsaved changes. Leave without saving?',
+						'You have unsaved changes. Switching tabs now will lose your edits. Choose Cancel to keep editing, or Discard to leave without saving.',
 						'performance-optimisation'
 					) }
 					confirmLabel={ __( 'Discard', 'performance-optimisation' ) }

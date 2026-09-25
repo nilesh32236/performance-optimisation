@@ -1,0 +1,106 @@
+@use '../abstracts/mixins' as *;
+
+// Phase C: preset hierarchy + small-viewport safety.
+// Copy/hierarchy only — no behavior change. Logical properties throughout
+// so LTR and RTL share one code path.
+
+.wppo-presets {
+	scroll-margin-top: 16px;
+
+	&__buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		margin-block: 12px;
+		min-width: 0;
+	}
+
+	&__badge {
+		display: inline-block;
+		margin-inline-start: 8px;
+		padding-block: 1px;
+		padding-inline: 8px;
+		border-radius: 999px;
+		font-size: 11px;
+		font-weight: 700;
+		line-height: 1.6;
+		white-space: nowrap;
+		background: var(--wppo-success-bg);
+		color: var(--wppo-success);
+		border: 1px solid var(--wppo-success-border);
+	}
+
+	&__diff {
+		margin-block-start: 12px;
+		min-width: 0;
+		max-width: 100%;
+		overflow-wrap: anywhere;
+	}
+
+	&__diff-list {
+		margin-block: 8px;
+		margin-inline: 0;
+		padding-inline-start: 20px;
+		min-width: 0;
+		max-width: 100%;
+
+		li {
+			overflow-wrap: anywhere;
+			word-break: break-word;
+			line-height: 1.6;
+		}
+
+		code {
+			overflow-wrap: anywhere;
+			word-break: break-all;
+		}
+	}
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		margin-block-start: 12px;
+		min-width: 0;
+	}
+
+	&__undo-note {
+		margin-block-start: 12px;
+	}
+
+	@include respond-to('sm') {
+		&__buttons .wppo-button,
+		&__actions .wppo-button {
+			flex: 1 1 100%;
+			justify-content: center;
+		}
+	}
+}
+
+// Progressive disclosure for the advanced welcome steps.
+.wppo-welcome-advanced {
+	margin-block-start: 12px;
+	border: 1px solid var(--wppo-border);
+	border-radius: 12px;
+	padding-block: 10px;
+	padding-inline: 14px;
+	background: var(--wppo-bg-card-surface);
+	min-width: 0;
+
+	summary {
+		cursor: pointer;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--wppo-text-main);
+		border-radius: var(--wppo-radius-xs);
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-primary);
+			outline-offset: 2px;
+		}
+	}
+
+	.wppo-welcome-steps {
+		margin-block-start: 12px;
+	}
+}

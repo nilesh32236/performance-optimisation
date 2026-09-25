@@ -28,9 +28,12 @@
 	border-radius: var(--wppo-radius);
 	box-shadow: var(--wppo-shadow-lg);
 	padding: 32px;
-	max-width: min(440px, calc(100vw - 32px));
+	// Phase C: viewport-relative cap (logical, RTL-safe) so the dialog
+	// never clips at 390px wide. Equivalent to the previous 32px gutter.
+	max-width: min(440px, calc(100vw - 2rem));
 	width: 100%;
 	box-sizing: border-box;
+	overflow-wrap: anywhere;
 	animation: wppo-dialog-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 
 	@keyframes wppo-dialog-in {

@@ -8,6 +8,7 @@
  * @param {import('react').ReactNode} [props.footer]    Buttons / links in the card footer.
  * @param {import('react').ReactNode} props.children    Card body content.
  * @param {string}                    [props.className] Extra CSS classes.
+ * @param {string}                    [props.id]        Optional anchor id.
  */
 const FeatureCard = ( {
 	title,
@@ -16,8 +17,12 @@ const FeatureCard = ( {
 	footer,
 	children,
 	className,
+	id,
 } ) => (
-	<div className={ `wppo-feature-card ${ className || '' }`.trim() }>
+	<div
+		className={ `wppo-feature-card ${ className || '' }`.trim() }
+		{ ...( id ? { id } : {} ) }
+	>
 		{ ( title || actions ) && (
 			<div className="wppo-feature-card__header">
 				{ title && (

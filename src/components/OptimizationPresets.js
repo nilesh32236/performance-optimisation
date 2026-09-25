@@ -38,24 +38,25 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 /**
- * Preset metadata in display order.
+ * Preset metadata in display order (Safe first: the beginner path).
  *
- * @type {Array.<{name:string,label:string,description:string}>}
+ * @type {Array.<{name:string,label:string,description:string,badge?:string}>}
  */
 export const PRESET_ORDER = [
 	{
 		name: 'safe',
 		label: __( 'Safe', 'performance-optimisation' ),
 		description: __(
-			'Page cache plus lazy-load images. Every aggressive pipeline stays off — the fresh-install baseline.',
+			'Best for beginners. Turns on page cache and lazy-loads images. Nothing that can break your layout.',
 			'performance-optimisation'
 		),
+		badge: __( 'Recommended', 'performance-optimisation' ),
 	},
 	{
 		name: 'balanced',
 		label: __( 'Balanced', 'performance-optimisation' ),
 		description: __(
-			'Cache plus low-risk wins: HTML/CSS minify, defer, background lazy-load, preload cache and RUM.',
+			'Adds small, low-risk speedups on top of Safe: tidier HTML/CSS files and smarter loading. Most sites stop here.',
 			'performance-optimisation'
 		),
 	},
@@ -63,11 +64,20 @@ export const PRESET_ORDER = [
 		name: 'aggressive',
 		label: __( 'Aggressive', 'performance-optimisation' ),
 		description: __(
-			'Full pipeline including JS minify, delay, combine and critical CSS. Safety guards stay forced on.',
+			'For advanced users. Rewrites more code for maximum speed — check your pages carefully afterwards. Safety guards stay on.',
 			'performance-optimisation'
 		),
 	},
 ];
+
+/**
+ * Maximum diff rows shown before collapsing the remainder behind an
+ * "N more" line. Render-only cap; the apply payload is never truncated.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const DIFF_PREVIEW_LIMIT = 8;
 
 /**
  * Format a diff value for display.
@@ -191,7 +201,7 @@ export const exportSettingsJson = ( notify ) => {
  * @return {Element} The presets + restore-point card.
  */
 const OptimizationPresets = () => {
-	const [ selected, setSelected ] = useState( 'balanced' );
+	const [ selected, setSelected ] = useState( 'safe' );
 	const [ diff, setDiff ] = useState( null );
 	const [ loadingDiff, setLoadingDiff ] = useState( false );
 	const [ applying, setApplying ] = useState( false );
@@ -456,6 +466,8 @@ const OptimizationPresets = () => {
 
 	return (
 		<FeatureCard
+			className="wppo-presets"
+			id="wppoSafeStart"
 			title={ __( 'Optimization Presets', 'performance-optimisation' ) }
 			icon={ <FontAwesomeIcon icon={ faSliders } aria-hidden="true" /> }
 		>
@@ -468,7 +480,7 @@ const OptimizationPresets = () => {
 			) }
 			<p className="wppo-text-muted">
 				{ __(
-					'One-click Safe, Balanced or Aggressive bundles with a preview of every change. Every save keeps an automatic restore point.',
+					'New here? Start with Safe (recommended) — one click, easy to undo. Balanced and Aggressive add more speed but need more checking.',
 					'performance-optimisation'
 				) }
 			</p>
@@ -490,6 +502,14 @@ const OptimizationPresets = () => {
 						onClick={ () => previewPreset( preset.name ) }
 					>
 						{ preset.label }
+						{ preset.badge && (
+							<span
+								className="wppo-presets__badge"
+								aria-hidden="true"
+							>
+								{ preset.badge }
+							</span>
+						) }
 					</button>
 				) ) }
 			</div>
@@ -510,7 +530,7 @@ const OptimizationPresets = () => {
 				</p>
 			) }
 			{ ! loadingDiff && diff && (
-				<div className="wppo-presets__diff">
+				<div className="wppo-presets__diff" aria-live="polite">
 					{ diff.length === 0 ? (
 						<p className="wppo-text-muted">
 							{ __(
@@ -531,19 +551,33 @@ const OptimizationPresets = () => {
 								) }
 							</p>
 							<ul className="wppo-presets__diff-list">
-								{ diff.map( ( entry, index ) => (
-									<li
-										key={ `${ entry.tab }.${ entry.key }::${ index }` }
-									>
-										<code>
-											{ entry.tab }.{ entry.key }
-										</code>{ ' ' }
-										{ formatDiffValue( entry.from ) }
-										{ ' → ' }
-										{ formatDiffValue( entry.to ) }
-									</li>
-								) ) }
+								{ diff
+									.slice( 0, DIFF_PREVIEW_LIMIT )
+									.map( ( entry, index ) => (
+										<li
+											key={ `${ entry.tab }.${ entry.key }::${ index }` }
+										>
+											<code>
+												{ entry.tab }.{ entry.key }
+											</code>{ ' ' }
+											{ formatDiffValue( entry.from ) }
+											{ ' → ' }
+											{ formatDiffValue( entry.to ) }
+										</li>
+									) ) }
 							</ul>
+							{ diff.length > DIFF_PREVIEW_LIMIT && (
+								<p className="wppo-text-muted wppo-text-small">
+									{ sprintf(
+										// translators: %d: number of additional hidden changes.
+										__(
+											'…and %d more change(s). Applying changes all of them.',
+											'performance-optimisation'
+										),
+										diff.length - DIFF_PREVIEW_LIMIT
+									) }
+								</p>
+							) }
 						</>
 					) }
 				</div>
@@ -616,6 +650,12 @@ const OptimizationPresets = () => {
 					{ __( 'Export JSON', 'performance-optimisation' ) }
 				</button>
 			</div>
+			<p className="wppo-text-muted wppo-text-small wppo-presets__undo-note">
+				{ __(
+					'Undo returns to the snapshot taken when you applied the preset. Export JSON is a manual backup file you keep yourself.',
+					'performance-optimisation'
+				) }
+			</p>
 		</FeatureCard>
 	);
 };

@@ -1265,7 +1265,7 @@ const Dashboard = ( {
 
 			<WelcomePanel onNavigate={ onNavigate } />
 
-			{ /* One-click presets with diff preview + restore-point undo (NEXT) */ }
+			{ /* Onboarding order (Phase C): Welcome → Safe preset shortcut (#wppoSafeStart) → GuidedNextStep below. */ }
 			<OptimizationPresets />
 
 			<UpgradePurgeBanner upgradePurge={ upgradePurge } />
