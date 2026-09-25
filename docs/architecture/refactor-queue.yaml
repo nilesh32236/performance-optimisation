@@ -1430,11 +1430,13 @@ phase3_items:
 
   - id: P3-020
     title: 'React card and polling isolation'
-    status: active
+    status: merged
     priority: low
     github_issue: 1609
     github_pr: 1610
     implementation_commit: 23fb5b67a7dc25fd35c2929000cb7f986f978333
+    merge_commit: 2dcd75b9
+    merged_at: '2026-09-25'
     type: epic
     problem: 'FileOptimization, Dashboard, and App still combine many cards, polling effects, and shell fetches.'
     target_owner: 'Presentational cards and narrow workflow hooks'
@@ -1458,9 +1460,20 @@ phase3_items:
       notes:
         - '2026-09-25: implemented and verified locally on branch p3/dashboard-polling; P3-019 useAsyncWorkflow is reused without adding a polling framework.'
 
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      dashboard_polling: 'Jest polling/cleanup gates green; no image optimization or cache mutation performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '86 inventory files / 89 graph nodes / 395 edges; PHP architecture unchanged; dashboard build regenerated'
+
   - id: P3-021
     title: 'Static-state cleanup and runtime reset coverage'
-    status: queued
+    status: audit-pending
     priority: medium
     type: architecture
     problem: '31 owners hold 141 static properties; P3-004 covers site-sensitive owners, then request/cross-request residues remain.'
