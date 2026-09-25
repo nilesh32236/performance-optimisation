@@ -562,6 +562,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			'wppo_ai_deploy_notes',                    // AI_Adaptive deploy notes (issue #1313).
 			'wppo_callback_secret',                    // Util::CALLBACK_SECRET_OPTION (issue #1347).
 			'wppo_last_purge',                       // Builder_Purge_Watcher::LAST_PURGE_OPTION (upgrade auto-purge).
+			'wppo_esi_fallback_secret',               // LiteSpeed ESI nonce fallback secret (audit #1187).
 		);
 		foreach ( $wppo_options as $wppo_option ) {
 			delete_option( $wppo_option );

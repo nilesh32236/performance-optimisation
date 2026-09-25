@@ -119,6 +119,10 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_callback_secret',
 		// Upgrade auto-purge last-purge timestamp (Builder_Purge_Watcher::LAST_PURGE_OPTION).
 		'wppo_last_purge',
+		// LiteSpeed ESI nonce fallback secret: a real 64-character secret
+		// persisted only when wp_salt() is unavailable, so no local install
+		// ever created it and it survived a full uninstall (audit #1187).
+		'wppo_esi_fallback_secret',
 	);
 
 	/**
