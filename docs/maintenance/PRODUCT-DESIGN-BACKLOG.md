@@ -44,16 +44,17 @@
 - **Recommendation:** Keep open as v2.0.0 checklist, verify gate `npm lint → composer lint → npm test → npm run build` (`AGENTS.md:18`) before tag.
 
 ## 369 — Create Plugin Banner and Icon for WordPress.org
-- **Problem:** Missing `assets/banner-1544x500.png` (WP.org requires 772×250 or 1544×500) + `icon-256x256.png` (`.distignore` includes `assets/`).
-- **Current:** No assets/banner, .distignore handles inclusion.
-- **Priority:** P3 — manual design, required before v2.0.0 release, not code.
-- **Recommendation:** Commission design, export PNG, add to `assets/` + readme.
+- **Status:** Completed in Phase B (`2026-09-25`).
+- **Delivered:** `assets/banner-1544x500.png` and `assets/icon-256x256.png`.
+- **Design evidence:** Banner communicates “Performance Optimisation”, “WordPress performance plugin”, page cache, Core Web Vitals, and image optimization without guaranteed-performance claims. The icon uses the same navy/cyan/lightning identity and remains legible at 256px and small display sizes.
+- **Validation:** PNG dimensions verified; assets were rendered in Chromium and visually reviewed.
 
 ## 368 — Add Real Screenshots to WordPress.org Listing
-- **Problem:** Missing `screenshot-1..7.png` (1200×900) matching `readme.txt:77` descriptions.
-- **Current:** No screenshots.
-- **Priority:** P3 — manual 1200×900 captures on default theme, deferred until pre-release.
-- **Recommendation:** Capture after #709 chosen design (otherwise screenshots mismatch new UI).
+- **Status:** Completed in Phase B (`2026-09-25`).
+- **Delivered:** `assets/screenshot-1.png` through `assets/screenshot-7.png`, all 1200×900 captures of the current live admin UI.
+- **Coverage:** Dashboard, File Optimisation, Image Optimisation, Performance Audit/PageSpeed, Database Cleanup, Object Cache/Redis, and Preload Settings.
+- **Validation:** Captured with Playwright at 1280×800, 1024×768, and 390×844; no console/page errors, horizontal overflow, visible notices, or unsaved-change dialogs in the published assets. The WordPress navigation was collapsed for the captures, and the unrelated `all-in-one-wp-migration` plugin was deactivated on the live site at the user's request. Live URLs were replaced with `example.com`; no API keys, passwords, or credentials are visible.
+- **Readme alignment:** Seven screenshot captions were added to `readme.txt` and match the captured feature screens.
 
 ## Separation Rationale
 All 6 require product/design human input (vote, design assets, roadmap). Mixing into engineering PRs would violate `AGENTS.md:42` 95% gate and `Simple by default` philosophy (risk of overwhelming interface from Dense/Premium or premature N-features). Keep in product backlog, implement only after explicit decision.

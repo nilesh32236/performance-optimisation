@@ -113,6 +113,22 @@ Compatibility wording is now qualified. The repository and tests support targete
 - External Services disclosures remain detailed and are not abbreviated away.
 - Upgrade Notice and historical changelog entries are retained.
 
+## Phase B — Visual conversion assets
+
+Phase B adds real visual assets for the existing product without changing functionality.
+
+### Delivered assets
+
+- `assets/banner-1544x500.png` — 1544×500 WordPress.org banner using the plugin's navy/cyan/lightning identity. It communicates the plugin name, WordPress performance, page cache, Core Web Vitals, and image optimization without “best”, “#1”, or guaranteed-speed claims.
+- `assets/icon-256x256.png` — 256×256 small-size lightning mark with no tiny text.
+- `assets/screenshot-1.png` through `assets/screenshot-7.png` — 1200×900 captures of the current live admin UI: Dashboard, File Optimisation, Image Optimisation, Performance Audit/PageSpeed, Database Cleanup, Object Cache/Redis, and Preload Settings.
+
+### Screenshot evidence
+
+Screenshots were captured from the real WordPress installation with Playwright/Chromium. The WordPress navigation was collapsed for the capture, and the unrelated `all-in-one-wp-migration` plugin was deactivated on the live site at the user's request so it would not appear in the product screenshots. No plugin source or WordPress behavior was changed by that site-level cleanup.
+
+The responsive QA set was checked at 1280×800, 1024×768, and 390×844. The captured flows reported no console/page errors, horizontal overflow, visible notices, or secret values. Live domain text was replaced with `example.com`; the captures show no API keys, passwords, authentication headers, private customer information, or unsaved-change dialogs. The readme now has seven matching screenshot captions.
+
 ## Validation and publication status
 
 Repository validation is recorded in the Phase A issue/PR. Directory publication is **not yet claimed**: after merge, the WordPress.org deployment/sync workflow must be observed, then the actual listing must be checked again for title, short description, tags, headings, links, screenshots, and markdown rendering. WordPress.org directory updates can be delayed after repository publication.
@@ -123,3 +139,4 @@ Repository validation is recorded in the Phase A issue/PR. Directory publication
 2. Confirm screenshot assets and banner/icon rendering after the readme update.
 3. Review search-console or directory-provided impressions only when those data are available; do not infer rankings from local wording changes.
 4. Keep future copy improvements evidence-based; do not add terms unless they map to an existing feature or a clearly documented compatibility/configuration path.
+5. Re-capture screenshots after a future admin UI redesign; the current captures intentionally reflect the current v2.4.0 UI.
