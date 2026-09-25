@@ -228,7 +228,23 @@ The old regex found 12 stateful files. The tokenizer finds 143 static properties
 | `Object_Cache` | 6 | Circuit state and outage state use different scoping models. |
 | `Settings_Store` | 4 | Raw and resolved settings memos are blog-keyed; add/update/delete/write paths invalidate resolved snapshots. |
 
-`Ai_Anomaly` provides the positive precedent: it keys request memos by blog ID and exposes a reset. The next static-state item should create a runtime reset registry, classify each memo, and add blog-switch parity before removing scattered test setup.
+`Ai_Anomaly` provides the positive precedent: it keys request memos by blog ID and exposes a reset. P3-004 then added the `Runtime_State` switch-blog registry for the six site-sensitive owners.
+
+### P3-021 fresh static-state audit
+
+The fresh generator audit on branch `p3/static-state` reports **86 inventory files, 33 static-state owners, and 143 static properties**. The count includes immutable static configuration arrays/constants as well as mutable state; it is a review signal, not a defect count. The selected cluster is exactly one non-site-sensitive request-state residue:
+
+| Selected owner | State | Lifecycle and evidence |
+|---|---|---|
+| `Bfcache` | `invalidation_script` (the current session token is only in the generated request script) and `script_staged` (duplicate-output guard) | Request-only state. `Bfcache::reset_runtime_state()` clears both at the WordPress `shutdown` boundary; the existing test helper delegates to it. The reset is registered for ordinary, REST, and cron entry points, while the persistent session token and settings remain untouched. Characterization tests pin one-shot footer printing, duplicate suppression within one request, reset behavior, and the shutdown seam. |
+
+The remaining static state is classified rather than silently removed:
+
+- **Site-sensitive request memo:** `RUM`, `AI_Adaptive`, `System_Info`, `LiteSpeed_Integration`, `Object_Cache`, and `Database_Cleanup` remain owned by their feature reset methods and dispatched by `Runtime_State` on `switch_blog` (P3-004). `Script_Strategy`, `Main`, `Image_Optimisation`, and `Ccss_Generator` retain blog/request signatures or explicit invalidation seams and remain follow-up work, not this item.
+- **Cross-request or persisted state:** `Settings_Store`, `Filesystem`, `Url`, `Cache`, `Cache_Capacity`, `Ccss_Store`, `Img_Converter`, `Log`, `Scheduler`, `CDN`, and `Used_CSS` own settings, options, transients, files, queue progress, or bounded process caches. Their existing write/invalidation/reset contracts remain authoritative; removing their state would change cross-request behavior.
+- **Protected compatibility state:** `LiteSpeed_ESI` asset/nonce memo state remains behind the protected ESI bridge; `Asset_Manager` protected handle lists are immutable safety policy. `Admin_Notices`, `Bfcache`, `Lcp_Preload`, `OD_Bridge`, and `Sandbox_Preview` are non-site-sensitive request residues documented here, with only `Bfcache` promoted to a production reset in P3-021. This leaves a bounded follow-up inventory rather than treating unrelated state as part of one extraction.
+
+The P3-021 ratchet is therefore: one selected request-state owner gains a production reset and characterization coverage; cross-request state remains persisted/invalidation-owned; protected ESI and immutable compatibility policy remain unchanged. See `docs/architecture/refactor-queue.yaml` for the audit evidence and implementation metadata.
 
 ## Duplicate candidates
 

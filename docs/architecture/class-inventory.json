@@ -1262,9 +1262,9 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 471,
-        "methods": 14,
-        "public_methods": 13,
+        "lines": 490,
+        "methods": 15,
+        "public_methods": 14,
         "large_methods": 0,
         "large_method_threshold_lines": 80,
         "largest_method": {
@@ -1276,13 +1276,13 @@
             "is": 2,
             "get": 2,
             "on": 2,
+            "reset": 2,
             "generate": 1,
             "attach": 1,
             "set": 1,
             "filter": 1,
             "enqueue": 1,
             "print": 1,
-            "reset": 1,
             "init": 1
         },
         "hooks": [
@@ -1290,6 +1290,7 @@
             "clear_auth_cookie",
             "nocache_headers",
             "set_logged_in_cookie",
+            "shutdown",
             "wp_enqueue_scripts",
             "wp_footer"
         ],
