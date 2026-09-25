@@ -8,7 +8,8 @@
 		"start": "wp-scripts start",
 		"test": "wp-scripts test-unit-js",
 		"lint:js": "wp-scripts lint-js src",
-		"lint:js:fix": "wp-scripts lint-js src --fix"
+		"lint:js:fix": "wp-scripts lint-js src --fix",
+		"docs:check": "bash scripts/docs-check.sh"
 	},
 	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
 	"license": "GPL-2.0-or-later",
