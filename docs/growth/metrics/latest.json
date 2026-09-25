@@ -1,0 +1,259 @@
+{
+  "schema": 1,
+  "captured_at": "2026-09-25T10:05:41+00:00",
+  "privacy": "Public WordPress.org and GitHub repository data only; no WordPress visitor or site-owner data collected.",
+  "wordpress_org": {
+    "version": "2.4.0",
+    "requires_wordpress": "6.2",
+    "tested_wordpress": "7.1.2",
+    "requires_php": "8.2",
+    "rating_score": 100,
+    "rating_count": 4,
+    "support_threads": 0,
+    "active_installs": 0,
+    "downloads": null,
+    "last_updated": "2026-09-24 1:10am GMT",
+    "added": "2025-02-24"
+  },
+  "github": {
+    "stars": 4,
+    "forks": 0,
+    "open_issues_search": 6,
+    "open_prs_search": 2,
+    "updated_at": "2026-09-25T09:50:02Z",
+    "pushed_at": "2026-09-25T09:55:35Z",
+    "latest_release": "v2.4.0",
+    "latest_release_at": "2026-09-24T01:09:01Z",
+    "release_count_recent": 10,
+    "release_gap_days_median": 4.33,
+    "traffic_views_14d": 731,
+    "traffic_view_uniques_14d": 7,
+    "traffic_clones_14d": 16616,
+    "traffic_clone_uniques_14d": 1169
+  },
+  "coverage": {
+    "features": {
+      "Page Cache": {
+        "doc_slug": "page-cache",
+        "covered": true,
+        "readme_term": true
+      },
+      "CSS": {
+        "doc_slug": "minify-combine",
+        "covered": true,
+        "readme_term": true
+      },
+      "JS": {
+        "doc_slug": "defer-delay-js",
+        "covered": true,
+        "readme_term": true
+      },
+      "HTML": {
+        "doc_slug": "minify-combine",
+        "covered": true,
+        "readme_term": true
+      },
+      "Images": {
+        "doc_slug": "images-webp-avif",
+        "covered": true,
+        "readme_term": true
+      },
+      "WebP": {
+        "doc_slug": "images-webp-avif",
+        "covered": true,
+        "readme_term": true
+      },
+      "AVIF": {
+        "doc_slug": "images-webp-avif",
+        "covered": true,
+        "readme_term": true
+      },
+      "Lazy Load": {
+        "doc_slug": "images-webp-avif",
+        "covered": true,
+        "readme_term": true
+      },
+      "Core Web Vitals": {
+        "doc_slug": "core-web-vitals",
+        "covered": true,
+        "readme_term": true
+      },
+      "PageSpeed": {
+        "doc_slug": "monitoring-rum",
+        "covered": true,
+        "readme_term": true
+      },
+      "RUM": {
+        "doc_slug": "monitoring-rum",
+        "covered": true,
+        "readme_term": true
+      },
+      "Redis": {
+        "doc_slug": "redis-object-cache",
+        "covered": true,
+        "readme_term": true
+      },
+      "Database": {
+        "doc_slug": "database-cleanup",
+        "covered": true,
+        "readme_term": true
+      },
+      "WooCommerce": {
+        "doc_slug": "troubleshooting",
+        "covered": true,
+        "readme_term": true
+      },
+      "LiteSpeed": {
+        "doc_slug": "litespeed",
+        "covered": true,
+        "readme_term": true
+      },
+      "CDN": {
+        "doc_slug": "cdn",
+        "covered": true,
+        "readme_term": true
+      },
+      "Critical CSS": {
+        "doc_slug": "used-critical-css",
+        "covered": true,
+        "readme_term": true
+      },
+      "Used CSS": {
+        "doc_slug": "used-critical-css",
+        "covered": true,
+        "readme_term": true
+      }
+    },
+    "search_intents": {
+      "enable page cache": {
+        "readme_term": true,
+        "doc_slug": "page-cache",
+        "doc_covered": true,
+        "product_feature": "Page Cache",
+        "uncovered": false
+      },
+      "improve LCP": {
+        "readme_term": true,
+        "doc_slug": "core-web-vitals",
+        "doc_covered": true,
+        "product_feature": "Critical Assets Preloading",
+        "uncovered": false
+      },
+      "improve Core Web Vitals": {
+        "readme_term": true,
+        "doc_slug": "core-web-vitals",
+        "doc_covered": true,
+        "product_feature": "Performance Audit",
+        "uncovered": false
+      },
+      "optimize images": {
+        "readme_term": true,
+        "doc_slug": "images-webp-avif",
+        "doc_covered": true,
+        "product_feature": "Image Optimization",
+        "uncovered": false
+      },
+      "convert images to WebP": {
+        "readme_term": true,
+        "doc_slug": "images-webp-avif",
+        "doc_covered": true,
+        "product_feature": "Image Optimization",
+        "uncovered": false
+      },
+      "optimize CSS": {
+        "readme_term": true,
+        "doc_slug": "minify-combine",
+        "doc_covered": true,
+        "product_feature": "File Optimization",
+        "uncovered": false
+      },
+      "optimize JavaScript": {
+        "readme_term": true,
+        "doc_slug": "defer-delay-js",
+        "doc_covered": true,
+        "product_feature": "File Optimization",
+        "uncovered": false
+      },
+      "lazy load images": {
+        "readme_term": true,
+        "doc_slug": "images-webp-avif",
+        "doc_covered": true,
+        "product_feature": "Image Optimization",
+        "uncovered": false
+      },
+      "enable Redis": {
+        "readme_term": true,
+        "doc_slug": "redis-object-cache",
+        "doc_covered": true,
+        "product_feature": "Object Cache",
+        "uncovered": false
+      },
+      "configure CDN": {
+        "readme_term": true,
+        "doc_slug": "cdn",
+        "doc_covered": true,
+        "product_feature": "File Optimization / Edge Cache",
+        "uncovered": false
+      },
+      "critical CSS missing styles": {
+        "readme_term": true,
+        "doc_slug": "used-critical-css",
+        "doc_covered": true,
+        "product_feature": "Used and Critical CSS",
+        "uncovered": false
+      },
+      "WooCommerce cart cache": {
+        "readme_term": true,
+        "doc_slug": "troubleshooting",
+        "doc_covered": true,
+        "product_feature": "WooCommerce safe mode",
+        "uncovered": false
+      },
+      "LiteSpeed coexistence": {
+        "readme_term": true,
+        "doc_slug": "litespeed",
+        "doc_covered": true,
+        "product_feature": "LiteSpeed mode",
+        "uncovered": false
+      },
+      "site broken after optimization": {
+        "readme_term": true,
+        "doc_slug": "troubleshooting",
+        "doc_covered": true,
+        "product_feature": "Disable narrow feature and clear cache",
+        "uncovered": false
+      }
+    }
+  },
+  "operational": {
+    "release_frequency": "Derived from the last 10 GitHub releases",
+    "regression_count": "Unavailable: not yet exported as a structured historical series",
+    "issue_to_merge_time": "Unavailable: current repository snapshot has no issue-to-merge event history in this report",
+    "merge_to_release_time": "Unavailable: current release list has no merge-event correlation",
+    "verification_failures": "Unavailable: not yet exported as a structured historical series",
+    "playwright_failures": "Unavailable: not yet exported as a structured historical series"
+  },
+  "unavailable": [
+    "WordPress.org downloads unavailable"
+  ],
+  "change_impact": [
+    {
+      "date": "2026-09-25",
+      "change": "Phase E documentation consolidation",
+      "why": "Reduce beginner friction and improve search coverage",
+      "causality": "Unknown; public baseline and later snapshots required"
+    },
+    {
+      "date": "2026-09-25",
+      "change": "Phase F trust and conversion",
+      "why": "Clarify free/open-source value, safe onboarding, and support recovery",
+      "causality": "Unknown; no causal claim"
+    },
+    {
+      "date": "2026-09-25",
+      "change": "Phase D feature discoverability",
+      "why": "Map tasks to existing controls",
+      "causality": "Unknown; no causal claim"
+    }
+  ]
+}
