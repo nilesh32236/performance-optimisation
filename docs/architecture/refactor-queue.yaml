@@ -1811,7 +1811,7 @@ growth_items:
 
   - id: G-001
     title: 'Measurement and growth monitoring'
-    status: active
+    status: merged
     priority: medium
     type: growth
     objective: 'Build a lightweight, evidence-based system for monitoring legitimate discoverability, adoption, support, documentation, and product-quality signals without private tracking or invasive analytics.'
@@ -1825,8 +1825,18 @@ growth_items:
     non_goals:
       - 'No WordPress visitor tracking, invasive analytics, fake activity, causal claims, runtime optimization changes, or automatic documentation page creation.'
     issue: 1642
-    pull_request: pending
-    status_note: 'Phase G is active; metrics remain public or repository-scoped, and causality is not inferred.'
+    pull_request: 1643
+    implementation_commit: a5ef5a52
+    merge_commit: 0fc93d0e
+    merged_at: '2026-09-25'
+    post_merge_verification:
+      repository: 'Public WordPress.org and GitHub metrics, feature coverage, search-intent coverage, baseline/latest JSON, and scheduled workflow merged'
+      ci: 'Exact-head CI, PHP syntax, PHPUnit, and AI review green'
+      local: 'Lint 0 errors/2 existing warnings; PHPCS binary pass; Jest 59 suites/833 tests; build pass with existing size warning; repeated collection and snapshot checks pass'
+      metrics: 'WordPress.org and GitHub baseline captured; unavailable downloads and operational series marked explicitly; repeated runs produce no false alert'
+      privacy: 'No WordPress visitor/site-owner data or invasive analytics introduced; GitHub traffic recorded as aggregate repository metadata'
+      runtime_scope: 'No runtime optimization, settings, REST, cache, database, or API behavior change'
+    status_note: 'Phase G is merged; monitoring remains public or repository-scoped, and causality is not inferred.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
