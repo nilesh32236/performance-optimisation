@@ -1,6 +1,6 @@
 # Phase G — Measurement & Growth Monitoring
 
-Captured: `2026-09-25T10:05:41+00:00`
+Captured: `2026-09-25T10:13:06+00:00`
 
 This report uses public WordPress.org and GitHub repository metadata. It does not collect WordPress visitors, site-owner settings, cookies, or private application traffic.
 
@@ -17,12 +17,12 @@ This report uses public WordPress.org and GitHub repository metadata. It does no
 | WordPress.org last updated | 2026-09-24 1:10am GMT | 2026-09-24 1:10am GMT | N/A |
 | GitHub stars | 4 | 4 | +0 |
 | GitHub forks | 0 | 0 | +0 |
-| GitHub open issues | 6 | 6 | +0 |
-| GitHub open PRs | 2 | 2 | +0 |
-| GitHub 14-day views | 731 | 731 | +0 |
-| GitHub 14-day view uniques | 7 | 7 | +0 |
-| GitHub 14-day clones | 16616 | 16616 | +0 |
-| GitHub 14-day clone uniques | 1169 | 1169 | +0 |
+| GitHub open issues | 5 | 6 | -1 |
+| GitHub open PRs | 5 | 2 | +3 |
+| GitHub 14-day views | Unavailable | 731 | N/A |
+| GitHub 14-day view uniques | Unavailable | 7 | N/A |
+| GitHub 14-day clones | Unavailable | 16616 | N/A |
+| GitHub 14-day clone uniques | Unavailable | 1169 | N/A |
 
 ## Operational metrics
 
@@ -85,6 +85,7 @@ The following changes are tracked for later comparison. Movement after a change 
 ## Unavailable metrics and limits
 
 - WordPress.org downloads unavailable
+- GitHub traffic requires owner-scoped API access
 
 ## Material-change gate
 

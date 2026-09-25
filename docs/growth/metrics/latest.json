@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "captured_at": "2026-09-25T10:05:41+00:00",
+  "captured_at": "2026-09-25T10:13:06+00:00",
   "privacy": "Public WordPress.org and GitHub repository data only; no WordPress visitor or site-owner data collected.",
   "wordpress_org": {
     "version": "2.4.0",
@@ -18,18 +18,18 @@
   "github": {
     "stars": 4,
     "forks": 0,
-    "open_issues_search": 6,
-    "open_prs_search": 2,
-    "updated_at": "2026-09-25T09:50:02Z",
-    "pushed_at": "2026-09-25T09:55:35Z",
+    "open_issues_search": 5,
+    "open_prs_search": 5,
+    "updated_at": "2026-09-25T10:12:48Z",
+    "pushed_at": "2026-09-25T10:12:44Z",
     "latest_release": "v2.4.0",
     "latest_release_at": "2026-09-24T01:09:01Z",
     "release_count_recent": 10,
     "release_gap_days_median": 4.33,
-    "traffic_views_14d": 731,
-    "traffic_view_uniques_14d": 7,
-    "traffic_clones_14d": 16616,
-    "traffic_clone_uniques_14d": 1169
+    "traffic_views_14d": null,
+    "traffic_view_uniques_14d": null,
+    "traffic_clones_14d": null,
+    "traffic_clone_uniques_14d": null
   },
   "coverage": {
     "features": {
@@ -234,7 +234,8 @@
     "playwright_failures": "Unavailable: not yet exported as a structured historical series"
   },
   "unavailable": [
-    "WordPress.org downloads unavailable"
+    "WordPress.org downloads unavailable",
+    "GitHub traffic requires owner-scoped API access"
   ],
   "change_impact": [
     {
