@@ -100,7 +100,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 | `Settings_Command` | Bounded settings write orchestration and snapshot/restore delegation | Keep callers on this seam; leave validation, memo, and canonical persistence in `Settings_Store` |
 | `Scheduler` / `Job_Registry` | Action Scheduler primitives, locks, and owned hook manifest | Keep registry-backed scheduling and teardown; no duplicate hook lists |
 | `Preload_Transport` | Same-host URL validation and bounded non-following redirects for Cron warmup | Keep all three Cron fetch seams on the transport policy; preserve LiteSpeed bypass |
-| `Runtime_State` | Central switch_blog reset registry for six site-sensitive static-state owners | Keep reset methods feature-owned; classify the remaining 25 static owners |
+| `Runtime_State` | Central switch_blog reset registry for six site-sensitive static-state owners | Keep reset methods feature-owned; classify the remaining static owners |
 | `Redis_Config_Policy` | Complete Redis key manifest and value normalization | Keep REST and CLI on this narrow security policy; leave connection and persistence in `Object_Cache` |
 | `Dropin_Registry` | Neutral forwarding seam for post-mutation drop-in cache invalidation | Keep fail-open and stateless; leave reporting, path/ownership detection, and storage in `System_Info` |
 | `Object_Cache` | Redis backend, connection, circuit state, drop-in management | Keep lifecycle and drop-in behavior; expose the policy key constant for compatibility |
@@ -116,7 +116,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 ## High-value findings
 
 1. **Preload transport:** Cron warmup now shares one bounded, same-host redirect policy; future fetch callers must use the owner rather than implicit redirects.
-2. **Runtime state:** 32 owners hold static state; the six site-sensitive owners now reset centrally, while the remaining 26 need classification.
+2. **Runtime state:** 33 owners hold 143 static properties. P3-004 resets six site-sensitive owners centrally; P3-021 selects the non-site-sensitive `Bfcache` request state for a shutdown reset and classifies persisted, compatibility, and protected residues.
 3. **`Util` hub:** 56 source nodes and 1,145 executable occurrences still depend on it.
 4. **`Main` hub:** 37 outgoing class dependencies and 18 feature dependencies remain; P3-015 reduces large methods and owned cluster lines behind a named coordinator.
 5. **Cache capacity:** `Cache_Capacity` now owns the statistics, cap, and eviction contract; `Cache` remains the public facade and lifecycle owner.

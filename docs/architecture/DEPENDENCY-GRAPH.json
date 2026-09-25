@@ -2215,14 +2215,14 @@
             "file": "includes/Cache/class-bfcache.php",
             "domain": "Cache",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 471,
+            "lines": 490,
             "property_count": 2,
             "static_property_count": 2,
             "public_property_count": 0,
             "protected_property_count": 0,
             "private_property_count": 2,
             "static_state": true,
-            "method_count": 14,
+            "method_count": 15,
             "top_level_function_count": 0,
             "top_level_functions": [],
             "largest_methods": [
@@ -2263,6 +2263,15 @@
                     "delegates": false
                 },
                 {
+                    "name": "init",
+                    "line": 474,
+                    "end_line": 488,
+                    "lines": 15,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
                     "name": "attach_session_information",
                     "line": 192,
                     "end_line": 205,
@@ -2284,15 +2293,6 @@
                     "name": "set_token_cookie",
                     "line": 231,
                     "end_line": 241,
-                    "lines": 11,
-                    "visibility": "public",
-                    "static": true,
-                    "delegates": false
-                },
-                {
-                    "name": "init",
-                    "line": 459,
-                    "end_line": 469,
                     "lines": 11,
                     "visibility": "public",
                     "static": true,
@@ -2327,6 +2327,7 @@
                     "self::get_user_token": 259,
                     "self::is_enabled": 196,
                     "self::is_logged_in_cookie_secure": 233,
+                    "self::reset_runtime_state": 465,
                     "self::set_token_cookie": 261
                 },
                 "instance_calls": {
@@ -2358,7 +2359,7 @@
                 },
                 "external_functions": {
                     "add_action": 410,
-                    "add_filter": 460,
+                    "add_filter": 475,
                     "apply_filters": 110,
                     "array_diff": 326,
                     "array_merge": 328,
@@ -2391,7 +2392,7 @@
                 },
                 "wordpress_functions": {
                     "add_action": 410,
-                    "add_filter": 460,
+                    "add_filter": 475,
                     "apply_filters": 110,
                     "get_current_user_id": 159,
                     "get_option": 216,
@@ -2423,19 +2424,22 @@
             "delegating_methods": [],
             "hooks": {
                 "attach_session_information": [
-                    460
+                    475
                 ],
                 "clear_auth_cookie": [
-                    462
+                    477
                 ],
                 "nocache_headers": [
-                    463
+                    478
                 ],
                 "set_logged_in_cookie": [
-                    461
+                    476
+                ],
+                "shutdown": [
+                    487
                 ],
                 "wp_enqueue_scripts": [
-                    468
+                    483
                 ],
                 "wp_footer": [
                     410

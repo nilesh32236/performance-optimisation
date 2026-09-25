@@ -163,7 +163,7 @@ The schema-v2 inventory tracks 86 files: 82 runtime plugin files under `includes
 | `Insight/class-rum.php` | Real-user Web Vitals beacon collection/aggregation |
 | `Insight/class-ai-adaptive.php` | Heuristic auto-tune from RUM/trends, model learning/persistence, opt-in remote AI, speculation override |
 | `Insight/class-od-bridge.php` | Optimization Detective bridge (real-visit LCP data) |
-| `Cache/class-bfcache.php` | bfcache for logged-in users (no-store removal + session invalidation) |
+| `Cache/class-bfcache.php` | bfcache for logged-in users (no-store removal + session invalidation); request-only script/duplicate guard reset at `shutdown` |
 | `Assets/class-google-fonts.php` | Self-host Google Fonts (download + local serving) |
 | `CSS/class-used-css.php` / `CSS/class-critical-css.php` | Per-URL used CSS + Critical CSS fetch/parse/output and public generation/frontend facades |
 | `CSS/class-ccss-generator.php` / `CSS/class-ccss-store.php` | Critical CSS generation status/retry/queue lifecycle + file storage/status projection; no frontend output or purge ownership |

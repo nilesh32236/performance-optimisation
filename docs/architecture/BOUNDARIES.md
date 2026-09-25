@@ -158,9 +158,21 @@ Two high-value corrections:
 1. Keep `Settings_Command` as the bounded write seam; Main and adapters must not bypass it for `wppo_settings` persistence.
 2. Keep Redis config construction on `Redis_Config_Policy`; REST, CLI, and `Object_Cache::ALLOWED_KEYS` share its manifest without moving connection or persistence into the policy.
 
+## Static-state lifecycle
+
+The fresh P3-021 audit classifies generated static declarations as follows:
+
+| Classification | Owners | Contract |
+|---|---|---|
+| Site-sensitive request memo | `RUM`, `AI_Adaptive`, `System_Info`, `LiteSpeed_Integration`, `Object_Cache`, `Database_Cleanup` | Feature-owned reset methods dispatched by `Runtime_State::on_switch_blog()`; no state is moved into a generic registry. |
+| Selected non-site-sensitive request state | `Bfcache` | `Bfcache::reset_runtime_state()` runs at the `shutdown` boundary. `invalidation_script` and `script_staged` never cross a logical request; session persistence remains in WordPress session tokens. |
+| Cross-request/persisted state | `Settings_Store`, `Filesystem`, `Url`, `Cache`, `Cache_Capacity`, `Ccss_Store`, `Img_Converter`, `Log`, `Scheduler`, `CDN`, `Used_CSS` | Options, transients, files, queues, or explicitly bounded process caches remain owned with their existing write/invalidation contracts. |
+| Protected compatibility/immutable policy | `LiteSpeed_ESI`, `Asset_Manager` protected handle lists, and remaining immutable static configuration | Protected ESI behavior and safety allowlists remain unchanged; no state extraction is implied. |
+
+`Admin_Notices`, `Lcp_Preload`, `OD_Bridge`, `Sandbox_Preview`, and the remaining Main/CSS/Image request memos are classified as follow-up request-state residues. They are not silently treated as cross-request state or included in the Bfcache extraction. A future item may give one owner a production reset after its own lifecycle and caller census.
+
 Do not introduce a configuration framework or DTO for every array. Use value objects only where stable shape and invariants already repeat.
 
-## Bridge rules
 
 Classify every bridge as:
 

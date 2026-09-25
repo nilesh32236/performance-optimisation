@@ -437,17 +437,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		}
 
 		/**
-		 * Reset staged bfcache state (tests / long-lived workers).
+		 * Reset staged bfcache state for the next request.
 		 *
-		 * Clears both the staged script and the already-staged flag so an
-		 * in-process second page starts clean.
+		 * The invalidation script and duplicate-output guard are request state:
+		 * the script contains the current session token, while the guard only
+		 * prevents duplicate output during one page render. WordPress runs the
+		 * `shutdown` hook after rendering, including for REST, cron, and other
+		 * non-frontend entry points, so long-lived workers do not carry either
+		 * value into the next logical request. This does not invalidate the
+		 * persistent session token or any site-scoped setting.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_state(): void {
+			self::$invalidation_script = '';
+			self::$script_staged       = false;
+		}
+
+		/**
+		 * Reset staged bfcache state (tests / compatibility helper).
 		 *
 		 * @since 2.2.0
 		 * @return void
 		 */
 		public static function reset_state_for_tests(): void {
-			self::$invalidation_script = '';
-			self::$script_staged       = false;
+			self::reset_runtime_state();
 		}
 
 		/**
@@ -466,6 +481,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			// pages are intentionally excluded (no bfcache invalidation needed
 			// there).
 			add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_scripts' ) );
+			// Clear the request-only script and duplicate-output guard after every
+			// entry point. The named callback is safe for REST/cron too: those
+			// paths simply clear an already-empty state.
+			add_action( 'shutdown', array( self::class, 'reset_runtime_state' ), PHP_INT_MAX );
 		}
 	}
 }

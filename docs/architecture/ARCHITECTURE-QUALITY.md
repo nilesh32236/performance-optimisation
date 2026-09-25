@@ -200,6 +200,8 @@ P3-013 trades three explicit `Main` owner edges for a 301-line and one-large-met
 
 P3-018 moves one lifecycle axis rather than splitting parsing by file size. `Ccss_Generator` now owns Critical CSS status values and keys, bounded retry/timeout state, failure/escalation, and generation-job liveness/enqueue policy. `Critical_CSS` keeps public generation/frontend facades and two public compatibility methods; `Ccss_Store` keeps file/status projection. Critical_CSS drops from 6,950 lines / 138 methods to 6,251 / 126, while feature-to-feature edges remain 50. The new explicit owner edges raise total/compatibility/bridge counts to 395/206/247 and are documented lifecycle bridges; they do not absorb Used CSS, image/preload, purge, LiteSpeed, Redis, or data concerns.
 
+P3-021's fresh inventory audit keeps the static-state change intentionally small. `Bfcache` is the one selected non-site-sensitive request cluster: its token-bearing script and duplicate-output guard are cleared by one named feature-owned reset at `shutdown`, with characterization tests for same-request duplicate suppression and next-request reset. Site-sensitive owners remain under the P3-004 `Runtime_State` contract; persisted options/files/queues and protected LiteSpeed ESI or immutable compatibility policy remain classified rather than moved. The ratchet is reset coverage for one cluster, not an unsafe attempt to remove all static properties.
+
 ## SOLID policy
 
 ### Single responsibility

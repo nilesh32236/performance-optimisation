@@ -1477,17 +1477,28 @@ phase3_items:
     priority: medium
     github_issue: 1613
     type: architecture
-    problem: '31 owners hold 141 static properties; P3-004 covers site-sensitive owners, then request/cross-request residues remain.'
-    target_owner: 'Feature-owned instance/request state where lifecycle permits'
-    ratchet: 'Unclassified static properties: 141 -> 0; documented request/cross-request residues tracked.'
+    problem: '33 owners hold 143 generated static properties; P3-004 covers site-sensitive owners, while request, cross-request, and protected residues still need explicit lifecycle classification.'
+    target_owner: 'Bfcache request-state owner for this item; feature-owned reset where lifecycle permits'
+    ratchet: 'Unclassified selected request-state owners: 1 -> 0; one production reset seam added; persisted and protected residues remain documented rather than removed.'
     re_audit:
       audited_at: '2026-09-25'
-      source_commit: 2be5b636
+      source_commit: ddf81114
       evidence:
-        - 'The graph reports 143 static properties across 33 nodes; P3-004 already covers site-sensitive owners, so this issue must select one non-site-sensitive request-state residue cluster.'
-        - 'Runtime reset and request/cross-request lifecycle tests are the required boundary; removing all state in one item would broaden the queue beyond one cluster.'
-        - 'The selected owner must remain behaviorally identical across ordinary requests, blog switches, and WordPress cron/REST entry points.'
-      decision: 'Run a fresh static-state audit, select one owner with a clear request lifecycle, and document any cross-request residue as protected follow-up debt.'
+        - 'Fresh generator output reports 86 inventory files, 33 static-state owners, and 143 static properties.'
+        - 'Bfcache has two request-only properties: a token-bearing invalidation script and a duplicate-output guard. print_invalidation_script() clears the script but intentionally leaves the guard set until the request ends.'
+        - 'Bfcache::init() runs for ordinary, REST, and cron entry points, so one shutdown callback can reset the state without touching persistent session tokens, settings, REST routes, or cron jobs.'
+        - 'P3-004 already owns six site-sensitive reset contracts; persisted settings/files/queues and protected LiteSpeed ESI or immutable compatibility policy must not be folded into this request-state item.'
+      decision: 'Select only Bfcache as the non-site-sensitive request-state cluster; add a feature-owned reset_runtime_state() and register it at shutdown, then document all other static state as site-sensitive, persisted, or protected follow-up debt.'
+    implementation:
+      owner: 'includes/Cache/class-bfcache.php; Bfcache::reset_runtime_state()'
+      lifecycle: 'Request-only; reset on WordPress shutdown at PHP_INT_MAX. The existing reset_state_for_tests() helper delegates for compatibility.'
+      preserved_contracts: 'Inline script output and same-request duplicate suppression, persistent WP session tokens, settings, ordinary frontend rendering, REST, cron, multisite, and hook callback behavior remain unchanged.'
+      tests: 'tests/php/BfcacheRequestStateTest.php pins one-shot footer printing, same-request duplicate suppression, reset behavior, and the shutdown registration seam.'
+      documentation: 'ARCHITECTURE-BASELINE.md, ARCHITECTURE.md, ARCHITECTURE-QUALITY.md, and BOUNDARIES.md record the fresh audit and classifications.'
+      ratchet_result: 'Selected request-state owner without a production reset: 1 -> 0; persisted/protected residue classifications documented without state removal.'
+      graph_delta: '86 inventory files / 89 graph nodes / 395 edges; Bfcache 14->15 methods, 471->490 lines; one shutdown hook; graph check passed'
+      notes:
+        - '2026-09-25: Bfcache selected as the single P3-021 cluster; no site-sensitive owner or cross-request store was moved.'
 
   - id: P3-022
     title: 'Architecture guardrails and dependency-direction enforcement'
