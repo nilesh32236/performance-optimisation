@@ -1864,6 +1864,7 @@ growth_items:
       local: 'pnpm build, pnpm typecheck, pnpm test 59 suites/833 tests, pnpm lint, pnpm doc:check, 11 registry tests, and 11 deterministic benchmark fixtures passed'
       evidence: 'Muse Spark health and capability probes passed; isolated coding baseline recorded 2/11 completed tasks, 3/11 verifications, one timeout, and one tool failure; no promotion decision'
       privacy: 'No credentials, raw provider payloads, site-owner data, or invasive analytics stored or added; model-intelligence excluded from release ZIPs'
+      automation: 'Manual workflow run 36132402939 passed; empty catalog override fell back to models.dev; no material registry issue or promotion was created'
       runtime_scope: 'No plugin runtime, settings, REST, cache, database, or production routing behavior change'
     status_note: 'H-001 is merged; the registry and scoring foundation can measure challengers while Muse Spark remains champion until evidence gates pass.'
 
