@@ -64,6 +64,14 @@
     "menu_order": 40
   },
   {
+    "file": "support.html",
+    "slug": "support",
+    "parent_slug": "performance-optimisation",
+    "title": "Support and safe recovery",
+    "excerpt": "How to recover a site, collect redacted evidence, reproduce a problem, and request useful support.",
+    "menu_order": 55
+  },
+  {
     "file": "troubleshooting.html",
     "slug": "troubleshooting",
     "parent_slug": "performance-optimisation",

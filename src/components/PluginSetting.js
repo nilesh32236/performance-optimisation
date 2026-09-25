@@ -18,6 +18,7 @@ import {
 	faHistory,
 	faTachometerAlt,
 	faUndo,
+	faLifeRing,
 } from '@fortawesome/free-solid-svg-icons';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
@@ -1129,6 +1130,61 @@ const PluginSetting = ( { options } ) => {
 							) }
 						</>
 					) }
+				</FeatureCard>
+
+				<FeatureCard
+					title={ __( 'Need help?', 'performance-optimisation' ) }
+					icon={
+						<FontAwesomeIcon
+							icon={ faLifeRing }
+							aria-hidden="true"
+						/>
+					}
+				>
+					<p className="wppo-text-muted">
+						{ __(
+							'Use the recovery checklist before opening a support request. Include the URL, exact steps, versions, cache owner, and redacted system information. Never include passwords, API keys, cookies, or private data.',
+							'performance-optimisation'
+						) }
+					</p>
+					<ul className="wppo-support-links">
+						<li>
+							<a
+								href="https://nileshportfolio.duckdns.org/docs/performance-optimisation/troubleshooting/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{ __(
+									'Read the troubleshooting guide',
+									'performance-optimisation'
+								) }
+							</a>
+						</li>
+						<li>
+							<a
+								href="https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{ __(
+									'Read the support checklist',
+									'performance-optimisation'
+								) }
+							</a>
+						</li>
+						<li>
+							<a
+								href="https://github.com/nilesh32236/performance-optimisation/issues/new/choose"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{ __(
+									'Open a GitHub support issue',
+									'performance-optimisation'
+								) }
+							</a>
+						</li>
+					</ul>
 				</FeatureCard>
 
 				{ /* Phase 2 — PageSpeed API Key (v1.6.0) */ }

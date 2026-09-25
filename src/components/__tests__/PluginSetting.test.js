@@ -25,6 +25,7 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 	faExclamationCircle: { iconName: 'exclamation-circle' },
 	faHistory: { iconName: 'history' },
 	faTachometerAlt: { iconName: 'tachometer-alt' },
+	faLifeRing: { iconName: 'life-ring' },
 } ) );
 
 import PluginSetting, {
@@ -54,6 +55,10 @@ describe( 'PluginSetting', () => {
 		render( <PluginSetting options={ baseOptions } /> );
 
 		expect( screen.getByText( 'Tools' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Need help?' ) ).toBeInTheDocument();
+		expect(
+			screen.getByRole( 'link', { name: 'Read the support checklist' } )
+		).toHaveAttribute( 'href', expect.stringContaining( '/support/' ) );
 		expect(
 			screen.getByText( 'Optimisation Activity Log' )
 		).toBeInTheDocument();

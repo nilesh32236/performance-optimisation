@@ -201,6 +201,14 @@
 	}
 }
 
+.wppo-support-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	margin: 12px 0 0;
+	padding-inline-start: 20px;
+}
+
 .wppo-danger-zone {
 	border-left: 4px solid var(--wppo-danger, #ef4444);
 	background: var(--wppo-error-bg, #fef2f2);

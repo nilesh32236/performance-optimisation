@@ -51,6 +51,11 @@ describe( 'WelcomePanel', () => {
 			screen.getByText( 'Welcome to Performance Optimisation' )
 		).toBeInTheDocument();
 		expect(
+			screen.getByText(
+				/Start Safe, test your site, review Performance Audit/
+			)
+		).toBeInTheDocument();
+		expect(
 			screen.getByRole( 'button', {
 				name: 'Enable – Enable Page Caching',
 			} )

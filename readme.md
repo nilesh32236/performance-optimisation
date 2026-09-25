@@ -128,6 +128,8 @@ The maintained, code-accurate documentation is published at [nileshportfolio.duc
 - [Features Guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/features/)
 - [Configuration and developer reference](https://nileshportfolio.duckdns.org/docs/performance-optimisation/configuration/)
 - [Troubleshooting](https://nileshportfolio.duckdns.org/docs/performance-optimisation/troubleshooting/)
+- [Support and safe recovery](https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/)
+- [Compatibility](https://nileshportfolio.duckdns.org/docs/performance-optimisation/compatibility/)
 - [Generated code reference](https://nileshportfolio.duckdns.org/docs/performance-optimisation/reference/)
 
 The source fragments live in [`docs/site/`](docs/site/), and the API reference is regenerated from the current recursive source tree. Documentation examples are operational guidance, not guaranteed performance scores.
@@ -151,6 +153,14 @@ A Composer/Node build is only needed when developing from source.
     ```bash
     npm run start
     ```
+
+---
+
+## Support and safe recovery
+
+If a recent optimization breaks the site, disable the narrowest advanced feature, save, clear the affected page cache, and test a logged-out page. The [support guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/) covers the existing preset restore point, feature controls, `wp wppo verify`, and redacted diagnostic evidence.
+
+Before reporting a bug, record the URL, exact steps, WordPress/PHP/server versions, cache owner, and feature you changed. Include redacted `wp wppo system-info` output. Never post passwords, API keys, cookies, bearer tokens, session IDs, private customer data, or database exports.
 
 ---
 

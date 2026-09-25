@@ -18,6 +18,12 @@ Start with the features that match your hosting and site setup, then test change
 
 For the maintained, code-accurate guides, see the [Performance Optimisation documentation](https://nileshportfolio.duckdns.org/docs/performance-optimisation/), including installation, feature behavior, settings, WP-CLI, REST, troubleshooting, and the generated source reference.
 
+= Start safely =
+
+Performance Optimisation is free and open source under GPLv2 or later. There is no premium version, feature lock, or subscription requirement. The plugin does not ask for a rating or a review to use its features.
+
+Start with the **Safe** preset, test the site, review Performance Audit, and enable advanced options only when you have a reason to test them. The Dashboard explains what each change does, where to verify it, and how to undo or disable it. Results depend on your host, theme, plugins, content, and traffic.
+
 = Why choose Performance Optimisation? =
 
 Most performance plugins either cover only one job or bury the important controls in a large settings list. Performance Optimisation gives site owners a practical starting point:
@@ -159,6 +165,16 @@ Yes. Use the **Tools** tab to export your current configuration as a JSON file a
 
 = Is this plugin free? =
 Yes. Performance Optimisation is 100% free and open source. There is no premium version, no upsells, and no feature restrictions.
+
+== Support ==
+
+Before reporting a problem, disable the most recent advanced optimization, save, clear the affected page cache, and test the site again. The [Support and safe recovery guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/support/) explains the narrow rollback path.
+
+When you open a support issue, include the affected URL, exact steps, WordPress/PHP/server versions, cache owner, and the feature you changed. Add redacted output from `wp wppo system-info` and `wp wppo verify`. Never post passwords, API keys, cookies, bearer tokens, session IDs, private customer data, or database exports.
+
+== Upgrade Notice ==
+
+Before upgrading, record the current cache owner and export settings without secrets. After upgrading, run `wp wppo verify`, inspect Dashboard notices, and test a logged-out page plus the main form. Test on staging when the site uses WooCommerce, a page builder, Redis, LiteSpeed, or a CDN.
 
 == External Services ==
 
