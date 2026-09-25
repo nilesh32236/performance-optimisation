@@ -4,6 +4,9 @@ Phase 3 evidence baseline: `ARCHITECTURE-BASELINE.md`
 
 Quality model: `ARCHITECTURE-QUALITY.md`
 
+Phase 3 closeout: `ARCHITECTURE-FINAL.md` (hotspot classification, zero unexplained) and
+`ARCHITECTURE-BEFORE-AFTER.md` (P3-001 → P3-022 metric comparison with per-item ratchets).
+
 Tokenizer graph: `DEPENDENCY-GRAPH.json`
 Class heat map: `class-inventory.json`
 

@@ -1556,7 +1556,7 @@ phase3_items:
 
   - id: P3-023
     title: 'Final deep architecture audit'
-    status: active
+    status: merged
     priority: high
     github_issue: 1619
     type: audit
@@ -1564,6 +1564,30 @@ phase3_items:
     target_owner: 'Final audit artifacts and hotspot classification'
     exact_scope: 'ARCHITECTURE-FINAL.md, ARCHITECTURE-BEFORE-AFTER.md, updated graph/inventory/hierarchy/load order, and resolved/intentional/protected/acceptable/future classification.'
     ratchet: 'No unexplained major hotspot; all metrics compared with P3-001.'
+    re_audit:
+      audited_at: '2026-09-25'
+      source_commit: 2e69007e
+      evidence:
+        - 'Generator + --check clean: 86 inventory files, 89 graph nodes (85 class-like + 4 procedural), 395 edges (394 runtime / 206 compatibility / 3 loader), 330 cross-domain, 50 feature-to-feature, 20 boundary findings, 247 bridge candidates, 1 runtime SCC of 68 nodes, 1 compatibility SCC of 22 nodes, 33 static-state owners / 143 properties, 18 duplicate groups.'
+        - 'ARCHITECTURE-FINAL.md and ARCHITECTURE-BEFORE-AFTER.md were missing; FINAL-AUDIT.md is the superseded Phase 2 closeout.'
+        - 'P3-001..P3-022 merged; P3-024 queued is the only explicit future item; FUT-002/003/004/005 superseded, FUT-001/006 merged.'
+      decision: 'Docs-only audit; zero runtime edits. Write the two final artifacts from generated evidence and queue notes; mark P3-023 merged.'
+      implementation:
+        status: 'implemented-active'
+        artifacts: 'docs/architecture/ARCHITECTURE-FINAL.md (hotspot classification, zero unexplained) and docs/architecture/ARCHITECTURE-BEFORE-AFTER.md (P3-001 71/74/340 baseline to current 86/89/395 plus per-item ratchets)'
+        queue: 'P3-023 merged; P3-024 remains the sole queued future item'
+        graph_delta: 'No source change; generator output byte-identical before and after (86 files / 89 nodes / 395 edges); --check passes'
+        verification: 'Generator + --check, ArchitectureInventoryTest, ArchitectureGuardTest, full PHPUnit, PHPCS, npm lint/test/build, focused PHPStan on architecture tooling'
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      final_audit: 'docs-only; no settings/cache mutation performed'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      cli_commands: 8
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '86 inventory files / 89 graph nodes / 395 edges; generator check passed'
 
 future_items:
   - id: FUT-001
