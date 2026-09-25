@@ -1668,7 +1668,7 @@ growth_items:
 
   - id: B-001
     title: 'Authentic WordPress.org visual conversion assets'
-    status: active
+    status: merged
     priority: medium
     type: growth
     objective: 'Improve WordPress.org conversion with professional, authentic banner, icon, and current-UI screenshots without adding functionality.'
@@ -1686,7 +1686,15 @@ growth_items:
     issue: 1625
     pull_request: 1627
     implementation_commit: 237ce25a
-    status_note: 'Visual assets captured from the real live WordPress UI; directory publication remains unclaimed until post-merge sync verification.'
+    merge_commit: 820820eb
+    merged_at: '2026-09-25'
+    post_merge_verification:
+      repository: 'Banner 1544x500, icon 256x256, screenshots 1-7 at 1200x900; readme captions and visual docs merged'
+      playwright: 'Real WordPress admin captures at 1280x800, 1024x768, 390x844; no overflow, console errors, visible notices, or unsaved-change dialogs'
+      live_site: 'all-in-one-wp-migration inactive; plugin active; frontend 200; admin 302; wp wppo verify 6/7 with known nobody-owned cache-root warning'
+      wordpress_org: 'API still reports pre-merge tags and new banner/icon CDN URLs return 404; directory publication is not claimed until sync'
+      runtime_scope: 'No runtime feature, REST, cache, database, or admin behavior changed'
+    status_note: 'Phase B repository changes are merged; WordPress.org asset publication remains pending directory sync verification.'
 
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
