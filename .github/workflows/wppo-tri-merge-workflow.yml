@@ -20,9 +20,6 @@ permissions:
   issues: write
   actions: read
 
-env:
-  CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
-
 jobs:
   verify:
     name: Full Verification Suite

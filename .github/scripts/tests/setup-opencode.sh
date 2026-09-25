@@ -109,7 +109,7 @@ for workflow_path in "${installer_workflows[@]}"; do
 done
 
 tri_workflow="${ROOT_DIR}/.github/workflows/wppo-tri-merge-workflow.yml"
-if grep -q 'git remote add origin-temp' "${tri_workflow}" || ! grep -q 'env -i' "${tri_workflow}" || ! grep -q 'rm -f .git/FETCH_HEAD' "${tri_workflow}"; then
+if grep -q 'CONTEXT7_API_KEY:' "${tri_workflow}" || grep -q 'git remote add origin-temp' "${tri_workflow}" || ! grep -q 'env -i' "${tri_workflow}" || ! grep -q 'rm -f .git/FETCH_HEAD' "${tri_workflow}"; then
 	echo "tri-merge exposes repository credentials to its raw OpenCode process" >&2
 	exit 1
 fi
