@@ -107,7 +107,6 @@ jobs:
         run: |
           .github/scripts/setup-opencode.sh
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           # Pinned for reproducible runs (resolved 2026-09-08 via
           # `npm view opencode-ai version` — matches the anomalyco/opencode
           # release tag the setup script downloads).

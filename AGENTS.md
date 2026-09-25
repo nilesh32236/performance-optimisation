@@ -266,7 +266,7 @@ and quote that in a report; never copy a number from this file or from an earlie
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `release.yml` | `v*` tag | Production build + ZIP + GitHub Release + WordPress.org SVN deploy |
-| `webpack.yml` | Push/PR to master | `npm ci` → `npm run lint:js` → `npm run build` |
+| `webpack.yml` | Push/PR to master | Stubbed-network OpenCode installer regression + `npm ci` → `npm run lint:js` → `npm test` → `npm run build` |
 | `psalm-wpcs-check.yml` | Push/PR to master + weekly | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, GitHub Issue/PR comment |
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
@@ -288,6 +288,10 @@ This plugin has autonomous AI agent workflows. See `.agents/AGENTS.md` for agent
 - **All changes must maintain backward compatibility**: Use `function_exists()`, `has_filter()`, and version-gated fallbacks
 - **AI fixer authorization (issue #1564)**: `/fix` comment triggers in `wppo-ai-review.yml` (`fix-issue`, `autofix`) accept only `OWNER`/`MEMBER`/`COLLABORATOR` via `github.event.comment.author_association`; untrusted commenters cannot invoke a write-capable fixer. Label triggers (`autofix-trigger`, `autofix`) remain maintainer-controlled via label permission. Never widen a write-capable (`mode: fix`) path to untrusted commenters.
 - **Scripts**: `.github/scripts/` contains setup/utility scripts for CI (setup-opencode, gather-context, etc.)
+
+### OpenCode installer integrity
+
+`.github/scripts/setup-opencode.sh` is executed by the AI workflows; do not source it. It is pinned-only: every caller supplies a stable `vMAJOR.MINOR.PATCH` version, and the installer uses a direct release URL rather than the GitHub API. Each pin must match the committed SHA-256 map in `.github/scripts/opencode-checksums.txt`. Update the installer default, workflow pins, regression fixture, and both supported Linux hashes atomically. The installer rejects unknown versions/architectures, checksum mismatches, and archives that do not contain exactly one regular `opencode` file. Installer steps do not receive `GITHUB_TOKEN`; later workflow steps scope their own credentials. `bash .github/scripts/tests/setup-opencode.sh` is a command-level stubbed-network regression test, not a network namespace sandbox.
 
 ## Required GitHub Secrets
 
