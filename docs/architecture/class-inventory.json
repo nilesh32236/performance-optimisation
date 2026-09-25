@@ -527,7 +527,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 2308,
+        "lines": 2305,
         "methods": 27,
         "public_methods": 17,
         "large_methods": 7,
@@ -535,7 +535,7 @@
         "largest_method": {
             "name": "settings",
             "line": 530,
-            "lines": 235
+            "lines": 232
         },
         "method_prefixes": {
             "check": 6,
@@ -572,14 +572,14 @@
         "compat_facade_methods": 0,
         "duplicate_code_candidates": 0,
         "fan_in": 1,
-        "fan_out": 16,
+        "fan_out": 17,
         "incoming_reference_evidence": 2,
-        "outgoing_reference_evidence": 80,
+        "outgoing_reference_evidence": 78,
         "runtime_fan_in": 1,
-        "runtime_fan_out": 16,
+        "runtime_fan_out": 17,
         "compatibility_fan_in": 1,
         "compatibility_fan_out": 5,
-        "cross_domain_edges": 17,
+        "cross_domain_edges": 18,
         "refs": [
             "Advanced_Cache_Handler",
             "Cache",
@@ -595,6 +595,7 @@
             "Pagespeed",
             "Redis_Config_Policy",
             "Server_Rules",
+            "Settings_Command",
             "System_Info",
             "Util"
         ]
@@ -4689,15 +4690,15 @@
         "feature_dependencies": 0,
         "compat_facade_methods": 0,
         "duplicate_code_candidates": 0,
-        "fan_in": 3,
+        "fan_in": 4,
         "fan_out": 1,
-        "incoming_reference_evidence": 5,
+        "incoming_reference_evidence": 7,
         "outgoing_reference_evidence": 3,
-        "runtime_fan_in": 3,
+        "runtime_fan_in": 4,
         "runtime_fan_out": 1,
         "compatibility_fan_in": 1,
         "compatibility_fan_out": 0,
-        "cross_domain_edges": 3,
+        "cross_domain_edges": 4,
         "refs": [
             "Settings_Store"
         ]
@@ -5233,7 +5234,7 @@
         "duplicate_code_candidates": 1,
         "fan_in": 60,
         "fan_out": 9,
-        "incoming_reference_evidence": 1084,
+        "incoming_reference_evidence": 1080,
         "outgoing_reference_evidence": 116,
         "runtime_fan_in": 60,
         "runtime_fan_out": 9,

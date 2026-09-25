@@ -630,16 +630,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 				$existing_settings = Util::get_settings();
 				$merged_settings   = array_replace_recursive( $existing_settings, $new_settings );
-				// One-click undo (issue #1144): snapshot the prior settings before
-				// overwriting. Fail-open: a snapshot failure must never block the import.
-				try {
-					Util::take_settings_snapshot( $existing_settings );
-				} catch ( \Throwable $snapshot_error ) {
-					unset( $snapshot_error );
-				}
-				// A write that did not persist must be reported, not announced as
-				// a success the operator cannot verify.
-				if ( ! Util::save_settings( $merged_settings ) ) {
+				// One-click undo (issue #1144) and the write itself go through the
+				// Settings_Command seam, which only snapshots when the merged
+				// value actually differs. Snapshotting unconditionally rewrote
+				// the single undo slot with the current state on an import that
+				// changed nothing, so the next "Undo settings" restored nothing
+				// and the operator's last real change became unrecoverable.
+				// A write that did not persist must be reported, not announced
+				// as a success the operator cannot verify.
+				if ( ! Settings_Command::save( $merged_settings, $existing_settings ) ) {
 					WP_CLI::error( __( 'Failed to import settings: the database write did not persist.', 'performance-optimisation' ) );
 					return;
 				}
@@ -737,16 +736,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 				$prior_settings  = $options;
 				$options[ $tab ] = array_replace_recursive( $options[ $tab ], $new_settings );
-				// One-click undo (issue #1144): snapshot the prior settings before
-				// overwriting. Fail-open: a snapshot failure must never block the update.
-				try {
-					Util::take_settings_snapshot( $prior_settings );
-				} catch ( \Throwable $snapshot_error ) {
-					unset( $snapshot_error );
-				}
-				// A write that did not persist must be reported, not announced as
-				// a success the operator cannot verify.
-				if ( ! Util::save_settings( $options ) ) {
+				// One-click undo (issue #1144) and the write itself go through the
+				// Settings_Command seam, which only snapshots when the merged
+				// value actually differs. Snapshotting unconditionally rewrote
+				// the single undo slot with the current state on an update that
+				// changed nothing, so the next "Undo settings" restored nothing.
+				// A write that did not persist must be reported, not announced
+				// as a success the operator cannot verify.
+				if ( ! Settings_Command::save( $options, $prior_settings ) ) {
 					/* translators: %s: Settings tab name */
 					WP_CLI::error( sprintf( __( 'Failed to update settings for tab "%s": the database write did not persist.', 'performance-optimisation' ), $tab ) );
 					return;

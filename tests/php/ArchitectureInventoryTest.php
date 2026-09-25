@@ -136,8 +136,10 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertSame( 89, $graph['summary']['files'] );
 		$this->assertSame( 85, $graph['summary']['class_like_nodes'] );
 		$this->assertSame( 4, $graph['summary']['procedural_nodes'] );
-		$this->assertSame( 395, $graph['summary']['edges'] );
-		$this->assertSame( 394, $graph['summary']['runtime_edges'] );
+		// 396/395: the WP-CLI settings subcommands now reach Settings_Command
+		// instead of hand-rolling the snapshot, which adds one runtime edge.
+		$this->assertSame( 396, $graph['summary']['edges'] );
+		$this->assertSame( 395, $graph['summary']['runtime_edges'] );
 		$this->assertSame( 206, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
