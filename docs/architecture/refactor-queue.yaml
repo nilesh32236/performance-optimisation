@@ -1516,11 +1516,13 @@ phase3_items:
 
   - id: P3-022
     title: 'Architecture guardrails and dependency-direction enforcement'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1615
     github_pr: 1617
     implementation_commit: 63230423
+    merge_commit: 2e69007e
+    merged_at: '2026-09-25'
     type: tooling
     problem: 'The graph drift gate exists, but no guard prevents new forbidden boundary edges, unowned schedules, or static-state gaps.'
     target_owner: 'Architecture tests and CI checks'
@@ -1542,9 +1544,19 @@ phase3_items:
       runtime: 'No plugin runtime files, Composer dependencies, or WordPress loading changed; guard tooling is excluded from runtime graph scope.'
       verification: 'Generator --check, focused guard PHPUnit, full PHPUnit, PHPCS, focused PHPStan, and diff review required before merge.'
 
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      architecture_guards: 'generator/check, fixture guard tests, full PHPUnit 2783/25808, PHPCS, and diff green'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '86 inventory files / 89 graph nodes / 395 edges; no runtime plugin changes'
+
   - id: P3-023
     title: 'Final deep architecture audit'
-    status: queued
+    status: audit-pending
     priority: high
     type: audit
     problem: 'The campaign cannot finish on passing tests alone.'
