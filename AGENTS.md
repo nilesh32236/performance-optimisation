@@ -266,12 +266,13 @@ and quote that in a report; never copy a number from this file or from an earlie
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `release.yml` | `v*` tag | Production build + ZIP + GitHub Release + WordPress.org SVN deploy |
-| `webpack.yml` | Push/PR to master | Stubbed-network OpenCode installer regression + `npm ci` → `npm run lint:js` → `npm test` → `npm run build` |
+| `webpack.yml` | Push/PR to master | Shell regressions (stubbed-network OpenCode installer + untrusted-workflow-context) + `npm ci` → `npm run lint:js` → `npm test` → `npm run build` |
 | `psalm-wpcs-check.yml` | Push/PR to master + weekly | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, GitHub Issue/PR comment |
-| `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
-| `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
-| `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs full verification suite + AI codebase audit + reviews open PRs + auto-merges at 95%+ confidence |
-| `tri-merge-cycle.yml` | Every 3 days (3 AM UTC) + `workflow_dispatch` | Verifies codebase, resolves merge conflicts, merges ready PRs, bumps version, creates release tag |
+| `growth-monitor.yml` | Weekly Monday (6:17 UTC) + manual | Compares public WordPress.org/GitHub metrics against the last snapshot and opens one material-change issue |
+| `model-intelligence.yml` | Daily + manual | Refreshes the free-model registry and publishes evidence/score JSON. Never changes production routing |
+| `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs the full verification suite + AI codebase audit and reports failures as an issue. It does **not** merge |
+| `wppo-ai-review.yml` | PR open/sync/label/close, comments, manual | AI review, `/fix` autofix (author-association gated), and auto-merge of `autofix:ready` PRs after all checks pass |
+| `wppo-tri-merge-workflow.yml` | Every 3 days (3 AM UTC) + `workflow_dispatch` | Verifies the codebase, resolves merge conflicts, merges ready PRs, then (gated on `merge-all`) bumps the version and creates the release tag |
 | `wordpress-monitor.yml` | Weekly Sunday (4 AM UTC) + manual | Researches new WP features via web + Context7 (9 lanes incl. design-researcher), analyzes plugin code, creates improvement PR with fallbacks |
 
 ## Autonomous Workflows (`.agents/`)
@@ -284,10 +285,23 @@ This plugin has autonomous AI agent workflows. See `.agents/AGENTS.md` for agent
 - **`.agents/skills/wppo-wordpress-monitor/SKILL.md`** — WP feature monitor skill for researching/implementing new core features
 
 ### Automation rules
-- **Merge gate**: AI confidence must be >= 95% AND all verification checks must pass
+- **Merge gate**: an `autofix:ready` PR is squash-merged only when the reviewer's own confidence rule (>= 95%, expressed in the reviewer skill) is satisfied *and* every check on the exact reviewed head commit reports `SUCCESS`. `auto-merge` re-reads the head SHA on every poll, aborts if the head moved, refuses a PR with zero checks, and treats `SKIPPED`/`NEUTRAL` as not-green. `tri-merge` re-validates draft state and check rollup at merge time and passes `--match-head-commit`. This repository has **no branch protection**, so these workflow checks are the only automated gate — keep them fail-closed.
 - **All changes must maintain backward compatibility**: Use `function_exists()`, `has_filter()`, and version-gated fallbacks
 - **AI fixer authorization (issue #1564)**: `/fix` comment triggers in `wppo-ai-review.yml` (`fix-issue`, `autofix`) accept only `OWNER`/`MEMBER`/`COLLABORATOR` via `github.event.comment.author_association`; untrusted commenters cannot invoke a write-capable fixer. Label triggers (`autofix-trigger`, `autofix`) remain maintainer-controlled via label permission. Never widen a write-capable (`mode: fix`) path to untrusted commenters.
 - **Scripts**: `.github/scripts/` contains setup/utility scripts for CI (setup-opencode, gather-context, etc.)
+
+### Untrusted GitHub context
+
+Never interpolate a `${{ }}` expression into a `run:` body. Fork pull requests, PR titles, issue titles, comment bodies and push ref names are attacker-chosen, and `$( )`, backticks and `;` are legal in git ref names, so an inline `echo "ref=${{ github.event.pull_request.head.ref }}"` executes the attacker's command substitution on the runner with the step's environment (including `GITHUB_TOKEN` when scoped) in scope. Pass the value through `env:` and read the variable inside the script:
+
+```yaml
+env:
+  PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+run: |
+  REF="$PR_HEAD_REF"
+```
+
+`bash .github/scripts/tests/workflow-untrusted-context.sh` is the hermetic regression: it scans every `run:` body in every workflow, asserts the env-passing pattern is still present, executes the real `Resolve PR ref` step with a `x$(id)` canary to prove the value is copied literally, and reintroduces the vulnerable line to prove the detector fires. The same test pins the auto-merge check-rollup gate and the release version-bump/tag-safety invariants. Numeric ids and git SHAs (`pull_request.number`, `head.sha`) are validated by GitHub and cannot carry shell metacharacters, so they are not covered by the scanner.
 
 ### OpenCode installer integrity
 

@@ -242,27 +242,80 @@ jobs:
     name: Merge Ready PRs
     needs: [verify, resolve-conflicts]
     if: needs.resolve-conflicts.outputs.ready_prs != ''
+    outputs:
+      merged_prs: ${{ steps.merge-ready.outputs.merged_prs }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Merge all ready PRs
+        id: merge-ready
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          # Operator/automation output passed through env, never the run body.
+          REPO: ${{ github.repository }}
+          READY_PRS: ${{ needs.resolve-conflicts.outputs.ready_prs }}
         run: |
-          for PR_NUM in ${{ needs.resolve-conflicts.outputs.ready_prs }}; do
+          MERGE_FAILED=0
+          MERGED=""
+          for PR_NUM in $READY_PRS; do
             echo "Merging PR #${PR_NUM}..."
-            if gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --delete-branch 2>/dev/null; then
+            # Re-validate the exact head and check state at merge time: the
+            # resolve-conflicts job read this data up to an hour earlier, and a
+            # push since then must not be merged on stale green checks.
+            PR_STATE=$(gh pr view "$PR_NUM" --repo "$REPO" --json isDraft,headRefOid,statusCheckRollup 2>/dev/null || echo "")
+            if [ -z "$PR_STATE" ]; then
+              echo "::error::Could not read PR #${PR_NUM} state; refusing to merge"
+              MERGE_FAILED=1
+              continue
+            fi
+            IS_DRAFT=$(printf '%s' "$PR_STATE" | jq -r '.isDraft')
+            if [ "$IS_DRAFT" = "true" ]; then
+              echo "::error::PR #${PR_NUM} is a draft; refusing to merge"
+              MERGE_FAILED=1
+              continue
+            fi
+            NOT_GREEN=$(printf '%s' "$PR_STATE" | jq '[.statusCheckRollup[] |
+              select(
+                (.__typename == "StatusContext" and (.state != "SUCCESS"))
+                or (.__typename != "StatusContext" and (.status != "COMPLETED" or .conclusion != "SUCCESS"))
+              )] | length')
+            TOTAL=$(printf '%s' "$PR_STATE" | jq '.statusCheckRollup | length')
+            if [ "$TOTAL" -eq 0 ] || [ "$NOT_GREEN" -ne 0 ]; then
+              echo "::error::PR #${PR_NUM} has ${NOT_GREEN} non-success check(s) of ${TOTAL}; refusing to merge"
+              MERGE_FAILED=1
+              continue
+            fi
+            HEAD_SHA=$(printf '%s' "$PR_STATE" | jq -r '.headRefOid')
+            if gh pr merge "$PR_NUM" --repo "$REPO" --squash --delete-branch --match-head-commit "$HEAD_SHA" 2>/dev/null; then
               echo "PR #${PR_NUM} merged successfully"
-              gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "auto-merged" 2>/dev/null || true
+              gh pr edit "$PR_NUM" --repo "$REPO" --add-label "auto-merged" 2>/dev/null || true
+              MERGED="${MERGED}${PR_NUM} "
             else
-              echo "::warning::Failed to merge PR #${PR_NUM}"
+              echo "::error::Failed to merge PR #${PR_NUM}"
+              MERGE_FAILED=1
             fi
           done
+          # Swallowing merge failures let the release job tag a version that
+          # never contained the queued PRs.
+          if [ "$MERGE_FAILED" -ne 0 ]; then
+            echo "::error::One or more merges failed; aborting before release"
+            exit 1
+          fi
+          echo "merged_prs=${MERGED% }" >> "$GITHUB_OUTPUT"
 
   release:
     name: Version & Release Tag
-    needs: [verify, resolve-conflicts]
-    if: success() && github.event.inputs.skip_release != 'true'
+    # Must depend on merge-all: releasing without it waited on nothing and could
+    # tag a version that did not contain the PRs the cycle had just approved.
+    # merge-all is skipped when no PR is ready, and a skipped dependency would
+    # otherwise skip the release too, so the gate is spelled out explicitly.
+    needs: [verify, resolve-conflicts, merge-all]
+    if: |
+      always() &&
+      needs.verify.result == 'success' &&
+      needs.resolve-conflicts.result == 'success' &&
+      (needs.merge-all.result == 'success' || needs.merge-all.result == 'skipped') &&
+      github.event.inputs.skip_release != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -286,19 +339,46 @@ jobs:
       - name: Build release assets
         id: build-release
         if: steps.release-check.outputs.needs_release == 'true'
+        env:
+          # Pass the operator-supplied override through env, never the run body.
+          FORCE_VERSION: ${{ github.event.inputs.force_version }}
+          RELEASE_CHECK_VERSION: ${{ steps.release-check.outputs.next_version }}
+          RELEASE_CHECK_CURRENT: ${{ steps.release-check.outputs.current_version }}
         run: |
-          NEXT_VERSION="${{ github.event.inputs.force_version || steps.release-check.outputs.next_version }}"
+          NEXT_VERSION="${FORCE_VERSION:-$RELEASE_CHECK_VERSION}"
+          # The value reaches sed/package.json/git below, so validate it here.
+          if ! printf '%s' "$NEXT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Refusing to release: version '${NEXT_VERSION}' is not MAJOR.MINOR.PATCH."
+            exit 1
+          fi
           echo "next_version=${NEXT_VERSION}" >> "$GITHUB_OUTPUT"
 
-          CURRENT_VERSION="${{ steps.release-check.outputs.current_version }}"
+          CURRENT_VERSION="$RELEASE_CHECK_CURRENT"
           if [ "${CURRENT_VERSION}" != "${NEXT_VERSION}" ]; then
             echo "Updating version from ${CURRENT_VERSION} to ${NEXT_VERSION}"
-            sed -i "s/^Version:.*/Version: ${NEXT_VERSION}/" performance-optimisation.php
+            # The plugin header is " * Version:           2.4.0" (leading " * "),
+            # so the substitution must be anchored to the comment form. A
+            # column-zero ^Version: pattern never matches, which previously
+            # left the header frozen while only WPPO_VERSION advanced and made
+            # the next cycle re-tag the already published version.
+            sed -i -E "s/^([[:space:]]*\*[[:space:]]*Version:)([[:space:]]+)[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*$/\1\2${NEXT_VERSION}/" performance-optimisation.php
             sed -i "s/define( 'WPPO_VERSION', '[^']*' );/define( 'WPPO_VERSION', '${NEXT_VERSION}' );/" performance-optimisation.php
             ESCAPED_CURRENT=$(printf '%s\n' "${CURRENT_VERSION}" | sed 's/\./\\./g')
             sed -i "s/\"version\": \"${ESCAPED_CURRENT}\"/\"version\": \"${NEXT_VERSION}\"/" package.json
             git add performance-optimisation.php package.json
             git commit -m "chore: bump version to ${NEXT_VERSION}" || true
+
+            # Fail closed: every published version source must now agree, or
+            # the release tag would not match what WordPress.org reads.
+            HEADER_VERSION=$(grep -E '^[[:space:]]*\*[[:space:]]*Version:' performance-optimisation.php | head -1 | awk '{print $NF}' | tr -d '\r')
+            DEFINE_VERSION=$(grep -E "define\( 'WPPO_VERSION', '[^']+' \);" performance-optimisation.php | head -1 | sed -E "s/.*'([^']+)'.*/\1/")
+            PACKAGE_VERSION=$(grep -E '"version"' package.json | head -1 | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+            for LABEL in header:"${HEADER_VERSION}" define:"${DEFINE_VERSION}" package:"${PACKAGE_VERSION}"; do
+              if [ "${LABEL#*:}" != "${NEXT_VERSION}" ]; then
+                echo "::error::Version mismatch after bump: ${LABEL} != ${NEXT_VERSION}. Aborting release."
+                exit 1
+              fi
+            done
           fi
 
           # Resolve unreleased @since placeholders to the real version before building.
@@ -330,10 +410,13 @@ jobs:
             }
           }
 
-          if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
-            echo "Tag ${TAG_NAME} already exists. Deleting and recreating..."
-            git tag -d "${TAG_NAME}"
-            git push origin ":refs/tags/${TAG_NAME}" 2>/dev/null || true
+          # Never delete or move a published tag. Recreating v2.4.0 overwrote an
+          # existing GitHub release artifact and re-deployed different content
+          # to WordPress.org; an existing tag means the version calculation is
+          # wrong, so stop instead of rewriting release history.
+          if git rev-parse "${TAG_NAME}" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG_NAME} already exists. Refusing to delete or re-create a published tag."
+            exit 1
           fi
 
           git tag "${TAG_NAME}" -m "Release ${TAG_NAME}"

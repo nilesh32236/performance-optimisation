@@ -160,8 +160,9 @@ jobs:
         if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ref_name is branch-controlled; pass through env, never the run body.
+          BRANCH: ${{ github.ref_name }}
         run: |
-          BRANCH="${{ github.ref_name }}"
           STATUS=$(cat reports/status.txt 2>/dev/null || echo "failure")
           EVENT_NAME="${{ github.event_name }}"
 

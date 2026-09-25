@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   opencode-installer:
-    name: OpenCode installer regression
+    name: CI shell regressions (installer + workflows)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -35,6 +35,10 @@ jobs:
         run: bash -n .github/scripts/setup-opencode.sh .github/scripts/tests/setup-opencode.sh
       - name: Installer regression (stubbed network)
         run: bash .github/scripts/tests/setup-opencode.sh
+      - name: Workflow shell syntax
+        run: bash -n .github/scripts/tests/workflow-untrusted-context.sh
+      - name: Untrusted workflow context regression
+        run: bash .github/scripts/tests/workflow-untrusted-context.sh
 
   js-build:
     name: JS Lint, Test & Build
