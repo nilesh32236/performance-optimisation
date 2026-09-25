@@ -19,11 +19,10 @@ import {
 	getWooSelfTestNotice,
 	shouldShowWooFixCta,
 } from '../lib/wooSelfTest';
-import { getDbCounts } from '../lib/dbCounts';
+import { useDbCounts } from '../lib/useDbCounts';
 import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
-import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
@@ -40,7 +39,7 @@ import AutoloadedOptions from './AutoloadedOptions';
 import LlmsPanel from './LlmsPanel';
 import AiPanel from './AiPanel';
 import EdgeCachePanel from './EdgeCachePanel';
-import ImageOptimizationCard from './ImageOptimizationCard';
+import ImageJobCard from './dashboard/ImageJobCard';
 import RecentActivityCard from './RecentActivityCard';
 import LoggedInCacheCard from './dashboard/LoggedInCacheCard';
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
@@ -60,41 +59,6 @@ import {
 	faBolt,
 	faGlobe,
 } from '@fortawesome/free-solid-svg-icons';
-
-/**
- * Polling interval for image_job_status ticks.
- */
-const POLL_INTERVAL_MS = 5000;
-
-/**
- * Maximum number of image_job_status poll attempts before giving up
- * (~5 minutes at 5s), matching PageSpeedPanel's cap.
- */
-const MAX_POLL_ATTEMPTS = 60;
-
-/**
- * Maximum delay between image_job_status poll ticks.
- *
- * Polling backs off (5s for the first 10 attempts, then +5s per 10
- * attempts) so deep queues do not hammer admin-ajax at the same rate as
- * near-complete ones.
- *
- * @since 2.3.0
- */
-const MAX_POLL_DELAY_MS = 15000;
-
-/**
- * Delay before the next poll tick, backing off with the attempt count.
- *
- * @since 2.3.0
- * @param {number} attempts 1-based poll attempt count.
- * @return {number} Milliseconds to wait before the next tick.
- */
-const getPollDelay = ( attempts ) =>
-	Math.min(
-		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
-		MAX_POLL_DELAY_MS
-	);
 
 /**
  * Coerce a TTL override select value to a finite number, or undefined when
@@ -308,12 +272,8 @@ const Dashboard = ( {
 		totalJs: getWppoSettings( 'total_js_css.js', 0 ),
 		totalCss: getWppoSettings( 'total_js_css.css', 0 ),
 		imageInfo: normalizeImageInfo( getWppoSettings( 'image_info', {} ) ),
-		dbCounts: {},
 		loading: {
 			clear_cache: false,
-			optimize_images: false,
-			remove_images: false,
-			db_counts: true,
 		},
 	} );
 
@@ -421,20 +381,15 @@ const Dashboard = ( {
 		cacheSettings.varnishPurgeUrls,
 	] );
 
-	const [ bgProcessing, setBgProcessing ] = useState( false );
-	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
-	const [ imgSavings, setImgSavings ] = useState( null );
-	const pollingRef = useRef( null );
-	const pollAbortRef = useRef( null );
-	const pollRetryRef = useRef( 0 );
-	const pollAttemptsRef = useRef( 0 );
-	const submittingRef = useRef( false );
 	const wooAbortRef = useRef( null );
 	const wooTimedOutRef = useRef( false );
 	const wooTimeoutRef = useRef( null );
 	const actionControllersRef = useRef( new Set() );
-	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	// Image-job polling lifecycle lives in the ImageJobCard boundary
+	// (P3-020); the shell keeps only a stats-strip mirror synced via
+	// handleImageStatus. The db-counts fetch lives in useDbCounts.
+	const { dbCounts } = useDbCounts( notify );
 
 	const {
 		imageInfo,
@@ -443,9 +398,8 @@ const Dashboard = ( {
 		cachedPages,
 		totalJs,
 		totalCss,
-		dbCounts,
 	} = state;
-	const { completed = {}, pending = {}, failed = {} } = imageInfo;
+	const { completed = {}, pending = {} } = imageInfo;
 
 	const updateState = useCallback( ( updates ) => {
 		setState( ( prevState ) => ( { ...prevState, ...updates } ) );
@@ -458,45 +412,15 @@ const Dashboard = ( {
 		} ) );
 	}, [] );
 
-	const fetchDbCounts = useCallback(
-		async ( signal ) => {
-			handleLoading( 'db_counts', true );
-			try {
-				const data = await getDbCounts( signal );
-				if ( signal?.aborted ) {
-					return;
-				}
-				updateState( { dbCounts: data } );
-			} catch ( error ) {
-				if ( error?.name === 'AbortError' || signal?.aborted ) {
-					return;
-				}
-				console.error(
-					'Error fetching db counts:',
-					getErrorLogMessage( error )
-				);
-				notify( {
-					type: 'error',
-					message: __(
-						'Failed to load database counts.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
-			} finally {
-				if ( ! signal?.aborted ) {
-					handleLoading( 'db_counts', false );
-				}
-			}
+	// Stats-strip mirror of the ImageJobCard boundary state (P3-020): the
+	// card owns all image-job fetching/polling, the shell only mirrors the
+	// committed image info for the overview percent.
+	const handleImageStatus = useCallback(
+		( nextImageInfo ) => {
+			updateState( { imageInfo: nextImageInfo } );
 		},
-		[ handleLoading, updateState, notify ]
+		[ updateState ]
 	);
-
-	useEffect( () => {
-		const controller = new AbortController();
-		fetchDbCounts( controller.signal );
-		return () => controller.abort();
-	}, [ fetchDbCounts ] );
 
 	// Abort any in-flight Woo self-test on unmount so a slow request can
 	// never call setWooSelfTest/notify after the component is gone.
@@ -523,126 +447,9 @@ const Dashboard = ( {
 		}, 0 );
 	}, [ dbCounts ] );
 
-	const pollJobStatus = useCallback( async () => {
-		const currentTimeout = pollingRef.current;
-		pollAttemptsRef.current += 1;
-		if ( pollAttemptsRef.current >= MAX_POLL_ATTEMPTS ) {
-			setBgProcessing( false );
-			pollingRef.current = null;
-			notify( {
-				type: 'error',
-				message: __(
-					'Image optimisation timed out. Please try again.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-			return;
-		}
-		// Polls are strictly sequential: the next tick is only scheduled
-		// after the previous await settles, so there is no overlapping
-		// in-flight request to abort here. A fresh controller per tick lets
-		// the unmount cleanup cancel the current poll.
-		pollAbortRef.current = new AbortController();
-		const signal = pollAbortRef.current.signal;
-		try {
-			const response = await apiCall(
-				'image_job_status',
-				{},
-				'GET',
-				signal
-			);
-			// The unmount/stop cleanup may have aborted this tick while the
-			// request was in flight — bail before any setState/notify.
-			if ( signal.aborted ) {
-				return;
-			}
-			pollRetryRef.current = 0;
-			if ( ! response.success || ! response.data ) {
-				// Malformed payload: treat as a retryable failure with backoff
-				// instead of silently rescheduling until the 5-minute timeout.
-				throw new Error( response.message || 'Status check failed' );
-			}
-			// Coerce: the endpoint may omit queued_jobs or encode it as a
-			// string ("0"). Strict === 0 would then never detect completion
-			// and poll until MAX_POLL_ATTEMPTS; NaN stays retryable below.
-			const queuedJobs = Number( response.data.queued_jobs ?? NaN );
-			setBgJobsQueued( Number.isFinite( queuedJobs ) ? queuedJobs : 0 );
-			setImgSavings( response.data.savings ?? null );
-
-			// Reuse the mount/sync-path normalizer so array-of-paths payloads
-			// (like wppoSettings.image_info) never store an Array where a
-			// count is expected (which would coerce totals to strings).
-			updateState( {
-				imageInfo: normalizeImageInfo( response.data ),
-			} );
-
-			if ( Number.isFinite( queuedJobs ) && queuedJobs === 0 ) {
-				setBgProcessing( false );
-				notify( {
-					type: 'success',
-					message: __(
-						'Image optimisation completed.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
-				pollingRef.current = null;
-				pollAttemptsRef.current = 0;
-				return;
-			}
-		} catch ( error ) {
-			if ( signal.aborted || error?.name === 'AbortError' ) {
-				return;
-			}
-			console.error(
-				'Error polling job status:',
-				getErrorLogMessage( error )
-			);
-			pollRetryRef.current++;
-			if ( pollRetryRef.current >= 5 ) {
-				setBgProcessing( false );
-				pollingRef.current = null;
-				notify( {
-					type: 'error',
-					message: __(
-						'Status check stopped after repeated failures.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
-				return;
-			}
-			notify( {
-				type: 'error',
-				message: __(
-					'Status check failed. Retrying…',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-		}
-		if ( pollingRef.current === currentTimeout ) {
-			// Audit #1354 review: back off while hidden (mirrors PageSpeed).
-			const delay = getPollDelay( pollAttemptsRef.current );
-			pollingRef.current = setTimeout(
-				pollJobStatus,
-				typeof document !== 'undefined' && document.hidden
-					? Math.max( delay, 30000 )
-					: delay
-			);
-		}
-	}, [ updateState, notify ] );
-
 	useEffect( () => {
 		const pendingActions = actionControllersRef.current;
 		return () => {
-			if ( pollingRef.current ) {
-				clearTimeout( pollingRef.current );
-			}
-			if ( pollAbortRef.current ) {
-				pollAbortRef.current.abort();
-			}
 			pendingActions.forEach( ( c ) => c.abort() );
 			pendingActions.clear();
 		};
@@ -718,174 +525,6 @@ const Dashboard = ( {
 		},
 		[ handleLoading, updateState, notify, refreshUpgradePurgeStatus ]
 	);
-
-	const optimizeImages = useCallback( () => {
-		if (
-			loading.optimize_images ||
-			bgProcessing ||
-			submittingRef.current
-		) {
-			return;
-		}
-		submittingRef.current = true;
-		handleLoading( 'optimize_images', true );
-		const controller = new AbortController();
-		actionControllersRef.current.add( controller );
-		const signal = controller.signal;
-
-		apiCall( 'optimise_image', {}, 'POST', signal )
-			.then( ( response ) => {
-				if ( signal.aborted ) {
-					return;
-				}
-				if ( response.data?.background ) {
-					// Background (Action Scheduler) path.
-					setBgProcessing( true );
-					const jobsQueued = Number( response.data.jobs_queued ?? 0 );
-					setBgJobsQueued(
-						Number.isFinite( jobsQueued ) ? jobsQueued : 0
-					);
-					notify( {
-						type: 'success',
-						message: __(
-							'Image optimisation started in background.',
-							'performance-optimisation'
-						),
-						durationMs: 5000,
-					} );
-					if ( pollingRef.current ) {
-						clearTimeout( pollingRef.current );
-					}
-					pollAttemptsRef.current = 0;
-					pollRetryRef.current = 0;
-					pollingRef.current = setTimeout(
-						pollJobStatus,
-						POLL_INTERVAL_MS
-					);
-				} else {
-					// Synchronous path (Action Scheduler unavailable).
-					setBgJobsQueued( 0 );
-					setBgProcessing( false );
-
-					if ( response.success && response.data ) {
-						updateState( {
-							imageInfo: normalizeImageInfo( response.data ),
-						} );
-						notify( {
-							type: 'success',
-							message: __(
-								'Images optimized successfully.',
-								'performance-optimisation'
-							),
-							durationMs: 5000,
-						} );
-					}
-
-					if ( pollingRef.current ) {
-						clearTimeout( pollingRef.current );
-						pollingRef.current = null;
-					}
-				}
-			} )
-			// Audit #1354: log rejections like pollJobStatus does.
-			.catch( ( optimizeError ) => {
-				if ( signal.aborted || optimizeError?.name === 'AbortError' ) {
-					return;
-				}
-				console.error(
-					'Image optimisation failed.',
-					getErrorLogMessage( optimizeError )
-				);
-				notify( {
-					type: 'error',
-					message: __(
-						'Image optimisation failed.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
-			} )
-			.finally( () => {
-				actionControllersRef.current.delete( controller );
-				submittingRef.current = false;
-				if ( ! signal.aborted ) {
-					handleLoading( 'optimize_images', false );
-				}
-			} );
-	}, [
-		handleLoading,
-		pollJobStatus,
-		updateState,
-		notify,
-		bgProcessing,
-		loading.optimize_images,
-	] );
-
-	const removeImages = useCallback( () => {
-		handleLoading( 'remove_images', true );
-		const controller = new AbortController();
-		actionControllersRef.current.add( controller );
-		const signal = controller.signal;
-		apiCall( 'delete_optimised_image', {}, 'POST', signal )
-			.then( ( data ) => {
-				if ( signal.aborted ) {
-					return;
-				}
-				if ( data.success ) {
-					setState( ( prev ) => ( {
-						...prev,
-						imageInfo: {
-							completed: { webp: 0, avif: 0 },
-							pending: { webp: 0, avif: 0 },
-							failed: { webp: 0, avif: 0 },
-						},
-					} ) );
-					notify( {
-						type: 'success',
-						message: __(
-							'Optimized images removed.',
-							'performance-optimisation'
-						),
-						durationMs: 5000,
-					} );
-				} else {
-					notify( {
-						type: 'error',
-						message:
-							data.message ||
-							__(
-								'Failed to remove optimized images.',
-								'performance-optimisation'
-							),
-						durationMs: 5000,
-					} );
-				}
-			} )
-			.catch( ( dashboardError ) => {
-				if ( signal.aborted || dashboardError?.name === 'AbortError' ) {
-					return;
-				}
-				// Audit #1420: log before notify.
-				console.error(
-					'Dashboard request failed:',
-					getErrorLogMessage( dashboardError )
-				);
-				notify( {
-					type: 'error',
-					message: __(
-						'Failed to remove optimized images.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
-			} )
-			.finally( () => {
-				actionControllersRef.current.delete( controller );
-				if ( ! signal.aborted ) {
-					handleLoading( 'remove_images', false );
-				}
-			} );
-	}, [ handleLoading, notify ] );
 
 	/**
 	 * Single save helper for the cache_settings tab: re-reads the live global
@@ -1235,16 +874,6 @@ const Dashboard = ( {
 	}, [] );
 	const handleVarnishPurgeUrlsChange = useCallback( ( e ) => {
 		setVarnishPurgeUrls( e.target.value );
-	}, [] );
-	const handleRemoveRequest = useCallback( () => {
-		setConfirmRemove( true );
-	}, [] );
-	const handleRemoveConfirm = useCallback( () => {
-		setConfirmRemove( false );
-		removeImages();
-	}, [ removeImages ] );
-	const handleRemoveCancel = useCallback( () => {
-		setConfirmRemove( false );
 	}, [] );
 
 	const totalWebP = ( completed.webp || 0 ) + ( pending.webp || 0 );
@@ -2122,21 +1751,11 @@ const Dashboard = ( {
 				<SystemInfo />
 			</div>
 
-			{ /* Image optimization + activity log */ }
+			{ /* Image optimization (P3-020 polling boundary) + activity log */ }
 			<div className="wppo-stacked-cards wppo-mt-20">
-				<ImageOptimizationCard
-					completed={ completed }
-					pending={ pending }
-					failed={ failed }
-					bgProcessing={ bgProcessing }
-					bgJobsQueued={ bgJobsQueued }
-					loading={ loading }
-					savings={ imgSavings }
-					pendingPathsCount={
-						( pending.webp || 0 ) + ( pending.avif || 0 )
-					}
-					onOptimize={ optimizeImages }
-					onRemove={ handleRemoveRequest }
+				<ImageJobCard
+					initialImageInfo={ imageInfo }
+					onStatus={ handleImageStatus }
 				/>
 
 				<RecentActivityCard
@@ -2145,22 +1764,6 @@ const Dashboard = ( {
 					onNavigate={ onNavigate }
 				/>
 			</div>
-
-			<ConfirmDialog
-				isOpen={ confirmRemove }
-				onConfirm={ handleRemoveConfirm }
-				onCancel={ handleRemoveCancel }
-				title={ __(
-					'Remove Optimized Images',
-					'performance-optimisation'
-				) }
-				message={ __(
-					'This will delete all optimized WebP and AVIF copies. Original images will not be affected.',
-					'performance-optimisation'
-				) }
-				confirmLabel={ __( 'Delete', 'performance-optimisation' ) }
-				variant="danger"
-			/>
 		</div>
 	);
 };

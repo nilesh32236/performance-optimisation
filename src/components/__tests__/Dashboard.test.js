@@ -493,6 +493,22 @@ describe( 'Dashboard', () => {
 		}
 	} );
 
+	it( 'does not own image polling on mount (P3-020 boundary lives in ImageJobCard)', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		// The shell mounts the image card but starts no image_job_status
+		// poll itself; polling lifecycle is owned by the card boundary.
+		expect( screen.getByTestId( 'image-card' ) ).toBeInTheDocument();
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'image_job_status',
+			{},
+			'GET',
+			expect.any( AbortSignal )
+		);
+	} );
+
 	it( 'saves logged-in cache settings', async () => {
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
@@ -629,9 +645,13 @@ describe( 'Dashboard', () => {
 				expect.any( AbortSignal )
 			)
 		);
-		expect(
-			screen.getByText( 'Optimized images removed.' )
-		).toBeInTheDocument();
+		// P3-020: removal commits through the ImageJobCard workflow wrapper,
+		// so await the notice instead of asserting synchronously.
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Optimized images removed.' )
+			).toBeInTheDocument()
+		);
 	} );
 
 	it( 'saves the Woo safe-mode toggle with page cache settings', async () => {
