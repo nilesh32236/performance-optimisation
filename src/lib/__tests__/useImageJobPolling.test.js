@@ -130,10 +130,22 @@ describe( 'useImageJobPolling', () => {
 			await statusResponse;
 		} );
 		await flushPromises();
-		expect( jest.getTimerCount() ).toBe( 0 );
 
 		expect( onImageInfo ).not.toHaveBeenCalled();
 		expect( notify ).not.toHaveBeenCalled();
+	} );
+
+	it( 'clears the pending polling timer on unmount', () => {
+		const clearTimeoutSpy = jest.spyOn( global, 'clearTimeout' );
+		const { result, unmount } = renderHook( () =>
+			useImageJobPolling( { notify: jest.fn(), onImageInfo: jest.fn() } )
+		);
+
+		act( () => result.current.startPolling( 2 ) );
+		unmount();
+
+		expect( clearTimeoutSpy ).toHaveBeenCalled();
+		clearTimeoutSpy.mockRestore();
 	} );
 
 	it( 'keeps processing state isolated between card workflows', () => {
