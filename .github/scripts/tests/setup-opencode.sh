@@ -65,6 +65,10 @@ for workflow_path in "${installer_workflows[@]}"; do
 		echo "workflow ${workflow_path##*/} has an installer call without the pinned version" >&2
 		exit 1
 	fi
+	if ! grep -q 'persist-credentials: false' "${workflow_path}"; then
+		echo "workflow ${workflow_path##*/} can expose checkout credentials to the installer" >&2
+		exit 1
+	fi
 done
 
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/wppo-opencode-test.XXXXXX")"
