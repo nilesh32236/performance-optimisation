@@ -600,7 +600,7 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 			) }
 			<p className="wppo-welcome-panel__intro">
 				{ __(
-					'Get started in 4 quick steps. Each toggle below activates a key performance feature — no page reload needed.',
+					'Start Safe, test your site, review Performance Audit, then enable advanced options only when needed. These four quick steps cover page cache, CSS and JavaScript, images, and WooCommerce safety. Every setting keeps its explanation and recovery path.',
 					'performance-optimisation'
 				) }
 			</p>

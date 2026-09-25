@@ -1,0 +1,21 @@
+<h2>Get help without exposing private data</h2>
+<p>Use this page to make a site safe again, collect useful evidence, and report a reproducible problem. Performance Optimisation does not need your passwords, API keys, cookies, or authorization headers to investigate a performance issue.</p>
+<h2>Before you report a problem</h2>
+<ol><li>Record the affected URL and the exact setting or action.</li><li>Disable the most recent advanced optimization: Delay JavaScript, Used CSS, Critical CSS, Combine CSS, or CDN edge handling.</li><li>Save, clear the affected page cache, and test in a logged-out window.</li><li>Run <code>wp wppo verify</code> and <code>wp wppo system-info</code>.</li><li>Compare the result with the same URL before the change.</li></ol>
+<h2>What to include</h2>
+<ul><li>WordPress and PHP versions</li><li>Server software and cache owner: Apache, nginx, LiteSpeed, or CDN</li><li>Theme, page builder, WooCommerce, Redis, and CDN versions when relevant</li><li>Reproduction steps and expected versus actual behavior</li><li>Redacted output from <code>wp wppo system-info</code> and <code>wp wppo verify</code></li><li>Browser console or Network-panel details with secrets removed</li></ul>
+<h2>What not to include</h2>
+<p>Do not post passwords, API keys, bearer tokens, cookies, session IDs, private URLs, customer data, or complete database exports. Redact hostnames and identifiers when they are not needed to reproduce the issue.</p>
+<h2>Where to find evidence</h2>
+<ul><li><strong>Tools:</strong> System Info, Activity Log, settings export, and snapshot status.</li><li><strong>Dashboard:</strong> cache size, last clear, image status, recent activity, and guided next step.</li><li><strong>WP-CLI:</strong> <code>wp wppo verify</code>, <code>wp wppo system-info</code>, and feature-specific status commands.</li><li><strong>Browser:</strong> response headers, console errors, and the Network panel for the affected URL.</li></ul>
+<h2>Safe recovery</h2>
+<p>Use the existing controls: disable the narrow feature, clear the exact page, restore a preset snapshot, or use the setting restore point. If the site remains broken, deactivate the plugin from WordPress and inspect the PHP error log. Do not delete an unknown cache or object-cache drop-in.</p>
+<h2>Upgrading</h2>
+<p>Before an upgrade, record the current cache owner, export settings without secrets, and test on staging when possible. After upgrading, run <code>wp wppo verify</code>, inspect the Dashboard notices, and test a logged-out page plus the main form. Existing settings remain in the plugin's settings store; a compatibility change can still require a new staging test.</p>
+<h2>FAQ</h2>
+<h3>Can support reproduce my site?</h3>
+<p>Start with a public or staging URL, exact steps, and redacted system information. A support conversation does not require access to your admin account.</p>
+<h3>Why do you ask for a cache owner?</h3>
+<p>A stale origin, LiteSpeed, or CDN layer can look like a plugin bug. The owner determines which purge path to test.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/troubleshooting/">Troubleshooting</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li><li><a href="/docs/performance-optimisation/installation/">Installation</a></li><li><a href="/docs/performance-optimisation/faq/">FAQ</a></li><li><a href="/docs/performance-optimisation/configuration/wp-cli/">WP-CLI commands</a></li></ul>

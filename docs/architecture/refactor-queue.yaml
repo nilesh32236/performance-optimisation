@@ -1779,6 +1779,25 @@ growth_items:
       runtime_scope: 'No runtime, API, settings, optimization, or public documentation deployment changes'
     status_note: 'Phase E is merged; source documentation is ready for the existing editor publishing pipeline, but public page sync is not claimed.'
 
+  - id: F-001
+    title: 'Trust and legitimate conversion'
+    status: active
+    priority: medium
+    type: growth
+    objective: 'Make the free/open-source product easier to trust, evaluate, install, onboard, recover, and support without new optimization behavior.'
+    scope:
+      - 'readme value, safe-first, support, and upgrade copy'
+      - 'WelcomePanel safe staged onboarding copy'
+      - 'support and safe recovery documentation'
+      - 'compatibility, troubleshooting, and external-service trust links'
+      - 'new-user Playwright journey and friction report'
+      - 'docs/growth/TRUST-AND-CONVERSION.md'
+    non_goals:
+      - 'No fake reviews, ratings, support posts, installations, scores, guarantees, premium locks, or runtime optimization changes.'
+    issue: 1639
+    pull_request: pending
+    status_note: 'Phase F is active; trust claims stay bounded to current code, docs, and observed evidence.'
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'
