@@ -1,0 +1,186 @@
+[
+  {
+    "file": "performance-optimisation.html",
+    "slug": "performance-optimisation",
+    "parent_slug": null,
+    "title": "Performance Optimisation",
+    "excerpt": "A practical guide to the current 2.4.0 performance plugin, its request layers, safe defaults, and first-run workflow.",
+    "menu_order": 0
+  },
+  {
+    "file": "installation.html",
+    "slug": "installation",
+    "parent_slug": "performance-optimisation",
+    "title": "Installation",
+    "excerpt": "Requirements, activation effects, filesystem boundaries, server notes, and a safe first-run sequence.",
+    "menu_order": 10
+  },
+  {
+    "file": "features.html",
+    "slug": "features",
+    "parent_slug": "performance-optimisation",
+    "title": "Features Guide",
+    "excerpt": "One page for each Performance Optimisation feature and the current dashboard workflow.",
+    "menu_order": 20
+  },
+  {
+    "file": "core-web-vitals.html",
+    "slug": "core-web-vitals",
+    "parent_slug": "performance-optimisation",
+    "title": "Core Web Vitals",
+    "excerpt": "Beginner-first paths for LCP, INP, and CLS using the existing cache, image, preload, CSS, JavaScript, and monitoring features.",
+    "menu_order": 25
+  },
+  {
+    "file": "cdn.html",
+    "slug": "cdn",
+    "parent_slug": "performance-optimisation",
+    "title": "CDN and edge cache",
+    "excerpt": "Cloudflare, Bunny Edge, and Varnish configuration, verification, ownership boundaries, and safe rollback.",
+    "menu_order": 35
+  },
+  {
+    "file": "compatibility.html",
+    "slug": "compatibility",
+    "parent_slug": "performance-optimisation",
+    "title": "Compatibility",
+    "excerpt": "Verified, supported, best-effort, and known-limitation guidance for WordPress, PHP, WooCommerce, builders, caches, and CDNs.",
+    "menu_order": 70
+  },
+  {
+    "file": "litespeed.html",
+    "slug": "litespeed",
+    "parent_slug": "performance-optimisation",
+    "title": "LiteSpeed and OpenLiteSpeed",
+    "excerpt": "Coexistence modes, header and purge contracts, TTL/variation policy, crawler limits, and OpenLiteSpeed notes.",
+    "menu_order": 30
+  },
+  {
+    "file": "configuration.html",
+    "slug": "configuration",
+    "parent_slug": "performance-optimisation",
+    "title": "Configuration",
+    "excerpt": "Settings storage, configuration surfaces, rollout discipline, and external integration boundaries.",
+    "menu_order": 40
+  },
+  {
+    "file": "troubleshooting.html",
+    "slug": "troubleshooting",
+    "parent_slug": "performance-optimisation",
+    "title": "Troubleshooting",
+    "excerpt": "Symptom-first checks for cache, assets, CSS, images, Redis, LiteSpeed, and monitoring.",
+    "menu_order": 50
+  },
+  {
+    "file": "faq.html",
+    "slug": "faq",
+    "parent_slug": "performance-optimisation",
+    "title": "FAQ",
+    "excerpt": "Short answers to common performance, cache, lazy-loading, credential, and reference questions.",
+    "menu_order": 60
+  },
+  {
+    "file": "page-cache.html",
+    "slug": "page-cache",
+    "parent_slug": "features",
+    "title": "Page cache",
+    "excerpt": "Static HTML generation, serving, safety gates, invalidation, capacity, and verification.",
+    "menu_order": 10
+  },
+  {
+    "file": "redis-object-cache.html",
+    "slug": "redis-object-cache",
+    "parent_slug": "features",
+    "title": "Redis object cache",
+    "excerpt": "Standalone, Sentinel, and Cluster Redis configuration, isolation, circuit behavior, and safe diagnostics.",
+    "menu_order": 20
+  },
+  {
+    "file": "minify-combine.html",
+    "slug": "minify-combine",
+    "parent_slug": "features",
+    "title": "Minification and combining",
+    "excerpt": "HTML, CSS, JavaScript, inline, combined, and font optimization with current exclusions and defaults.",
+    "menu_order": 30
+  },
+  {
+    "file": "defer-delay-js.html",
+    "slug": "defer-delay-js",
+    "parent_slug": "features",
+    "title": "Defer and delay JavaScript",
+    "excerpt": "Interaction, idle, viewport, and priority strategies with first-click safety guidance.",
+    "menu_order": 40
+  },
+  {
+    "file": "used-critical-css.html",
+    "slug": "used-critical-css",
+    "parent_slug": "features",
+    "title": "Used and critical CSS",
+    "excerpt": "Critical CSS, used CSS, safe rollout, health checks, rollback, and selector recovery.",
+    "menu_order": 50
+  },
+  {
+    "file": "images-webp-avif.html",
+    "slug": "images-webp-avif",
+    "parent_slug": "features",
+    "title": "Images, WebP, and AVIF",
+    "excerpt": "Native lazy loading, LCP guardrails, next-generation conversion, and server delivery verification.",
+    "menu_order": 60
+  },
+  {
+    "file": "database-cleanup.html",
+    "slug": "database-cleanup",
+    "parent_slug": "features",
+    "title": "Database cleanup",
+    "excerpt": "Nine bounded cleanup types, dry runs, scheduling, activity hooks, and autoloaded-options remediation.",
+    "menu_order": 70
+  },
+  {
+    "file": "preload-speculation.html",
+    "slug": "preload-speculation",
+    "parent_slug": "features",
+    "title": "Preload and speculation",
+    "excerpt": "Cache warm-up, sitemap discovery, resource hints, speculation rules, and the LiteSpeed crawler.",
+    "menu_order": 80
+  },
+  {
+    "file": "monitoring-rum.html",
+    "slug": "monitoring-rum",
+    "parent_slug": "features",
+    "title": "Monitoring: PageSpeed and RUM",
+    "excerpt": "PageSpeed scans, first-party Web Vitals, read-only suggestions, and field-data interpretation.",
+    "menu_order": 90
+  },
+  {
+    "file": "settings-reference.html",
+    "slug": "settings-reference",
+    "parent_slug": "configuration",
+    "title": "Settings reference",
+    "excerpt": "Canonical 2.4.0 settings tabs, defaults, safety boundaries, and import/export behavior.",
+    "menu_order": 10
+  },
+  {
+    "file": "hooks.html",
+    "slug": "hooks",
+    "parent_slug": "configuration",
+    "title": "Hooks reference",
+    "excerpt": "Frequently used cache, asset, CSS, monitoring, and integration hooks with safe extension rules.",
+    "menu_order": 20
+  },
+  {
+    "file": "wp-cli.html",
+    "slug": "wp-cli",
+    "parent_slug": "configuration",
+    "title": "WP-CLI commands",
+    "excerpt": "All eight wp wppo command families, dry runs, destructive gates, and redacted output guidance.",
+    "menu_order": 30
+  },
+  {
+    "file": "rest-api.html",
+    "slug": "rest-api",
+    "parent_slug": "configuration",
+    "title": "REST API reference",
+    "excerpt": "The performance-optimisation/v1 namespace, authentication, route groups, and response conventions.",
+    "menu_order": 40
+  }
+]

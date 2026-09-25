@@ -1,0 +1,31 @@
+<h2>What it does</h2>
+<p>Image Optimization reduces initial image work through lazy loading, LCP protection, WebP/AVIF conversion, and server delivery rules. Original Media Library files stay available as the source of truth.</p>
+<h2>When to use it</h2>
+<p>Use it when images dominate page weight, the LCP element is an image, or lower-resolution devices receive oversized files. Start with the measured hero image and one representative content page.</p>
+<h2>Safe default</h2>
+<p>Native lazy loading and LCP guardrails are enabled. The legacy observer, automatic LCP preload, and aggressive background-image policies are opt-in. AVIF-first selection and smart quality are enabled where the runtime supports them.</p>
+<h2>How to enable it</h2>
+<ol><li>Open <strong>Image Optimization</strong>.</li><li>Keep native lazy loading on and exclude the logo, hero, and above-the-fold images from lazy loading.</li><li>Review <strong>LCP Preload</strong> and enable automatic preload only after a real or PageSpeed candidate is available.</li><li>Choose WebP, AVIF, or both and review the quality and maximum edge settings.</li><li>Save, run a conversion, and check the browser's selected source.</li></ol>
+<h2>What changes</h2>
+<p>The plugin adds loading hints, protects the measured LCP image, creates next-generation siblings, and may rewrite delivery to a supported format. A failed or pending conversion leaves the original upload available.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>Server rules must preserve the original fallback and correct MIME/Vary behavior.</li><li>Apache and LiteSpeed can apply marked <code>.htaccess</code> rules. Nginx needs server configuration. Restart OpenLiteSpeed after rule edits.</li><li>Builder widgets can add late images. Review Elementor and Divi exclusions before enabling background-image lazy loading.</li><li>CDN caching must vary on the delivered format or keep the original fallback reachable.</li></ul>
+<h2>How to verify</h2>
+<pre><code>wp wppo image status
+wp wppo image convert</code></pre>
+<p>In the browser, inspect the image source, intrinsic dimensions, alt text, loading attribute, and <code>fetchpriority</code>. Test the hero before content images. Confirm WebP or AVIF only after the server returns a valid fallback for unsupported clients.</p>
+<h2>How to undo or disable</h2>
+<p>Turn off the specific image option, save, clear the affected page cache, and remove the setting from the preset. Keep the original upload. Disable automatic LCP preload first if the wrong image is prioritized.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>Images disappear:</strong> remove the image from lazy-loading exclusions and clear the page cache.</li><li><strong>Wrong format is served:</strong> check generated files, MIME rules, and the CDN's format policy.</li><li><strong>LCP gets slower:</strong> disable automatic preload, verify the hero loads eagerly, and inspect TTFB.</li><li><strong>Builder layout changes:</strong> exclude the builder section and re-test after the builder regenerates assets.</li></ul>
+<h2>FAQ</h2>
+<h3>Does conversion delete the original image?</h3>
+<p>No. The original remains the source of truth.</p>
+<h3>Should every image be lazy-loaded?</h3>
+<p>No. The hero and other above-the-fold images can make LCP worse when delayed.</p>
+<h3>Why is AVIF not served?</h3>
+<p>Check conversion status, the image extension support, the server's MIME/Vary rules, and the CDN cache.</p>
+<h2>Technical reference</h2>
+<table><thead><tr><th>Key</th><th>Default</th><th>Purpose</th></tr></thead><tbody><tr><td><code>lazyLoadImages</code></td><td><code>false</code></td><td>Enable the image lazy-loading feature.</td></tr><tr><td><code>lazyLoadNative</code></td><td><code>true</code></td><td>Use the browser native path.</td></tr><tr><td><code>lcp_guardrails</code>, <code>lcpHeroPreload</code></td><td><code>true</code></td><td>Protect above-the-fold LCP images.</td></tr><tr><td><code>autoPreloadLCP</code>, <code>prioritizeLCPImages</code></td><td><code>false</code></td><td>Opt into measured image prioritization.</td></tr><tr><td><code>avifFirst</code>, <code>smartQuality</code></td><td><code>true</code></td><td>Prefer AVIF and use size-aware quality where available.</td></tr><tr><td><code>maxLongestEdgePx</code></td><td><code>2560</code></td><td>Bound generated image dimensions.</td></tr></tbody></table>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/core-web-vitals/">Core Web Vitals</a></li><li><a href="/docs/performance-optimisation/features/preload-speculation/">Preload and speculation</a></li><li><a href="/docs/performance-optimisation/litespeed/">LiteSpeed delivery rules</a></li><li><a href="/docs/performance-optimisation/cdn/">CDN delivery</a></li><li><a href="/docs/performance-optimisation/features/monitoring-rum/">LCP monitoring</a></li></ul>

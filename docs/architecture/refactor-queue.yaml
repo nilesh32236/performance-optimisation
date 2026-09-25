@@ -1750,6 +1750,24 @@ growth_items:
       runtime_scope: 'No runtime, REST, API, telemetry, recommendation, settings-persistence, backend-key, navigation, router, or state-library changes'
     status_note: 'Phase D is merged; existing controls remain available and the task map only navigates existing tabs.'
 
+  - id: E-001
+    title: 'Beginner-first feature documentation and discoverability map'
+    status: active
+    priority: medium
+    type: growth
+    objective: 'Document the existing plugin with useful user questions, safe defaults, compatibility boundaries, troubleshooting, and natural internal links.'
+    scope:
+      - 'docs/site feature pages and three new user guides'
+      - 'compatibility matrix for WordPress, PHP, WooCommerce, Elementor, LiteSpeed, Redis, and CDN'
+      - 'symptom-first troubleshooting and FAQ'
+      - 'docs/growth/DOCUMENTATION-MAP.md'
+      - 'manifest and internal-link validation'
+    non_goals:
+      - 'No runtime, API, settings, optimization, or public deployment changes; no thin keyword-only pages.'
+    issue: 1636
+    pull_request: pending
+    status_note: 'Phase E is active; documentation claims remain bounded to current code and verification evidence.'
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'

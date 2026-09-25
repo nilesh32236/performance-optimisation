@@ -20,20 +20,19 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 **Requirements:** WordPress **6.2+** and PHP **8.2+** (same as the [WordPress.org](https://wordpress.org/plugins/performance-optimisation/) listing; the canonical requirements live in `readme.txt`).
 
-**Safe defaults:** Aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules) are **off** by default, with clear warnings when you enable them.
+**Safe defaults:** Page caching and native lazy loading are available on a fresh install, while aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules) are **off** by default. LCP guardrails, WooCommerce safe mode, and bounded cache safeguards remain on.
 
 ---
 
-## What's New in v2.0.0
+## What's New in v2.4.0
 
-- **LiteSpeed/OpenLiteSpeed Coexistence:** Auto/WPPO/LiteSpeed/Standalone modes with native `X-LiteSpeed-*` header protocol, purge sync, ESI punch-holing, per-page/per-post-type TTL overrides, and a background cache crawler.
-- **Edge Cache + CDN:** Purge fan-out for Cloudflare, Bunny, and Varnish, plus per-mapping CDN URL rewriting.
-- **Real-User Monitoring (RUM):** Anonymized field Web Vitals (LCP, INP, CLS) collected with trend charts in the dashboard.
-- **New WP-CLI self-verification:** `wp wppo verify` checks cache dirs, drop-ins, Redis, LiteSpeed state, settings schema, cron, and uninstall hygiene.
-- **Autoload Bloat Audit:** Largest-autoloaded-options report with dry-run/apply/revert remediation, plus a read-only expired-transients export.
-- **Safety & Reliability:** Redis object-cache circuit breaker, builder-update purge watcher (Elementor/Divi/Bricks/WPBakery), safe-by-default Used CSS and critical CSS hardening, delay-JS presets, bfcache for logged-in users, and a redesigned WCAG-AA dashboard.
+- **Recursive responsibility architecture:** runtime code is organized by cache, settings, assets, CSS, images, edge delivery, insight, integrations, scheduler, support, and admin boundaries, with a generated source reference.
+- **Safer defaults and rollouts:** native lazy loading, LCP guardrails, WooCommerce safe mode, staged sandbox settings, and explicit aggressive-transform opt-ins.
+- **Reliability tooling:** `wp wppo verify` reports live cache, drop-in, Redis, LiteSpeed, settings-schema, cron, and uninstall-hygiene checks.
+- **Operational visibility:** PageSpeed, first-party Web Vitals, guided next steps, autoloaded-options audit, edge/CDN purge coordination, and bounded crawler/preload status.
+- **Compatibility:** PHP 8.2+, WordPress 6.2+, tested through WordPress 7.1, with guarded WordPress 6.9+ APIs and LiteSpeed coexistence modes.
 
-See the full [changelog](readme.txt) for the complete list.
+See the full [changelog](readme.txt) and the maintained [site documentation source](docs/site/README.md).
 
 ---
 
@@ -79,7 +78,7 @@ See the methodology and detailed desktop/mobile breakdown in [PERFORMANCE.md](PE
 ### Image Optimization Settings
 
 - **Next-Gen Formats:** Automatically convert images to highly compressed WebP or AVIF formats.
-- **Smart Lazy Loading:** Defer offscreen images and `<video>` tags utilizing lightweight SVG placeholders and an active `MutationObserver` to track dynamically injected DOM content.
+- **Smart Lazy Loading:** Native browser lazy loading is preferred. The opt-in observer can defer offscreen images, iframes, and videos with placeholders and observes dynamically injected content.
 - **Exclusion Rules:** Limit preloaded image sizes and exclude specific media from lazy loading rules.
 
 ### Database Optimization
@@ -101,11 +100,11 @@ See the methodology and detailed desktop/mobile breakdown in [PERFORMANCE.md](PE
 
 ### Compatibility & Ecosystem
 
-Performance Optimisation is tested and verified compatible with popular themes, page builders, e-commerce platforms, and SEO plugins:
-- **Themes:** Astra, GeneratePress, Kadence, OceanWP, Blocksy, Twenty Twenty-Four.
-- **Page Builders:** Elementor, Divi, Beaver Builder, WPBakery.
-- **E-Commerce:** WooCommerce (cart, checkout, and account pages are automatically excluded from full-page caching).
-- **SEO Plugins:** Yoast SEO, Rank Math, All in One SEO, SEOPress (XML sitemaps and feeds bypass caching/minification).
+Performance Optimisation includes compatibility safeguards and guarded behavior for common WordPress environments and integrations. Test cache, minification, defer/delay, image, and CDN behavior on staging before production; safeguards are not a blanket guarantee for every theme or plugin combination:
+- **Themes:** Astra, GeneratePress, Kadence, OceanWP, Blocksy, and Twenty Twenty-Four are supported starting points.
+- **Page Builders:** Elementor, Divi, Beaver Builder, and WPBakery receive exclusion, purge, and builder-update safeguards.
+- **E-Commerce:** WooCommerce safe mode excludes dynamic cart, checkout, account, Store API, AJAX, and faceted routes.
+- **SEO Plugins:** Yoast SEO, Rank Math, All in One SEO, and SEOPress are treated as integration contexts; feeds and REST/sitemap routes remain dynamic.
 
 ---
 
@@ -120,34 +119,30 @@ This plugin leverages modern development practices, utilizing Composer for PHP d
 
 ---
 
+## Documentation
+
+The maintained, code-accurate documentation is published at [nileshportfolio.duckdns.org/docs/](https://nileshportfolio.duckdns.org/docs/):
+
+- [Performance Optimisation overview](https://nileshportfolio.duckdns.org/docs/performance-optimisation/)
+- [Installation and first run](https://nileshportfolio.duckdns.org/docs/performance-optimisation/installation/)
+- [Features Guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/features/)
+- [Configuration and developer reference](https://nileshportfolio.duckdns.org/docs/performance-optimisation/configuration/)
+- [Troubleshooting](https://nileshportfolio.duckdns.org/docs/performance-optimisation/troubleshooting/)
+- [Generated code reference](https://nileshportfolio.duckdns.org/docs/performance-optimisation/reference/)
+
+The source fragments live in [`docs/site/`](docs/site/), and the API reference is regenerated from the current recursive source tree. Documentation examples are operational guidance, not guaranteed performance scores.
+
+---
+
 ## Installation & Setup
 
 ### For End Users
 
-1. Clone the repository:
+1. Download the latest ZIP from the [WordPress.org listing](https://wordpress.org/plugins/performance-optimisation/) or the repository's Releases page.
+2. In WordPress, open **Plugins → Add New → Upload Plugin**, select the ZIP, install it, and activate it.
+3. Follow the [online installation guide](https://nileshportfolio.duckdns.org/docs/performance-optimisation/installation/) and enable one optional optimization at a time.
 
-   ```bash
-   git clone https://github.com/nilesh32236/performance-optimisation.git
-   ```
-
-2. Navigate to the plugin directory:
-   ```bash
-   cd performance-optimisation
-   ```
-3. Install PHP dependencies via Composer:
-   ```bash
-   composer install --no-dev
-   ```
-4. Install Node dependencies:
-   ```bash
-   npm install
-   ```
-5. Build the plugin frontend assets:
-   ```bash
-   npm run build
-   ```
-6. Upload the compiled plugin folder to your WordPress site's `wp-content/plugins/` directory.
-7. Activate the plugin from the **Plugins** menu in WordPress.
+A Composer/Node build is only needed when developing from source.
 
 ### For Developers
 
@@ -176,9 +171,11 @@ This plugin leverages modern development practices, utilizing Composer for PHP d
     }
   ],
   "require": {
+    "php": ">=8.2",
     "voku/html-min": "^5.0",
     "matthiasmullie/minify": "^1.3",
-    "woocommerce/action-scheduler": "^4.1"
+    "woocommerce/action-scheduler": "^4.1",
+    "symfony/css-selector": "^7.4"
   },
   "extra": {
     "cleanup": {

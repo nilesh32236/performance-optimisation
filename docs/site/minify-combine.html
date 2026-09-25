@@ -1,0 +1,32 @@
+<h2>What it does</h2>
+<p>File Optimization can minify HTML, CSS, and JavaScript, combine eligible stylesheets, remove selected WordPress bloat, and host Google Fonts locally. Each transform writes a generated asset only after containment and safety checks.</p>
+<h2>When to use it</h2>
+<p>Use minification for a measured transfer-size or parse cost. Test one asset family at a time. Use CSS combining only when a request-count reduction helps the site and HTTP/2 or HTTP/3 is not harmed.</p>
+<h2>Safe default</h2>
+<p>External and inline minification, combining, and local font hosting start disabled. Elementor-safe mode stays on by default, so Combine CSS steps aside on builder-built pages. The plugin keeps exclusions and a complete stylesheet fallback for eligible paths.</p>
+<h2>How to enable it</h2>
+<ol><li>Open <strong>File Optimization → Assets</strong>.</li><li>Enable HTML, CSS, or JavaScript minification separately.</li><li>Clear one representative page cache and inspect rendered HTML and the Network panel.</li><li>Test navigation, forms, popups, and builder layouts before saving more changes.</li><li>Add exact handles or URLs to the matching exclusion list if a file breaks.</li></ol>
+<h2>What changes</h2>
+<p>Eligible source files are read, transformed, stored with a stable version, and served through a rewritten URL. Combining merges eligible stylesheets. Local font hosting changes the font source. Already-minified, unsafe, excluded, or builder-critical assets stay untouched.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>Builder-generated CSS can arrive after a page render. Keep Elementor-safe mode and the CSS safelist active.</li><li>JavaScript can depend on execution order. Exclude consent, payment, menu, and critical builder scripts.</li><li>Some hosts and CDNs cache by URL only. A generated asset URL must change whenever its content changes.</li><li>Combining is not automatically better on HTTP/2 or HTTP/3.</li></ul>
+<h2>How to verify</h2>
+<pre><code>wp wppo cache clear --page=/sample-page/
+wp wppo cache status</code></pre>
+<p>Compare the HTML source, CSS cascade, JavaScript console, responsive layout, and first interaction. A smaller file that breaks a menu is not an optimization.</p>
+<h2>How to undo or disable</h2>
+<p>Disable the narrowest transform, save, clear the page cache, and reload. Keep the exact failing handle in the exclusion list. Use the preset restore point if a bundle changed several settings.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>CSS is missing:</strong> disable Combine CSS, keep the handle excluded, and clear derived CSS.</li><li><strong>JavaScript fails:</strong> disable minification for that family, inspect the console, and exclude the handle.</li><li><strong>Builder output breaks:</strong> keep Elementor-safe mode on and test the sandbox preview before promoting changes.</li><li><strong>Fonts change:</strong> disable local font hosting and clear the page and edge cache.</li></ul>
+<h2>FAQ</h2>
+<h3>Is combining CSS safe for every site?</h3>
+<p>No. It can change cascade order and request behavior. Test the exact theme and builder.</p>
+<h3>Why was my file excluded?</h3>
+<p>The file may be already minified, unsafe, builder-critical, or listed in an exclusion. Check the current exclusion list and settings reference.</p>
+<h3>Can I undo a preset?</h3>
+<p>Yes. The Dashboard preset card creates a restore point and exposes an Undo action.</p>
+<h2>Technical reference</h2>
+<table><thead><tr><th>Key</th><th>Default</th><th>Purpose</th></tr></thead><tbody><tr><td><code>minifyHTML</code>, <code>minifyJS</code>, <code>minifyCSS</code></td><td><code>false</code></td><td>Minify each asset family.</td></tr><tr><td><code>minifyInlineCSS</code>, <code>minifyInlineJS</code></td><td><code>false</code></td><td>Process inline payloads.</td></tr><tr><td><code>removeHTMLComments</code></td><td><code>true</code></td><td>Remove HTML comments during HTML processing.</td></tr><tr><td><code>combineCSS</code></td><td><code>false</code></td><td>Combine eligible stylesheets.</td></tr><tr><td><code>hostGoogleFontsLocally</code></td><td><code>false</code></td><td>Fetch and serve Google Fonts locally.</td></tr></tbody></table>
+<p>The historical <code>removeQueryStrings</code> option is not a current control. Keep versioned asset URLs versioned.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/features/defer-delay-js/">Defer and delay JavaScript</a></li><li><a href="/docs/performance-optimisation/features/used-critical-css/">Used and critical CSS</a></li><li><a href="/docs/performance-optimisation/core-web-vitals/">Core Web Vitals</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li><li><a href="/docs/performance-optimisation/configuration/hooks/">Exclusion hooks</a></li></ul>

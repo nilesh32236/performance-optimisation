@@ -1,0 +1,29 @@
+<h2>What it does</h2>
+<p>Critical CSS prepares above-the-fold styles for a template. Used CSS builds a page-specific stylesheet from selectors observed in a rendered URL. Both are independent, opt-in pipelines.</p>
+<h2>When to use it</h2>
+<p>Use Critical CSS after measuring a render-blocking stylesheet problem. Use Used CSS only when a full stylesheet is demonstrably larger than the page needs and the page has stable HTML states.</p>
+<h2>Safe default</h2>
+<p>Both pipelines start disabled. Used CSS keeps a full-stylesheet fallback, user safelist, and builder exclusions. Critical CSS reports generation failures instead of treating them as a successful render.</p>
+<h2>How to enable it</h2>
+<ol><li>Open <strong>File Optimization</strong> and review the CSS settings.</li><li>Enable one pipeline on staging.</li><li>Use Preview or Dry Run and inspect the generated selectors.</li><li>Add dynamic selectors to the safelist before promotion.</li><li>Promote, clear the affected page, and test the real page in mobile and desktop.</li></ol>
+<h2>What changes</h2>
+<p>Critical CSS writes a bounded template artifact and serves a fallback stylesheet. Used CSS writes a per-URL artifact after checking rendered HTML, queued styles, safelist entries, and freshness.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>Dynamic classes, JavaScript-created markup, and builder widgets belong in the safelist.</li><li>Builder cache regeneration can make a previously valid artifact stale.</li><li>Strict CSP, large stylesheets, and commerce pages can need separate settings.</li><li>Do not enable Used CSS and Critical CSS as a combined experiment on the first attempt.</li></ul>
+<h2>How to verify</h2>
+<p>Inspect the generated artifact, health result, response headers, and rendered page. Test a logged-out page, an editor preview, a form, a modal, and a dynamic state. Re-run after a theme or builder update.</p>
+<h2>How to undo or disable</h2>
+<p>Disable the failing pipeline, clear its derived cache, and promote the last-good artifact when the staged controls offer it. Keep the safelist for the next rollout. Do not delete all generated files as the first step.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>Required styles disappear:</strong> add the selector to the safelist and regenerate the URL.</li><li><strong>FOUC appears:</strong> disable Critical CSS, clear the page cache, and keep the full stylesheet fallback.</li><li><strong>Styles break after a builder update:</strong> re-run the health check and regenerate the affected template.</li><li><strong>Used CSS removes dynamic content:</strong> add the state selector or disable Used CSS while investigating.</li></ul>
+<h2>FAQ</h2>
+<h3>Are Used CSS and Critical CSS the same?</h3>
+<p>No. Used CSS reduces a rendered page's stylesheet; Critical CSS prioritizes above-the-fold styles.</p>
+<h3>Can I use them together?</h3>
+<p>You can, but test one pipeline first so a failure has a clear cause.</p>
+<h3>What is a safelist?</h3>
+<p>A small set of selectors or handles the optimizer must keep even when it cannot prove they are present in the initial HTML.</p>
+<h2>Technical reference</h2>
+<table><thead><tr><th>Key</th><th>Default</th><th>Purpose</th></tr></thead><tbody><tr><td><code>criticalCSS</code></td><td><code>false</code></td><td>Generate template critical CSS.</td></tr><tr><td><code>removeUnusedCSS</code></td><td><code>false</code></td><td>Build per-URL used CSS.</td></tr><tr><td><code>excludeUnusedCSS</code>, <code>ccssSafelistExtra</code></td><td><code>''</code></td><td>Keep site-specific selectors.</td></tr><tr><td><code>usedCSSDeliveryMode</code></td><td><code>file</code></td><td>Use the file delivery mode.</td></tr></tbody></table>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/features/minify-combine/">CSS and JavaScript optimization</a></li><li><a href="/docs/performance-optimisation/features/page-cache/">Page Cache and derived purges</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li><li><a href="/docs/performance-optimisation/configuration/hooks/">CSS filters</a></li></ul>

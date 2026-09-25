@@ -1,0 +1,30 @@
+<h2>What it does</h2>
+<p>LiteSpeed and OpenLiteSpeed support is an explicit coexistence boundary. The plugin can use its own cache, defer to LiteSpeed Cache, run standalone, or resolve the owner automatically. The selected mode is visible in the Dashboard.</p>
+<h2>When to use it</h2>
+<p>Use the LiteSpeed mode when the site runs LiteSpeed or OpenLiteSpeed and you need server-level cache headers, purge coordination, TTL variants, or the built-in crawler. Keep one page-cache owner.</p>
+<h2>Safe default</h2>
+<p>Automatic mode is the default. It resolves from the detected server and active LiteSpeed Cache plugin. Explicit modes remain available for staging and agencies.</p>
+<h2>How to enable or configure it</h2>
+<ol><li>Open the Dashboard and inspect the detected server type.</li><li>Review the LiteSpeed integration mode.</li><li>Choose <strong>auto</strong>, <strong>wppo</strong>, <strong>litespeed</strong>, or <strong>standalone</strong> for the page-cache owner.</li><li>Save, clear a test URL, and inspect the response headers.</li><li>On OpenLiteSpeed, restart LiteSpeed after marked <code>.htaccess</code> changes.</li></ol>
+<h2>What changes</h2>
+<p>The adapter emits cache-control, tag, vary, and purge protocol when the LiteSpeed owner is active. Purge synchronization coordinates both plugins behind a lock. TTL and vary groups remain bounded and opt-in.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>LiteSpeed Enterprise supports the protected ESI path. OpenLiteSpeed does not provide Enterprise ESI, so that bridge remains unavailable there.</li><li>Do not run two page-cache orchestrators against the same URL.</li><li>Apache and LiteSpeed can apply marked <code>.htaccess</code> rules. Nginx needs server configuration.</li><li>Guest, mobile, and WebP/AVIF vary groups must represent a real output difference.</li></ul>
+<h2>How to verify</h2>
+<pre><code>curl -sI https://example.com/ | grep -iE 'x-litespeed-cache|x-litespeed-tag|etag|last-modified|vary'
+wp wppo cache preload
+wp wppo cache status</code></pre>
+<p>Check the effective mode, cache owner, headers, purge result, and a real miss followed by a hit. Restart OLS after rule edits before judging the result.</p>
+<h2>How to undo or disable</h2>
+<p>Return the mode to <strong>auto</strong> or <strong>standalone</strong>, save, and clear a test URL. Keep the competing page-cache module disabled. Do not remove LiteSpeed rules until the origin page works without them.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>Headers absent:</strong> check server detection, active LiteSpeed Cache, mode, and the selected rule layer.</li><li><strong>Old content remains:</strong> inspect purge logs, vary groups, and the owner boundary.</li><li><strong>OpenLiteSpeed ignores rules:</strong> restart LiteSpeed after marked file changes.</li><li><strong>Two caches conflict:</strong> choose one page-cache owner and keep the other as a purge bridge only when documented.</li></ul>
+<h2>FAQ</h2>
+<h3>Does OLS support Enterprise ESI?</h3>
+<p>No. The plugin exposes the LiteSpeed Enterprise boundary and does not claim that OpenLiteSpeed can provide the same path.</p>
+<h3>Should I disable the plugin cache when LiteSpeed Cache is active?</h3>
+<p>Use the explicit LiteSpeed mode. Keep the competing HTML cache and transforms out of the same URL.</p>
+<h2>Technical reference</h2>
+<p>The setting is <code>litespeed_integration.mode</code>. The current integration plan and compatibility audit document the header, purge, TTL, vary, crawler, and ESI boundaries.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/features/page-cache/">Page Cache</a></li><li><a href="/docs/performance-optimisation/cdn/">CDN and edge cache</a></li><li><a href="/docs/performance-optimisation/features/preload-speculation/">Preload and the LiteSpeed crawler</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li></ul>

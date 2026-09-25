@@ -1,0 +1,21 @@
+<p>The plugin registers eight <code>wp wppo</code> command families. Run commands as a user with the capabilities required by the operation and review destructive previews before applying them.</p>
+<h2>Command map</h2>
+<table><thead><tr><th>Command</th><th>Actions</th><th>Notes</th></tr></thead><tbody><tr><td><code>cache</code></td><td><code>clear</code>, <code>preload</code>, <code>status</code></td><td><code>--page=</code> accepts a page URL or path for a targeted clear.</td></tr><tr><td><code>database</code></td><td><code>cleanup</code>, <code>optimize</code>, <code>counts</code></td><td>Cleanup supports nine types, <code>--dry-run</code>, and <code>--yes</code> for an all-type run.</td></tr><tr><td><code>image</code></td><td><code>status</code>, <code>convert</code></td><td>Conversion honors the configured format and bounded batch size.</td></tr><tr><td><code>settings</code></td><td><code>get</code>, <code>update</code>, <code>export</code>, <code>import</code></td><td>Exports and reads redact secret-shaped values; imports validate the canonical tab allowlist.</td></tr><tr><td><code>object-cache</code></td><td><code>status</code>, <code>ping</code>, <code>enable</code>, <code>disable</code>, <code>flush</code></td><td>Connection arguments are validated by the Redis configuration policy.</td></tr><tr><td><code>pagespeed</code></td><td><code>scan</code>, <code>results</code></td><td>Requires a configured PageSpeed key for a remote scan.</td></tr><tr><td><code>system-info</code></td><td>JSON groups or the full report</td><td>Use for redacted diagnostics; do not paste secrets into reports.</td></tr><tr><td><code>verify</code></td><td>Read-only live-state gates</td><td>Checks cache directories, drop-ins, Redis, LiteSpeed, settings schema, cron, and uninstall hygiene.</td></tr></tbody></table>
+<h2>Common examples</h2>
+<pre><code>wp wppo cache clear
+wp wppo cache clear --page=/sample-page/
+wp wppo cache preload
+wp wppo database cleanup --type=revisions --dry-run
+wp wppo database counts
+wp wppo image status
+wp wppo settings get file_optimisation
+wp wppo settings update file_optimisation --settings='{"minifyHTML":true}'
+wp wppo object-cache status
+wp wppo pagespeed scan --url=https://example.com --strategy=mobile
+wp wppo verify --format=json</code></pre>
+<h2>Destructive operations</h2>
+<p>Use <code>--dry-run</code> before database cleanup. The all-type cleanup asks for confirmation in an interactive terminal and accepts <code>--yes</code> for automation. Disabling the Redis drop-in is also confirmation-gated. Keep an export and a staging test before importing settings or changing server rules.</p>
+<h2>Output and secrets</h2>
+<p>Commands return JSON where documented and redact password/API-key-shaped values from settings reads and exports. Do not add a wrapper that prints raw options, request headers, cookies, or environment variables.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/configuration/settings-reference/">Settings reference</a></li><li><a href="/docs/performance-optimisation/troubleshooting/">Troubleshooting</a></li><li><a href="/docs/performance-optimisation/reference/includes/class-wppo-cli-command/">WPPO_CLI_Command reference</a></li></ul>

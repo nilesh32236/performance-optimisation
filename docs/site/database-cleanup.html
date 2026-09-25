@@ -1,0 +1,32 @@
+<h2>What it does</h2>
+<p>Database Cleanup removes bounded categories of stale WordPress data and audits autoloaded options. It shows possible work before deletion and uses the same canonical runner in the Dashboard and WP-CLI.</p>
+<h2>When to use it</h2>
+<p>Use cleanup after reviewing counts, especially for revisions, auto-drafts, trashed content, expired transients, and orphan metadata. Use the autoloaded-options audit for repeated database growth. Back up the database first.</p>
+<h2>Safe default</h2>
+<p>Cleanup and scheduling start disabled. A lock prevents overlapping runs. Unattached media and autoloaded options require an explicit review because a large or unattached row can still be needed.</p>
+<h2>How to enable it</h2>
+<ol><li>Open <strong>Database</strong> and read the counts for each cleanup type.</li><li>Run a dry run for the smallest type.</li><li>Confirm the retention and age policy.</li><li>Run the selected cleanup and review the result count.</li><li>Schedule only after the one-time cleanup is correct.</li></ol>
+<h2>What changes</h2>
+<p>Selected stale rows or metadata are deleted in bounded batches. Autoloaded-options remediation can apply, revert one option, or revert all after a dry run. Activity entries record aggregate work without logging deleted content.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>Use a database backup. Cleanup is not a substitute for a backup.</li><li>Plugins can attach media to posts through custom relationships. Confirm unattached media before deletion.</li><li>Some autoloaded options are required on every request. Review each candidate instead of deleting by size alone.</li><li>WooCommerce orders, customers, sessions, and payment records are outside the default cleanup list.</li></ul>
+<h2>How to verify</h2>
+<pre><code>wp wppo database counts
+wp wppo database cleanup --type=all --dry-run
+wp wppo database cleanup --type=expired_transients --yes</code></pre>
+<p>Compare counts before and after, inspect the activity log, and confirm the homepage and a WooCommerce flow still work. Purge page or derived caches only when visible content changed.</p>
+<h2>How to undo or disable</h2>
+<p>Database deletions cannot be undone from the plugin. Restore from the backup. Autoloaded-options remediation has a revert action. Turn off the schedule after cleanup and keep the backup until the site is verified.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>Unexpected missing media:</strong> restore the backup and review the unattached-media policy.</li><li><strong>Cleanup is locked:</strong> wait for the current run or inspect the canonical runner before forcing another run.</li><li><strong>Site slows after autoload remediation:</strong> revert the option and review plugins that load it on every request.</li><li><strong>Count differs from phpMyAdmin:</strong> compare prefix, retention, and dry-run scope before deleting more.</li></ul>
+<h2>FAQ</h2>
+<h3>Does cleanup delete WooCommerce orders?</h3>
+<p>No. The default cleanup types do not target orders, customers, sessions, or payment records.</p>
+<h3>Can I schedule cleanup immediately?</h3>
+<p>Run a dry run first. Scheduling is for a policy you have already tested.</p>
+<h3>Is an autoloaded option safe to delete because it is large?</h3>
+<p>No. Size is a signal, not proof. Review the option owner and use revert.</p>
+<h2>Technical reference</h2>
+<table><thead><tr><th>Type</th><th>Typical target</th></tr></thead><tbody><tr><td><code>revisions</code></td><td>Old post revisions.</td></tr><tr><td><code>auto_drafts</code></td><td>Abandoned editor drafts.</td></tr><tr><td><code>trashed_posts</code></td><td>Trashed posts past retention.</td></tr><tr><td><code>spam_comments</code>, <code>trashed_comments</code></td><td>Comment rows and metadata.</td></tr><tr><td><code>expired_transients</code></td><td>Expired transients.</td></tr><tr><td><code>orphan_postmeta</code></td><td>Post meta without a parent.</td></tr><tr><td><code>unattached_media</code></td><td>Unattached media after review.</td></tr><tr><td><code>oembed_cache</code></td><td>Expired oEmbed cache.</td></tr></tbody></table>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/configuration/wp-cli/">WP-CLI database commands</a></li><li><a href="/docs/performance-optimisation/features/redis-object-cache/">Redis Object Cache</a></li><li><a href="/docs/performance-optimisation/troubleshooting/">Troubleshooting</a></li></ul>

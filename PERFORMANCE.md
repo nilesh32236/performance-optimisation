@@ -1,6 +1,6 @@
 # Performance Comparison & Benchmark Showcase
 
-This document details the performance testing methodology, real-world benchmark metrics, and before/after comparison results achieved using the **Performance Optimisation** WordPress plugin.
+This document is a **historical, illustrative lab record** from a controlled test of the Performance Optimisation plugin. It is useful for understanding the variables that affect a benchmark; it is not a promise, current guarantee, or substitute for measuring the target site. Current operator guidance lives in the [online documentation](https://nileshportfolio.duckdns.org/docs/performance-optimisation/).
 
 ---
 

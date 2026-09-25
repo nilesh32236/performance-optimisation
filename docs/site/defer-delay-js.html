@@ -1,0 +1,29 @@
+<h2>What it does</h2>
+<p>Defer lets the browser download and run eligible JavaScript after parsing. Delay holds selected scripts until an interaction, idle period, or viewport trigger. The controls change execution timing, not JavaScript source.</p>
+<h2>When to use it</h2>
+<p>Use defer for non-critical scripts that can run after the document parses. Use delay only after checking that a script does not own the first tap, menu, consent, payment, modal, or builder state.</p>
+<h2>Safe default</h2>
+<p>Defer and delay start disabled. When you opt in, the safe preset, builder/commerce exclusions, and first-click safety gate remain available. Interaction is the default delay strategy.</p>
+<h2>How to enable it</h2>
+<ol><li>Open <strong>File Optimization → Scripts</strong>.</li><li>Enable Defer for a small, known non-critical group first.</li><li>Test the first click and keyboard interaction on mobile and desktop.</li><li>Enable Delay only for a measured script and choose Interaction, Idle, Viewport, or Priority deliberately.</li><li>Keep the exact handles in the exclusion list and save.</li></ol>
+<h2>What changes</h2>
+<p>Selected scripts receive a defer attribute or a trigger-based loader. The first interaction, idle timeout, and viewport behavior determine when their handlers attach. A delayed script can consume a tap before its code is ready.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>Navigation, consent, payment, menu, modal, and builder scripts need early review.</li><li>WooCommerce safe mode and the commerce preset keep common dynamic paths conservative.</li><li>Elementor and other builders can add late handles. Keep their safe mode and exclusions on.</li><li>Per-post Asset Manager overrides can help one template without widening global settings.</li></ul>
+<h2>How to verify</h2>
+<ol><li>Clear the page cache after saving.</li><li>Load a logged-out page in a private window.</li><li>Test the first menu click, search, modal, consent, checkout, and builder interaction.</li><li>Inspect the Network panel and browser console.</li><li>Compare INP and interaction latency, not only page size.</li></ol>
+<h2>How to undo or disable</h2>
+<p>Turn off Defer or Delay, save, clear the page cache, and retest. Keep the failing handle excluded before re-enabling a smaller set. Use the preset restore point when several delay settings changed together.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>First click fails:</strong> disable Delay, exclude the handle, and retest.</li><li><strong>Menu breaks:</strong> restore the navigation handle and keep it out of Delay.</li><li><strong>Checkout breaks:</strong> turn WooCommerce safe mode on and restore payment and AJAX exclusions.</li><li><strong>Builder popup fails:</strong> keep Elementor and popup handles excluded.</li></ul>
+<h2>FAQ</h2>
+<h3>Is defer safer than delay?</h3>
+<p>Usually. Defer keeps more predictable browser ordering. Delay can affect first interaction.</p>
+<h3>Why did my script not move?</h3>
+<p>It may be inline, protected by safe mode, excluded by a preset, or blocked by a per-post override.</p>
+<h3>Does delay improve INP automatically?</h3>
+<p>No. It can help a long task, but it can also delay the handler that responds to the first click.</p>
+<h2>Technical reference</h2>
+<table><thead><tr><th>Key</th><th>Default</th><th>Purpose</th></tr></thead><tbody><tr><td><code>deferJS</code></td><td><code>false</code></td><td>Apply native defer to eligible scripts.</td></tr><tr><td><code>delayJS</code></td><td><code>false</code></td><td>Enable trigger-based delay.</td></tr><tr><td><code>delayJSDefaultStrategy</code></td><td><code>interaction</code></td><td>Default trigger.</td></tr><tr><td><code>delayJSIdleTimeout</code></td><td><code>3000</code></td><td>Idle timeout in milliseconds.</td></tr><tr><td><code>delayJSPreset</code></td><td><code>safe</code></td><td>Preset level.</td></tr><tr><td><code>delayJSSafeMode</code></td><td><code>true</code></td><td>Conservative safety gate.</td></tr></tbody></table>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/features/minify-combine/">Minification and combining</a></li><li><a href="/docs/performance-optimisation/core-web-vitals/">Core Web Vitals and INP</a></li><li><a href="/docs/performance-optimisation/features/monitoring-rum/">Monitoring and RUM</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li></ul>

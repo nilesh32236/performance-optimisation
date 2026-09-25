@@ -1,0 +1,32 @@
+<h2>What it does</h2>
+<p>Page Cache saves a rendered HTML response as a static file. On a hit, the owned <code>advanced-cache.php</code> drop-in can serve the file before WordPress boots, avoiding PHP and most database work for that request.</p>
+<h2>When to use it</h2>
+<p>Use Page Cache on a public WordPress site with mostly cacheable content. Keep dynamic routes out of it. It is usually the first performance layer to verify when TTFB is high on anonymous requests.</p>
+<h2>Safe default</h2>
+<p><code>enableCache</code> starts enabled for eligible anonymous traffic. Logged-in variants are off by default. WooCommerce safe mode is on. Cart, checkout, account, Store API, AJAX, admin, REST, feeds, unsafe queries, and private responses stay outside shared cache.</p>
+<h2>How to enable it</h2>
+<ol><li>Open <strong>Dashboard → Page Cache</strong>.</li><li>Confirm <strong>Enable Page Cache</strong> is on.</li><li>Review the cache lifespan and post-type overrides.</li><li>Save, clear the affected page, and load it in a logged-out window twice.</li><li>Run <code>wp wppo cache status</code>.</li></ol>
+<h2>What changes</h2>
+<p>Eligible responses are written under <code>wp-content/cache/wppo/</code> and served as a stored file. Publishing, settings changes, theme or plugin changes, permalink changes, and manual clears can invalidate affected URLs. Derived CSS and edge layers may also be purged.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>WooCommerce safe mode protects dynamic routes and session cookies.</li><li>LiteSpeed has explicit coexistence modes. Keep one page-cache owner.</li><li>Logins, REST, feeds, error pages, and unsafe query strings intentionally miss.</li><li>Another plugin can set <code>DONOTCACHEPAGE</code> or use the documented request filter. Known unsafe Woo routes remain fail-closed.</li></ul>
+<h2>How to verify</h2>
+<pre><code>wp wppo cache status
+curl -sI https://example.com/ | grep -iE 'etag|last-modified|vary|x-litespeed-cache'
+wp wppo cache clear --page=/sample-page/</code></pre>
+<p>Check the first miss and second hit, response validators, cache directory, and page count. A smaller response is not enough if the content is stale or wrong.</p>
+<h2>How to undo or disable</h2>
+<p>Turn off <strong>Enable Page Cache</strong>, save, and clear the cache. Use <strong>Restore</strong> or the automatic settings restore point when a preset changed the value. The plugin-owned drop-in is removed during the controlled deactivate/uninstall path, not by deleting arbitrary files.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>Nothing is cached:</strong> check <code>enableCache</code>, <code>WP_CACHE</code>, the owned drop-in, directory permissions, and request gates.</li><li><strong>Stale content:</strong> publish a test change, inspect invalidation, then clear the exact URL and derived CSS.</li><li><strong>Woo cart issue:</strong> turn WooCommerce safe mode on, save, clear cache, and run the Woo self-test.</li><li><strong>Cache is growing too fast:</strong> review size and file-count caps before increasing them.</li></ul>
+<h2>FAQ</h2>
+<h3>Does Page Cache cache my admin?</h3>
+<p>No. Admin and authenticated requests are excluded unless a narrow, explicit path allows otherwise.</p>
+<h3>Why does the second request look faster?</h3>
+<p>The second request can reuse a stored HTML file instead of rendering WordPress again.</p>
+<h3>Can I run it beside LiteSpeed Cache?</h3>
+<p>Use the LiteSpeed coexistence mode that names the page-cache owner. Do not let two orchestrators write the same URL.</p>
+<h2>Technical reference</h2>
+<table><thead><tr><th>Key</th><th>Default</th><th>Purpose</th></tr></thead><tbody><tr><td><code>enableCache</code></td><td><code>true</code></td><td>Enable the page cache.</td></tr><tr><td><code>cacheLife</code></td><td><code>0</code></td><td>Global lifetime in hours; zero has owner-specific bounded meaning.</td></tr><tr><td><code>enableLoggedInCache</code></td><td><code>false</code></td><td>Opt in to role-keyed logged-in variants.</td></tr><tr><td><code>ttlOverrides</code></td><td><code>{}</code></td><td>Post-type lifetime overrides.</td></tr><tr><td><code>wooSafeMode</code></td><td><code>true</code></td><td>Protect dynamic WooCommerce requests.</td></tr></tbody></table>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/litespeed/">LiteSpeed coexistence</a></li><li><a href="/docs/performance-optimisation/cdn/">CDN and edge cache</a></li><li><a href="/docs/performance-optimisation/features/preload-speculation/">Preload and speculation</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li><li><a href="/docs/performance-optimisation/troubleshooting/">Troubleshooting</a></li></ul>

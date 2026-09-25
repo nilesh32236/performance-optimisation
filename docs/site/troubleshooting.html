@@ -1,0 +1,42 @@
+<h2>Start with a safe diagnosis</h2>
+<p>Capture the URL, exact setting, action, WordPress/PHP/server versions, and response headers before changing several controls. Run <code>wp wppo verify</code> and keep passwords, API keys, cookies, and authorization headers out of screenshots.</p>
+<h2>Site looks broken</h2>
+<p>Disable the most recent transform first: Delay JavaScript, Used CSS, Critical CSS, Combine CSS, then the other asset transforms in reverse order. Save, clear the exact page, and test logged out. If the site still fails, deactivate the plugin through WordPress and inspect the PHP error log and browser console.</p>
+<h2>CSS is missing or FOUC appears</h2>
+<p>Turn off Used CSS and Critical CSS one at a time. Keep the full stylesheet fallback. Add builder, dynamic-state, and required selectors to the safelist, regenerate the affected URL, and clear derived cache. If only one builder page fails, keep that page excluded.</p>
+<h2>JavaScript or the first click fails</h2>
+<p>Turn off Delay JavaScript, save, clear cache, and test again. Exclude navigation, consent, payment, menu, modal, and builder handles before re-enabling a smaller set. Defer can also affect inline or order-dependent code, so inspect the console and Network panel.</p>
+<h2>Cache is not clearing</h2>
+<pre><code>wp wppo cache status
+wp wppo cache clear
+wp wppo cache clear --page=/sample-page/</code></pre>
+<p>Check the owned drop-in, <code>WP_CACHE</code>, directory permissions, cache owner, URL invalidation, and edge purge. A stale LiteSpeed or CDN layer can outlive the origin cache. Use the matching owner’s purge path.</p>
+<h2>WooCommerce cart or checkout issue</h2>
+<p>Turn on WooCommerce safe mode, save, clear cache, and run the Woo self-test. Confirm cart, checkout, Store API, and AJAX requests are excluded. Keep payment, session, add-to-cart, and fragment handles out of delay. Restore a backup only if a database cleanup removed data.</p>
+<h2>Redis cannot connect</h2>
+<pre><code>wp wppo object-cache status
+wp wppo object-cache ping</code></pre>
+<p>Check PhpRedis, host, port, TLS, firewall, password, drop-in ownership, and the circuit state. A foreign object-cache drop-in must be removed by its owner. Never paste the Redis password into a ticket.</p>
+<h2>Critical CSS causes FOUC</h2>
+<p>Disable Critical CSS, clear the page and derived CSS, and keep the full stylesheet fallback. Re-enable it only after testing the hero, fonts, modal, and builder states. Do not delete every generated artifact first.</p>
+<h2>Used CSS removes required styles</h2>
+<p>Add the missing selector or state to the safelist and regenerate the URL. If the failure follows a builder update, keep the page excluded and rerun the health check. Disable Used CSS while investigating if the selector cannot be identified.</p>
+<h2>WebP or AVIF is not served</h2>
+<pre><code>wp wppo image status
+wp wppo image convert</code></pre>
+<p>Check conversion status, generated files, server MIME/Vary rules, and the CDN format policy. On OpenLiteSpeed restart LiteSpeed after rule edits. The original Media Library file remains the fallback.</p>
+<h2>LiteSpeed headers are absent</h2>
+<p>Check the detected server, LiteSpeed integration mode, active LiteSpeed Cache, and the rule layer. Nginx does not execute <code>.htaccess</code>. Use generated nginx rules. Keep one page-cache owner.</p>
+<h2>PageSpeed or RUM data is missing</h2>
+<p>PageSpeed needs a valid key, public URL, and queued scan. RUM needs the setting enabled and an unobstructed browser beacon. Check ad blockers, consent rules, rate limits, and the Dashboard status without exposing credentials.</p>
+<h2>How to get help</h2>
+<p>Include versions, server software, exact reproduction URL, the feature you changed, and redacted <code>wp wppo system-info</code> output. Do not include private data or credentials.</p>
+<h2>FAQ</h2>
+<h3>Should I clear the entire site first?</h3>
+<p>No. Clear the affected URL or derived asset first. A full clear is a diagnostic of last resort.</p>
+<h3>Can I restore a deleted database row?</h3>
+<p>Not from the cleanup UI. Restore the database backup.</p>
+<h3>Why does a feature work on staging but fail on production?</h3>
+<p>Compare server, PHP, theme, builder, CDN, cookies, and cache owner. The compatibility page records the boundary.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/faq/">FAQ</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li><li><a href="/docs/performance-optimisation/features/page-cache/">Page Cache</a></li><li><a href="/docs/performance-optimisation/features/used-critical-css/">Used and critical CSS</a></li><li><a href="/docs/performance-optimisation/features/redis-object-cache/">Redis Object Cache</a></li></ul>

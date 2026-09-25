@@ -1,0 +1,32 @@
+<h2>What it does</h2>
+<p>Redis Object Cache is the optional in-PHP cache layer. It keeps repeated option, post, term, and transient reads out of MySQL when Page Cache cannot serve a complete request.</p>
+<h2>When to use it</h2>
+<p>Use Redis when the site has repeated database reads, a reachable Redis service, and PhpRedis available. Test the connection before enabling the drop-in.</p>
+<h2>Safe default</h2>
+<p>Redis starts disabled. The plugin refuses to replace a foreign <code>object-cache.php</code>. Passwords stay out of status output and exports. A failed connection falls back safely instead of producing a site fatal.</p>
+<h2>How to enable it</h2>
+<ol><li>Open <strong>Object Cache</strong> and choose Standalone, Sentinel, or Cluster.</li><li>Enter the host, port, database, TLS, and authentication settings your infrastructure uses.</li><li>Run a connection test before saving credentials.</li><li>Enable the object cache, then run <code>wp wppo object-cache status</code> and <code>ping</code>.</li><li>Watch hit ratio and circuit state after representative traffic.</li></ol>
+<h2>What changes</h2>
+<p>A successful enable writes the owned drop-in and guarded runtime configuration, then flushes stale entries. When Redis is unavailable, the drop-in uses a per-request in-memory fallback and surfaces a safe circuit state.</p>
+<h2>Compatibility considerations</h2>
+<ul><li>PhpRedis and the selected Redis topology must match the server.</li><li>A foreign object-cache drop-in blocks ownership.</li><li>Compression choices depend on the installed PhpRedis extension.</li><li>Password rotation must reach every web node before changing the server credential.</li><li>Multisite keys use blog/site isolation where WordPress provides the current blog ID.</li></ul>
+<h2>How to verify</h2>
+<pre><code>wp wppo object-cache status
+wp wppo object-cache ping
+wp wppo object-cache flush</code></pre>
+<p>Compare hit/miss, circuit information, and the drop-in marker after real traffic. A reachable Redis server can still show a poor hit ratio when prefixes, serializers, or eviction policy differ from the application.</p>
+<h2>How to undo or disable</h2>
+<p>Use the confirmation dialog to disable the object cache. The plugin removes its owned drop-in and flushes plugin-scoped keys. Do not delete an unknown third-party drop-in.</p>
+<h2>Troubleshooting</h2>
+<ul><li><strong>Cannot connect:</strong> check PhpRedis, host, port, TLS, password, firewall, and Redis logs.</li><li><strong>Foreign drop-in:</strong> disable the other cache plugin or remove its drop-in through its own supported process.</li><li><strong>Poor hit ratio:</strong> inspect key prefixes, serializer behavior, eviction, and the circuit state.</li><li><strong>Password mismatch:</strong> rotate every web node and never paste the password into a report.</li></ul>
+<h2>FAQ</h2>
+<h3>Does Redis replace Page Cache?</h3>
+<p>No. Page Cache serves complete HTML. Redis reduces database work for requests that reach PHP.</p>
+<h3>Can I run another Redis plugin?</h3>
+<p>Only after choosing one owner for <code>object-cache.php</code>. The plugin will not replace a foreign drop-in.</p>
+<h3>Why did Redis disable itself?</h3>
+<p>The circuit breaker can suspend the drop-in after repeated connection failures and schedule a recovery probe.</p>
+<h2>Technical reference</h2>
+<p>Standalone, Sentinel, and Cluster modes support the current connection policy. Runtime settings belong in the guarded <code>wp-content/wppo-redis-config.php</code> boundary or the documented constant/environment path. Status, exports, and diagnostics redact secret-shaped values.</p>
+<h2>Related pages</h2>
+<ul><li><a href="/docs/performance-optimisation/features/page-cache/">Page Cache</a></li><li><a href="/docs/performance-optimisation/compatibility/">Compatibility</a></li><li><a href="/docs/performance-optimisation/configuration/wp-cli/">WP-CLI commands</a></li><li><a href="/docs/performance-optimisation/troubleshooting/">Troubleshooting</a></li></ul>
