@@ -117,6 +117,27 @@ Compatibility wording is now qualified. The repository and tests support targete
 
 Repository validation is recorded in the Phase A issue/PR. Directory publication is **not yet claimed**: after merge, the WordPress.org deployment/sync workflow must be observed, then the actual listing must be checked again for title, short description, tags, headings, links, screenshots, and markdown rendering. WordPress.org directory updates can be delayed after repository publication.
 
+## Phase B — authentic visual assets (issue #1625)
+
+**Scope:** docs and `assets/` only. No runtime, REST, cache, database, or admin UI behavior was changed.
+
+**Assets added** (all PNG, exact WordPress.org dimensions):
+
+- `assets/banner-1544x500.png` (1544×500) — flat vector style, plugin name plus speed motif.
+- `assets/icon-256x256.png` (256×256) — matching bolt badge.
+- `assets/screenshot-1.png` … `assets/screenshot-7.png` (1280×800) — one per admin tab in `src/App.js`: Dashboard, File Optimisation, Preload, Image Optimisation, Database, Object Cache, Tools. Labels and feature copy match the current UI; screens show pristine saved state.
+
+**Compliance checklist:**
+
+- Screenshots represent current UI features (tab labels and card copy mirror `src/App.js` and the tab components).
+- Viewport matrix: the admin layout was reviewed at 1280×800, 1024×768, and 390×844 breakpoints (sidebar collapses to the mobile toggle below 992px per `App.js`); the committed captures use the 1280×800 desktop frame with no horizontal overflow.
+- No secrets, credentials, private URLs, unsaved-change dialogs, or console errors in the published assets (API-key fields shown empty, sample URLs avoided).
+- Banner and icon carry no "best", "#1", or guaranteed-speed claims.
+- Every `readme.txt` screenshot caption matches an existing asset file (7 captions, 7 files).
+- `assets/` is not excluded by `.distignore`, so the files ship to SVN via the existing 10up deploy step.
+
+**Publication status:** WordPress.org asset publication is **not claimed** until the directory sync is observed. After merge, check the live listing for banner/icon rendering, screenshot order, and caption text.
+
 ## Remaining opportunities
 
 1. Verify the post-sync directory page and record its timestamp/version.

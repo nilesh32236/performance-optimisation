@@ -107,6 +107,16 @@ After activation, you can manage the following from the settings tabs:
 - **Object Cache** — One-click Redis integration with standalone, sentinel, and cluster support.
 - **Tools** — Import/export settings for quick deployment across multiple sites.
 
+== Screenshots ==
+
+1. Dashboard — cache size, optimized file counts, image status, and recent activity at a glance.
+2. File Optimization — minify and combine JS/CSS/HTML, defer or delay scripts, and remove WordPress bloat.
+3. Preload — cache warm-up, preconnect, DNS prefetch, and font/CSS preloading.
+4. Image Optimization — lazy loading, WebP/AVIF conversion, and preload images for faster LCP.
+5. Database — clean revisions, transients, spam, and orphaned data, manually or on a schedule.
+6. Object Cache — Redis status with standalone, Sentinel, and Cluster support.
+7. Tools — import/export settings, activity log, PageSpeed key, and system info.
+
 == Frequently Asked Questions ==
 
 = How do I speed up my WordPress site with this plugin? =

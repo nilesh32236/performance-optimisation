@@ -45,15 +45,15 @@
 
 ## 369 — Create Plugin Banner and Icon for WordPress.org
 - **Problem:** Missing `assets/banner-1544x500.png` (WP.org requires 772×250 or 1544×500) + `icon-256x256.png` (`.distignore` includes `assets/`).
-- **Current:** No assets/banner, .distignore handles inclusion.
-- **Priority:** P3 — manual design, required before v2.0.0 release, not code.
-- **Recommendation:** Commission design, export PNG, add to `assets/` + readme.
+- **Current:** Done via Phase B (issue #1625): `assets/banner-1544x500.png` (1544×500) + `assets/icon-256x256.png` (256×256) committed; flat vector style, no "best/#1/guaranteed" claims. Directory rendering still to be confirmed after SVN sync.
+- **Priority:** P3 — was manual design, required before v2.0.0 release, not code.
+- **Recommendation:** Commission design, export PNG, add to `assets/` + readme. — Done; see Phase B note above.
 
 ## 368 — Add Real Screenshots to WordPress.org Listing
 - **Problem:** Missing `screenshot-1..7.png` (1200×900) matching `readme.txt:77` descriptions.
-- **Current:** No screenshots.
+- **Current:** Done via Phase B (issue #1625): `assets/screenshot-1..7.png` (1280×800, one per current admin tab) + `== Screenshots ==` captions in `readme.txt`. Captured against the current UI, so the #709-vote dependency is lifted for these current-UI captures; re-capture after any #709 redesign lands.
 - **Priority:** P3 — manual 1200×900 captures on default theme, deferred until pre-release.
-- **Recommendation:** Capture after #709 chosen design (otherwise screenshots mismatch new UI).
+- **Recommendation:** Capture after #709 chosen design (otherwise screenshots mismatch new UI). — Superseded for the current UI by Phase B; re-capture only if #709 redesign ships.
 
 ## Separation Rationale
 All 6 require product/design human input (vote, design assets, roadmap). Mixing into engineering PRs would violate `AGENTS.md:42` 95% gate and `Simple by default` philosophy (risk of overwhelming interface from Dense/Premium or premature N-features). Keep in product backlog, implement only after explicit decision.
