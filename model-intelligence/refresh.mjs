@@ -40,7 +40,8 @@ let error = null;
 const controller = new AbortController();
 const timeout = setTimeout(() => controller.abort(), Number(process.env.MODEL_DISCOVERY_TIMEOUT_MS ?? 20000));
 try {
-  const response = await fetch(process.env.MODEL_CATALOG_URL ?? MODELS_DEV_URL, { signal: controller.signal, headers: { accept: 'application/json', 'user-agent': 'performance-optimisation-model-registry' } });
+  const catalogUrl = process.env.MODEL_CATALOG_URL || MODELS_DEV_URL;
+  const response = await fetch(catalogUrl, { signal: controller.signal, headers: { accept: 'application/json', 'user-agent': 'performance-optimisation-model-registry' } });
   if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
   catalog = await response.json();
 } catch (failure) {
@@ -49,7 +50,8 @@ try {
   clearTimeout(timeout);
 }
 
-const refreshed = refreshRegistry(previous, catalog, { now: new Date().toISOString(), champion: config.champion, source: { name: 'models.dev', url: process.env.MODEL_CATALOG_URL ?? MODELS_DEV_URL } });
+const catalogUrl = process.env.MODEL_CATALOG_URL || MODELS_DEV_URL;
+const refreshed = refreshRegistry(previous, catalog, { now: new Date().toISOString(), champion: config.champion, source: { name: 'models.dev', url: catalogUrl } });
 if (args.has('--write') && refreshed.status === 'updated') {
   await writeFile(registryPath, serializeRegistry(refreshed.registry));
   await writeFile(reportPath, renderReport(refreshed.registry));
