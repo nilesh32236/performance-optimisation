@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import SuggestionsPanel, {
 	formatValue,
+	getFixActionLabel,
 	suggestionKey,
 } from '../SuggestionsPanel';
 
@@ -104,7 +105,7 @@ describe( 'SuggestionsPanel Component', () => {
 			/>
 		);
 		expect(
-			screen.getByRole( 'button', { name: /Fix It/i } )
+			screen.getByRole( 'button', { name: /Review Server Rules/i } )
 		).toBeInTheDocument();
 	} );
 
@@ -126,7 +127,9 @@ describe( 'SuggestionsPanel Component', () => {
 				onNavigate={ onNavigate }
 			/>
 		);
-		fireEvent.click( screen.getByRole( 'button', { name: /Fix It/i } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Review Server Rules/i } )
+		);
 		expect( onNavigate ).toHaveBeenCalledWith( 'fileOptimization' );
 	} );
 
@@ -173,6 +176,20 @@ describe( 'SuggestionsPanel Component', () => {
 
 		const icon = document.querySelector( '.wppo-suggestion-icon--poor' );
 		expect( icon ).toBeInTheDocument();
+	} );
+} );
+
+describe( 'getFixActionLabel', () => {
+	it( 'names the existing feature destination', () => {
+		expect( getFixActionLabel( 'open_preload_tab' ) ).toBe(
+			'Review Advanced Preloading'
+		);
+		expect( getFixActionLabel( 'open_object_cache_tab' ) ).toBe(
+			'Review Redis Object Cache'
+		);
+		expect( getFixActionLabel( 'unknown' ) ).toBe(
+			'Review related settings'
+		);
 	} );
 } );
 

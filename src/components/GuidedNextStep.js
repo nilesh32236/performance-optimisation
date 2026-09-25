@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useCallback } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCompass,
@@ -27,7 +27,11 @@ import useNotice from '../lib/useNotice';
 import NoticeBanner from './common/NoticeBanner';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
-import { FIX_ACTION_TAB_MAP, formatValue } from './SuggestionsPanel';
+import {
+	FIX_ACTION_TAB_MAP,
+	formatValue,
+	getFixActionLabel,
+} from './SuggestionsPanel';
 
 /**
  * Server-type note copy keyed by the detected server software.
@@ -194,12 +198,17 @@ const GuidedNextStep = ( { onNavigate } ) => {
 								type="button"
 								className="wppo-button wppo-button--sm wppo-button--primary"
 								onClick={ () => onNavigate?.( targetTab ) }
-								aria-label={ `${ __(
-									'Fix It',
-									'performance-optimisation'
-								) }: ${ nextAction.description }` }
+								aria-label={ sprintf(
+									/* translators: 1: existing feature destination, 2: suggestion description. */
+									__(
+										'%1$s: %2$s',
+										'performance-optimisation'
+									),
+									getFixActionLabel( nextAction.fix_action ),
+									nextAction.description
+								) }
 							>
-								{ __( 'Fix It', 'performance-optimisation' ) }
+								{ getFixActionLabel( nextAction.fix_action ) }
 								<FontAwesomeIcon
 									icon={ faArrowRight }
 									className="wppo-ml-6"

@@ -26,6 +26,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
+import FeatureTaskLinks from './FeatureTaskLinks';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 import PerformanceAudit from './PerformanceAudit';
@@ -1264,6 +1265,8 @@ const Dashboard = ( {
 			/>
 
 			<WelcomePanel onNavigate={ onNavigate } />
+
+			<FeatureTaskLinks onNavigate={ onNavigate } />
 
 			{ /* One-click presets with diff preview + restore-point undo (NEXT) */ }
 			<OptimizationPresets />
