@@ -247,12 +247,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			// complete — the run produced nothing (skips/off-host/failures).
 			// Downgrade to running only when resumable work remains;
 			// otherwise report idle so the UI stays honest and recoverable.
-			try {
-				if ( 'complete' === $status && $total > 0 && $bytes <= 0 ) {
-					$status = ( $queued > 0 || $failed > 0 ) ? 'running' : 'idle';
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			if ( 'complete' === $status && $total > 0 && $bytes <= 0 ) {
+				$status = ( $queued > 0 || $failed > 0 ) ? 'running' : 'idle';
 			}
 			// Stalled detection: running with pending work but no queue
 			// mutation for 30+ minutes (e.g. killed mid-run).

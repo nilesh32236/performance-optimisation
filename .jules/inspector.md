@@ -78,3 +78,7 @@
 **Root Cause:** The code evolved until some constraints became impossible to fail, leaving dead guards behind. The missing `wp_cache_set_salted()` guard was an independent oversight.
 **Fix:** Removed the dead guards, kept behaviour identical in each case (verified: `invalidate_woo_object()` already returns early for `$object_id <= 0`, `$kept` is already a list, `array_slice()` reindexes without `array_values()`), and added the missing `function_exists()` check for the salted cache write.
 **Test Added:** No new test; `PhpDeprecationHygieneTest` needed a `__()` Brain Monkey stub and now passes.
+## 2023-10-25 - Fix PHPStan dead catch errors
+**Bug/Gap:** PHPStan throws `catch.neverThrown` errors in `includes/Scheduler/class-cron.php` and `includes/class-util.php`.
+**Root Cause:** Simple boolean checks and integer assignment/comparisons were wrapped in `try...catch (\Throwable)` blocks unnecessarily.
+**Test Added:** Static analysis will no longer fail on these files for `catch.neverThrown`.
