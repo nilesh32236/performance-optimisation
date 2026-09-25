@@ -19,4 +19,9 @@ describe( 'polling backoff', () => {
 		expect( getPollDelay( 60 ) ).toBe( 15000 );
 		expect( getPollDelay( 1000 ) ).toBe( 15000 );
 	} );
+
+	it( 'fails open to the base interval for non-finite attempts', () => {
+		expect( getPollDelay( NaN ) ).toBe( POLL_INTERVAL_MS );
+		expect( getPollDelay( undefined ) ).toBe( POLL_INTERVAL_MS );
+	} );
 } );

@@ -45,4 +45,9 @@ describe( 'parseGuardedInt', () => {
 		expect( parseGuardedInt( '2560', { fallback: 2560 } ) ).toBe( 2560 );
 		expect( parseGuardedInt( -5, { min: 0, fallback: 2560 } ) ).toBe( 0 );
 	} );
+
+	it( 'fails open to fallback for explicit null options', () => {
+		expect( parseGuardedInt( 'abc', null ) ).toBe( 0 );
+		expect( parseGuardedInt( '3', null ) ).toBe( 3 );
+	} );
 } );
