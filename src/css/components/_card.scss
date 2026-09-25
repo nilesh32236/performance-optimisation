@@ -105,6 +105,37 @@
 	}
 }
 
+.wppo-presets__buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+
+	.wppo-button {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		min-width: 112px;
+	}
+}
+
+.wppo-presets__preset-label {
+	font-weight: 700;
+}
+
+.wppo-presets__preset-audience {
+	font-size: 11px;
+	font-weight: 500;
+	opacity: 0.78;
+}
+
+@media (max-width: 480px) {
+	.wppo-presets__buttons .wppo-button {
+		flex: 1 1 100%;
+		width: 100%;
+	}
+}
+
 .wppo-danger-zone {
 	border-left: 4px solid var(--wppo-danger, #ef4444);
 	background: var(--wppo-error-bg, #fef2f2);
