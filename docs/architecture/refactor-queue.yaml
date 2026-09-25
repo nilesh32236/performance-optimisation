@@ -1775,6 +1775,7 @@ growth_items:
       links: 'Manifest, required-section, HTML-fragment, and internal-route checks passed'
       ci: 'Exact-head CI and AI review green; PHP 8.2-8.5 syntax and PHPUnit green'
       local: 'Lint 0 errors/2 existing warnings; PHPCS binary pass; Jest 59 suites/833 tests; build pass with existing size warning; inventory and diff checks pass'
+      wordpress: 'Performance Optimisation active; frontend 200; wp wppo verify 6/7 with the known cache-root warning; public troubleshooting route 200; new Core Web Vitals, CDN, and Compatibility routes remain 404 pending editor publishing sync'
       runtime_scope: 'No runtime, API, settings, optimization, or public documentation deployment changes'
     status_note: 'Phase E is merged; source documentation is ready for the existing editor publishing pipeline, but public page sync is not claimed.'
 
