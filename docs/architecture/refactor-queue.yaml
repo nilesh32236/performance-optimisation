@@ -1430,13 +1430,22 @@ phase3_items:
 
   - id: P3-020
     title: 'React card and polling isolation'
-    status: audit-pending
+    status: active
     priority: low
+    github_issue: 1609
     type: epic
     problem: 'FileOptimization, Dashboard, and App still combine many cards, polling effects, and shell fetches.'
     target_owner: 'Presentational cards and narrow workflow hooks'
     exact_scope: 'One card or one polling boundary per item after correctness tests.'
     ratchet: 'FileOptimization/Dashboard/App responsibility and unrelated fetch counts down.'
+    re_audit:
+      audited_at: '2026-09-25'
+      source_commit: 873e501e
+      evidence:
+        - 'FileOptimization and Dashboard still mix several polling/card workflows; selecting one bounded card is safer than a shell-wide rewrite.'
+        - 'P3-019 provides tested abort/stale/mounted primitives, so one polling boundary can adopt them without changing REST contracts.'
+        - 'No router, global store, or polling framework is permitted.'
+      decision: 'Proceed with one bounded Dashboard polling/card extraction after characterization; leave FileOptimization card separation for a follow-up.'
 
   - id: P3-021
     title: 'Static-state cleanup and runtime reset coverage'
