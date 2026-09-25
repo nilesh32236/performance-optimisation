@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "model_provider": "opencode",
+  "model_id": "muse-spark-1.3-contributor-free",
+  "evaluation_status": "probe_plus_isolated_executable_benchmark",
+  "observed_workflow": {
+    "ai_review": "pass",
+    "repository_ci": "pass",
+    "source": "PR #1643 exact-head workflow and direct review"
+  },
+  "observed_probes": {
+    "health": { "success": true, "latency_ms": 15917, "timeout": false, "tool_success": true },
+    "capability": { "success": true, "latency_ms": 4270, "timeout": false, "tool_success": true }
+  },
+  "executable_benchmark": {
+    "tasks": 11,
+    "successful_tasks": 2,
+    "failed_tasks": 9,
+    "verification_successes": 3,
+    "verification_failures": 8,
+    "timeouts": 1,
+    "tool_failures": 1,
+    "security_task_successes": 0,
+    "average_latency_ms": 51119.2,
+    "strong_categories": "TypeScript and GitHub Actions completed successfully in this isolated run",
+    "weak_categories": "JavaScript, PHP, React, refactoring, bug fixing, tests, documentation, and WordPress verification failed; security verification passed but the task timed out"
+  },
+  "interpretation": "Muse Spark responded to bounded health and capability probes. In this isolated one-run harness it completed two of eleven coding tasks, passed three verifications, and had one timeout. This is a baseline for one run and does not prove general model quality. The model remains champion because no challenger has a promotion decision."
+}

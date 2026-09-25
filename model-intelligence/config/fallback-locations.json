@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "champion": "opencode/muse-spark-1.3-contributor-free",
+  "explicit_selection_variable": "OPENCODE_MODEL",
+  "fallback_locations": [
+    { "path": "AGENTS.md", "kind": "documentation", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" },
+    { "path": ".github/workflows/daily-audit.yml", "kind": "workflow-input", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" },
+    { "path": ".github/workflows/wordpress-monitor.yml", "kind": "workflow-command", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" },
+    { "path": ".github/workflows/wppo-ai-review.yml", "kind": "workflow-input-and-command", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" },
+    { "path": ".github/workflows/wppo-tri-merge-workflow.yml", "kind": "workflow-command", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" }
+  ],
+  "interpretation": "These are compatibility fallbacks. Explicit OPENCODE_MODEL selection remains authoritative. This campaign does not replace them."
+}
