@@ -78,6 +78,16 @@ LiteSpeed ESI bridge for dynamic fragments (LSWS Enterprise; AJAX fallback on OL
 **🛠️ Developer Friendly**
 System Info dashboard, Google PageSpeed Insights integration, per-page asset manager, and import/export settings.
 
+== Screenshots ==
+
+1. Dashboard with system health, optimization presets, and current cache/file/database/image status.
+2. File Optimisation controls for safe presets, asset delivery, CSS, JavaScript, and core WordPress optimizations.
+3. Image Optimisation controls for lazy loading, WebP/AVIF delivery, placeholders, and preload rules.
+4. Performance Audit, PageSpeed Insights, and Core Web Vitals monitoring controls.
+5. Database Cleanup with scheduled cleanup settings and current optimization opportunities.
+6. Object Cache with Redis deployment mode and connection settings.
+7. Preload Settings with cache warm-up, URL exclusions, and sitemap preload controls.
+
 = Compatibility =
 
 Performance Optimisation includes compatibility safeguards for common WordPress environments and integrations, including Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, and Rank Math. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.

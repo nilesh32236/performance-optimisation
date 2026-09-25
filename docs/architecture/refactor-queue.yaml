@@ -1666,6 +1666,27 @@ growth_items:
       runtime_scope: 'No runtime feature, REST, database, cache, or admin behavior changed'
     status_note: 'Phase A repository changes are merged; WordPress.org publication remains pending directory sync verification.'
 
+  - id: B-001
+    title: 'Authentic WordPress.org visual conversion assets'
+    status: active
+    priority: medium
+    type: growth
+    objective: 'Improve WordPress.org conversion with professional, authentic banner, icon, and current-UI screenshots without adding functionality.'
+    scope:
+      - 'assets/banner-1544x500.png'
+      - 'assets/icon-256x256.png'
+      - 'assets/screenshot-1.png through assets/screenshot-7.png'
+      - 'readme.txt screenshot captions'
+      - 'docs/growth/WORDPRESS-ORG.md'
+      - 'docs/maintenance/PRODUCT-DESIGN-BACKLOG.md'
+      - 'Playwright viewport verification'
+    non_goals:
+      - 'No admin redesign, runtime feature, REST, cache, database, or performance behavior changes.'
+      - 'No fake screens, fabricated metrics, secrets, or unsupported visual claims.'
+    issue: 1625
+    pull_request: pending
+    status_note: 'Visual assets captured from the real live WordPress UI; directory publication remains unclaimed until post-merge sync verification.'
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'
