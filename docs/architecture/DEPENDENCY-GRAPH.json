@@ -8320,30 +8320,30 @@
             "file": "includes/Edge/class-edge-purger.php",
             "domain": "Edge",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 333,
+            "lines": 366,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
             "protected_property_count": 0,
             "private_property_count": 0,
             "static_state": false,
-            "method_count": 10,
+            "method_count": 11,
             "top_level_function_count": 0,
             "top_level_functions": [],
             "largest_methods": [
                 {
                     "name": "purge_all",
-                    "line": 95,
-                    "end_line": 156,
-                    "lines": 62,
+                    "line": 124,
+                    "end_line": 189,
+                    "lines": 66,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
                     "name": "purge_bunny",
-                    "line": 257,
-                    "end_line": 279,
+                    "line": 290,
+                    "end_line": 312,
                     "lines": 23,
                     "visibility": "private",
                     "static": true,
@@ -8351,8 +8351,8 @@
                 },
                 {
                     "name": "mirror_to_activity_log",
-                    "line": 311,
-                    "end_line": 331,
+                    "line": 344,
+                    "end_line": 364,
                     "lines": 21,
                     "visibility": "private",
                     "static": true,
@@ -8360,8 +8360,8 @@
                 },
                 {
                     "name": "resolve_page_url",
-                    "line": 168,
-                    "end_line": 184,
+                    "line": 201,
+                    "end_line": 217,
                     "lines": 17,
                     "visibility": "private",
                     "static": true,
@@ -8369,8 +8369,8 @@
                 },
                 {
                     "name": "purge_cloudflare_files",
-                    "line": 201,
-                    "end_line": 216,
+                    "line": 234,
+                    "end_line": 249,
                     "lines": 16,
                     "visibility": "private",
                     "static": true,
@@ -8378,17 +8378,26 @@
                 },
                 {
                     "name": "purge_cloudflare",
-                    "line": 230,
-                    "end_line": 245,
+                    "line": 263,
+                    "end_line": 278,
                     "lines": 16,
                     "visibility": "private",
                     "static": true,
                     "delegates": false
                 },
                 {
+                    "name": "release_purge_lock_on_failure",
+                    "line": 88,
+                    "end_line": 95,
+                    "lines": 8,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                },
+                {
                     "name": "log_failure",
-                    "line": 289,
-                    "end_line": 292,
+                    "line": 322,
+                    "end_line": 325,
                     "lines": 4,
                     "visibility": "private",
                     "static": true,
@@ -8411,38 +8420,30 @@
                     "visibility": "public",
                     "static": true,
                     "delegates": false
-                },
-                {
-                    "name": "set_purge_lock",
-                    "line": 68,
-                    "end_line": 70,
-                    "lines": 3,
-                    "visibility": "public",
-                    "static": true,
-                    "delegates": false
                 }
             ],
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Cloudflare_Purger::purge": 240,
-                    "PerformanceOptimise\\Inc\\Cloudflare_Purger::purge_files": 211,
-                    "PerformanceOptimise\\Inc\\Edge_Cache::is_enabled": 107,
-                    "PerformanceOptimise\\Inc\\Log::add": 325,
-                    "PerformanceOptimise\\Inc\\Util::get_settings": 114,
+                    "PerformanceOptimise\\Inc\\Cloudflare_Purger::purge": 273,
+                    "PerformanceOptimise\\Inc\\Cloudflare_Purger::purge_files": 244,
+                    "PerformanceOptimise\\Inc\\Edge_Cache::is_enabled": 136,
+                    "PerformanceOptimise\\Inc\\Log::add": 358,
+                    "PerformanceOptimise\\Inc\\Util::get_settings": 143,
                     "PerformanceOptimise\\Inc\\Util::transient_key": 49,
                     "self::get_purge_lock_key": 59,
-                    "self::has_purge_lock": 110,
-                    "self::log_failure": 270,
-                    "self::mirror_to_activity_log": 213,
-                    "self::purge_bunny": 149,
-                    "self::purge_cloudflare": 142,
-                    "self::purge_cloudflare_files": 135,
-                    "self::resolve_page_url": 127,
-                    "self::set_purge_lock": 134
+                    "self::has_purge_lock": 139,
+                    "self::log_failure": 303,
+                    "self::mirror_to_activity_log": 246,
+                    "self::purge_bunny": 180,
+                    "self::purge_cloudflare": 173,
+                    "self::purge_cloudflare_files": 164,
+                    "self::release_purge_lock_on_failure": 165,
+                    "self::resolve_page_url": 156,
+                    "self::set_purge_lock": 163
                 },
                 "instance_calls": {
-                    "$response->get_error_message": 270
+                    "$response->get_error_message": 303
                 },
                 "new_expressions": [],
                 "class_references": [],
@@ -8450,14 +8451,14 @@
                     "self": 49
                 },
                 "class_string_references": {
-                    "PerformanceOptimise\\Inc\\Cloudflare_Purger": 205,
+                    "PerformanceOptimise\\Inc\\Cloudflare_Purger": 238,
                     "PerformanceOptimise\\Inc\\Edge_Purger": 18,
-                    "PerformanceOptimise\\Inc\\Log": 313
+                    "PerformanceOptimise\\Inc\\Log": 346
                 },
                 "class_exists": {
-                    "PerformanceOptimise\\Inc\\Cloudflare_Purger": 205,
+                    "PerformanceOptimise\\Inc\\Cloudflare_Purger": 238,
                     "PerformanceOptimise\\Inc\\Edge_Purger": 18,
-                    "PerformanceOptimise\\Inc\\Log": 313
+                    "PerformanceOptimise\\Inc\\Log": 346
                 },
                 "method_exists": [],
                 "interface_exists": [],
@@ -8468,42 +8469,44 @@
                 "external_classes": [],
                 "external_functions": {
                     "class_exists": 18,
-                    "constant": 119,
+                    "constant": 148,
                     "defined": 14,
-                    "do_action": 290,
-                    "esc_url_raw": 175,
-                    "function_exists": 177,
+                    "delete_transient": 93,
+                    "do_action": 323,
+                    "esc_url_raw": 208,
+                    "function_exists": 92,
                     "get_transient": 59,
-                    "has_filter": 313,
-                    "home_url": 178,
-                    "is_array": 115,
-                    "is_string": 170,
-                    "is_wp_error": 269,
-                    "ltrim": 178,
-                    "preg_replace": 317,
-                    "rawurlencode": 259,
-                    "sanitize_text_field": 118,
+                    "has_filter": 346,
+                    "home_url": 211,
+                    "is_array": 144,
+                    "is_string": 203,
+                    "is_wp_error": 302,
+                    "ltrim": 211,
+                    "preg_replace": 350,
+                    "rawurlencode": 292,
+                    "sanitize_text_field": 147,
                     "set_transient": 69,
-                    "strpos": 174,
-                    "strtolower": 317,
-                    "substr": 318,
-                    "trim": 170,
-                    "wp_remote_request": 258,
-                    "wp_remote_retrieve_response_code": 273
+                    "strpos": 207,
+                    "strtolower": 350,
+                    "substr": 351,
+                    "trim": 203,
+                    "wp_remote_request": 291,
+                    "wp_remote_retrieve_response_code": 306
                 },
                 "wordpress_functions": {
-                    "do_action": 290,
-                    "esc_url_raw": 175,
+                    "delete_transient": 93,
+                    "do_action": 323,
+                    "esc_url_raw": 208,
                     "get_transient": 59,
-                    "home_url": 178,
-                    "is_wp_error": 269,
-                    "sanitize_text_field": 118,
-                    "wp_remote_request": 258,
-                    "wp_remote_retrieve_response_code": 273
+                    "home_url": 211,
+                    "is_wp_error": 302,
+                    "sanitize_text_field": 147,
+                    "wp_remote_request": 291,
+                    "wp_remote_retrieve_response_code": 306
                 },
                 "filesystem_dependencies": [],
                 "network_dependencies": {
-                    "wp_remote_request": 258
+                    "wp_remote_request": 291
                 },
                 "database_dependencies": [],
                 "dynamic_references": []
@@ -28812,10 +28815,10 @@
                 "static_call"
             ],
             "lines": [
-                205,
-                211,
-                234,
-                240
+                238,
+                244,
+                267,
+                273
             ],
             "evidence_count": 4,
             "cross_domain": false,
@@ -28835,7 +28838,7 @@
                 "static_call"
             ],
             "lines": [
-                107
+                136
             ],
             "evidence_count": 1,
             "cross_domain": false,
@@ -28858,8 +28861,8 @@
                 "static_call"
             ],
             "lines": [
-                313,
-                325
+                346,
+                358
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -28880,8 +28883,8 @@
             ],
             "lines": [
                 49,
-                114,
-                322
+                143,
+                355
             ],
             "evidence_count": 3,
             "cross_domain": true,
@@ -49874,8 +49877,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    313,
-                    325
+                    346,
+                    358
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -49897,8 +49900,8 @@
                 ],
                 "lines": [
                     49,
-                    114,
-                    322
+                    143,
+                    355
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -59536,10 +59539,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    205,
-                    211,
-                    234,
-                    240
+                    238,
+                    244,
+                    267,
+                    273
                 ],
                 "evidence_count": 4,
                 "cross_domain": false,
@@ -59562,8 +59565,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    313,
-                    325
+                    346,
+                    358
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -59584,8 +59587,8 @@
                 ],
                 "lines": [
                     49,
-                    114,
-                    322
+                    143,
+                    355
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,

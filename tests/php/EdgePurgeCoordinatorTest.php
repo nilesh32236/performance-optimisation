@@ -160,6 +160,9 @@ class EdgePurgeCoordinatorTest extends \PHPUnit\Framework\TestCase {
 				'get_option',
 				'get_transient',
 				'set_transient',
+				// Edge_Purger releases the coalescing window when a purge
+				// fails, so a deduplicated failure path now reaches it.
+				'delete_transient',
 				'has_filter',
 				'is_wp_error',
 				'wp_remote_request',
@@ -215,6 +218,12 @@ class EdgePurgeCoordinatorTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'set_transient' )->alias(
 			function ( $key, $value, $expiration = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test mock signature must match set_transient().
 				$this->state[ $key ] = $value;
+				return true;
+			}
+		);
+		Functions\when( 'delete_transient' )->alias(
+			function ( $key ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test mock signature must match delete_transient().
+				unset( $this->state[ $key ] );
 				return true;
 			}
 		);
