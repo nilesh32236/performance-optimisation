@@ -1,6 +1,6 @@
 === Performance Optimisation ===
 Contributors: nilesh912
-Tags: cache, performance, speed, pagespeed, minify
+Tags: performance, cache, optimization, core-web-vitals, pagespeed
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
@@ -8,22 +8,25 @@ Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Speed up WordPress with page caching, JS/CSS minify, lazy load, WebP/AVIF images, Redis object cache, and database cleanup. Simple and powerful.
+Free WordPress performance plugin for faster sites with page caching, Core Web Vitals monitoring, image optimization, and CSS/JS optimization.
 
 == Description ==
 
-**Performance Optimisation** is a free, all-in-one speed plugin that makes your WordPress site faster — without the complexity. Fully compatible with popular themes and page builders (Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, Rank Math). Page caching, file minification, image optimization, lazy loading, database cleanup, and Redis object cache — all from one clean dashboard.
+**Performance Optimisation** is a free WordPress performance plugin for site owners who want faster pages without a complex stack of separate tools. It combines page caching, CSS and JavaScript optimization, image optimization, and Core Web Vitals monitoring in one clear dashboard.
+
+Start with the features that match your hosting and site setup, then test changes one at a time. Aggressive options are opt-in and clearly explained.
 
 = Why choose Performance Optimisation? =
 
-Most performance plugins either do too little or overwhelm you with dozens of confusing settings. This plugin gives you **everything you need to speed up WordPress** in one place, with safe defaults and clear explanations for every option.
+Most performance plugins either cover only one job or bury the important controls in a large settings list. Performance Optimisation gives site owners a practical starting point:
 
- - **Simple to use:** Clean, modern dashboard. Enable what you need, leave the rest off. No guesswork.
- - **Powerful features:** Page cache, JS/CSS/HTML minify, WebP/AVIF image conversion, lazy loading, Redis object cache, database cleanup — the full stack.
- - **Safe by default:** Aggressive options like defer JS, delay JS, and WooCommerce asset removal are off by default with clear warnings when you turn them on.
- - **Works everywhere:** Shared hosting, VPS, dedicated servers, Apache, Nginx — it adapts to your environment.
+ - **Page caching:** Serve static HTML pages with smart invalidation when content changes.
+ - **Core Web Vitals monitoring:** Measure LCP, INP, and CLS with PageSpeed Insights and optional first-party RUM.
+ - **Image optimization:** Convert images to WebP and AVIF, lazy-load media, and preload important images.
+ - **CSS and JavaScript optimization:** Minify and combine assets, defer or delay selected scripts, and remove WordPress bloat.
+ - **Safe defaults:** Test one feature at a time; advanced defer, delay, and asset-removal options are off by default.
 
-= What does this plugin do? =
+= Core Performance Features =
 
 **🚀 Page Caching**
 Generate static HTML files for your pages so they load instantly. Includes Gzip compression, CDN support, and smart cache clearing when you update content.
@@ -45,6 +48,8 @@ Built-in Redis object cache with support for standalone, Sentinel, and Cluster t
 
 **📊 Performance Monitor**
 Built-in performance scanner that measures real load times, TTFB, DNS resolution, and Core Web Vitals — right from your WordPress dashboard.
+
+= Advanced Features =
 
 **📡 Real-User Monitoring (RUM)**
 Collects anonymised field Web Vitals (LCP, INP, CLS) from real visitors and charts trends in the dashboard, so you can see what each optimisation actually changed.
@@ -73,6 +78,10 @@ LiteSpeed ESI bridge for dynamic fragments (LSWS Enterprise; AJAX fallback on OL
 **🛠️ Developer Friendly**
 System Info dashboard, Google PageSpeed Insights integration, per-page asset manager, and import/export settings.
 
+= Compatibility =
+
+Performance Optimisation includes compatibility safeguards for common WordPress environments and integrations, including Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, and Rank Math. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
+
 = Who is this plugin for? =
 
  - **Site owners** who want a faster website without hiring a developer.
@@ -97,6 +106,94 @@ After activation, you can manage the following from the settings tabs:
 - **Database** — Clean up revisions, auto-drafts, transients, spam, and orphaned data — manually or on a schedule.
 - **Object Cache** — One-click Redis integration with standalone, sentinel, and cluster support.
 - **Tools** — Import/export settings for quick deployment across multiple sites.
+
+== Frequently Asked Questions ==
+
+= How do I speed up my WordPress site with this plugin? =
+Install and activate the plugin, then visit the **Dashboard**. Start by enabling **Page Caching** for the biggest speed boost. Then enable **JS/CSS Minification** and **Lazy Loading** for images. Each feature can be turned on independently — enable one at a time and test your site.
+
+= Will this work with WooCommerce? =
+The plugin includes WooCommerce safeguards, such as dynamic cart/checkout route detection, cache exclusions, and an optional self-test. WooCommerce-specific asset removal is **optional** and off by default. Test cart, checkout, product, and account pages on staging before enabling aggressive asset rules.
+
+= Can I use this alongside another cache plugin? =
+You should only run **one** full-page caching solution at a time. If another plugin (WP Super Cache, LiteSpeed Cache, WP Rocket, etc.) already manages caching, this plugin will detect it and won't overwrite the existing setup. You can still use the minification, image optimization, and database cleanup features alongside most other plugins.
+
+= Does this plugin improve Core Web Vitals and PageSpeed scores? =
+Yes. The features below — static HTML caching, lazy loading, WebP/AVIF image conversion, font preloading, and script deferral — directly target the metrics measured by Core Web Vitals and PageSpeed Insights. In one internal example benchmark on a standard WordPress install (Astra theme, 5 images) we observed improvements in PageSpeed scores, Time to First Byte, LCP, and total page size, but **results vary** significantly with hosting, theme, plugin mix, and content, so your own before/after measurements are the only reliable guide.
+
+= Does this work on shared hosting? =
+Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS, dedicated servers, and managed WordPress hosts. Redis Object Cache requires Redis to be installed on your server, but all other features work everywhere.
+
+= Is this compatible with page builders like Elementor or Divi? =
+The plugin includes compatibility safeguards for Elementor, Divi, Beaver Builder, and WPBakery, including builder-aware asset handling and exclusions. Test layout and interactions on a staging site after changing minification, defer, or delay rules; add exclusions when needed.
+
+= Is this plugin compatible with popular themes, WooCommerce, and SEO plugins? =
+The plugin includes safeguards for common themes (including Astra, GeneratePress, Kadence, OceanWP, Blocksy, and Twenty Twenty-Four), WooCommerce, and SEO plugins (including Yoast SEO, Rank Math, All in One SEO, and SEOPress). This is not a blanket guarantee for every version: test on staging, and use the File Optimization exclusion rules when a theme, builder, or integration needs a specific adjustment. WooCommerce cart, checkout, and account pages are excluded from full-page caching.
+
+= How do I convert images to WebP or AVIF? =
+Go to the **Image Optimization** tab, enable image conversion, and choose your format (WebP, AVIF, or both). Click **Optimize Now** to start converting your existing images. New uploads are converted automatically in the background.
+
+= Can I exclude specific files from minification? =
+Yes. In the **File Optimization** tab, you can list specific JavaScript or CSS files to exclude from minification, defer, or delay. This is useful for scripts that break when minified.
+
+= Does the plugin support lazy loading? =
+Yes. The plugin lazy loads images, iframes, and videos using an IntersectionObserver. You can use lightweight SVG placeholders for a better loading experience. A MutationObserver also catches dynamically injected content.
+
+= How do I clean up my WordPress database? =
+Go to the **Database** tab. You can manually clean post revisions, auto-drafts, spam comments, expired transients, trashed posts, and orphaned metadata. You can also schedule automatic cleanups to run daily, weekly, or monthly.
+
+= Can I import/export plugin settings? =
+Yes. Use the **Tools** tab to export your current configuration as a JSON file and import it on another site. This is useful for agencies deploying the same setup across multiple client sites.
+
+= Is this plugin free? =
+Yes. Performance Optimisation is 100% free and open source. There is no premium version, no upsells, and no feature restrictions.
+
+== External Services ==
+
+This plugin relies on the following external services. The PageSpeed and Google Fonts requests are only made after an explicit administrator action as described below. Edge-cache purges (Cloudflare, Bunny and Varnish) are the one exception: the plugin calls them automatically after it clears its own page cache — including on post publish/update — but only when the administrator has already configured the integration and stored the relevant credentials. Each entry lists the exact data sent and how to opt out.
+
+= Google PageSpeed Insights API (https://www.googleapis.com/pagespeedonline/v5/runPagespeed) =
+* **Purpose:** Provides Lighthouse performance scores, Core Web Vitals, and diagnostic audits for the URL you choose to scan. Used by the Dashboard → Performance Audit → PageSpeed panel.
+* **When:** Only when an administrator who has set a PageSpeed API key (Performance Audit → PageSpeed API Key) clicks “Scan” (or when the daily auto-rescan cron runs if that option is enabled). No request is made on page load, and no request is made without a stored API key.
+* **Where:** The request is made server-side via `wp_remote_get` to `https://www.googleapis.com/pagespeedonline/v5/runPagespeed` with query params `url` (the scanned URL), `strategy` (`mobile` or `desktop`), `category` (PERFORMANCE, ACCESSIBILITY, BEST_PRACTICES, SEO), and `key` (your API key).
+* **What data is sent:** The public URL to audit and the chosen strategy. The API key is sent as authentication. No site visitor data, cookies, or admin credentials are sent. Results are cached as a transient (`wppo_pagespeed_*`) for 24 hours and optionally stored as trend history in the `wppo_web_vitals_trends` option.
+* **Terms/Privacy:** https://developers.google.com/speed/docs/insights/v5/get-started and https://policies.google.com/privacy. You must obtain your own API key from https://console.cloud.google.com/; the plugin never ships a default key.
+* **EOL/Opt-out:** Remove the API key or disable the PageSpeed panel to stop all requests. No further calls are made.
+
+= Google Fonts CDN (https://fonts.googleapis.com and https://fonts.gstatic.com) =
+* **Purpose:** When the File Optimization option “Host Google Fonts Locally” is enabled, the plugin detects Google Fonts CSS requested via `fonts.googleapis.com` and downloads the CSS and associated font files (`fonts.gstatic.com`, woff2) to serve locally (`wp-content/cache/wppo/fonts/`). This eliminates external DNS lookups on the frontend, improves GDPR compliance, and enables `font-display: swap`.
+* **When:** Only when “Host Google Fonts Locally” is enabled **and** a page or enqueued stylesheet contains a `fonts.googleapis.com` URL (via `style_loader_tag` or an `@import`/`link` in the HTML buffer). Each unique Google Fonts CSS URL is fetched once and then served from the local cache. When the option is disabled, the plugin makes no requests to Google Fonts; the browser loads fonts directly from Google as authored.
+* **Where:** Server-side via `wp_remote_get` to `https://fonts.googleapis.com/...` (CSS, using a Chrome 120 UA to request woff2) and `https://fonts.gstatic.com/...` (font file, woff2). Timeouts are 20s (CSS) and 30s (font file).
+* **What data is sent:** Only the Google Fonts stylesheet URL as authored in the theme/plugin (e.g. `https://fonts.googleapis.com/css2?family=Inter:wght@400`). No visitor IP beyond the server’s outbound request, no cookies, and no site content is sent.
+* **Terms/Privacy:** https://developers.google.com/fonts/faq and https://policies.google.com/privacy.
+* **EOL/Opt-out:** Disable “Host Google Fonts Locally” to stop all server-side fetches; existing cached files remain in `wp-content/cache/wppo/fonts/` until cleared via “Clear All Cache” or the plugin is uninstalled.
+
+= Cloudflare cache purge (https://api.cloudflare.com/client/v4/zones/{zoneId}/purge_cache) =
+* **Purpose:** Purge the configured Cloudflare zone cache whenever the plugin clears its own page cache, so visitors do not receive stale HTML after content or settings change.
+* **When:** Automatically after `wppo_after_cache_clear` fires — this includes post publish/update (`save_post`), theme/plugin changes, settings saves and manual "Clear All Cache". No request is made unless an administrator has stored a Cloudflare API token (constant `WPPO_CLOUDFLARE_API_TOKEN`) and a Zone ID in the Edge Cache settings.
+* **Where:** Server-side `wp_remote_request` POST to `https://api.cloudflare.com/client/v4/zones/{zoneId}/purge_cache`. A full purge sends `{"purge_everything":true}`; a single-page clear sends `{"files":["<page URL>"]}`.
+* **What data is sent:** The Cloudflare Zone ID (in the URL), the API token (as an `Authorization: Bearer` header) and either the purge-everything flag or the URL(s) being purged. No visitor data, cookies, or site content are sent.
+* **Terms/Privacy:** https://www.cloudflare.com/terms/ and https://www.cloudflare.com/privacypolicy/.
+* **Opt-out:** Remove the `WPPO_CLOUDFLARE_API_TOKEN` constant, clear the Zone ID, or set the CDN purge service to "None" in the Edge Cache settings. No further purge calls are made.
+
+= Bunny pull-zone cache purge (https://api.bunny.net/pullzone/{pullZoneId}/purgeCache) =
+* **Purpose:** Purge the configured Bunny pull zone whenever the plugin clears its own page cache, so edge visitors do not receive stale HTML.
+* **When:** Automatically after `wppo_after_cache_clear` (post publish/update, settings saves, manual cache clear), but only when an administrator has stored a Bunny API key (constant `WPPO_BUNNY_API_KEY`) and a Pull Zone ID in the Edge Cache settings. Bunny only supports all-or-nothing purges, so single-page clears skip it.
+* **Where:** Server-side `wp_remote_request` POST to `https://api.bunny.net/pullzone/{pullZoneId}/purgeCache`.
+* **What data is sent:** The Pull Zone ID (in the URL) and the API key (as an `AccessKey` header). No request body, visitor data or site content are sent.
+* **Terms/Privacy:** https://bunny.net/terms/ and https://bunny.net/privacy/.
+* **Opt-out:** Remove the `WPPO_BUNNY_API_KEY` constant and/or clear the Pull Zone ID. No further purge calls are made.
+
+= Varnish cache purge (administrator-provided endpoints) =
+* **Purpose:** Send HTTP `PURGE` requests to the Varnish endpoints you configure, so your own edge/Varnish layer is invalidated together with the plugin cache.
+* **When:** Automatically after `wppo_after_cache_clear` (post publish/update, settings saves, manual cache clear), but only when you have entered one or more Varnish purge URLs in the CDN settings.
+* **Where:** Server-side `wp_remote_request` `PURGE` calls to the exact URLs you entered (capped at 20 per purge, filterable). No vendor service is contacted.
+* **What data is sent:** Only the HTTP `PURGE` request to your configured endpoint; no site content or visitor data.
+* **Opt-out:** Remove the configured Varnish purge URLs. No further purge calls are made.
+
+= First-party Real-User Monitoring (RUM) data =
+
+When Real-User Monitoring is enabled (Dashboard → Web Vitals), the plugin records **anonymised field metrics only** — the page path and that page's Largest Contentful Paint (LCP), Interaction to Next Paint (INP) and Cumulative Layout Shift (CLS) samples. No cookies, names, email addresses, user IDs, form values, or IP addresses are stored with the samples. A visitor IP is read into memory solely to rate-limit the public beacon (120 requests/hour) and is never persisted. Metrics are aggregated and stored only in your own site's database (`wppo_web_vitals_rum` option plus per-path trend data), retained on a rolling 14-day window (up to 200 paths/day, 600 paths total), and are never sent to the plugin author or any third party. Disabling RUM stops collection; uninstalling the plugin removes the stored data. See `includes/class-rum.php`.
 
 == Changelog ==
 
@@ -326,94 +423,6 @@ JavaScript, CSS, and HTML optimization.
 Advanced image optimisation and lazy loading.
 Preloading settings for cache, fonts, and images.
 Import/export settings tools.
-
-== Frequently Asked Questions ==
-
-= How do I speed up my WordPress site with this plugin? =
-Install and activate the plugin, then visit the **Dashboard**. Start by enabling **Page Caching** for the biggest speed boost. Then enable **JS/CSS Minification** and **Lazy Loading** for images. Each feature can be turned on independently — enable one at a time and test your site.
-
-= Will this work with WooCommerce? =
-Yes. The plugin is fully compatible with WooCommerce. WooCommerce-specific asset removal is **optional** and off by default. If you enable it, the plugin shows a clear warning reminding you to test cart, checkout, and product pages.
-
-= Can I use this alongside another cache plugin? =
-You should only run **one** full-page caching solution at a time. If another plugin (WP Super Cache, LiteSpeed Cache, WP Rocket, etc.) already manages caching, this plugin will detect it and won't overwrite the existing setup. You can still use the minification, image optimization, and database cleanup features alongside most other plugins.
-
-= Does this plugin improve Core Web Vitals and PageSpeed scores? =
-Yes. The features below — static HTML caching, lazy loading, WebP/AVIF image conversion, font preloading, and script deferral — directly target the metrics measured by Core Web Vitals and PageSpeed Insights. In one internal example benchmark on a standard WordPress install (Astra theme, 5 images) we observed improvements in PageSpeed scores, Time to First Byte, LCP, and total page size, but **results vary** significantly with hosting, theme, plugin mix, and content, so your own before/after measurements are the only reliable guide.
-
-= Does this work on shared hosting? =
-Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS, dedicated servers, and managed WordPress hosts. Redis Object Cache requires Redis to be installed on your server, but all other features work everywhere.
-
-= Is this compatible with page builders like Elementor or Divi? =
-Yes. The plugin works with all major page builders including Elementor, Divi, Beaver Builder, and WPBakery. If you experience any layout issues after enabling minification, you can exclude specific files using the built-in exclusion rules.
-
-= Is this plugin compatible with popular themes, WooCommerce, and SEO plugins? =
-Yes. It is fully tested and compatible with major themes (Astra, GeneratePress, Kadence, OceanWP, Blocksy, Twenty Twenty-Four), e-commerce (WooCommerce), and SEO plugins (Yoast SEO, Rank Math, All in One SEO, SEOPress). WooCommerce cart, checkout, and account pages are automatically excluded from full-page caching. If minification or deferral affects specific scripts or style handles, you can add them to the exclusion rules in the File Optimization tab.
-
-= How do I convert images to WebP or AVIF? =
-Go to the **Image Optimization** tab, enable image conversion, and choose your format (WebP, AVIF, or both). Click **Optimize Now** to start converting your existing images. New uploads are converted automatically in the background.
-
-= Can I exclude specific files from minification? =
-Yes. In the **File Optimization** tab, you can list specific JavaScript or CSS files to exclude from minification, defer, or delay. This is useful for scripts that break when minified.
-
-= Does the plugin support lazy loading? =
-Yes. The plugin lazy loads images, iframes, and videos using an IntersectionObserver. You can use lightweight SVG placeholders for a better loading experience. A MutationObserver also catches dynamically injected content.
-
-= How do I clean up my WordPress database? =
-Go to the **Database** tab. You can manually clean post revisions, auto-drafts, spam comments, expired transients, trashed posts, and orphaned metadata. You can also schedule automatic cleanups to run daily, weekly, or monthly.
-
-= Can I import/export plugin settings? =
-Yes. Use the **Tools** tab to export your current configuration as a JSON file and import it on another site. This is useful for agencies deploying the same setup across multiple client sites.
-
-= Is this plugin free? =
-Yes. Performance Optimisation is 100% free and open source. There is no premium version, no upsells, and no feature restrictions.
-
-== External Services ==
-
-This plugin relies on the following external services. The PageSpeed and Google Fonts requests are only made after an explicit administrator action as described below. Edge-cache purges (Cloudflare, Bunny and Varnish) are the one exception: the plugin calls them automatically after it clears its own page cache — including on post publish/update — but only when the administrator has already configured the integration and stored the relevant credentials. Each entry lists the exact data sent and how to opt out.
-
-= Google PageSpeed Insights API (https://www.googleapis.com/pagespeedonline/v5/runPagespeed) =
-* **Purpose:** Provides Lighthouse performance scores, Core Web Vitals, and diagnostic audits for the URL you choose to scan. Used by the Dashboard → Performance Audit → PageSpeed panel.
-* **When:** Only when an administrator who has set a PageSpeed API key (Performance Audit → PageSpeed API Key) clicks “Scan” (or when the daily auto-rescan cron runs if that option is enabled). No request is made on page load, and no request is made without a stored API key.
-* **Where:** The request is made server-side via `wp_remote_get` to `https://www.googleapis.com/pagespeedonline/v5/runPagespeed` with query params `url` (the scanned URL), `strategy` (`mobile` or `desktop`), `category` (PERFORMANCE, ACCESSIBILITY, BEST_PRACTICES, SEO), and `key` (your API key).
-* **What data is sent:** The public URL to audit and the chosen strategy. The API key is sent as authentication. No site visitor data, cookies, or admin credentials are sent. Results are cached as a transient (`wppo_pagespeed_*`) for 24 hours and optionally stored as trend history in the `wppo_web_vitals_trends` option.
-* **Terms/Privacy:** https://developers.google.com/speed/docs/insights/v5/get-started and https://policies.google.com/privacy. You must obtain your own API key from https://console.cloud.google.com/; the plugin never ships a default key.
-* **EOL/Opt-out:** Remove the API key or disable the PageSpeed panel to stop all requests. No further calls are made.
-
-= Google Fonts CDN (https://fonts.googleapis.com and https://fonts.gstatic.com) =
-* **Purpose:** When the File Optimization option “Host Google Fonts Locally” is enabled, the plugin detects Google Fonts CSS requested via `fonts.googleapis.com` and downloads the CSS and associated font files (`fonts.gstatic.com`, woff2) to serve locally (`wp-content/cache/wppo/fonts/`). This eliminates external DNS lookups on the frontend, improves GDPR compliance, and enables `font-display: swap`.
-* **When:** Only when “Host Google Fonts Locally” is enabled **and** a page or enqueued stylesheet contains a `fonts.googleapis.com` URL (via `style_loader_tag` or an `@import`/`link` in the HTML buffer). Each unique Google Fonts CSS URL is fetched once and then served from the local cache. When the option is disabled, the plugin makes no requests to Google Fonts; the browser loads fonts directly from Google as authored.
-* **Where:** Server-side via `wp_remote_get` to `https://fonts.googleapis.com/...` (CSS, using a Chrome 120 UA to request woff2) and `https://fonts.gstatic.com/...` (font file, woff2). Timeouts are 20s (CSS) and 30s (font file).
-* **What data is sent:** Only the Google Fonts stylesheet URL as authored in the theme/plugin (e.g. `https://fonts.googleapis.com/css2?family=Inter:wght@400`). No visitor IP beyond the server’s outbound request, no cookies, and no site content is sent.
-* **Terms/Privacy:** https://developers.google.com/fonts/faq and https://policies.google.com/privacy.
-* **EOL/Opt-out:** Disable “Host Google Fonts Locally” to stop all server-side fetches; existing cached files remain in `wp-content/cache/wppo/fonts/` until cleared via “Clear All Cache” or the plugin is uninstalled.
-
-= Cloudflare cache purge (https://api.cloudflare.com/client/v4/zones/{zoneId}/purge_cache) =
-* **Purpose:** Purge the configured Cloudflare zone cache whenever the plugin clears its own page cache, so visitors do not receive stale HTML after content or settings change.
-* **When:** Automatically after `wppo_after_cache_clear` fires — this includes post publish/update (`save_post`), theme/plugin changes, settings saves and manual "Clear All Cache". No request is made unless an administrator has stored a Cloudflare API token (constant `WPPO_CLOUDFLARE_API_TOKEN`) and a Zone ID in the Edge Cache settings.
-* **Where:** Server-side `wp_remote_request` POST to `https://api.cloudflare.com/client/v4/zones/{zoneId}/purge_cache`. A full purge sends `{"purge_everything":true}`; a single-page clear sends `{"files":["<page URL>"]}`.
-* **What data is sent:** The Cloudflare Zone ID (in the URL), the API token (as an `Authorization: Bearer` header) and either the purge-everything flag or the URL(s) being purged. No visitor data, cookies, or site content are sent.
-* **Terms/Privacy:** https://www.cloudflare.com/terms/ and https://www.cloudflare.com/privacypolicy/.
-* **Opt-out:** Remove the `WPPO_CLOUDFLARE_API_TOKEN` constant, clear the Zone ID, or set the CDN purge service to "None" in the Edge Cache settings. No further purge calls are made.
-
-= Bunny pull-zone cache purge (https://api.bunny.net/pullzone/{pullZoneId}/purgeCache) =
-* **Purpose:** Purge the configured Bunny pull zone whenever the plugin clears its own page cache, so edge visitors do not receive stale HTML.
-* **When:** Automatically after `wppo_after_cache_clear` (post publish/update, settings saves, manual cache clear), but only when an administrator has stored a Bunny API key (constant `WPPO_BUNNY_API_KEY`) and a Pull Zone ID in the Edge Cache settings. Bunny only supports all-or-nothing purges, so single-page clears skip it.
-* **Where:** Server-side `wp_remote_request` POST to `https://api.bunny.net/pullzone/{pullZoneId}/purgeCache`.
-* **What data is sent:** The Pull Zone ID (in the URL) and the API key (as an `AccessKey` header). No request body, visitor data or site content are sent.
-* **Terms/Privacy:** https://bunny.net/terms/ and https://bunny.net/privacy/.
-* **Opt-out:** Remove the `WPPO_BUNNY_API_KEY` constant and/or clear the Pull Zone ID. No further purge calls are made.
-
-= Varnish cache purge (administrator-provided endpoints) =
-* **Purpose:** Send HTTP `PURGE` requests to the Varnish endpoints you configure, so your own edge/Varnish layer is invalidated together with the plugin cache.
-* **When:** Automatically after `wppo_after_cache_clear` (post publish/update, settings saves, manual cache clear), but only when you have entered one or more Varnish purge URLs in the CDN settings.
-* **Where:** Server-side `wp_remote_request` `PURGE` calls to the exact URLs you entered (capped at 20 per purge, filterable). No vendor service is contacted.
-* **What data is sent:** Only the HTTP `PURGE` request to your configured endpoint; no site content or visitor data.
-* **Opt-out:** Remove the configured Varnish purge URLs. No further purge calls are made.
-
-= First-party Real-User Monitoring (RUM) data =
-
-When Real-User Monitoring is enabled (Dashboard → Web Vitals), the plugin records **anonymised field metrics only** — the page path and that page's Largest Contentful Paint (LCP), Interaction to Next Paint (INP) and Cumulative Layout Shift (CLS) samples. No cookies, names, email addresses, user IDs, form values, or IP addresses are stored with the samples. A visitor IP is read into memory solely to rate-limit the public beacon (120 requests/hour) and is never persisted. Metrics are aggregated and stored only in your own site's database (`wppo_web_vitals_rum` option plus per-path trend data), retained on a rolling 14-day window (up to 200 paths/day, 600 paths total), and are never sent to the plugin author or any third party. Disabling RUM stops collection; uninstalling the plugin removes the stored data. See `includes/class-rum.php`.
 
 == Upgrade Notice ==
 
