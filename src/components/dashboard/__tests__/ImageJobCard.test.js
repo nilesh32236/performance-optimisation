@@ -402,7 +402,7 @@ describe( 'ImageJobCard (P3-020 polling boundary)', () => {
 			};
 			render(
 				<>
-					<ImageJobCard initialImageInfo={ {} } />
+					<ImageJobCard defaultImageInfo={ {} } />
 					<Sibling />
 				</>
 			);
