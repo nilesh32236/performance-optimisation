@@ -28,6 +28,13 @@ jobs:
         env:
           MODEL_CATALOG_URL: ${{ vars.MODEL_CATALOG_URL }}
 
+      # Fails the run before the refreshed registry is committed if a workflow,
+      # AGENTS.md, champion.json or the registry drifted away from the explicit
+      # Muse Spark fallback. This job owns the registry data, so the guard runs
+      # here as well as on pull requests.
+      - name: Model authority check
+        run: npm run model:check
+
       - name: Open material registry issue
         if: steps.refresh.outputs.material == 'true'
         env:

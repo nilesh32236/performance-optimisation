@@ -323,7 +323,18 @@ as the action's `openai_api_key` input for `opencode-ai-reviewer`.
 The current production fallback remains `opencode/muse-spark-1.3-contributor-free`. Explicit `OPENCODE_MODEL` selection remains authoritative. The registry and evaluation foundation lives in `model-intelligence/`; it does not change production routing.
 
 - `pnpm typecheck` checks the registry types and model-intelligence sources.
-- `pnpm test:model-registry` runs registry, scoring, and redaction tests.
+- `pnpm model:check` asserts the **model authority invariant**: every location in
+  `model-intelligence/config/fallback-locations.json` (the four model-bearing
+  workflows plus this file) still carries
+  `vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'`, no other
+  `opencode/<model>` literal has appeared, and `champion.json` agrees with the
+  registry champion. It runs in CI on every pull request (the `model-authority`
+  job in `webpack.yml`) and in the `discover` job of the model-intelligence
+  workflow before a refreshed registry is committed, so a drifted model literal
+  fails the run instead of lapsing silently. A new model-bearing workflow must
+  be added to `fallback-locations.json` to stay covered.
+- `pnpm test:model-registry` runs registry, scoring, and redaction tests, including
+  a test that asserts the authority guard is still wired into `package.json` and CI.
 - `pnpm benchmark:model` runs deterministic executable fixtures.
 - `pnpm doc:check` checks the model-intelligence safety and privacy documentation.
 - `pnpm model:refresh` refreshes positively verified free-model metadata. A failed catalog preserves the previous registry.

@@ -12,6 +12,7 @@
 		"typecheck": "tsc --noEmit -p model-intelligence/tsconfig.json",
 		"lint": "npm run lint:js && node model-intelligence/check-syntax.mjs",
 		"doc:check": "node model-intelligence/check-docs.mjs",
+		"model:check": "node model-intelligence/check-config.mjs",
 		"test:model-registry": "node --test model-intelligence/tests/*.test.mjs",
 		"benchmark:model": "node model-intelligence/benchmark.mjs",
 		"benchmark:model:run": "node model-intelligence/run-model-benchmark.mjs",
