@@ -40,30 +40,33 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 /**
  * Preset metadata in display order.
  *
- * @type {Array.<{name:string,label:string,description:string}>}
+ * @type {Array.<{name:string,label:string,audience:string,description:string}>}
  */
 export const PRESET_ORDER = [
 	{
 		name: 'safe',
 		label: __( 'Safe', 'performance-optimisation' ),
+		audience: __( 'Beginner', 'performance-optimisation' ),
 		description: __(
-			'Page cache plus lazy-load images. Every aggressive pipeline stays off — the fresh-install baseline.',
+			'Low-risk optimizations: page cache and lazy-loaded images. Aggressive options stay off — the fresh-install baseline.',
 			'performance-optimisation'
 		),
 	},
 	{
 		name: 'balanced',
 		label: __( 'Balanced', 'performance-optimisation' ),
+		audience: __( 'Recommended', 'performance-optimisation' ),
 		description: __(
-			'Cache plus low-risk wins: HTML/CSS minify, defer, background lazy-load, preload cache and RUM.',
+			'More performance with compatibility considerations: cache, low-risk HTML/CSS/JS wins, preload and RUM.',
 			'performance-optimisation'
 		),
 	},
 	{
 		name: 'aggressive',
 		label: __( 'Aggressive', 'performance-optimisation' ),
+		audience: __( 'Advanced', 'performance-optimisation' ),
 		description: __(
-			'Full pipeline including JS minify, delay, combine and critical CSS. Safety guards stay forced on.',
+			'Advanced optimizations that may require testing: JS minify, delay, combine and critical CSS. Safety guards stay forced on.',
 			'performance-optimisation'
 		),
 	},
@@ -468,14 +471,17 @@ const OptimizationPresets = () => {
 			) }
 			<p className="wppo-text-muted">
 				{ __(
-					'One-click Safe, Balanced or Aggressive bundles with a preview of every change. Every save keeps an automatic restore point.',
+					'Choose a level, preview every change, and keep an automatic restore point. Safe is the beginner baseline; Balanced is recommended; Aggressive requires testing.',
 					'performance-optimisation'
 				) }
 			</p>
 			<div
 				className="wppo-presets__buttons"
 				role="group"
-				aria-label={ __( 'Presets', 'performance-optimisation' ) }
+				aria-label={ __(
+					'Optimization preset levels',
+					'performance-optimisation'
+				) }
 			>
 				{ PRESET_ORDER.map( ( preset ) => (
 					<button
@@ -487,18 +493,31 @@ const OptimizationPresets = () => {
 								: 'wppo-button--secondary'
 						}` }
 						aria-pressed={ selected === preset.name }
+						aria-describedby={ `wppo-preset-${ preset.name }-description` }
 						onClick={ () => previewPreset( preset.name ) }
 					>
-						{ preset.label }
+						<span className="wppo-presets__preset-label">
+							{ preset.label }
+						</span>
+						<span className="wppo-presets__preset-audience">
+							{ preset.audience }
+						</span>
 					</button>
 				) ) }
 			</div>
-			<p className="wppo-text-muted wppo-text-small">
-				{
-					PRESET_ORDER.find( ( preset ) => preset.name === selected )
-						?.description
-				}
-			</p>
+			{ PRESET_ORDER.map( ( preset ) => (
+				<p
+					key={ preset.name }
+					className={
+						selected === preset.name
+							? 'wppo-text-muted wppo-text-small'
+							: 'wppo-screen-reader-text'
+					}
+					id={ `wppo-preset-${ preset.name }-description` }
+				>
+					{ preset.description }
+				</p>
+			) ) }
 			{ loadingDiff && (
 				<p className="wppo-text-muted">
 					<FontAwesomeIcon

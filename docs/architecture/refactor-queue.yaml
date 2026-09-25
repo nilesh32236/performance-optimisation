@@ -1696,6 +1696,24 @@ growth_items:
       runtime_scope: 'No runtime feature, REST, cache, database, or admin behavior changed'
     status_note: 'Phase B repository changes are merged; WordPress.org asset publication remains pending directory sync verification.'
 
+  - id: C-001
+    title: 'Admin UX simplification without behavior changes'
+    status: active
+    priority: medium
+    type: ux
+    objective: 'Make the existing seven-tab admin easier for beginners through clearer preset levels, progressive disclosure, safety explanations, and preserved advanced access.'
+    scope:
+      - 'Safe/Balanced/Aggressive preset copy and accessible descriptions'
+      - 'responsive preset hierarchy'
+      - 'unsaved-change, dialog, accessibility, mobile, and RTL regression coverage'
+      - 'docs/growth/UX-DESIGN.md'
+      - 'Playwright verification'
+    non_goals:
+      - 'No new optimization functionality, navigation rewrite, router, state store, REST, cache, database, or settings-persistence changes.'
+    issue: 1630
+    pull_request: pending
+    status_note: 'Phase C keeps the current seven-tab IA and improves the existing preset/onboarding surface without changing preset behavior.'
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'

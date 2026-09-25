@@ -37,13 +37,28 @@ describe( 'OptimizationPresets', () => {
 		render( <OptimizationPresets /> );
 
 		expect(
-			screen.getByRole( 'button', { name: 'Safe' } )
+			screen.getByRole( 'button', { name: /^Safe Beginner$/ } )
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole( 'button', { name: 'Balanced' } )
+			screen.getByRole( 'button', { name: /^Balanced Recommended$/ } )
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole( 'button', { name: 'Aggressive' } )
+			screen.getByRole( 'button', { name: /^Aggressive Advanced$/ } )
+		).toBeInTheDocument();
+		expect( screen.getByText( 'Beginner' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Recommended' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Advanced' ) ).toBeInTheDocument();
+		expect(
+			screen.getByRole( 'button', { name: /^Safe Beginner$/ } )
+		).toHaveAttribute( 'aria-describedby', 'wppo-preset-safe-description' );
+		expect(
+			document.getElementById( 'wppo-preset-safe-description' )
+		).toBeInTheDocument();
+		expect(
+			document.getElementById( 'wppo-preset-balanced-description' )
+		).toBeInTheDocument();
+		expect(
+			document.getElementById( 'wppo-preset-aggressive-description' )
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole( 'button', { name: /Export JSON/i } )
@@ -76,7 +91,9 @@ describe( 'OptimizationPresets', () => {
 
 		render( <OptimizationPresets /> );
 
-		fireEvent.click( screen.getByRole( 'button', { name: 'Balanced' } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /^Balanced Recommended$/ } )
+		);
 
 		await waitFor( () =>
 			expect( fetchOptimizationPresets ).toHaveBeenCalledWith(
@@ -105,7 +122,9 @@ describe( 'OptimizationPresets', () => {
 
 		render( <OptimizationPresets /> );
 
-		fireEvent.click( screen.getByRole( 'button', { name: 'Safe' } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /^Safe Beginner$/ } )
+		);
 		// Wait for the preview to settle: Apply stays disabled while loading.
 		await waitFor( () =>
 			expect( fetchOptimizationPresets ).toHaveBeenCalledWith(
@@ -149,7 +168,9 @@ describe( 'OptimizationPresets', () => {
 
 		render( <OptimizationPresets /> );
 
-		fireEvent.click( screen.getByRole( 'button', { name: 'Balanced' } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /^Balanced Recommended$/ } )
+		);
 		await waitFor( () =>
 			expect(
 				screen.getByText(
@@ -186,7 +207,7 @@ describe( 'OptimizationPresets', () => {
 			render( <OptimizationPresets /> );
 
 			fireEvent.click(
-				screen.getByRole( 'button', { name: 'Balanced' } )
+				screen.getByRole( 'button', { name: /^Balanced Recommended$/ } )
 			);
 			await waitFor( () =>
 				expect( fetchOptimizationPresets ).toHaveBeenCalledWith(
@@ -265,8 +286,12 @@ describe( 'OptimizationPresets', () => {
 
 		render( <OptimizationPresets /> );
 
-		fireEvent.click( screen.getByRole( 'button', { name: 'Balanced' } ) );
-		fireEvent.click( screen.getByRole( 'button', { name: 'Safe' } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /^Balanced Recommended$/ } )
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /^Safe Beginner$/ } )
+		);
 
 		// Resolve out of order: the stale Balanced response settles last
 		// and must not overwrite the Safe diff.
