@@ -53,7 +53,7 @@
 - **Status:** Completed in Phase B (`2026-09-25`).
 - **Delivered:** `assets/screenshot-1.png` through `assets/screenshot-7.png`, all 1200×900 captures of the current live admin UI.
 - **Coverage:** Dashboard, File Optimisation, Image Optimisation, Performance Audit/PageSpeed, Database Cleanup, Object Cache/Redis, and Preload Settings.
-- **Validation:** Captured with Playwright at 1280×800, 1024×768, and 390×844; no console errors, horizontal overflow, visible notices, or unsaved-change dialogs in the published assets. Live URLs were replaced with `example.com`; no API keys, passwords, or credentials are visible.
+- **Validation:** Captured with Playwright at 1280×800, 1024×768, and 390×844; no console/page errors, horizontal overflow, visible notices, or unsaved-change dialogs in the published assets. The WordPress navigation was collapsed for the captures, and the unrelated `all-in-one-wp-migration` plugin was deactivated on the live site at the user's request. Live URLs were replaced with `example.com`; no API keys, passwords, or credentials are visible.
 - **Readme alignment:** Seven screenshot captions were added to `readme.txt` and match the captured feature screens.
 
 ## Separation Rationale

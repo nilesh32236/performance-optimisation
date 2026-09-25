@@ -125,9 +125,9 @@ Phase B adds real visual assets for the existing product without changing functi
 
 ### Screenshot evidence
 
-Screenshots were captured from the real WordPress installation with Playwright/Chromium. The responsive QA set was checked at 1280×800, 1024×768, and 390×844. The captured flows reported no console errors, horizontal overflow, or secret values. Live domain text was replaced with `example.com`; the captures show no API keys, passwords, authentication headers, private customer information, or unsaved-change dialogs. The readme now has seven matching screenshot captions.
+Screenshots were captured from the real WordPress installation with Playwright/Chromium. The WordPress navigation was collapsed for the capture, and the unrelated `all-in-one-wp-migration` plugin was deactivated on the live site at the user's request so it would not appear in the product screenshots. No plugin source or WordPress behavior was changed by that site-level cleanup.
 
-The published assets are real UI captures; the banner and icon are presentation assets only and do not imply performance guarantees.
+The responsive QA set was checked at 1280×800, 1024×768, and 390×844. The captured flows reported no console/page errors, horizontal overflow, visible notices, or secret values. Live domain text was replaced with `example.com`; the captures show no API keys, passwords, authentication headers, private customer information, or unsaved-change dialogs. The readme now has seven matching screenshot captions.
 
 ## Validation and publication status
 
