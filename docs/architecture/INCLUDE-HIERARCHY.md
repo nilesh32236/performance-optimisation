@@ -1,6 +1,6 @@
 # Include Hierarchy: Performance Optimisation Plugin
 
-Phase 3 tree baseline: 2026-09-24
+Phase 3 tree baseline: 2026-09-25
 Authoritative metrics: `class-inventory.json` and `ARCHITECTURE-BASELINE.md`
 
 The Phase 2 hierarchy remains live. Phase 3 changes a path only when ownership evidence requires it. This document describes the current tree; it does not preserve obsolete flat-path targets.
@@ -19,6 +19,7 @@ includes/
     class-main.php
     class-hook-registry.php
     class-loader-map.php
+    class-runtime-state.php
     class-wp-version.php
     class-activate.php
     class-deactivate.php
@@ -28,6 +29,8 @@ includes/
     class-cache-key.php
     class-cache-invalidator.php
     class-cache-coordinator.php
+    class-cache-capacity.php
+    class-redis-config-policy.php
     class-advanced-cache-handler.php
     class-bfcache.php
     class-dropin-registry.php
@@ -42,6 +45,8 @@ includes/
   Scheduler/
     class-scheduler.php
     class-cron.php
+    class-job-registry.php
+    class-preload-transport.php
 
   Support/
     class-filesystem.php
@@ -122,6 +127,7 @@ includes/
     class-css.php
     class-html.php
     class-js.php
+    class-minify-policy.php
 
 templates/
   object-cache.php
@@ -187,7 +193,7 @@ The dependency graph adds four procedural runtime files: the plugin entry, `unin
 
 ### Integrations
 
-`Integrations` owns LiteSpeed, WooCommerce detection, and builder purge adaptation. LiteSpeed behavior stays protected. Builder scheduling should migrate to the central job registry.
+`Integrations` owns LiteSpeed, WooCommerce detection, and builder purge adaptation. LiteSpeed behavior stays protected. Builder scheduling remains a classified direct schedule owner, while `Job_Registry` owns the canonical hook manifest used by teardown.
 
 ### Admin
 
@@ -199,7 +205,7 @@ The dependency graph adds four procedural runtime files: the plugin entry, `unin
 
 ### Util
 
-`Util` remains a public static compatibility layer with residual canonical helpers. Phase 3 tracks each method as one of:
+`Util` remains a public static compatibility layer with residual canonical helpers. The current generated graph records 60 unique incoming source nodes and 1,084 incoming executable occurrences. Phase 3 tracks each method as one of:
 
 - canonical shared responsibility;
 - compatibility proxy;
@@ -209,7 +215,7 @@ The dependency graph adds four procedural runtime files: the plugin entry, `unin
 - dead code;
 - wrong owner.
 
-The class stays at the root until its remaining canonical responsibilities have named targets. Its current 56-node fan-in prevents a cosmetic move.
+The class stays at the root until its remaining canonical responsibilities have named targets. Its current 60-node fan-in prevents a cosmetic move.
 
 ### Minify and drop-ins
 

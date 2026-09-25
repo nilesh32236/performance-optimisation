@@ -1370,19 +1370,6 @@ phase3_items:
       http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
       architecture_graph: '86 inventory files / 89 graph nodes / 395 edges; generator check passed'
 
-  - id: P3-024
-    title: 'AI model persistence and learning ownership'
-    status: queued
-    priority: medium
-    type: architecture
-    problem: 'AI_Adaptive persists learned model data and performs opt-in remote suggestion work inside the same feature adapter.'
-    target_owner: 'AI_Model_Store/Policy under Insight boundary'
-    target_direction: 'AI_Adaptive -> explicit model store/policy; REST and settings adapters remain thin'
-    exact_scope: 'Model option read/write, learning reset, opt-in remote request boundary, and migration-compatible defaults.'
-    non_goals: 'Do not change AI opt-in defaults, REST security, or suggestion response shape.'
-    tests: 'Model persistence parity, reset isolation, opt-in/remote-disabled behavior, and multisite option ownership.'
-    ratchet: 'AI_Adaptive direct model persistence/remote-policy responsibilities: 2 -> 0.'
-
   - id: P3-019
     title: 'React settings-response and async lifecycle correctness'
     status: merged
@@ -1556,7 +1543,7 @@ phase3_items:
 
   - id: P3-023
     title: 'Final deep architecture audit'
-    status: active
+    status: implemented-active
     priority: high
     github_issue: 1619
     type: audit
@@ -1564,8 +1551,29 @@ phase3_items:
     target_owner: 'Final audit artifacts and hotspot classification'
     exact_scope: 'ARCHITECTURE-FINAL.md, ARCHITECTURE-BEFORE-AFTER.md, updated graph/inventory/hierarchy/load order, and resolved/intentional/protected/acceptable/future classification.'
     ratchet: 'No unexplained major hotspot; all metrics compared with P3-001.'
+    implementation:
+      status: 'implemented-active'
+      final_artifacts: 'docs/architecture/ARCHITECTURE-FINAL.md and docs/architecture/ARCHITECTURE-BEFORE-AFTER.md'
+      classification: 'All major hotspots classified as resolved, intentional, protected, acceptable, or future debt; no unexplained hotspot remains.'
+      graph_delta: 'P3-001 74 graph files / 340 edges / 191 compatibility edges / 226 bridge candidates; final 89 files / 395 edges / 206 compatibility edges / 247 bridge candidates; metrics are compared in ARCHITECTURE-BEFORE-AFTER.md.'
+      evidence: 'Generated graph/inventory, P3-022 architecture guards, full PHPUnit 2783/25808, PHPCS, generator --check, JavaScript gates, and post-merge WordPress verification.'
+      protected_contracts: 'LiteSpeed ESI/coexistence/header contracts, manual loading/no PSR-4, REST/Abilities auth, public RUM exception, multisite/drop-in/cache isolation, and React no-routing architecture remain explicit.'
 
 future_items:
+  - id: P3-024
+    title: 'AI model persistence and learning ownership'
+    status: queued
+    priority: medium
+    type: architecture
+    deferred_from: 'P3-023 final audit; no issue or executable work started'
+    problem: 'AI_Adaptive persists learned model data and performs opt-in remote suggestion work inside the same feature adapter.'
+    target_owner: 'AI_Model_Store/Policy under Insight boundary'
+    target_direction: 'AI_Adaptive -> explicit model store/policy; REST and settings adapters remain thin'
+    exact_scope: 'Model option read/write, learning reset, opt-in remote request boundary, and migration-compatible defaults.'
+    non_goals: 'Do not change AI opt-in defaults, REST security, or suggestion response shape.'
+    tests: 'Model persistence parity, reset isolation, opt-in/remote-disabled behavior, and multisite option ownership.'
+    ratchet: 'AI_Adaptive direct model persistence/remote-policy responsibilities: 2 -> 0.'
+
   - id: FUT-001
     title: 'Critical_CSS storage/staging cluster extraction (Ccss_Store)'
     status: merged

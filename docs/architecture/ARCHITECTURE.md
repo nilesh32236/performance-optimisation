@@ -117,8 +117,8 @@ Cross-domain edges require review. An edge can represent a real product interact
 
 1. **Preload transport:** Cron warmup now shares one bounded, same-host redirect policy; future fetch callers must use the owner rather than implicit redirects.
 2. **Runtime state:** 33 owners hold 143 static properties. P3-004 resets six site-sensitive owners centrally; P3-021 selects the non-site-sensitive `Bfcache` request state for a shutdown reset and classifies persisted, compatibility, and protected residues.
-3. **`Util` hub:** 56 source nodes and 1,145 executable occurrences still depend on it.
-4. **`Main` hub:** 37 outgoing class dependencies and 18 feature dependencies remain; P3-015 reduces large methods and owned cluster lines behind a named coordinator.
+3. **`Util` hub:** 60 source nodes and 1,084 executable occurrences still depend on it; P3-017 removed the Woo proxy cluster without removing the public facade.
+4. **`Main` hub:** 38 outgoing class dependencies and 19 feature dependencies remain; P3-013 through P3-015 reduced large methods and moved bounded owners behind named coordinators, while Main retains public callback/facade identity.
 5. **Cache capacity:** `Cache_Capacity` now owns the statistics, cap, and eviction contract; `Cache` remains the public facade and lifecycle owner.
 6. **Settings writes:** `Settings_Command` now routes REST partial/import/safe-mode writes through `Settings_Store`; no direct runtime `update_option('wppo_settings')` remains outside the canonical store.
 7. **Redis policy:** `Redis_Config_Policy` now owns the full key manifest and value sanitizer used by REST and CLI; `Object_Cache::ALLOWED_KEYS` remains a compatibility alias.
@@ -126,7 +126,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 9. **CSS and image cycles:** `Ccss_Generator` now owns generation lifecycle status/retry policy and `Ccss_Store` owns file projection, but parser/frontend bridges still keep the larger SCC connected.
 10. **REST and CLI duplication:** `Admin_Auth` now owns the duplicated administrative capability/nonce decision; adapters still duplicate dispatch, settings, telemetry, and diagnostics.
 11. **Database cleanup orchestration:** `Database_Cleanup_Runner` now owns the shared REST/Abilities/CLI dispatch, aliases, dry-run preview, and activity policy; adapters retain transport concerns.
-12. **React async ownership:** cache commits, deferred saves, abort guards, and polling state need bounded fixes.
+12. **React async ownership:** P3-019 and P3-020 now centralize settings-response commits, save/abort/mount guards, and Dashboard image polling without a router, global store, or polling framework. FileOptimization card separation and Woo self-test transport remain bounded future work.
 
 `ARCHITECTURE-BASELINE.md` records source evidence and queue priority for each finding.
 

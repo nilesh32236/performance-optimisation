@@ -30,12 +30,12 @@ P3-022 makes this vocabulary executable. `php scripts/generate-class-inventory.p
 | `Settings_Store` | Effective settings resolution, historical in-memory backfills, blog-keyed raw/resolved memos, writes, validation dispatch, snapshots | REST/CLI response shaping, asset/minification/speculation behavior | P3-013 moved the 300-line Main resolver; historical compatibility data remains, not new feature policy |
 | `Filesystem` | WP_Filesystem/native I/O, atomic writes, containment, path helpers | Cache policy, HTML mutation | Four static properties; partial test reset ownership |
 | `Url` | Home/content URL memos, normalization, same-site policy, redirect parsing | Settings arrays, feature decisions | Five static properties; preload policy needs a separate allowance-preserving owner |
-| `Scheduler` | Action Scheduler and WP-Cron primitives, locks, job ownership registry | Job payload policy owned by a feature | First Phase 3 implementation target; teardown lists miss builder hooks |
+| `Scheduler` | Action Scheduler and WP-Cron primitives, locks, job ownership registry | Job payload policy owned by a feature | `Job_Registry` owns the canonical hook manifest; direct feature scheduling remains classified and teardown is centralized |
 | `Http` | Shared cURL, finfo, XML, GD teardown | Provider request semantics | Small, stable support boundary |
 | `Woo_Detect` | Woo detection and exclusion policy | Cache invalidation actions | `Util` still calls it, keeping a shared-facade edge |
-| `Log` | Activity persistence and logging calls | Feature decisions | Fan-in 27; deliberate infrastructure hub, not a god class |
+| `Log` | Activity persistence and logging calls | Feature decisions | Fan-in 29; deliberate infrastructure hub, not a god class |
 | `Loader_Map` | Eager files, fallback map, CLI path | Feature behavior | Three loader edges; stale-classmap safety remains required |
-| `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 57 and 1,138 incoming executable occurrences; defaults are now a Store facade |
+| `Util` | Residual canonical helpers and backward-compatible proxies | New feature policy or a new dependency hub | Fan-in 60 and 1,084 incoming executable occurrences; defaults are now a Store facade |
 | `Minify_Policy` | CSS/JS enqueue eligibility, tag rewrites, minified-file checks, and containment guards | Hook registration, speculation/resource hints, preload, cache output, or settings writes | P3-014 extraction under the existing `includes/minify/` boundary; Main retains public callback facades and exclusion state bridges |
 | `Preload_Buffer_Coordinator` | Core template-enhancement availability, legacy used-CSS/LCP buffer lifecycle, cache-aware post-save scheduling gates | Hook registration, speculation/resource hints, image serving, LiteSpeed lanes, Redis/drop-ins, or data migration | P3-015 dependency-light injected ports; Main retains public callback identities and ordering |
 
@@ -149,7 +149,7 @@ The SPA keeps `useState`, `wppoSettings`, and `apiCall`. Boundaries include:
 - shared notice feedback;
 - local polling and dirty-state ownership.
 
-Current sizes are `FileOptimization.js` 6,114 lines, `Dashboard.js` 2,168, and `App.js` 654. One card or one hook per item keeps regressions searchable.
+Current sizes are `FileOptimization.js` 6,320 lines, `Dashboard.js` 2,011, and `App.js` 654. One card or one hook per item keeps regressions searchable.
 
 ## Configuration ownership
 

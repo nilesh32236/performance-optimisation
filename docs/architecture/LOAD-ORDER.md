@@ -1,7 +1,7 @@
 # Load Order and Autoload Boundaries
 
-Phase 3 verification baseline: 2026-09-24
-Runtime source: `origin/master` commit `33711d11e41614fb7661e3a1b2c6bdb0330a743d`
+Phase 3 final-audit verification baseline: 2026-09-25
+Runtime source: `p3/final-audit` commit `e8f465ef`
 Loader owner: `includes/Core/class-loader-map.php`
 
 The plugin uses two autoload mechanisms:
@@ -72,7 +72,7 @@ Action Scheduler remains a deliberate direct require outside `Loader_Map` path d
 
 ## 3. Lazy class loading
 
-`Loader_Map::fallback_map()` maps 76 `PerformanceOptimise\Inc` class names to canonical files under:
+`Loader_Map::fallback_map()` maps 81 `PerformanceOptimise\Inc` class names to canonical files under:
 
 ```text
 includes/<Domain>/class-<name>.php
@@ -141,13 +141,7 @@ The old “7 subcommands” documentation counted the pre-`verify` surface.
 
 `Cron` loads lazily and registers WP-Cron hooks. `Scheduler` owns shared Action Scheduler and WP-Cron primitives.
 
-Action Scheduler's vendor library loads before plugin classes. The plugin still has fragmented job ownership:
-
-- `Cron::AS_HOOKS` drives part of deactivation and uninstall cleanup;
-- `Builder_Purge_Watcher` schedules drift and upgrade purge hooks;
-- RUM and `Object_Cache` schedule some Cron-owned hooks directly.
-
-Phase 3 will centralize job ownership without changing the vendor require order.
+Action Scheduler's vendor library loads before plugin classes. `Job_Registry` is the single owned hook manifest for teardown: 17 canonical WP-Cron hooks, 3 feature fallback hooks, 1 legacy spelling, and 9 owned Action Scheduler hooks. Deactivate and uninstall consume that registry; feature enqueue calls remain classified direct schedule owners without changing the vendor require order.
 
 ## 8. Object-cache drop-in
 
@@ -159,23 +153,11 @@ WordPress loads `/wp-content/object-cache.php` before regular plugins. The repos
 includes/Support/redis-connect-helper.php
 ```
 
-### Installed drift
+### Installed parity
 
-The installed `/wp-content/object-cache.php` still searches the pre-ARCH-013 path:
+The final audit compared the deployed `/wp-content/object-cache.php` with the repository template on 2026-09-25: both have SHA-256 `1463f80564cd62075c7169d7daeedce64b4c68e06699619574fa3467df11a7e2` and `cmp` reports identical. The deployed helper path is current, so the P3-001 pre-ARCH-013 drift is resolved. Redis credentials and unrelated site data were not read or changed.
 
-```text
-includes/redis-connect-helper.php
-```
-
-That deployed file also predates later template hardening. Every CLI probe logs:
-
-```text
-wppo_redis_connect() not found
-```
-
-The repository template and `Object_Cache` class use the current path. `wp wppo verify` checks drop-in ownership, not byte parity. P3-001 records this installed-state defect. The post-merge refresh must copy the owned template through the plugin's safe install path or a reviewed equivalent, then re-run Redis and object-cache smoke checks.
-
-`tests/php/bootstrap.php` requires the repository template, so PHPUnit does not detect deployed template drift. A later verification improvement should compare the installed drop-in with the repository template without exposing Redis credentials or unrelated site data.
+`wp help wppo` lists all eight subcommands, and the final live `wp wppo verify` run completed successfully (6/7 with the known cache-root writability warning). CLI dispatch is available; no loader-map or generated-graph gap remains.
 
 ## 9. Advanced-cache drop-in
 
@@ -207,7 +189,7 @@ and a committed `build/` diff. The loader does not affect PHP class order.
 6. installs a test `$wpdb` shape;
 7. exposes `WPPO_Test_Bootstrap` for Brain Monkey setup and targeted static reset calls.
 
-The bootstrap uses synthetic `/tmp/wordpress/` paths and defines `WPPO_VERSION` as `2.0.0`. It does not replace installed-site verification. Phase 3 must extend reset coverage through a production-owned runtime-state registry rather than add more scattered test-only calls.
+The bootstrap uses synthetic `/tmp/wordpress/` paths and defines `WPPO_VERSION` as `2.0.0`. It does not replace installed-site verification. P3-004's `Runtime_State` registry and P3-021's `Bfcache` shutdown reset are the production-owned state seams; the bootstrap does not add more scattered test-only reset calls.
 
 ## 12. Activation, deactivation, and uninstall
 
@@ -215,7 +197,7 @@ The bootstrap uses synthetic `/tmp/wordpress/` paths and defines `WPPO_VERSION` 
 - `Deactivate::init()` clears scheduled work and removes owned artifacts.
 - `uninstall.php` runs under `WP_UNINSTALL_PLUGIN`, removes network and per-site data, and iterates multisite sites when needed.
 
-Job teardown must use one canonical hook registry. The current builder upgrade purge hook is the first known omission.
+Job teardown uses the canonical `Job_Registry` hook set. The builder upgrade and drift hooks are included in that set; direct builder scheduling remains a classified owner concern rather than an untracked teardown path.
 
 ## 13. Verification after loader changes
 
@@ -229,4 +211,4 @@ composer test
 wp wppo verify
 ```
 
-Runtime smoke must cover plugin activation, frontend, admin, REST, CLI, cron, cache, and any touched drop-in. The installed Redis drop-in parity check is mandatory until the deployed copy is refreshed.
+Runtime smoke must cover plugin activation, frontend, admin, REST, CLI, cron, cache, and any touched drop-in. Re-run the installed Redis drop-in parity check after any drop-in or template change.
