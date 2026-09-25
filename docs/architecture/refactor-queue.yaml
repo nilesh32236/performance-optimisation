@@ -1473,11 +1473,13 @@ phase3_items:
 
   - id: P3-021
     title: 'Static-state cleanup and runtime reset coverage'
-    status: active
+    status: merged
     priority: medium
     github_issue: 1613
     github_pr: 1614
     implementation_commit: a77bdcd9a44c568c0c61f5327ac2a7e00d69df36
+    merge_commit: 899822f9
+    merged_at: '2026-09-25'
     type: architecture
     problem: '33 owners hold 143 generated static properties; P3-004 covers site-sensitive owners, while request, cross-request, and protected residues still need explicit lifecycle classification.'
     target_owner: 'Bfcache request-state owner for this item; feature-owned reset where lifecycle permits'
@@ -1502,9 +1504,19 @@ phase3_items:
       notes:
         - '2026-09-25: Bfcache selected as the single P3-021 cluster; no site-sensitive owner or cross-request store was moved.'
 
+    post_merge_verification:
+      wordpress: '7.1.2'
+      php: '8.3.33'
+      plugin: '2.4.0'
+      bfcache: 'shutdown reset and 3 characterization tests green; no settings/cache mutation'
+      wppo_verify: '6/7; known nobody-owned cache-root warning only'
+      rest_patterns: 48
+      http: 'frontend 200; admin 302; REST root 200; unauthenticated system_info 401'
+      architecture_graph: '86 inventory files / 89 graph nodes / 395 edges; Bfcache 14->15 methods, 471->490 lines'
+
   - id: P3-022
     title: 'Architecture guardrails and dependency-direction enforcement'
-    status: queued
+    status: audit-pending
     priority: medium
     type: tooling
     problem: 'The graph drift gate exists, but no guard prevents new forbidden boundary edges, unowned schedules, or static-state gaps.'
