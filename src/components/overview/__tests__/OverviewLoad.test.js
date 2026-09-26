@@ -9,7 +9,7 @@
 
 import { act, render, screen, waitFor } from '@testing-library/react';
 
-import Overview from '../Overview';
+import Overview, { resetObjectCacheMemo } from '../Overview';
 
 jest.mock( '../../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
@@ -25,6 +25,10 @@ const {
 
 describe( 'Overview loading and failure behaviour', () => {
 	beforeEach( () => {
+		// The object-cache memo is module-level by design (it must survive the
+		// component unmounting), so it has to be cleared between tests or the
+		// first test's result answers every later one.
+		resetObjectCacheMemo();
 		apiCall.mockReset();
 		fetchSystemInfo.mockReset();
 		fetchWebVitalsTrends.mockReset();

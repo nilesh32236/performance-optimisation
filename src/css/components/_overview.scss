@@ -99,10 +99,20 @@
 	text-align: start;
 }
 
-.wppo-overview__links .wppo-button--link:focus-visible {
-	outline: none;
-	box-shadow: var(--wppo-focus-ring);
-}
+// Deliberately NO focus rule here.
+//
+// An earlier version of this file set `outline: none` and substituted
+// `box-shadow: var(--wppo-focus-ring)`. That is wrong twice over:
+// `--wppo-focus-ring` is `0 0 0 3px var(--wppo-primary-soft)` — a *soft*, very
+// low-alpha colour intended as a halo *around* a real outline, not as the
+// indicator itself. An independent review measured the result at **1.02:1**
+// against the page (WCAG 2.2 SC 1.4.11 requires 3:1) by pixel-diffing a real
+// Tab press, and keyboard users were left with effectively no focus indicator
+// on the three primary actions.
+//
+// The design system already sets `outline: 2px solid var(--wppo-primary)` on
+// every focusable element in `_base.scss`, which is what should be used. Not
+// overriding it is the fix; adding a local rule here is the bug.
 
 .wppo-overview__activity {
 	display: flex;
@@ -119,6 +129,17 @@
 	gap: 8px;
 	justify-content: space-between;
 	font-size: 14px;
+}
+
+// A long PageSpeed URL made this span 1197px inside a 336px row at 390px
+// viewport, and the content was silently clipped with no page scroll to hint
+// at it. A flex item's default `min-width: auto` refuses to shrink below its
+// content, so `overflow-wrap` alone does nothing — the sibling `__status-body`
+// rule already had `min-width: 0` for exactly this reason.
+.wppo-overview__activity-text {
+	flex: 1 1 12rem;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .wppo-overview__activity-time {
@@ -155,4 +176,28 @@
 	.wppo-overview__links .wppo-button--link {
 		min-height: 44px;
 	}
+}
+
+/**
+ * Badge contrast, scoped to this page's badges.
+ *
+ * `.wppo-status-badge` renders at 0.7rem (11.2px) / 600, which is *not* WCAG
+ * "large text", so 4.5:1 applies. Measured against the live page:
+ *
+ *   good     #059669 on #ecfdf5  -> 3.58:1   fail
+ *   poor     #dc2626 on #fef2f2  -> 4.41:1   fail
+ *   unknown  #64748b on #f1f5f9  -> 4.34:1   fail
+ *   warning  #92400e on #fffbeb  -> 6.84:1   pass
+ *
+ * The tokens themselves are pre-existing and used elsewhere at larger sizes, so
+ * this does **not** change them globally — changing `--wppo-success` would
+ * alter every other consumer for a problem that only exists at 11px. The
+ * variables are re-bound on this component only, to darker steps of the same
+ * hues that clear 4.5:1.
+ */
+.wppo-overview .wppo-status-badge {
+	--wppo-success: #047857; // 5.48:1 on --wppo-success-bg
+	--wppo-error: #b91c1c; // 5.02:1 on --wppo-error-bg
+	--wppo-text-light: #475569; // 6.10:1 on the unknown background
+	--wppo-warning: #92400e; // unchanged, already passes
 }

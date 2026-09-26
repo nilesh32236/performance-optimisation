@@ -50,6 +50,51 @@ import {
  * @param {AbortSignal} signal Cancellation signal.
  * @return {Promise<Object|null>} The object-cache payload, or null.
  */
+// `object_cache` is throttled to five calls a minute, and the Overview remounts
+// on every sub-item change. An independent review drove 7 mounts in 20 s and got
+// 8 requests, 3 of them HTTP 429, which turned a perfectly healthy Redis into a
+// grey "Unavailable" row with no visible cause. One read per page session is
+// enough: this is a status snapshot, not a live gauge, and nothing on this page
+// asks for it to be fresh.
+//
+// A module-level memo rather than a React ref, so it survives the component
+// unmounting and remounting — which is the entire problem.
+let objectCacheMemo;
+let objectCacheInFlight = null;
+
+/**
+ * Read the object-cache status once per page load.
+ *
+ * The memo exists to stop *navigation* re-fetching, not to block a refresh the
+ * user explicitly asked for. So `force` bypasses it: without that, "Try again"
+ * would appear to do nothing for exactly the throttled row that produced it,
+ * which is the worst possible outcome for a retry control.
+ *
+ * @param {AbortSignal} [signal] Optional cancellation signal.
+ * @param {boolean}     [force]  Bypass the memo and re-read.
+ * @return {Promise<Object|null>} The object-cache payload, or null.
+ */
+export const fetchObjectCacheOnce = async ( signal, force = false ) => {
+	if ( objectCacheMemo !== undefined && ! force ) {
+		return objectCacheMemo;
+	}
+	// Concurrent callers share one request rather than racing to the throttle.
+	// A forced read always starts a fresh one.
+	if ( ! objectCacheInFlight || force ) {
+		objectCacheInFlight = fetchObjectCache( signal ).then( ( value ) => {
+			objectCacheMemo = value;
+			return value;
+		} );
+	}
+	return objectCacheInFlight;
+};
+
+/** Test-only: forget the session memo. */
+export const resetObjectCacheMemo = () => {
+	objectCacheMemo = undefined;
+	objectCacheInFlight = null;
+};
+
 export const fetchObjectCache = async ( signal ) => {
 	const response = await apiCall(
 		'object_cache',
@@ -123,8 +168,20 @@ export const summariseVitals = ( payload ) => {
 	/**
 	 * Median of a real, finite, non-negative measurement.
 	 *
-	 * Zero is excluded: `Number( null )` is 0, so counting absent readings as
-	 * "0 ms" is how an unmeasured site reports perfect vitals.
+	 * Absence is decided **explicitly**, not by a `> 0` test. Both are needed
+	 * and they are not the same thing:
+	 *
+	 * - `Number( null )`, `Number( '' )` and `Number( false )` are all `0`, so
+	 *   treating zero as a measurement is how an unmeasured site reports a
+	 *   perfect vitals row.
+	 * - A **genuine** CLS of `0` is an excellent real measurement, not a
+	 *   missing one. A `> 0` filter discards it, which made a fast site render
+	 *   "No real-user data yet" while the plugin was holding the data. On the
+	 *   live site 7 of 37 stored rows are true zeros, and dropping them moved
+	 *   the reported median from 0.0026 to 0.0046 — a 76% overstatement.
+	 *
+	 * `deriveVitalsStatus` already draws the same distinction, and both layers
+	 * must agree or the row contradicts itself.
 	 *
 	 * @param {string[]} keys Candidate field names, in order.
 	 * @return {number|undefined} The median, or undefined when unmeasured.
@@ -141,7 +198,11 @@ export const summariseVitals = ( payload ) => {
 					continue;
 				}
 				const value = Number( raw );
-				if ( Number.isFinite( value ) && value > 0 ) {
+				// Explicit absence, then accept a real zero.
+				const isNumber =
+					typeof raw === 'number' ||
+					( typeof raw === 'string' && raw.trim() !== '' );
+				if ( isNumber && Number.isFinite( value ) && value >= 0 ) {
 					values.push( value );
 					break;
 				}
@@ -179,7 +240,13 @@ const fetchVitals = async ( signal ) => {
 		// The typed helper, not a raw call: this action requires a url and a
 		// strategy, and building the action by hand is how arguments get lost.
 		const response = await fetchWebVitalsTrends( '', '', signal );
-		return summariseVitals( response?.data ?? response );
+		// The same allow-list `fetchObjectCache` uses. A response that declares
+		// failure must not be read as measurements — otherwise a failed request
+		// escalates the whole page to "Needs attention".
+		if ( ! response || response.success !== true ) {
+			return null;
+		}
+		return summariseVitals( response.data ?? response );
 	} catch ( error ) {
 		// A missing vitals source is a normal state, not an error to show.
 		if ( error?.name === 'AbortError' ) {
@@ -212,75 +279,78 @@ export default function Overview( { onNavigate, activities = [] } ) {
 	// One request per source, issued once on mount. The promises are shared so
 	// nothing is ever fetched twice — `object_cache` allows only five calls a
 	// minute, and the Overview remounts on every sub-item change.
-	const request = useCallback( ( controller ) => {
+	const request = useCallback( ( controller, force = false ) => {
 		const systemInfo = fetchSystemInfo( controller.signal ).then(
 			( response ) => response?.data ?? null
 		);
-		const objectCache = fetchObjectCache( controller.signal );
+		const objectCache = fetchObjectCacheOnce( controller.signal, force );
 		const vitals = fetchVitals( controller.signal ).catch( () => null );
 		return { systemInfo, objectCache, vitals };
 	}, [] );
 
-	const load = useCallback( () => {
-		controllerRef.current?.abort();
-		const controller = new AbortController();
-		controllerRef.current = controller;
-		setLoading( true );
-		setFailed( false );
-		// Every source starts pending, so a row can say "still checking" rather
-		// than claiming "Unavailable" while its request is still in flight.
-		setSettled( {} );
+	const load = useCallback(
+		( { force = false } = {} ) => {
+			controllerRef.current?.abort();
+			const controller = new AbortController();
+			controllerRef.current = controller;
+			setLoading( true );
+			setFailed( false );
+			// Every source starts pending, so a row can say "still checking" rather
+			// than claiming "Unavailable" while its request is still in flight.
+			setSettled( {} );
 
-		const requests = request( controller );
+			const requests = request( controller, force );
 
-		/**
-		 * Record one source's outcome, keeping the page honest about what is
-		 * known versus what is still being asked for.
-		 *
-		 * @param {string} key    Which source finished.
-		 * @param {*}      value  Its payload, or null when it produced none.
-		 * @param {string} reason Why it produced none, if it did.
-		 */
-		const settle = ( key, value, reason ) => {
-			if ( controller.signal.aborted || ! mounted.current ) {
-				return;
-			}
-			if ( value !== undefined ) {
-				setPayload( ( prev ) => ( { ...prev, [ key ]: value } ) );
-			}
-			setSettled( ( prev ) => ( { ...prev, [ key ]: reason } ) );
-		};
-
-		requests.systemInfo
-			.then( ( value ) =>
-				settle( 'systemInfo', value, value ? 'ok' : 'unavailable' )
-			)
-			.catch( () => settle( 'systemInfo', null, 'error' ) );
-
-		// A throttled endpoint answers 429 with a *resolved* response rather than
-		// rejecting, so treating "resolved" as success would leave the row wrong
-		// with no way to retry. Reproduced live: `object_cache` allows five calls
-		// a minute and this page remounts on every sub-item change. Each source
-		// therefore reports explicitly whether it produced data.
-		requests.objectCache
-			.then( ( value ) =>
-				settle( 'objectCache', value, value ? 'ok' : 'unavailable' )
-			)
-			.catch( () => settle( 'objectCache', null, 'error' ) );
-
-		// Vitals are optional: a site with no stored measurements is a normal
-		// state, so their absence is never a failure and never blocks the page.
-		requests.vitals
-			.then( ( value ) =>
-				settle( 'vitals', value, value ? 'ok' : 'unmeasured' )
-			)
-			.catch( () => {} )
-			.finally( () => {
-				if ( ! controller.signal.aborted && mounted.current ) {
-					setLoading( false );
+			/**
+			 * Record one source's outcome, keeping the page honest about what is
+			 * known versus what is still being asked for.
+			 *
+			 * @param {string} key    Which source finished.
+			 * @param {*}      value  Its payload, or null when it produced none.
+			 * @param {string} reason Why it produced none, if it did.
+			 */
+			const settle = ( key, value, reason ) => {
+				if ( controller.signal.aborted || ! mounted.current ) {
+					return;
 				}
-			} );
-	}, [ request ] );
+				if ( value !== undefined ) {
+					setPayload( ( prev ) => ( { ...prev, [ key ]: value } ) );
+				}
+				setSettled( ( prev ) => ( { ...prev, [ key ]: reason } ) );
+			};
+
+			requests.systemInfo
+				.then( ( value ) =>
+					settle( 'systemInfo', value, value ? 'ok' : 'unavailable' )
+				)
+				.catch( () => settle( 'systemInfo', null, 'error' ) );
+
+			// A throttled endpoint answers 429 with a *resolved* response rather than
+			// rejecting, so treating "resolved" as success would leave the row wrong
+			// with no way to retry. Reproduced live: `object_cache` allows five calls
+			// a minute and this page remounts on every sub-item change. Each source
+			// therefore reports explicitly whether it produced data.
+			requests.objectCache
+				.then( ( value ) =>
+					settle( 'objectCache', value, value ? 'ok' : 'unavailable' )
+				)
+				.catch( () => settle( 'objectCache', null, 'error' ) );
+
+			// Vitals are optional: a site with no stored measurements is a normal
+			// state, so their absence is never a failure and never blocks the page.
+			requests.vitals
+				.then( ( value ) =>
+					settle( 'vitals', value, value ? 'ok' : 'unmeasured' )
+				)
+				.catch( () => {} )
+				.finally( () => {
+					if ( ! controller.signal.aborted && mounted.current ) {
+						setLoading( false );
+					}
+				} );
+		},
+		[ request ]
+	);
 
 	useEffect( () => {
 		mounted.current = true;
