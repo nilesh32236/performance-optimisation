@@ -223,3 +223,32 @@ Completed: 2026-08-31 11:35 UTC
 - **Vacuous assertion.** `test_dynamic_option_prefixes_are_swept_on_uninstall` asserted a bare substring over the whole of `uninstall.php`, so deleting the real `esc_like( 'wppo_front_page_lcp_' ) . '%'` sweep while leaving the comment that names the prefix kept it green. It now asserts the executable statement via a regex over `esc_like( ... ) . '%'`. Re-mutation-checked: deleting the sweep and leaving the comment now fails. (A pre-existing test killed that mutation too, so this was a dead test rather than dead coverage — but it claimed to check something it did not.)
 - **Overstated contract.** The scan does not match the `update_option( self::CONST, ... )` call form; the constant branch only recognises a bare identifier. That form is used at 56 option-API call sites in this repository versus 40 literal ones, so the docblock's claim that it "sees every option the plugin can ever write" was false for the dominant style. The docblock now states the limit explicitly instead of overclaiming; closing the gap is a follow-up.
 - **Phantom reference.** Two comments cited `LiteSpeed_ESI::FALLBACK_SECRET_OPTION`. That class declares no constants at all — the real call sites are bare string literals at `includes/Integrations/class-litespeed-esi.php:373-398`. Corrected to cite the file:line.
+
+## 2026-09-25 — Release ZIP no longer ships composer dev packages
+- Branch: `fix/distignore-dev-packages`, cut from `master` @ `efdb2019`.
+- Gap: the release workflow installs production dependencies with
+  `composer install --no-dev`, so CI never exercises the local
+  `scripts/build-release.sh` path, which stages whatever the working tree
+  contains. `.distignore` lists dev vendor directories by hand and three
+  packages added to `require-dev` afterwards were missing:
+  `phpstan/phpstan`, `szepeviktor/phpstan-wordpress` and its transitive
+  `php-stubs/wordpress-stubs`.
+- Verified by execution, not by reading: an `rsync` staging dry run matching
+  build-release.sh staged 532 entries, 78 of them from those three dev packages
+  (including `wordpress-stubs.php` and a third-party LICENSE), plus the tracked
+  internal files `wppo-agent-rules.md` and `empty_commit.sh`. After the fix the
+  same dry run stages 436 entries with 0 dev-package and 0 internal leaks.
+- Guard: `DistignoreDevPackageTest` derives the required vendor directories from
+  `composer.lock` `packages-dev` rather than restating them, so adding a dev
+  dependency without a matching `.distignore` entry fails the build. A package
+  present in both `packages` and `packages-dev` is treated as a real runtime
+  dependency and is allowed to ship. Both directions are mutation-checked:
+  removing the `/vendor/phpstan` line, or the `/wppo-agent-rules.md` line, fails
+  the suite.
+- Gate: PHPCS, ESLint (0 errors), 833 Jest, 2,785 PHPUnit / 25,813 assertions,
+  build, architecture check, diff check — all green.
+
+## 2026-09-26 — The .distignore guard was one-directional (adversarial review)
+- An independent review appended `/vendor/voku/` — a **production** dependency, `use`d at `includes/minify/class-html.php:17` — to `.distignore` and both tests stayed green. A release-breaking ZIP whose `vendor/autoload.php` fatals on the minify feature would have shipped with a fully passing suite, and nothing else in the suite catches it either.
+- Added `test_no_production_package_is_excluded_from_the_release`, deriving the production set from `composer.lock` `packages` and failing for any whose vendor directory is excluded. Re-mutation-checked: appending `/vendor/voku/` now fails, naming `voku/simple_html_dom`.
+- The guard is now bidirectional: dev -> excluded, and production -> not excluded.
