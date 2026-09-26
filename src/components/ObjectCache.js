@@ -9,7 +9,10 @@ import {
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
-import { invalidateObjectCacheStatus } from '../lib/objectCacheStatus';
+import {
+	invalidateObjectCacheStatus,
+	shouldInvalidateObjectCache,
+} from '../lib/objectCacheStatus';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -324,16 +327,28 @@ const ObjectCache = ( { options = {} } ) => {
 					durationMs: 5000,
 				} );
 
-				// The Overview memoises the object-cache status for the page session, so
-				// that navigating around does not re-hit a throttled endpoint. Every
-				// action here changes exactly that status, so without this the user
-				// could enable Redis here, go back to Overview, and be told the object
-				// cache is switched off until they reloaded the page.
-				//
-				// A *failed* action is deliberately not invalidating: nothing changed, and
-				// the memo may be holding a perfectly good earlier result.
-				invalidateObjectCacheStatus();
+				// A *failed* action deliberately does not invalidate: nothing
+				// changed, and the memo may be holding a perfectly good earlier
+				// result. Burning it here would also spend one of the five calls a
+				// minute this endpoint allows.
 				return;
+			}
+
+			// The Overview memoises the object-cache status for the page session,
+			// so navigating around does not re-hit a throttled endpoint. Every
+			// action here changes exactly that status, so a successful action must
+			// invalidate it: otherwise the user enables Redis here, goes back to
+			// Overview, and is told the object cache is switched off until they
+			// reload the page.
+			//
+			// This was previously on the *failure* branch, directly under a comment
+			// saying the opposite — the exact call the comment contradicted. An
+			// independent review caught it by spying on the module: a successful
+			// flush invalidated 0 times and a failed one invalidated 1. That is why
+			// there is now a test asserting the call happens on success and *not*
+			// on failure.
+			if ( shouldInvalidateObjectCache( res ) ) {
+				invalidateObjectCacheStatus();
 			}
 
 			// Minimise secret exposure: once the action that needed the

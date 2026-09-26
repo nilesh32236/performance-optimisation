@@ -3,7 +3,14 @@
  *
  * Every action is a real, already-existing capability reached through the same
  * `apiCall` the rest of the admin uses, so whatever guard that endpoint carries
- * is still in force. Nothing here is a shortcut around a confirmation.
+ * is still in force.
+ *
+ * Stated plainly because it was previously mis-stated: clearing the cache here
+ * has **no confirmation step**. That matches the Dashboard's "Purge All Cache"
+ * and the admin bar's "Clear All Cache", neither of which confirms either — so
+ * this is consistent, not a regression. It is called out because this card now
+ * sits on the landing page, where a cache wipe is one click from the first
+ * screen a user sees.
  *
  * The one action that changes state (clearing the cache) carries its own busy
  * key, so starting it never spins the navigation buttons beside it. That is the

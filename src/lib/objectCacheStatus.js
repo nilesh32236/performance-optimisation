@@ -40,7 +40,8 @@ export const readObjectCacheStatus = async ( fetcher, force = false ) => {
 	// Concurrent callers share one request rather than racing to the throttle.
 	// A forced read always starts a fresh one.
 	if ( ! inFlight || force ) {
-		inFlight = fetcher()
+		// Captured so the catch below can tell "my" rejection from another's.
+		const thisRequest = fetcher()
 			.then( ( value ) => {
 				// A failed read must never destroy a good earlier result. The
 				// endpoint is throttled, so a forced retry is exactly when a
@@ -65,9 +66,15 @@ export const readObjectCacheStatus = async ( fetcher, force = false ) => {
 				// mid-flight rejects it, and a rejected promise that was never
 				// cleared was replayed by every later mount — the row stayed
 				// "Unavailable" until a full page reload.
-				inFlight = null;
+				//
+				// Identity-checked, so an abort belonging to a *superseded*
+				// request cannot clear the slot a newer one is holding.
+				if ( inFlight === thisRequest ) {
+					inFlight = null;
+				}
 				throw error;
 			} );
+		inFlight = thisRequest;
 	}
 	return inFlight;
 };
@@ -84,3 +91,18 @@ export const invalidateObjectCacheStatus = () => {
 
 /** Test-only: read the current memo without requesting. */
 export const peekObjectCacheStatus = () => memo;
+
+/**
+ * Whether an object-cache action result should invalidate the memo.
+ *
+ * Extracted because the call site lives behind a button that is disabled until
+ * the settings form is valid, which makes the branch untestable through the
+ * component in jsdom — and an untested branch is exactly how the call ended up
+ * on the *failure* path for a whole review round, under a comment claiming the
+ * opposite. The rule is small enough to state directly and pin directly.
+ *
+ * @param {Object} response The `apiCall` result for a mutating action.
+ * @return {boolean} True only when the action actually succeeded.
+ */
+export const shouldInvalidateObjectCache = ( response ) =>
+	response?.success === true;
