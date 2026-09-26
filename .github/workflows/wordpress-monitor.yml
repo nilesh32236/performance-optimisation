@@ -41,6 +41,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -52,7 +53,6 @@ jobs:
         run: |
           .github/scripts/setup-opencode.sh
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           # Pinned for reproducible research runs (resolved 2026-09-08 via
           # `npm view opencode-ai version` — matches the anomalyco/opencode
           # release tag the setup script downloads).
@@ -548,7 +548,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 1
-          # Default GITHUB_TOKEN is sufficient for checkout — least privilege.
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -580,7 +580,6 @@ jobs:
         run: |
           .github/scripts/setup-opencode.sh
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           # Pinned for reproducible runs (resolved 2026-09-08 via
           # `npm view opencode-ai version` — matches the anomalyco/opencode
           # release tag the setup script downloads). The publisher is the
