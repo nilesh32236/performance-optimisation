@@ -42,6 +42,9 @@ export const getEffectiveMode = ( {
 /**
  * Whether WPPO optimizer should be disabled in the current LiteSpeed mode.
  *
+ * Test-pinned: imported only by __tests__/litespeed.test.js, zero production
+ * importers. Do not re-raise as dead code.
+ *
  * @param {Object} opts - Options.
  * @return {boolean} True if optimizer should be disabled.
  */
@@ -71,6 +74,9 @@ export const modeLabel = ( mode ) => {
 
 /**
  * Get vary env string for P2 groups.
+ *
+ * Test-pinned: imported only by __tests__/litespeed.test.js, zero production
+ * importers. Do not re-raise as dead code.
  *
  * @param {Object} varyGroups - {guest,mobile,webp,role}
  * @return {string} Vary env.

@@ -391,19 +391,23 @@ const PluginSetting = ( { options } ) => {
 	const [ savingAutoRescan, setSavingAutoRescan ] = useState( false );
 
 	// Monitoring: Server-Timing header + high-value URLs for auto re-scan.
-	const storedAudit =
+	// One render-time read of the global slice, shared by the mount-time
+	// state seeds, the baseline snapshot and the #1420 resync effect below.
+	// The call-time re-read inside savePerformanceAudit() is deliberately
+	// NOT this value — see the comment there.
+	const auditSettings =
 		typeof wppoSettings !== 'undefined'
 			? wppoSettings?.settings?.performance_audit ?? {}
 			: {};
 	const [ serverTimingEnabled, setServerTimingEnabled ] = useState(
-		!! storedAudit.server_timing_enabled
+		!! auditSettings.server_timing_enabled
 	);
 	const [ rumEnabled, setRumEnabled ] = useState(
-		!! storedAudit.rum_enabled
+		!! auditSettings.rum_enabled
 	);
 	const [ highValueUrls, setHighValueUrls ] = useState(
-		Array.isArray( storedAudit.high_value_urls )
-			? storedAudit.high_value_urls.join( '\n' )
+		Array.isArray( auditSettings.high_value_urls )
+			? auditSettings.high_value_urls.join( '\n' )
 			: ''
 	);
 	const [ savingMonitoring, setSavingMonitoring ] = useState( false );
@@ -411,34 +415,30 @@ const PluginSetting = ( { options } ) => {
 	// Audit #1420: resync when the global arrives late. Per-key deps so
 	// parent re-renders do not reset the form; saving guards so an
 	// in-progress edit is never clobbered.
-	const liveAudit =
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.performance_audit ?? {}
-			: {};
 	useEffect( () => {
 		if ( ! savingMonitoring && ! savingAutoRescan ) {
-			setServerTimingEnabled( !! liveAudit.server_timing_enabled );
-			setRumEnabled( !! liveAudit.rum_enabled );
+			setServerTimingEnabled( !! auditSettings.server_timing_enabled );
+			setRumEnabled( !! auditSettings.rum_enabled );
 			setHighValueUrls(
-				Array.isArray( liveAudit.high_value_urls )
-					? liveAudit.high_value_urls.join( '\n' )
+				Array.isArray( auditSettings.high_value_urls )
+					? auditSettings.high_value_urls.join( '\n' )
 					: ''
 			);
 		}
 	}, [
-		liveAudit.server_timing_enabled,
-		liveAudit.rum_enabled,
-		liveAudit.high_value_urls,
+		auditSettings.server_timing_enabled,
+		auditSettings.rum_enabled,
+		auditSettings.high_value_urls,
 		savingMonitoring,
 		savingAutoRescan,
 	] );
 	const [ baseline, setBaseline ] = useState( {
 		newApiKey: '',
 		autoRescan,
-		serverTimingEnabled: !! storedAudit.server_timing_enabled,
-		rumEnabled: !! storedAudit.rum_enabled,
-		highValueUrls: Array.isArray( storedAudit.high_value_urls )
-			? storedAudit.high_value_urls.join( '\n' )
+		serverTimingEnabled: !! auditSettings.server_timing_enabled,
+		rumEnabled: !! auditSettings.rum_enabled,
+		highValueUrls: Array.isArray( auditSettings.high_value_urls )
+			? auditSettings.high_value_urls.join( '\n' )
 			: '',
 	} );
 	const currentMonitoringSettings = useMemo(
@@ -481,6 +481,10 @@ const PluginSetting = ( { options } ) => {
 		setSaving( true );
 		dismissApiKey();
 		try {
+			// Re-read the global at call-time, NOT from the render-time
+			// `auditSettings` above: a prior save mutates
+			// wppoSettings.settings via apiCall's freeze, and a hoisted
+			// read would merge a stale snapshot. Mirrors Dashboard.js:743.
 			const currentSettings =
 				typeof wppoSettings !== 'undefined'
 					? wppoSettings?.settings?.performance_audit ?? {}

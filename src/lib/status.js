@@ -5,17 +5,14 @@
  */
 
 /**
- * Status levels used across audit panels.
- *
- * @since 2.3.0
- * @type {string[]}
- */
-/**
  * Reserved status vocabulary (audit #1401): currently no in-repo importer.
  * Kept (not deleted) as the documented contract for future panels and
  * external consumers — import this instead of inventing new level strings.
+ * Test-pinned: imported only by __tests__/status.test.js, zero production
+ * importers. Do not re-raise as dead code.
  *
  * @since 2.3.0
+ * @type {string[]}
  */
 export const STATUS_LEVELS = Object.freeze( [
 	'good',
