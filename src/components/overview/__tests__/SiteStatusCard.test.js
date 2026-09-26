@@ -8,7 +8,11 @@
 import { render, screen } from '@testing-library/react';
 
 import SiteStatusCard from '../SiteStatusCard';
-import { ALL_STATUSES, buildStatusModel, STATUS } from '../../../lib/overviewStatus';
+import {
+	ALL_STATUSES,
+	buildStatusModel,
+	STATUS,
+} from '../../../lib/overviewStatus';
 
 const model = ( payload ) => buildStatusModel( payload );
 
@@ -38,7 +42,9 @@ describe( 'SiteStatusCard', () => {
 			objectCache: undefined,
 		} );
 		render( <SiteStatusCard rows={ rows } overall={ overall } /> );
-		expect( screen.getAllByText( 'Unavailable' ).length ).toBeGreaterThan( 0 );
+		expect( screen.getAllByText( 'Unavailable' ).length ).toBeGreaterThan(
+			0
+		);
 		expect(
 			screen.queryByText( /is enabled and the server is reachable/ )
 		).toBeNull();
@@ -49,7 +55,9 @@ describe( 'SiteStatusCard', () => {
 			cacheSettings: { enableCache: false },
 		} );
 		render( <SiteStatusCard rows={ rows } overall={ overall } /> );
-		expect( screen.getAllByText( 'Not set up' ).length ).toBeGreaterThan( 0 );
+		expect( screen.getAllByText( 'Not set up' ).length ).toBeGreaterThan(
+			0
+		);
 		expect(
 			screen.getByText( /Page cache is turned off/ )
 		).toBeInTheDocument();
@@ -113,8 +121,6 @@ describe( 'SiteStatusCard', () => {
 			/>
 		);
 		expect( screen.getAllByText( 'Unknown' ).length ).toBeGreaterThan( 0 );
-		ALL_STATUSES.forEach( ( s ) =>
-			expect( typeof s ).toBe( 'string' )
-		);
+		ALL_STATUSES.forEach( ( s ) => expect( typeof s ).toBe( 'string' ) );
 	} );
 } );

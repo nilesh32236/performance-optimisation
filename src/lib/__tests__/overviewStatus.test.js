@@ -91,7 +91,8 @@ describe( 'deriveObjectCacheStatus', () => {
 
 	it( 'reports healthy only when enabled AND reachable', () => {
 		expect(
-			deriveObjectCacheStatus( { enabled: true, redis_reachable: true } ).status
+			deriveObjectCacheStatus( { enabled: true, redis_reachable: true } )
+				.status
 		).toBe( STATUS.HEALTHY );
 	} );
 
