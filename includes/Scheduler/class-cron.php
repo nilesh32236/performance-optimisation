@@ -528,7 +528,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				Scheduler::schedule_recurring_event( 'wppo_used_css_cron', time(), 'every_5_hours' );
 			}
 
-			Scheduler::schedule_recurring_event( 'wppo_ccss_regeneration', time(), 'daily' );
+			// Gate the schedule on the setting, exactly like the two events above.
+			// The handler already early-returns when criticalCSS is off, so the
+			// only cost was a daily event firing on every site — including the
+			// majority that never enables Critical CSS. Scheduling it only while
+			// the feature is on removes that, and clearing it on disable stops a
+			// stale event left behind by a settings change.
+			if ( ! empty( $options['file_optimisation']['criticalCSS'] ) ) {
+				Scheduler::schedule_recurring_event( 'wppo_ccss_regeneration', time(), 'daily' );
+			} else {
+				wp_clear_scheduled_hook( 'wppo_ccss_regeneration' );
+			}
 
 			// Object-cache recovery probe: scheduled only while the circuit
 			// is open (drop-in parked after repeated Redis failures) and
