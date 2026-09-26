@@ -447,7 +447,7 @@
             "file": "includes/Admin/class-abilities.php",
             "domain": "Admin",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 1422,
+            "lines": 1426,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -506,8 +506,8 @@
                 {
                     "name": "execute_crawler",
                     "line": 1376,
-                    "end_line": 1420,
-                    "lines": 45,
+                    "end_line": 1424,
+                    "lines": 49,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
@@ -567,8 +567,8 @@
                     "PerformanceOptimise\\Inc\\Img_Converter::get_img_info": 916,
                     "PerformanceOptimise\\Inc\\Insight_Query::get_pagespeed": 854,
                     "PerformanceOptimise\\Inc\\Insight_Query::get_telemetry": 877,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::crawl_batch": 1415,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::get_urls_to_crawl": 1388,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::crawl_batch": 1419,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler::get_urls_to_crawl": 1392,
                     "PerformanceOptimise\\Inc\\Main::clear_all_cache": 693,
                     "PerformanceOptimise\\Inc\\Pagespeed::queue_scan": 833,
                     "PerformanceOptimise\\Inc\\RUM::get_data": 1029,
@@ -604,7 +604,7 @@
                 "class_references": {
                     "PerformanceOptimise\\Inc\\AI_Adaptive": 882,
                     "PerformanceOptimise\\Inc\\Critical_CSS": 1282,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1387,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1391,
                     "PerformanceOptimise\\Inc\\Used_CSS": 1348
                 },
                 "class_constant_references": {
@@ -619,7 +619,7 @@
                     "PerformanceOptimise\\Inc\\AI_Adaptive": 882,
                     "PerformanceOptimise\\Inc\\Abilities": 18,
                     "PerformanceOptimise\\Inc\\Critical_CSS": 1282,
-                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1387,
+                    "PerformanceOptimise\\Inc\\LiteSpeed_Crawler": 1391,
                     "PerformanceOptimise\\Inc\\Used_CSS": 1348,
                     "PerformanceOptimise\\Inc\\Util": 782,
                     "WP_Abilities_Registry": 1261
@@ -642,11 +642,11 @@
                     "__": 55,
                     "absint": 930,
                     "add_action": 35,
-                    "array_filter": 1385,
-                    "array_map": 1385,
+                    "array_filter": 1389,
+                    "array_map": 1389,
                     "array_merge": 110,
-                    "array_slice": 1408,
-                    "array_values": 1385,
+                    "array_slice": 1412,
+                    "array_values": 1389,
                     "as_has_scheduled_action": 1331,
                     "class_exists": 18,
                     "defined": 14,
@@ -665,7 +665,7 @@
                     "round": 967,
                     "sanitize_text_field": 707,
                     "set_transient": 1014,
-                    "strtolower": 1403,
+                    "strtolower": 1407,
                     "wp_has_ability": 1261,
                     "wp_parse_url": 684,
                     "wp_register_ability": 75,
@@ -25018,10 +25018,10 @@
                 "static_call"
             ],
             "lines": [
-                1387,
-                1388,
-                1414,
-                1415
+                1391,
+                1392,
+                1418,
+                1419
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -25220,7 +25220,7 @@
                 784,
                 959,
                 1326,
-                1396
+                1400
             ],
             "evidence_count": 11,
             "cross_domain": true,
@@ -46190,13 +46190,13 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Abilities",
                 "file": "includes/Admin/class-abilities.php",
-                "score": 40.42,
+                "score": 40.43,
                 "fan_in": 1,
                 "fan_out": 19,
                 "compatibility_in": 0,
                 "cross_domain": 19,
                 "static_state": false,
-                "lines": 1422
+                "lines": 1426
             },
             {
                 "node": "PerformanceOptimise\\Inc\\WPPO_CLI_Command",
@@ -46588,10 +46588,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    1387,
-                    1388,
-                    1414,
-                    1415
+                    1391,
+                    1392,
+                    1418,
+                    1419
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -46799,7 +46799,7 @@
                     784,
                     959,
                     1326,
-                    1396
+                    1400
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,
@@ -56728,10 +56728,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    1387,
-                    1388,
-                    1414,
-                    1415
+                    1391,
+                    1392,
+                    1418,
+                    1419
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -56809,7 +56809,7 @@
                     784,
                     959,
                     1326,
-                    1396
+                    1400
                 ],
                 "evidence_count": 11,
                 "cross_domain": true,

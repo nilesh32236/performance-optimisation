@@ -1382,7 +1382,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				$urls[] = esc_url_raw( $input['url'] );
 			}
 			if ( ! empty( $input['urls'] ) && is_array( $input['urls'] ) ) {
-				$urls = array_merge( $urls, array_values( array_filter( array_map( 'esc_url_raw', $input['urls'] ) ) ) );
+				// Audit #1434: array input fatals esc_url_raw on PHP 8. The single
+				// `url` case above is guarded for exactly this reason; the plural
+				// `urls` case was missed, so one nested array element made the
+				// whole crawler run throw a TypeError instead of skipping it.
+				$urls = array_merge( $urls, array_values( array_filter( array_map( 'esc_url_raw', array_filter( $input['urls'], 'is_string' ) ) ) ) );
 			}
 			if ( empty( $urls ) && class_exists( LiteSpeed_Crawler::class ) ) {
 				$urls = LiteSpeed_Crawler::get_urls_to_crawl( 20 );
