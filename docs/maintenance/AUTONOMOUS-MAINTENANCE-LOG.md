@@ -304,3 +304,14 @@ Completed: 2026-08-31 11:35 UTC
 - All four guards are now mutation-verified: deleting the post-await guard from either path, the abort cleanup, or the catch guard from either path each fails the suite.
 - The double-submit case pins pre-existing behaviour (the `isLoading` guard and button disabling already on master), not this change. Noted as characterisation, not regression coverage.
 - Gate: lint 0 errors, Jest 59 suites / 842 tests, build, committed bundle regenerated. No PHP changed, so PHPCS/PHPUnit are not applicable.
+
+## 2026-09-26 — Safe mode: its scope is now stated, and pinned
+- An audit ranked "safe mode does not stop what users assume it stops" as the highest-risk feature interaction. Re-derived from source rather than taken on trust: `build_safe_mode_enable_payload()` (`includes/Core/class-main.php:5529`) sets exactly one key, `file_optimisation.safeMode`, and only **five** subsystems consult `is_safe_mode_active()` — Delay and Defer (`class-hook-registry.php:158`), Combine CSS (`class-css-combine.php:279,1139`), Used CSS (`class-used-css.php:4787`) and Critical CSS (`class-critical-css.php:5523`), plus a third `class-script-strategy.php` guard.
+- **Not** consulted by minification (`Cache::minify_buffer()` checks only `should_bypass_for_litespeed()`), image optimisation, CDN rewriting, preload, Google Fonts or speculation rules. And `handle_safe_mode` then **purges the page cache**, so a still-broken page is re-cached with all of those still applied.
+- The existing UI copy was **accurate but incomplete** — it named the four paused features correctly and did not claim more. So this is not a false claim. The defect is that a user whose breakage came from minification, images or the CDN gets no signal about why safe mode did not help.
+- Fix: the description and the warning banner now state that minification, image optimisation, CDN rewriting and preload keep running and must be disabled individually. Zero behavioural change, so zero compatibility risk.
+- `SafeModeScopeTest` pins the scope as a *characterization* test: it scans every plugin PHP file for consumers of the kill switch and fails if that set changes, asserts the ungated subsystems stay ungated, and asserts the UI says so. Without it the scope would drift silently and the copy would rot.
+- Mutation-verified: making `minify_buffer()` consult safe mode fails with a message naming the copy that must change; reverting the UI text fails.
+- **Deliberately not done:** extending the kill switch to minification. That is a real product decision with a real behavioural change for anyone already in safe mode, so it is raised for the maintainer rather than taken unilaterally. The honest options are to gate minification too, or to keep the narrow scope and the explicit wording above.
+- Gate: PHPCS 0, ESLint 0 errors, Jest 60 suites / 1,072 tests, PHPUnit 2,808 / 25,972, build, architecture `--check`, `git diff --check` — all green.
+
