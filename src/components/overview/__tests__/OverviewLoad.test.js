@@ -291,3 +291,73 @@ describe( 'fetchObjectCache envelope handling', () => {
 		);
 	} );
 } );
+
+describe( 'envelope handling on every source', () => {
+	beforeEach( () => {
+		invalidateObjectCacheStatus();
+		apiCall.mockReset();
+		fetchSystemInfo.mockReset();
+		fetchWebVitalsTrends.mockReset();
+		fetchSystemInfo.mockResolvedValue( {
+			success: true,
+			data: { php: { version: '8.3' }, wordpress: { version: '7.1.2' } },
+		} );
+		apiCall.mockResolvedValue( {
+			success: true,
+			data: { enabled: true, redis_reachable: true },
+		} );
+		fetchWebVitalsTrends.mockResolvedValue( {
+			success: true,
+			data: { trends: {} },
+		} );
+	} );
+
+	// Two independent reviews found the same asymmetry: `system_info` was the
+	// one source still using `response?.data ?? null`, so a response that
+	// declared failure was read as data. Live, `{success:false, data:{php:…}}`
+	// rendered "Working — Running on WordPress 0.1 and PHP 1.0".
+	it( 'does not read a failed system_info as data', async () => {
+		fetchSystemInfo.mockResolvedValue( {
+			success: false,
+			message: 'boom',
+			data: { php: { version: '1.0' }, wordpress: { version: '0.1' } },
+		} );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await new Promise( ( r ) => setTimeout( r, 400 ) );
+		// The versions must not be rendered as a working fact.
+		expect( screen.queryByText( /WordPress 0\.1/ ) ).toBeNull();
+		expect( screen.queryByText( /PHP 1\.0/ ) ).toBeNull();
+		// And the page must offer a way to try again, because it did not load.
+		expect(
+			screen.getByText( /Some information could not be loaded/ )
+		).toBeInTheDocument();
+	} );
+
+	it( 'does not read a WP_Error system_info body as data', async () => {
+		// No `success` key at all — the shape a negative check lets through.
+		fetchSystemInfo.mockResolvedValue( {
+			code: 'internal_error',
+			message: 'x',
+			data: { status: 500 },
+		} );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await new Promise( ( r ) => setTimeout( r, 400 ) );
+		expect(
+			screen.getByText( /Some information could not be loaded/ )
+		).toBeInTheDocument();
+	} );
+
+	it( 'does not read a failed vitals response as measurements', async () => {
+		// The allow-list's own mutation survived a revert; this pins it.
+		fetchWebVitalsTrends.mockResolvedValue( {
+			success: false,
+			data: { trends: { a: [ { lcp: 9999, cls: 0.9 } ] } },
+		} );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await new Promise( ( r ) => setTimeout( r, 400 ) );
+		expect( screen.queryByText( /is poor at|is good at/ ) ).toBeNull();
+	} );
+} );

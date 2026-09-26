@@ -51,9 +51,15 @@ export default function QuickActionsCard( { onNavigate } ) {
 		setBusy( 'clear-cache' );
 		try {
 			const result = await apiCall( 'clear_cache', {} );
-			if ( result && result.success === false ) {
+			// An allow-list, not `success === false`. A `WP_Error` body carries
+			// no `success` key at all, so the negative check let it through and
+			// the user was told "Cache cleared" about a clear that never
+			// happened. An independent review found this present in the shipped
+			// bundle, and confirmed it is the exact anti-pattern
+			// `fetchObjectCache`'s own comment rejects.
+			if ( ! result || result.success !== true ) {
 				throw new Error(
-					result.message ||
+					result?.message ||
 						__(
 							'The cache could not be cleared.',
 							'performance-optimisation'

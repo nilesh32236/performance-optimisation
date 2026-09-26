@@ -107,3 +107,37 @@ describe( 'summariseVitals', () => {
 		).toEqual( { lcp: 900, cls: undefined, inp: undefined } );
 	} );
 } );
+
+describe( 'summariseVitals: corrupt stored values', () => {
+	// `Number()` accepts hex and arbitrary-precision digit strings, so a corrupt
+	// stored value became a plausible measurement — and a large enough one
+	// flipped the whole Overview to "Needs attention". Found by an independent
+	// review and reproduced live.
+	it( 'rejects hex, huge, and non-numeric values', () => {
+		[
+			{ lcp: '0x4d2' },
+			{ lcp: '999999999999999999999999' },
+			{ lcp: 'abc' },
+			{ lcp: true },
+			{ lcp: '1e400' },
+		].forEach( ( v ) => {
+			const out = summariseVitals( { trends: { a: [ v ] } } );
+			expect( out === null || out.lcp === undefined ).toBe( true );
+		} );
+	} );
+
+	it( 'rejects a value past a day in milliseconds', () => {
+		// A page cannot take 24 hours to load; that is corrupt storage, not a
+		// slow page, and it must not escalate the page verdict.
+		expect(
+			summariseVitals( { trends: { a: [ { lcp: 9e12 } ] } } )
+		).toBeNull();
+	} );
+
+	it( 'still accepts a genuine numeric string', () => {
+		// The bound must not over-reject real stored data.
+		expect(
+			summariseVitals( { trends: { a: [ { lcp: '1500' } ] } } ).lcp
+		).toBe( 1500 );
+	} );
+} );

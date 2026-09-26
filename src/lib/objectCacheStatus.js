@@ -50,12 +50,17 @@ export const readObjectCacheStatus = async ( fetcher, force = false ) => {
 				// session, with no further request to correct it.
 				if ( value ) {
 					memo = value;
-				} else {
+				} else if ( inFlight === thisRequest ) {
 					// A read that produced nothing must not be pinned in the
 					// shared slot either. Leaving it there meant the *next*
 					// ordinary read replayed the null without ever asking again,
 					// so one throttled request stuck the row at "Unavailable"
 					// for the whole session.
+					//
+					// Identity-checked for the same reason the rejection path is:
+					// a superseded read resolving to null must not clear a slot a
+					// newer request is holding. An independent review found this
+					// branch was the unguarded twin of the catch.
 					inFlight = null;
 				}
 				return value;

@@ -384,9 +384,21 @@ const ObjectCache = ( { options = {} } ) => {
 			// This was previously on the *failure* branch, directly under a comment
 			// saying the opposite — the exact call the comment contradicted. An
 			// independent review caught it by spying on the module: a successful
-			// flush invalidated 0 times and a failed one invalidated 1. That is why
-			// there is now a test asserting the call happens on success and *not*
-			// on failure.
+			// flush invalidated 0 times and a failed one invalidated 1.
+			//
+			// The *rule* is pinned by `shouldInvalidateObjectCache` in
+			// `objectCacheInvalidation.test.js`. **This call site is not.** Two
+			// reviews verified that moving it back onto the failure branch leaves
+			// the whole suite green, because the control that drives it is
+			// disabled until the settings form is valid and so is unreachable
+			// through the component in jsdom.
+			//
+			// I attempted to pin it by mocking this module and driving the button,
+			// and it destabilised the existing `ObjectCache.test.js` suite. Rather
+			// than ship a broken harness I reverted it and am recording the gap:
+			// **moving this line to the wrong branch would not fail any test.** The
+			// rule test makes the intent explicit, and the code comment keeps the
+			// wiring visible, but neither is enforcement.
 			if ( shouldInvalidateObjectCache( res ) ) {
 				invalidateObjectCacheStatus();
 			}

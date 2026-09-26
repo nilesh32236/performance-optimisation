@@ -118,6 +118,42 @@ describe( 'QuickActionsCard', () => {
 		} );
 	} );
 
+	// The anti-pattern this PR already rejected elsewhere: a negative
+	// `success === false` check lets through any response carrying no `success`
+	// key at all — a `WP_Error` body, or an empty array from a filter — and the
+	// user is told "Cache cleared" about a clear that never ran. An independent
+	// review confirmed the shipped bundle contained exactly this.
+	describe( 'a response that does not declare success', () => {
+		beforeEach( () => {
+			apiCall.mockReset();
+		} );
+
+		it.each( [
+			[
+				'a WP_Error body',
+				{ code: 'rest_no_route', data: { status: 404 } },
+			],
+			[ 'an empty array', [] ],
+			[ 'null', null ],
+			[ 'an object with no success key', { data: { cleared: true } } ],
+		] )(
+			'reports an error, not a clear, for %s',
+			async ( _label, bogus ) => {
+				apiCall.mockResolvedValue( bogus );
+				render( <QuickActionsCard onNavigate={ jest.fn() } /> );
+				fireEvent.click( screen.getByText( LABELS.clear ) );
+				await waitFor( () =>
+					expect( mockNotify ).toHaveBeenCalledWith(
+						expect.objectContaining( { type: 'error' } )
+					)
+				);
+				expect( mockNotify ).not.toHaveBeenCalledWith(
+					expect.objectContaining( { type: 'success' } )
+				);
+			}
+		);
+	} );
+
 	it( 'reports success with a message that says what happened', async () => {
 		apiCall.mockResolvedValue( { success: true } );
 		render( <QuickActionsCard onNavigate={ jest.fn() } /> );

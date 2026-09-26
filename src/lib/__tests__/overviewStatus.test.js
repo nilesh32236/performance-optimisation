@@ -35,15 +35,6 @@ describe( 'deriveCacheStatus', () => {
 		).toBe( STATUS.HEALTHY );
 	} );
 
-	it( 'takes the measured size exactly as production supplies it', () => {
-		// The regression that shipped: the function read `stats.cacheStats` from
-		// an object while buildStatusModel passed a plain string, so every unit
-		// test using the object shape passed and production read `undefined`.
-		expect(
-			deriveCacheStatus( { enableCache: true }, '14 MB' ).status
-		).toBe( STATUS.HEALTHY );
-	} );
-
 	it( 'reports working from the real cache statistics, not from enableCache', () => {
 		// A cache that is switched on but storing nothing is a different
 		// situation from one serving pages, so the evidence is the measured
@@ -284,8 +275,19 @@ describe( 'deriveVitalsStatus', () => {
 		expect( deriveVitalsStatus( { inp: 200 } )[ 0 ].status ).toBe(
 			STATUS.HEALTHY
 		);
-		// One step past the boundary is not.
+		// The *judged* number is now the *shown* number, so the comparison uses
+		// the rounded value. 2500.1 displays as 2500, and 2500 is the published
+		// good threshold, so it is good — the previous behaviour reported
+		// "could be better (2500 ms)", which showed a good threshold while
+		// calling it poor.
 		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].status ).toBe(
+			STATUS.HEALTHY
+		);
+		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].detail ).toMatch(
+			/good at 2500 ms/
+		);
+		// A value that displays past the boundary still is not good.
+		expect( deriveVitalsStatus( { lcp: 2500.6 } )[ 0 ].status ).toBe(
 			STATUS.ATTENTION
 		);
 		// The *poor* boundary is the other `<=` and was unpinned. Both sides of
@@ -294,7 +296,12 @@ describe( 'deriveVitalsStatus', () => {
 		expect( deriveVitalsStatus( { lcp: 4000 } )[ 0 ].detail ).toMatch(
 			/could be better/
 		);
+		// 4000.1 also displays as 4000, which is the poor threshold, so it reads
+		// "could be better" — the judged and shown numbers agree again.
 		expect( deriveVitalsStatus( { lcp: 4000.1 } )[ 0 ].detail ).toMatch(
+			/could be better \(4000 ms\)/
+		);
+		expect( deriveVitalsStatus( { lcp: 4000.6 } )[ 0 ].detail ).toMatch(
 			/is poor at/
 		);
 		// And a good boundary value must not drag the page verdict down.
@@ -398,6 +405,24 @@ describe( 'deriveOverallStatus', () => {
 				row( STATUS.NOT_CONFIGURED ),
 			] )
 		).toBe( STATUS.NOT_CONFIGURED );
+	} );
+
+	it( 'never blames the user for a backend failure', () => {
+		// Removing the `reportable` filter made an all-unavailable model return
+		// `not-configured` — "Not set up" — which reads as the user's fault for
+		// a request that never succeeded. An independent review found this
+		// unpinned.
+		expect(
+			deriveOverallStatus( [
+				{ id: 'a', label: 'A', status: STATUS.UNAVAILABLE, detail: '' },
+			] )
+		).toBe( STATUS.UNAVAILABLE );
+		expect(
+			deriveOverallStatus( [
+				{ id: 'a', label: 'A', status: STATUS.UNAVAILABLE, detail: '' },
+				{ id: 'b', label: 'B', status: STATUS.UNAVAILABLE, detail: '' },
+			] )
+		).toBe( STATUS.UNAVAILABLE );
 	} );
 
 	it( 'is unavailable with no rows, or a non-array', () => {

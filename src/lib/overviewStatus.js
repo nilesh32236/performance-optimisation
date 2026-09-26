@@ -378,11 +378,24 @@ export const deriveVitalsStatus = ( vitals ) => {
 					detail: `No real-user data yet. ${ measure.hint }`,
 				};
 			}
+			// The number *judged* is the number *shown*.
+			//
+			// The verdict compares `raw`, but the message used to format a
+			// rounded value, so at the boundary the two disagreed: an LCP of
+			// 2500.4 rendered as "could be better (2500 ms)" and one of 2499.6 as
+			// "is good at 2500 ms" — the same string with opposite verdicts, and
+			// "2500" is the published *good* threshold. On a page whose whole
+			// premise is that the numbers it shows are the numbers it judged,
+			// that is the one place it was not.
+			const rounded =
+				measure.key === 'cls'
+					? Number( raw.toFixed( 3 ) )
+					: Math.round( raw );
 			const value =
 				measure.key === 'cls'
-					? raw.toFixed( 3 )
-					: `${ Math.round( raw ) } ms`;
-			if ( raw <= measure.good ) {
+					? rounded.toFixed( 3 )
+					: `${ rounded } ms`;
+			if ( rounded <= measure.good ) {
 				return {
 					id: measure.id,
 					label: measure.label,
@@ -390,7 +403,7 @@ export const deriveVitalsStatus = ( vitals ) => {
 					detail: `${ measure.label } is good at ${ value }.`,
 				};
 			}
-			if ( raw <= measure.poor ) {
+			if ( rounded <= measure.poor ) {
 				return {
 					id: measure.id,
 					label: measure.label,

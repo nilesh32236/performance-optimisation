@@ -162,7 +162,24 @@ export const summariseVitals = ( payload ) => {
 				if ( raw === null || raw === '' || typeof raw === 'boolean' ) {
 					continue;
 				}
+				// Only a real number counts. `Number()` accepts hex
+				// (`'0x4d2'` -> 1234) and arbitrary-precision digit strings
+				// (`'999999999999999999999999'` -> 1e+24), so a corrupt stored
+				// value became a plausible-looking measurement — and one large
+				// enough flipped the whole Overview to "Needs attention". An
+				// independent review reproduced all three live.
+				if (
+					typeof raw !== 'number' &&
+					! /^\d+(?:\.\d+)?$/.test( String( raw ).trim() )
+				) {
+					continue;
+				}
 				const value = Number( raw );
+				// A vital is milliseconds (or a unitless CLS). Anything past a
+				// day in ms is a corrupt value, not a slow page.
+				if ( value > 86400000 ) {
+					continue;
+				}
 				// Explicit absence, then accept a real zero.
 				const isNumber =
 					typeof raw === 'number' ||
@@ -244,8 +261,17 @@ export default function Overview( { onNavigate, activities = [] } ) {
 	// nothing is ever fetched twice — `object_cache` allows only five calls a
 	// minute, and the Overview remounts on every sub-item change.
 	const request = useCallback( ( controller, force = false ) => {
+		// The same allow-list `fetchObjectCache` and `fetchVitals` use.
+		//
+		// `apiCall` **resolves** rather than throws for a `WP_Error` body on a
+		// 500, so `response?.data` was a truthy `{ status: 500 }` and the source
+		// settled as a *success*. The page then said "the plugin did not report
+		// the PHP or WordPress version" when the truth was that the request
+		// failed — and, because it counted as a success, no "Try again" was
+		// offered at all. Reproduced live by fault injection.
 		const systemInfo = fetchSystemInfo( controller.signal ).then(
-			( response ) => response?.data ?? null
+			( response ) =>
+				response?.success === true ? response.data ?? null : null
 		);
 		const objectCache = readObjectCacheStatus(
 			() => fetchObjectCache( controller.signal ),
