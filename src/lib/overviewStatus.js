@@ -142,8 +142,7 @@ export const deriveCacheStatus = ( settings ) => {
 		id: 'page-cache',
 		label: 'Page cache',
 		status: STATUS.UNKNOWN,
-		detail:
-			'Page cache is switched on. This page cannot confirm it is serving — open Speed to check the cache status.',
+		detail: 'Page cache is switched on. This page cannot confirm it is serving — open Speed to check the cache status.',
 	};
 };
 
@@ -237,9 +236,7 @@ export const deriveCompatibilityStatus = ( info ) => {
 	// the plugin actually returns, and reading only the flat names is what made
 	// this row say "did not report the version" on a working site.
 	const php = String( info?.php?.version ?? info?.php_version ?? '' );
-	const wp = String(
-		info?.wordpress?.version ?? info?.wp_version ?? ''
-	);
+	const wp = String( info?.wordpress?.version ?? info?.wp_version ?? '' );
 	if ( ! php || ! wp ) {
 		return {
 			id: 'compatibility',

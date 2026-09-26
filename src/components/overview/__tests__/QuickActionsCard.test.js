@@ -11,17 +11,13 @@ import QuickActionsCard from '../QuickActionsCard';
 
 jest.mock( '../../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
-	getErrorLogMessage: ( error ) =>
-		error?.message ?? 'Something went wrong.',
+	getErrorLogMessage: ( error ) => error?.message ?? 'Something went wrong.',
 } ) );
 
-jest.mock( '../../../lib/useNotice', () => {
-	const React = require( '@wordpress/element' );
-	return {
-		__esModule: true,
-		default: () => ( { notify: mockNotify } ),
-	};
-} );
+jest.mock( '../../../lib/useNotice', () => ( {
+	__esModule: true,
+	default: () => ( { notify: mockNotify } ),
+} ) );
 
 const mockNotify = jest.fn();
 const { apiCall } = require( '../../../lib/apiRequest' );
@@ -58,9 +54,10 @@ describe( 'QuickActionsCard', () => {
 		// a single shared `isLoading` flag.
 		let resolveCall;
 		apiCall.mockImplementation(
-			() => new Promise( ( resolve ) => {
-				resolveCall = resolve;
-			} )
+			() =>
+				new Promise( ( resolve ) => {
+					resolveCall = resolve;
+				} )
 		);
 		render( <QuickActionsCard onNavigate={ jest.fn() } /> );
 
@@ -87,9 +84,7 @@ describe( 'QuickActionsCard', () => {
 			// sets the attribute at all.
 			expect( control.getAttribute( 'aria-busy' ) ).not.toBe( 'true' );
 		} );
-		expect(
-			screen.queryByText( LABELS.clear )
-		).not.toBeInTheDocument();
+		expect( screen.queryByText( LABELS.clear ) ).not.toBeInTheDocument();
 
 		resolveCall( { success: true } );
 		await waitFor( () => {
@@ -134,8 +129,14 @@ describe( 'QuickActionsCard', () => {
 		} );
 	} );
 
-	it( 'does not throw when no navigation callback is supplied', () => {
+	it( 'still renders and stays usable with no navigation callback', () => {
+		// A missing optional prop must not take the card down, and the control
+		// must remain present and enabled rather than vanishing.
 		render( <QuickActionsCard /> );
-		fireEvent.click( screen.getByText( LABELS.speed ) );
+		const control = screen.getByText( LABELS.speed ).closest( 'button' );
+		expect( control ).toBeTruthy();
+		expect( control ).not.toBeDisabled();
+		expect( () => fireEvent.click( control ) ).not.toThrow();
+		expect( screen.getByText( LABELS.speed ) ).toBeInTheDocument();
 	} );
 } );
