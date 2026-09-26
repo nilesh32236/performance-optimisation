@@ -1809,6 +1809,65 @@ growth_items:
       runtime_scope: 'No runtime optimization, settings, REST, cache, database, or API behavior change'
     status_note: 'Phase F is merged; trust claims stay bounded to current code, docs, and observed evidence.'
 
+  - id: G-001
+    title: 'Measurement and growth monitoring'
+    status: merged
+    priority: medium
+    type: growth
+    objective: 'Build a lightweight, evidence-based system for monitoring legitimate discoverability, adoption, support, documentation, and product-quality signals without private tracking or invasive analytics.'
+    scope:
+      - 'public WordPress.org and GitHub metric collection'
+      - 'feature and search-intent coverage reports'
+      - 'JSON and Markdown snapshots with baseline and deltas'
+      - 'scheduled material-change monitoring workflow'
+      - 'operational metrics and availability limits'
+      - 'docs/growth/METRICS.md'
+    non_goals:
+      - 'No WordPress visitor tracking, invasive analytics, fake activity, causal claims, runtime optimization changes, or automatic documentation page creation.'
+    issue: 1642
+    pull_request: 1643
+    implementation_commit: a5ef5a52
+    merge_commit: 0fc93d0e
+    merged_at: '2026-09-25'
+    post_merge_verification:
+      repository: 'Public WordPress.org and GitHub metrics, feature coverage, search-intent coverage, baseline/latest JSON, and scheduled workflow merged'
+      ci: 'Exact-head CI, PHP syntax, PHPUnit, and AI review green'
+      local: 'Lint 0 errors/2 existing warnings; PHPCS binary pass; Jest 59 suites/833 tests; build pass with existing size warning; repeated collection and snapshot checks pass'
+      metrics: 'WordPress.org and GitHub baseline captured; unavailable downloads and operational series marked explicitly; repeated runs produce no false alert'
+      privacy: 'No WordPress visitor/site-owner data or invasive analytics introduced; GitHub traffic recorded as aggregate repository metadata'
+      automation: 'Manual workflow run 36122905212 passed; GH_PAT traffic was available; clean comparison created no alert; commit identity fix verified'
+      runtime_scope: 'No runtime optimization, settings, REST, cache, database, or API behavior change'
+    status_note: 'Phase G is merged; monitoring remains public or repository-scoped, and causality is not inferred.'
+
+  - id: H-001
+    title: 'Free-model registry and evidence-based evaluation foundation'
+    status: merged
+    priority: high
+    type: agent-intelligence
+    objective: 'Measure which currently available free OpenCode models fit each repository task type while keeping Muse Spark as the initial champion and preserving production routing safety.'
+    scope:
+      - 'verified free-model registry and dynamic catalog discovery'
+      - 'health, capability, and executable benchmark schemas'
+      - 'champion/challenger scoring with sample and hysteresis gates'
+      - 'twice-daily bounded discovery and optional probe workflow'
+      - 'Muse Spark baseline honesty and privacy documentation'
+    non_goals:
+      - 'No paid models, broad production replacement, one-run promotion, credential storage, provider flooding, or plugin runtime behavior change.'
+    issue: 1646
+    pull_request: 1648
+    implementation_commit: 416028ef
+    merge_commit: 0e5b6894
+    merged_at: '2026-09-25'
+    post_merge_verification:
+      repository: 'Registry, dynamic discovery, fallback audit, bounded probes, executable benchmark, scoring, and twice-daily workflow merged without production model replacement'
+      ci: 'Exact-head CI, PHP syntax 8.2-8.5, PHPUnit, AI review, and Snyk checks green'
+      local: 'pnpm build, pnpm typecheck, pnpm test 59 suites/833 tests, pnpm lint, pnpm doc:check, 11 registry tests, and 11 deterministic benchmark fixtures passed'
+      evidence: 'Muse Spark health and capability probes passed; isolated coding baseline recorded 2/11 completed tasks, 3/11 verifications, one timeout, and one tool failure; no promotion decision'
+      privacy: 'No credentials, raw provider payloads, site-owner data, or invasive analytics stored or added; model-intelligence excluded from release ZIPs'
+      automation: 'Manual workflow run 36132402939 passed; empty catalog override fell back to models.dev; no material registry issue or promotion was created'
+      runtime_scope: 'No plugin runtime, settings, REST, cache, database, or production routing behavior change'
+    status_note: 'H-001 is merged; the registry and scoring foundation can measure challengers while Muse Spark remains champion until evidence gates pass.'
+
 notes:
   - '2026-09-23: audit PR #1517 (maintainability hooks/banner/redaction) merged alongside campaign (7ebfeb57) to pre-empt conflicts. JS-only; disjoint from PHP Util splits. Resolved build conflicts via rebuild; Jest 780/780.'
   - '2026-09-23: worktree incident — conflict-resolution commit accidentally tracked worktree-local vendor/node_modules symlinks (gitignore dir-patterns); self-loop symlinks replaced live dirs on pull. Recovered via composer reinstall (fresh classmap) + npm ci; untracked via git rm; hardened .gitignore with bare /vendor + /node_modules. Verified: PHPUnit 2425 OK, Jest 780 OK, wp wppo verify 6/7.'

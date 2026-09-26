@@ -56,6 +56,7 @@
 /test-lab/
 /reports/
 /review-output.jsonl
+/model-intelligence/
 
 # Internal audit, planning and design artifacts — never ship in the release ZIP
 /AUDIT/

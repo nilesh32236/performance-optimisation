@@ -1,0 +1,1100 @@
+{
+  "schema": 1,
+  "policy": "free-only",
+  "champion": {
+    "provider": "opencode",
+    "model_id": "muse-spark-1.3-contributor-free",
+    "model_ref": "opencode/muse-spark-1.3-contributor-free"
+  },
+  "first_seen": "2026-09-25T10:50:44.322Z",
+  "last_successful_discovery": "2026-09-26T04:53:59.534Z",
+  "last_discovery_attempt": "2026-09-26T04:53:59.534Z",
+  "last_discovery_error": null,
+  "models": [
+    {
+      "provider": "opencode",
+      "model_id": "deepseek-v4-flash-free",
+      "display_name": "DeepSeek V4 Flash Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 200000,
+      "maximum_output": 128000,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "deepseek-v4-flash-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "15232324c1f8e02dfeb978db364c0131e8860cda1a220688147e90d94ebf31dd"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "glm-4.7-free",
+      "display_name": "GLM-4.7 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 204800,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "glm-4.7-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "8ddbf90f759f95f1b45817e9ea6c930f0ba21ec29dfff6fd51d5ded0b584b9d5"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "glm-5-free",
+      "display_name": "GLM-5 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 204800,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "glm-5-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "389fca28b8932eff7875f8a0923a99f1c35fb06a5e21a7db23ed5652a506b602"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "hy3-free",
+      "display_name": "Hy3 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 190000,
+      "maximum_output": 64000,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "hy3-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "864c1cece0d68c15a40d2739eb311fc46716472a42fbe5ecb18be4ada6bee477"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "hy3-preview-free",
+      "display_name": "Hy3 preview Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 256000,
+      "maximum_output": 64000,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "hy3-preview-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "ec362efb7870825e427b06d15d068501edf526b6013299e79451e9ae339cf94b"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "kimi-k2.5-free",
+      "display_name": "Kimi K2.5 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 262144,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "kimi-k2.5-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "1a4fdbaed74ba47ade19064e70f163ba43fbfbd334a9dde34ba48c10428ca9ba"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "laguna-s-2.1-free",
+      "display_name": "Laguna S 2.1 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 256000,
+      "maximum_output": 32000,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "laguna-s-2.1-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "d97513f86819faca00b278079c70dfe07fee83a464f2eb40562d9f86296ef071"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "ling-2.6-flash-free",
+      "display_name": "Ling 2.6 Flash Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262100,
+      "maximum_output": 32800,
+      "reasoning_support": false,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "ling-2.6-flash-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "def0e9679dfd357849205a3cc760ad8c00d6ac67ed4a6a99014d49bd6d09e27e"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "ling-3.0-flash-fin-free",
+      "display_name": "Ling 3.0 Flash Fin Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 32768,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "ling-3.0-flash-fin-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "0dda769e38609e88ea925662a509875f614dd9525e34bbb33f437faeb9d7134a"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "ling-3.0-flash-free",
+      "display_name": "Ling-3.0-flash Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 32768,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "ling-3.0-flash-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "aa7a535c2aeb361dbf0fe6f5caaaa7c5a13c62dbf65a8e084d0db84066f31f15"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "ling-3.0-tiny-free",
+      "display_name": "Ling-3.0-tiny Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 32768,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "ling-3.0-tiny-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "8ec66616d5b2f12099215da2cad9e9ab518fd32f2bbba62c213baa6ff5aad147"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "longcat-2.0-free",
+      "display_name": "LongCat-2.0 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 1000000,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "longcat-2.0-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "bef4746e291cc8ecebaad6c6c78d94742ae97b0e4b3e5b0c65075a3aacb18fac"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "mimo-v2-flash-free",
+      "display_name": "MiMo V2 Flash Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 65536,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "mimo-v2-flash-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "c5cbd227f06fc9b57907ca2af6ace30e7f7ad98796dea000a06d87660a98239e"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "mimo-v2-omni-free",
+      "display_name": "MiMo V2 Omni Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 64000,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "mimo-v2-omni-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "b195d8eab29169a54b644e161e83aeb89dbd3bd87cc88cdc1d1730405c0fcd36"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "mimo-v2-pro-free",
+      "display_name": "MiMo V2 Pro Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 1048576,
+      "maximum_output": 64000,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "mimo-v2-pro-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "c8362ce07e11cc7fb8514469e0c256d4e0b6761d76b90beb76bd87dcad135c48"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "mimo-v2.5-free",
+      "display_name": "MiMo V2.5 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 200000,
+      "maximum_output": 32000,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "mimo-v2.5-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "750de1c0b4cd5577f1fc0879a173372cddf98473f75ef72e7824c0ee2d936914"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "mimo-v2.6-flash-free",
+      "display_name": "MiMo-V2.6-Flash Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 200000,
+      "maximum_output": 32000,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "mimo-v2.6-flash-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "99ac8695883220506fa9d8c06cf632ebad5b192de6767ce185697835161aa6ae"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "minimax-m2.1-free",
+      "display_name": "MiniMax-M2.1 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 204800,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "minimax-m2.1-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "fc8482cc1f91004ad851021cffcb99754190d9dcd7826bcb04bd616bd4481fd0"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "minimax-m2.5-free",
+      "display_name": "MiniMax-M2.5 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 204800,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "minimax-m2.5-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "14cb449ee068a7b70b2c1c54a322564057b331d5a43acda2f645cc00432e249d"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "minimax-m3-free",
+      "display_name": "MiniMax-M3 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 200000,
+      "maximum_output": 32000,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "minimax-m3-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "8109e71be1357151f8706e489cdb0f65396f5ee06b2e908083a674d4eae67bad"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "muse-spark-1.2-contributor-free",
+      "display_name": "Muse Spark 1.2 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 1048576,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "muse-spark-1.2-contributor-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "5a2b26e912a881f8775d22b987592cc495dcc81671449526b4e34e362c413193"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "muse-spark-1.3-contributor-free",
+      "display_name": "Muse Spark 1.3 Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 1048576,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "muse-spark-1.3-contributor-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "3181f8103755bc6a048a4f3fbe73b8826df300d1f15409dd932612efec9966b8"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "nemotron-3-super-free",
+      "display_name": "Nemotron 3 Super Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 204800,
+      "maximum_output": 128000,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "nemotron-3-super-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "d53ae69427d9467c6813b2d4e3956f97e914d902e7efff80ff1e0d154a60ba08"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "nemotron-3-ultra-free",
+      "display_name": "Nemotron 3 Ultra Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 1000000,
+      "maximum_output": 128000,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "nemotron-3-ultra-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "03afa0cdb6a5679a864dcea18ea93c141973539bbb0a96326bc45667fcb8e78b"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "nemotron-3.5-lightning-free",
+      "display_name": "Nemotron 3.5 Lightning Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 262144,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "nemotron-3.5-lightning-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "e2a94dfc80ccd8bfb8da59bc0df3419682e7d3648f37d7912451fb695aa616da"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "north-mini-code-free",
+      "display_name": "North Mini Code Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 256000,
+      "maximum_output": 64000,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "north-mini-code-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "e913774a8bd13db674c08a6c492855627958235ac0a89b2a227bb46d4e071f2a"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "qwen3.6-plus-free",
+      "display_name": "Qwen3.6 Plus Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 65536,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "qwen3.6-plus-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "12ab7e489aa44bdb7fcf87db96bc37a248840ad374d5f27692547b70c93e7b74"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "ring-2.6-1t-free",
+      "display_name": "Ring 2.6 1T Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262000,
+      "maximum_output": 66000,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "ring-2.6-1t-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "0f005321f73c9d8b884e4cb36482388308faf4c9a545cf7f25db9f8776df621e"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "space-bunny-free",
+      "display_name": "Space Bunny Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 1048576,
+      "maximum_output": 524288,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "space-bunny-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "65774ecbe0af4b3b6bf7d7b5c8464d7d5d0dcb000c274f8229977f41be92c71d"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "trinity-large-preview-free",
+      "display_name": "Trinity Large Preview",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 131072,
+      "maximum_output": 131072,
+      "reasoning_support": false,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "trinity-large-preview-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "2ae9dcf69a578cd264e9961cef32adabf7a3175cc56656cacefa36f9857f7de8"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "x-preview-f-free",
+      "display_name": "Ox Alpha Free (Unlimited)",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 1000000,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/zen/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-09-25T10:50:44.322Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "x-preview-f-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "57611e8ed1203e06a41e9aa632a9e3137db136a53afc78fddca1346505130802"
+      },
+      "retired": false,
+      "unavailable_since": null
+    }
+  ]
+}
