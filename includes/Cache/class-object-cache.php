@@ -748,9 +748,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 				if ( $wp_filesystem ) {
 					$wp_filesystem->delete( $path );
+					continue;
 				}
 				// Best-effort cleanup: without a filesystem instance there is
 				// nothing safe to do here, so skip rather than silenced unlink().
+				// Log the skip under WP_DEBUG so a stuck circuit state is diagnosable.
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO: clear_circuit_state skipped stale state file (filesystem unavailable): ' . ( defined( 'ABSPATH' ) ? str_replace( ABSPATH, '', $path ) : $path ) );
+				}
 			}
 		}
 

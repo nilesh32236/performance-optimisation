@@ -906,7 +906,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 					if ( empty( $path ) || ! is_file( $path ) ) {
 						continue;
 					}
-					$raw_size = @filesize( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- guarded with is_int check below; a delete/rename race must not warn.
+					// No silence operator (consistent with the WP_Filesystem-only
+					// policy — no @ suppression): probe under a temporary error
+					// handler so a delete/rename race cannot warn. Guarded with
+					// the is_int check below, so a raced stat is skipped safely.
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- warning-free probe; restored immediately below.
+					set_error_handler(
+						static function () {
+							return true;
+						}
+					);
+					try {
+						$raw_size = filesize( $path );
+					} finally {
+						restore_error_handler();
+					}
 					if ( ! is_int( $raw_size ) || $raw_size <= 0 ) {
 						continue;
 					}

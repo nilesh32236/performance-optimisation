@@ -270,9 +270,21 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 		$redis = new \Redis();
 		$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
 
-		// Connection failures return WP_Error below; no silence operator so
-		// diagnosable warnings stay visible.
-		if ( $redis->$func( $host, $port, $timeout ) ) {
+		// Connection failures return WP_Error below. The connect runs under a
+		// temporary error handler (instead of the @ operator) so a failure on a
+		// host with display_errors enabled cannot leak the host:port into output.
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- temporary handler records rather than emits; restored immediately below.
+		set_error_handler(
+			static function () {
+				return true;
+			}
+		);
+		try {
+			$connected = $redis->$func( $host, $port, $timeout );
+		} finally {
+			restore_error_handler();
+		}
+		if ( $connected ) {
 			if ( ! empty( $password ) && false === $redis->auth( $password ) ) { // Audit #1434: Yoda.
 				$redis->close();
 				return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );
