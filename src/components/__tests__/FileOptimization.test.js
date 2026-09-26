@@ -10,6 +10,9 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import FileOptimization, {
 	normalizeRetries,
+	normalizeIdleTimeout,
+	normalizeCcssMaxSize,
+	normalizeRegressionThreshold,
 	normalizeDeliveryMode,
 	stripPreviewParams,
 	withCdnRowIds,
@@ -1745,6 +1748,223 @@ describe( 'FileOptimization Component', () => {
 			expect( normalizeRetries( '0x3' ) ).toBe( 5 );
 			expect( normalizeRetries( '0b101' ) ).toBe( 5 );
 			expect( normalizeRetries( '0o17' ) ).toBe( 5 );
+		} );
+	} );
+
+	// The three normalizers below share the guarded-number core
+	// (parseGuardedNumber) but have distinct clamp/fallback contracts. Until
+	// now only normalizeRetries had a direct test, so the PHP-parity claim for
+	// the other three was untested. These tables pin the current behaviour
+	// exactly, including the deliberate absence of an upper clamp on
+	// normalizeCcssMaxSize.
+	describe( 'normalizeIdleTimeout', () => {
+		// Anything the guarded parser rejects, plus any value <= 0, fails
+		// open to 3000 (the Settings_Store default for delayJSIdleTimeout).
+		it.each( [
+			[ 'non-numeric string', 'abc' ],
+			[ 'empty string', '' ],
+			[ 'whitespace-only string', '   ' ],
+			[ 'tab/newline-only string', '\t\n ' ],
+			[ 'null', null ],
+			[ 'undefined', undefined ],
+			[ 'NaN', NaN ],
+			[ 'Infinity', Infinity ],
+			[ '-Infinity', -Infinity ],
+			[ 'true', true ],
+			[ 'false', false ],
+			[ 'empty array', [] ],
+			[ 'array with a value', [ 5 ] ],
+			[ 'array with many values', [ 1, 2, 3 ] ],
+			[ 'empty object', {} ],
+			[ 'non-empty object', { a: 1 } ],
+			[ 'hex string', '0x10' ],
+			[ 'uppercase hex string', '0X10' ],
+			[ 'octal string', '0o17' ],
+			[ 'binary string', '0b101' ],
+			[ 'exponent-overflow string', '1e400' ],
+			[ 'exponent-overflow number', 1e400 ],
+			[ 'partially-numeric string', '5%' ],
+			[ 'trailing-junk string', '12abc' ],
+			[ 'zero', 0 ],
+			[ 'zero string', '0' ],
+			[ 'negative zero', -0 ],
+			[ 'negative number', -3 ],
+			[ 'negative string', '-3' ],
+		] )( 'fails open to 3000 for %s', ( _label, value ) => {
+			expect( normalizeIdleTimeout( value ) ).toBe( 3000 );
+		} );
+
+		it.each( [
+			// Valid in-range values pass through, truncated toward zero.
+			[ 'in-range number', 3000, 3000 ],
+			[ 'in-range float', 1234.9, 1234 ],
+			[ 'lower band edge', 500, 500 ],
+			[ 'upper band edge', 20000, 20000 ],
+			[ 'padded numeric string', '  3000  ', 3000 ],
+			[ 'tab-padded numeric string', '\t2500\n', 2500 ],
+			[ 'leading-plus string', '+1500', 1500 ],
+			// Below-min and above-max clamp to the band edges, not to the
+			// 3000 fallback.
+			[ 'below-min number', 100, 500 ],
+			[ 'below-min exponent string', '1e2', 500 ],
+			[ 'just under the min edge', 499.9, 500 ],
+			[ 'above-max number', 999999, 20000 ],
+			[ 'just over the max edge', 20000.9, 20000 ],
+			// Truncation happens before clamping, so a fraction that would
+			// land inside the band after rounding still clamps.
+			[ 'fraction that truncates below min', '12.9', 500 ],
+			// The hex guard tests the *string* form, so a JS number literal
+			// (which is 16, not the string '0x10') is accepted and then
+			// clamped up to the minimum. PHP is_numeric(16) agrees.
+			[ 'hex number literal (is 16)', 0x10, 500 ],
+		] )( 'normalizes %s', ( _label, value, expected ) => {
+			expect( normalizeIdleTimeout( value ) ).toBe( expected );
+		} );
+	} );
+
+	describe( 'normalizeCcssMaxSize', () => {
+		// Same guarded-parser fail-open set as the idle timeout, but the
+		// fallback is 20480 (the Settings_Store default for ccssMaxSize).
+		it.each( [
+			[ 'non-numeric string', 'abc' ],
+			[ 'empty string', '' ],
+			[ 'whitespace-only string', '   ' ],
+			[ 'tab/newline-only string', '\t\n ' ],
+			[ 'null', null ],
+			[ 'undefined', undefined ],
+			[ 'NaN', NaN ],
+			[ 'Infinity', Infinity ],
+			[ '-Infinity', -Infinity ],
+			[ 'true', true ],
+			[ 'false', false ],
+			[ 'empty array', [] ],
+			[ 'array with a value', [ 5 ] ],
+			[ 'array with many values', [ 1, 2, 3 ] ],
+			[ 'empty object', {} ],
+			[ 'non-empty object', { a: 1 } ],
+			[ 'hex string', '0x10' ],
+			[ 'uppercase hex string', '0X10' ],
+			[ 'octal string', '0o17' ],
+			[ 'binary string', '0b101' ],
+			[ 'exponent-overflow string', '1e400' ],
+			[ 'exponent-overflow number', 1e400 ],
+			[ 'partially-numeric string', '5%' ],
+			[ 'trailing-junk string', '12abc' ],
+			[ 'zero', 0 ],
+			[ 'zero string', '0' ],
+			[ 'negative zero', -0 ],
+			[ 'negative number', -3 ],
+			[ 'negative string', '-3' ],
+		] )( 'fails open to 20480 for %s', ( _label, value ) => {
+			expect( normalizeCcssMaxSize( value ) ).toBe( 20480 );
+		} );
+
+		// Deliberate contract: there is NO upper clamp, matching
+		// Settings_Store::sanitize_scalar_setting(), which stores any
+		// is_numeric() value as an int without a band. Critical_CSS::
+		// get_ccss_max_size() only guards non-positive values at read time.
+		// Adding a ceiling here would change what gets written to
+		// wppo_settings, so the absence is pinned explicitly.
+		it.each( [
+			[ 'one byte', 1, 1 ],
+			// These sit in the range a plausible "sane" ceiling would use
+			// (64 KB / 100 KB / 256 KB / 1 MB), so a future clamp is caught
+			// even if it is far below MAX_SAFE_INTEGER.
+			[ '100 KB', 100000, 100000 ],
+			[ '256 KB', 262144, 262144 ],
+			[ 'just under 1 MB', 1048575, 1048575 ],
+			[ 'far above any sane cap', 999999, 999999 ],
+			[ 'one gigabyte', 1e9, 1000000000 ],
+			[
+				'Number.MAX_SAFE_INTEGER',
+				Number.MAX_SAFE_INTEGER,
+				9007199254740991,
+			],
+		] )( 'does NOT clamp %s', ( _label, value, expected ) => {
+			expect( normalizeCcssMaxSize( value ) ).toBe( expected );
+		} );
+
+		it.each( [
+			[ 'in-range number', 3000, 3000 ],
+			[ 'in-range float', 1234.9, 1234 ],
+			[ 'fraction just over 20480', 20480.9, 20480 ],
+			[ 'padded numeric string', '  3000  ', 3000 ],
+			[ 'tab-padded numeric string', '\t2500\n', 2500 ],
+			[ 'leading-plus string', '+1500', 1500 ],
+			[ 'exponent string', '1e2', 100 ],
+			[ 'exponent number literal', 1e2, 100 ],
+			[ 'small value above zero', 499, 499 ],
+			[ 'fraction truncating to 4', '4.9', 4 ],
+			// Same string-vs-number asymmetry as normalizeIdleTimeout: the
+			// hex guard inspects the string form, so the number 0x10 (16)
+			// is accepted rather than rejected.
+			[ 'hex number literal (is 16)', 0x10, 16 ],
+		] )( 'normalizes %s', ( _label, value, expected ) => {
+			expect( normalizeCcssMaxSize( value ) ).toBe( expected );
+		} );
+	} );
+
+	describe( 'normalizeRegressionThreshold', () => {
+		it.each( [
+			[ 'non-numeric string', 'abc' ],
+			[ 'empty string', '' ],
+			[ 'whitespace-only string', '   ' ],
+			[ 'tab/newline-only string', '\t\n ' ],
+			[ 'null', null ],
+			[ 'undefined', undefined ],
+			[ 'NaN', NaN ],
+			[ 'Infinity', Infinity ],
+			[ '-Infinity', -Infinity ],
+			[ 'true', true ],
+			[ 'false', false ],
+			[ 'empty array', [] ],
+			[ 'array with a value', [ 5 ] ],
+			[ 'array with many values', [ 1, 2, 3 ] ],
+			[ 'empty object', {} ],
+			[ 'non-empty object', { a: 1 } ],
+			[ 'hex string', '0x10' ],
+			[ 'uppercase hex string', '0X10' ],
+			[ 'octal string', '0o17' ],
+			[ 'binary string', '0b101' ],
+			[ 'exponent-overflow string', '1e400' ],
+			[ 'exponent-overflow number', 1e400 ],
+			[ 'partially-numeric string', '5%' ],
+			[ 'trailing-junk string', '12abc' ],
+		] )( 'fails open to 20 for %s', ( _label, value ) => {
+			expect( normalizeRegressionThreshold( value ) ).toBe( 20 );
+		} );
+
+		it.each( [
+			// Valid in-band values pass through, truncated toward zero.
+			[ 'band minimum', 5, 5 ],
+			[ 'in-band number', 20, 20 ],
+			[ 'band maximum', 50, 50 ],
+			[ 'in-band float', 12.9, 12 ],
+			[ 'float just under the max edge', 50.9, 50 ],
+			[ 'padded numeric string', '  30  ', 30 ],
+			[ 'tab-padded numeric string', '\t30\n', 30 ],
+			[ 'leading-plus string', '+30', 30 ],
+			[ 'numeric string at min', '5', 5 ],
+			[ 'numeric string at max', '50', 50 ],
+			// Out-of-band values fail safe to 20. Truncation happens first,
+			// so 4.9 truncates to 4 and lands outside the band.
+			[ 'just below the min edge', 4, 20 ],
+			[ 'fraction truncating to 4', '4.9', 20 ],
+			[ 'just above the max edge', 51, 20 ],
+			[ 'numeric string above the max edge', '51', 20 ],
+			[ 'exponent string in range', '1e2', 20 ],
+			[ 'zero', 0, 20 ],
+			[ 'zero string', '0', 20 ],
+			[ 'negative zero', -0, 20 ],
+			[ 'negative number', -3, 20 ],
+			[ 'negative string', '-3', 20 ],
+			[ 'huge value', 1e9, 20 ],
+			// The hex guard tests the *string* form, so a JS number literal
+			// (which is 16, not the string '0x10') is accepted and lands
+			// inside the band. PHP is_numeric(16) agrees.
+			[ 'hex number literal (is 16)', 0x10, 16 ],
+		] )( 'normalizes %s', ( _label, value, expected ) => {
+			expect( normalizeRegressionThreshold( value ) ).toBe( expected );
 		} );
 	} );
 
