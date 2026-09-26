@@ -7,8 +7,8 @@
     "model_ref": "opencode/muse-spark-1.3-contributor-free"
   },
   "first_seen": "2026-09-25T10:50:44.322Z",
-  "last_successful_discovery": "2026-09-25T17:08:08.222Z",
-  "last_discovery_attempt": "2026-09-25T17:08:08.222Z",
+  "last_successful_discovery": "2026-09-26T04:53:59.534Z",
+  "last_discovery_attempt": "2026-09-26T04:53:59.534Z",
   "last_discovery_error": null,
   "models": [
     {
@@ -30,7 +30,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -65,7 +65,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -100,7 +100,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -135,7 +135,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -170,7 +170,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -205,7 +205,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -240,7 +240,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -275,7 +275,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -310,7 +310,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -345,7 +345,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -380,7 +380,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -415,7 +415,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -450,7 +450,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -485,7 +485,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -520,7 +520,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -555,7 +555,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -590,7 +590,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -625,7 +625,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -660,7 +660,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -695,7 +695,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -730,7 +730,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -765,7 +765,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -800,7 +800,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -835,7 +835,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -870,7 +870,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -905,7 +905,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -940,7 +940,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -975,7 +975,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1010,7 +1010,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1045,7 +1045,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1080,7 +1080,7 @@
       "api_protocol": "https://opencode.ai/zen/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-09-25T17:08:08.222Z",
+      "last_verified": "2026-09-26T04:53:59.534Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
