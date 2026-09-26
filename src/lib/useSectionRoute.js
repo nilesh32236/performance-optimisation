@@ -25,7 +25,7 @@
  * @package
  */
 
-import { useCallback, useEffect, useState } from '@wordpress/element';
+import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 
 /**
  * The query key that carries the area.
@@ -196,9 +196,15 @@ export const urlMisdescribes = ( search, actual, view, items ) => {
  * @param {string}   config.defaultArea Area id used when the URL names none.
  * @param {string[]} config.areas       Every area id that exists.
  * @param {Function} config.itemsFor    Returns the screen ids an area owns.
- * @return {Object} `{ area, view, navigate }` route state.
+ * @param {Function} config.onBeforePop Optional popstate veto; false refuses.
+ * @return {Object} `{ area, view, navigate, navigateTo }` route state.
  */
-export const useSectionRoute = ( { defaultArea, areas, itemsFor } ) => {
+export const useSectionRoute = ( {
+	defaultArea,
+	areas,
+	itemsFor,
+	onBeforePop = () => true,
+} ) => {
 	const itemsForArea = useCallback(
 		( area ) => itemsFor( area ) || [],
 		[ itemsFor ]
@@ -221,6 +227,12 @@ export const useSectionRoute = ( { defaultArea, areas, itemsFor } ) => {
 
 	// The URL is the only source of truth; this is always a read of it.
 	const [ route, setRoute ] = useState( read );
+
+	// A ref, not state: the popstate handler needs the route currently on
+	// screen in order to put the URL back when the caller refuses, and it must
+	// not re-subscribe on every render to have it.
+	const currentRef = useRef( route );
+	currentRef.current = route;
 
 	const write = useCallback(
 		( next, replace ) => {
@@ -277,6 +289,21 @@ export const useSectionRoute = ( { defaultArea, areas, itemsFor } ) => {
 		}
 		const onPopState = () => {
 			const next = read();
+			// Let the caller refuse the move. Without this, Back and Forward
+			// bypass `navigate` entirely — so the unsaved-changes guard never
+			// sees them, and a dirty form is destroyed silently. Same-document
+			// navigation also never fires `beforeunload`, so nothing else would
+			// have caught it.
+			if (
+				typeof onBeforePop === 'function' &&
+				onBeforePop( next ) === false
+			) {
+				// Put the address bar back to what is actually on screen, so the
+				// URL does not describe a section the user is not looking at
+				// while the dialog is open.
+				write( currentRef.current, true );
+				return;
+			}
 			setRoute( next );
 			// Re-sync the address bar if the entry we landed on does not describe
 			// what is now rendered. Without this, returning to a history entry
@@ -296,7 +323,7 @@ export const useSectionRoute = ( { defaultArea, areas, itemsFor } ) => {
 		};
 		window.addEventListener( 'popstate', onPopState );
 		return () => window.removeEventListener( 'popstate', onPopState );
-	}, [ read, itemsForArea, write ] );
+	}, [ read, itemsForArea, write, onBeforePop ] );
 
 	/**
 	 * Navigate to an area, or to a specific screen within it.
@@ -351,5 +378,30 @@ export const useSectionRoute = ( { defaultArea, areas, itemsFor } ) => {
 		[ areas, itemsForArea, write ]
 	);
 
-	return { area: route.area, view: route.view, navigate };
+	/**
+	 * Move to an explicit route rather than a named target.
+	 *
+	 * Needed because a refused Back/Forward already knows the exact route the
+	 * user was reaching for; routing that back through `navigate` would
+	 * re-resolve a string the caller no longer holds.
+	 *
+	 * @param {Object} next Route with `area` and optional `view`.
+	 * @return {Object|null} The route applied, or null when invalid.
+	 */
+	const navigateTo = useCallback(
+		( next ) => {
+			if ( ! next || ! areas.includes( next.area ) ) {
+				return null;
+			}
+			const items = itemsForArea( next.area );
+			const view = items.includes( next.view ) ? next.view : items[ 0 ];
+			const target = { area: next.area, view };
+			write( target, false );
+			setRoute( target );
+			return target;
+		},
+		[ areas, itemsForArea, write ]
+	);
+
+	return { area: route.area, view: route.view, navigate, navigateTo };
 };

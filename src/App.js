@@ -136,14 +136,43 @@ const App = () => {
 	// Both values come from one read of the URL, so the rendered panel cannot
 	// trail behind the address bar on a popstate — which is exactly what it did
 	// when the area and the screen were held separately.
+	// Refuse a Back/Forward that would move away from unsaved work.
+	//
+	// A popstate never reaches `navigate`, so without this the guard is
+	// bypassed entirely for browser history and a dirty form is destroyed with
+	// no dialog and no browser prompt — same-document navigation does not fire
+	// `beforeunload` either. Returning false puts the address bar back to what
+	// is on screen; `pendingRoute` then holds the route the user was trying to
+	// reach, so Discard honours the gesture they actually made.
+	//
+	// The live values are read through a ref rather than captured: this
+	// callback is *passed into* the hook that produces them, so referring to
+	// them directly would be a circular initialisation.
+	const popGuard = useRef( { isDirty: false, area: '', view: '' } );
+
+	const onBeforePop = useCallback( ( incoming ) => {
+		const current = popGuard.current;
+		if (
+			! current.isDirty ||
+			( incoming.area === current.area && incoming.view === current.view )
+		) {
+			return true;
+		}
+		setPendingRoute( incoming );
+		setShowGuard( true );
+		return false;
+	}, [] );
+
 	const {
 		area: activeSection,
 		view: activeView,
 		navigate,
+		navigateTo: navigateToRoute,
 	} = useSectionRoute( {
 		defaultArea: DEFAULT_SECTION,
 		areas: SECTION_IDS,
 		itemsFor: areaItemIds,
+		onBeforePop,
 	} );
 	const [ transition, setTransition ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
@@ -154,7 +183,13 @@ const App = () => {
 	const [ ccssRefreshTrigger, setCcssRefreshTrigger ] = useState( 0 );
 	const [ isDirty, setIsDirty ] = useState( false );
 	const [ pendingTarget, setPendingTarget ] = useState( null );
+	const [ pendingRoute, setPendingRoute ] = useState( null );
 	const [ showGuard, setShowGuard ] = useState( false );
+
+	// Keep the popstate guard's view of the world current without making
+	// `onBeforePop` change identity (a changing identity would re-bind the
+	// listener on every render for no benefit).
+	popGuard.current = { isDirty, area: activeSection, view: activeView };
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedCcss = useRef( false );
 
@@ -226,16 +261,22 @@ const App = () => {
 	const confirmDiscard = useCallback( () => {
 		setShowGuard( false );
 		setIsDirty( false );
-		if ( pendingTarget ) {
+		if ( pendingRoute ) {
+			// A refused Back/Forward: the URL was put back, so the route has to
+			// be written again now that the user confirmed the discard.
+			navigateToRoute( pendingRoute );
+			setPendingRoute( null );
+		} else if ( pendingTarget ) {
 			navigate( pendingTarget );
 			setMobileMenuOpen( false );
 			setPendingTarget( null );
 		}
-	}, [ pendingTarget, navigate ] );
+	}, [ pendingTarget, pendingRoute, navigate, navigateToRoute ] );
 
 	const cancelGuard = useCallback( () => {
 		setShowGuard( false );
 		setPendingTarget( null );
+		setPendingRoute( null );
 	}, [] );
 
 	// Block browser unload when dirty — browsers show generic confirmation.
