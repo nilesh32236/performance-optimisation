@@ -109,7 +109,7 @@ export default function SiteStatusCard( {
 					<button
 						type="button"
 						className="wppo-button wppo-button--secondary"
-						onClick={ onRetry }
+						onClick={ () => onRetry?.( { force: true } ) }
 					>
 						{ __( 'Try again', 'performance-optimisation' ) }
 					</button>
@@ -152,7 +152,7 @@ export default function SiteStatusCard( {
 					<button
 						type="button"
 						className="wppo-button wppo-button--link"
-						onClick={ onRetry }
+						onClick={ () => onRetry?.( { force: true } ) }
 					>
 						{ __( 'Try again', 'performance-optimisation' ) }
 					</button>

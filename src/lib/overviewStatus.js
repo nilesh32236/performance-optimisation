@@ -173,6 +173,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			detail: 'Object cache state is not available right now.',
 		};
 	}
+
 	// Every flag goes through `triState`. An independent review reproduced
 	// `{ enabled: 'false', redis_reachable: true }` rendering as a *working*
 	// object cache, because a truthiness check treats the string "false" as
@@ -196,6 +197,22 @@ export const deriveObjectCacheStatus = ( state ) => {
 			detail: 'The plugin did not report whether the object cache is enabled.',
 		};
 	}
+
+	// Order matters here, and it is not arbitrary.
+	//
+	// `Object_Cache::get_status()` returns **early** when the Redis extension is
+	// missing, so `redis_reachable` is *always* false alongside `redis_missing`.
+	// Testing reachability first therefore reported "the server is not
+	// reachable" when the true cause was a missing extension, and made the
+	// specific branch unreachable dead code.
+	if ( triState( state.redis_missing ) === true ) {
+		return {
+			id: 'object-cache',
+			label: 'Object cache',
+			status: STATUS.ATTENTION,
+			detail: 'Object cache is enabled but the Redis extension is not available, so it cannot be used.',
+		};
+	}
 	if ( triState( state.foreign_dropin ) === true ) {
 		return {
 			id: 'object-cache',
@@ -204,26 +221,12 @@ export const deriveObjectCacheStatus = ( state ) => {
 			detail: 'Another plugin installed the object-cache drop-in, so this one is not active.',
 		};
 	}
-	// The endpoint reports `redis_reachable`; `reachable` is accepted so a
-	// filtered or older payload still works. Reading only `reachable` left the
-	// row permanently "Unknown" against the real backend.
-	const reachable = triState( state.redis_reachable ?? state.reachable );
-	if ( reachable === false ) {
-		return {
-			id: 'object-cache',
-			label: 'Object cache',
-			status: STATUS.ATTENTION,
-			detail: 'Object cache is enabled but the server is not reachable, so it is not speeding anything up.',
-		};
-	}
-	// Reachable is the whole claim. If the backend never reported it we do not
-	// know whether the cache is doing anything, and "healthy" would be a guess
-	// dressed as a fact.
-	// `get_status()` also reports the outage-bypass flag and the circuit
-	// breaker. When either is set the cache is deliberately or currently not in
-	// use, so calling it working would be the most misleading claim on the page
-	// — a Redis the plugin has stopped trusting, reported as healthy. The review
-	// reproduced this live with `{ bypassed: true, circuit_open: true }`.
+
+	// The endpoint also reports the outage-bypass flag and the circuit breaker.
+	// When either is set the cache is deliberately or currently not in use, so
+	// calling it working would be the most misleading claim on the page — a
+	// Redis the plugin has stopped trusting, reported as healthy. Reproduced
+	// live with `{ bypassed: true, circuit_open: true }`.
 	if ( triState( state.circuit_open ) === true ) {
 		return {
 			id: 'object-cache',
@@ -240,14 +243,22 @@ export const deriveObjectCacheStatus = ( state ) => {
 			detail: 'Object cache is enabled but is currently bypassed because of recent failures.',
 		};
 	}
-	if ( triState( state.redis_missing ) === true ) {
+
+	// The endpoint reports `redis_reachable`; `reachable` is accepted so a
+	// filtered or older payload still works. Reading only `reachable` left the
+	// row permanently "Unknown" against the real backend.
+	const reachable = triState( state.redis_reachable ?? state.reachable );
+	if ( reachable === false ) {
 		return {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.ATTENTION,
-			detail: 'Object cache is enabled but the Redis extension is not available, so it cannot be used.',
+			detail: 'Object cache is enabled but the server is not reachable, so it is not speeding anything up.',
 		};
 	}
+	// Reachable is the whole claim. If the backend never reported it we do not
+	// know whether the cache is doing anything, and "healthy" would be a guess
+	// dressed as a fact.
 	if ( reachable === true ) {
 		return {
 			id: 'object-cache',

@@ -94,12 +94,28 @@ describe( 'deriveObjectCacheStatus', () => {
 		// The single most important regression here. A truthiness check reads
 		// the string "false" as true, which reported a *disabled* object cache as
 		// working. The review reproduced this on the live page.
-		[ 'false', '0', 0, '', null, [], {} ].forEach( ( value ) => {
-			const row = deriveObjectCacheStatus( {
-				enabled: value,
-				redis_reachable: true,
-			} );
-			expect( row.status ).not.toBe( STATUS.HEALTHY );
+		//
+		// Asserted as NOT_CONFIGURED, not merely "not HEALTHY". A triState that
+		// returned null for 'false' would yield UNKNOWN, which also satisfies a
+		// `not.toBe(HEALTHY)` test — so the weaker form passed even with the
+		// entire string-coercion block deleted.
+		[ 'false', '0', 0 ].forEach( ( value ) => {
+			expect(
+				deriveObjectCacheStatus( {
+					enabled: value,
+					redis_reachable: true,
+				} ).status
+			).toBe( STATUS.NOT_CONFIGURED );
+		} );
+		// A missing or nonsensical value is genuinely "do not know", and must not
+		// be reported as switched off either.
+		[ null, '', [], {} ].forEach( ( value ) => {
+			expect(
+				deriveObjectCacheStatus( {
+					enabled: value,
+					redis_reachable: true,
+				} ).status
+			).toBe( STATUS.UNKNOWN );
 		} );
 	} );
 
@@ -143,14 +159,19 @@ describe( 'deriveObjectCacheStatus', () => {
 		).toBe( STATUS.ATTENTION );
 	} );
 
-	it( 'treats a missing Redis extension as a problem, not as working', () => {
-		expect(
-			deriveObjectCacheStatus( {
-				enabled: true,
-				redis_reachable: true,
-				redis_missing: true,
-			} ).status
-		).toBe( STATUS.ATTENTION );
+	it( 'reports a missing extension, not an unreachable server', () => {
+		// The real `get_status()` shape: it returns early when the extension is
+		// missing, so `redis_reachable` is *always* false alongside it. A test
+		// using `redis_reachable: true` here exercised a shape production can
+		// never emit, and the branch was unreachable.
+		const row = deriveObjectCacheStatus( {
+			enabled: true,
+			redis_reachable: false,
+			redis_missing: true,
+		} );
+		expect( row.status ).toBe( STATUS.ATTENTION );
+		expect( row.detail ).toMatch( /extension/i );
+		expect( row.detail ).not.toMatch( /not reachable/i );
 	} );
 
 	it( 'reports a working cache only when enabled, reachable, and not bypassed', () => {
@@ -383,6 +404,25 @@ describe( 'buildStatusModel', () => {
 			Object.values( node ).forEach( walk );
 		};
 		walk( model );
+	} );
+
+	it( 'threads cacheStats through to the page-cache row', () => {
+		// The single highest-value line in this file, and the mutation the
+		// independent review could not catch: renaming `payload.cacheStats` to
+		// `payload.cache_stats` in buildStatusModel left 1186/1186 tests green
+		// while production reverted to a permanently "Unknown" page-cache row.
+		//
+		// Every other buildStatusModel test passes cacheSettings without
+		// cacheStats, so nothing pinned the *wiring* between the two — and the
+		// wiring is exactly where the original bug lived.
+		const { rows, overall } = buildStatusModel( {
+			cacheSettings: { enableCache: true },
+			cacheStats: '14 MB',
+		} );
+		expect( rows[ 0 ].id ).toBe( 'page-cache' );
+		expect( rows[ 0 ].status ).toBe( STATUS.HEALTHY );
+		expect( rows[ 0 ].detail ).toContain( '14 MB' );
+		expect( overall ).toBe( STATUS.HEALTHY );
 	} );
 
 	it( 'emits only known status values, so no badge can go blank', () => {

@@ -11,6 +11,7 @@ import {
 	WEB_VITALS_ALL_NULL,
 	WEB_VITALS_PARTIAL,
 	WEB_VITALS_TRENDS_RESPONSE,
+	WEB_VITALS_WITH_REAL_ZEROS,
 } from '../__fixtures__/vitals-fixture';
 
 describe( 'summariseVitals', () => {
@@ -62,6 +63,22 @@ describe( 'summariseVitals', () => {
 		expect( vitals ).not.toBeNull();
 		expect( vitals.lcp ).toBeUndefined();
 		expect( vitals.cls ).toBe( 0.06 );
+	} );
+
+	it( 'counts a genuine zero as a measurement, not as an absence', () => {
+		// A CLS of exactly 0 is an excellent real result. The first fixture had
+		// no zero-valued metric, so a `> 0` filter passed it — and on the live
+		// site 7 of 37 stored rows are true zeros, which moved the reported
+		// median from 0.0026 to 0.0046.
+		const vitals = summariseVitals( WEB_VITALS_WITH_REAL_ZEROS.data );
+		expect( vitals.cls ).toBe( 0 );
+		expect( vitals.lcp ).toBe( 1000 );
+	} );
+
+	it( 'still excludes absent readings, which also coerce to 0', () => {
+		// The other half: `Number( null )` is 0, so absence must still be
+		// rejected. Both properties are asserted because they are opposite.
+		expect( summariseVitals( WEB_VITALS_ALL_NULL.data ) ).toBeNull();
 	} );
 
 	it( 'omits INP rather than borrowing a different metric', () => {
