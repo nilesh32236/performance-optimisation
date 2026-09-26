@@ -64,8 +64,11 @@ describe( 'SiteStatusCard', () => {
 	} );
 
 	it( 'surfaces a row that needs attention', () => {
+		// An enabled-but-unreachable object cache is a real problem, and it is
+		// the case the page can actually detect from the data it has.
 		const { rows, overall } = model( {
-			cacheSettings: { enableCache: true, cache_enabled: false },
+			cacheSettings: { enableCache: true },
+			objectCache: { enabled: true, redis_reachable: false },
 		} );
 		expect( overall ).toBe( STATUS.ATTENTION );
 		render( <SiteStatusCard rows={ rows } overall={ overall } /> );

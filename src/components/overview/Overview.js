@@ -54,55 +54,125 @@ const fetchObjectCache = async ( signal ) => {
 		signal
 	);
 	// The REST layer answers `{ success, data, message }`; the status model
-	// works on the payload, not the envelope. Verified live: reading the
-	// envelope directly made every row report "Unavailable" or "Not set up".
-	return response?.data ?? null;
+	// works on the payload, not the envelope. Reading the envelope directly made
+	// every row report "Unavailable" or "Not set up".
+	//
+	// `success` is checked first, and it matters. A `WP_Error`-shaped body
+	// (`{ code, message, data: { status: 429 } }`) carries a *truthy* `data`,
+	// which the independent review showed reaching the model and rendering
+	// "Object cache is off" — a false claim manufactured out of an error. A
+	// failed request is not evidence that a feature is switched off.
+	if ( ! response || response.success === false ) {
+		return null;
+	}
+	return response.data ?? null;
 };
 
 /**
- * Pull the best real-user vitals the plugin already stores, if any.
+ * Pull the median real-user vitals the plugin already stores, if any.
  *
- * Reads the plugin's own aggregated trend rather than issuing a fresh
+ * Reads the plugin's own recorded history rather than issuing a fresh
  * measurement: the Overview must stay fast, and a real-user number is more
  * honest than a lab score anyway.
  *
+ * ## The real shape
+ *
+ * `web_vitals_trends` returns `data.trends` as an **object keyed by
+ * `<url-hash>_<strategy>`**, each value an array of history rows — not the flat
+ * array this originally assumed. An independent review confirmed the assumed
+ * shape never matched, so the vitals feature was dead: zero of three rows ever
+ * rendered. The history rows carry `performance`, `lcp`, `cls` and `tbt`; there
+ * is **no `inp` field**, so INP is reported only when a source actually
+ * provides it rather than being faked from a neighbouring metric.
+ *
+ * Exported for testing against the literal captured response.
+ *
+ * @param {Object} payload The decoded `web_vitals_trends` payload.
+ * @return {Object|null} `{ lcp, cls, inp? }`, or null when nothing is measured.
+ */
+export const summariseVitals = ( payload ) => {
+	// Accepts the `{ success, data }` envelope, the decoded payload, or the
+	// `trends` object itself. Unwrapping here rather than only at the call site
+	// means a caller that passes the raw response gets the same answer.
+	const container =
+		payload?.trends ?? payload?.data?.trends ?? payload?.data ?? payload;
+	if ( ! container || typeof container !== 'object' ) {
+		return null;
+	}
+
+	// Accepts both the keyed map the endpoint really returns and a flat array,
+	// because a filter could hand back either and neither should silently
+	// produce an empty page.
+	const groups = Array.isArray( container )
+		? [ container ]
+		: Object.values( container ).filter( ( value ) =>
+				Array.isArray( value )
+		  );
+	const rows = groups.flat();
+	if ( ! rows.length ) {
+		return null;
+	}
+
+	/**
+	 * Median of a real, finite, non-negative measurement.
+	 *
+	 * Zero is excluded: `Number( null )` is 0, so counting absent readings as
+	 * "0 ms" is how an unmeasured site reports perfect vitals.
+	 *
+	 * @param {string[]} keys Candidate field names, in order.
+	 * @return {number|undefined} The median, or undefined when unmeasured.
+	 */
+	const medianOf = ( keys ) => {
+		const values = [];
+		for ( const row of rows ) {
+			if ( ! row || typeof row !== 'object' ) {
+				continue;
+			}
+			for ( const key of keys ) {
+				const raw = row[ key ];
+				if ( raw === null || raw === '' || typeof raw === 'boolean' ) {
+					continue;
+				}
+				const value = Number( raw );
+				if ( Number.isFinite( value ) && value > 0 ) {
+					values.push( value );
+					break;
+				}
+			}
+		}
+		if ( ! values.length ) {
+			return undefined;
+		}
+		values.sort( ( a, b ) => a - b );
+		return values[ Math.floor( values.length / 2 ) ];
+	};
+
+	const vitals = {
+		lcp: medianOf( [ 'lcp', 'LCP', 'lcp_ms' ] ),
+		cls: medianOf( [ 'cls', 'CLS', 'cls_value' ] ),
+		// Only when the source genuinely measures it. There is no INP field in
+		// the stored history, so this stays undefined and the row is reported as
+		// unmeasured instead of borrowing a different metric.
+		inp: medianOf( [ 'inp', 'INP' ] ),
+	};
+
+	return Object.values( vitals ).some( ( value ) => value !== undefined )
+		? vitals
+		: null;
+};
+
+/**
+ * Fetch the stored real-user vitals.
+ *
  * @param {AbortSignal} signal Cancellation signal.
- * @return {Promise<Object|null>} `{ lcp, cls, inp }` or null.
+ * @return {Promise<Object|null>} `{ lcp, cls, inp? }` or null.
  */
 const fetchVitals = async ( signal ) => {
 	try {
 		// The typed helper, not a raw call: this action requires a url and a
 		// strategy, and building the action by hand is how arguments get lost.
 		const response = await fetchWebVitalsTrends( '', '', signal );
-		const trends = response?.data ?? response;
-		const rows = trends?.trends || trends?.data || trends?.results || null;
-		if ( ! Array.isArray( rows ) || ! rows.length ) {
-			return null;
-		}
-		// Aggregate the recorded values rather than picking one lucky page.
-		const pick = ( keys ) => {
-			const values = rows
-				.map( ( row ) =>
-					keys
-						.map( ( key ) => Number( row?.[ key ] ) )
-						.find( ( n ) => Number.isFinite( n ) && n >= 0 )
-				)
-				.filter( ( n ) => Number.isFinite( n ) );
-			if ( ! values.length ) {
-				return undefined;
-			}
-			return values.sort( ( a, b ) => a - b )[
-				Math.floor( values.length / 2 )
-			];
-		};
-		const vitals = {
-			lcp: pick( [ 'lcp', 'LCP', 'lcp_ms' ] ),
-			cls: pick( [ 'cls', 'CLS', 'cls_value' ] ),
-			inp: pick( [ 'inp', 'INP', 'fcp', 'ttfb' ] ),
-		};
-		return Object.values( vitals ).some( ( v ) => v !== undefined )
-			? vitals
-			: null;
+		return summariseVitals( response?.data ?? response );
 	} catch ( error ) {
 		// A missing vitals source is a normal state, not an error to show.
 		if ( error?.name === 'AbortError' ) {
@@ -188,6 +258,12 @@ export default function Overview( { onNavigate, activities = [] } ) {
 		() =>
 			buildStatusModel( {
 				cacheSettings: settings.cache_settings,
+				// Already injected server-side by Cache::get_cache_stats(); using
+				// it costs no request.
+				cacheStats:
+					typeof wppoSettings !== 'undefined'
+						? wppoSettings?.cache_size
+						: undefined,
 				...payload,
 			} ),
 		[ payload, settings ]
