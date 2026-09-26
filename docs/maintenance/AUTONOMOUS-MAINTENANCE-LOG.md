@@ -82,3 +82,40 @@ Completed: 2026-08-31 11:35 UTC
 - Regression, each mutation-checked: the REST 500 and the unchanged-save success both fail with their fix reverted and pass with it. `test_failed_write_leaves_the_memo_on_the_stored_value` pins memo coherence on the failure path. The pre-existing `test_snapshot_failure_does_not_block_write` contract is unchanged and still passes.
 - Gate: PHPCS, ESLint (0 errors), 833 Jest, 2,786 PHPUnit / 25,816 assertions, build, architecture check, diff check — all green.
 - Scope boundary: the CLI snapshot churn (an unconditional `take_settings_snapshot()` on a no-op write destroying one-click undo) and the dead `Settings_Command` branch in the safe-mode handler are separate defects and were not bundled here.
+
+## 2026-09-25 — WP-CLI settings writes through the Settings_Command seam
+- Branch: `fix/cli-settings-undo-snapshot`. It was originally stacked on the
+  settings write-result fix because the CLI now checks the write result, and
+  without that seam an unchanged write would return false and make the CLI
+  report an error for a no-op update. That dependency has since been satisfied:
+  the settings fix merged to `master` as #1652 and this branch was rebased onto
+  it, so it now carries only the CLI change.
+- Defect: `settings import` and `settings update` hand-rolled
+  `take_settings_snapshot()` before every write, with no "did anything change"
+  guard. `take_settings_snapshot()` writes a single slot, so
+  `wp wppo settings update file_optimisation --settings='{"minifyHTML":true}'`
+  with that value already set rewrote the undo slot with the current state. The
+  next "Undo settings" restored the settings already in place, and the operator's
+  last real change became unrecoverable. `Settings_Command::save()` has exactly
+  the `$prior !== $settings` guard these two paths lacked.
+- Fix: both branches now call `Settings_Command::save( $next, $prior )`, which
+  also removes the duplicated fail-open snapshot try/catch.
+- Regression: new `tests/php/WppoCliSettingsTest.php` — the `wp wppo settings`
+  subcommand previously had **no test file at all**, and the two highest-impact
+  defects in it lived in that untested code. Three tests, all mutation-checked
+  against the reverted source: a no-op write preserves the undo snapshot, a real
+  change still snapshots the prior value, and a failed write is reported as an
+  error rather than a success.
+- Invariant: `MainSettingsOwnershipTest::test_cli_settings_writes_go_through_the_settings_command`
+  now pins that the CLI has no raw `Util::save_settings` /
+  `Util::take_settings_snapshot` call sites and exactly two
+  `Settings_Command::save` sites, so the hand-rolled path cannot come back.
+- Architecture: the new dependency edge `WPPO_CLI_Command -> Settings_Command`
+  is recorded in the regenerated graph, and the `ArchitectureInventoryTest`
+  edge ratchet moved 395 -> 396 (runtime 394 -> 395) with the reason noted in
+  the assertion.
+- Gate: PHPCS, ESLint (0 errors), 833 Jest, 2,790 PHPUnit / 25,830 assertions,
+  build, architecture check, diff check — all green.
+- Scope boundary: the CLI snapshots the defaults-merged prior state rather than
+  the raw stored array. That is pre-existing behaviour, left alone here; the new
+  test asserts the changed key rather than baking the wart in.

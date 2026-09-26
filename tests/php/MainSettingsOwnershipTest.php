@@ -317,4 +317,34 @@ class MainSettingsOwnershipTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( array(), $writes );
 		$this->assertSame( 1, $command_saves );
 	}
+
+	/**
+	 * The WP-CLI settings subcommands write through the same seam.
+	 *
+	 * The CLI hand-rolled snapshot-then-save, which is how an unchanged write
+	 * came to overwrite the single one-click undo slot. Routing it through
+	 * Settings_Command::save() is what gives it the change guard, so the
+	 * invariant is pinned here rather than left to review.
+	 *
+	 * @return void
+	 */
+	public function test_cli_settings_writes_go_through_the_settings_command(): void {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local source scan.
+		$source = (string) file_get_contents( WPPO_PLUGIN_PATH . 'includes/Admin/class-wppo-cli-command.php' );
+		$this->assertStringNotContainsString(
+			'Util::save_settings',
+			$source,
+			'WP-CLI settings writes must go through Settings_Command, not the raw Util facade'
+		);
+		$this->assertStringNotContainsString(
+			'Util::take_settings_snapshot',
+			$source,
+			'WP-CLI must not hand-roll the undo snapshot; the seam owns the change guard'
+		);
+		$this->assertSame(
+			2,
+			substr_count( $source, 'Settings_Command::save(' ),
+			'both the import and update branches must save through the seam'
+		);
+	}
 }
