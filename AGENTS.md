@@ -193,7 +193,9 @@ The schema-v2 inventory tracks 86 files: 82 runtime plugin files under `includes
 - Jest config lives in `package.json` (no `jest.config.js`). Environment is `jsdom`.
 - `src/setupTests.js` mocks: `wppoSettings` (translations), `window.matchMedia`, and `@wordpress/components` (ToggleControl → plain checkbox)
 - Global `wppoSettings` object must be extended per-test (`apiUrl`, `nonce`, `settings`, etc.)
-- React component tests use `@testing-library/react` + `@testing-library/jest-dom`; the current Jest baseline is 59 suites and 978 tests (measured on `master`, not estimated — re-measure with `npx wp-scripts test-unit-js` before quoting a number here)
+- React component tests use `@testing-library/react` + `@testing-library/jest-dom`. **Do not hardcode a suite or test count here.** Every count recorded in this file went stale within one merge, because any PR that adds or removes a test changes it. Measure the current baseline with
+  `npx wp-scripts test-unit-js`
+and quote that in a report; never copy a number from this file or from an earlier run.
 - **API mocking patterns**:
   - `jest.mock('../../lib/apiRequest', () => ({ apiCall: jest.fn() }))` (preferred for components)
   - `global.fetch = jest.fn()` (used in apiRequest.test.js)
