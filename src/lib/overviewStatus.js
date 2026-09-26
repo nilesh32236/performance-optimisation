@@ -90,10 +90,12 @@ const triState = ( value ) => {
  * Reads the same `cache_settings` the rest of the admin uses. When the feature
  * is off this says "not configured" rather than implying a problem.
  *
- * @param {Object} settings `cache_settings` slice, or undefined.
+ * @param {Object} settings  `cache_settings` slice, or undefined.
+ * @param {string} cacheSize The measured cache size as the plugin renders it,
+ *                           e.g. '14 MB', '0 B' or 'N/A', or undefined.
  * @return {Object} A status row.
  */
-export const deriveCacheStatus = ( settings ) => {
+export const deriveCacheStatus = ( settings, cacheSize ) => {
 	if ( ! settings || typeof settings !== 'object' ) {
 		return {
 			id: 'page-cache',
@@ -111,38 +113,44 @@ export const deriveCacheStatus = ( settings ) => {
 		};
 	}
 
-	// The cache_settings slice the plugin injects carries configuration only —
-	// `enableCache`, `cacheLife`, `ttlOverrides` and so on — and never a
-	// "is it currently serving" flag. So a positive claim needs a backend that
-	// actually supplies one; when none does, this row says Unknown rather than
-	// guessing. Guessing here is how a dashboard tells a user their cache is
-	// working when it is not.
-	const running = triState(
-		settings.cache_enabled ?? settings.cacheEnabled ?? settings.active
-	);
-	if ( running === true ) {
+	// The `cache_settings` slice carries configuration only and never a
+	// "is it serving" flag. The evidence is the cache **statistics** the plugin
+	// already renders into `wppoSettings` from `Cache::get_cache_stats()`,
+	// which is why this is not a restatement of `enableCache`: a cache that is
+	// switched on but storing nothing is a different situation from one serving
+	// pages.
+	// A plain string, deliberately. This parameter once accepted an object and
+	// read `stats.cacheStats`, while `buildStatusModel` passed the raw string —
+	// so production read `undefined` and this row was permanently Unknown, and
+	// the unit tests passed because they used the object shape production never
+	// took. A second green suite over broken production code.
+	const stored = typeof cacheSize === 'string' ? cacheSize.trim() : '';
+
+	// `get_cache_stats()` reports the literal string "N/A" when it cannot
+	// measure, which is not the same as measuring zero.
+	if ( ! stored || stored === 'N/A' ) {
 		return {
 			id: 'page-cache',
 			label: 'Page cache',
-			status: STATUS.HEALTHY,
-			detail: 'Page cache is on and serving cached pages.',
+			status: STATUS.UNKNOWN,
+			detail: 'Page cache is switched on, but the plugin could not read how much it has stored. Open Speed to check the cache status.',
 		};
 	}
-	if ( running === false ) {
+	// A measured zero is a real fact, but not a fault: a freshly cleared cache
+	// legitimately holds nothing, and the next request repopulates it.
+	if ( /^0(?:\.0+)?\s*(?:b|bytes?)$/i.test( stored ) ) {
 		return {
 			id: 'page-cache',
 			label: 'Page cache',
-			status: STATUS.ATTENTION,
-			detail: 'Page cache is switched on but is not serving cached pages. Check the cache settings under Speed.',
+			status: STATUS.NOT_CONFIGURED,
+			detail: 'Page cache is switched on but nothing is cached yet. The next visitor will generate a page.',
 		};
 	}
-	// Enabled, but the backend did not report a running state. Honest, neither
-	// optimistic nor an invented problem.
 	return {
 		id: 'page-cache',
 		label: 'Page cache',
-		status: STATUS.UNKNOWN,
-		detail: 'Page cache is switched on. This page cannot confirm it is serving — open Speed to check the cache status.',
+		status: STATUS.HEALTHY,
+		detail: `Page cache is on, with ${ stored } of cached pages stored.`,
 	};
 };
 
@@ -165,7 +173,13 @@ export const deriveObjectCacheStatus = ( state ) => {
 			detail: 'Object cache state is not available right now.',
 		};
 	}
-	if ( ! state.enabled ) {
+	// Every flag goes through `triState`. An independent review reproduced
+	// `{ enabled: 'false', redis_reachable: true }` rendering as a *working*
+	// object cache, because a truthiness check treats the string "false" as
+	// true. A filter can return a string, and that is exactly how a disabled
+	// feature gets reported as working.
+	const enabled = triState( state.enabled );
+	if ( enabled === false ) {
 		return {
 			id: 'object-cache',
 			label: 'Object cache',
@@ -173,7 +187,16 @@ export const deriveObjectCacheStatus = ( state ) => {
 			detail: 'Object cache (Redis or Memcached) is off. Useful for busy or dynamic sites; not needed everywhere.',
 		};
 	}
-	if ( state.foreign_dropin ) {
+	if ( enabled === null ) {
+		// Neither on nor off: say so, rather than quietly picking one.
+		return {
+			id: 'object-cache',
+			label: 'Object cache',
+			status: STATUS.UNKNOWN,
+			detail: 'The plugin did not report whether the object cache is enabled.',
+		};
+	}
+	if ( triState( state.foreign_dropin ) === true ) {
 		return {
 			id: 'object-cache',
 			label: 'Object cache',
@@ -196,6 +219,35 @@ export const deriveObjectCacheStatus = ( state ) => {
 	// Reachable is the whole claim. If the backend never reported it we do not
 	// know whether the cache is doing anything, and "healthy" would be a guess
 	// dressed as a fact.
+	// `get_status()` also reports the outage-bypass flag and the circuit
+	// breaker. When either is set the cache is deliberately or currently not in
+	// use, so calling it working would be the most misleading claim on the page
+	// — a Redis the plugin has stopped trusting, reported as healthy. The review
+	// reproduced this live with `{ bypassed: true, circuit_open: true }`.
+	if ( triState( state.circuit_open ) === true ) {
+		return {
+			id: 'object-cache',
+			label: 'Object cache',
+			status: STATUS.ATTENTION,
+			detail: 'Object cache is enabled but the safety breaker is open, so it is switched off until it recovers.',
+		};
+	}
+	if ( triState( state.bypassed ) === true ) {
+		return {
+			id: 'object-cache',
+			label: 'Object cache',
+			status: STATUS.ATTENTION,
+			detail: 'Object cache is enabled but is currently bypassed because of recent failures.',
+		};
+	}
+	if ( triState( state.redis_missing ) === true ) {
+		return {
+			id: 'object-cache',
+			label: 'Object cache',
+			status: STATUS.ATTENTION,
+			detail: 'Object cache is enabled but the Redis extension is not available, so it cannot be used.',
+		};
+	}
 	if ( reachable === true ) {
 		return {
 			id: 'object-cache',
@@ -297,7 +349,16 @@ export const deriveVitalsStatus = ( vitals ) => {
 	return measures
 		.filter( ( measure ) => measure.key in vitals )
 		.map( ( measure ) => {
-			const raw = Number( vitals[ measure.key ] );
+			// `Number( null )`, `Number( '' )`, `Number( [] )` and
+			// `Number( false )` are all 0, and 0 <= 2500, so an unreported vital
+			// scored a *perfect* result. The review reproduced three green
+			// "good at 0 ms" rows on a site with no data at all. Only a genuine
+			// finite, non-negative number counts as a measurement.
+			const candidate = vitals[ measure.key ];
+			const isNumber =
+				typeof candidate === 'number' ||
+				( typeof candidate === 'string' && candidate.trim() !== '' );
+			const raw = isNumber ? Number( candidate ) : Number.NaN;
 			if ( ! Number.isFinite( raw ) || raw < 0 ) {
 				return {
 					id: measure.id,
@@ -378,7 +439,7 @@ export const deriveOverallStatus = ( rows ) => {
  */
 export const buildStatusModel = ( payload = {} ) => {
 	const rows = [
-		deriveCacheStatus( payload.cacheSettings ),
+		deriveCacheStatus( payload.cacheSettings, payload.cacheStats ),
 		deriveObjectCacheStatus( payload.objectCache ),
 		deriveCompatibilityStatus( payload.systemInfo ),
 	];

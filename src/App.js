@@ -314,12 +314,12 @@ const App = () => {
 			overview: (
 				<Overview
 					onNavigate={ handleTabChange }
-					activities={ recentActivities?.activities }
+					activities={ recentActivities }
 				/>
 			),
 			dashboard: (
 				<Dashboard
-					activities={ recentActivities?.activities }
+					activities={ recentActivities }
 					activitiesError={ activitiesError }
 					cacheSettings={ settings.cache_settings }
 					userRoles={
@@ -531,7 +531,16 @@ const App = () => {
 					activitiesController.signal
 				);
 				if ( ! activitiesController.signal.aborted ) {
-					setRecentActivities( data );
+					// `fetchRecentActivities` resolves the `{ success, data, message }`
+					// envelope, but both consumers read `activities.activities`.
+					// Storing the envelope made that permanently undefined, so a
+					// site with 42,091 logged entries rendered "No optimisation
+					// activity recorded yet." The dashboard reported no activity
+					// because of a shape mismatch, not because there was none.
+					const rows = Array.isArray( data )
+						? data
+						: data?.activities ?? data?.data?.activities;
+					setRecentActivities( Array.isArray( rows ) ? rows : [] );
 					setActivitiesError( false );
 					hasFetchedActivities.current = true;
 				}

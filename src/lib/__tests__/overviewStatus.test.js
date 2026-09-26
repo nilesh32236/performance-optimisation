@@ -20,44 +20,65 @@ import {
 
 describe( 'deriveCacheStatus', () => {
 	it( 'says not-configured, not unhealthy, when the cache is off', () => {
-		const row = deriveCacheStatus( { enableCache: false } );
+		const row = deriveCacheStatus( { enableCache: false }, '14 MB' );
 		expect( row.status ).toBe( STATUS.NOT_CONFIGURED );
 		expect( needsAttention( row.status ) ).toBe( false );
 	} );
 
-	it( 'says healthy only when the backend positively reports it running', () => {
+	it( 'takes the measured size the same way production supplies it', () => {
+		// This is the regression that shipped: the function read
+		// `stats.cacheStats` from an object while buildStatusModel passed the
+		// plain string, so every unit test using the object shape passed and
+		// production read `undefined`. This test uses the call-site shape.
 		expect(
-			deriveCacheStatus( { enableCache: true, cache_enabled: true } )
-				.status
+			deriveCacheStatus( { enableCache: true }, '14 MB' ).status
 		).toBe( STATUS.HEALTHY );
 	} );
 
-	it( 'flags attention when enabled but not serving', () => {
+	it( 'takes the measured size exactly as production supplies it', () => {
+		// The regression that shipped: the function read `stats.cacheStats` from
+		// an object while buildStatusModel passed a plain string, so every unit
+		// test using the object shape passed and production read `undefined`.
 		expect(
-			deriveCacheStatus( { enableCache: true, cache_enabled: false } )
-				.status
-		).toBe( STATUS.ATTENTION );
-	} );
-
-	it( 'does NOT claim healthy when enabled but the state is unknown', () => {
-		const row = deriveCacheStatus( { enableCache: true } );
-		expect( row.status ).not.toBe( STATUS.HEALTHY );
-		expect( row.status ).toBe( STATUS.UNKNOWN );
-		// And the user is told where to look, rather than left guessing.
-		expect( row.detail ).toMatch( /Speed/ );
-	} );
-
-	it( 'does not treat the string "false" as truthy', () => {
-		// A filter can hand back a string. Treating it as truthy is how a
-		// disabled cache gets reported as healthy.
-		expect(
-			deriveCacheStatus( { enableCache: true, cache_enabled: 'false' } )
-				.status
-		).toBe( STATUS.ATTENTION );
-		expect(
-			deriveCacheStatus( { enableCache: true, cache_enabled: 'true' } )
-				.status
+			deriveCacheStatus( { enableCache: true }, '14 MB' ).status
 		).toBe( STATUS.HEALTHY );
+	} );
+
+	it( 'reports working from the real cache statistics, not from enableCache', () => {
+		// A cache that is switched on but storing nothing is a different
+		// situation from one serving pages, so the evidence is the measured
+		// statistics rather than the setting.
+		const row = deriveCacheStatus( { enableCache: true }, '14 MB' );
+		expect( row.status ).toBe( STATUS.HEALTHY );
+		expect( row.detail ).toContain( '14 MB' );
+	} );
+
+	it( 'treats a measured zero as a choice, not a fault', () => {
+		// A freshly cleared cache legitimately holds nothing, and the next
+		// request repopulates it. Calling that "needs attention" would be wrong.
+		const row = deriveCacheStatus( { enableCache: true }, '0 B' );
+		expect( row.status ).toBe( STATUS.NOT_CONFIGURED );
+		expect( needsAttention( row.status ) ).toBe( false );
+	} );
+
+	it( 'treats the literal "N/A" as unknown, not as zero', () => {
+		// Cache::get_cache_stats() reports "N/A" when it cannot measure, which
+		// is not the same as having measured nothing.
+		expect( deriveCacheStatus( { enableCache: true }, 'N/A' ).status ).toBe(
+			STATUS.UNKNOWN
+		);
+	} );
+
+	it( 'stays honest when the statistics are absent entirely', () => {
+		expect( deriveCacheStatus( { enableCache: true } ).status ).toBe(
+			STATUS.UNKNOWN
+		);
+		expect( deriveCacheStatus( { enableCache: true } ).status ).toBe(
+			STATUS.UNKNOWN
+		);
+		expect( deriveCacheStatus( { enableCache: true }, '' ).status ).toBe(
+			STATUS.UNKNOWN
+		);
 	} );
 
 	it( 'reports unavailable rather than throwing on missing data', () => {
@@ -69,6 +90,78 @@ describe( 'deriveCacheStatus', () => {
 } );
 
 describe( 'deriveObjectCacheStatus', () => {
+	it( 'does NOT report a working cache when enabled is the string "false"', () => {
+		// The single most important regression here. A truthiness check reads
+		// the string "false" as true, which reported a *disabled* object cache as
+		// working. The review reproduced this on the live page.
+		[ 'false', '0', 0, '', null, [], {} ].forEach( ( value ) => {
+			const row = deriveObjectCacheStatus( {
+				enabled: value,
+				redis_reachable: true,
+			} );
+			expect( row.status ).not.toBe( STATUS.HEALTHY );
+		} );
+	} );
+
+	it( 'does NOT report a foreign drop-in when the flag is the string "false"', () => {
+		// The mirror bug on the neighbouring field.
+		expect(
+			deriveObjectCacheStatus( {
+				enabled: true,
+				redis_reachable: true,
+				foreign_dropin: 'false',
+			} ).status
+		).not.toBe( STATUS.ATTENTION );
+	} );
+
+	it( 'reports unknown when the plugin did not say whether it is enabled', () => {
+		// Neither on nor off: the row must not pick one.
+		expect(
+			deriveObjectCacheStatus( { redis_reachable: true } ).status
+		).toBe( STATUS.UNKNOWN );
+	} );
+
+	it( 'treats an open circuit breaker as a problem, not as working', () => {
+		// Reproduced live by the review: bypassed:true, circuit_open:true still
+		// rendered a green "Working" badge.
+		const row = deriveObjectCacheStatus( {
+			enabled: true,
+			redis_reachable: true,
+			circuit_open: true,
+		} );
+		expect( row.status ).toBe( STATUS.ATTENTION );
+		expect( row.detail ).toMatch( /breaker/i );
+	} );
+
+	it( 'treats an outage bypass as a problem, not as working', () => {
+		expect(
+			deriveObjectCacheStatus( {
+				enabled: true,
+				redis_reachable: true,
+				bypassed: true,
+			} ).status
+		).toBe( STATUS.ATTENTION );
+	} );
+
+	it( 'treats a missing Redis extension as a problem, not as working', () => {
+		expect(
+			deriveObjectCacheStatus( {
+				enabled: true,
+				redis_reachable: true,
+				redis_missing: true,
+			} ).status
+		).toBe( STATUS.ATTENTION );
+	} );
+
+	it( 'reports a working cache only when enabled, reachable, and not bypassed', () => {
+		expect(
+			deriveObjectCacheStatus( {
+				enabled: true,
+				redis_reachable: true,
+			} ).status
+		).toBe( STATUS.HEALTHY );
+	} );
+
 	it( 'treats a site without object cache as a choice, not a problem', () => {
 		expect( deriveObjectCacheStatus( { enabled: false } ).status ).toBe(
 			STATUS.NOT_CONFIGURED
@@ -175,6 +268,17 @@ describe( 'deriveVitalsStatus', () => {
 		expect( deriveVitalsStatus( { cls: 0.3 } )[ 0 ].status ).toBe(
 			STATUS.ATTENTION
 		);
+	} );
+
+	it( 'reports an UNREPORTED vital as unknown, never as a perfect zero', () => {
+		// Number(null), Number(''), Number([]) and Number(false) are all 0, and
+		// 0 <= 2500. The review reproduced three green "good at 0 ms" rows on a
+		// site with no measurement at all.
+		[ null, '', [], false, NaN, '  ', {} ].forEach( ( value ) => {
+			const row = deriveVitalsStatus( { lcp: value } )[ 0 ];
+			expect( row.status ).toBe( STATUS.UNKNOWN );
+			expect( row.detail ).not.toMatch( /good at 0/ );
+		} );
 	} );
 
 	it( 'reports a nonsense measurement as unknown, never as healthy', () => {

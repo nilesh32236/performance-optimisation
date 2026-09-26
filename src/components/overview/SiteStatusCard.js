@@ -20,20 +20,27 @@ import { ALL_STATUSES, needsAttention } from '../../lib/overviewStatus';
  */
 const badgeFor = ( status ) => {
 	switch ( status ) {
+		// The tones are the design system's own vocabulary
+		// (`--good`/`--poor`/`--unknown`/`--warning` in
+		// `_performance-audit.scss`). The first version invented
+		// `success`/`error`/`neutral`, none of which exist, so "Working",
+		// "Needs attention" and "Not set up" all rendered with no background,
+		// no border and no colour — and the most important state on the page
+		// was the least prominent.
 		case 'healthy':
 			return {
 				label: __( 'Working', 'performance-optimisation' ),
-				tone: 'success',
+				tone: 'good',
 			};
 		case 'attention':
 			return {
 				label: __( 'Needs attention', 'performance-optimisation' ),
-				tone: 'error',
+				tone: 'poor',
 			};
 		case 'not-configured':
 			return {
 				label: __( 'Not set up', 'performance-optimisation' ),
-				tone: 'neutral',
+				tone: 'unknown',
 			};
 		case 'unavailable':
 			return {

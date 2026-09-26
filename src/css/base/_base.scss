@@ -253,3 +253,27 @@ alternative to the WP core screen-reader-text class). */
 	white-space: nowrap;
 	border: 0;
 }
+
+/**
+ * Visually hidden, still announced.
+ *
+ * The first Overview referenced `.wppo-visually-hidden` for its live-region
+ * summary, but no stylesheet defined it — an independent review measured the
+ * element at 492×20px and fully visible, so every user saw a redundant
+ * "Overall status: Working" line duplicating the badge beside it.
+ *
+ * This is the standard clip-based implementation rather than `display: none`,
+ * which would remove the text from the accessibility tree and silence the very
+ * announcement the class exists for.
+ */
+.wppo-visually-hidden {
+	position: absolute !important;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect( 0, 0, 0, 0 );
+	white-space: nowrap;
+	border: 0;
+}
