@@ -11,15 +11,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import ConfirmDialog from './components/common/ConfirmDialog';
 import UnsavedChangesContext from './lib/UnsavedChangesContext';
 import {
-	faTachometerAlt,
-	faFileCode,
-	faBullseye,
-	faImages,
-	faDatabase,
-	faTools,
 	faBars,
 	faTimes,
-	faServer,
 	faBolt,
 	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
@@ -31,6 +24,20 @@ import {
 } from './lib/apiRequest';
 import useServerRules from './lib/useServerRules';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import SectionShell from './components/SectionShell';
+import { readSection, readView, useSectionRoute } from './lib/useSectionRoute';
+import {
+	DEFAULT_SECTION,
+	SECTIONS,
+	SECTION_IDS,
+	LEGACY_TO_AREA,
+	areaForView,
+	itemsForSection,
+} from './lib/informationArchitecture';
+
+// Ids of the screens an area owns, for validating a `view` deep link.
+const sectionItems = ( sectionId ) =>
+	itemsForSection( sectionId ).map( ( item ) => item.id );
 
 import { __ } from '@wordpress/i18n';
 
@@ -96,7 +103,37 @@ export const isSafeCssColor = ( value ) =>
 	/^#[0-9a-fA-F]{3,4}$|^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/.test( value );
 
 const App = () => {
-	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
+	// The URL is the source of truth for which area is open. Proven live to be
+	// absent before this: walking every tab left location.href unchanged, so a
+	// refresh lost the section and Back/Forward did nothing.
+	const { active: activeSection, navigate: setActiveSection } =
+		useSectionRoute( {
+			defaultSection: DEFAULT_SECTION,
+			sections: SECTION_IDS,
+		} );
+	// Which screen inside the area. Reset to the area's first screen whenever the
+	// area changes, so a bookmarked sub-screen never leaks across areas.
+	const [ activeView, setActiveView ] = useState( () => {
+		const section = readSection(
+			window.location.search,
+			DEFAULT_SECTION,
+			SECTION_IDS
+		);
+		// A `view` deep link is only honoured when the area that owns it is also
+		// the one named in the URL, so ?section=manage&view=preload cannot open a
+		// Speed screen while the sidebar says Manage. Failing that, fall back to
+		// the first screen OF THE SECTION THE URL NAMED — a hardcoded fallback
+		// here is what made ?section=media render an Overview header.
+		return (
+			readView(
+				window.location.search,
+				section,
+				sectionItems( section )
+			) ??
+			itemsForSection( section )[ 0 ]?.id ??
+			'dashboard'
+		);
+	} );
 	const [ transition, setTransition ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
@@ -124,69 +161,67 @@ const App = () => {
 	const sidebarRef = useRef( null );
 	const toggleBtnRef = useRef( null );
 
-	const sidebarItems = useMemo(
-		() => [
-			{
-				name: 'dashboard',
-				icon: faTachometerAlt,
-				label: __( 'Dashboard', 'performance-optimisation' ),
-			},
-			{
-				name: 'fileOptimization',
-				icon: faFileCode,
-				label: __( 'File Optimisation', 'performance-optimisation' ),
-			},
-			{
-				name: 'preload',
-				icon: faBullseye,
-				label: __( 'Preload', 'performance-optimisation' ),
-			},
-			{
-				name: 'imageOptimization',
-				icon: faImages,
-				label: __( 'Image Optimisation', 'performance-optimisation' ),
-			},
-			{
-				name: 'databaseCleanup',
-				icon: faDatabase,
-				label: __( 'Database', 'performance-optimisation' ),
-			},
-			{
-				name: 'objectCache',
-				icon: faServer,
-				label: __( 'Object Cache', 'performance-optimisation' ),
-			},
-			{
-				name: 'tools',
-				icon: faTools,
-				label: __( 'Tools', 'performance-optimisation' ),
-			},
-		],
-		[]
-	);
+	const sidebarItems = useMemo( () => SECTIONS, [] );
 
+	// Changing area. The dirty-form guard is unchanged in behaviour: it still
+	// intercepts a navigation away from unsaved work and routes it through the
+	// confirm dialog.
 	const handleTabChange = useCallback(
-		( nextTab ) => {
-			if ( isDirty && nextTab !== activeTab ) {
-				setPendingTab( nextTab );
+		( nextSection ) => {
+			if ( isDirty && nextSection !== activeSection ) {
+				setPendingTab( nextSection );
 				setShowGuard( true );
 				return;
 			}
-			setActiveTab( nextTab );
+			setActiveSection( nextSection );
+			setActiveView(
+				itemsForSection( nextSection )[ 0 ]?.id ?? 'dashboard'
+			);
 			setMobileMenuOpen( false );
 		},
-		[ isDirty, activeTab ]
+		[ isDirty, activeSection, setActiveSection ]
 	);
+
+	// Changing the screen inside the current area. No reload, no guard: the
+	// form being left is part of the same area the user is already in.
+	const handleViewChange = useCallback( ( nextView ) => {
+		setActiveView( nextView );
+	}, [] );
+
+	// A legacy deep link (tab=fileOptimization, or the old ?tab= param) must
+	// still resolve to something useful rather than dumping the user on
+	// Overview with no explanation.
+	const legacyTarget = useMemo( () => {
+		const params = new URLSearchParams( window.location.search );
+		const legacy = params.get( 'tab' );
+		if ( legacy && LEGACY_TO_AREA[ legacy ] ) {
+			return LEGACY_TO_AREA[ legacy ];
+		}
+		const view = params.get( 'view' );
+		const owner = areaForView( view );
+		return owner ? { section: owner.id, view } : null;
+	}, [] );
+
+	useEffect( () => {
+		if ( ! legacyTarget ) {
+			return;
+		}
+		setActiveSection( legacyTarget.section );
+		setActiveView( legacyTarget.view );
+	}, [ legacyTarget, setActiveSection ] );
 
 	const confirmDiscard = useCallback( () => {
 		setShowGuard( false );
 		setIsDirty( false );
 		if ( pendingTab ) {
-			setActiveTab( pendingTab );
+			setActiveSection( pendingTab );
+			setActiveView(
+				itemsForSection( pendingTab )[ 0 ]?.id ?? 'dashboard'
+			);
 			setMobileMenuOpen( false );
 			setPendingTab( null );
 		}
-	}, [ pendingTab ] );
+	}, [ pendingTab, setActiveSection ] );
 
 	const cancelGuard = useCallback( () => {
 		setShowGuard( false );
@@ -256,12 +291,23 @@ const App = () => {
 			tools: <PluginSettings options={ settings } />,
 		};
 
-		const activeComponent = components[ activeTab ] || components.dashboard;
+		const activeComponent =
+			components[ activeView ] || components.dashboard;
+		const area = areaForView( activeView ) ?? sidebarItems[ 0 ];
 
 		return (
-			<Suspense fallback={ <TabFallback /> }>
-				{ activeComponent }
-			</Suspense>
+			<SectionShell
+				id={ area.id }
+				title={ area.label }
+				purpose={ area.purpose }
+				items={ itemsForSection( area.id ) }
+				activeId={ activeView }
+				onSelect={ handleViewChange }
+			>
+				<Suspense fallback={ <TabFallback /> }>
+					{ activeComponent }
+				</Suspense>
+			</SectionShell>
 		);
 	};
 
@@ -381,8 +427,8 @@ const App = () => {
 		// a no-op, and aborting its controller would kill unrelated
 		// in-flight requests on every tab change.
 		const wantActivities =
-			( activeTab === 'overview' ||
-				activeTab === 'dashboard' ||
+			( activeSection === 'overview' ||
+				activeView === 'dashboard' ||
 				recentActivities.length === 0 ) &&
 			! hasFetchedActivities.current;
 		const wantCcss = ! hasFetchedCcss.current || 0 !== ccssRefreshTrigger;
@@ -403,8 +449,8 @@ const App = () => {
 		const fetchActivities = async () => {
 			if (
 				! (
-					( activeTab === 'overview' ||
-						activeTab === 'dashboard' ||
+					( activeSection === 'overview' ||
+						activeView === 'dashboard' ||
 						recentActivities.length === 0 ) &&
 					! hasFetchedActivities.current
 				)
@@ -488,13 +534,13 @@ const App = () => {
 		// fetch and could abort the parallel CCSS request when sibling
 		// state resolves first.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ activeTab, ccssRefreshTrigger ] );
+	}, [ activeSection, activeView, ccssRefreshTrigger ] );
 
 	useEffect( () => {
 		setTransition( true );
 		const timeout = setTimeout( () => setTransition( false ), 400 );
 		return () => clearTimeout( timeout );
-	}, [ activeTab ] );
+	}, [ activeSection, activeView ] );
 
 	const wppoVersion = getWppoSettings()?.version ?? '';
 
@@ -586,20 +632,20 @@ const App = () => {
 					>
 						<ul>
 							{ sidebarItems.map( ( item ) => (
-								<li key={ item.name }>
+								<li key={ item.id }>
 									<button
 										className={
-											activeTab === item.name
+											activeSection === item.id
 												? 'wppo-is-active'
 												: ''
 										}
 										aria-current={
-											activeTab === item.name
+											activeSection === item.id
 												? 'page'
 												: undefined
 										}
 										onClick={ () =>
-											handleTabChange( item.name )
+											handleTabChange( item.id )
 										}
 									>
 										<FontAwesomeIcon
