@@ -123,6 +123,11 @@ class SchedulerCronPrimitivesTest extends \PHPUnit\Framework\TestCase {
 			),
 			'file_optimisation' => array(
 				'removeUnusedCSS' => true,
+				// The fixture is named "all features enabled" but omitted this
+				// key, so the Critical CSS event was scheduled unconditionally
+				// and the omission was invisible. Now that the schedule is gated
+				// on the setting, the fixture must actually enable it.
+				'criticalCSS'     => true,
 			),
 		);
 	}
