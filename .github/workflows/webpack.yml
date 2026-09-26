@@ -149,3 +149,10 @@ jobs:
 
       - name: Model intelligence tests
         run: npm run test:model-registry
+
+      # The deploy guard exists because an `rsync --delete` from the wrong
+      # worktree twice removed the Overview from production. A guard that
+      # silently stops working is worse than no guard, so it is tested here
+      # rather than when someone remembers.
+      - name: Test the deploy guard
+        run: bash tests/shell/test-deploy-guard.sh
