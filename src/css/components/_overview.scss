@@ -1,0 +1,158 @@
+/**
+ * The Overview landing page.
+ *
+ * A two-column grid on wide screens, one column on narrow. The columns are the
+ * primary left / secondary right reading order, expressed with logical
+ * properties so the layout mirrors in RTL.
+ *
+ * Status badges carry meaning by colour *and* by text, so the state is never
+ * conveyed by colour alone — the row text says the same thing in words.
+ *
+ * The only token consumed is `--wppo-focus-ring`, which is a **box-shadow**
+ * triple in this design system; the same way `_forms.scss` uses it. Using it as
+ * an `outline` colour produces an invalid shorthand and no visible focus.
+ */
+
+.wppo-overview {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 16px;
+	align-items: start;
+}
+
+.wppo-overview__card {
+	grid-column: 1;
+	min-width: 0;
+}
+
+.wppo-overview__card-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-block-end: 12px;
+}
+
+.wppo-overview__status-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.wppo-overview__status {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.wppo-overview__status--attention {
+	// A left rule, expressed logically so RTL mirrors it. This is decoration:
+	// the row already says "Needs attention" in words.
+	padding-inline-start: 12px;
+	border-inline-start: 3px solid var(--wppo-danger, #d63638);
+}
+
+.wppo-overview__status-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex: 1 1 16rem;
+	min-width: 0;
+}
+
+.wppo-overview__status-name {
+	font-weight: 600;
+	color: var(--wppo-text-main, #0f172a);
+}
+
+.wppo-overview__status-detail {
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--wppo-text-muted, #475569);
+}
+
+.wppo-overview__action-hint {
+	margin: 6px 0 0;
+	font-size: 13px;
+	color: var(--wppo-text-muted, #475569);
+}
+
+.wppo-overview__links {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 14px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.wppo-overview__links .wppo-button--link {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	justify-content: flex-start;
+	text-align: start;
+}
+
+.wppo-overview__links .wppo-button--link:focus-visible {
+	outline: none;
+	box-shadow: var(--wppo-focus-ring);
+}
+
+.wppo-overview__activity {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.wppo-overview__activity li {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: space-between;
+	font-size: 14px;
+}
+
+.wppo-overview__activity-time {
+	color: var(--wppo-text-muted, #475569);
+	font-size: 13px;
+}
+
+.wppo-overview__placeholder {
+	margin: 0;
+	padding: 12px 0;
+	color: var(--wppo-text-muted, #475569);
+}
+
+/* Two columns only when there is genuinely room for them. */
+@media ( min-width: 1100px ) {
+	.wppo-overview {
+		grid-template-columns: minmax( 0, 2fr ) minmax( 0, 1fr );
+	}
+
+	// Status and activity read first; actions sit in the side column.
+	.wppo-overview__card:nth-of-type( 1 ),
+	.wppo-overview__card:nth-of-type( 3 ) {
+		grid-column: 1;
+	}
+
+	.wppo-overview__card:nth-of-type( 2 ) {
+		grid-column: 2;
+		grid-row: 1;
+	}
+}
+
+// Touch targets on the action links.
+@media ( max-width: 782px ) {
+	.wppo-overview__links .wppo-button--link {
+		min-height: 44px;
+	}
+}
