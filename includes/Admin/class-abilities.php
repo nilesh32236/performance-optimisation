@@ -1382,7 +1382,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				$urls[] = esc_url_raw( $input['url'] );
 			}
 			if ( ! empty( $input['urls'] ) && is_array( $input['urls'] ) ) {
-				$urls = array_merge( $urls, array_values( array_filter( array_map( 'esc_url_raw', $input['urls'] ) ) ) );
+				$urls = array_merge( $urls, array_values( array_filter( array_map( 'esc_url_raw', array_filter( $input['urls'], 'is_string' ) ) ) ) );
 			}
 			if ( empty( $urls ) && class_exists( LiteSpeed_Crawler::class ) ) {
 				$urls = LiteSpeed_Crawler::get_urls_to_crawl( 20 );

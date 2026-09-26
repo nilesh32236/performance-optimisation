@@ -1211,6 +1211,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// matching the _wpnonce read order below so a mixed-source
 			// request cannot route one source's block against the other's
 			// nonce scope.
+			// Intentional read order: block is read before wp_verify_nonce() runs
+			// (line ~1233) because it scopes the per-block throttle bucket and the
+			// nonce-refresh branch. Values are is_string-guarded, unslashed, and
+			// sanitize_text_field()-cleaned here, and output stays wp_kses-filtered
+			// until verification completes below.
 			$block = '';
 			if ( isset( $_POST['block'] ) && is_string( $_POST['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
 				$block = strtolower( sanitize_text_field( wp_unslash( $_POST['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing

@@ -187,7 +187,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 1006,
+        "lines": 1014,
         "methods": 16,
         "public_methods": 6,
         "large_methods": 2,
@@ -195,7 +195,7 @@
         "largest_method": {
             "name": "render_asset_manager_metabox",
             "line": 138,
-            "lines": 342
+            "lines": 350
         },
         "method_prefixes": {
             "save": 3,
@@ -661,7 +661,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Assets",
-        "lines": 1554,
+        "lines": 1555,
         "methods": 30,
         "public_methods": 30,
         "large_methods": 2,
@@ -696,7 +696,7 @@
         "private_state_properties": 1,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 55,
+        "external_dependencies": 56,
         "wordpress_dependencies": 7,
         "filesystem_dependencies": 8,
         "network_dependencies": 0,
@@ -777,7 +777,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Assets",
-        "lines": 1033,
+        "lines": 1037,
         "methods": 18,
         "public_methods": 14,
         "large_methods": 3,
@@ -807,7 +807,7 @@
         "private_state_properties": 3,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 52,
+        "external_dependencies": 53,
         "wordpress_dependencies": 17,
         "filesystem_dependencies": 9,
         "network_dependencies": 1,
@@ -1115,7 +1115,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "CSS",
-        "lines": 4961,
+        "lines": 4962,
         "methods": 94,
         "public_methods": 47,
         "large_methods": 8,
@@ -1756,9 +1756,9 @@
         "private_state_properties": 11,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 84,
+        "external_dependencies": 83,
         "wordpress_dependencies": 26,
-        "filesystem_dependencies": 21,
+        "filesystem_dependencies": 20,
         "network_dependencies": 1,
         "database_dependencies": 0,
         "feature_dependencies": 3,
@@ -1915,7 +1915,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Compatibility",
-        "lines": 637,
+        "lines": 640,
         "methods": 14,
         "public_methods": 9,
         "large_methods": 3,
@@ -1923,7 +1923,7 @@
         "largest_method": {
             "name": "serve",
             "line": 113,
-            "lines": 118
+            "lines": 121
         },
         "method_prefixes": {
             "emit": 2,
@@ -3749,14 +3749,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Insight",
-        "lines": 3348,
+        "lines": 3354,
         "methods": 63,
         "public_methods": 28,
         "large_methods": 7,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "flush_queue",
-            "line": 2066,
+            "line": 2072,
             "lines": 328
         },
         "method_prefixes": {
@@ -3879,7 +3879,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Insight",
-        "lines": 999,
+        "lines": 1010,
         "methods": 24,
         "public_methods": 14,
         "large_methods": 2,
@@ -3909,7 +3909,7 @@
         "public_state_properties": 0,
         "external_dependencies": 58,
         "wordpress_dependencies": 17,
-        "filesystem_dependencies": 6,
+        "filesystem_dependencies": 5,
         "network_dependencies": 0,
         "database_dependencies": 3,
         "feature_dependencies": 6,
@@ -3918,7 +3918,7 @@
         "fan_in": 6,
         "fan_out": 7,
         "incoming_reference_evidence": 8,
-        "outgoing_reference_evidence": 23,
+        "outgoing_reference_evidence": 25,
         "runtime_fan_in": 6,
         "runtime_fan_out": 7,
         "compatibility_fan_in": 0,
@@ -4132,7 +4132,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Integrations",
-        "lines": 1780,
+        "lines": 1785,
         "methods": 29,
         "public_methods": 18,
         "large_methods": 6,
@@ -4140,7 +4140,7 @@
         "largest_method": {
             "name": "handle_ajax_fragment",
             "line": 1208,
-            "lines": 172
+            "lines": 177
         },
         "method_prefixes": {
             "is": 4,
@@ -4995,7 +4995,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Support",
-        "lines": 883,
+        "lines": 887,
         "methods": 24,
         "public_methods": 17,
         "large_methods": 0,
@@ -5003,7 +5003,7 @@
         "largest_method": {
             "name": "is_url_excluded",
             "line": 184,
-            "lines": 63
+            "lines": 67
         },
         "method_prefixes": {
             "normalize": 6,
@@ -5026,8 +5026,8 @@
         "private_state_properties": 5,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 40,
-        "wordpress_dependencies": 8,
+        "external_dependencies": 41,
+        "wordpress_dependencies": 9,
         "filesystem_dependencies": 1,
         "network_dependencies": 0,
         "database_dependencies": 0,
@@ -5054,7 +5054,7 @@
         "kind": "procedural",
         "scope": "runtime",
         "domain": "Support",
-        "lines": 623,
+        "lines": 624,
         "methods": 0,
         "public_methods": 0,
         "large_methods": 0,
@@ -5234,7 +5234,7 @@
         "duplicate_code_candidates": 1,
         "fan_in": 60,
         "fan_out": 9,
-        "incoming_reference_evidence": 1080,
+        "incoming_reference_evidence": 1082,
         "outgoing_reference_evidence": 116,
         "runtime_fan_in": 60,
         "runtime_fan_out": 9,

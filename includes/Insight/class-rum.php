@@ -1078,7 +1078,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					if ( function_exists( 'wp_rand' ) ) {
 						$roll = (int) wp_rand( 1, 100 );
 					} else {
-						$roll = mt_rand( 1, 100 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand
+						try {
+							$roll = random_int( 1, 100 );
+						} catch ( \Throwable $e ) {
+							// CSPRNG unavailable: fail open so sampling never blocks RUM.
+							unset( $e );
+							return true;
+						}
 					}
 				}
 				if ( $roll < 1 || $roll > 100 ) {
