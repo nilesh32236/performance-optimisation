@@ -9,6 +9,7 @@ import {
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
+import { invalidateObjectCacheStatus } from '../lib/objectCacheStatus';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -322,6 +323,16 @@ const ObjectCache = ( { options = {} } ) => {
 						__( 'Action failed.', 'performance-optimisation' ),
 					durationMs: 5000,
 				} );
+
+				// The Overview memoises the object-cache status for the page session, so
+				// that navigating around does not re-hit a throttled endpoint. Every
+				// action here changes exactly that status, so without this the user
+				// could enable Redis here, go back to Overview, and be told the object
+				// cache is switched off until they reloaded the page.
+				//
+				// A *failed* action is deliberately not invalidating: nothing changed, and
+				// the memo may be holding a perfectly good earlier result.
+				invalidateObjectCacheStatus();
 				return;
 			}
 

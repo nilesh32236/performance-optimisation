@@ -270,6 +270,38 @@ describe( 'deriveVitalsStatus', () => {
 		expect( rows.map( ( r ) => r.id ) ).not.toContain( 'vital-inp' );
 	} );
 
+	it( 'treats a value exactly at the threshold as good, not poor', () => {
+		// **T4** — `raw <= good` versus `raw < good`. A vital landing exactly on
+		// the published boundary is *good*, and flipping that also escalated the
+		// overall verdict, because one ATTENTION row drives it. Nothing tested
+		// the boundary itself.
+		expect( deriveVitalsStatus( { lcp: 2500 } )[ 0 ].status ).toBe(
+			STATUS.HEALTHY
+		);
+		expect( deriveVitalsStatus( { cls: 0.1 } )[ 0 ].status ).toBe(
+			STATUS.HEALTHY
+		);
+		expect( deriveVitalsStatus( { inp: 200 } )[ 0 ].status ).toBe(
+			STATUS.HEALTHY
+		);
+		// One step past the boundary is not.
+		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].status ).toBe(
+			STATUS.ATTENTION
+		);
+		// And a good boundary value must not drag the page verdict down.
+		const { overall } = buildStatusModel( {
+			cacheSettings: { enableCache: true },
+			cacheStats: '14 MB',
+			objectCache: { enabled: true, redis_reachable: true },
+			systemInfo: {
+				php: { version: '8.3' },
+				wordpress: { version: '7.1.2' },
+			},
+			vitals: { lcp: 2500 },
+		} );
+		expect( overall ).toBe( STATUS.HEALTHY );
+	} );
+
 	it( 'applies the published threshold for each vital', () => {
 		expect( deriveVitalsStatus( { lcp: 1000 } )[ 0 ].status ).toBe(
 			STATUS.HEALTHY
