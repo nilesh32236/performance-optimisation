@@ -4566,12 +4566,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.3.0
 		 */
 		public static function add_committed_inline_bytes( int $bytes ): void {
-			try {
-				if ( $bytes > 0 ) {
-					self::$committed_inline_bytes += $bytes;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			if ( $bytes > 0 ) {
+				self::$committed_inline_bytes += $bytes;
 			}
 		}
 
@@ -4584,12 +4580,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.3.0
 		 */
 		public static function get_committed_inline_bytes(): int {
-			try {
-				return self::$committed_inline_bytes > 0 ? (int) self::$committed_inline_bytes : 0;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 0;
-			}
+			return self::$committed_inline_bytes > 0 ? (int) self::$committed_inline_bytes : 0;
 		}
 
 		/**
