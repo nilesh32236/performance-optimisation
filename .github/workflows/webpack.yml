@@ -44,6 +44,14 @@ jobs:
       - name: JS Tests
         run: npm test
 
+      - name: Test the deploy guard
+        # The guard exists because an `rsync --delete` from the wrong worktree
+        # twice removed the Overview from production. A guard that silently
+        # stops working is worse than no guard, so it is tested here rather
+        # than when someone remembers. Placed with lint/test/build so an
+        # unrelated model-registry failure cannot stop exercising it.
+        run: bash tests/shell/test-deploy-guard.sh
+
       - name: Build
         run: npm run build
 

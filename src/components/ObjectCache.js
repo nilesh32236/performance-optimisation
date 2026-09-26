@@ -64,56 +64,96 @@ const getCompressionLabel = ( statusLoaded, supported, key ) => {
 	return '';
 };
 
+/**
+ * The single definition of the object-cache settings shape.
+ *
+ * The defaults and the dirty-state baseline used to be two *independent*
+ * hard-coded lists, and they had already drifted: the plugin schema
+ * (`includes/class-util.php`) declares **13** keys, while both lists carried
+ * **10** — `timeout`, `prefix` and `outage_bypassed` were in neither.
+ *
+ * Because `defaultSettings` spread `...options`, a server value such as
+ * `outage_bypassed` landed in `settings` but could never land in the baseline.
+ * The comparison then differed on first render, so the screen reported itself
+ * dirty before the user had touched anything, and **every** attempt to navigate
+ * away raised a false "You have unsaved changes — Discard?" dialog. The modal
+ * covered the sidebar, so the screen was a trap until the user found Discard.
+ *
+ * One frozen table, used for both, so the key sets cannot diverge again.
+ *
+ * The table lists only the keys the plugin actually reads. The schema in
+ * `includes/class-util.php` declares 13, but it declares *types* and no
+ * values, and `Settings_Store` defaults `object_cache` to an empty array for
+ * back-compat. `timeout` and `prefix` are declared and yet have **no
+ * consumer**: the connect timeout is hardcoded `0.5` in
+ * `Redis_Connect_Helper` and `templates/object-cache.php`, and the drop-in
+ * builds its blog prefix from `$table_prefix`, not from settings. Adding
+ * invented values here would have started writing two keys the plugin never
+ * wrote before. Keys missing from this table are still carried through
+ * `withServerValues`, so nothing the server sends is dropped.
+ */
+const OBJECT_CACHE_DEFAULTS = Object.freeze( {
+	mode: 'standalone',
+	host: '127.0.0.1',
+	port: 6379,
+	password: '',
+	database: 0,
+	nodes: '',
+	master_name: 'mymaster',
+	use_tls: false,
+	persistent: false,
+	compression: 'none',
+	outage_bypassed: false,
+} );
+
+/**
+ * Merge server values over the defaults.
+ *
+ * Every key the server sends is carried, including ones this table does not
+ * list, so a future schema addition is never silently dropped. An explicit
+ * `undefined` is skipped rather than assigned, so it cannot clobber a real
+ * default with a missing one.
+ *
+ * @param {Object} options Values from the server.
+ * @return {Object} A complete settings object.
+ */
+
+const withServerValues = ( options ) => {
+	const merged = { ...OBJECT_CACHE_DEFAULTS };
+	for ( const key of Object.keys( options ) ) {
+		if ( options[ key ] !== undefined ) {
+			merged[ key ] = options[ key ];
+		}
+	}
+	return merged;
+};
+
 const ObjectCache = ( { options = {} } ) => {
 	const hitRatioLabelId = useId();
-	const defaultSettings = {
-		mode: 'standalone',
-		host: '127.0.0.1',
-		port: 6379,
-		password: '',
-		database: 0,
-		nodes: '',
-		master_name: 'mymaster',
-		use_tls: false,
-		persistent: false,
-		compression: 'none',
-		...options,
-	};
+	const defaultSettings = withServerValues( options );
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
-	// Audit #1420: full baseline memoized on option keys with inlined
-	// static defaults (not the per-render defaultSettings identity), so
-	// exhaustive-deps needs no suppression.
+	// The baseline is built from the *same* table as the settings, so the two
+	// can never hold different key sets — which is the whole fix. It is memoised
+	// on the server values so its identity stays stable across renders (the
+	// intent of audit #1420, which had introduced the duplicated list), and it
+	// no longer re-lists the keys.
+	//
+	// The `options` reference is deliberately excluded: depending on it would
+	// recompute the memo on every render, because `App` hands down a freshly
+	// built object each time. `optionsKey` captures the *content*, which is what
+	// the baseline actually depends on. The disable below silences the
+	// `react-hooks/exhaustive-deps` warning about that missing reference; remove
+	// it and the rule reports a missing `options` dep. It is a warning, not an
+	// error — `lint:js` sets no `--max-warnings`, so CI would still pass.
+	const optionsKey = JSON.stringify( options );
 	const memoizedBaseline = useMemo(
-		// Audit #1420: static defaults with explicit per-key fallback
-		// (no duplicate keys) so undefined options never clobber defaults.
-		() => ( {
-			mode: options.mode ?? 'standalone',
-			host: options.host ?? '127.0.0.1',
-			port: options.port ?? 6379,
-			password: options.password ?? '',
-			database: options.database ?? 0,
-			nodes: options.nodes ?? '',
-			master_name: options.master_name ?? 'mymaster',
-			use_tls: options.use_tls ?? false,
-			persistent: options.persistent ?? false,
-			compression: options.compression ?? 'none',
-		} ),
-		[
-			options.mode,
-			options.host,
-			options.port,
-			options.password,
-			options.database,
-			options.nodes,
-			options.master_name,
-			options.use_tls,
-			options.persistent,
-			options.compression,
-		]
+		() => withServerValues( options ),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[ optionsKey ]
 	);
 	useEffect( () => {
 		setBaseline( memoizedBaseline );
