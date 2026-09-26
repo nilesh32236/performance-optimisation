@@ -323,3 +323,10 @@ Completed: 2026-08-31 11:35 UTC
 - New "Frontend transformation order and its traps" section records the order itself plus six consequences: the cache-hit dead zone, the Critical CSS interaction, the safe-mode scope, CDN URLs being baked into the cache, bfcache being inert on a hit, defer and delay not being mutually exclusive, and the domain-mapped-multisite fail-open (which `AGENTS.md` had called "inherently multisite-safe" — the code itself calls it a "Known tradeoff").
 - Docs only. `git diff --check` exit 0, `npm run doc:check` -> `{"ok":true,"files":4}`.
 
+## 2026-09-26 — The Critical CSS daily cron ran on every site, enabled or not
+- Found by the feature inventory, then verified from source: `schedule_cron_jobs()` scheduled `wppo_ccss_regeneration` **unconditionally**, while the two events immediately above it — `wppo_llms_txt_daily` and `wppo_used_css_cron` — were both gated on their own setting (`includes/Scheduler/class-cron.php:521-531`).
+- The handler `Cron::ccss_regeneration_cron()` already early-returns when `criticalCSS` is off, so no work was being done. The only cost was a **daily cron event firing on every site**, including the large majority that never enables Critical CSS. `schedule_cron_jobs()` runs on every `init`, so this is permanent, not one-off.
+- Fix: schedule only while `criticalCSS` is on, and `wp_clear_scheduled_hook()` when it is off, matching the `llms_txt` pattern directly above. The clear branch matters: without it a site that enabled Critical CSS and then disabled it would keep firing a stale daily event forever.
+- Regression: `CronCcssGatingTest` mirrors the shape of the existing `CronPreloadGatingTest` — scheduled when enabled, absent when disabled, stale event cleared on disable, and absent when settings have never been written. Mutation-verified: reverting to the unconditional schedule fails 3 of the 4 cases.
+- Gate: PHPCS 0, PHPUnit, ESLint 0, Jest 60 suites / 1,072, architecture `--check` 0, `git diff --check` 0.
+
