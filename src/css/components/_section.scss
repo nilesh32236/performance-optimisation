@@ -133,9 +133,20 @@
 	padding-block-start: 16px;
 }
 
-.wppo-section__panel:focus {
-	outline: none;
-}
+// Deliberately NO `:focus { outline: none }` here.
+//
+// That rule has equal specificity to `[tabindex]:focus-visible` in `_base.scss`
+// and appears *later* in the stylesheet, so it won and left the panel with no
+// focus indicator at all: `outline: none` and no `box-shadow`, measured live
+// with `:focus-visible` matching.
+//
+// The panel is a real `tabIndex={ 0 }` stop and the **first** one on every
+// area, so this is the worst possible place for an invisible ring — and the
+// earlier `box-shadow: var(--wppo-focus-ring)` it removed was itself only
+// about 1.07:1. Removing one weak indicator without replacing it turned a
+// weak indicator into none.
+//
+// Letting the base rule apply is the fix.
 
 // Same reasoning as `.wppo-subnav__tab` above. The panel is a real tab stop
 // (`tabIndex={ 0 }`, so a keyboard user can scroll it) and it is the *first*

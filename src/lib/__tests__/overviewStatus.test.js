@@ -288,6 +288,15 @@ describe( 'deriveVitalsStatus', () => {
 		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].status ).toBe(
 			STATUS.ATTENTION
 		);
+		// The *poor* boundary is the other `<=` and was unpinned. Both sides of
+		// it are ATTENTION, so the difference is only in the wording, but the
+		// comparison itself is now pinned either way.
+		expect( deriveVitalsStatus( { lcp: 4000 } )[ 0 ].detail ).toMatch(
+			/could be better/
+		);
+		expect( deriveVitalsStatus( { lcp: 4000.1 } )[ 0 ].detail ).toMatch(
+			/is poor at/
+		);
 		// And a good boundary value must not drag the page verdict down.
 		const { overall } = buildStatusModel( {
 			cacheSettings: { enableCache: true },

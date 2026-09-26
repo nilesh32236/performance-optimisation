@@ -232,7 +232,6 @@ const fetchVitals = async ( signal ) => {
 export default function Overview( { onNavigate, activities = [] } ) {
 	const [ payload, setPayload ] = useState( {} );
 	const [ loading, setLoading ] = useState( true );
-	const [ failed, setFailed ] = useState( false );
 	// Per-source outcome: 'ok' | 'unavailable' | 'unmeasured' | 'error', or
 	// absent while a source is still in flight.
 	const [ settled, setSettled ] = useState( {} );
@@ -262,7 +261,6 @@ export default function Overview( { onNavigate, activities = [] } ) {
 			const controller = new AbortController();
 			controllerRef.current = controller;
 			setLoading( true );
-			setFailed( false );
 			// Every source starts pending, so a row can say "still checking" rather
 			// than claiming "Unavailable" while its request is still in flight.
 			setSettled( {} );
@@ -370,7 +368,7 @@ export default function Overview( { onNavigate, activities = [] } ) {
 				rows={ model.rows }
 				overall={ model.overall }
 				loading={ loading }
-				failed={ failedNow || failed }
+				failed={ failedNow }
 				onRetry={ load }
 				// A source that produced nothing gets a real retry affordance
 				// rather than sitting wrong for the rest of the throttle window.
