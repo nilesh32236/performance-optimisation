@@ -165,7 +165,10 @@
 	&:hover,
 	&:focus-visible {
 		border-color: var(--wppo-primary);
-		background: var(--wppo-primary-light, #eff6ff);
+		// `--wppo-primary-light` does not exist; the hardcoded `#eff6ff` always
+		// won. `--wppo-primary-soft` is the real faint-primary token, and is what
+		// `--wppo-focus-ring` is built from.
+		background: var(--wppo-primary-soft);
 	}
 }
 

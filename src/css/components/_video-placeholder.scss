@@ -5,7 +5,11 @@
 	border-radius: 4px;
 	overflow: hidden;
 	aspect-ratio: 16 / 9;
-	background-color: var(--wppo-bg-secondary, #f0f0f1);
+	// `--wppo-bg-secondary` does not exist in the design system, so the
+	// hardcoded `#f0f0f1` was always what rendered and any theme override under
+	// that name was silently ignored. `--wppo-bg-card-surface` is the real
+	// token for a subtle inset surface.
+	background-color: var(--wppo-bg-card-surface);
 
 	img {
 		display: block;
