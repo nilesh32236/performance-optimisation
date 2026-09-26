@@ -136,3 +136,46 @@ describe( 'readObjectCacheStatus', () => {
 		expect( fetcher ).toHaveBeenCalledTimes( 2 );
 	} );
 } );
+
+describe( 'readObjectCacheStatus: a superseded request must not clear a newer slot', () => {
+	// The identity check in the catch is the difference between "my rejection
+	// releases the slot" and "my rejection releases whatever is in the slot".
+	// A fourth review noted no test distinguished them, because the case needs
+	// an abort racing a *newer* request. It can be built with a fetcher that
+	// resolves on demand: the forced read must be issued and held while the
+	// first one rejects.
+	beforeEach( () => {
+		invalidateObjectCacheStatus();
+	} );
+
+	it( 'leaves a newer in-flight request alone when an older one rejects', async () => {
+		let rejectFirst;
+		const first = new Promise( ( resolve, reject ) => {
+			rejectFirst = reject;
+		} );
+		let call = 0;
+		const fetcher = jest.fn( () => {
+			call += 1;
+			return call === 1
+				? first
+				: Promise.resolve( { enabled: true, redis_reachable: true } );
+		} );
+
+		const firstCall = readObjectCacheStatus( fetcher );
+		// A forced read starts a second request while the first is still open.
+		const forced = readObjectCacheStatus( fetcher, true );
+		expect( fetcher ).toHaveBeenCalledTimes( 2 );
+
+		// The FIRST (superseded) request now fails.
+		rejectFirst( new Error( 'aborted' ) );
+		await expect( firstCall ).rejects.toThrow( 'aborted' );
+		await expect( forced ).resolves.toEqual( {
+			enabled: true,
+			redis_reachable: true,
+		} );
+
+		// The good result is memoised and served without a third request.
+		await readObjectCacheStatus( fetcher );
+		expect( fetcher ).toHaveBeenCalledTimes( 2 );
+	} );
+} );
