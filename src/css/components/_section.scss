@@ -152,6 +152,16 @@
 // (`tabIndex={ 0 }`, so a keyboard user can scroll it) and it is the *first*
 // stop on every area, so an invisible ring here is worse than anywhere else.
 .wppo-section__panel:focus-visible {
+	// An explicit rule, not an inherited one.
+	//
+	// The design system's `outline: 2px solid var(--wppo-primary)` survives
+	// minification only on `.wppo-sidebar nav ul li button`; the separate
+	// `[tabindex]:focus-visible` rule is a different declaration that this
+	// element still loses on. So when the `outline: none` was removed, nothing
+	// took its place — measured live, `outline: none` and `box-shadow: none` on
+	// the first tab stop of every area.
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
 	border-radius: var(--wppo-radius-sm, 8px);
 }
 
