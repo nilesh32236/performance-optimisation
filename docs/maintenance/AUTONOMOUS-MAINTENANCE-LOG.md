@@ -170,3 +170,12 @@ Completed: 2026-08-31 11:35 UTC
   accepted it. Any future check of an extension API should assert the installed
   version's actual signature rather than reasoning from documentation — which is
   exactly what `RedisSentinelConstructorTest::test_options_array_is_accepted_by_the_installed_phpredis()` now does.
+
+## 2026-09-26 — Contract tests for the three untested numeric normalizers
+- A re-audit of issue #1628 found its "critical — silent UI/server divergence" claim **not reproducible**: all three JS copies agree with the PHP sanitizers across 34 inputs. The real exposure was coverage, not behaviour — of the four sibling normalizers only `normalizeRetries` had a direct test.
+- Test-only change: 136 table-driven cases for `normalizeIdleTimeout`, `normalizeCcssMaxSize` and `unusedCSSRegressionThreshold`. No production file touched. `coerceLongestEdge` is deliberately left to the #1658 branch, which is already changing `ImageOptimization.js`.
+- Mutation-verified (12/12 killed): both fallback values, both band edges in each direction, the `n <= 0` guards, `Math.trunc -> Math.round`, adding a 1 MB ceiling **and a 256 KB ceiling** to `normalizeCcssMaxSize`, and the hex/octal/binary-string and boolean/array guards inside the shared `parseGuardedNumber` core. The first no-clamp table was too weak — it only caught clamps above 1 MB — so 100 KB / 256 KB / 1048575 rows were added and re-verified.
+- The deliberately NOT-done part matters: the proposed `parseGuardedInt(value,{min,max,fallback})` extraction cannot express `normalizeCcssMaxSize`'s intentional *absence* of an upper clamp without a sentinel, and `Settings_Store::sanitize_scalar_setting()` does not clamp it either, so a max would change the values written to `wppo_settings` and break the current settings schema.
+- Two behaviours the tests now lock in, both confirmed true against PHP: the hex guard tests the *string* form, so the number literal `0x10` is accepted as 16 while `'0x10'` fails open; and only `unusedCSSRegressionThreshold` has a server-side band at all — `ccssMaxSize` and `delayJSIdleTimeout` fall through to `sanitize_scalar_setting`, which stores any numeric value verbatim.
+- Gate: lint 0 errors, Jest 59 suites / 969 tests (+136 over master's 833). No PHP changed, so PHPCS/PHPUnit are not applicable.
+
