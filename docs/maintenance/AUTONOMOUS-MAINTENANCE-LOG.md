@@ -295,3 +295,7 @@ Completed: 2026-08-31 11:35 UTC
 - The same review found a live coverage gap of exactly that kind: `model-intelligence.yml:84` (`refs=(opencode/muse-spark-1.3-contributor-free)`) and `webpack.yml:144` both hold real literals but were **not** in the manifest, so drift in them was invisible. Both are now covered; the guard's occurrence count moved 19 -> 21.
 - Mutation results, all observed failing: neutering the guard script -> 2 fail; dropping `wppo-ai-review.yml` from the manifest -> 2 fail. Restored -> 15/15 pass.
 - **Residual risk, recorded rather than dismissed:** `master` has no branch protection, so every check this adds is advisory. A PR that edits the guard, the manifest, and the tests together can still disable it. That is a repository-settings matter, not a code one, and is left for a human.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 911ee395 (test(model): close two ways to neuter the model authority guard)
