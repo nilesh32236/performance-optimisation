@@ -166,3 +166,67 @@ being reported.
 
 Nothing here is asserted from the page itself; each row was checked against a
 source the page did not derive from.
+
+## Round 24 — the seventh review, and a lesson about deploying
+
+### The blocker a review found
+
+A hanging `web_vitals_trends` froze the entire Overview **for ever**. `setLoading(false)`
+existed in exactly one place — the vitals `.finally()` — and `apiCall` has no request
+timeout. Measured live at 5s, 20s and 45s: **0 status rows, 0 "Try again" buttons**,
+while `system_info` and `object_cache` had both already answered.
+
+The code's own comment claimed vitals "never block the page". Absence *was* handled;
+**non-settlement was not**, so the one source declared optional was the only one that
+could block — and it blocked everything. `SiteStatusCard` returns the loading branch
+before the retry affordance, so there was no recourse.
+
+Loading now means "the required sources have settled", plus a backstop that records
+anything still outstanding as an error so the retry can appear. The comment's claim is
+now true. Verified live: with the request hung, all three required rows render and the
+spinner clears within 5s.
+
+### Five unpinned guards
+
+Each was reported as surviving its whole suite. All five now fail a test:
+
+| Mutation | What the page would then say |
+|---|---|
+| `!php \|\| !wp` → `&&` | green **"Working — Running on WordPress 7.1.2 and PHP ."** |
+| `String()` instead of a type-checked read | green **"Running on WordPress false and PHP 0."** |
+| `measure.key in vitals` → `!== undefined` | unmeasured metrics silently dropped |
+| `/^0/` instead of the anchored test | "0.5 MB" reported as **"nothing is cached yet"** |
+| `! settings.enableCache` | an **absent** key read as "switched off" |
+
+Also: a zero LCP is no longer a measurement (`good at 0 ms` is a missing reading wearing
+a number) while a zero **CLS** still is — the live store genuinely holds seven. That
+asymmetry is commented, because "0 is real" is only true of one metric.
+
+### The lesson: I broke production again, and the same way
+
+To verify a fix from a *master-based* branch I ran `rsync -a --delete` at the live site.
+That removed the Overview from the deployed tree. The admin page **threw** — sidebar and
+section title rendered, then the SPA died, because `tab-overview.js` was gone too.
+
+This is the **second** time. Round 19: an `rsync --delete` from a master-based worktree
+removed the Overview mid-review. The rule adopted then was not written down as a *mechanical*
+rule, which is why I did it again four rounds later.
+
+**The rule, now mechanical:** a deploy target is the *branch being reviewed*, never
+`master`, whenever master lacks the files the live site is currently serving. The check
+is one comparison, made before the copy:
+
+```sh
+# The live tree must match the head being deployed, or the deploy is a downgrade.
+git -C <worktree> diff --stat HEAD -- src build   # must be empty
+```
+
+and after the copy, the reverse — the served bundle must contain the feature the live
+page is using. A reviewer caught it before I did, and the right response was to restore
+from the reviewed SHA rather than from whatever branch happened to be closest.
+
+The second half of the lesson: **a review's evidence expires when the deployed tree
+moves under it.** The reviewer's report is explicitly scoped to "the deployed bundle was
+byte-for-byte `36dd9589` at 21:58". That is not a defect in the review; it is a property
+of reviews against a live target, and it means the merge claim has to be re-checked after
+any deploy, not inherited.
