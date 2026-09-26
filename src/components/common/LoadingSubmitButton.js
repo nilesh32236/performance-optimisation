@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 
@@ -45,10 +46,26 @@ const LoadingSubmitButton = ( {
 	//    form, for the rest of the page's life. No production caller passes
 	//    `doneLabel`, so this was the state every one of the 16 usages reached.
 	//
-	// The button's own `aria-busy` and disabled state, plus the text change to
-	// `loadingLabel`, already convey the in-flight state to assistive tech.
-	const showLiveRegion = ! isLoading && Boolean( doneLabel );
-	const liveText = doneLabel || '';
+	// Two distinct announcements, and which one applies depends on the caller:
+	//
+	// 1. **While saving, and only when the button's own text does not change.**
+	//    `loadingLabel` is supplied at only 19 of the 46 call sites, so for the
+	//    other 27 the visible label stays "Save Settings" throughout. With the
+	//    region silent, the only in-flight signals left are `aria-busy`, the
+	//    disabled attribute and an `aria-hidden` spinner — none of which a
+	//    screen reader announces. The region carries a generic progress message
+	//    here, which is *not* a duplicate of the button name, so it adds
+	//    information rather than echoing it.
+	// 2. **After saving, when the caller asks for it** via `doneLabel`.
+	//
+	// What it must never do is repeat the button's own text while saving: that
+	// is the duplicate-announcement defect this change fixed.
+	const announceInFlight = isLoading && ! loadingLabel;
+	const showLiveRegion =
+		announceInFlight || ( ! isLoading && Boolean( doneLabel ) );
+	const liveText = announceInFlight
+		? __( 'Working…', 'performance-optimisation' )
+		: doneLabel || '';
 
 	return (
 		<>

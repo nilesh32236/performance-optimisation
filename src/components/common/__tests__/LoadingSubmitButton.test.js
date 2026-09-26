@@ -131,6 +131,71 @@ describe( 'LoadingSubmitButton', () => {
 		expect( screen.queryAllByRole( 'status' ) ).toHaveLength( 0 );
 	} );
 
+	it( 'announces the in-flight state when the button text does not change', () => {
+		// 27 of the 46 real call sites pass no `loadingLabel`, so their visible
+		// label stays "Save Settings" throughout the save. For those, the region
+		// is the only announced in-flight signal — `aria-busy`, `disabled` and
+		// the `aria-hidden` spinner are all silent to a screen reader.
+		render( <LoadingSubmitButton isLoading label="Save Settings" /> );
+		const region = screen.getByRole( 'status' );
+		expect( region ).toHaveTextContent( 'Working…' );
+		// And it must not merely repeat the button's name, which is the defect
+		// this whole change set was about.
+		expect( region.textContent ).not.toBe( 'Save Settings' );
+	} );
+
+	it( 'stays silent in flight when the caller already changed the label', () => {
+		// With a `loadingLabel` the button's own text becomes the announcement,
+		// so a region repeating it would be the duplicate.
+		render(
+			<LoadingSubmitButton
+				isLoading
+				label="Save Settings"
+				loadingLabel="Saving…"
+			/>
+		);
+		expect( screen.queryByRole( 'status' ) ).not.toBeInTheDocument();
+	} );
+
+	it( 'keeps the status region outside the button', () => {
+		// A region inside the <button> would fold its text into the accessible
+		// name, so the button would be announced as "Save Settings Saved." and
+		// an exact-name lookup would stop matching. That mutation survived the
+		// suite until this assertion existed.
+		const { container } = render(
+			<LoadingSubmitButton
+				isLoading={ false }
+				label="Save Settings"
+				doneLabel="Saved."
+			/>
+		);
+		const region = screen.getByRole( 'status' );
+		expect( container.querySelector( 'button' ) ).not.toContainElement(
+			region
+		);
+		expect(
+			screen.getByRole( 'button', { name: 'Save Settings' } )
+		).toBeInTheDocument();
+	} );
+
+	it( 'hides the completion text from sighted users', () => {
+		// Deleting this class renders "Saved." as visible body text on every
+		// save, and nothing else fails.
+		const { container } = render(
+			<LoadingSubmitButton
+				isLoading={ false }
+				label="Save Settings"
+				doneLabel="Saved."
+			/>
+		);
+		expect( screen.getByRole( 'status' ) ).toHaveClass(
+			'wppo-screen-reader-text'
+		);
+		expect(
+			container.querySelector( '.wppo-screen-reader-text' )
+		).toBeInTheDocument();
+	} );
+
 	it( 'announces completion only when the caller asks for it', () => {
 		const { rerender } = render(
 			<LoadingSubmitButton
