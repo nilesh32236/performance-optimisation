@@ -50,6 +50,12 @@ UNTRUSTED = [
     r"github\.event\.issue\.(?:body|title)",
     r"github\.event\.head_commit\.(?:message|author\.(?:name|email))",
     r"github\.event\.workflow_run\.(?:head_branch|display_title)",
+    # workflow_dispatch inputs are operator-supplied free text, not a
+    # charset-constrained GitHub identifier, so they are untrusted too. An
+    # independent review showed that reverting inputs.force_version back to
+    # inline interpolation in wppo-tri-merge-workflow.yml shipped silently
+    # without this entry.
+    r"github\.event\.inputs\.[A-Za-z_]+",
     r"github\.(?:ref_name|head_ref)",
 ]
 UNTRUSTED_RE = re.compile("|".join(UNTRUSTED))
