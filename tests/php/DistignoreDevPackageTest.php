@@ -113,4 +113,41 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 			);
 		}
 	}
+
+	/**
+	 * The inverse direction: a PRODUCTION package must never be excluded.
+	 *
+	 * Without this, the guard is one-directional and silently green. An
+	 * independent review demonstrated that appending `/vendor/voku/` — a
+	 * production dependency, used at `includes/minify/class-html.php:17` —
+	 * left every test in this file passing, which would ship a ZIP whose
+	 * `vendor/autoload.php` fatals the moment the minify feature loads.
+	 *
+	 * @return void
+	 */
+	public function test_no_production_package_is_excluded_from_the_release(): void {
+		$lock     = $this->composer_lock();
+		$prod     = array();
+		$patterns = $this->distignore_patterns();
+
+		foreach ( (array) ( $lock['packages'] ?? array() ) as $package ) {
+			$prod[ explode( '/', (string) $package['name'] )[0] ] = (string) $package['name'];
+		}
+		$this->assertNotEmpty( $prod, 'composer.lock must declare production packages for this guard to mean anything' );
+
+		$wrongly_excluded = array();
+		foreach ( array_keys( $prod ) as $vendor ) {
+			if ( in_array( '/vendor/' . $vendor, $patterns, true ) ) {
+				$wrongly_excluded[] = $prod[ $vendor ] . ' (needs /vendor/' . $vendor . ' in the release ZIP)';
+			}
+		}
+
+		$this->assertSame(
+			array(),
+			$wrongly_excluded,
+			"Production packages excluded from the release ZIP, which would fatal at runtime:\n"
+			. implode( "\n", $wrongly_excluded )
+			. "\nRemove the .distignore entry."
+		);
+	}
 }
