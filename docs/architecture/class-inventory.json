@@ -5139,14 +5139,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Shared",
-        "lines": 4754,
+        "lines": 4791,
         "methods": 156,
         "public_methods": 151,
-        "large_methods": 4,
+        "large_methods": 5,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "get_with_stampede_lock",
-            "line": 3345,
+            "line": 3382,
             "lines": 197
         },
         "method_prefixes": {
@@ -5222,7 +5222,7 @@
         "private_state_properties": 4,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 91,
+        "external_dependencies": 92,
         "wordpress_dependencies": 27,
         "filesystem_dependencies": 1,
         "network_dependencies": 0,
