@@ -52,6 +52,28 @@ describe( 'deriveCacheStatus', () => {
 		expect( needsAttention( row.status ) ).toBe( false );
 	} );
 
+	it( 'anchors the zero test, so "0.5 MB" is not zero', () => {
+		// `/^0/` matched "0.5 MB" and "0 B cached", so a populated cache was
+		// reported as holding nothing. That mutation survived the suite.
+		[ '0.5 MB', '0 B cached', '0.00 MB' ].forEach( ( value ) => {
+			expect(
+				deriveCacheStatus( { enableCache: true }, value ).status
+			).toBe( STATUS.HEALTHY );
+		} );
+		[ '0 B', '0 B ', '0 bytes' ].forEach( ( value ) => {
+			expect(
+				deriveCacheStatus( { enableCache: true }, value ).status
+			).toBe( STATUS.NOT_CONFIGURED );
+		} );
+	} );
+
+	it( 'claims neither state when the setting key is absent', () => {
+		// `! settings.enableCache` treated an absent key as "off".
+		const row = deriveCacheStatus( {}, '14 MB' );
+		expect( row.status ).not.toBe( STATUS.NOT_CONFIGURED );
+		expect( row.status ).not.toBe( STATUS.HEALTHY );
+	} );
+
 	it( 'treats the literal "N/A" as unknown, not as zero', () => {
 		// Cache::get_cache_stats() reports "N/A" when it cannot measure, which
 		// is not the same as having measured nothing.
@@ -233,6 +255,38 @@ describe( 'deriveCompatibilityStatus', () => {
 		expect( row.detail ).toContain( '7.1.2' );
 	} );
 
+	it( 'is unknown, not healthy, when EITHER version is missing', () => {
+		// The `||` is load-bearing. With `&&` a payload carrying only WordPress
+		// was treated as complete and the row rendered a green "Running on
+		// WordPress 7.1.2 and PHP ." — claiming a PHP version never reported.
+		// That mutation survived 108/108 before this test.
+		const onlyWp = deriveCompatibilityStatus( {
+			wordpress: { version: '7.1.2' },
+		} );
+		expect( onlyWp.status ).not.toBe( STATUS.HEALTHY );
+		expect( onlyWp.status ).toBe( STATUS.UNKNOWN );
+		expect( onlyWp.detail ).not.toMatch( /PHP \./ );
+
+		const onlyPhp = deriveCompatibilityStatus( {
+			php: { version: '8.3' },
+		} );
+		expect( onlyPhp.status ).toBe( STATUS.UNKNOWN );
+	} );
+
+	it( 'rejects a version that is a boolean or zero', () => {
+		// `String()` turned these into the literals "false" and "0", producing
+		// a working "Running on WordPress false and PHP 0." row.
+		[
+			{ php: { version: false }, wordpress: { version: '7.1.2' } },
+			{ php: { version: '8.3' }, wordpress: { version: 0 } },
+			{ php: { version: 0 }, wordpress: { version: 0 } },
+		].forEach( ( payload ) => {
+			const row = deriveCompatibilityStatus( payload );
+			expect( row.status ).toBe( STATUS.UNKNOWN );
+			expect( row.detail ).not.toMatch( /false|PHP 0|PHP \./ );
+		} );
+	} );
+
 	it( 'is unknown, not healthy, when versions are missing', () => {
 		expect(
 			deriveCompatibilityStatus( { php_version: '', wp_version: '' } )
@@ -252,6 +306,41 @@ describe( 'deriveVitalsStatus', () => {
 	it( 'returns nothing when there is no vitals data at all', () => {
 		expect( deriveVitalsStatus( undefined ) ).toEqual( [] );
 		expect( deriveVitalsStatus( null ) ).toEqual( [] );
+	} );
+
+	it( 'reports a vital the source knows about but has not measured', () => {
+		// A key present with an undefined value is a metric the source tracks
+		// but has not measured. Dropping the row would read as "nothing to say"
+		// rather than "not measured yet"; that mutation survived 108/108.
+		const rows = deriveVitalsStatus( {
+			lcp: 505,
+			cls: undefined,
+			inp: undefined,
+		} );
+		expect( rows.map( ( r ) => r.id ) ).toEqual( [
+			'vital-lcp',
+			'vital-cls',
+			'vital-inp',
+		] );
+		expect( rows[ 1 ].status ).toBe( STATUS.UNKNOWN );
+	} );
+
+	it( 'rejects a zero LCP but accepts a zero CLS', () => {
+		// 0 ms is not a real LCP; a CLS of exactly 0 is a genuinely excellent
+		// measurement, and the live store really does hold seven of them.
+		expect( deriveVitalsStatus( { lcp: 0 } )[ 0 ].status ).not.toBe(
+			STATUS.HEALTHY
+		);
+		expect( deriveVitalsStatus( { cls: 0 } )[ 0 ].status ).toBe(
+			STATUS.HEALTHY
+		);
+	} );
+
+	it( 'rejects a value at the upper bound, not just past it', () => {
+		// `value > 86400000` let exactly 86400000 through.
+		expect( deriveVitalsStatus( { lcp: 86400000 } )[ 0 ].status ).toBe(
+			STATUS.UNKNOWN
+		);
 	} );
 
 	it( 'omits a vital that was not measured rather than calling it good', () => {

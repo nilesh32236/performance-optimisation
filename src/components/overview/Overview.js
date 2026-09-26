@@ -38,6 +38,15 @@ import {
 } from '../../lib/apiRequest';
 
 /**
+ * How long the Overview waits for a source before giving up on it.
+ *
+ * Without this, one hanging request held the page in its loading state
+ * indefinitely. Comfortably above any healthy response time, and well below the
+ * point where a user would assume the page is broken.
+ */
+export const OVERVIEW_SETTLE_TIMEOUT_MS = 15000;
+
+/**
  * Pull the object-cache status, which has no dedicated typed helper.
  *
  * The endpoint dispatches on an `action` and answers 400 without one, so this
@@ -177,7 +186,7 @@ export const summariseVitals = ( payload ) => {
 				const value = Number( raw );
 				// A vital is milliseconds (or a unitless CLS). Anything past a
 				// day in ms is a corrupt value, not a slow page.
-				if ( value > 86400000 ) {
+				if ( value >= 86400000 ) {
 					continue;
 				}
 				// Explicit absence, then accept a real zero.
@@ -256,6 +265,7 @@ export default function Overview( { onNavigate, activities = [] } ) {
 	// Guards a state update after unmount, and lets a retry start clean.
 	const mounted = useRef( true );
 	const controllerRef = useRef( null );
+	const timerRef = useRef( null );
 
 	// One request per source, issued once on mount. The promises are shared so
 	// nothing is ever fetched twice — `object_cache` allows only five calls a
@@ -284,6 +294,7 @@ export default function Overview( { onNavigate, activities = [] } ) {
 	const load = useCallback(
 		( { force = false } = {} ) => {
 			controllerRef.current?.abort();
+			clearTimeout( timerRef.current );
 			const controller = new AbortController();
 			controllerRef.current = controller;
 			setLoading( true );
@@ -292,6 +303,10 @@ export default function Overview( { onNavigate, activities = [] } ) {
 			setSettled( {} );
 
 			const requests = request( controller, force );
+
+			// Sources the page cannot render meaningfully without.
+			const REQUIRED = [ 'systemInfo', 'objectCache' ];
+			const outstanding = new Set( [ ...REQUIRED, 'vitals' ] );
 
 			/**
 			 * Record one source's outcome, keeping the page honest about what is
@@ -302,6 +317,7 @@ export default function Overview( { onNavigate, activities = [] } ) {
 			 * @param {string} reason Why it produced none, if it did.
 			 */
 			const settle = ( key, value, reason ) => {
+				outstanding.delete( key );
 				if ( controller.signal.aborted || ! mounted.current ) {
 					return;
 				}
@@ -309,6 +325,11 @@ export default function Overview( { onNavigate, activities = [] } ) {
 					setPayload( ( prev ) => ( { ...prev, [ key ]: value } ) );
 				}
 				setSettled( ( prev ) => ( { ...prev, [ key ]: reason } ) );
+				// Release the page as soon as the required sources have answered,
+				// rather than waiting on an optional one.
+				if ( REQUIRED.every( ( k ) => ! outstanding.has( k ) ) ) {
+					setLoading( false );
+				}
 			};
 
 			requests.systemInfo
@@ -334,12 +355,26 @@ export default function Overview( { onNavigate, activities = [] } ) {
 				.then( ( value ) =>
 					settle( 'vitals', value, value ? 'ok' : 'unmeasured' )
 				)
-				.catch( () => {} )
-				.finally( () => {
-					if ( ! controller.signal.aborted && mounted.current ) {
-						setLoading( false );
-					}
+				.catch( () => settle( 'vitals', null, 'unmeasured' ) );
+
+			// Backstop: a request that never settles must not hold the page in
+			// its loading state for ever. `setLoading( false )` used to live only in
+			// the vitals `.finally()`, so a hanging `web_vitals_trends` left the
+			// whole Overview reading "Checking your site…" indefinitely —
+			// measured live at 5s, 20s and 45s, with no rows and no retry.
+			//
+			// Anything still outstanding when this fires is recorded as an error,
+			// so the page offers a retry instead of hanging.
+			timerRef.current = setTimeout( () => {
+				if ( controller.signal.aborted || ! mounted.current ) {
+					return;
+				}
+				[ ...outstanding ].forEach( ( key ) => {
+					outstanding.delete( key );
+					setSettled( ( prev ) => ( { ...prev, [ key ]: 'error' } ) );
 				} );
+				setLoading( false );
+			}, OVERVIEW_SETTLE_TIMEOUT_MS );
 		},
 		[ request ]
 	);
@@ -349,6 +384,7 @@ export default function Overview( { onNavigate, activities = [] } ) {
 		load();
 		return () => {
 			mounted.current = false;
+			clearTimeout( timerRef.current );
 			controllerRef.current?.abort();
 		};
 	}, [ load ] );

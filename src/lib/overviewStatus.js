@@ -104,7 +104,20 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 			detail: 'Cache state is not available right now.',
 		};
 	}
-	if ( ! settings.enableCache ) {
+	// `! settings.enableCache` treated an *absent* key as "off". A payload with
+	// no `enableCache` at all must claim neither state.
+	const cacheEnabled = triState( settings.enableCache );
+	if ( cacheEnabled === null ) {
+		// Neither on nor off: claiming either would be a guess, and a green
+		// "Working" here is exactly the false claim this row exists to avoid.
+		return {
+			id: 'page-cache',
+			label: 'Page cache',
+			status: STATUS.UNKNOWN,
+			detail: 'The plugin did not report whether the page cache is enabled.',
+		};
+	}
+	if ( cacheEnabled === false ) {
 		return {
 			id: 'page-cache',
 			label: 'Page cache',
@@ -298,8 +311,30 @@ export const deriveCompatibilityStatus = ( info ) => {
 	// an older endpoint could hand those back — but the nested shape is what
 	// the plugin actually returns, and reading only the flat names is what made
 	// this row say "did not report the version" on a working site.
-	const php = String( info?.php?.version ?? info?.php_version ?? '' );
-	const wp = String( info?.wordpress?.version ?? info?.wp_version ?? '' );
+	// A version is only a version if it is a non-empty string or a positive
+	// number. `String()` alone turned `false` and `0` into the literals "false"
+	// and "0", so `{ version: false }` produced a *working* "Running on
+	// WordPress false and PHP 0." row. Booleans are rejected explicitly,
+	// because the same discipline is applied to every other flag here.
+	const readVersion = ( value ) => {
+		if ( typeof value === 'string' ) {
+			return value.trim();
+		}
+		if (
+			typeof value === 'number' &&
+			Number.isFinite( value ) &&
+			value > 0
+		) {
+			return String( value );
+		}
+		return '';
+	};
+	const php = readVersion( info?.php?.version ?? info?.php_version );
+	const wp = readVersion( info?.wordpress?.version ?? info?.wp_version );
+	// `||` is load-bearing: with `&&`, a payload carrying only one version was
+	// treated as complete and the row claimed a version never reported —
+	// "Running on WordPress 7.1.2 and PHP ." under a green badge. An
+	// independent review found that mutation survived 108/108.
 	if ( ! php || ! wp ) {
 		return {
 			id: 'compatibility',
@@ -357,6 +392,11 @@ export const deriveVitalsStatus = ( vitals ) => {
 		},
 	];
 
+	// `in`, not `!== undefined`: a key that exists with an undefined value is a
+	// metric the source knows about but has not measured, and the user should be
+	// told so. Switching to `!== undefined` silently drops the row instead,
+	// which reads as "nothing to say" rather than "not measured yet". An
+	// independent review found that mutation survived 108/108.
 	return measures
 		.filter( ( measure ) => measure.key in vitals )
 		.map( ( measure ) => {
@@ -370,7 +410,20 @@ export const deriveVitalsStatus = ( vitals ) => {
 				typeof candidate === 'number' ||
 				( typeof candidate === 'string' && candidate.trim() !== '' );
 			const raw = isNumber ? Number( candidate ) : Number.NaN;
-			if ( ! Number.isFinite( raw ) || raw < 0 ) {
+			// Zero is a real measurement for CLS — the live store holds seven
+			// true zeros — but not for a latency: "good at 0 ms" is not a
+			// plausible LCP, it is a missing reading wearing a number.
+			const zeroIsValid = 'cls' === measure.key;
+			if (
+				! Number.isFinite( raw ) ||
+				raw < 0 ||
+				( 0 === raw && ! zeroIsValid ) ||
+				// A page cannot take a full day to load. The bound lives here as
+				// well as in the summariser: `deriveVitalsStatus` is also reachable
+				// with a payload the summariser never saw, and an unbounded value
+				// renders as "poor at 86400000 ms" with no separator.
+				86400000 <= raw
+			) {
 				return {
 					id: measure.id,
 					label: measure.label,

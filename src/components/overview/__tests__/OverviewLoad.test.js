@@ -361,3 +361,63 @@ describe( 'envelope handling on every source', () => {
 		expect( screen.queryByText( /is poor at|is good at/ ) ).toBeNull();
 	} );
 } );
+
+describe( 'a source that never settles', () => {
+	// A hanging `web_vitals_trends` held the whole Overview in "Checking your
+	// site…" indefinitely — measured live at 5s, 20s and 45s, with no rows and
+	// no retry. An independent review found it.
+	beforeEach( () => {
+		invalidateObjectCacheStatus();
+		apiCall.mockReset();
+		fetchSystemInfo.mockReset();
+		fetchWebVitalsTrends.mockReset();
+		apiCall.mockResolvedValue( {
+			success: true,
+			data: { enabled: true, redis_reachable: true },
+		} );
+		fetchSystemInfo.mockResolvedValue( {
+			success: true,
+			data: { php: { version: '8.3' }, wordpress: { version: '7.1.2' } },
+		} );
+	} );
+
+	it( 'does not wait for vitals once the required sources have answered', async () => {
+		// Vitals are optional: their absence is a normal state, so a slow one
+		// must not hold the page.
+		fetchWebVitalsTrends.mockReturnValue( new Promise( () => {} ) );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await waitFor(
+			() =>
+				expect(
+					screen.queryByText( 'Checking your site…' )
+				).toBeNull(),
+			{ timeout: 4000 }
+		);
+		// And the rows that did load are shown.
+		expect( screen.getByText( 'Compatibility' ) ).toBeInTheDocument();
+	} );
+
+	it( 'gives up on a hanging required source and offers a retry', async () => {
+		// A required source that never answers must not freeze the page for
+		// ever; after the backstop the row is reported as an error and the
+		// retry affordance appears.
+		fetchSystemInfo.mockReturnValue( new Promise( () => {} ) );
+		fetchWebVitalsTrends.mockResolvedValue( {
+			success: true,
+			data: { trends: {} },
+		} );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await waitFor(
+			() =>
+				expect(
+					screen.getByText( /Some information could not be loaded/ )
+				).toBeInTheDocument(),
+			{ timeout: 20000 }
+		);
+		expect(
+			screen.getByRole( 'button', { name: 'Try again' } )
+		).toBeInTheDocument();
+	}, 30000 );
+} );
