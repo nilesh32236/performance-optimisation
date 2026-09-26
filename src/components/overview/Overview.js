@@ -30,6 +30,7 @@ import { __ } from '@wordpress/i18n';
 import SiteStatusCard from './SiteStatusCard';
 import QuickActionsCard from './QuickActionsCard';
 import { buildStatusModel } from '../../lib/overviewStatus';
+import { readObjectCacheStatus } from '../../lib/objectCacheStatus';
 import {
 	apiCall,
 	fetchSystemInfo,
@@ -59,42 +60,6 @@ import {
 //
 // A module-level memo rather than a React ref, so it survives the component
 // unmounting and remounting — which is the entire problem.
-let objectCacheMemo;
-let objectCacheInFlight = null;
-
-/**
- * Read the object-cache status once per page load.
- *
- * The memo exists to stop *navigation* re-fetching, not to block a refresh the
- * user explicitly asked for. So `force` bypasses it: without that, "Try again"
- * would appear to do nothing for exactly the throttled row that produced it,
- * which is the worst possible outcome for a retry control.
- *
- * @param {AbortSignal} [signal] Optional cancellation signal.
- * @param {boolean}     [force]  Bypass the memo and re-read.
- * @return {Promise<Object|null>} The object-cache payload, or null.
- */
-export const fetchObjectCacheOnce = async ( signal, force = false ) => {
-	if ( objectCacheMemo !== undefined && ! force ) {
-		return objectCacheMemo;
-	}
-	// Concurrent callers share one request rather than racing to the throttle.
-	// A forced read always starts a fresh one.
-	if ( ! objectCacheInFlight || force ) {
-		objectCacheInFlight = fetchObjectCache( signal ).then( ( value ) => {
-			objectCacheMemo = value;
-			return value;
-		} );
-	}
-	return objectCacheInFlight;
-};
-
-/** Test-only: forget the session memo. */
-export const resetObjectCacheMemo = () => {
-	objectCacheMemo = undefined;
-	objectCacheInFlight = null;
-};
-
 export const fetchObjectCache = async ( signal ) => {
 	const response = await apiCall(
 		'object_cache',
@@ -283,7 +248,10 @@ export default function Overview( { onNavigate, activities = [] } ) {
 		const systemInfo = fetchSystemInfo( controller.signal ).then(
 			( response ) => response?.data ?? null
 		);
-		const objectCache = fetchObjectCacheOnce( controller.signal, force );
+		const objectCache = readObjectCacheStatus(
+			() => fetchObjectCache( controller.signal ),
+			force
+		);
 		const vitals = fetchVitals( controller.signal ).catch( () => null );
 		return { systemInfo, objectCache, vitals };
 	}, [] );

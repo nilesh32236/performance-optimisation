@@ -9,7 +9,8 @@
 
 import { act, render, screen, waitFor } from '@testing-library/react';
 
-import Overview, { resetObjectCacheMemo } from '../Overview';
+import Overview from '../Overview';
+import { invalidateObjectCacheStatus } from '../../../lib/objectCacheStatus';
 
 jest.mock( '../../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
@@ -28,7 +29,7 @@ describe( 'Overview loading and failure behaviour', () => {
 		// The object-cache memo is module-level by design (it must survive the
 		// component unmounting), so it has to be cleared between tests or the
 		// first test's result answers every later one.
-		resetObjectCacheMemo();
+		invalidateObjectCacheStatus();
 		apiCall.mockReset();
 		fetchSystemInfo.mockReset();
 		fetchWebVitalsTrends.mockReset();
@@ -107,6 +108,83 @@ describe( 'Overview loading and failure behaviour', () => {
 		expect(
 			screen.queryByText( /Some information could not be loaded/ )
 		).toBeNull();
+	} );
+
+	it( 'reads the cache size from wppoSettings, not from a payload key', async () => {
+		// **T2** — the mutation the previous review called out as the strongest
+		// it could not catch: changing
+		// `cacheStats: wppoSettings?.cache_size` to `payload.cacheStats` left
+		// every test green while the page-cache row went permanently "Unknown"
+		// in production. The pure function was tested; the *wiring* into it was
+		// not, and the wiring is where the original defect lived.
+		global.wppoSettings = {
+			...global.wppoSettings,
+			settings: { cache_settings: { enableCache: true } },
+			cache_size: '14 MB',
+		};
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await waitFor( () =>
+			expect(
+				screen.getByText( /14 MB of cached pages stored/ )
+			).toBeInTheDocument()
+		);
+	} );
+
+	it( 'does not blame a cache it could not read', async () => {
+		// The honest fallback when wppoSettings carries no size.
+		global.wppoSettings = {
+			...global.wppoSettings,
+			settings: { cache_settings: { enableCache: true } },
+			cache_size: undefined,
+		};
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await waitFor( () =>
+			expect(
+				screen.getByText( /could not read how much it has stored/ )
+			).toBeInTheDocument()
+		);
+	} );
+
+	it( 'T6: a site with no stored vitals does not blank the page', async () => {
+		// Counting vitals as a required source would render "This information
+		// could not be loaded." for every site that has never run a scan.
+		fetchWebVitalsTrends.mockResolvedValue( {
+			success: true,
+			data: { trends: {} },
+		} );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await waitFor( () =>
+			expect(
+				screen.queryByText( /This information could not be loaded/ )
+			).toBeNull()
+		);
+		// And the rows that *did* load are still shown — the page did not blank.
+		expect( screen.getAllByText( 'Compatibility' ).length ).toBeGreaterThan(
+			0
+		);
+		expect( screen.getByText( 'Object cache' ) ).toBeInTheDocument();
+	} );
+
+	it( 'T1: a vitals response declaring failure is not read as measurements', async () => {
+		// A `WP_Error`-shaped body carrying data would otherwise escalate the
+		// whole page to "Needs attention" from a failed request.
+		// A body that declares failure but still carries usable-looking data.
+		// The previous version of this test used `data: { status: 500 }`, which
+		// produced no rows *anyway*, so it passed with the guard removed — the
+		// very mutation it was written for. The payload has to be one that
+		// would actually render a row without the allow-list.
+		fetchWebVitalsTrends.mockResolvedValue( {
+			success: false,
+			data: { trends: { a: [ { lcp: 9999, cls: 0.9 } ] } },
+		} );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await screen.findByRole( 'heading', { name: /Site status/i } );
+		await new Promise( ( r ) => setTimeout( r, 400 ) );
+		expect( screen.queryByText( /is poor at|is good at/ ) ).toBeNull();
+		expect( screen.queryByText( /Loading \(LCP\)/ ) ).toBeNull();
 	} );
 
 	it( 'treats absent vitals as normal, not as a failure', async () => {

@@ -104,10 +104,17 @@
 // way _forms.scss consumes it. Using it as an `outline` colour yields an
 // invalid shorthand, `outline-style: none`, and no visible focus at all.
 // Applied on the tab itself, so there is exactly one focus stop per sub-tab.
-.wppo-subnav__tab:focus-visible {
-	outline: none;
-	box-shadow: var(--wppo-focus-ring);
-}
+// No `outline: none` here.
+//
+// The rule this replaces set `outline: none` and used `--wppo-focus-ring` as
+// the indicator. That token is `0 0 0 3px var(--wppo-primary-soft)` — a soft,
+// very low-alpha halo intended to sit *around* a real outline, not to be one.
+// Measured on the live page it is about **1.07:1** against the surrounding
+// surface, where WCAG 2.2 SC 1.4.11 requires 3:1, so the focus stop was
+// effectively invisible.
+//
+// The design system's `outline: 2px solid var(--wppo-primary)` in `_base.scss`
+// is what carries the indicator; not overriding it is the fix.
 
 .wppo-subnav__icon {
 	display: inline-flex;
@@ -130,9 +137,10 @@
 	outline: none;
 }
 
+// Same reasoning as `.wppo-subnav__tab` above. The panel is a real tab stop
+// (`tabIndex={ 0 }`, so a keyboard user can scroll it) and it is the *first*
+// stop on every area, so an invisible ring here is worse than anywhere else.
 .wppo-section__panel:focus-visible {
-	outline: none;
-	box-shadow: var(--wppo-focus-ring);
 	border-radius: var(--wppo-radius-sm, 8px);
 }
 
