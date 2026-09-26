@@ -371,6 +371,28 @@ export default function Overview( { onNavigate, activities = [] } ) {
 				}
 				[ ...outstanding ].forEach( ( key ) => {
 					outstanding.delete( key );
+					// Only a *required* source that never answered is a failure.
+					//
+					// Marking an optional one produced a banner on a page that was
+					// completely fine: hanging `web_vitals_trends` gave 3 correct
+					// rows and a "Working" verdict at 0.5s, and then at 15s claimed
+					// "Some information could not be loaded" with byte-identical
+					// content. An *absent* vitals source produces no banner at all, so
+					// slow was being reported as broken.
+					//
+					// Worse, the affordance could not work: `apiCall` shares the still
+					// pending GET, so "Try again" issued zero new requests and the
+					// banner returned 15s after every click. A retry that cannot retry
+					// is worse than no retry, and it contradicted the invariant five
+					// lines above this: "Vitals are optional… their absence is never a
+					// failure."
+					if ( ! REQUIRED.includes( key ) ) {
+						setSettled( ( prev ) => ( {
+							...prev,
+							[ key ]: 'unmeasured',
+						} ) );
+						return;
+					}
 					setSettled( ( prev ) => ( { ...prev, [ key ]: 'error' } ) );
 				} );
 				setLoading( false );

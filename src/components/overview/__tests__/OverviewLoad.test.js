@@ -7,9 +7,15 @@
  * throttle window — reproduced live.
  */
 
-import { act, render, screen, waitFor } from '@testing-library/react';
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from '@testing-library/react';
 
-import Overview from '../Overview';
+import Overview, { OVERVIEW_SETTLE_TIMEOUT_MS } from '../Overview';
 import { invalidateObjectCacheStatus } from '../../../lib/objectCacheStatus';
 
 jest.mock( '../../../lib/apiRequest', () => ( {
@@ -366,7 +372,12 @@ describe( 'a source that never settles', () => {
 	// A hanging `web_vitals_trends` held the whole Overview in "Checking your
 	// site…" indefinitely — measured live at 5s, 20s and 45s, with no rows and
 	// no retry. An independent review found it.
+	//
+	// Fake timers, not real ones: these used to sleep out the actual 15 000ms
+	// and made the file 18s instead of 3.7s — about a third of the whole suite's
+	// wall clock spent waiting for a timeout.
 	beforeEach( () => {
+		jest.useFakeTimers();
 		invalidateObjectCacheStatus();
 		apiCall.mockReset();
 		fetchSystemInfo.mockReset();
@@ -381,43 +392,111 @@ describe( 'a source that never settles', () => {
 		} );
 	} );
 
+	afterEach( () => {
+		jest.useRealTimers();
+	} );
+
+	/** Let queued microtasks drain, without advancing the fake clock. */
+	const flush = async () => {
+		await act( async () => {
+			await Promise.resolve();
+		} );
+	};
+
+	/** Advance past the backstop and settle the state updates it triggers. */
+	const passBackstop = async () => {
+		await act( async () => {
+			jest.advanceTimersByTime( OVERVIEW_SETTLE_TIMEOUT_MS + 1 );
+			await Promise.resolve();
+		} );
+	};
+
 	it( 'does not wait for vitals once the required sources have answered', async () => {
 		// Vitals are optional: their absence is a normal state, so a slow one
 		// must not hold the page.
 		fetchWebVitalsTrends.mockReturnValue( new Promise( () => {} ) );
 		render( <Overview onNavigate={ jest.fn() } /> );
-		await screen.findByRole( 'heading', { name: /Site status/i } );
-		await waitFor(
-			() =>
-				expect(
-					screen.queryByText( 'Checking your site…' )
-				).toBeNull(),
-			{ timeout: 4000 }
-		);
+		await flush();
+		expect( screen.queryByText( 'Checking your site…' ) ).toBeNull();
 		// And the rows that did load are shown.
 		expect( screen.getByText( 'Compatibility' ) ).toBeInTheDocument();
 	} );
 
-	it( 'gives up on a hanging required source and offers a retry', async () => {
-		// A required source that never answers must not freeze the page for
-		// ever; after the backstop the row is reported as an error and the
-		// retry affordance appears.
+	it( 'does not claim failure for a slow OPTIONAL source', async () => {
+		// The regression: hanging vitals gave 3 correct rows and a "Working"
+		// verdict, and then at 15s the backstop added "Some information could
+		// not be loaded" over byte-identical content — while an *absent* vitals
+		// source produced no banner at all. Slow was reported as broken, and the
+		// "Try again" could not work because `apiCall` shares the pending GET.
+		fetchWebVitalsTrends.mockReturnValue( new Promise( () => {} ) );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await flush();
+		await passBackstop();
+		expect(
+			screen.queryByText( /Some information could not be loaded/ )
+		).toBeNull();
+		// The page still reports what it actually knows.
+		expect( screen.getByText( 'Compatibility' ) ).toBeInTheDocument();
+	} );
+
+	it( 'does claim failure for a hanging REQUIRED source, and offers a retry', async () => {
 		fetchSystemInfo.mockReturnValue( new Promise( () => {} ) );
 		fetchWebVitalsTrends.mockResolvedValue( {
 			success: true,
 			data: { trends: {} },
 		} );
 		render( <Overview onNavigate={ jest.fn() } /> );
-		await screen.findByRole( 'heading', { name: /Site status/i } );
-		await waitFor(
-			() =>
-				expect(
-					screen.getByText( /Some information could not be loaded/ )
-				).toBeInTheDocument(),
-			{ timeout: 20000 }
-		);
+		await flush();
+		await passBackstop();
+		expect(
+			screen.getByText( /Some information could not be loaded/ )
+		).toBeInTheDocument();
 		expect(
 			screen.getByRole( 'button', { name: 'Try again' } )
 		).toBeInTheDocument();
-	}, 30000 );
+	} );
+
+	it( 'does not let a superseded load raise a banner on a clean page', async () => {
+		// The timer-hygiene property. Removing `clearTimeout` in `load()`, the
+		// unmount clear, AND the `aborted` guard together still passed the whole
+		// suite, yet the mutant is reachable: load A's timer fires at t=15s into
+		// load B and puts a spurious failure banner on a page that fully
+		// succeeded. An independent review demonstrated exactly that.
+		fetchSystemInfo.mockReturnValue( new Promise( () => {} ) );
+		render( <Overview onNavigate={ jest.fn() } /> );
+		await flush();
+
+		// Load A backs off and offers a retry.
+		await passBackstop();
+		expect(
+			screen.getByRole( 'button', { name: 'Try again' } )
+		).toBeInTheDocument();
+
+		// Retry: every source now answers, so load B is clean.
+		fetchSystemInfo.mockResolvedValue( {
+			success: true,
+			data: { php: { version: '8.3' }, wordpress: { version: '7.1.2' } },
+		} );
+		fetchWebVitalsTrends.mockResolvedValue( {
+			success: true,
+			data: { trends: {} },
+		} );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: 'Try again' } )
+			);
+		} );
+		await flush();
+		expect(
+			screen.queryByText( /Some information could not be loaded/ )
+		).toBeNull();
+
+		// Load A's timer would fire here if the retry had not cleared it.
+		await passBackstop();
+		expect(
+			screen.queryByText( /Some information could not be loaded/ )
+		).toBeNull();
+		// The page still shows what it really knows.
+		expect( screen.getByText( 'Compatibility' ) ).toBeInTheDocument();
+	} );
 } );
