@@ -1,0 +1,147 @@
+/**
+ * The area frame: a section header and the in-area sub-navigation.
+ *
+ * The sub-nav is a horizontal row of tabs. It is styled from the existing
+ * `src/css/abstracts/_variables.scss` tokens rather than hardcoded values, so
+ * it stays consistent with the rest of the admin and inherits the dark and
+ * high-contrast palettes automatically.
+ *
+ * Notes on the approach:
+ *
+ * - Logical properties (`padding-inline`, `border-inline-start`) rather than
+ *   left/right, so the sub-nav mirrors correctly in RTL.
+ * - Focus is shown with the shared `--wppo-focus-ring` token, matching every
+ *   other control in the admin.
+ * - The container scrolls horizontally on narrow screens instead of wrapping,
+ *   so a two-item row never reflows the panel height under the user.
+ */
+
+.wppo-section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--wppo-space-4, 16px);
+	min-width: 0;
+}
+
+.wppo-section__header {
+	display: flex;
+	flex-direction: column;
+	gap: var(--wppo-space-1, 4px);
+}
+
+.wppo-section__title {
+	margin: 0;
+	font-size: var(--wppo-font-size-xl, 24px);
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--wppo-text-main, #0f172a);
+}
+
+.wppo-section__purpose {
+	margin: 0;
+	max-width: 68ch;
+	font-size: var(--wppo-font-size-sm, 14px);
+	line-height: 1.5;
+	color: var(--wppo-text-muted, #475569);
+}
+
+/* In-area sub-navigation. */
+.wppo-subnav {
+	display: flex;
+	gap: var(--wppo-space-1, 4px);
+	overflow-x: auto;
+	scrollbar-width: thin;
+	// Keep the row from being squeezed into two lines by a long label.
+	flex-wrap: nowrap;
+	padding-block-end: var(--wppo-space-1, 4px);
+	// A visible, consistent focus surface for keyboard users.
+	border-block-end: 1px solid var(--wppo-border, #e2e8f0);
+}
+
+.wppo-subnav__tab {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--wppo-space-2, 8px);
+	flex: 0 0 auto;
+	margin-block-end: -1px;
+	padding: var(--wppo-space-2, 8px) var(--wppo-space-3, 12px);
+	border: 1px solid transparent;
+	border-block-end: 2px solid transparent;
+	border-radius: var(--wppo-radius-sm, 8px) var(--wppo-radius-sm, 8px) 0 0;
+	background: transparent;
+	color: var(--wppo-text-muted, #475569);
+	font-size: var(--wppo-font-size-sm, 14px);
+	font-weight: 500;
+	line-height: 1.4;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.wppo-subnav__tab:hover:not( .wppo-is-active ) {
+	background: var(--wppo-switch-hover, #f1f5f9);
+	color: var(--wppo-text-main, #0f172a);
+}
+
+.wppo-subnav__tab.wppo-is-active {
+	color: var(--wppo-primary);
+	background: var(--wppo-bg-card, #fff);
+	border-color: var(--wppo-border, #e2e8f0);
+	// The active marker sits on the row's own border line, so it reads as
+	// "you are here" rather than another box.
+	border-block-end-color: var(--wppo-primary);
+	font-weight: 600;
+}
+
+// One focus treatment, shared with the rest of the admin. Applied on the tab
+// itself, not a wrapper, so there is exactly one focus stop per sub-tab.
+.wppo-subnav__tab:focus-visible {
+	outline: 2px solid var(--wppo-focus-ring, #2563eb);
+	outline-offset: -2px;
+}
+
+.wppo-subnav__icon {
+	display: inline-flex;
+	align-items: center;
+	font-size: var(--wppo-font-size-sm, 14px);
+}
+
+.wppo-subnav__label {
+	white-space: nowrap;
+}
+
+/* The panel body. Focusable so a keyboard user can scroll it, but it must not
+   draw a focus ring around the whole page on mouse click. */
+.wppo-section__panel {
+	min-width: 0;
+	padding-block-start: var(--wppo-space-4, 16px);
+}
+
+.wppo-section__panel:focus {
+	outline: none;
+}
+
+.wppo-section__panel:focus-visible {
+	outline: 2px solid var(--wppo-focus-ring, #2563eb);
+	outline-offset: 4px;
+	border-radius: var(--wppo-radius-sm, 8px);
+}
+
+@media ( prefers-reduced-motion: reduce ) {
+	.wppo-subnav__tab {
+		transition: none;
+	}
+}
+
+@media ( max-width: 782px ) {
+	.wppo-section__title {
+		font-size: var(--wppo-font-size-lg, 20px);
+	}
+
+	// Touch targets: the sub-nav is a primary navigation control on mobile.
+	.wppo-subnav__tab {
+		min-height: 44px;
+		padding-inline: var(--wppo-space-3, 12px);
+	}
+}

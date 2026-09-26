@@ -25,18 +25,17 @@ import {
 import useServerRules from './lib/useServerRules';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import SectionShell from './components/SectionShell';
-import { readSection, readView, useSectionRoute } from './lib/useSectionRoute';
+import { useSectionRoute } from './lib/useSectionRoute';
 import {
 	DEFAULT_SECTION,
 	SECTIONS,
 	SECTION_IDS,
-	LEGACY_TO_AREA,
-	areaForView,
 	itemsForSection,
 } from './lib/informationArchitecture';
 
-// Ids of the screens an area owns, for validating a `view` deep link.
-const sectionItems = ( sectionId ) =>
+// Ids of the screens an area owns. The route hook needs ids only; the
+// descriptors (icon, label) stay with the render.
+const areaItemIds = ( sectionId ) =>
 	itemsForSection( sectionId ).map( ( item ) => item.id );
 
 import { __ } from '@wordpress/i18n';
@@ -103,36 +102,22 @@ export const isSafeCssColor = ( value ) =>
 	/^#[0-9a-fA-F]{3,4}$|^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/.test( value );
 
 const App = () => {
-	// The URL is the source of truth for which area is open. Proven live to be
-	// absent before this: walking every tab left location.href unchanged, so a
-	// refresh lost the section and Back/Forward did nothing.
-	const { active: activeSection, navigate: setActiveSection } =
-		useSectionRoute( {
-			defaultSection: DEFAULT_SECTION,
-			sections: SECTION_IDS,
-		} );
-	// Which screen inside the area. Reset to the area's first screen whenever the
-	// area changes, so a bookmarked sub-screen never leaks across areas.
-	const [ activeView, setActiveView ] = useState( () => {
-		const section = readSection(
-			window.location.search,
-			DEFAULT_SECTION,
-			SECTION_IDS
-		);
-		// A `view` deep link is only honoured when the area that owns it is also
-		// the one named in the URL, so ?section=manage&view=preload cannot open a
-		// Speed screen while the sidebar says Manage. Failing that, fall back to
-		// the first screen OF THE SECTION THE URL NAMED — a hardcoded fallback
-		// here is what made ?section=media render an Overview header.
-		return (
-			readView(
-				window.location.search,
-				section,
-				sectionItems( section )
-			) ??
-			itemsForSection( section )[ 0 ]?.id ??
-			'dashboard'
-		);
+	// The URL is the single source of truth for BOTH the open area and the
+	// open screen within it. Proven live to be absent before this: walking every
+	// tab left location.href unchanged, so a refresh lost the section and
+	// Back/Forward did nothing.
+	//
+	// Both values come from one read of the URL, so the rendered panel cannot
+	// trail behind the address bar on a popstate — which is exactly what it did
+	// when the area and the screen were held separately.
+	const {
+		area: activeSection,
+		view: activeView,
+		navigate,
+	} = useSectionRoute( {
+		defaultArea: DEFAULT_SECTION,
+		areas: SECTION_IDS,
+		itemsFor: areaItemIds,
 	} );
 	const [ transition, setTransition ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
@@ -173,55 +158,30 @@ const App = () => {
 				setShowGuard( true );
 				return;
 			}
-			setActiveSection( nextSection );
-			setActiveView(
-				itemsForSection( nextSection )[ 0 ]?.id ?? 'dashboard'
-			);
+			navigate( nextSection );
 			setMobileMenuOpen( false );
 		},
-		[ isDirty, activeSection, setActiveSection ]
+		[ isDirty, activeSection, navigate ]
 	);
 
-	// Changing the screen inside the current area. No reload, no guard: the
-	// form being left is part of the same area the user is already in.
-	const handleViewChange = useCallback( ( nextView ) => {
-		setActiveView( nextView );
-	}, [] );
-
-	// A legacy deep link (tab=fileOptimization, or the old ?tab= param) must
-	// still resolve to something useful rather than dumping the user on
-	// Overview with no explanation.
-	const legacyTarget = useMemo( () => {
-		const params = new URLSearchParams( window.location.search );
-		const legacy = params.get( 'tab' );
-		if ( legacy && LEGACY_TO_AREA[ legacy ] ) {
-			return LEGACY_TO_AREA[ legacy ];
-		}
-		const view = params.get( 'view' );
-		const owner = areaForView( view );
-		return owner ? { section: owner.id, view } : null;
-	}, [] );
-
-	useEffect( () => {
-		if ( ! legacyTarget ) {
-			return;
-		}
-		setActiveSection( legacyTarget.section );
-		setActiveView( legacyTarget.view );
-	}, [ legacyTarget, setActiveSection ] );
+	// Changing the screen inside the current area. No reload, no guard: the form
+	// being left is part of the same area the user is already in.
+	const handleViewChange = useCallback(
+		( nextView ) => {
+			navigate( nextView );
+		},
+		[ navigate ]
+	);
 
 	const confirmDiscard = useCallback( () => {
 		setShowGuard( false );
 		setIsDirty( false );
 		if ( pendingTab ) {
-			setActiveSection( pendingTab );
-			setActiveView(
-				itemsForSection( pendingTab )[ 0 ]?.id ?? 'dashboard'
-			);
+			navigate( pendingTab );
 			setMobileMenuOpen( false );
 			setPendingTab( null );
 		}
-	}, [ pendingTab, setActiveSection ] );
+	}, [ pendingTab, navigate ] );
 
 	const cancelGuard = useCallback( () => {
 		setShowGuard( false );
@@ -293,7 +253,13 @@ const App = () => {
 
 		const activeComponent =
 			components[ activeView ] || components.dashboard;
-		const area = areaForView( activeView ) ?? sidebarItems[ 0 ];
+		// The rendered area follows the AREA, not the view. Deriving it from the
+		// view is what froze the panel on Back: popstate updated the area and the
+		// sidebar, but this line kept rendering whichever area the stale view
+		// happened to belong to, so the URL and the screen disagreed permanently.
+		const area =
+			sidebarItems.find( ( item ) => item.id === activeSection ) ??
+			sidebarItems[ 0 ];
 
 		return (
 			<SectionShell

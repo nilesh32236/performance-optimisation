@@ -19,9 +19,6 @@ import {
 	faServer,
 	faTools,
 	faCode,
-	faRocket,
-	faStore,
-	faShieldAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import { __ } from '@wordpress/i18n';
 
@@ -161,6 +158,3 @@ export const areaForView = ( view ) =>
  */
 export const itemsForSection = ( sectionId ) =>
 	SECTIONS.find( ( section ) => section.id === sectionId )?.items ?? [];
-
-/** Icons referenced by FileOptimization's own sub-tabs, re-exported for reuse. */
-export const SUBCATEGORY_ICONS = { faStore, faShieldAlt, faRocket };
