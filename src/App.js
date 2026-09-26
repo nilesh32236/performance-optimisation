@@ -40,6 +40,11 @@ const areaItemIds = ( sectionId ) =>
 
 import { __ } from '@wordpress/i18n';
 
+const Overview = lazy( () =>
+	import(
+		/* webpackChunkName: "tab-overview" */ './components/overview/Overview'
+	)
+);
 const Dashboard = lazy( () =>
 	import( /* webpackChunkName: "tab-dashboard" */ './components/Dashboard' )
 );
@@ -306,6 +311,12 @@ const App = () => {
 				? wppoSettings?.settings ?? {}
 				: {};
 		const components = {
+			overview: (
+				<Overview
+					onNavigate={ handleTabChange }
+					activities={ recentActivities?.activities }
+				/>
+			),
 			dashboard: (
 				<Dashboard
 					activities={ recentActivities?.activities }
