@@ -122,3 +122,30 @@ jobs:
 
       - name: PHPUnit Tests
         run: composer test
+
+  model-authority:
+    name: Muse Spark Model Authority
+    runs-on: ubuntu-latest
+    # 5m ceiling: a pure-node config assertion, no dependency install.
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: '.nvmrc'
+
+      # check-config.mjs is the only executable guard that the workflows and
+      # AGENTS.md still carry vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'
+      # and that no other opencode/<model> literal has appeared. It had no
+      # caller, so the explicit-model-authority guarantee existed only as prose.
+      - name: Model authority check
+        run: npm run model:check
+
+      - name: Model intelligence tests
+        run: npm run test:model-registry

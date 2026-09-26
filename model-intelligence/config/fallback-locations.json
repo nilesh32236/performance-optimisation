@@ -3,11 +3,42 @@
   "champion": "opencode/muse-spark-1.3-contributor-free",
   "explicit_selection_variable": "OPENCODE_MODEL",
   "fallback_locations": [
-    { "path": "AGENTS.md", "kind": "documentation", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" },
-    { "path": ".github/workflows/daily-audit.yml", "kind": "workflow-input", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" },
-    { "path": ".github/workflows/wordpress-monitor.yml", "kind": "workflow-command", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" },
-    { "path": ".github/workflows/wppo-ai-review.yml", "kind": "workflow-input-and-command", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" },
-    { "path": ".github/workflows/wppo-tri-merge-workflow.yml", "kind": "workflow-command", "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'" }
+    {
+      "path": "AGENTS.md",
+      "kind": "documentation",
+      "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'"
+    },
+    {
+      "path": ".github/workflows/daily-audit.yml",
+      "kind": "workflow-input",
+      "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'"
+    },
+    {
+      "path": ".github/workflows/wordpress-monitor.yml",
+      "kind": "workflow-command",
+      "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'"
+    },
+    {
+      "path": ".github/workflows/wppo-ai-review.yml",
+      "kind": "workflow-input-and-command",
+      "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'"
+    },
+    {
+      "path": ".github/workflows/wppo-tri-merge-workflow.yml",
+      "kind": "workflow-command",
+      "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'"
+    },
+    {
+      "path": ".github/workflows/model-intelligence.yml",
+      "kind": "workflow-literal",
+      "pattern": "opencode/muse-spark-1.3-contributor-free"
+    },
+    {
+      "path": ".github/workflows/webpack.yml",
+      "kind": "workflow-comment",
+      "pattern": "vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'"
+    }
   ],
-  "interpretation": "These are compatibility fallbacks. Explicit OPENCODE_MODEL selection remains authoritative. This campaign does not replace them."
+  "interpretation": "These are compatibility fallbacks. Explicit OPENCODE_MODEL selection remains authoritative. This campaign does not replace them.",
+  "coverage_note": "Every path below that contains an opencode/<model> literal must be listed here. An independent review found model-intelligence.yml and webpack.yml holding real literals while being outside this list, so drift in them was invisible to the guard."
 }

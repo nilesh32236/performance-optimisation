@@ -252,3 +252,46 @@ Completed: 2026-08-31 11:35 UTC
 - An independent review appended `/vendor/voku/` — a **production** dependency, `use`d at `includes/minify/class-html.php:17` — to `.distignore` and both tests stayed green. A release-breaking ZIP whose `vendor/autoload.php` fatals on the minify feature would have shipped with a fully passing suite, and nothing else in the suite catches it either.
 - Added `test_no_production_package_is_excluded_from_the_release`, deriving the production set from `composer.lock` `packages` and failing for any whose vendor directory is excluded. Re-mutation-checked: appending `/vendor/voku/` now fails, naming `voku/simple_html_dom`.
 - The guard is now bidirectional: dev -> excluded, and production -> not excluded.
+
+## 2026-09-25 — Muse Spark model authority enforced in CI
+- Branch: `fix/enforce-muse-spark-authority`, cut from `master` @ `efdb2019`.
+  Independent of the other branches; the new `model-authority` job is appended at
+  the end of `webpack.yml` precisely so it does not collide with the #1563
+  security branch's edits to the same file.
+- Gap: `model-intelligence/check-config.mjs` is the only executable proof that
+  the four model-bearing workflows and `AGENTS.md` still carry
+  `vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'`, that no
+  other `opencode/<model>` literal has appeared, and that `champion.json` agrees
+  with the registry champion. It passed when run by hand and **had no caller at
+  all** — no package script, no workflow, no test. Worse, the test named
+  "configuration keeps Muse Spark as the sole fallback reference" only asserted
+  three `champion.json` fields and never ran the guard, so the objective's
+  explicit-model-authority guarantee existed as prose.
+- Fix: `npm run model:check` script; a dedicated `model-authority` job in
+  `webpack.yml` (PR and push gate, no dependency install) and a step in the
+  `discover` job of `model-intelligence.yml` before a refreshed registry is
+  committed, since that job owns the registry data.
+- Regression, in `model-intelligence/tests/safety.test.mjs`: the guard is now
+  actually executed and its result asserted, and a further test pins that the
+  guard is still wired into `package.json` and `webpack.yml` — so removing the
+  CI step fails the suite again. Both were mutation-checked: deleting the
+  `model-authority` job fails the wiring test, and hardcoding
+  `opencode/some-other-model` into `wppo-ai-review.yml` makes the guard exit 1.
+  The overstated test name was replaced by one that describes what it asserts.
+- Documentation: `AGENTS.md` now records the invariant, both call sites, and the
+  requirement that a new model-bearing workflow be added to
+  `fallback-locations.json` to stay covered.
+- No production model, provider, or routing change: the champion stays
+  `opencode/muse-spark-1.3-contributor-free` and explicit `OPENCODE_MODEL`
+  selection stays authoritative.
+- Gate: model:check, 13 model-intelligence tests, benchmark 11/11, doc:check,
+  typecheck, YAML parse, PHPCS, ESLint (0 errors), 833 Jest, 2,783 PHPUnit /
+  25,808 assertions, build, architecture check, diff check — all green.
+
+## 2026-09-26 — Hardening the model authority guard against neutering
+- An independent adversarial review of `fix/enforce-muse-spark-authority` found two ways to disable the guard while every existing test stayed green. Both are now closed and both closures are mutation-verified.
+- **Vector 1 — rewrite `check-config.mjs` to always report `ok`.** Only the *wiring* was pinned (the package script, and a grep of `webpack.yml`), never the script's content. Added a test that runs the **real** guard against a temporary fixture with a planted `opencode/attacker-model` literal, and asserts it exits non-zero *and that the diagnostic names the planted model* — so an unrelated crash cannot masquerade as a detection. Gutting the guard now fails that test.
+- **Vector 2 — drop a covered workflow from `fallback-locations.json`.** A workflow could be removed from the scan and its model drift would be invisible. Added a test that walks every `.github/workflows/*.yml`, and fails for any file holding an `opencode/<model>` literal that the manifest does not list.
+- The same review found a live coverage gap of exactly that kind: `model-intelligence.yml:84` (`refs=(opencode/muse-spark-1.3-contributor-free)`) and `webpack.yml:144` both hold real literals but were **not** in the manifest, so drift in them was invisible. Both are now covered; the guard's occurrence count moved 19 -> 21.
+- Mutation results, all observed failing: neutering the guard script -> 2 fail; dropping `wppo-ai-review.yml` from the manifest -> 2 fail. Restored -> 15/15 pass.
+- **Residual risk, recorded rather than dismissed:** `master` has no branch protection, so every check this adds is advisory. A PR that edits the guard, the manifest, and the tests together can still disable it. That is a repository-settings matter, not a code one, and is left for a human.
