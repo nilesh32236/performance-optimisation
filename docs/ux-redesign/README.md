@@ -87,3 +87,82 @@ infinite recursion in the walker — `Object.values('a')` yields `['a']` forever
 
 Phase 2: the Overview components that render `overviewStatus`, built over
 existing endpoints with no new expensive calls.
+
+
+## Phase 2 — the Overview (in review, PR #1675)
+
+The Overview area had no page of its own. It rendered the old Dashboard, a
+13-panel accumulation of audits, charts and diagnostics — which answers "what
+does this plugin measure?", not "what state is my site in?".
+
+The new Overview adds `src/lib/overviewStatus.js`, a **pure** status model (no
+fetching, no React) so the rules deciding what the page *claims* are directly
+testable and cannot drift from what is rendered. The Dashboard keeps all thirteen
+panels as the area's second sub-item, "All diagnostics" — relocated, not
+reduced.
+
+### There is no health score, deliberately
+
+A composite "92/100" would be decoration. Every input is already weighted by
+something other than a made-up formula — PageSpeed weights LCP far above TTFB —
+and "enabled" says nothing about "working". The model reports five discrete
+states and never claims health without evidence: a feature that is **off** reads
+"Not set up", a value the backend **never reported** reads "Unknown", a **failed
+request** reads "Unavailable".
+
+### What the reviews caught that I could not
+
+The first review found four ways to make the deployed page lie, each reproduced
+by intercepting REST responses:
+
+| Payload | Rendered | Now |
+|---|---|---|
+| `enabled: "false"`, `redis_reachable: true` | **"Working"** | Not set up |
+| `bypassed` / `circuit_open: true` | **"Working"** | Needs attention |
+| `{success:false, code, data:{status:429}}` | **"Not set up"** | Unavailable |
+| `{lcp:null, cls:null, inp:null}` | 3× **"good at 0 ms"** | Unmeasured |
+
+The first of these was the exact bug my own commit message claimed to have
+caught. `triState()` was applied to `cache_enabled` and never to the
+neighbouring `enabled` field, so the string `"false"` read as true and a
+*disabled* object cache was reported as working.
+
+The vitals feature was also **entirely dead**: `web_vitals_trends` returns
+`trends` as an object keyed by `<url-hash>_<strategy>`, not the flat array I
+assumed, so zero vitals rows ever rendered.
+
+### The lesson worth keeping
+
+A second green suite covered code that could not work. `deriveCacheStatus` read
+`stats.cacheStats` from an object while `buildStatusModel` passed a plain
+string, so production read `undefined` — and every test passed, because they
+all used the object shape production never took. It surfaced only because live
+behaviour contradicted a passing test, and I diffed the minified bundle against
+the source to locate it.
+
+The fix was not "write more tests". It was: **a test that does not exercise the
+shape production actually uses proves nothing about it.**
+
+This is now the third time this campaign that a green suite hid broken code —
+after `useSectionRoute`'s named-vs-default export, and the `item.icon` render
+crash. The pattern is consistent enough to name: *a test asserts on what the
+code was written to accept, not on what it is actually given.*
+
+### Gate honesty
+
+I also reported "ESLint 0 errors" from a **stale summary line earlier in the
+same command block**. CI failed on 15 real errors, one of which was a test with
+no assertions at all. A gate result is only evidence if it came from the run
+being reported.
+
+### Verified live, against independent ground truth
+
+| Row | State | Checked with |
+|---|---|---|
+| Page cache | Working — "14 MB of cached pages stored" | `Cache::get_cache_stats()` |
+| Object cache | Working — server reachable | WP-CLI: drop-in present, `redis_reachable=true` |
+| Compatibility | Working — WP 7.1.2 / PHP 8.3 | `wp wppo system-info --format=json` |
+| Loading (LCP) | Working — 505 ms | stored real-user history |
+
+Nothing here is asserted from the page itself; each row was checked against a
+source the page did not derive from.
