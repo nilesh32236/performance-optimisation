@@ -222,8 +222,52 @@ and quote that in a report; never copy a number from this file or from an earlie
 - REST routes and Abilities require `manage_options` + `X-WP-Nonce` through the shared `Admin_Auth` policy; public `rum_collect` keeps token, IP, and global rate-limit validation
 - Settings stored as serialized array in single `wppo_settings` option
 - **PHP 8.5 compat**: never call `Reflection::{Method,Property}::setAccessible()` (deprecated on PHP 8.5, no-op since PHP 8.1 — reflection works without it on the PHP 8.2+ floor); route resource teardown (`curl_close`, `curl_multi_close`, `curl_share_close`, `finfo_close`, `xml_parser_free`, `imagedestroy`) through the `Util` helpers (`close_curl_handle()`, `close_curl_multi_handle()`, `close_curl_share_handle()`, `close_finfo_handle()`, `free_xml_parser()`, `destroy_gd_image()`). Both rules are pinned by `tests/php/PhpDeprecationHygieneTest.php` (13-pattern scanner). See `docs/php-84-85-compat.md`.
-- **Filters**: `wppo_inline_combined_css` (return falsy to disable inlining of the combined/minified CSS via core `wp_maybe_inline_styles()` — e.g. when using a CDN for the combined file)
+- **Filters**: `wppo_inline_combined_css` (return falsy to disable inlining of the combined/minified CSS via core `wp_maybe_inline_styles()` — e.g. when using a CDN for the combined file).
+  ⚠️ **This filter is more powerful than its name suggests.** It is the *sole* gate for **Critical CSS**: `Critical_CSS::is_inline_allowed()` is nothing but `apply_filters( 'wppo_inline_combined_css', true )`, and `is_ccss_effective()` is `is_inline_allowed() && ! is_deferral_suspended_by_js()` (`includes/CSS/class-critical-css.php`). Returning `false` for a CDN therefore **also disables Critical CSS entirely**. If you need inlining off but Critical CSS on, this filter cannot express it today — that is a known gap, not a documented behaviour.
 - **Versioning / `@since` tags:** Never invent a version number. New functions, classes, and methods get a `@since` tag using the current unreleased `NEXT` version placeholder. The placeholder is replaced with the real version at release time. Do not guess future versions like `2.0.0` or `3.8.0`.
+
+## Frontend transformation order and its traps
+
+**The single most important fact about frontend output, documented nowhere else:**
+one 72-line method decides the entire order — `Cache::process_buffer_only()` at
+`includes/Cache/class-cache.php:2614-2685`:
+
+1. exactly-once guard
+2. hoist late block styles
+3. images: next-gen, delay, backgrounds, videos, lazy-render
+4. Google Fonts
+5. font metric fallback
+6. **minify** (only when `minifyHTML || delayJS || minifyInlineCSS || minifyInlineJS`)
+7. **Used CSS**
+8. **CDN rewrite**
+9. `save_processed_buffer()`
+
+The cached artefact is the **fully processed** buffer, not the original. On a
+cache hit the generated `advanced-cache.php` drop-in `exit`s before WordPress
+boots (`includes/Cache/class-advanced-cache-handler.php:759-762`), so **no plugin
+filter runs on a hit** — every feature is baked in at render time.
+
+Consequences worth knowing before changing anything:
+
+- **Critical CSS is silently disabled by defer or delay.** `is_ccss_effective()`
+  requires `! is_deferral_suspended_by_js()`, and that is exactly
+  `deferJS || delayJS`. The settings screen still shows Critical CSS as enabled.
+- **Safe mode covers only five subsystems.** `file_optimisation.safeMode` is
+  consulted by Delay, Defer, Combine CSS, Used CSS and Critical CSS only — not by
+  minification, images, CDN rewriting, preload, Google Fonts or speculation.
+  `SafeModeScopeTest` pins that set.
+- **CDN URLs are baked into the cached page.** Any out-of-band CDN change strands
+  dead URLs until a plugin-side save forces a full purge.
+- **bfcache handling is inert on a page-cache hit**, because the drop-in exits
+  before the page loads.
+- **Defer and delay are not mutually exclusive.** Delay registers first on the
+  same hook and wins; both toggles can appear on at once in the UI.
+- **The static cache is domain-keyed, and the drop-in compares the canonical host
+  with strict equality.** Domain-mapped multisite therefore fails open to uncached
+  rather than serving the wrong tree. The code labels this a "Known tradeoff"
+  (`class-advanced-cache-handler.php:459-479`); it is not "inherently multisite-safe".
+- Three cache variants are written and served, not two: `.html`, `.gz` and `.br`,
+  with brotli tried first.
 
 ## Multisite compatibility
 
