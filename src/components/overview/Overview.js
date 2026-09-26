@@ -43,10 +43,14 @@ import {
  * asks for `status` explicitly. It is also throttled to five calls a minute, so
  * it is issued once per mount and never polled.
  *
+ * Exported for testing: the envelope handling here is what stops a failed
+ * request being reported as a switched-off feature, and it cannot be pinned
+ * from the rendered page alone.
+ *
  * @param {AbortSignal} signal Cancellation signal.
- * @return {Promise<Object>} The object-cache state.
+ * @return {Promise<Object|null>} The object-cache payload, or null.
  */
-const fetchObjectCache = async ( signal ) => {
+export const fetchObjectCache = async ( signal ) => {
 	const response = await apiCall(
 		'object_cache',
 		{ action: 'status' },
@@ -57,12 +61,15 @@ const fetchObjectCache = async ( signal ) => {
 	// works on the payload, not the envelope. Reading the envelope directly made
 	// every row report "Unavailable" or "Not set up".
 	//
-	// `success` is checked first, and it matters. A `WP_Error`-shaped body
-	// (`{ code, message, data: { status: 429 } }`) carries a *truthy* `data`,
-	// which the independent review showed reaching the model and rendering
-	// "Object cache is off" — a false claim manufactured out of an error. A
-	// failed request is not evidence that a feature is switched off.
-	if ( ! response || response.success === false ) {
+	// Only an explicit success is a payload. This has to be an allow-list, not
+	// `success === false`: a `WP_Error`-shaped body (`{ code, message, data }`)
+	// has **no** `success` key at all, so a negative check lets it through and
+	// its `data` — `{ status: 429 }` — reaches the model as if it were a status
+	// report. An independent review found the first half of this; a test I wrote
+	// while covering the review's recommendation found the second.
+	//
+	// A failed request is not evidence that a feature is switched off.
+	if ( ! response || response.success !== true ) {
 		return null;
 	}
 	return response.data ?? null;
@@ -194,10 +201,25 @@ export default function Overview( { onNavigate, activities = [] } ) {
 	const [ payload, setPayload ] = useState( {} );
 	const [ loading, setLoading ] = useState( true );
 	const [ failed, setFailed ] = useState( false );
+	// Per-source outcome: 'ok' | 'unavailable' | 'unmeasured' | 'error', or
+	// absent while a source is still in flight.
+	const [ settled, setSettled ] = useState( {} );
 
 	// Guards a state update after unmount, and lets a retry start clean.
 	const mounted = useRef( true );
 	const controllerRef = useRef( null );
+
+	// One request per source, issued once on mount. The promises are shared so
+	// nothing is ever fetched twice — `object_cache` allows only five calls a
+	// minute, and the Overview remounts on every sub-item change.
+	const request = useCallback( ( controller ) => {
+		const systemInfo = fetchSystemInfo( controller.signal ).then(
+			( response ) => response?.data ?? null
+		);
+		const objectCache = fetchObjectCache( controller.signal );
+		const vitals = fetchVitals( controller.signal ).catch( () => null );
+		return { systemInfo, objectCache, vitals };
+	}, [] );
 
 	const load = useCallback( () => {
 		controllerRef.current?.abort();
@@ -205,37 +227,60 @@ export default function Overview( { onNavigate, activities = [] } ) {
 		controllerRef.current = controller;
 		setLoading( true );
 		setFailed( false );
+		// Every source starts pending, so a row can say "still checking" rather
+		// than claiming "Unavailable" while its request is still in flight.
+		setSettled( {} );
 
-		// Each source settles independently: one failure must not blank the page.
-		const settle = ( key ) => ( value ) => {
+		const requests = request( controller );
+
+		/**
+		 * Record one source's outcome, keeping the page honest about what is
+		 * known versus what is still being asked for.
+		 *
+		 * @param {string} key    Which source finished.
+		 * @param {*}      value  Its payload, or null when it produced none.
+		 * @param {string} reason Why it produced none, if it did.
+		 */
+		const settle = ( key, value, reason ) => {
 			if ( controller.signal.aborted || ! mounted.current ) {
 				return;
 			}
-			setPayload( ( prev ) => ( { ...prev, [ key ]: value } ) );
+			if ( value !== undefined ) {
+				setPayload( ( prev ) => ( { ...prev, [ key ]: value } ) );
+			}
+			setSettled( ( prev ) => ( { ...prev, [ key ]: reason } ) );
 		};
 
-		Promise.allSettled( [
-			fetchSystemInfo( controller.signal )
-				.then( ( r ) => r?.data ?? null )
-				.then( settle( 'systemInfo' ) ),
-			fetchObjectCache( controller.signal ).then(
-				settle( 'objectCache' )
-			),
-			fetchVitals( controller.signal ).then( settle( 'vitals' ) ),
-		] )
-			.then( ( results ) => {
-				if ( controller.signal.aborted || ! mounted.current ) {
-					return;
-				}
-				// Every source failing is a failed page; one failing is not.
-				setFailed( results.every( ( r ) => r.status === 'rejected' ) );
-			} )
+		requests.systemInfo
+			.then( ( value ) =>
+				settle( 'systemInfo', value, value ? 'ok' : 'unavailable' )
+			)
+			.catch( () => settle( 'systemInfo', null, 'error' ) );
+
+		// A throttled endpoint answers 429 with a *resolved* response rather than
+		// rejecting, so treating "resolved" as success would leave the row wrong
+		// with no way to retry. Reproduced live: `object_cache` allows five calls
+		// a minute and this page remounts on every sub-item change. Each source
+		// therefore reports explicitly whether it produced data.
+		requests.objectCache
+			.then( ( value ) =>
+				settle( 'objectCache', value, value ? 'ok' : 'unavailable' )
+			)
+			.catch( () => settle( 'objectCache', null, 'error' ) );
+
+		// Vitals are optional: a site with no stored measurements is a normal
+		// state, so their absence is never a failure and never blocks the page.
+		requests.vitals
+			.then( ( value ) =>
+				settle( 'vitals', value, value ? 'ok' : 'unmeasured' )
+			)
+			.catch( () => {} )
 			.finally( () => {
 				if ( ! controller.signal.aborted && mounted.current ) {
 					setLoading( false );
 				}
 			} );
-	}, [] );
+	}, [ request ] );
 
 	useEffect( () => {
 		mounted.current = true;
@@ -253,6 +298,18 @@ export default function Overview( { onNavigate, activities = [] } ) {
 		}
 		return wppoSettings?.settings ?? {};
 	}, [] );
+
+	// A page-level failure means nothing usable arrived from any required
+	// source. Vitals are excluded: their absence is a normal state, not a
+	// failure, and must not blank the page.
+	const requiredSettled = Object.entries( settled ).filter(
+		( [ key ] ) => key !== 'vitals'
+	);
+	const failedNow =
+		requiredSettled.length > 0 &&
+		requiredSettled.every(
+			( [ , reason ] ) => reason === 'unavailable' || reason === 'error'
+		);
 
 	const model = useMemo(
 		() =>
@@ -274,9 +331,14 @@ export default function Overview( { onNavigate, activities = [] } ) {
 			<SiteStatusCard
 				rows={ model.rows }
 				overall={ model.overall }
-				loading={ loading && ! Object.keys( payload ).length }
-				failed={ failed }
+				loading={ loading }
+				failed={ failedNow || failed }
 				onRetry={ load }
+				// A source that produced nothing gets a real retry affordance
+				// rather than sitting wrong for the rest of the throttle window.
+				partialFailure={ Object.values( settled ).some(
+					( reason ) => reason === 'unavailable' || reason === 'error'
+				) }
 			/>
 
 			<QuickActionsCard onNavigate={ onNavigate } />
