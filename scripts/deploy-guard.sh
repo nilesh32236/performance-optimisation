@@ -12,7 +12,9 @@
 #   a review is running" — and it was broken again four rounds later, because
 #   a remembered rule is not a check.
 #
-#   This is that check. It refuses the deploy, it does not warn.
+#   This is that check. It refuses a deploy that would remove a file the live
+#   site is serving, ship an empty bundle, or read an unreadable tree; it does
+#   not judge whether the *content* of a deploy is correct.
 #
 # Usage:
 #   scripts/deploy-guard.sh <worktree> [live-dir]
@@ -62,8 +64,19 @@ list_relative() {
 		# '%p' is the path as given (build/index.js). '%P' would strip to the
 		# matched subdirectory and yield index.js, so every lookup below would
 		# miss and the guard would report every file as absent.
-		find src build -type f 2>/dev/null -printf '%p\n'
-	) | sort
+		#
+		# -H so a symlinked src/ or build/ is actually enumerated: the default
+		# -P does not follow a symlinked start point, so the subtree lists zero
+		# files and the guard reports "none" and allows the deploy.
+		#
+		# No 2>/dev/null, and no `| sort` here. Both hid a failure: an
+		# unreadable subtree made find print an error that was discarded, and
+		# the `| sort` meant the pipeline's status was sort's. Either way the
+		# caller saw an empty list and the guard printed ALLOWED — a green
+		# light from a tool whose only job is to fail closed. The status is
+		# returned instead, and the caller checks it.
+		find -H src build -type f -printf '%p\n'
+	)
 }
 
 # Files the live tree holds that this deploy intentionally removes. One path per
@@ -110,6 +123,20 @@ echo
 #    These are the ones `--delete` would remove. This is the check that would
 #    have caught both incidents.
 # ---------------------------------------------------------------------------
+# Enumerate both trees *before* comparing, and check each enumeration's
+# status. A process substitution discards its exit code, which is how an
+# unreadable subtree previously became an empty list and an ALLOWED verdict.
+LIVE_FILES=$( list_relative "$LIVE" ) || {
+	echo "REFUSED: could not read $LIVE/src or $LIVE/build" >&2
+	echo "  An unreadable tree enumerates to nothing, so the guard would report" >&2
+	echo "  'none' and allow the deploy. Fix the permissions and re-run." >&2
+	exit 1
+}
+WORKTREE_FILES=$( list_relative "$WORKTREE" ) || {
+	echo "REFUSED: could not read $WORKTREE/src or $WORKTREE/build" >&2
+	exit 1
+}
+
 echo "-- files present live but absent from the worktree --"
 missing=0
 while IFS= read -r rel; do
@@ -121,7 +148,7 @@ while IFS= read -r rel; do
 		echo "  MISSING  $rel"
 		missing=$(( missing + 1 ))
 	fi
-done < <( list_relative "$LIVE" )
+done <<< "$LIVE_FILES"
 
 if [ "$missing" -gt 0 ]; then
 	echo
@@ -155,7 +182,7 @@ while IFS= read -r rel; do
 		fi
 		;;
 	esac
-done < <( list_relative "$WORKTREE" )
+done <<< "$WORKTREE_FILES"
 
 echo "  $changed file(s) would change"
 

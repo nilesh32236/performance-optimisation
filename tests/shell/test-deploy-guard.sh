@@ -120,6 +120,39 @@ else
 fi
 rm -rf "$r"
 
+# 9. A symlinked src/ or build/ must still be enumerated. `[ -d ]` follows
+#    symlinks and passes, but find's default -P does not, so the subtree
+#    listed zero files and the guard reported "none" and allowed the deploy.
+r=$( fixture )
+mv "$r/live/src" "$r/live-src-real"
+ln -s "$r/live-src-real" "$r/live/src"
+out=$( bash "$GUARD" "$r/wt" "$r/live" 2>&1 ); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'components/overview/Overview.js'; then
+	ok "enumerates a symlinked src/ instead of reporting none"
+else
+	bad "did not follow a symlinked src/ (rc=$rc)"
+fi
+rm -rf "$r"
+
+# 10. An unreadable subtree must refuse, not report an empty list. The
+#     2>/dev/null on find used to swallow this and the guard allowed it.
+if [ "$( id -u )" -ne 0 ]; then
+	r=$( fixture )
+	echo 'x' > "$r/wt/build/tab-overview.js"
+	echo 'x' > "$r/wt/src/components/overview/Overview.js"
+	chmod 0000 "$r/live/src"
+	out=$( bash "$GUARD" "$r/wt" "$r/live" 2>&1 ); rc=$?
+	chmod 0755 "$r/live/src"
+	if [ "$rc" -ne 0 ]; then
+		ok "refuses when a subtree cannot be read"
+	else
+		bad "allowed a deploy from an unreadable live tree (rc=$rc)"
+	fi
+	rm -rf "$r"
+else
+	echo "  SKIP  unreadable-subtree case (needs non-root)"
+fi
+
 echo
 [ "$fails" -eq 0 ] && echo "deploy-guard: all tests passed" || echo "deploy-guard: $fails FAILED"
 exit "$fails"
