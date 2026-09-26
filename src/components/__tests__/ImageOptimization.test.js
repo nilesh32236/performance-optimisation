@@ -18,6 +18,30 @@ jest.mock( '../../lib/apiRequest', () => ( {
 		error instanceof Error ? error.message : String( error ),
 } ) );
 
+// Every useNotice().notify() call is recorded so the lifecycle tests can assert
+// on the real user-visible effect. React 18 removed the "setState on an
+// unmounted component" warning, so console.error proves nothing; whether a
+// banner would have been shown is the actual question. The real hook is still
+// executed, so every other test in this file behaves exactly as before.
+jest.mock( '../../lib/useNotice', () => {
+	const actual = jest.requireActual( '../../lib/useNotice' );
+	return {
+		__esModule: true,
+		default: () => {
+			const real = actual.default();
+			return {
+				...real,
+				notify: ( opts ) => {
+					if ( global.__wppoNotifySpy ) {
+						global.__wppoNotifySpy( opts );
+					}
+					return real.notify( opts );
+				},
+			};
+		},
+	};
+} );
+
 describe( 'ImageOptimization Component', () => {
 	beforeEach( () => {
 		global.wppoSettings = {};
@@ -139,7 +163,9 @@ describe( 'ImageOptimization Component', () => {
 				settings: expect.objectContaining( {
 					discardOversizedSibling: false,
 				} ),
-			} )
+			} ),
+			'POST',
+			expect.anything()
 		);
 
 		await waitFor( () => {
@@ -268,7 +294,9 @@ describe( 'ImageOptimization Component', () => {
 					lazyRenderBelowFold: true,
 					lazyRenderExcludeBuilders: true,
 				} ),
-			} )
+			} ),
+			'POST',
+			expect.anything()
 		);
 
 		await waitFor( () => {
@@ -357,7 +385,9 @@ describe( 'ImageOptimization Component', () => {
 					autoPreloadLCP: true,
 					prioritizeLCPImages: true,
 				} ),
-			} )
+			} ),
+			'POST',
+			expect.anything()
 		);
 
 		await waitFor( () => {
@@ -505,5 +535,312 @@ describe( 'ImageOptimization Component', () => {
 		} finally {
 			spy.mockRestore();
 		}
+	} );
+
+	// ---------------------------------------------------------------------
+	// Save lifecycle: unmounting mid-save must not fire a notice banner or
+	// set state. ImageOptimization was the one settings tab with neither a
+	// mounted guard nor an AbortController, so a slow save resolved against an
+	// unmounted component. ObjectCache.js and PreloadSettings.js already had
+	// this guard (audit #1420).
+	// ---------------------------------------------------------------------
+	describe( 'save lifecycle guards', () => {
+		let mockNotify;
+
+		beforeEach( () => {
+			mockNotify = jest.fn();
+			global.__wppoNotifySpy = mockNotify;
+		} );
+
+		afterEach( () => {
+			global.__wppoNotifySpy = undefined;
+		} );
+
+		const deferred = () => {
+			let resolve;
+			let reject;
+			const promise = new Promise( ( res, rej ) => {
+				resolve = res;
+				reject = rej;
+			} );
+			return { promise, resolve, reject };
+		};
+
+		it( 'passes an AbortSignal to every update_settings save', () => {
+			apiCall.mockResolvedValue( { success: true } );
+			render( <ImageOptimization /> );
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Save Settings/i } )
+			);
+			const saveCall = apiCall.mock.calls.find(
+				( c ) => c[ 0 ] === 'update_settings'
+			);
+			expect( saveCall ).toBeDefined();
+			expect( saveCall[ 2 ] ).toBe( 'POST' );
+			expect( saveCall[ 3 ] ).toEqual( expect.any( AbortSignal ) );
+		} );
+
+		it( 'aborts the in-flight save when the component unmounts', async () => {
+			const gate = deferred();
+			apiCall.mockImplementation( ( route ) =>
+				route === 'update_settings'
+					? gate.promise
+					: Promise.resolve( { success: true } )
+			);
+			const { unmount } = render( <ImageOptimization /> );
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Save Settings/i } )
+			);
+			await waitFor( () => {
+				expect(
+					apiCall.mock.calls.filter(
+						( c ) => c[ 0 ] === 'update_settings'
+					)
+				).toHaveLength( 1 );
+			} );
+			const signal = apiCall.mock.calls.find(
+				( c ) => c[ 0 ] === 'update_settings'
+			)[ 3 ];
+			expect( signal.aborted ).toBe( false );
+			unmount();
+			expect( signal.aborted ).toBe( true );
+			await act( async () => {
+				gate.resolve( { success: true } );
+				await gate.promise;
+			} );
+		} );
+
+		it( 'does not notify when unmounted mid-save (success path)', async () => {
+			const gate = deferred();
+			apiCall.mockImplementation( ( route ) =>
+				route === 'update_settings'
+					? gate.promise
+					: Promise.resolve( { success: true } )
+			);
+			const { unmount } = render( <ImageOptimization /> );
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Save Settings/i } )
+			);
+			await waitFor( () => {
+				expect(
+					apiCall.mock.calls.filter(
+						( c ) => c[ 0 ] === 'update_settings'
+					)
+				).toHaveLength( 1 );
+			} );
+			mockNotify.mockClear();
+			unmount();
+			await act( async () => {
+				gate.resolve( {
+					success: true,
+					message: 'Settings updated successfully.',
+				} );
+				await gate.promise;
+			} );
+			expect( mockNotify ).not.toHaveBeenCalled();
+		} );
+
+		it( 'does not notify when unmounted mid-save (failure path)', async () => {
+			const gate = deferred();
+			apiCall.mockImplementation( ( route ) =>
+				route === 'update_settings'
+					? gate.promise
+					: Promise.resolve( { success: true } )
+			);
+			const { unmount } = render( <ImageOptimization /> );
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Save Settings/i } )
+			);
+			await waitFor( () => {
+				expect(
+					apiCall.mock.calls.filter(
+						( c ) => c[ 0 ] === 'update_settings'
+					)
+				).toHaveLength( 1 );
+			} );
+			mockNotify.mockClear();
+			unmount();
+			await act( async () => {
+				gate.resolve( { success: false, message: 'nope' } );
+				await gate.promise;
+			} );
+			expect( mockNotify ).not.toHaveBeenCalled();
+		} );
+
+		it( 'aborts the LCP apply when the component unmounts', async () => {
+			const gate = deferred();
+			apiCall.mockImplementation( ( action ) => {
+				if (
+					typeof action === 'string' &&
+					action.startsWith( 'lcp_preload_candidate' )
+				) {
+					return Promise.resolve( {
+						success: true,
+						data: {
+							candidate: {
+								url: 'https://example.com/hero.jpg',
+								n: 0,
+								lastSeen: Date.now(),
+							},
+							source: 'pagespeed',
+						},
+					} );
+				}
+				if ( action === 'update_settings' ) {
+					return gate.promise;
+				}
+				return Promise.resolve( { success: true } );
+			} );
+
+			const { unmount } = render( <ImageOptimization /> );
+			const applyButton = await screen.findByRole( 'button', {
+				name: /Preload this image/i,
+			} );
+			fireEvent.click( applyButton );
+
+			await waitFor( () => {
+				expect(
+					apiCall.mock.calls.filter(
+						( c ) => c[ 0 ] === 'update_settings'
+					)
+				).toHaveLength( 1 );
+			} );
+			const signal = apiCall.mock.calls.find(
+				( c ) => c[ 0 ] === 'update_settings'
+			)[ 3 ];
+			expect( signal.aborted ).toBe( false );
+
+			mockNotify.mockClear();
+			unmount();
+			expect( signal.aborted ).toBe( true );
+			await act( async () => {
+				gate.resolve( { success: true } );
+				await gate.promise;
+			} );
+			expect( mockNotify ).not.toHaveBeenCalled();
+		} );
+
+		it( 'does not notify when unmounted mid-LCP-apply (failure path)', async () => {
+			const gate = deferred();
+			apiCall.mockImplementation( ( action ) => {
+				if (
+					typeof action === 'string' &&
+					action.startsWith( 'lcp_preload_candidate' )
+				) {
+					return Promise.resolve( {
+						success: true,
+						data: {
+							candidate: {
+								url: 'https://example.com/hero.jpg',
+								n: 0,
+								lastSeen: Date.now(),
+							},
+							source: 'pagespeed',
+						},
+					} );
+				}
+				if ( action === 'update_settings' ) {
+					return gate.promise;
+				}
+				return Promise.resolve( { success: true } );
+			} );
+
+			const { unmount } = render( <ImageOptimization /> );
+			const applyButton = await screen.findByRole( 'button', {
+				name: /Preload this image/i,
+			} );
+			fireEvent.click( applyButton );
+
+			await waitFor( () => {
+				expect(
+					apiCall.mock.calls.filter(
+						( c ) => c[ 0 ] === 'update_settings'
+					)
+				).toHaveLength( 1 );
+			} );
+			mockNotify.mockClear();
+			unmount();
+			await act( async () => {
+				// Reject, not resolve: this is the only way into the catch
+				// block, which carries its own separate mounted/abort guard.
+				gate.reject( new Error( 'network down' ) );
+				await gate.promise.catch( () => {} );
+			} );
+			expect( mockNotify ).not.toHaveBeenCalled();
+		} );
+
+		it( 'does not notify or log when the LCP apply rejects after unmount', async () => {
+			const gate = deferred();
+			const consoleSpy = jest
+				.spyOn( console, 'error' )
+				.mockImplementation( () => {} );
+			apiCall.mockImplementation( ( action ) => {
+				if (
+					typeof action === 'string' &&
+					action.startsWith( 'lcp_preload_candidate' )
+				) {
+					return Promise.resolve( {
+						success: true,
+						data: {
+							candidate: {
+								url: 'https://example.com/hero.jpg',
+								n: 0,
+								lastSeen: Date.now(),
+							},
+							source: 'pagespeed',
+						},
+					} );
+				}
+				if ( action === 'update_settings' ) {
+					return gate.promise;
+				}
+				return Promise.resolve( { success: true } );
+			} );
+
+			const { unmount } = render( <ImageOptimization /> );
+			const applyButton = await screen.findByRole( 'button', {
+				name: /Preload this image/i,
+			} );
+			fireEvent.click( applyButton );
+			await waitFor( () => {
+				expect(
+					apiCall.mock.calls.filter(
+						( c ) => c[ 0 ] === 'update_settings'
+					)
+				).toHaveLength( 1 );
+			} );
+			mockNotify.mockClear();
+			consoleSpy.mockClear();
+			unmount();
+			await act( async () => {
+				gate.reject( new Error( 'network down' ) );
+				await gate.promise.catch( () => {} );
+			} );
+			expect( mockNotify ).not.toHaveBeenCalled();
+			expect( consoleSpy ).not.toHaveBeenCalled();
+			consoleSpy.mockRestore();
+		} );
+
+		it( 'sends exactly one update_settings request on a double submit', async () => {
+			apiCall.mockResolvedValue( { success: true } );
+			render( <ImageOptimization /> );
+			const button = screen.getByRole( 'button', {
+				name: /Save Settings/i,
+			} );
+			fireEvent.click( button );
+			fireEvent.click( button );
+			await waitFor( () => {
+				expect(
+					apiCall.mock.calls.filter(
+						( c ) => c[ 0 ] === 'update_settings'
+					).length
+				).toBeGreaterThan( 0 );
+			} );
+			expect(
+				apiCall.mock.calls.filter(
+					( c ) => c[ 0 ] === 'update_settings'
+				)
+			).toHaveLength( 1 );
+		} );
 	} );
 } );
