@@ -640,7 +640,7 @@ describe( 'ImageOptimization Component', () => {
 			expect( mockNotify ).not.toHaveBeenCalled();
 		} );
 
-		it( 'does not notify when unmounted mid-save (failure path)', async () => {
+		it( 'does not notify when unmounted and the save resolves unsatisfied', async () => {
 			const gate = deferred();
 			apiCall.mockImplementation( ( route ) =>
 				route === 'update_settings'
@@ -665,6 +665,42 @@ describe( 'ImageOptimization Component', () => {
 				await gate.promise;
 			} );
 			expect( mockNotify ).not.toHaveBeenCalled();
+		} );
+
+		it( 'does not notify or log when the save REJECTS after unmount', async () => {
+			// This is the only way into onSubmit's catch block. Resolving
+			// { success: false } returns through the post-await guard instead,
+			// so without this case the catch-block guard is pinned by nothing.
+			const gate = deferred();
+			const consoleSpy = jest
+				.spyOn( console, 'error' )
+				.mockImplementation( () => {} );
+			apiCall.mockImplementation( ( route ) =>
+				route === 'update_settings'
+					? gate.promise
+					: Promise.resolve( { success: true } )
+			);
+			const { unmount } = render( <ImageOptimization /> );
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Save Settings/i } )
+			);
+			await waitFor( () => {
+				expect(
+					apiCall.mock.calls.filter(
+						( c ) => c[ 0 ] === 'update_settings'
+					)
+				).toHaveLength( 1 );
+			} );
+			mockNotify.mockClear();
+			consoleSpy.mockClear();
+			unmount();
+			await act( async () => {
+				gate.reject( new Error( 'network down' ) );
+				await gate.promise.catch( () => {} );
+			} );
+			expect( mockNotify ).not.toHaveBeenCalled();
+			expect( consoleSpy ).not.toHaveBeenCalled();
+			consoleSpy.mockRestore();
 		} );
 
 		it( 'aborts the LCP apply when the component unmounts', async () => {
