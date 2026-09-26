@@ -189,3 +189,37 @@ Completed: 2026-08-31 11:35 UTC
 - Architecture: the new private method changes the generated inventory, so `docs/architecture/class-inventory.json` and `DEPENDENCY-GRAPH.json` were regenerated as the project rules require.
 - Gate: PHPCS, ESLint (0 errors), 833 Jest, 2,785 PHPUnit / 25,818 assertions, build, architecture check, diff check all green.
 - Scope boundary: the LiteSpeed twin cannot receive the same fix — its sync methods return `void` with no failure signal, so "release on failure" is not expressible there and a design change is required. Recorded as a follow-up, not silently bundled.
+
+## 2026-09-25 — Uninstall option leak closed, and the class of leak guarded
+- Branch: `fix/uninstall-option-leak`, cut from `master` @ `efdb2019`. Independent
+  of the other branches.
+- Leak: `wppo_esi_fallback_secret` is a real 64-character secret written with
+  `add_option()` / `update_option()` by the LiteSpeed ESI bridge when `wp_salt()`
+  is unavailable. It was absent from `Util::UNINSTALL_OPTIONS` and from the
+  inline `uninstall.php` list, so it survived a full "delete all plugin data"
+  uninstall and would be reused by a later reinstall.
+- Re-derived independently rather than trusting the earlier report: a source
+  scan of every `wppo_` option literal and class constant under `includes/`,
+  classified by which WordPress API it reaches, showed exactly one true
+  persistent-option leak. The other 32 names that are also missing are
+  transient-backed and removed by the bulk transient sweep, and
+  `wppo_front_page_lcp_` is a documented dynamic prefix swept by an explicit
+  LIKE query — so a blanket "everything must be in the list" rule would have
+  produced 33 false positives and would have been disabled.
+- Fix: the option is added to `Util::UNINSTALL_OPTIONS` and to the inline list
+  in `uninstall.php`, and `UninstallOptionsTest::$expected_options` — which
+  deliberately ratchets the exact list — is updated with the reason.
+- New guard, `tests/php/UninstallOptionLeakTest.php`, closes the class of leak
+  rather than only this instance. It reads the source instead of the database,
+  so it sees options no local install has ever created — which is exactly why
+  `wp wppo verify` (database-driven) and the sync test both passed while this
+  secret survived. It separates persistent options from transient-backed keys
+  and the documented dynamic prefix, and both directions are mutation-checked:
+  removing the entry fails the guard and names the option and its source lines.
+- Gate: PHPCS, ESLint (0 errors), 833 Jest, 2,786 PHPUnit / 25,816 assertions,
+  build, architecture check, diff check — all green.
+
+## 2026-09-26 — Two test defects in the option-leak guard (adversarial review)
+- **Vacuous assertion.** `test_dynamic_option_prefixes_are_swept_on_uninstall` asserted a bare substring over the whole of `uninstall.php`, so deleting the real `esc_like( 'wppo_front_page_lcp_' ) . '%'` sweep while leaving the comment that names the prefix kept it green. It now asserts the executable statement via a regex over `esc_like( ... ) . '%'`. Re-mutation-checked: deleting the sweep and leaving the comment now fails. (A pre-existing test killed that mutation too, so this was a dead test rather than dead coverage — but it claimed to check something it did not.)
+- **Overstated contract.** The scan does not match the `update_option( self::CONST, ... )` call form; the constant branch only recognises a bare identifier. That form is used at 56 option-API call sites in this repository versus 40 literal ones, so the docblock's claim that it "sees every option the plugin can ever write" was false for the dominant style. The docblock now states the limit explicitly instead of overclaiming; closing the gap is a follow-up.
+- **Phantom reference.** Two comments cited `LiteSpeed_ESI::FALLBACK_SECRET_OPTION`. That class declares no constants at all — the real call sites are bare string literals at `includes/Integrations/class-litespeed-esi.php:373-398`. Corrected to cite the file:line.
