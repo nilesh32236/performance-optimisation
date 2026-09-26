@@ -58,12 +58,14 @@ const badgeFor = ( status ) => {
 /**
  * The site status card.
  *
- * @param {Object}   props         Component props.
- * @param {Array}    props.rows    Status rows from the status model.
- * @param {string}   props.overall The overall verdict.
- * @param {boolean}  props.loading Whether the data is still arriving.
- * @param {boolean}  props.failed  Whether the data could not be loaded.
- * @param {Function} props.onRetry Re-request the data.
+ * @param {Object}   props                Component props.
+ * @param {Array}    props.rows           Status rows from the status model.
+ * @param {string}   props.overall        The overall verdict.
+ * @param {boolean}  props.loading        Whether the data is still arriving.
+ * @param {boolean}  props.failed         Whether the data could not be loaded.
+ * @param {Function} props.onRetry        Re-request the data.
+ * @param {boolean}  props.partialFailure Whether some, but not all,
+ *                                        sources produced nothing.
  * @return {Object} The card.
  */
 export default function SiteStatusCard( {
@@ -71,6 +73,7 @@ export default function SiteStatusCard( {
 	overall = 'unknown',
 	loading = false,
 	failed = false,
+	partialFailure = false,
 	onRetry,
 } ) {
 	// One live region for the whole card, announcing only the verdict, so a
@@ -139,6 +142,22 @@ export default function SiteStatusCard( {
 					overallBadge.label
 				}` }
 			</p>
+
+			{ partialFailure && onRetry ? (
+				<p className="wppo-overview__stale">
+					{ __(
+						'Some information could not be loaded.',
+						'performance-optimisation'
+					) }{ ' ' }
+					<button
+						type="button"
+						className="wppo-button wppo-button--link"
+						onClick={ onRetry }
+					>
+						{ __( 'Try again', 'performance-optimisation' ) }
+					</button>
+				</p>
+			) : null }
 
 			<ul className="wppo-overview__status-list">
 				{ rows.map( ( row ) => {
