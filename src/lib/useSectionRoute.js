@@ -371,6 +371,12 @@ export const useSectionRoute = ( {
 				return null;
 			}
 			const next = { area, view: view ?? itemsForArea( area )[ 0 ] };
+			// Re-selecting what is already open must not add a history entry, or
+			// the next Back press becomes a visible no-op the user cannot explain.
+			const current = currentRef.current;
+			if ( current.area === next.area && current.view === next.view ) {
+				return current;
+			}
 			write( next, false );
 			setRoute( next );
 			return next;
@@ -396,6 +402,13 @@ export const useSectionRoute = ( {
 			const items = itemsForArea( next.area );
 			const view = items.includes( next.view ) ? next.view : items[ 0 ];
 			const target = { area: next.area, view };
+			const current = currentRef.current;
+			if (
+				current.area === target.area &&
+				current.view === target.view
+			) {
+				return current;
+			}
 			write( target, false );
 			setRoute( target );
 			return target;

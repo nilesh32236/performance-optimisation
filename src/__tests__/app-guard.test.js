@@ -253,6 +253,95 @@ describe( 'the unsaved-changes guard, exercised through App', () => {
 		);
 	} );
 
+	it( 'blocks a Back that moves to the SIBLING sub-screen in the same area', async () => {
+		// The D1 defect restricted to a screen that has a sibling sub-tab. The
+		// other Back tests only cross areas, so an exemption that compared the
+		// area alone would let this through — which is precisely the bug the
+		// veto exists to close.
+		window.history.replaceState(
+			{},
+			'',
+			`${ PAGE }&section=speed&view=preload`
+		);
+		render( <App /> );
+		await screen.findByRole( 'heading', { level: 1 } );
+		await waitFor( () =>
+			expect(
+				document.querySelector( 'input[type="checkbox"]' )
+			).toBeTruthy()
+		);
+		await dirtyTheForm();
+
+		act( () => {
+			window.history.replaceState( {}, '', `${ PAGE }&section=speed` );
+			window.dispatchEvent( new window.PopStateEvent( 'popstate' ) );
+		} );
+
+		await waitFor( () => expect( openDialog() ).toBeTruthy() );
+		expect( window.location.search ).toContain( 'view=preload' );
+	} );
+
+	it( 'allows a Back that lands on the very same screen, with no prompt', async () => {
+		// The flip side, and the part that matters: the veto must not fire when
+		// the history entry describes the screen already on display. The form is
+		// DIRTY here on purpose — with a clean form the exemption short-circuits
+		// on `!isDirty` and the view comparison is never exercised, so a guard
+		// that compared the area alone would pass unnoticed.
+		window.history.replaceState(
+			{},
+			'',
+			`${ PAGE }&section=speed&view=preload`
+		);
+		render( <App /> );
+		await screen.findByRole( 'heading', { level: 1 } );
+		await waitFor( () =>
+			expect(
+				document.querySelector( '.wppo-subnav [role="tab"]' )
+			).toBeTruthy()
+		);
+		await waitFor( () =>
+			expect(
+				document.querySelector( 'input[type="checkbox"]' )
+			).toBeTruthy()
+		);
+		await dirtyTheForm();
+
+		act( () => {
+			window.history.replaceState(
+				{},
+				'',
+				`${ PAGE }&section=speed&view=preload`
+			);
+			window.dispatchEvent( new window.PopStateEvent( 'popstate' ) );
+		} );
+
+		await new Promise( ( r ) => setTimeout( r, 300 ) );
+		expect( openDialog() ).toBeNull();
+		expect( window.location.search ).toContain( 'view=preload' );
+	} );
+
+	it( 're-clicking the already-active sub-tab adds no history entry', async () => {
+		window.history.replaceState(
+			{},
+			'',
+			`${ PAGE }&section=speed&view=preload`
+		);
+		const { container } = render( <App /> );
+		await screen.findByRole( 'heading', { level: 1 } );
+		await waitFor( () =>
+			expect(
+				container.querySelector( '.wppo-subnav [role="tab"]' )
+			).toBeTruthy()
+		);
+
+		const before = window.history.length;
+		fireEvent.click( subTab( container, /Preload/ ) );
+		await new Promise( ( r ) => setTimeout( r, 300 ) );
+
+		expect( window.history.length ).toBe( before );
+		expect( openDialog() ).toBeNull();
+	} );
+
 	it( 'navigates freely when the form is NOT dirty', async () => {
 		// The guard must not become a wall.
 		const container = await renderMedia();
