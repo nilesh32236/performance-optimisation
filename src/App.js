@@ -25,18 +25,17 @@ import {
 import useServerRules from './lib/useServerRules';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import SectionShell from './components/SectionShell';
-import { readSection, readView, useSectionRoute } from './lib/useSectionRoute';
+import { useSectionRoute } from './lib/useSectionRoute';
 import {
 	DEFAULT_SECTION,
 	SECTIONS,
 	SECTION_IDS,
-	LEGACY_TO_AREA,
-	areaForView,
 	itemsForSection,
 } from './lib/informationArchitecture';
 
-// Ids of the screens an area owns, for validating a `view` deep link.
-const sectionItems = ( sectionId ) =>
+// Ids of the screens an area owns. The route hook needs ids only; the
+// descriptors (icon, label) stay with the render.
+const areaItemIds = ( sectionId ) =>
 	itemsForSection( sectionId ).map( ( item ) => item.id );
 
 import { __ } from '@wordpress/i18n';
@@ -103,36 +102,77 @@ export const isSafeCssColor = ( value ) =>
 	/^#[0-9a-fA-F]{3,4}$|^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/.test( value );
 
 const App = () => {
-	// The URL is the source of truth for which area is open. Proven live to be
-	// absent before this: walking every tab left location.href unchanged, so a
-	// refresh lost the section and Back/Forward did nothing.
-	const { active: activeSection, navigate: setActiveSection } =
-		useSectionRoute( {
-			defaultSection: DEFAULT_SECTION,
-			sections: SECTION_IDS,
-		} );
-	// Which screen inside the area. Reset to the area's first screen whenever the
-	// area changes, so a bookmarked sub-screen never leaks across areas.
-	const [ activeView, setActiveView ] = useState( () => {
-		const section = readSection(
-			window.location.search,
-			DEFAULT_SECTION,
-			SECTION_IDS
+	// Resolve a navigation target without performing it, so the dirty guard can
+	// compare the destination against what is currently on screen. Callers pass
+	// area ids, screen ids and legacy values, so the guard cannot compare the
+	// raw argument against the current area.
+	const resolveDestination = useCallback( ( target ) => {
+		const raw = String( target || '' );
+		if ( SECTION_IDS.includes( raw ) ) {
+			return { area: raw, view: areaItemIds( raw )[ 0 ] };
+		}
+		const legacy = new URLSearchParams( window.location.search ).get(
+			'tab'
 		);
-		// A `view` deep link is only honoured when the area that owns it is also
-		// the one named in the URL, so ?section=manage&view=preload cannot open a
-		// Speed screen while the sidebar says Manage. Failing that, fall back to
-		// the first screen OF THE SECTION THE URL NAMED — a hardcoded fallback
-		// here is what made ?section=media render an Overview header.
-		return (
-			readView(
-				window.location.search,
-				section,
-				sectionItems( section )
-			) ??
-			itemsForSection( section )[ 0 ]?.id ??
-			'dashboard'
-		);
+		for ( const candidate of [ raw, legacy ] ) {
+			if ( ! candidate ) {
+				continue;
+			}
+			const owner = SECTION_IDS.find( ( id ) =>
+				areaItemIds( id ).includes( candidate )
+			);
+			if ( owner ) {
+				return { area: owner, view: candidate };
+			}
+		}
+		return null;
+	}, [] );
+
+	// The URL is the single source of truth for BOTH the open area and the
+	// open screen within it. Proven live to be absent before this: walking every
+	// tab left location.href unchanged, so a refresh lost the section and
+	// Back/Forward did nothing.
+	//
+	// Both values come from one read of the URL, so the rendered panel cannot
+	// trail behind the address bar on a popstate — which is exactly what it did
+	// when the area and the screen were held separately.
+	// Refuse a Back/Forward that would move away from unsaved work.
+	//
+	// A popstate never reaches `navigate`, so without this the guard is
+	// bypassed entirely for browser history and a dirty form is destroyed with
+	// no dialog and no browser prompt — same-document navigation does not fire
+	// `beforeunload` either. Returning false puts the address bar back to what
+	// is on screen; `pendingRoute` then holds the route the user was trying to
+	// reach, so Discard honours the gesture they actually made.
+	//
+	// The live values are read through a ref rather than captured: this
+	// callback is *passed into* the hook that produces them, so referring to
+	// them directly would be a circular initialisation.
+	const popGuard = useRef( { isDirty: false, area: '', view: '' } );
+
+	const onBeforePop = useCallback( ( incoming ) => {
+		const current = popGuard.current;
+		if (
+			! current.isDirty ||
+			( incoming.area === current.area && incoming.view === current.view )
+		) {
+			return true;
+		}
+		setPendingRoute( incoming );
+		setShowGuard( true );
+		return false;
+	}, [] );
+
+	const {
+		area: activeSection,
+		view: activeView,
+		navigate,
+		navigateTo: navigateToRoute,
+	} = useSectionRoute( {
+		defaultArea: DEFAULT_SECTION,
+		areas: SECTION_IDS,
+		itemsFor: areaItemIds,
+		onBeforePop,
 	} );
 	const [ transition, setTransition ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
@@ -142,8 +182,14 @@ const App = () => {
 	const [ ccssError, setCcssError ] = useState( false );
 	const [ ccssRefreshTrigger, setCcssRefreshTrigger ] = useState( 0 );
 	const [ isDirty, setIsDirty ] = useState( false );
-	const [ pendingTab, setPendingTab ] = useState( null );
+	const [ pendingTarget, setPendingTarget ] = useState( null );
+	const [ pendingRoute, setPendingRoute ] = useState( null );
 	const [ showGuard, setShowGuard ] = useState( false );
+
+	// Keep the popstate guard's view of the world current without making
+	// `onBeforePop` change identity (a changing identity would re-bind the
+	// listener on every render for no benefit).
+	popGuard.current = { isDirty, area: activeSection, view: activeView };
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedCcss = useRef( false );
 
@@ -163,69 +209,74 @@ const App = () => {
 
 	const sidebarItems = useMemo( () => SECTIONS, [] );
 
-	// Changing area. The dirty-form guard is unchanged in behaviour: it still
-	// intercepts a navigation away from unsaved work and routes it through the
-	// confirm dialog.
-	const handleTabChange = useCallback(
-		( nextSection ) => {
-			if ( isDirty && nextSection !== activeSection ) {
-				setPendingTab( nextSection );
-				setShowGuard( true );
-				return;
+	// Any navigation away from unsaved work goes through the confirm dialog.
+	//
+	// This covers BOTH changing area and changing the screen within an area.
+	// Guarding only the area switch left a silent data-loss path: editing the
+	// Preload settings and then clicking the "Assets & Scripts" sub-tab
+	// discarded the edit with no prompt, because two settings forms share each
+	// area. The earlier comment here claimed that was intentional; it was not.
+	//
+	// The comparison is against the resolved destination rather than the raw
+	// argument, because callers pass area ids, screen ids and legacy values, and
+	// comparing a screen id against an area id is always "different".
+	const requestNavigation = useCallback(
+		( target ) => {
+			const destination = resolveDestination( target );
+			if ( ! destination ) {
+				// Unresolvable target: do nothing, and do not prompt about edits
+				// the user never navigated away from.
+				return false;
 			}
-			setActiveSection( nextSection );
-			setActiveView(
-				itemsForSection( nextSection )[ 0 ]?.id ?? 'dashboard'
-			);
-			setMobileMenuOpen( false );
+			if (
+				isDirty &&
+				( destination.area !== activeSection ||
+					destination.view !== activeView )
+			) {
+				setPendingTarget( target );
+				setShowGuard( true );
+				return false;
+			}
+			navigate( target );
+			return true;
 		},
-		[ isDirty, activeSection, setActiveSection ]
+		[ isDirty, activeSection, activeView, navigate, resolveDestination ]
 	);
 
-	// Changing the screen inside the current area. No reload, no guard: the
-	// form being left is part of the same area the user is already in.
-	const handleViewChange = useCallback( ( nextView ) => {
-		setActiveView( nextView );
-	}, [] );
+	const handleTabChange = useCallback(
+		( nextSection ) => {
+			requestNavigation( nextSection );
+			setMobileMenuOpen( false );
+		},
+		[ requestNavigation ]
+	);
 
-	// A legacy deep link (tab=fileOptimization, or the old ?tab= param) must
-	// still resolve to something useful rather than dumping the user on
-	// Overview with no explanation.
-	const legacyTarget = useMemo( () => {
-		const params = new URLSearchParams( window.location.search );
-		const legacy = params.get( 'tab' );
-		if ( legacy && LEGACY_TO_AREA[ legacy ] ) {
-			return LEGACY_TO_AREA[ legacy ];
-		}
-		const view = params.get( 'view' );
-		const owner = areaForView( view );
-		return owner ? { section: owner.id, view } : null;
-	}, [] );
-
-	useEffect( () => {
-		if ( ! legacyTarget ) {
-			return;
-		}
-		setActiveSection( legacyTarget.section );
-		setActiveView( legacyTarget.view );
-	}, [ legacyTarget, setActiveSection ] );
+	const handleViewChange = useCallback(
+		( nextView ) => {
+			requestNavigation( nextView );
+		},
+		[ requestNavigation ]
+	);
 
 	const confirmDiscard = useCallback( () => {
 		setShowGuard( false );
 		setIsDirty( false );
-		if ( pendingTab ) {
-			setActiveSection( pendingTab );
-			setActiveView(
-				itemsForSection( pendingTab )[ 0 ]?.id ?? 'dashboard'
-			);
+		if ( pendingRoute ) {
+			// A refused Back/Forward: the URL was put back, so the route has to
+			// be written again now that the user confirmed the discard.
+			navigateToRoute( pendingRoute );
+			setPendingRoute( null );
+		} else if ( pendingTarget ) {
+			navigate( pendingTarget );
 			setMobileMenuOpen( false );
-			setPendingTab( null );
+			setPendingTarget( null );
 		}
-	}, [ pendingTab, setActiveSection ] );
+	}, [ pendingTarget, pendingRoute, navigate, navigateToRoute ] );
 
 	const cancelGuard = useCallback( () => {
 		setShowGuard( false );
-		setPendingTab( null );
+		setPendingTarget( null );
+		setPendingRoute( null );
 	}, [] );
 
 	// Block browser unload when dirty — browsers show generic confirmation.
@@ -293,7 +344,13 @@ const App = () => {
 
 		const activeComponent =
 			components[ activeView ] || components.dashboard;
-		const area = areaForView( activeView ) ?? sidebarItems[ 0 ];
+		// The rendered area follows the AREA, not the view. Deriving it from the
+		// view is what froze the panel on Back: popstate updated the area and the
+		// sidebar, but this line kept rendering whichever area the stale view
+		// happened to belong to, so the URL and the screen disagreed permanently.
+		const area =
+			sidebarItems.find( ( item ) => item.id === activeSection ) ??
+			sidebarItems[ 0 ];
 
 		return (
 			<SectionShell

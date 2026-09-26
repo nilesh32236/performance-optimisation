@@ -1,24 +1,26 @@
 /**
- * useSectionRoute — keeps the active admin section in the URL.
+ * useSectionRoute — keeps the admin's area *and* sub-screen in the URL.
  *
- * The SPA kept its active tab in React state only, so the browser URL never
- * changed: refresh lost the section, Back and Forward did nothing, and a
- * bookmark could not be shared. This hook makes the URL the single source of
- * truth for *which section is open*, without pulling in a router dependency —
- * the repository deliberately has none, and `pushState`/`popstate` is the
- * right size of solution for one query key.
+ * The admin used to keep its active tab in React state only, so the browser URL
+ * never changed: refresh lost the section, Back and Forward did nothing, and a
+ * bookmark could not be shared.
  *
- * Behaviour that must not regress:
+ * ## Why this owns the sub-screen too
  *
- * - WordPress admin routing is untouched. We only ever add or replace the
- *   `section` key on the existing `admin.php?page=…` URL, so `page`, the nonce
- *   and any other admin query args survive.
- * - No full page reload: in-app changes use `pushState`, and the document is
- *   only written on first mount if the URL is missing the key.
- * - An unknown or hostile value falls back to the default rather than rendering
- *   nothing, and does not get written back to the URL.
- * - The popstate listener is the single source of truth for Back/Forward, so
- *   the URL and the visible section cannot drift.
+ * The first version of this hook owned only the area and left the sub-screen in
+ * separate caller state. That was a desynchronisation waiting to happen, and it
+ * happened: `popstate` updated the area, the sidebar followed, but the rendered
+ * panel was still driven by the caller's stale sub-screen — so Back moved the
+ * URL and the sidebar while the panel stayed frozen, and this module's own
+ * "the URL and the screen cannot drift" claim was false.
+ *
+ * Holding both values here, derived from one read of the URL, makes that class
+ * of bug unrepresentable rather than merely untested.
+ *
+ * ## What this does not do
+ *
+ * It does not manage the unsaved-changes guard. That stays with the caller; this
+ * hook reports what the URL says and moves the URL when asked.
  *
  * @package
  */
@@ -26,188 +28,393 @@
 import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 
 /**
- * The query key that carries the section. Short because it appears in every
- * URL, and deliberately distinct from the WordPress `page` key.
+ * The query key that carries the area.
  */
 export const SECTION_PARAM = 'section';
 
 /**
- * Build the canonical section definitions.
- *
- * Kept in one place so navigation, the URL contract and the tests cannot
- * disagree about what exists. Order is the sidebar order.
- *
- * @param {Function} translate Translation function.
- * @return {Array<Object>} Section descriptors.
- */
-export const buildSections = ( translate ) => [
-	{
-		id: 'overview',
-		label: translate( 'Overview', 'performance-optimisation' ),
-	},
-	{ id: 'speed', label: translate( 'Speed', 'performance-optimisation' ) },
-	{ id: 'media', label: translate( 'Media', 'performance-optimisation' ) },
-	{
-		id: 'data-system',
-		label: translate( 'Data & System', 'performance-optimisation' ),
-	},
-	{ id: 'manage', label: translate( 'Manage', 'performance-optimisation' ) },
-];
-
-/**
- * Read a valid section id from a URL search string.
- *
- * Returns the default for a missing, empty, unknown or non-string value rather
- * than throwing or rendering a blank panel.
- *
- * @param {string}   search   A `location.search` value.
- * @param {string}   fallback Section id to use when none is valid.
- * @param {string[]} known    Every section id that exists.
- * @return {string} A valid section id.
- */
-export const readSection = ( search, fallback, known ) => {
-	try {
-		const params = new URLSearchParams( search || '' );
-		const raw = params.get( SECTION_PARAM );
-		return known.includes( raw ) ? raw : fallback;
-	} catch {
-		// A malformed query string must never take the admin down.
-		return fallback;
-	}
-};
-
-/**
- * The query key that carries the sub-screen within an area.
+ * The query key that carries the sub-screen within the area.
  */
 export const VIEW_PARAM = 'view';
 
 /**
- * Read a valid sub-screen for a given area.
- *
- * The view is only honoured when the area that owns it is the one named in the
- * URL, so `?section=manage&view=preload` cannot open a Speed screen while the
- * sidebar says Manage. Returns undefined when the view is absent, unknown, or
- * owned by a different area, so the caller can fall back to the first item.
- *
- * @param {string}   search  A `location.search` value.
- * @param {string}   section The active area id.
- * @param {string[]} items   Sub-item ids the area owns.
- * @return {string|undefined} A valid view id, or undefined.
+ * A query key an older version of this admin used. It is consumed on arrival
+ * and never written back — leaving it in place is what made a legacy link
+ * re-assert itself and lock navigation permanently.
  */
-export const readView = ( search, section, items ) => {
+export const LEGACY_PARAM = 'tab';
+
+/**
+ * Read a query value without ever throwing.
+ *
+ * @param {string} search A `location.search` value.
+ * @param {string} key    Parameter name.
+ * @return {string|null} The value, or null.
+ */
+const readParam = ( search, key ) => {
 	try {
-		const raw = new URLSearchParams( search || '' ).get( VIEW_PARAM );
-		if ( ! raw ) {
-			return undefined;
-		}
-		return ( items || [] ).includes( raw ) ? raw : undefined;
+		return new URLSearchParams( search || '' ).get( key );
 	} catch {
-		return undefined;
+		return null;
 	}
 };
 
 /**
- * Produce the URL for a section, preserving every other query argument.
+ * Read a valid area id from a URL search string.
  *
- * Uses the current location so `page`, the nonce and anything else a plugin or
- * WordPress added survive the navigation.
+ * Returns the fallback for a missing, empty, unknown or hostile value rather
+ * than rendering nothing. Whether the *URL* should then be corrected is a
+ * separate question, handled by the mount effect.
  *
- * @param {string} section Target section id.
- * @param {string} search  Current `location.search`.
+ * @param {string}   search   A `location.search` value.
+ * @param {string}   fallback Area id to use when none is valid.
+ * @param {string[]} known    Every area id that exists.
+ * @return {string} A valid area id.
+ */
+export const readSection = ( search, fallback, known ) => {
+	const raw = readParam( search, SECTION_PARAM );
+	return raw && known.includes( raw ) ? raw : fallback;
+};
+
+/**
+ * Read a valid sub-screen for a given area.
+ *
+ * Returns undefined when the view is absent, unknown, or owned by a different
+ * area, so the caller falls back to the area's first screen. Validating
+ * ownership is what stops `?section=manage&view=preload` from opening a Speed
+ * screen under a Manage header.
+ *
+ * @param {string}   search A `location.search` value.
+ * @param {string[]} items  Sub-item ids the area owns.
+ * @return {string|undefined} A valid view id, or undefined.
+ */
+export const readView = ( search, items ) => {
+	const raw = readParam( search, VIEW_PARAM );
+	return raw && ( items || [] ).includes( raw ) ? raw : undefined;
+};
+
+/**
+ * Build a search string for a target area and view, preserving every other
+ * admin argument — `page`, the nonce, anything a plugin added.
+ *
+ * `view` is omitted when it equals the area's first screen, which keeps ordinary
+ * URLs short and gives "no view" exactly one representation.
+ *
+ * @param {string}   search A `location.search` value.
+ * @param {string}   area   Target area id.
+ * @param {string}   view   Target view id, or undefined.
+ * @param {string[]} items  Sub-item ids the area owns.
  * @return {string} The `?…` suffix for the new location.
  */
-export const buildSearch = ( section, search ) => {
+export const buildSearch = ( search, area, view, items ) => {
 	const params = new URLSearchParams( search || '' );
-	params.set( SECTION_PARAM, section );
+	params.set( SECTION_PARAM, area );
+	if ( view && items && items[ 0 ] !== view ) {
+		params.set( VIEW_PARAM, view );
+	} else {
+		params.delete( VIEW_PARAM );
+	}
+	// The legacy key is consumed, never rewritten.
+	params.delete( LEGACY_PARAM );
 	return `?${ params.toString() }`;
 };
 
 /**
- * Track the active section in the URL.
+ * Resolve the full route from a URL.
  *
- * @param {Object}   config                Configuration.
- * @param {string}   config.defaultSection Section shown when the URL has none.
- * @param {string[]} config.sections       Every valid section id.
- * @return {Object} `{ active, navigate, setActive }` route state.
+ * One function turns a query string into the pair the UI renders, so the first
+ * render, a popstate and an explicit navigation cannot disagree.
+ *
+ * @param {Object}   config             Configuration.
+ * @param {string}   config.search      A `location.search` value.
+ * @param {string}   config.defaultArea Area id when the URL names none.
+ * @param {string[]} config.areas       Every area id.
+ * @param {Function} config.itemsFor    ( areaId ) => sub-item ids.
+ * @return {{area: string, view: string|undefined}} The resolved route.
  */
-export const useSectionRoute = ( { defaultSection, sections } ) => {
-	const known = sections;
-	const [ active, setActiveState ] = useState( () =>
-		typeof window === 'undefined'
-			? defaultSection
-			: readSection( window.location.search, defaultSection, known )
+export const resolveRoute = ( { search, defaultArea, areas, itemsFor } ) => {
+	const area = readSection( search, defaultArea, areas );
+	const items = itemsFor( area ) || [];
+	const view = readView( search, items );
+
+	// A link from the old seven-tab scheme carries `tab=<screen id>` and no
+	// `section`. Resolve it to the screen's owning area so existing bookmarks
+	// and task links still land where they used to, then let the mount effect
+	// strip the key. Ignoring it would silently send those links to Overview.
+	const rawArea = readParam( search, SECTION_PARAM );
+	if ( ! rawArea && ! view ) {
+		const legacy = readParam( search, LEGACY_PARAM );
+		if ( legacy ) {
+			const owner = areas.find( ( id ) =>
+				( itemsFor( id ) || [] ).includes( legacy )
+			);
+			if ( owner ) {
+				return { area: owner, view: legacy };
+			}
+		}
+	}
+
+	return { area, view: view ?? items[ 0 ] };
+};
+
+/**
+ * Whether the URL misdescribes what is on screen.
+ *
+ * True when the `section` key is absent or not a known id, or when a `view` is
+ * present that the resolved area does not own. The mount effect uses this to
+ * correct the address bar, so a bogus value cannot persist and quietly lie.
+ *
+ * @param {string}   search A `location.search` value.
+ * @param {string}   actual The area actually rendered.
+ * @param {string}   view   The view actually rendered.
+ * @param {string[]} items  Sub-item ids the actual area owns.
+ * @return {boolean} True when the URL should be rewritten.
+ */
+export const urlMisdescribes = ( search, actual, view, items ) => {
+	// A leftover `tab` key describes the old seven-tab scheme and is not what
+	// is on screen. Leaving it in the address bar is the same "URL lies" failure
+	// as a bogus `section`, so it is corrected on the same pass.
+	if ( readParam( search, LEGACY_PARAM ) ) {
+		return true;
+	}
+	const rawArea = readParam( search, SECTION_PARAM );
+	if ( rawArea !== actual ) {
+		return true;
+	}
+	const rawView = readParam( search, VIEW_PARAM );
+	if ( ! rawView ) {
+		return false;
+	}
+	// A view is only correct when the area owns it AND it is not the default.
+	return ! ( items || [] ).includes( rawView ) || items[ 0 ] === view;
+};
+
+/**
+ * Track the active area and sub-screen in the URL.
+ *
+ * @param {Object}   config             Configuration.
+ * @param {string}   config.defaultArea Area id used when the URL names none.
+ * @param {string[]} config.areas       Every area id that exists.
+ * @param {Function} config.itemsFor    Returns the screen ids an area owns.
+ * @param {Function} config.onBeforePop Optional popstate veto; false refuses.
+ * @return {Object} `{ area, view, navigate, navigateTo }` route state.
+ */
+export const useSectionRoute = ( {
+	defaultArea,
+	areas,
+	itemsFor,
+	onBeforePop = () => true,
+} ) => {
+	const itemsForArea = useCallback(
+		( area ) => itemsFor( area ) || [],
+		[ itemsFor ]
 	);
 
-	// Guard against a Back/Forward arriving between render and effect.
-	const mounted = useRef( false );
-
-	// First mount: make the URL describe what is actually on screen. A bare
-	// `replaceState` keeps this out of the history stack, so the first Back
-	// press still leaves the admin rather than re-entering this write.
-	useEffect( () => {
+	const read = useCallback( () => {
 		if ( typeof window === 'undefined' ) {
-			return;
+			return {
+				area: defaultArea,
+				view: itemsForArea( defaultArea )[ 0 ],
+			};
 		}
-		const current = readSection(
-			window.location.search,
-			defaultSection,
-			known
-		);
-		if ( current !== active ) {
-			setActiveState( current );
-			return;
-		}
-		if ( ! window.location.search.includes( `${ SECTION_PARAM }=` ) ) {
-			const next =
-				window.location.pathname +
-				buildSearch( active, window.location.search );
-			window.history.replaceState(
-				{ ...( window.history.state || {} ), wppoSection: active },
-				'',
-				next
-			);
-		}
-	}, [] );
+		return resolveRoute( {
+			search: window.location.search,
+			defaultArea,
+			areas,
+			itemsFor: itemsForArea,
+		} );
+	}, [ defaultArea, areas, itemsForArea ] );
 
-	// popstate is the authority for Back/Forward. Reading the URL (not a
-	// captured value) is what keeps the URL and the screen from disagreeing.
+	// The URL is the only source of truth; this is always a read of it.
+	const [ route, setRoute ] = useState( read );
+
+	// A ref, not state: the popstate handler needs the route currently on
+	// screen in order to put the URL back when the caller refuses, and it must
+	// not re-subscribe on every render to have it.
+	const currentRef = useRef( route );
+	currentRef.current = route;
+
+	const write = useCallback(
+		( next, replace ) => {
+			if ( typeof window === 'undefined' ) {
+				return;
+			}
+			const url =
+				window.location.pathname +
+				buildSearch(
+					window.location.search,
+					next.area,
+					next.view,
+					itemsForArea( next.area )
+				);
+			const state = {
+				...( window.history.state || {} ),
+				wppoRoute: next,
+			};
+			if ( replace ) {
+				window.history.replaceState( state, '', url );
+			} else {
+				window.history.pushState( state, '', url );
+			}
+		},
+		[ itemsForArea ]
+	);
+
+	// Mount: correct a missing, unknown, stale or legacy URL so the address bar
+	// describes what is on screen. `replaceState` keeps this out of history, so
+	// the first Back press still leaves the admin rather than undoing a write
+	// the user never made.
+	useEffect( () => {
+		const initial = read();
+		setRoute( initial );
+		if (
+			typeof window !== 'undefined' &&
+			urlMisdescribes(
+				window.location.search,
+				initial.area,
+				initial.view,
+				itemsForArea( initial.area )
+			)
+		) {
+			write( initial, true );
+		}
+	}, [] ); // eslint-disable-line react-hooks/exhaustive-deps -- one-shot mount sync.
+
+	// popstate is the authority for Back/Forward, and it re-reads the whole
+	// route rather than mutating one field. That is what makes the rendered
+	// panel follow the address bar instead of trailing behind it.
 	useEffect( () => {
 		if ( typeof window === 'undefined' ) {
 			return undefined;
 		}
 		const onPopState = () => {
-			const next = readSection(
-				window.location.search,
-				defaultSection,
-				known
-			);
-			mounted.current = true;
-			setActiveState( next );
+			const next = read();
+			// Let the caller refuse the move. Without this, Back and Forward
+			// bypass `navigate` entirely — so the unsaved-changes guard never
+			// sees them, and a dirty form is destroyed silently. Same-document
+			// navigation also never fires `beforeunload`, so nothing else would
+			// have caught it.
+			if (
+				typeof onBeforePop === 'function' &&
+				onBeforePop( next ) === false
+			) {
+				// Put the address bar back to what is actually on screen, so the
+				// URL does not describe a section the user is not looking at
+				// while the dialog is open.
+				write( currentRef.current, true );
+				return;
+			}
+			setRoute( next );
+			// Re-sync the address bar if the entry we landed on does not describe
+			// what is now rendered. Without this, returning to a history entry
+			// that lacks `section` leaves the URL silent about the screen, and the
+			// "URL and screen agree" invariant holds only on the happy path.
+			if (
+				typeof window !== 'undefined' &&
+				urlMisdescribes(
+					window.location.search,
+					next.area,
+					next.view,
+					itemsForArea( next.area )
+				)
+			) {
+				write( next, true );
+			}
 		};
 		window.addEventListener( 'popstate', onPopState );
 		return () => window.removeEventListener( 'popstate', onPopState );
-	}, [ defaultSection, known ] );
+	}, [ read, itemsForArea, write, onBeforePop ] );
 
-	const setActive = useCallback(
-		( next ) => {
-			if ( ! known.includes( next ) ) {
-				// Never let an unknown id into the URL or the screen.
-				return;
+	/**
+	 * Navigate to an area, or to a specific screen within it.
+	 *
+	 * Accepts an area id, a screen id, or a legacy `tab` value. The Dashboard's
+	 * existing task links pass screen ids such as `fileOptimization`, and
+	 * existing bookmarks carry `tab=`. Both resolve here rather than silently
+	 * doing nothing, which is what broke those links before.
+	 *
+	 * @param {string} target Area id, screen id, or a legacy value.
+	 * @return {Object|null} The resolved destination, or null when unknown.
+	 */
+	const navigate = useCallback(
+		( target ) => {
+			if ( typeof window === 'undefined' ) {
+				return null;
 			}
-			if ( typeof window !== 'undefined' && next !== active ) {
-				const url =
-					window.location.pathname +
-					buildSearch( next, window.location.search );
-				window.history.pushState(
-					{ ...( window.history.state || {} ), wppoSection: next },
-					'',
-					url
-				);
+			const raw = String( target || '' );
+			let area = null;
+			let view = null;
+
+			if ( areas.includes( raw ) ) {
+				area = raw;
+			} else {
+				const params = new URLSearchParams( window.location.search );
+				const legacy = params.get( LEGACY_PARAM );
+				for ( const candidate of [ raw, legacy ] ) {
+					if ( ! candidate ) {
+						continue;
+					}
+					const hit = areas.find( ( id ) =>
+						itemsForArea( id ).includes( candidate )
+					);
+					if ( hit ) {
+						area = hit;
+						view = candidate;
+						break;
+					}
+				}
 			}
-			setActiveState( next );
+
+			if ( ! area ) {
+				// Unknown target: do not move the URL, and do not pretend it
+				// worked. A silent no-op here is what made 12 task links dead.
+				return null;
+			}
+			const next = { area, view: view ?? itemsForArea( area )[ 0 ] };
+			// Re-selecting what is already open must not add a history entry, or
+			// the next Back press becomes a visible no-op the user cannot explain.
+			const current = currentRef.current;
+			if ( current.area === next.area && current.view === next.view ) {
+				return current;
+			}
+			write( next, false );
+			setRoute( next );
+			return next;
 		},
-		[ active, known ]
+		[ areas, itemsForArea, write ]
 	);
 
-	return { active, navigate: setActive, setActive: setActiveState };
+	/**
+	 * Move to an explicit route rather than a named target.
+	 *
+	 * Needed because a refused Back/Forward already knows the exact route the
+	 * user was reaching for; routing that back through `navigate` would
+	 * re-resolve a string the caller no longer holds.
+	 *
+	 * @param {Object} next Route with `area` and optional `view`.
+	 * @return {Object|null} The route applied, or null when invalid.
+	 */
+	const navigateTo = useCallback(
+		( next ) => {
+			if ( ! next || ! areas.includes( next.area ) ) {
+				return null;
+			}
+			const items = itemsForArea( next.area );
+			const view = items.includes( next.view ) ? next.view : items[ 0 ];
+			const target = { area: next.area, view };
+			const current = currentRef.current;
+			if (
+				current.area === target.area &&
+				current.view === target.view
+			) {
+				return current;
+			}
+			write( target, false );
+			setRoute( target );
+			return target;
+		},
+		[ areas, itemsForArea, write ]
+	);
+
+	return { area: route.area, view: route.view, navigate, navigateTo };
 };

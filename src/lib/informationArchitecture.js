@@ -19,9 +19,6 @@ import {
 	faServer,
 	faTools,
 	faCode,
-	faRocket,
-	faStore,
-	faShieldAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import { __ } from '@wordpress/i18n';
 
@@ -132,26 +129,6 @@ export const SECTION_IDS = SECTIONS.map( ( section ) => section.id );
  * Every legacy screen id, so a bookmarked URL from before the redesign still
  * resolves instead of dumping the user on Overview.
  */
-export const LEGACY_TO_AREA = {
-	dashboard: { section: 'overview', view: 'dashboard' },
-	fileOptimization: { section: 'speed', view: 'fileOptimization' },
-	preload: { section: 'speed', view: 'preload' },
-	imageOptimization: { section: 'media', view: 'imageOptimization' },
-	databaseCleanup: { section: 'data-system', view: 'databaseCleanup' },
-	objectCache: { section: 'data-system', view: 'objectCache' },
-	tools: { section: 'manage', view: 'tools' },
-};
-
-/**
- * Find the area that owns a given screen id.
- *
- * @param {string} view Screen id.
- * @return {Object|undefined} The owning area, if any.
- */
-export const areaForView = ( view ) =>
-	SECTIONS.find( ( section ) =>
-		section.items.some( ( item ) => item.id === view )
-	);
 
 /**
  * The sub-items of an area, or an empty list for an unknown one.
@@ -161,6 +138,3 @@ export const areaForView = ( view ) =>
  */
 export const itemsForSection = ( sectionId ) =>
 	SECTIONS.find( ( section ) => section.id === sectionId )?.items ?? [];
-
-/** Icons referenced by FileOptimization's own sub-tabs, re-exported for reuse. */
-export const SUBCATEGORY_ICONS = { faStore, faShieldAlt, faRocket };
