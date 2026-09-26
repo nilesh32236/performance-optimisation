@@ -1445,6 +1445,45 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A write that did not persist must not be reported as a successful save.
+	 *
+	 * The SPA commits its local settings on a success response, so a 200 for a
+	 * write that never happened shows the new value in the admin until the next
+	 * page load silently reverts it. The sibling import_settings() endpoint
+	 * already fails closed; update_settings() must agree.
+	 */
+	public function test_update_settings_reports_a_failed_write(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+
+		$prior = array( 'file_optimisation' => array( 'minifyHTML' => false ) );
+		$store = array( 'wppo_settings' => $prior );
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		// The database rejects the write; the stored value is unchanged.
+		Functions\when( 'update_option' )->justReturn( false );
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'file_optimisation',
+				'settings' => array( 'minifyHTML' => true ),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 500, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+		$this->assertSame( $prior, $store['wppo_settings'], 'the stored settings must be untouched' );
+	}
+
+	/**
 	 * Test that a no-op update_settings save does not churn the single-slot snapshot (issue #1144).
 	 */
 	public function test_update_settings_noop_save_preserves_snapshot(): void {

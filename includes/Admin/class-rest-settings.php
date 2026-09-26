@@ -327,7 +327,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Settings' ) ) {
 			$options       = $merged_options;
 
 			// One-click undo and the canonical Store write stay behind Settings_Command.
-			Settings_Command::save( $options, $prior_options );
+			// A write that did not persist must not be reported as saved: the
+			// SPA mutates its local settings on success, so a 200 here shows the
+			// new value in the admin until the next page load silently reverts
+			// it. The sibling import_settings() already fails closed.
+			if ( ! Settings_Command::save( $options, $prior_options ) ) {
+				return $this->owner->rest_send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
+			}
 
 			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				Telemetry::invalidate_audit_cache();
