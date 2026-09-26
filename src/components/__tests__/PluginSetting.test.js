@@ -35,7 +35,11 @@ import PluginSetting, {
 	isPollutionKey,
 	MAX_IMPORT_TOP_KEYS,
 } from '../PluginSetting';
-import { apiCall, fetchRecentActivities } from '../../lib/apiRequest';
+import {
+	apiCall,
+	fetchRecentActivities,
+	patchSettingsCache,
+} from '../../lib/apiRequest';
 
 describe( 'PluginSetting', () => {
 	const baseOptions = {
@@ -382,6 +386,81 @@ describe( 'PluginSetting', () => {
 				'POST',
 				expect.any( AbortSignal )
 			)
+		);
+	} );
+
+	it( 'merges the performance_audit slice re-read at call time, not render time', async () => {
+		// A prior save replaces wppoSettings.settings via apiCall's freeze
+		// (see commitSettingsCache/patchSettingsCache in apiRequest.js). That
+		// replacement swaps the slice object reference, so any component that
+		// captured the slice during render holds the PREVIOUS map forever.
+		// savePerformanceAudit() must therefore re-read the global when it is
+		// called, or the outgoing payload merges a stale base and silently
+		// drops the prior save's write. Mirrors Dashboard.js:743.
+		//
+		// auto_rescan is the probe key: saveMonitoring() patches only
+		// server_timing_enabled/rum_enabled/high_value_urls, so the value the
+		// payload carries for auto_rescan comes purely from the merge base.
+		global.wppoSettings = {
+			performance_audit: { pagespeedApiKeyConfigured: false },
+			settings: {
+				performance_audit: {
+					auto_rescan: 'render-time-value',
+					server_timing_enabled: false,
+					rum_enabled: false,
+					high_value_urls: [],
+				},
+			},
+		};
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: false },
+		} );
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		// Let the mount-time settings_snapshot probe settle, so no render
+		// driven by it can re-read the global and mask a stale capture.
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith(
+				'settings_snapshot',
+				{},
+				'GET'
+			)
+		);
+
+		// The prior save lands *after* render, using the real production
+		// helper so the reference swap and freeze match runtime exactly.
+		patchSettingsCache( 'performance_audit', {
+			auto_rescan: 'call-time-value',
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Monitoring/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'performance_audit',
+					settings: expect.objectContaining( {
+						auto_rescan: 'call-time-value',
+					} ),
+				} ),
+				'POST',
+				expect.any( AbortSignal )
+			)
+		);
+
+		// Belt and braces: the render-time value must not reach the wire.
+		const saveCall = apiCall.mock.calls.find(
+			( [ action ] ) => action === 'update_settings'
+		);
+		expect( saveCall[ 1 ].settings.auto_rescan ).toBe( 'call-time-value' );
+		expect( saveCall[ 1 ].settings.auto_rescan ).not.toBe(
+			'render-time-value'
 		);
 	} );
 
