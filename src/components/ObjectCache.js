@@ -136,9 +136,6 @@ const ObjectCache = ( { options = {} } ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
-	// Audit #1420: full baseline memoized on option keys with inlined
-	// static defaults (not the per-render defaultSettings identity), so
-	// exhaustive-deps needs no suppression.
 	// The baseline is built from the *same* table as the settings, so the two
 	// can never hold different key sets — which is the whole fix. It is memoised
 	// on the server values so its identity stays stable across renders (the
@@ -148,8 +145,10 @@ const ObjectCache = ( { options = {} } ) => {
 	// The `options` reference is deliberately excluded: depending on it would
 	// recompute the memo on every render, because `App` hands down a freshly
 	// built object each time. `optionsKey` captures the *content*, which is what
-	// the baseline actually depends on. The disable below is load-bearing —
-	// removing it makes `react-hooks/exhaustive-deps` fail.
+	// the baseline actually depends on. The disable below silences the
+	// `react-hooks/exhaustive-deps` warning about that missing reference; remove
+	// it and the rule reports a missing `options` dep. It is a warning, not an
+	// error — `lint:js` sets no `--max-warnings`, so CI would still pass.
 	const optionsKey = JSON.stringify( options );
 	const memoizedBaseline = useMemo(
 		() => withServerValues( options ),
