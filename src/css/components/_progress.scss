@@ -9,7 +9,11 @@
 		height: 100%;
 		background: linear-gradient(90deg, var(--wppo-primary), color-mix(in srgb, var(--wppo-primary) 60%, white));
 		border-radius: 4px;
-		width: var(--wppo-progress, var(--wppo-hit-ratio, 0%));
+		// `--wppo-progress` is a component variable, not a design token: the
+		// progress bar sets it inline (`style={{ '--wppo-progress': pct }}`), so
+		// the name collision with the token namespace is worth a note. The
+		// `--wppo-hit-ratio` fallback was dead — defined nowhere, set nowhere.
+		width: var(--wppo-progress, 0%);
 		transition: width 0.6s ease;
 
 		@media (prefers-reduced-motion: reduce) {
