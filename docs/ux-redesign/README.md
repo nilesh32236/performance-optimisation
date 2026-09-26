@@ -62,7 +62,7 @@ infinite recursion in the walker — `Object.values('a')` yields `['a']` forever
 ## Progress
 
 - [x] Phase 0 discovery
-- [x] Phase 1 information architecture + URL routing
+- [x] Phase 1 information architecture + URL routing (merged `d60557ec`)
 - [ ] Phase 2 Overview
 - [ ] Phase 3 loading/feedback system
 - [ ] Phase 4 visual design system
