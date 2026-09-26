@@ -1,5 +1,3 @@
-import { useRef } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 
@@ -29,22 +27,28 @@ const LoadingSubmitButton = ( {
 	...rest
 } ) => {
 	const isDisabled = Boolean( disabled ) || Boolean( isLoading );
-	// Remember the last loading text so it is never announced as empty.
-	const lastLoadingRef = useRef( '' );
 	const buttonText = isLoading
 		? loadingLabel || label || children
 		: label || children;
-	const loadingText =
-		loadingLabel ||
-		label ||
-		( typeof children === 'string' ? children : '' ) ||
-		__( 'Loading…', 'performance-optimisation' );
-	if ( isLoading && loadingText ) {
-		lastLoadingRef.current = loadingText;
-	}
-	const doneText = doneLabel || lastLoadingRef.current || '';
-	const liveText = isLoading ? loadingText : doneText;
-	const showLiveRegion = Boolean( liveText );
+
+	// The live region announces **completion only**, and only when the caller
+	// asked for it.
+	//
+	// It previously also announced the loading text, and remembered the last
+	// loading text in a ref to use as a fallback. Both were defects, measured on
+	// the live page:
+	//
+	// 1. While loading, the region contained the same text the button already
+	//    showed, so a screen reader heard it twice.
+	// 2. The ref was never cleared, so after a single save the region *permanently*
+	//    held the loading text — a `role="status"` reading "Saving…" on an idle
+	//    form, for the rest of the page's life. No production caller passes
+	//    `doneLabel`, so this was the state every one of the 16 usages reached.
+	//
+	// The button's own `aria-busy` and disabled state, plus the text change to
+	// `loadingLabel`, already convey the in-flight state to assistive tech.
+	const showLiveRegion = ! isLoading && Boolean( doneLabel );
+	const liveText = doneLabel || '';
 
 	return (
 		<>
@@ -65,10 +69,8 @@ const LoadingSubmitButton = ( {
 				) }
 				<span>{ buttonText }</span>
 			</button>
-			{ /* Audit #1354 review: persistent region (toggled text, not
-			mount) so SRs never miss the announcement. Audit #1483: never
-			render an empty role=status — completion announces doneLabel
-			(or the last loading label) instead of clearing to ''. */ }
+			{ /* Present only when there is a completion to announce, so it can
+			never be left holding stale text, and never renders empty. */ }
 			{ showLiveRegion && (
 				<span
 					role="status"
