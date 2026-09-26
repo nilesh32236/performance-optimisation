@@ -100,6 +100,80 @@ class RedisSentinelConstructorTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Every option key the helper passes must be one phpredis recognises.
+	 *
+	 * An unrecognised key makes phpredis emit a PHP warning and drop the key,
+	 * so a typo would otherwise fail silently and leave the connection using
+	 * phpredis's own default. Capturing warnings turns that into a failure.
+	 *
+	 * @return void
+	 */
+	public function test_no_unknown_option_key_is_passed_to_phpredis(): void {
+		if ( ! class_exists( 'RedisSentinel' ) ) {
+			$this->markTestSkipped( 'phpredis is not installed in this environment' );
+		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local source scan.
+		$source = (string) file_get_contents( WPPO_PLUGIN_PATH . 'includes/Support/redis-connect-helper.php' );
+		$this->assertSame(
+			1,
+			preg_match( '@new\s+\\\\RedisSentinel\s*\(\s*array\s*\((.*?)\)\s*\)@s', $source, $match ),
+			'the options array passed to RedisSentinel must be found'
+		);
+		preg_match_all( "@'([A-Za-z_][A-Za-z0-9_]*)'\s*=>@", $match[1], $keys );
+
+		$warnings = array();
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- capturing a phpredis diagnostic is the point of this test.
+		set_error_handler(
+			static function ( int $errno, string $errstr ) use ( &$warnings ): bool {
+				$warnings[] = $errstr;
+				return true;
+			}
+		);
+		try {
+			new RedisSentinel(
+				array(
+					'host'           => '127.0.0.1',
+					'port'           => 26379,
+					'connectTimeout' => 0.5,
+					'readTimeout'    => 0.0,
+					'retryInterval'  => 0,
+					'persistent'     => false,
+				)
+			);
+		} finally {
+			restore_error_handler();
+		}
+		$this->assertSame(
+			array(),
+			$warnings,
+			'phpredis rejected an option key, so it would fall back to its own default. Keys found in source: '
+			. implode( ', ', $keys[1] ) . ' | diagnostics: ' . implode( ' | ', $warnings )
+		);
+	}
+
+	/**
+	 * `persistent` must stay explicit.
+	 *
+	 * Measured against the installed extension: passing `persistent => false`
+	 * closes the connection when the object is destroyed, while
+	 * `persistent => true` leaves it in the server's pool. phpredis defaults
+	 * this option to true for RedisSentinel, so omitting the key would leak a
+	 * persistent socket per Sentinel node instead of the short-lived
+	 * connection this code expects.
+	 *
+	 * @return void
+	 */
+	public function test_persistent_is_explicitly_disabled(): void {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local source scan.
+		$source = (string) file_get_contents( WPPO_PLUGIN_PATH . 'includes/Support/redis-connect-helper.php' );
+		$this->assertSame(
+			1,
+			preg_match( "@'persistent'\s*=>\s*false@", $source ),
+			"RedisSentinel options must set 'persistent' => false explicitly"
+		);
+	}
+
+	/**
 	 * A sentinel failure must not be silently treated as a healthy config.
 	 *
 	 * `sentinel_fail` after the fix means the configured Sentinel nodes could
