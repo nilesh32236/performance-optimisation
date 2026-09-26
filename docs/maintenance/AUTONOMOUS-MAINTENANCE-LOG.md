@@ -119,3 +119,54 @@ Completed: 2026-08-31 11:35 UTC
 - Scope boundary: the CLI snapshots the defaults-merged prior state rather than
   the raw stored array. That is pre-existing behaviour, left alone here; the new
   test asserts the changed key rather than baking the wart in.
+
+## 2026-09-25 — Redis Sentinel mode could not work on any supported phpredis
+- Branch: `fix/redis-sentinel-constructor`, cut from `master` @ `efdb2019`.
+- Defect: `wppo_redis_connect_sentinel()` refuses to run on phpredis < 6.0
+  (`redis-connect-helper.php:162`) and then constructed `RedisSentinel` with the
+  **phpredis 5.x positional signature** (six arguments). On the installed
+  phpredis 6.3.0 that raises `ArgumentCountError: RedisSentinel::__construct()
+  expects at most 1 argument, 6 given` — verified by Reflection and by direct
+  reproduction on this host. The `catch ( \Throwable )` converted it into
+  "Sentinel node connection failed." and finally into a `sentinel_fail` error.
+- Amplification: `Object_Cache::is_transient_outage_error()` classified
+  `sentinel_fail` as **transient**, so a permanent misconfiguration armed the
+  persistent `outage_bypassed` flag, parked the drop-in and counted toward the
+  5-failure circuit breaker. Sentinel mode therefore did not work at all, and a
+  site configured for it was driven permanently uncached with no self-heal.
+- Fix: construct with the phpredis 6.x options array. The removed `$retry`
+  variable was only ever the value 0, which the array now carries as
+  `retryInterval`.
+- Regression: `tests/php/RedisSentinelConstructorTest.php` asserts the
+  constructor shape against the source, re-asserts that the 6.0 version gate is
+  still present (it is what makes the options array the only reachable form),
+  and constructs the real `RedisSentinel` with the exact options the helper
+  passes, so a future phpredis API change fails here rather than in production.
+  Mutation-checked: restoring the positional constructor fails the suite.
+- Scope boundary: `sentinel_fail` remains classified as transient on purpose.
+  After this fix it means the configured Sentinel nodes were genuinely
+  unreachable, which is a real outage the outage flag is designed to cover.
+  Reclassifying it would trade away fast-path resilience for no verified gain.
+- Gate: PHPCS, ESLint (0 errors), 833 Jest, 2,787 PHPUnit / 25,819 assertions,
+  build, architecture check, diff check — all green.
+
+## 2026-09-25 — Root cause of the Sentinel defect: PR #744
+- The broken constructor did not come from an untested corner. PR #744
+  (`google-labs-jules[bot]`, merged 2026-08-31) introduced it, and its body
+  states the exact opposite of the truth: *"the phpredis extension strictly
+  requires positional arguments for the RedisSentinel constructor"*. It
+  refactored a working options array into the positional form.
+- On the installed phpredis 6.3.0 the positional form raises
+  `ArgumentCountError: RedisSentinel::__construct() expects at most 1 argument,
+  6 given`, and the same PR's own version gate requires >= 6.0.
+- The merge landed on `includes/redis-connect-helper.php`, a path that was later
+  moved to `includes/Support/`, so the broken call travelled with it.
+- The remote branch `fix/inspector-redis-sentinel-constructor-217604302318816716`
+  (`33228349`) is an orphan with no open PR. It targets the pre-move path and its
+  diff converts the working options array back into the broken positional form.
+  **It must not be merged.** Recorded in the ledger as DO-NOT-MERGE.
+- Systemic note: the claim was falsifiable with a single `ReflectionMethod` call
+  against the installed extension, and the repository's 95%-confidence merge gate
+  accepted it. Any future check of an extension API should assert the installed
+  version's actual signature rather than reasoning from documentation — which is
+  exactly what `RedisSentinelConstructorTest::test_options_array_is_accepted_by_the_installed_phpredis()` now does.
