@@ -136,7 +136,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_ai_deploy_notes',                    // AI_Adaptive::DEPLOY_NOTES_OPTION (issue #1313).
 			'wppo_callback_secret',                    // CALLBACK_SECRET_OPTION (issue #1347).
 			'wppo_last_purge',                       // Builder_Purge_Watcher::LAST_PURGE_OPTION (upgrade auto-purge).
-			'wppo_esi_fallback_secret',               // LiteSpeed_ESI::FALLBACK_SECRET_OPTION (audit #1187).
+			'wppo_esi_fallback_secret',               // LiteSpeed ESI nonce secret, written as a bare literal at
+			// includes/Integrations/class-litespeed-esi.php:373-398 (audit #1187).
 		);
 
 		/**

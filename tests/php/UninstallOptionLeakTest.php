@@ -194,10 +194,13 @@ class UninstallOptionLeakTest extends \PHPUnit\Framework\TestCase {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local source scan.
 		$uninstall = (string) file_get_contents( WPPO_PLUGIN_PATH . 'uninstall.php' );
 		foreach ( self::DYNAMIC_PREFIXES as $prefix ) {
-			$this->assertStringContainsString(
-				$prefix,
+			// Assert the EXECUTABLE statement, not a bare substring. An
+			// independent review deleted the whole LIKE sweep while leaving the
+			// comment that names the prefix, and this test stayed green.
+			$this->assertMatchesRegularExpression(
+				'@esc_like\(\s*\'' . preg_quote( $prefix, '@' ) . '\'\s*\)\s*\.\s*\'%\'@',
 				$uninstall,
-				"Dynamic option prefix {$prefix} must still be swept by uninstall.php"
+				"Dynamic option prefix {$prefix} must still be swept by an esc_like() LIKE query in uninstall.php"
 			);
 		}
 	}
