@@ -231,7 +231,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 			// Get the path from the parsed URL.
 			$relative_path = wp_normalize_path( $parsed_url['path'] ?? '' );
 
-			if ( strpos( $relative_path, '..' ) !== false ) {
+			if ( false !== strpos( $relative_path, '..' ) ) {
 				return '';
 			}
 

@@ -995,7 +995,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			if ( '' === trim( $fallback_css ) ) {
 				return $buffer;
 			}
-			$style_tag = '<style id="wppo-font-fallback">' . $fallback_css . '</style>';
+			// Re-sanitize post-filter: third-party wppo_font_metric_fallback_css
+			// callbacks run inside generate_metric_fallback(), so strip style-breakout
+			// tokens before concatenating into the <style> tag.
+			$fallback_css = str_ireplace( array( '</style', '<script', '<!--' ), '', $fallback_css );
+			$style_tag    = '<style id="wppo-font-fallback">' . $fallback_css . '</style>';
 			// Inject before </head> if present, else prepend.
 			if ( false !== stripos( $buffer, '</head>' ) ) {
 				$out = preg_replace( '/<\/head>/i', $style_tag . '</head>', $buffer, 1 );

@@ -192,7 +192,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 			// The native 'strategy' script data added via wp_script_add_data() is only
 			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
 			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
-			// TODO(#553): remove the legacy fallback when minimum supported WP is raised to 6.3.
+			// Note(#553): remove the legacy fallback when minimum supported WP is raised to 6.3.
 			// Issue #1203 (modularity) proposed removing the shims now; deferred —
 			// the floor is still 6.2, so deletion would drop defer-JS on 6.2 with no
 			// native replacement. One canonical path per install is already enforced
@@ -220,7 +220,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Hook_Registry' ) ) {
 			// intentional availability tradeoff: re-arming a private capture on
 			// opt-out would stack a second buffer on top of core's and
 			// re-process HTML, so caching stays off until core opts back in.
-			// TODO(#553, #829): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
+			// Note(#553, #829): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
 			// Blocked until `Requires at least: 6.9`.
 			$use_core_buffer = Main::should_use_core_template_buffer();
 

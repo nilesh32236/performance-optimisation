@@ -906,13 +906,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 					if ( empty( $path ) || ! is_file( $path ) ) {
 						continue;
 					}
-					$size = (int) filesize( $path );
-					if ( $size > 0 ) {
-						$size_map[ $queued_handle ] = array(
-							'size'     => $size,
-							'readable' => is_readable( $path ),
-						);
+					$raw_size = @filesize( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- guarded with is_int check below; a delete/rename race must not warn.
+					if ( ! is_int( $raw_size ) || $raw_size <= 0 ) {
+						continue;
 					}
+					$size_map[ $queued_handle ] = array(
+						'size'     => $raw_size,
+						'readable' => is_readable( $path ),
+					);
 				}
 			}
 

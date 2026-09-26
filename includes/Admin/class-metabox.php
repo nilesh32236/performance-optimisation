@@ -359,9 +359,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 											name="wppo_disabled_scripts[]"
 												value="<?php echo esc_attr( $script['handle'] ); ?>"
 												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: script handle */ __( 'Disable script %s', 'performance-optimisation' ), $script['handle'] ) ); ?>"
-												<?php checked( $is_disabled ); ?>
-												<?php disabled( $is_protected ); ?>
-												<?php echo $is_protected ? 'aria-describedby="' . esc_attr( $note_id ) . '"' : ''; ?>
+											<?php checked( $is_disabled ); ?>
+											<?php disabled( $is_protected ); ?>
+											<?php
+											if ( $is_protected ) {
+												printf( 'aria-describedby="%s"', esc_attr( $note_id ) );
+											}
+											?>
 											/>
 										</td>
 										<td>
@@ -453,9 +457,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 											name="wppo_disabled_styles[]"
 												value="<?php echo esc_attr( $style['handle'] ); ?>"
 												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: style handle */ __( 'Disable style %s', 'performance-optimisation' ), $style['handle'] ) ); ?>"
-												<?php checked( $is_disabled ); ?>
-												<?php disabled( $is_protected ); ?>
-												<?php echo $is_protected ? 'aria-describedby="' . esc_attr( $note_id ) . '"' : ''; ?>
+											<?php checked( $is_disabled ); ?>
+											<?php disabled( $is_protected ); ?>
+											<?php
+											if ( $is_protected ) {
+												printf( 'aria-describedby="%s"', esc_attr( $note_id ) );
+											}
+											?>
 											/>
 										</td>
 										<td>

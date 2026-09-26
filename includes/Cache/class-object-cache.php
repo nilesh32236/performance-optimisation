@@ -748,9 +748,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 				if ( $wp_filesystem ) {
 					$wp_filesystem->delete( $path );
-				} else {
-					@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale state files are best-effort cleanup.
 				}
+				// Best-effort cleanup: without a filesystem instance there is
+				// nothing safe to do here, so skip rather than silenced unlink().
 			}
 		}
 

@@ -194,9 +194,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 				return $u;
 			};
 
-			$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize
-			$cache_key = $blog_id . ':' . md5( serialize( $exclude_urls ) ); // We use serialize since it's faster and guaranteed safe for arrays of strings internally generated.
+			$blog_id      = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			$encoded_urls = function_exists( 'wp_json_encode' ) ? wp_json_encode( $exclude_urls ) : false;
+			if ( ! is_string( $encoded_urls ) || '' === $encoded_urls ) {
+				// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- fallback when JSON encoding is unavailable.
+				$encoded_urls = serialize( $exclude_urls );
+			}
+			$cache_key = $blog_id . ':' . md5( $encoded_urls );
 
 			if ( ! isset( self::$exclusion_rule_cache[ $cache_key ] ) ) {
 				$home_base = self::cached_home_url();

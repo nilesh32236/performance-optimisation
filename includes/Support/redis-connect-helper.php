@@ -270,8 +270,9 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 		$redis = new \Redis();
 		$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
 
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		if ( @$redis->$func( $host, $port, $timeout ) ) {
+		// Connection failures return WP_Error below; no silence operator so
+		// diagnosable warnings stay visible.
+		if ( $redis->$func( $host, $port, $timeout ) ) {
 			if ( ! empty( $password ) && false === $redis->auth( $password ) ) { // Audit #1434: Yoda.
 				$redis->close();
 				return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );

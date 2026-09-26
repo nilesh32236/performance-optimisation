@@ -225,7 +225,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				header( 'Content-Length: ' . $byte_size );
 			}
 
-			readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+			// Terminal template_redirect response: headers (Content-Type, ETag,
+			// Content-Length) are set above and output buffers are flushed, so
+			// readfile()+exit streams the generated markdown file directly.
+			readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile -- intentional terminal passthrough on the template_redirect path.
 			exit;
 		}
 

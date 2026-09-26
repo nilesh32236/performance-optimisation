@@ -427,9 +427,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						$resolved_dropin = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) realpath( $path ) ) : '';
 						$content_root    = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
 						if ( is_int( $dropin_size ) && $dropin_size > 0 && $dropin_size < 1048576 && '' !== $content_root && 0 === strpos( $resolved_dropin, $content_root ) ) {
-							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-							if ( is_string( $contents_raw ) ) {
-								$contents = $contents_raw;
+							$dropin_fs = Util::init_filesystem();
+							if ( $dropin_fs ) {
+								$contents_raw = $dropin_fs->get_contents( $path );
+								if ( is_string( $contents_raw ) ) {
+									$contents = $contents_raw;
+								}
 							}
 						}
 						if ( false !== strpos( $contents, 'litespeed' ) || false !== strpos( $contents, 'LSCACHE' ) || false !== strpos( $contents, 'LSCWP' ) ) {
@@ -467,9 +470,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						$resolved_dropin = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( (string) realpath( $path ) ) : '';
 						$content_root    = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
 						if ( is_int( $dropin_size ) && $dropin_size > 0 && $dropin_size < 1048576 && '' !== $content_root && 0 === strpos( $resolved_dropin, $content_root ) ) {
-							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-							if ( is_string( $contents_raw ) ) {
-								$contents = $contents_raw;
+							$dropin_fs = Util::init_filesystem();
+							if ( $dropin_fs ) {
+								$contents_raw = $dropin_fs->get_contents( $path );
+								if ( is_string( $contents_raw ) ) {
+									$contents = $contents_raw;
+								}
 							}
 						}
 						if ( false !== strpos( $contents, 'litespeed' ) || false !== strpos( $contents, 'LSCache' ) ) {
@@ -835,7 +841,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			if ( ! isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ) {
 				return null;
 			}
-			$value = (float) $_SERVER['REQUEST_TIME_FLOAT']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.InputNotValidated
+			// Server-set float timestamp: sanitize text input before casting;
+			// native int/float values cast directly. The (float) cast plus the
+			// positivity check below neutralize output risk.
+			$server_time      = $_SERVER['REQUEST_TIME_FLOAT']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.InputNotValidated,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- server-set timing value, unslashed when string + sanitized/validated below via sanitize_text_field + is_numeric + positivity check.
+			$raw_request_time = is_string( $server_time ) ? sanitize_text_field( wp_unslash( $server_time ) ) : $server_time;
+			$value            = is_numeric( $raw_request_time ) ? (float) $raw_request_time : 0.0;
 			return $value > 0.0 ? $value : null;
 		}
 
