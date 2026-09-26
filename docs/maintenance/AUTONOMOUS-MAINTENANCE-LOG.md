@@ -339,3 +339,11 @@ Completed: 2026-08-31 11:35 UTC
 - Mutation-verified: removing the `is_string` guard reproduces the exact production failure — `TypeError: esc_url_raw(): Argument #1 ($url) must be of type string` — in 2 of 3 cases.
 - Gate: PHPCS 0, PHPUnit 2,815 / 25,983, ESLint 0, Jest 60 suites / 1,072, architecture `--check` 0, `git diff --check` 0.
 
+## 2026-09-26 — Pinned the object-cache circuit recovery invariant
+- Follow-up to the #1664 review. That PR would drop the `@unlink()` fallback in `Object_Cache::clear_circuit_state()` and `continue` instead when `Util::init_filesystem()` returns false. #1664 is **not** being merged, so `master` is currently correct — but nothing was stopping it from becoming wrong, because `clear_circuit_state()` had **zero** test coverage.
+- The causal chain is short and fully verified: `clear_circuit_state()` deletes `get_parked_path()`; `get_parked_path()` existing **forces `$state['open'] = true`** in `get_circuit_state()`. A surviving parked file therefore re-opens the breaker on the very next state read — after a successful Redis probe, after `enable()`, on uninstall, and on deactivate. That is exactly the state the method exists to clear.
+- `ObjectCacheCircuitClearTest` pins it in both directions: the parked and disabled-state files **are** removed with no filesystem available, and a real `WP_Filesystem` **is** preferred when one exists (asserting the fallback did *not* run). The no-filesystem case is not stubbed — the test bootstrap already makes `WP_Filesystem()` return false, so `Filesystem::init_filesystem()` returns false for real, and the test asserts that precondition so it cannot pass vacuously on the wrong branch.
+- Creates real files under `WP_CONTENT_DIR`, because the code under test deletes real files; a mocked filesystem would prove nothing.
+- **Mutation-verified against the exact #1664 change:** replacing the `@unlink()` branch with `continue` fails 2 of 3 cases, with the message naming the re-open consequence. The review had found this mutation left a fully green 2808-test suite.
+- Gate: PHPCS 0, PHPUnit 2,818 / 25,995, architecture `--check` 0, Jest 60 suites / 1,072, `git diff --check` 0.
+
