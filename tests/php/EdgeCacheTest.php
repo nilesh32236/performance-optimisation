@@ -41,6 +41,14 @@ class EdgeCacheTest extends \PHPUnit\Framework\TestCase {
 	private $requests = array();
 
 	/**
+	 * HTTP status the transport stub returns. Lets a test model an edge
+	 * provider that rejects a purge, then recovers on the retry.
+	 *
+	 * @var int
+	 */
+	private $http_code = 200;
+
+	/**
 	 * Install stubs.
 	 *
 	 * @return void
@@ -137,7 +145,7 @@ class EdgeCacheTest extends \PHPUnit\Framework\TestCase {
 					'url'  => $url,
 					'args' => $args,
 				);
-				return array( 'response' => array( 'code' => 200 ) );
+				return array( 'response' => array( 'code' => $this->http_code ) );
 			}
 		);
 		Functions\when( 'wp_remote_retrieve_response_code' )->alias(
@@ -282,6 +290,79 @@ class EdgeCacheTest extends \PHPUnit\Framework\TestCase {
 		// Second purge while lock active should not send requests.
 		Edge_Purger::purge_all( 'all', null );
 		$this->assertCount( $count_first, $this->requests );
+	}
+
+	/**
+	 * A purge that reached the provider and failed must release the window.
+	 *
+	 * The lock exists to coalesce a duplicate of a purge that actually
+	 * happened. When the fan-out fails there is nothing to coalesce, and
+	 * keeping the window armed made every retry inside the TTL return true
+	 * without contacting the edge — a false "cache cleared successfully" for
+	 * an operator who had just been shown the failure.
+	 *
+	 * @return void
+	 */
+	public function test_retry_after_failed_purge_reaches_the_edge(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'edge_cache' => array(
+				'enabled'          => true,
+				'cloudflareZoneId' => 'z123',
+				'bunnyPullZoneId'  => '1',
+			),
+		);
+		Util::clear_settings_cache();
+
+		// First attempt: the provider rejects the purge.
+		$this->http_code = 500;
+		Edge_Purger::purge_all( 'all', null );
+		$this->assertFalse(
+			Edge_Purger::has_purge_lock(),
+			'a failed purge must not arm the coalescing window'
+		);
+		$requests_after_first = count( $this->requests );
+		$this->assertGreaterThan( 0, $requests_after_first );
+
+		// The retry is allowed through and can succeed.
+		$this->http_code = 200;
+		$retry_result    = Edge_Purger::purge_all( 'all', null );
+		$this->assertTrue( $retry_result, 'a retry after a failure must be able to succeed' );
+		$this->assertGreaterThan(
+			$requests_after_first,
+			count( $this->requests ),
+			'a retry after a failed purge must actually contact the edge'
+		);
+		$this->assertTrue( Edge_Purger::has_purge_lock(), 'a successful purge keeps the coalescing window' );
+	}
+
+	/**
+	 * A successful single-page purge keeps the window; a failed one releases it.
+	 *
+	 * @return void
+	 */
+	public function test_single_page_purge_releases_lock_only_on_failure(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'edge_cache' => array(
+				'enabled'          => true,
+				'cloudflareZoneId' => 'z123',
+			),
+		);
+		Util::clear_settings_cache();
+
+		$this->http_code = 500;
+		$this->assertFalse( Edge_Purger::purge_all( 'single_page', '/about/' ) );
+		$this->assertFalse(
+			Edge_Purger::has_purge_lock(),
+			'a failed single-page purge must not block the retry'
+		);
+
+		$this->http_code = 200;
+		$after_failure   = count( $this->requests );
+		$this->assertTrue( Edge_Purger::purge_all( 'single_page', '/about/' ) );
+		$this->assertGreaterThan( $after_failure, count( $this->requests ) );
+		$this->assertTrue( Edge_Purger::has_purge_lock() );
 	}
 
 	/**

@@ -2944,21 +2944,22 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Edge",
-        "lines": 333,
-        "methods": 10,
+        "lines": 366,
+        "methods": 11,
         "public_methods": 4,
         "large_methods": 0,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "purge_all",
-            "line": 95,
-            "lines": 62
+            "line": 124,
+            "lines": 66
         },
         "method_prefixes": {
             "purge": 4,
             "get": 1,
             "has": 1,
             "set": 1,
+            "release": 1,
             "resolve": 1,
             "log": 1,
             "mirror": 1
@@ -2969,8 +2970,8 @@
         "private_state_properties": 0,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 23,
-        "wordpress_dependencies": 8,
+        "external_dependencies": 24,
+        "wordpress_dependencies": 9,
         "filesystem_dependencies": 0,
         "network_dependencies": 1,
         "database_dependencies": 0,

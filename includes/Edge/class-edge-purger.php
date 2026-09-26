@@ -70,6 +70,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		}
 
 		/**
+		 * Release the lock when a purge did not actually happen.
+		 *
+		 * The lock is a coalescing throttle: a successful purge keeps the
+		 * window so an immediate duplicate is skipped, because the edge is
+		 * already fresh. A purge that FAILED has nothing to coalesce, and
+		 * leaving the window armed made every retry inside PURGE_LOCK_TTL
+		 * return true without contacting the edge — a false "cache cleared"
+		 * reported to REST and the admin bar. Only the call that armed the
+		 * lock reaches this path, so the release can never clear another
+		 * request's window.
+		 *
+		 * @since NEXT
+		 * @param bool $purged Whether the purge reached the provider successfully.
+		 * @return void
+		 */
+		private static function release_purge_lock_on_failure( bool $purged ): void {
+			if ( $purged ) {
+				return;
+			}
+			if ( function_exists( 'delete_transient' ) ) {
+				delete_transient( self::get_purge_lock_key() );
+			}
+		}
+
+		/**
 		 * Purge edge caches (Cloudflare and Bunny) after wppo_after_cache_clear.
 		 *
 		 * When edge_cache.enabled is false, returns true immediately (no-op).
@@ -78,6 +103,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * purgeCache endpoint, so single-page clears cannot purge Bunny for
 		 * one URL — that limitation is documented and the Bunny zone is left
 		 * untouched (next full purge clears it). When lock is active, no-op.
+		 *
+		 * The lock coalesces duplicates for PURGE_LOCK_TTL seconds and is
+		 * released when a purge fails, so a retry after an edge error is not
+		 * swallowed and reported as a successful clear.
 		 *
 		 * Bunny purge uses WPPO_BUNNY_API_KEY + edge_cache.bunnyPullZoneId
 		 * via api.bunny.net/pullzone/{id}/purgeCache POST.
@@ -132,7 +161,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 					return true;
 				}
 				self::set_purge_lock();
-				return self::purge_cloudflare_files( $cf_zone, $cf_token, $page_url );
+				$files_ok = self::purge_cloudflare_files( $cf_zone, $cf_token, $page_url );
+				self::release_purge_lock_on_failure( $files_ok );
+				return $files_ok;
 			}
 			self::set_purge_lock();
 
@@ -151,6 +182,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 					$ok = false;
 				}
 			}
+
+			self::release_purge_lock_on_failure( $ok );
 
 			return $ok;
 		}
