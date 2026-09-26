@@ -171,6 +171,12 @@ export const resolveRoute = ( { search, defaultArea, areas, itemsFor } ) => {
  * @return {boolean} True when the URL should be rewritten.
  */
 export const urlMisdescribes = ( search, actual, view, items ) => {
+	// A leftover `tab` key describes the old seven-tab scheme and is not what
+	// is on screen. Leaving it in the address bar is the same "URL lies" failure
+	// as a bogus `section`, so it is corrected on the same pass.
+	if ( readParam( search, LEGACY_PARAM ) ) {
+		return true;
+	}
 	const rawArea = readParam( search, SECTION_PARAM );
 	if ( rawArea !== actual ) {
 		return true;

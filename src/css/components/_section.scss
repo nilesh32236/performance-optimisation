@@ -1,10 +1,15 @@
 /**
  * The area frame: a section header and the in-area sub-navigation.
  *
- * The sub-nav is a horizontal row of tabs. It is styled from the existing
- * `src/css/abstracts/_variables.scss` tokens rather than hardcoded values, so
- * it stays consistent with the rest of the admin and inherits the dark and
- * high-contrast palettes automatically.
+ * The sub-nav is a horizontal row of tabs. Colour, radius and the focus ring
+ * come from the tokens in `src/css/abstracts/_variables.scss`, so the component
+ * tracks the admin's palette.
+ *
+ * Spacing and type sizes are literal px/rem, deliberately. The design system
+ * has no spacing or font-size scale — inventing `--wppo-space-*` tokens would
+ * have made every value silently fall back to its own fallback while the file
+ * claimed to be token-driven. These match the values the existing components
+ * already use.
  *
  * Notes on the approach:
  *
@@ -19,19 +24,19 @@
 .wppo-section {
 	display: flex;
 	flex-direction: column;
-	gap: var(--wppo-space-4, 16px);
+	gap: 16px;
 	min-width: 0;
 }
 
 .wppo-section__header {
 	display: flex;
 	flex-direction: column;
-	gap: var(--wppo-space-1, 4px);
+	gap: 4px;
 }
 
 .wppo-section__title {
 	margin: 0;
-	font-size: var(--wppo-font-size-xl, 24px);
+	font-size: 1.5rem;
 	font-weight: 600;
 	line-height: 1.25;
 	color: var(--wppo-text-main, #0f172a);
@@ -40,7 +45,7 @@
 .wppo-section__purpose {
 	margin: 0;
 	max-width: 68ch;
-	font-size: var(--wppo-font-size-sm, 14px);
+	font-size: 14px;
 	line-height: 1.5;
 	color: var(--wppo-text-muted, #475569);
 }
@@ -48,12 +53,12 @@
 /* In-area sub-navigation. */
 .wppo-subnav {
 	display: flex;
-	gap: var(--wppo-space-1, 4px);
+	gap: 4px;
 	overflow-x: auto;
 	scrollbar-width: thin;
 	// Keep the row from being squeezed into two lines by a long label.
 	flex-wrap: nowrap;
-	padding-block-end: var(--wppo-space-1, 4px);
+	padding-block-end: 4px;
 	// A visible, consistent focus surface for keyboard users.
 	border-block-end: 1px solid var(--wppo-border, #e2e8f0);
 }
@@ -61,16 +66,16 @@
 .wppo-subnav__tab {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--wppo-space-2, 8px);
+	gap: 8px;
 	flex: 0 0 auto;
 	margin-block-end: -1px;
-	padding: var(--wppo-space-2, 8px) var(--wppo-space-3, 12px);
+	padding: 8px 12px;
 	border: 1px solid transparent;
 	border-block-end: 2px solid transparent;
 	border-radius: var(--wppo-radius-sm, 8px) var(--wppo-radius-sm, 8px) 0 0;
 	background: transparent;
 	color: var(--wppo-text-muted, #475569);
-	font-size: var(--wppo-font-size-sm, 14px);
+	font-size: 14px;
 	font-weight: 500;
 	line-height: 1.4;
 	white-space: nowrap;
@@ -94,17 +99,20 @@
 	font-weight: 600;
 }
 
-// One focus treatment, shared with the rest of the admin. Applied on the tab
-// itself, not a wrapper, so there is exactly one focus stop per sub-tab.
+// One focus treatment, shared with the rest of the admin: `--wppo-focus-ring`
+// is a **box-shadow** triple (`0 0 0 3px var(--wppo-primary-soft)`), the same
+// way _forms.scss consumes it. Using it as an `outline` colour yields an
+// invalid shorthand, `outline-style: none`, and no visible focus at all.
+// Applied on the tab itself, so there is exactly one focus stop per sub-tab.
 .wppo-subnav__tab:focus-visible {
-	outline: 2px solid var(--wppo-focus-ring, #2563eb);
-	outline-offset: -2px;
+	outline: none;
+	box-shadow: var(--wppo-focus-ring);
 }
 
 .wppo-subnav__icon {
 	display: inline-flex;
 	align-items: center;
-	font-size: var(--wppo-font-size-sm, 14px);
+	font-size: 14px;
 }
 
 .wppo-subnav__label {
@@ -115,7 +123,7 @@
    draw a focus ring around the whole page on mouse click. */
 .wppo-section__panel {
 	min-width: 0;
-	padding-block-start: var(--wppo-space-4, 16px);
+	padding-block-start: 16px;
 }
 
 .wppo-section__panel:focus {
@@ -123,8 +131,8 @@
 }
 
 .wppo-section__panel:focus-visible {
-	outline: 2px solid var(--wppo-focus-ring, #2563eb);
-	outline-offset: 4px;
+	outline: none;
+	box-shadow: var(--wppo-focus-ring);
 	border-radius: var(--wppo-radius-sm, 8px);
 }
 
@@ -136,12 +144,12 @@
 
 @media ( max-width: 782px ) {
 	.wppo-section__title {
-		font-size: var(--wppo-font-size-lg, 20px);
+		font-size: 1.25rem;
 	}
 
 	// Touch targets: the sub-nav is a primary navigation control on mobile.
 	.wppo-subnav__tab {
 		min-height: 44px;
-		padding-inline: var(--wppo-space-3, 12px);
+		padding-inline: 12px;
 	}
 }

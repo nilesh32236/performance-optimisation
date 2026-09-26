@@ -102,6 +102,32 @@ export const isSafeCssColor = ( value ) =>
 	/^#[0-9a-fA-F]{3,4}$|^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/.test( value );
 
 const App = () => {
+	// Resolve a navigation target without performing it, so the dirty guard can
+	// compare the destination against what is currently on screen. Callers pass
+	// area ids, screen ids and legacy values, so the guard cannot compare the
+	// raw argument against the current area.
+	const resolveDestination = useCallback( ( target ) => {
+		const raw = String( target || '' );
+		if ( SECTION_IDS.includes( raw ) ) {
+			return { area: raw, view: areaItemIds( raw )[ 0 ] };
+		}
+		const legacy = new URLSearchParams( window.location.search ).get(
+			'tab'
+		);
+		for ( const candidate of [ raw, legacy ] ) {
+			if ( ! candidate ) {
+				continue;
+			}
+			const owner = SECTION_IDS.find( ( id ) =>
+				areaItemIds( id ).includes( candidate )
+			);
+			if ( owner ) {
+				return { area: owner, view: candidate };
+			}
+		}
+		return null;
+	}, [] );
+
 	// The URL is the single source of truth for BOTH the open area and the
 	// open screen within it. Proven live to be absent before this: walking every
 	// tab left location.href unchanged, so a refresh lost the section and
@@ -127,7 +153,7 @@ const App = () => {
 	const [ ccssError, setCcssError ] = useState( false );
 	const [ ccssRefreshTrigger, setCcssRefreshTrigger ] = useState( 0 );
 	const [ isDirty, setIsDirty ] = useState( false );
-	const [ pendingTab, setPendingTab ] = useState( null );
+	const [ pendingTarget, setPendingTarget ] = useState( null );
 	const [ showGuard, setShowGuard ] = useState( false );
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedCcss = useRef( false );
@@ -148,44 +174,68 @@ const App = () => {
 
 	const sidebarItems = useMemo( () => SECTIONS, [] );
 
-	// Changing area. The dirty-form guard is unchanged in behaviour: it still
-	// intercepts a navigation away from unsaved work and routes it through the
-	// confirm dialog.
-	const handleTabChange = useCallback(
-		( nextSection ) => {
-			if ( isDirty && nextSection !== activeSection ) {
-				setPendingTab( nextSection );
-				setShowGuard( true );
-				return;
+	// Any navigation away from unsaved work goes through the confirm dialog.
+	//
+	// This covers BOTH changing area and changing the screen within an area.
+	// Guarding only the area switch left a silent data-loss path: editing the
+	// Preload settings and then clicking the "Assets & Scripts" sub-tab
+	// discarded the edit with no prompt, because two settings forms share each
+	// area. The earlier comment here claimed that was intentional; it was not.
+	//
+	// The comparison is against the resolved destination rather than the raw
+	// argument, because callers pass area ids, screen ids and legacy values, and
+	// comparing a screen id against an area id is always "different".
+	const requestNavigation = useCallback(
+		( target ) => {
+			const destination = resolveDestination( target );
+			if ( ! destination ) {
+				// Unresolvable target: do nothing, and do not prompt about edits
+				// the user never navigated away from.
+				return false;
 			}
-			navigate( nextSection );
-			setMobileMenuOpen( false );
+			if (
+				isDirty &&
+				( destination.area !== activeSection ||
+					destination.view !== activeView )
+			) {
+				setPendingTarget( target );
+				setShowGuard( true );
+				return false;
+			}
+			navigate( target );
+			return true;
 		},
-		[ isDirty, activeSection, navigate ]
+		[ isDirty, activeSection, activeView, navigate, resolveDestination ]
 	);
 
-	// Changing the screen inside the current area. No reload, no guard: the form
-	// being left is part of the same area the user is already in.
+	const handleTabChange = useCallback(
+		( nextSection ) => {
+			requestNavigation( nextSection );
+			setMobileMenuOpen( false );
+		},
+		[ requestNavigation ]
+	);
+
 	const handleViewChange = useCallback(
 		( nextView ) => {
-			navigate( nextView );
+			requestNavigation( nextView );
 		},
-		[ navigate ]
+		[ requestNavigation ]
 	);
 
 	const confirmDiscard = useCallback( () => {
 		setShowGuard( false );
 		setIsDirty( false );
-		if ( pendingTab ) {
-			navigate( pendingTab );
+		if ( pendingTarget ) {
+			navigate( pendingTarget );
 			setMobileMenuOpen( false );
-			setPendingTab( null );
+			setPendingTarget( null );
 		}
-	}, [ pendingTab, navigate ] );
+	}, [ pendingTarget, navigate ] );
 
 	const cancelGuard = useCallback( () => {
 		setShowGuard( false );
-		setPendingTab( null );
+		setPendingTarget( null );
 	}, [] );
 
 	// Block browser unload when dirty — browsers show generic confirmation.
