@@ -16,7 +16,7 @@
  * @package
  */
 
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import ObjectCache from '../ObjectCache';
@@ -92,6 +92,36 @@ describe( 'ObjectCache dirty state', () => {
 			port: undefined,
 		} );
 		expect( dirtied( calls ) ).toEqual( [] );
+	} );
+
+	it( 'does not persist invented values for keys the plugin never read', async () => {
+		// `object_cache.timeout` and `.prefix` are declared by the schema but
+		// have no consumer — the connect timeout is hardcoded 0.5 and the
+		// drop-in builds its prefix from $table_prefix. Shipping defaults for
+		// them would have started persisting two keys the plugin never wrote.
+		const api = require( '../../lib/apiRequest' );
+		api.apiCall.mockClear();
+		api.apiCall.mockResolvedValue( { success: true } );
+		await act( async () => {
+			render( <ObjectCache options={ { password: 'x' } } /> );
+		} );
+		const save = screen
+			.getAllByRole( 'button', { name: /Save/i } )
+			.find( ( b ) => ! b.disabled );
+		// If the control is not there, the test fails loudly rather than
+		// passing by skipping its own assertion.
+		expect( save ).toBeDefined();
+
+		await act( async () => {
+			save.click();
+		} );
+		await waitFor( () => expect( api.apiCall ).toHaveBeenCalled() );
+		const payload = api.apiCall.mock.calls
+			.map( ( c ) => c[ 1 ] && c[ 1 ].settings )
+			.find( Boolean );
+		expect( payload ).toBeDefined();
+		expect( payload ).not.toHaveProperty( 'timeout' );
+		expect( payload ).not.toHaveProperty( 'prefix' );
 	} );
 
 	it( 'still renders its actions with a full payload, and stays clean', async () => {
