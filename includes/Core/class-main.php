@@ -372,6 +372,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * double-fire (issue #1700): the closure registrations cannot be
 		 * detected via `has_filter()`, so a second call would otherwise append
 		 * duplicate callbacks and core would emit the merged rules twice.
+		 * Instance state by design: production `Main` is a per-request
+		 * singleton (`get_instance()`), so same-instance coverage is the
+		 * reported bug; test instances stay isolated. Deliberately not
+		 * reset on `switch_blog` — a second-site head render in the same
+		 * process reuses the single registration (resetting would re-add
+		 * duplicate closures; see `claim_speculation_rules_registration()`).
 		 *
 		 * @var   bool
 		 * @since NEXT
@@ -7175,7 +7181,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `has_filter()`, so the instance flag is authoritative; the
 		 * `has_filter()` probes (guarded for minimal installs without the
 		 * function) cover the named callbacks when registration state was
-		 * lost (e.g. a fresh instance after unserialization). Fail-open:
+		 * lost (e.g. a fresh instance after unserialization). Production
+		 * `Main` is a per-request singleton, so a fresh-instance duplicate
+		 * closure pair cannot occur outside tests (test instances stay
+		 * isolated by design). Fail-open:
 		 * any throwable leaves prior state untouched and allows
 		 * registration (a duplicate block degrades gracefully; a missing
 		 * block would silently drop the feature).
@@ -8074,7 +8083,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// suppress so the document config emits null (no rules) instead
 				// of a prefetch default. A missing option (false, e.g. minimal
 				// test installs) stays fail-open so unit tests without the
-				// stub still run.
+				// stub still run. No request-local memo: WordPress memoizes
+				// options in memory, and a static would go stale across
+				// switch_to_blog()/mid-test option changes.
 				if ( function_exists( 'get_option' ) ) {
 					try {
 						$structure = get_option( 'permalink_structure' );

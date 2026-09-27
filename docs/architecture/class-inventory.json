@@ -2270,14 +2270,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 10295,
+        "lines": 10306,
         "methods": 237,
         "public_methods": 151,
         "large_methods": 17,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "enqueue_scripts",
-            "line": 3350,
+            "line": 3356,
             "lines": 203
         },
         "method_prefixes": {
