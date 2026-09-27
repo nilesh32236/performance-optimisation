@@ -629,3 +629,104 @@ eight.
 Round 30: **a green suite is not evidence that a change is pinned.** Every one of
 1,293 tests passed with the fix removed entirely. The suite was not weak — it
 was aimed at code nobody had changed.
+
+## Rounds 31–33 — three reviews, two reverts, and a PASS line that could not fail
+
+### Merged
+
+| PR | What | Round |
+|---|---|---|
+| #1694 | the Overview's headline number was a pooled lab median | 31 |
+| #1697 | a long code block was clipped at 360px, unreachable | 31 |
+| #1698 | the left column read LCP, CLS, INP, LCP, CLS, INP | 32 |
+| #1715 | a tooltip laid out 12% wider than its rule declares | 33 |
+
+### A PASS line that was vacuous
+
+For most of this campaign the objective sweep reported:
+
+```
+PASS  responsive: 56/56 checks clean (360-1920px)
+```
+
+The check was:
+
+```js
+document.documentElement.scrollWidth > vw + 2
+```
+
+**That is structurally always false here.** `.wppo-container` sets
+`overflow-x: clip`, so the document never scrolls — and a genuinely clipped
+element therefore reads as a pass. The check could not fail. It was reporting
+`0` and calling it evidence, for as many rounds as it took for someone to look
+at what it measured.
+
+Replaced with the question that actually matters — *does anything extend past
+the viewport with no scrollable ancestor that could bring it back?* — and the
+first run failed immediately:
+
+```
+FAIL  responsive: 51/56
+  cut off at 360px on data-system/databaseCleanup: wppo-tooltip-content
+  cut off at 360px on overview/dashboard:        wppo-suggestion-card__value
+```
+
+Then it cried wolf the other way, reporting every tooltip on the page as cut off
+because a hidden tooltip still has geometry. Both under-reporting and
+over-reporting are useless; the check now ignores elements that are not shown,
+and reports **54/56** with the offenders named.
+
+> I had been quoting "56/56 clean" as evidence for the objective's responsive
+> clause. It was evidence that a subtraction was zero.
+
+### #1715: I shipped a fix that made three tooltips worse
+
+The review found **five regressions** from my re-anchoring, three of which left
+only **26–28% of the tooltip readable** — worse than the bug it was meant to fix
+— because the measurement only tested the right-hand edge, and the `transform`
+that was supposed to reposition the box was **dead code** (a `0,3,0` hover rule
+beats a `0,1,0` modifier, so all 56 measured rows rendered
+`matrix(1,0,0,1,-100,-8)`).
+
+My own measurement was also wrong: I reported "0/0/0 clipped, 0/3/4
+end-anchored", and the reviewer measured 2 clipped at 360. Their *before* count
+reproduced exactly, so the discrepancy was entirely in my *after*. I had hovered
+4 triggers per width; they covered 56 instances across 10 widths and 5 tabs.
+
+The mechanism was **removed rather than repaired**, and the one-line
+`box-sizing: border-box` — which the review verified safe and correct — was kept:
+
+```
+20 tooltips hovered at 320/360/390/1024:  3 clipped, all at 390px
+```
+
+Three is a real, scoped remaining defect. Repairing the anchor properly needs a
+two-sided check, logical edges for RTL, the real clipping ancestor rather than a
+three-class allowlist, and a resize re-measure — a change that deserves its own
+review rather than a rider on a one-line fix.
+
+### Two of my own mistakes, recorded because the pattern repeats
+
+**A grep for a class name misses a nested SCSS rule.** I grepped `src/css` for
+`wppo-suggestion-card__value`, got zero matches, and was about to file a "class
+with no rule behind it" defect. The class has **eight** nested `&__value` rules.
+This is the same failure as measuring the wrong focus stops in round 25 — I
+measured the wrong thing, confidently — in a new disguise.
+
+**A test that cannot fail is worse than no test.** My "keeps the threshold where
+the arithmetic puts it" referenced no production code at all: it computed over a
+test-local constant. The reviewer broke the production code **eleven** different
+ways and it passed every time. Ten mutations survived, including the three that
+matter most — the ones that decide *where the box actually goes*.
+
+### The lesson, sixth form
+
+Rounds 25–30 each recorded a way of being wrong:
+
+1. a remembered rule is not a check;
+2. "I cannot prove this" is not a reason to ship;
+3. I sampled two screens and generalised to all eight;
+4. a green suite is not evidence that a change is pinned;
+5. a campaign record that certifies its own output is not a check on it;
+6. **a check that cannot fail is not evidence of anything** — including one of my
+   own, which I had been quoting as proof for rounds.
