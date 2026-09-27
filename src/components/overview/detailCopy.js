@@ -225,16 +225,26 @@ export const DEVICE_COPY = {
  * @param {string} [device] `'desktop'`, `'mobile'`, or undefined.
  * @return {string} e.g. `" on desktop (PageSpeed lab scan)"`.
  */
-const sourceClause = ( device ) => {
+const deviceName = ( device ) => {
+	// `Object.hasOwn`, not a truthy lookup: a plain object literal inherits
+	// `toString`, `constructor` and `__proto__`, so an unrecognised device
+	// rendered "Loading (LCP) on function toString() { [native code] }". The
+	// same hole is already guarded in `renderDetail`.
+	//
+	// An unlabelled or unrecognised device is **not** guessed at: defaulting to
+	// a real one would attribute a number to hardware it was never measured on,
+	// which is the pooling defect, inverted.
+	return device && Object.hasOwn( DEVICE_COPY, device )
+		? DEVICE_COPY[ device ]
+		: null;
+};
+
+const sourceClause = () => {
 	const source = __( '(PageSpeed lab scan)', 'performance-optimisation' );
-	// An unlabelled source has no device, and an unrecognised one is not
-	// guessed at. Defaulting to a real device here would attribute a number to
-	// hardware it was never measured on - the pooling defect, inverted.
-	const name = device ? DEVICE_COPY[ device ] ?? null : null;
-	// An unrecognised device is not guessed at; only the proven source is said.
-	return name
-		? ` ${ __( 'on', 'performance-optimisation' ) } ${ name } ${ source }`
-		: ` ${ source }`;
+	// The device is named in the row's **label**, so the sentence carries only
+	// the source. Naming it in both places moved a duplication rather than
+	// removing one, and cost the sentence its subject.
+	return ` ${ source }`;
 };
 
 /**
@@ -296,7 +306,7 @@ const resolveVital = ( args = {} ) => {
 			VITAL_COPY[ args.labelKey ]?.hint ??
 			'',
 		// The device and provenance clause, built in one place.
-		source: sourceClause( args.device ),
+		source: sourceClause(),
 	};
 };
 
@@ -325,18 +335,13 @@ export const renderLabel = ( row ) => {
 	// vitals rows the left column was `LCP, CLS, INP, LCP, CLS, INP` with
 	// byte-identical names, so a user scanning it learned nothing about the
 	// duplication and could reasonably conclude the numbers had collapsed.
-	const device = row?.detailArgs?.device;
-	const name = device ? DEVICE_COPY[ device ] : null;
+	const name = deviceName( row?.detailArgs?.device );
 	if ( ! name ) {
 		return base;
 	}
-	// translators: 1: metric name, 2: device class.
-	return sprintf(
-		// translators: 1: metric name, 2: device class.
-		__( '%1$s on %2$s', 'performance-optimisation' ),
-		base,
-		name
-	);
+	// translators: %1$s metric name, e.g. "Loading (LCP)"; %2$s device class.
+	const format = __( '%1$s on %2$s', 'performance-optimisation' );
+	return sprintf( format, base, name );
 };
 
 /**

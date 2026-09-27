@@ -148,7 +148,7 @@ describe( 'Overview detail copy', () => {
 		[
 			DETAIL.vital_good,
 			{ labelKey: VITAL.lcp, value: '505 ms', device: 'desktop' },
-			'Good: 505 ms on desktop (PageSpeed lab scan).',
+			'Good: 505 ms (PageSpeed lab scan).',
 		],
 		[
 			DETAIL.vital_attention,
@@ -158,7 +158,7 @@ describe( 'Overview detail copy', () => {
 				hintKey: VITAL.lcp,
 				device: 'desktop',
 			},
-			'Could be better: 2500 ms on desktop (PageSpeed lab scan). How long the main content takes to appear.',
+			'Could be better: 2500 ms (PageSpeed lab scan). How long the main content takes to appear.',
 		],
 		[
 			DETAIL.vital_poor,
@@ -168,7 +168,7 @@ describe( 'Overview detail copy', () => {
 				hintKey: VITAL.lcp,
 				device: 'desktop',
 			},
-			'Poor: 4000 ms on desktop (PageSpeed lab scan). How long the main content takes to appear.',
+			'Poor: 4000 ms (PageSpeed lab scan). How long the main content takes to appear.',
 		],
 	];
 
@@ -195,7 +195,7 @@ describe( 'Overview detail copy', () => {
 				labelKey: VITAL.lcp,
 				device: 'desktop',
 			},
-			'Poor: 4000 ms on desktop (PageSpeed lab scan). How much the page jumps around while loading.',
+			'Poor: 4000 ms (PageSpeed lab scan). How much the page jumps around while loading.',
 		],
 		[
 			DETAIL.vital_attention,
@@ -205,12 +205,12 @@ describe( 'Overview detail copy', () => {
 				labelKey: VITAL.lcp,
 				device: 'desktop',
 			},
-			'Could be better: 2500 ms on desktop (PageSpeed lab scan). How much the page jumps around while loading.',
+			'Could be better: 2500 ms (PageSpeed lab scan). How much the page jumps around while loading.',
 		],
 		[
 			DETAIL.vital_good,
 			{ value: '505 ms', labelKey: VITAL.lcp, device: 'desktop' },
-			'Good: 505 ms on desktop (PageSpeed lab scan).',
+			'Good: 505 ms (PageSpeed lab scan).',
 		],
 		[
 			DETAIL.system_versions,
@@ -232,6 +232,53 @@ describe( 'Overview detail copy', () => {
 		expect( RENDERED.map( ( [ key ] ) => key ).sort() ).toEqual(
 			Object.values( DETAIL ).sort()
 		);
+	} );
+
+	// An unrecognised device is not guessed at. A mutation that fell back to
+	// `DEVICE_COPY.mobile` for anything unknown passed the whole suite, and a
+	// prototype key rendered the function body into the bold heading.
+	it.each( [
+		'tablet',
+		'all',
+		'',
+		null,
+		undefined,
+		'toString',
+		'constructor',
+		'__proto__',
+		'hasOwnProperty',
+		0,
+		false,
+	] )( 'never invents a device for %p', ( device ) => {
+		expect(
+			renderLabel( { labelKey: VITAL.lcp, detailArgs: { device } } )
+		).toBe( 'Loading (LCP)' );
+		// And the sentence never claims one either.
+		expect(
+			renderDetail( {
+				detailKey: DETAIL.vital_good,
+				detailArgs: { labelKey: VITAL.lcp, value: '346 ms', device },
+			} )
+		).toBe( 'Good: 346 ms (PageSpeed lab scan).' );
+	} );
+
+	it( 'names the device exactly once, in the label', () => {
+		const label = renderLabel( {
+			labelKey: VITAL.lcp,
+			detailArgs: { device: 'desktop' },
+		} );
+		const sentence = renderDetail( {
+			detailKey: DETAIL.vital_good,
+			detailArgs: {
+				labelKey: VITAL.lcp,
+				value: '346 ms',
+				device: 'desktop',
+			},
+		} );
+		expect( label ).toBe( 'Loading (LCP) on desktop' );
+		expect( sentence ).toBe( 'Good: 346 ms (PageSpeed lab scan).' );
+		// Read together they say it once, and neither repeats the other.
+		expect( label + ' ' + sentence ).toMatch( /desktop/ );
 	} );
 
 	it( 'renders a sentence rather than a key or a blank', () => {
@@ -273,7 +320,9 @@ describe( 'Overview detail copy', () => {
 		expect( sentence ).not.toContain( 'Loading (LCP)' );
 		expect( sentence ).toContain( '4000 ms' );
 		expect( sentence ).toContain( 'PageSpeed lab scan' );
-		expect( sentence ).toContain( 'on desktop' );
+		// The device is named **once**, in the label. The sentence carries the
+		// source only, so the pair reads as a whole without repeating it.
+		expect( sentence ).not.toContain( 'on desktop' );
 		expect( sentence ).toContain( 'PageSpeed lab scan' );
 		expect( sentence ).toContain(
 			'How long the main content takes to appear.'
@@ -294,7 +343,7 @@ describe( 'Overview detail copy', () => {
 			},
 		} );
 		expect( sentence ).toBe(
-			'Poor: 600 ms on mobile (PageSpeed lab scan). How quickly the page reacts to a tap or click.'
+			'Poor: 600 ms (PageSpeed lab scan). How quickly the page reacts to a tap or click.'
 		);
 		expect( renderLabel( { labelKey: VITAL.cls } ) ).toBe(
 			'Visual stability (CLS)'
