@@ -645,8 +645,20 @@
 		font-size: 0.875rem;
 		font-weight: 500;
 		color: var(--wppo-text-muted);
+		// `overflow-wrap: anywhere`, and **not** inherited from a sibling block.
+		//
+		// This value is frequently a URL, and a long one is 329px of near
+		// unbreakable token. Measured on the All-diagnostics screen at 360px: it
+		// laid out at 329px inside a 227px body and ran 36px past the viewport,
+		// clipped by the container with no way to read it.
+		//
+		// `anywhere` rather than `break-word` because it also lets the element's
+		// min-content contribution shrink, which matters inside a flex row: a flex
+		// item's default `min-width: auto` otherwise holds it at its longest
+		// token regardless of what any wrapping property says.
+		overflow-wrap: anywhere;
+		min-width: 0;
 	}
-
 	&__passing {
 		font-size: 0.8rem;
 		font-weight: 600;
