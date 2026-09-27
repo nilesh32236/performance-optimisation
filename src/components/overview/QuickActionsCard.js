@@ -98,71 +98,78 @@ export default function QuickActionsCard( { onNavigate } ) {
 			<h2 className="wppo-card__title" id="wppo-quick-actions-title">
 				{ __( 'Quick actions', 'performance-optimisation' ) }
 			</h2>
+			<div className="wppo-card__body">
+				<LoadingSubmitButton
+					type="button"
+					className="wppo-button wppo-button--secondary"
+					isLoading={ busy === 'clear-cache' }
+					loadingLabel={ __(
+						'Clearing…',
+						'performance-optimisation'
+					) }
+					onClick={ clearCache }
+					label={
+						<>
+							<FontAwesomeIcon icon={ faBroom } />{ ' ' }
+							{ __(
+								'Clear the page cache',
+								'performance-optimisation'
+							) }
+						</>
+					}
+				/>
+				<p className="wppo-overview__action-hint">
+					{ __(
+						'The next visitor gets a freshly generated page.',
+						'performance-optimisation'
+					) }
+				</p>
 
-			<LoadingSubmitButton
-				type="button"
-				className="wppo-button wppo-button--secondary"
-				isLoading={ busy === 'clear-cache' }
-				loadingLabel={ __( 'Clearing…', 'performance-optimisation' ) }
-				onClick={ clearCache }
-				label={
-					<>
-						<FontAwesomeIcon icon={ faBroom } />{ ' ' }
-						{ __(
-							'Clear the page cache',
-							'performance-optimisation'
-						) }
-					</>
-				}
-			/>
-			<p className="wppo-overview__action-hint">
-				{ __(
-					'The next visitor gets a freshly generated page.',
-					'performance-optimisation'
-				) }
-			</p>
-
-			<ul className="wppo-overview__links">
-				<li>
-					<button
-						type="button"
-						className="wppo-button wppo-button--link"
-						onClick={ goTo( 'media' ) }
-					>
-						<FontAwesomeIcon icon={ faImages } />{ ' ' }
-						{ __( 'Review images', 'performance-optimisation' ) }
-						<FontAwesomeIcon icon={ faArrowRight } />
-					</button>
-				</li>
-				<li>
-					<button
-						type="button"
-						className="wppo-button wppo-button--link"
-						onClick={ goTo( 'data-system' ) }
-					>
-						<FontAwesomeIcon icon={ faDatabase } />{ ' ' }
-						{ __(
-							'Review the database',
-							'performance-optimisation'
-						) }
-						<FontAwesomeIcon icon={ faArrowRight } />
-					</button>
-				</li>
-				<li>
-					<button
-						type="button"
-						className="wppo-button wppo-button--link"
-						onClick={ goTo( 'speed' ) }
-					>
-						<FontAwesomeIcon icon={ faGaugeHigh } />{ ' ' }
-						{ __(
-							'Tune speed settings',
-							'performance-optimisation'
-						) }
-						<FontAwesomeIcon icon={ faArrowRight } />
-					</button>
-				</li>
-			</ul>
+				<ul className="wppo-overview__links">
+					<li>
+						<button
+							type="button"
+							className="wppo-button wppo-button--link"
+							onClick={ goTo( 'media' ) }
+						>
+							<FontAwesomeIcon icon={ faImages } />{ ' ' }
+							{ __(
+								'Review images',
+								'performance-optimisation'
+							) }
+							<FontAwesomeIcon icon={ faArrowRight } />
+						</button>
+					</li>
+					<li>
+						<button
+							type="button"
+							className="wppo-button wppo-button--link"
+							onClick={ goTo( 'data-system' ) }
+						>
+							<FontAwesomeIcon icon={ faDatabase } />{ ' ' }
+							{ __(
+								'Review the database',
+								'performance-optimisation'
+							) }
+							<FontAwesomeIcon icon={ faArrowRight } />
+						</button>
+					</li>
+					<li>
+						<button
+							type="button"
+							className="wppo-button wppo-button--link"
+							onClick={ goTo( 'speed' ) }
+						>
+							<FontAwesomeIcon icon={ faGaugeHigh } />{ ' ' }
+							{ __(
+								'Tune speed settings',
+								'performance-optimisation'
+							) }
+							<FontAwesomeIcon icon={ faArrowRight } />
+						</button>
+					</li>
+				</ul>
+			</div>
 		</section>
 	);
 }
