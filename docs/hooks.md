@@ -743,6 +743,26 @@ add_filter( 'wppo_lazyload_iframe_allowed', function( $allowed, $src, $iframe_ta
 
 ---
 
+### `wppo_lazyload_allow_attr`
+Opt-in gate for lazy-load attribute re-emission hardening. Hostile attributes (event handlers, `srcdoc`, scriptable URLs, hostile `style`) are denied by default so stored-XSS payloads can never be baked into the static cache artefact; return `true` to re-admit an exotic attribute without forking. @since NEXT.
+
+**Parameters:**
+- `$allowed` *(bool)* — Default verdict (`false` for hostile attributes, `true` otherwise).
+- `$name` *(string)* — Lower-cased attribute name.
+- `$value` *(mixed)* — Raw attribute value.
+
+**Example:**
+```php
+add_filter( 'wppo_lazyload_allow_attr', function( $allowed, $name, $value ) {
+    if ( 'onload' === $name && 'doThing()' === $value ) {
+        return true; // Re-admit a known-safe handler
+    }
+    return $allowed;
+}, 10, 3 );
+```
+
+---
+
 ### `wppo_litespeed_is_litespeed`
 Filters whether the current server is detected as LiteSpeed / OpenLiteSpeed. @since 2.0.0.
 

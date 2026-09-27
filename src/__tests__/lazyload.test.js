@@ -1556,4 +1556,82 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( img.classList.contains( 'wppo-lqip-loaded' ) ).toBe( true );
 		} );
 	} );
+
+	describe( 'poisoned deferred attributes are never assigned (issue #1699)', () => {
+		it( 'blocks a javascript: hero data-src and leaves src unset', () => {
+			mockIntersectionObserver();
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute( 'data-src', 'javascript:alert(1)' );
+			hero.setAttribute( 'data-wppo-hero', '1' );
+			hero.setAttribute( 'loading', 'lazy' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			expect( hero.getAttribute( 'src' ) ).toBeNull();
+			expect( hero.hasAttribute( 'data-src' ) ).toBe( false );
+			expect( consoleWarnSpy ).toHaveBeenCalledWith(
+				expect.stringContaining( 'blocked hero image src' ),
+				'javascript:alert(1)'
+			);
+		} );
+
+		it( 'blocks a control-obfuscated javascript: hero data-src', () => {
+			mockIntersectionObserver();
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute( 'data-src', 'java\tscript:alert(1)' );
+			hero.setAttribute( 'data-wppo-hero', '1' );
+			hero.setAttribute( 'loading', 'lazy' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			expect( hero.getAttribute( 'src' ) ).toBeNull();
+			expect( hero.hasAttribute( 'data-src' ) ).toBe( false );
+		} );
+
+		it( 'blocks a fully-poisoned hero data-srcset and never assigns srcset', () => {
+			mockIntersectionObserver();
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute(
+				'data-srcset',
+				'javascript:alert(1) 1x, data:text/html,<b>x</b> 2x'
+			);
+			hero.setAttribute( 'data-wppo-hero', '1' );
+			hero.setAttribute( 'loading', 'lazy' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			expect( hero.getAttribute( 'srcset' ) ).toBeNull();
+			expect( hero.hasAttribute( 'data-srcset' ) ).toBe( false );
+		} );
+
+		it( 'still restores a benign hero data-src', () => {
+			mockIntersectionObserver();
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute( 'data-src', 'https://example.com/hero.jpg' );
+			hero.setAttribute( 'data-wppo-hero', '1' );
+			hero.setAttribute( 'loading', 'lazy' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			expect( hero.getAttribute( 'src' ) ).toBe(
+				'https://example.com/hero.jpg'
+			);
+		} );
+	} );
 } );
