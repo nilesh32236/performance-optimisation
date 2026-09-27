@@ -424,3 +424,126 @@ loading state are all localized; the sentence under each row is not.
 The fix is a real refactor: the model returns a message key plus arguments, and
 the component owns the copy. That also makes the tests better — asserting
 `detailKey`/`detailArgs` pins *which* claim is made, not the English of it.
+
+## Round 27 — the last real gap, and a measurement that was wrong twice
+
+### Merged
+
+`93f4e5d1` — the Overview's status prose is now translatable (#1685, 955 lines).
+
+The audit that found it was a one-liner:
+
+```
+"The plugin did not report"             in .pot: 0
+"Page cache is on"                      in .pot: 0
+"is enabled and the server is reachable" in .pot: 0
+"Running on WordPress"                  in .pot: 0
+```
+
+Every string in the component was correctly wrapped in `__()`. The i18n lint
+rules passed. The feature was still untranslatable, because those strings were
+**never passed to a translation function at all**. A missing `__()` is invisible
+to every check that looks for a present one — which is why the review's second
+finding was the more useful one: the vitals `label` and `hint` were English and
+were being interpolated straight into the newly-translatable format strings, so a
+German translator would have received
+
+```
+"%1$s ist schlecht bei %2$s. %3$s"   with  %1$s = "Loading (LCP)"
+```
+
+A **mixed-language sentence**, arguably worse than the homogeneous English one it
+replaced. Metric names are keys now too, and so are the three row headings. The
+model now contains no English at all:
+
+```
+grep -cE "label: '|hint: '|detail: '" src/lib/overviewStatus.js   →  0
+```
+
+The template is regenerated (1854 → **1902 msgids**), without which the PR would
+have delivered nothing.
+
+### Nine mutations, and two of the nine were not really mutations
+
+The review found **9 of 17 mutations survived**, the strongest being one that
+made `t()` discard its declared `order` and use `Object.values(args)` — while
+rendering *"9 MB is poor at 7.1.2. 8.3"* with all 1,257 tests green. The root
+cause: only **3 of 23 keys** had their English pinned; the rest were covered by
+structural checks that are invariant under any argument permutation.
+
+Fixed with a table of all 23 rendered sentences, plus a second table supplying
+each key's arguments **in a different key order** — the only input that
+distinguishes a correct `t()` from one that ignores its `order`.
+
+Two of the nine, though, were **no-op mutations**: the review's harness edited
+mapping objects that an earlier commit had already replaced, so their "survived"
+was unearned. Re-applied correctly, they are caught. *A mutation that did not
+change the code is not a mutation.*
+
+### A change I shipped without being able to prove it (#1687)
+
+The objective sweep reported one console error: `Failed to fetch activities:
+signal is aborted`. The guard was
+`! activitiesController.signal.aborted`, which only covers aborts *this code*
+performed — a request the **browser** cancelled (a page unload mid-flight) also
+rejects, without our controller ever being aborted.
+
+Then I tried to reproduce it, and could not. Not on the old guard, not on the new
+one, across repeated runs of the same sweep. I also wrote two jsdom regression
+tests and **both were worthless**:
+
+1. The first modelled the bug as a shared controller the second fetch reassigns.
+   But each effect run closes over its own `const`, so each fetch checks its own
+   signal and the guard holds in both versions. The mutation survived —
+   *correctly*, because it was not the bug.
+2. The second drove the whole `App`, needing a dozen unrelated API mocks, and
+   jsdom will not reproduce a browser-initiated cancellation anyway.
+
+So the change is shipped because it is strictly safer and matches the rule
+`apiRequest` already applies for its own logging — **not** because it was proven,
+and the code comment says exactly that. I have not written a test that fails on
+the old code, so I have not pretended to.
+
+### The sweep was the thing tripping its own rate limit
+
+The console error the sweep kept reporting as a product defect was a **429 from
+`object_cache`**, caused by the sweep loading the Overview eight times against a
+documented five-per-minute limit. The plugin handles it honestly — "Object cache
+state is not available right now" plus a retry — and the console line is the
+browser's own network log.
+
+Two of my own measurement bugs hid this for a while: an error filter that matched
+`/429/` against a message **truncated at 45 characters**, which cut the status
+code off before the filter ever saw it; and a pace change that only reached some
+of the loops. *A verification harness that trips the limit it is measuring under
+should say so, not report the app as broken.*
+
+Paced within the limit, the same checks are clean: **zero HTTP errors, zero
+console errors**, all six Overview rows correct.
+
+### Objective verification on merged master (live)
+
+```
+PASS  five-area IA: all 8 screens render a heading
+PASS  invalid tab -> Overview (4 hostile URLs)
+PASS  History API: back/forward/refresh/direct-URL
+PASS  evidence-based Overview: 6 rows, no NN/100 score, 0 empty elements
+PASS  control-local loading: 1 aria-busy element, 0 overlays, announces "Working…"
+PASS  dirty-state: 8/8 untouched forms navigate freely
+PASS  responsive: 56/56 checks clean (360-1920px)
+PASS  accessibility: 12/12 plugin tab stops with a visible focus ring
+```
+
+The dirty-state guard was checked in **both** directions, which is the thing a
+false-positive fix can silently break: eight untouched forms navigate freely, and
+a genuinely edited form (`pagespeed-api-key`) still raises the discard prompt.
+
+### The design system is unified
+
+Every screen uses the same card treatment — `.wppo-feature-card`, 16px radius,
+`#fff`, shadow, `#fafbfc` header. A first reading suggested the Dashboard
+differed; it was matching an outer wrapper, not the card. The 742 elements in
+the plugin's markup are `.wppo-` throughout; the hashed classes I first reported
+(`e518617e7c3a18e7__flex`) appear in **neither `src/` nor `build/`** — they come
+from a WordPress-shipped stylesheet and belong to a dependency, not to this
+plugin.
