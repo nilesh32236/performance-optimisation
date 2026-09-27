@@ -331,9 +331,10 @@ outstanding and is the first thing the next round should do.
 ### Merged
 
 `9fb25c23` — the Overview, **27 files, 4,020 insertions**. Post-merge gate on a
-clean `origin/master` worktree: ESLint **0 errors** · Jest **72 suites / 1,250
-tests** · deploy guard **10/10** · PHPCS 0 · PHPUnit **2,818 / 25,986** ·
-architecture 0 · `git diff --check` 0 — and the committed build is
+clean `origin/master` worktree: ESLint **0 errors** (2 pre-existing warnings) ·
+Jest **72 suites / 1,250 tests, 0 failed** · deploy guard **10/10** · PHPCS 0 ·
+PHPUnit **2,818 tests, 0 failed, 9 skipped** · architecture 0 ·
+`git diff --check` 0 — and the committed build is
 **byte-reproducible from source** (0 files differing after `npm run build`).
 
 ### The outstanding verification, and what it cost
@@ -388,7 +389,7 @@ must name the elements it measured.*
 | History API | In-app Overview→Media→Manage, **Back → Media, Forward → Manage, refresh survives**; no full reload |
 | Evidence-based Overview, no fake score | All rows real; `/\d+\/100/` **not present** |
 | Control-local loading | 0 blocking overlays during load; sidebar still clickable |
-| Responsive | **0 failures of 56** (6 screens × 7 widths, 360–1920) |
+| Responsive | **0 failures of 56** (8 screens × 7 widths, 360–1920) |
 | Accessibility | **11/11** plugin Tab stops with a 2px ring |
 | Design system | 75 tokens defined, 74 referenced, 1 unresolved (`--wppo-progress`, set by JS), 2 documented orphans |
 | Object Cache false-dirty fix | Navigates on a real mouse click, no dialog |
