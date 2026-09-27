@@ -177,6 +177,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		private static $responsive_lcp_preload_emitted = false;
 
 		/**
+		 * Per-request memo of resolved hero responsive pairs (issue #1703).
+		 *
+		 * Keyed by normalized URL + buffer hash so the OD-breakpoint →
+		 * buffer-scan → attachment gap-fill in `resolve_hero_responsive_pair()`
+		 * runs once per distinct input per request. Bounded (30 entries),
+		 * reset with {@see clear_lcp_preload_caches()}. In-memory only.
+		 *
+		 * @since NEXT
+		 * @var array<string,array{srcset:string,sizes:string}>
+		 */
+		private static $hero_responsive_memo = array();
+
+		/**
 		 * Whether LCP prioritization already ran on this instance's buffer.
 		 *
 		 * One-shot per instance (issue #881 review): the 6.9+ enhancement
@@ -204,6 +217,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 			self::$preload_emitted                = array();
 			self::$preload_emitted_urls           = array();
 			self::$heuristic_lcp_memo             = array();
+			self::$hero_responsive_memo           = array();
 			self::$responsive_lcp_preload_emitted = false;
 		}
 
@@ -1897,30 +1911,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 					$srcset = '';
 					$sizes  = '';
 				}
-				$link_tag = '';
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_preload_link' ) ) {
-						$link_tag = Util::get_preload_link(
-							$url,
-							'preload',
-							'image',
-							false,
-							Util::get_image_mime_type( $url ),
-							'',
-							'high',
-							$srcset,
-							$sizes
-						);
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$link_tag = '';
-				}
-				if ( ! is_string( $link_tag ) || '' === trim( $link_tag ) ) {
-					self::release_hero_preload_slot( $url, '' );
-					return '';
-				}
-				if ( false === strpos( $link_tag, 'fetchpriority="high"' ) && false === strpos( $link_tag, "fetchpriority='high'" ) ) {
+				$link_tag = $this->build_single_high_preload_tag( $url, $srcset, $sizes );
+				if ( '' === $link_tag ) {
 					self::release_hero_preload_slot( $url, '' );
 					return '';
 				}
@@ -1933,76 +1925,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		}
 
 		/**
-		 * Emit the automatic LCP hero preload tag (issue #1703).
+		 * Resolve the hero responsive pair with per-request memo (issue #1703).
 		 *
-		 * Opt-in single-preload entry point for the automatic LCP hero path:
-		 * resolves the hero candidate via the unified `resolve_auto_lcp_url()`
-		 * chain (manual `_wppo_lcp_preload_url` picker keeps precedence, then
-		 * OD real-visit data + RUM field data, then stored PageSpeed; the DOM
-		 * heuristic tier applies only when a `$buffer` is supplied), and emits
-		 * exactly one `<link rel="preload" as="image" fetchpriority="high">`
-		 * for the candidate (with `imagesrcset`/`imagesizes` when resolvable).
-		 *
-		 * Contract: opt-in gate first (`preload_settings.autoLcpPreload` or
-		 * legacy `image_optimisation.autoPreloadLCP`, both default-off) — the
-		 * manual picker is explicit opt-in and bypasses the gate; toggle-off
-		 * with no manual URL returns '' before touching any buffer or
-		 * per-request state (byte-identical output). Manual precedence holds
-		 * even on `_wppo_disable_auto_lcp` posts via the shared resolver.
-		 * Disagreeing (OD stability gate) or missing signals resolve to ''
-		 * and emit nothing (fail-open, never fatal). Single-preload dedup via
-		 * `response_already_has_high_preload()` + `claim_hero_preload_slot()`
-		 * (exact + any-media emitted set plus buffer scan) suppresses a second
-		 * tag, including when OD already emitted one; the claimed URL is also
-		 * recorded via `record_direct_preload_url()` so the lazy pipeline
-		 * (`get_lazy_lcp_exclusion_url()` + direct-preload normalized check)
-		 * excludes it from lazy-load rewriting in the same response.
-		 * Guards new symbols with `class_exists()`/`method_exists()`/
-		 * `function_exists()`; multisite-safe (per-site options via the owner,
-		 * per-request dedup flushed on `switch_blog`).
+		 * Shared breakpoint → buffer → attachment gap-fill used by
+		 * `emit_lcp_preload()`: OD-breakpoint pair first, then the full-buffer
+		 * Tag Processor scan (only when a `$buffer` is supplied), then the
+		 * attachment lookup. Results (including the empty pair) are memoized
+		 * per normalized URL + buffer hash for the request so a second
+		 * emission resolving the same hero skips all three stages. Bounded
+		 * (30 entries), reset via `clear_lcp_preload_caches()`. Fail-open to
+		 * the empty pair, never fatal.
 		 *
 		 * @since NEXT
-		 * @param string|null $buffer Optional HTML buffer for the heuristic tier and buffer-dedup scan.
-		 * @return string The preload `<link>` tag, or empty string when skipped.
-		 * @internal Call via the Image_Optimisation facade, never directly.
+		 * @param string      $lcp_url Resolved hero URL.
+		 * @param string|null $buffer  Optional HTML buffer for the buffer tier.
+		 * @return array{srcset:string,sizes:string} Responsive pair (empty when unresolvable).
 		 */
-		public function emit_lcp_preload( ?string $buffer = null ): string {
+		private function resolve_hero_responsive_pair( string $lcp_url, ?string $buffer ): array {
+			$empty = array(
+				'srcset' => '',
+				'sizes'  => '',
+			);
 			try {
-				$manual = '';
+				$norm = '';
 				try {
-					$manual = $this->get_manual_lcp_url();
+					$norm = $this->normalize_image_url( $lcp_url );
 				} catch ( \Throwable $e ) {
 					unset( $e );
-					$manual = '';
+					$norm = trim( $lcp_url );
 				}
-				$is_manual = '' !== $manual;
-				if ( ! $is_manual ) {
-					$lcpown_options = $this->owner->lcp_get_options();
-					$preload_on     = ! empty( ( $lcpown_options['preload_settings'] ?? array() )['autoLcpPreload'] );
-					$legacy_on      = ! empty( ( $lcpown_options['image_optimisation'] ?? array() )['autoPreloadLCP'] );
-					if ( ! $preload_on && ! $legacy_on ) {
-						return '';
-					}
+				if ( '' === $norm ) {
+					return $empty;
 				}
-				if ( $this->response_already_has_high_preload( $buffer ) ) {
-					return '';
-				}
-				$lcp_url = '';
-				try {
-					$lcp_url = $this->resolve_auto_lcp_url( $buffer );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return '';
-				}
-				$lcp_url = is_string( $lcp_url ) ? trim( $lcp_url ) : '';
-				if ( '' === $lcp_url ) {
-					return '';
-				}
-				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
-					return '';
-				}
-				if ( ! $this->claim_hero_preload_slot( $lcp_url, '', is_string( $buffer ) ? $buffer : null ) ) {
-					return '';
+				$buf_hash = ( is_string( $buffer ) && '' !== $buffer ) ? md5( $buffer ) : '';
+				$memo_key = substr( $norm, 0, 2048 ) . '|' . $buf_hash;
+				if ( isset( self::$hero_responsive_memo[ $memo_key ] ) && is_array( self::$hero_responsive_memo[ $memo_key ] ) ) {
+					$cached = self::$hero_responsive_memo[ $memo_key ];
+					return array(
+						'srcset' => is_string( $cached['srcset'] ?? '' ) ? (string) $cached['srcset'] : '',
+						'sizes'  => is_string( $cached['sizes'] ?? '' ) ? (string) $cached['sizes'] : '',
+					);
 				}
 				$srcset = '';
 				$sizes  = '';
@@ -2046,30 +2008,165 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 					$srcset = '';
 					$sizes  = '';
 				}
-				$link_tag = '';
-				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_preload_link' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) ) {
-						$link_tag = Util::get_preload_link(
-							$lcp_url,
-							'preload',
-							'image',
-							false,
-							Util::get_image_mime_type( $lcp_url ),
-							'',
-							'high',
-							$srcset,
-							$sizes
-						);
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$link_tag = '';
+				$pair                                    = array(
+					'srcset' => $srcset,
+					'sizes'  => $sizes,
+				);
+				self::$hero_responsive_memo[ $memo_key ] = $pair;
+				if ( count( self::$hero_responsive_memo ) > 30 ) {
+					self::$hero_responsive_memo = array_slice( self::$hero_responsive_memo, -30, null, true );
 				}
+				return $pair;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $empty;
+			}
+		}
+
+		/**
+		 * Build the single high-priority hero preload tag (issue #1703).
+		 *
+		 * Shared tag builder for `emit_responsive_lcp_preload()` and
+		 * `emit_lcp_preload()` so fetchpriority assertion logic lives in one
+		 * place: builds via `Util::get_preload_link()` (escaped + kses-ed)
+		 * and returns '' when the tag is empty or lacks
+		 * `fetchpriority="high"` (callers release the claimed slot).
+		 * Fail-open to '' on any failure, never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $lcp_url Resolved hero URL.
+		 * @param string $srcset  Responsive srcset (may be '').
+		 * @param string $sizes   Responsive sizes (may be '').
+		 * @return string The preload `<link>` tag, or empty string.
+		 */
+		private function build_single_high_preload_tag( string $lcp_url, string $srcset = '', string $sizes = '' ): string {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_preload_link' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) ) {
+					return '';
+				}
+				$link_tag = Util::get_preload_link(
+					$lcp_url,
+					'preload',
+					'image',
+					false,
+					Util::get_image_mime_type( $lcp_url ),
+					'',
+					'high',
+					$srcset,
+					$sizes
+				);
 				if ( ! is_string( $link_tag ) || '' === trim( $link_tag ) ) {
-					self::release_hero_preload_slot( $lcp_url, '' );
 					return '';
 				}
 				if ( false === strpos( $link_tag, 'fetchpriority="high"' ) && false === strpos( $link_tag, "fetchpriority='high'" ) ) {
+					return '';
+				}
+				return $link_tag;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Emit the automatic LCP hero preload tag (issue #1703).
+		 *
+		 * Opt-in single-preload entry point for the automatic LCP hero path:
+		 * resolves the hero candidate via the unified `resolve_auto_lcp_url()`
+		 * chain (manual `_wppo_lcp_preload_url` picker keeps precedence, then
+		 * OD real-visit data + RUM field data, then stored PageSpeed; the DOM
+		 * heuristic tier applies only when a `$buffer` is supplied), and emits
+		 * exactly one `<link rel="preload" as="image" fetchpriority="high">`
+		 * for the candidate (with `imagesrcset`/`imagesizes` when resolvable).
+		 *
+		 * Contract: opt-in gate first (`preload_settings.autoLcpPreload` or
+		 * legacy `image_optimisation.autoPreloadLCP`, both default-off) — the
+		 * manual picker is explicit opt-in and bypasses the gate; toggle-off
+		 * with no manual URL returns '' before touching any buffer or
+		 * per-request state (byte-identical output). Manual precedence holds
+		 * even on `_wppo_disable_auto_lcp` posts via the shared resolver.
+		 * Mirrors the `get_auto_lcp_preload_data()` RUM gate: with the new
+		 * toggle on alone while RUM is unsatisfied, only the OD-only subset
+		 * (`resolve_od_only_lcp_url()`) resolves — stored-PageSpeed/RUM-field
+		 * tiers stay silent here exactly as on the `wp_head` path.
+		 * Disagreeing (OD stability gate) or missing signals resolve to ''
+		 * and emit nothing (fail-open, never fatal). Single-preload dedup via
+		 * `response_already_has_high_preload()` (flag + buffer scan) +
+		 * `claim_hero_preload_slot()` plus the shared
+		 * `$responsive_lcp_preload_emitted` response flag (issue #1429)
+		 * suppresses a second tag, including when OD already emitted one or a
+		 * sibling emitter resolved a different URL; the claimed URL is also
+		 * recorded via `record_direct_preload_url()` so the lazy pipeline
+		 * (`get_lazy_lcp_exclusion_url()` + direct-preload normalized check)
+		 * excludes it from lazy-load rewriting in the same response.
+		 * Responsive gap-fill (breakpoint → buffer → attachment) and tag
+		 * construction go through the shared
+		 * `resolve_hero_responsive_pair()` / `build_single_high_preload_tag()`
+		 * helpers (per-request memoized) so both single-high emitters stay in
+		 * lockstep. Guards new symbols with `class_exists()`/`method_exists()`/
+		 * `function_exists()`; multisite-safe (per-site options via the owner,
+		 * per-request dedup flushed on `switch_blog`).
+		 *
+		 * Wiring note: self-contained staging entry point — no `wp_head` or
+		 * buffer hook invokes it yet. Call via the Image_Optimisation facade
+		 * (`Image_Optimisation::emit_lcp_preload()`); the hook-wiring
+		 * follow-up will attach it to its intended call site.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for the heuristic tier and buffer-dedup scan.
+		 * @return string The preload `<link>` tag, or empty string when skipped.
+		 * @internal Call via the Image_Optimisation facade, never directly.
+		 */
+		public function emit_lcp_preload( ?string $buffer = null ): string {
+			try {
+				$manual = '';
+				try {
+					$manual = $this->get_manual_lcp_url();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$manual = '';
+				}
+				$is_manual  = '' !== $manual;
+				$preload_on = false;
+				$legacy_on  = false;
+				if ( ! $is_manual ) {
+					$lcpown_options = $this->owner->lcp_get_options();
+					$preload_on     = ! empty( ( $lcpown_options['preload_settings'] ?? array() )['autoLcpPreload'] );
+					$legacy_on      = ! empty( ( $lcpown_options['image_optimisation'] ?? array() )['autoPreloadLCP'] );
+					if ( ! $preload_on && ! $legacy_on ) {
+						return '';
+					}
+				}
+				if ( self::$responsive_lcp_preload_emitted ) {
+					return '';
+				}
+				if ( $this->response_already_has_high_preload( $buffer ) ) {
+					return '';
+				}
+				$lcp_url = '';
+				try {
+					if ( ! $is_manual && $preload_on && ! $legacy_on && ! $this->is_auto_lcp_rum_satisfied() ) {
+						$lcp_url = $this->resolve_od_only_lcp_url();
+					} else {
+						$lcp_url = $this->resolve_auto_lcp_url( $buffer );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return '';
+				}
+				$lcp_url = is_string( $lcp_url ) ? trim( $lcp_url ) : '';
+				if ( '' === $lcp_url ) {
+					return '';
+				}
+				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
+					return '';
+				}
+				if ( ! $this->claim_hero_preload_slot( $lcp_url, '', is_string( $buffer ) ? $buffer : null ) ) {
+					return '';
+				}
+				$pair     = $this->resolve_hero_responsive_pair( $lcp_url, is_string( $buffer ) ? $buffer : null );
+				$link_tag = $this->build_single_high_preload_tag( $lcp_url, $pair['srcset'], $pair['sizes'] );
+				if ( '' === $link_tag ) {
 					self::release_hero_preload_slot( $lcp_url, '' );
 					return '';
 				}
@@ -2078,6 +2175,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+				self::$responsive_lcp_preload_emitted = true;
 				return $link_tag;
 			} catch ( \Throwable $e ) {
 				unset( $e );
