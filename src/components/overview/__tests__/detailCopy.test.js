@@ -143,7 +143,7 @@ describe( 'Overview detail copy', () => {
 		[
 			DETAIL.vital_unmeasured,
 			{ labelKey: VITAL.inp, hintKey: VITAL.inp },
-			'Responsiveness (INP) is not measured by a PageSpeed lab scan. How quickly the page reacts to a tap or click.',
+			'Responsiveness (INP) has no reading in the stored PageSpeed lab scan history yet. How quickly the page reacts to a tap or click.',
 		],
 		[
 			DETAIL.vital_good,

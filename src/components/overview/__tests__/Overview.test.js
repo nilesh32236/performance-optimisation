@@ -7,6 +7,8 @@
  */
 
 import { summariseVitals } from '../Overview';
+import { renderDetail, renderLabel } from '../detailCopy';
+import { deriveVitalsStatus } from '../../../lib/overviewStatus';
 import {
 	WEB_VITALS_ALL_NULL,
 	WEB_VITALS_PARTIAL,
@@ -85,6 +87,79 @@ describe( 'summariseVitals', () => {
 		} );
 		expect( vitals.desktop.lcp ).toBe( 345.5 );
 		expect( vitals.mobile ).toBeUndefined();
+	} );
+
+	// The durable test, and the one whose absence shipped a broken sentence.
+	//
+	// An independent review found the unmeasured sentence rendering as
+	// "is not measured by a PageSpeed lab scan." - no subject - on both INP
+	// rows of every load, because the UNKNOWN branch never passed `labelKey`.
+	// The one-line fix changed the shipped sentence, and **all 1,297 tests still
+	// passed**, because the copy table asserted it from a hand-built `detailArgs`
+	// the model never emits.
+	//
+	// So this test builds the row the way production does - payload through
+	// `summariseVitals`, then `deriveVitalsStatus` - and asserts on the rendered
+	// **sentence**, not on `detailArgs`. A change to the producer's shape now
+	// breaks it, which is the whole point.
+	it( 'renders a complete sentence for every row a real payload produces', () => {
+		const rows = deriveVitalsStatus(
+			summariseVitals( {
+				trends: {
+					hasha_desktop: [
+						{ lcp: 345.5, cls: 0.0018, tbt: 120 },
+						{ lcp: 361, cls: 0.002, tbt: 130 },
+					],
+					hasha_mobile: [
+						{ lcp: 1202, cls: 0.0092, tbt: 480 },
+						{ lcp: 1180, cls: 0.01, tbt: 500 },
+					],
+				},
+			} )
+		);
+		expect( rows ).toHaveLength( 6 );
+		for ( const row of rows ) {
+			const sentence = renderDetail( row );
+			// A sentence, not a fragment: it starts with the metric's own name
+			// and contains no leading whitespace.
+			expect( sentence ).not.toMatch( /^\s/ );
+			expect( sentence.length ).toBeGreaterThan( 20 );
+			expect( renderLabel( row ) ).toBeTruthy();
+			// Every rendered sentence names its source.
+			expect( sentence ).toContain( 'PageSpeed lab scan' );
+		}
+		// The two INP rows, which are the branch that renders on every load.
+		const inp = rows.filter( ( r ) => r.id.startsWith( 'vital-inp' ) );
+		expect( inp ).toHaveLength( 2 );
+		for ( const row of inp ) {
+			expect( renderDetail( row ) ).toBe(
+				'Responsiveness (INP) has no reading in the stored PageSpeed lab scan history yet. How quickly the page reacts to a tap or click.'
+			);
+		}
+	} );
+
+	// The unlabelled path must not attribute a number to a device it was never
+	// measured on. A surviving mutation defaulted the lookup to 'desktop'.
+	it( 'never names a device for an unlabelled source', () => {
+		const rows = deriveVitalsStatus(
+			summariseVitals( {
+				trends: {
+					h_plain: [
+						{ lcp: 345, cls: 0.01 },
+						{ lcp: 350, cls: 0.02 },
+					],
+				},
+			} )
+		);
+		// Three rows: LCP and CLS measured, plus the INP row this source can
+		// never fill. All three carry `device: null`.
+		expect( rows ).toHaveLength( 3 );
+		expect( rows.every( ( r ) => r.detailArgs.device === null ) ).toBe(
+			true
+		);
+		for ( const row of rows ) {
+			expect( renderDetail( row ) ).not.toMatch( /on (desktop|mobile)/ );
+		}
 	} );
 
 	it( 'accepts the full response envelope as well as the payload', () => {

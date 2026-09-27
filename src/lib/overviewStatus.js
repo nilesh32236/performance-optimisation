@@ -527,7 +527,11 @@ const deriveOneDevice = ( vitals, device ) => {
 					labelKey: measure.labelKey,
 					status: STATUS.UNKNOWN,
 					detailKey: DETAIL.vital_unmeasured,
-					detailArgs: { hintKey: measure.hintKey, device },
+					detailArgs: {
+						labelKey: measure.labelKey,
+						hintKey: measure.hintKey,
+						device,
+					},
 				};
 			}
 			// The number *judged* is the number *shown*.

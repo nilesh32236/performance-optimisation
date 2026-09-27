@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-27T07:49:00+00:00\n"
+"POT-Creation-Date: 2026-09-27T08:22:58+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -6758,7 +6758,7 @@ msgstr ""
 #. translators: 1: metric name, 2: advice on what to do about this metric.
 #: src/components/overview/detailCopy.js:181
 #, js-format
-msgid "%1$s is not measured by a PageSpeed lab scan. %2$s"
+msgid "%1$s has no reading in the stored PageSpeed lab scan history yet. %2$s"
 msgstr ""
 
 #. translators: 1: metric name, 2: the measured value, 3: source and device clause.
@@ -6791,43 +6791,43 @@ msgstr ""
 msgid "(PageSpeed lab scan)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:236
+#: src/components/overview/detailCopy.js:239
 msgid "on"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:252
+#: src/components/overview/detailCopy.js:255
 msgid "Page cache"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:253
+#: src/components/overview/detailCopy.js:256
 msgid "Object cache"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:254
+#: src/components/overview/detailCopy.js:257
 msgid "Compatibility"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:259
+#: src/components/overview/detailCopy.js:262
 msgid "Loading (LCP)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:260
+#: src/components/overview/detailCopy.js:263
 msgid "How long the main content takes to appear."
 msgstr ""
 
-#: src/components/overview/detailCopy.js:266
+#: src/components/overview/detailCopy.js:269
 msgid "Visual stability (CLS)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:267
+#: src/components/overview/detailCopy.js:270
 msgid "How much the page jumps around while loading."
 msgstr ""
 
-#: src/components/overview/detailCopy.js:273
+#: src/components/overview/detailCopy.js:276
 msgid "Responsiveness (INP)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:274
+#: src/components/overview/detailCopy.js:277
 msgid "How quickly the page reacts to a tap or click."
 msgstr ""
 

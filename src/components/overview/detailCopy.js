@@ -179,7 +179,7 @@ export const DETAIL_COPY = {
 	'vital-unmeasured': t(
 		// translators: 1: metric name, 2: advice on what to do about this metric.
 		__(
-			'%1$s is not measured by a PageSpeed lab scan. %2$s',
+			'%1$s has no reading in the stored PageSpeed lab scan history yet. %2$s',
 			'performance-optimisation'
 		),
 		[ 'label', 'hint' ]
@@ -230,6 +230,9 @@ export const DEVICE_COPY = {
  */
 const sourceClause = ( device ) => {
 	const source = __( '(PageSpeed lab scan)', 'performance-optimisation' );
+	// An unlabelled source has no device, and an unrecognised one is not
+	// guessed at. Defaulting to a real device here would attribute a number to
+	// hardware it was never measured on - the pooling defect, inverted.
 	const name = device ? DEVICE_COPY[ device ] ?? null : null;
 	// An unrecognised device is not guessed at; only the proven source is said.
 	return name
