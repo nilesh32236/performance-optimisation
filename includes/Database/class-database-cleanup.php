@@ -1637,7 +1637,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * pre-apply state before running apply, and verify post-revert that
 		 * the map is empty. Changes nothing (no options, transients, or
 		 * files written). Fail-open: helper/DB failures yield empty lists,
-		 * never fatal.
+		 * never fatal. Privacy note: `remediated`/`backup` `prior` values
+		 * are autoload flags only (`yes`/`no`), never option payloads, so
+		 * admin-gated (`manage_options` + nonce) exposure is intentional.
 		 *
 		 * @since NEXT
 		 * @param int|null $threshold Optional threshold override (bytes).

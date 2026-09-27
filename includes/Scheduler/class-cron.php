@@ -214,7 +214,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * `verified_done=min(done,cache_files)` plus `filesystem_matched`
 		 * (`done<=files`) expose counter-vs-filesystem drift, and a
 		 * `complete` run with `done>files` plus pending work is downgraded
-		 * to `running` so the SPA never shows a false 100%. A `stalled`
+		 * to `running` so the SPA never shows a false 100%. Note
+		 * `cache_files` counts the whole static cache (all cached pages,
+		 * not just this queue's URLs), so on a warm site `done<=files` is
+		 * almost always true and the reconciliation is an honest heuristic,
+		 * not an exact per-URL audit — never treat `verified_done` as
+		 * proof that every queued URL has a file. A `stalled`
 		 * flag marks a `running` queue untouched for 30+ minutes.
 		 * Fail-open: cache failures leave counters untouched.
 		 *
@@ -345,9 +350,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				if ( empty( $pending ) ) {
 					// All pending URLs were Woo-dynamic: park the queue as
 					// complete without scheduling anything (still touch
-					// updated_at so stalled clears honestly).
+					// updated_at so stalled clears honestly). Recalculate
+					// total from the surviving counters so done/total stays
+					// honest instead of counting the dropped URLs.
 					$queue['queued'] = array();
 					$queue['failed'] = array();
+					$queue['total']  = (int) $queue['done'];
 					$queue['status'] = 'complete';
 					self::save_preload_queue( $queue );
 					return 0;

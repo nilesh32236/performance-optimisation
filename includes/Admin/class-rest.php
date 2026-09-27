@@ -555,6 +555,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * map plus the current dry-run backup triples without writing
 		 * anything. Read-only like `dry_run`, so intentionally unthrottled.
 		 * Requires `manage_options` + `X-WP-Nonce` via `permission_callback`.
+		 * Privacy note: `prior` values are autoload flags only (`yes`/`no`),
+		 * never option payloads, so admin-gated exposure is intentional.
 		 *
 		 * Optional params: `threshold` (bytes, 100..10MB), `limit` (1..500).
 		 *

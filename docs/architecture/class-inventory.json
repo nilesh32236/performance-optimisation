@@ -418,14 +418,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 3697,
+        "lines": 3699,
         "methods": 77,
         "public_methods": 56,
         "large_methods": 8,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "optimise_image",
-            "line": 1185,
+            "line": 1187,
             "lines": 310
         },
         "method_prefixes": {
@@ -1545,14 +1545,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 5092,
+        "lines": 5093,
         "methods": 167,
         "public_methods": 67,
         "large_methods": 7,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "maybe_store_cache",
-            "line": 3694,
+            "line": 3695,
             "lines": 177
         },
         "method_prefixes": {
@@ -2621,14 +2621,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Database",
-        "lines": 3420,
+        "lines": 3422,
         "methods": 60,
         "public_methods": 51,
         "large_methods": 9,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "get_action_scheduler_health",
-            "line": 2191,
+            "line": 2193,
             "lines": 220
         },
         "method_prefixes": {
@@ -4353,14 +4353,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Scheduler",
-        "lines": 1854,
+        "lines": 1862,
         "methods": 37,
         "public_methods": 25,
         "large_methods": 2,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "schedule_page_cron_jobs",
-            "line": 799,
+            "line": 807,
             "lines": 159
         },
         "method_prefixes": {

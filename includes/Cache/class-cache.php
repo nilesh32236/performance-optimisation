@@ -2986,6 +2986,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				return true;
 			}
 
 			// Unconditional (issue #1705): wc-ajax XHRs are dynamic JSON and must
