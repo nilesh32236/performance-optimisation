@@ -199,7 +199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 				// view-order / downloads / add-payment-method URLs are
 				// per-order dynamic even when the page slug itself is not in
 				// the excluded-paths list (e.g. /checkout/order-pay/123/).
-				foreach ( array( 'order-pay', 'view-order', 'download', 'add-payment-method' ) as $endpoint ) {
+				foreach ( array( 'order-pay', 'view-order', 'download', 'downloads', 'add-payment-method' ) as $endpoint ) {
 					if ( (bool) preg_match( '#/(?:' . preg_quote( $endpoint, '#' ) . ')(/|$)#i', '/' . $normalized ) ) {
 						return true;
 					}
