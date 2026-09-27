@@ -95,10 +95,10 @@ export const fetchObjectCache = async ( signal ) => {
 };
 
 /**
- * Pull the median real-user vitals the plugin already stores, if any.
+ * Pull the stored performance scans and summarise them per device class.
  *
  * Reads the plugin's own recorded history rather than issuing a fresh
- * measurement: the Overview must stay fast, and a real-user number is more
+ * measurement: the Overview must stay fast, and a per-device number is more
  * honest than a lab score anyway.
  *
  * ## The real shape
@@ -129,13 +129,49 @@ export const summariseVitals = ( payload ) => {
 	// Accepts both the keyed map the endpoint really returns and a flat array,
 	// because a filter could hand back either and neither should silently
 	// produce an empty page.
-	const groups = Array.isArray( container )
-		? [ container ]
-		: Object.values( container ).filter( ( value ) =>
-				Array.isArray( value )
-		  );
-	const rows = groups.flat();
-	if ( ! rows.length ) {
+	// Group by **device class** rather than pooling.
+	//
+	// The endpoint's keys carry a `_desktop` or `_mobile` suffix, and pooling
+	// them produced a median that was neither device's. Measured on this site
+	// (37 stored scans): desktop 345.5 ms, mobile 1202 ms, pooled **504.5 ms** —
+	// which is the desktop *maximum*, presented as if it were typical. Mobile,
+	// normally the majority of traffic, was 2.4x worse and invisible.
+	//
+	// A final review caught this by splitting the store with WP-CLI. An
+	// independent review had already raised the pooling in round 26 and it was
+	// recorded as an accepted trade-off, which was the wrong call: the number is
+	// the Overview's headline performance claim.
+	const byDevice = new Map();
+	if ( Array.isArray( container ) ) {
+		byDevice.set(
+			'all',
+			container.filter( ( r ) => r && typeof r === 'object' )
+		);
+	} else {
+		for ( const [ key, value ] of Object.entries( container ) ) {
+			if ( ! Array.isArray( value ) ) {
+				continue;
+			}
+			// An unsuffixed key is an **unlabelled** source, not a device called
+			// "all". Reporting it as `all` rendered "on all" in the sentence; a
+			// container key literally named `desktop` (no underscore) landed there
+			// too, and was mislabelled.
+			let device = null;
+			if ( /_mobile$/i.test( key ) ) {
+				device = 'mobile';
+			} else if ( /_desktop$/i.test( key ) ) {
+				device = 'desktop';
+			}
+			const bucket = device ?? 'all';
+			if ( ! byDevice.has( bucket ) ) {
+				byDevice.set( bucket, [] );
+			}
+			byDevice
+				.get( bucket )
+				.push( ...value.filter( ( r ) => r && typeof r === 'object' ) );
+		}
+	}
+	if ( ! [ ...byDevice.values() ].some( ( rows ) => rows.length ) ) {
 		return null;
 	}
 
@@ -157,12 +193,13 @@ export const summariseVitals = ( payload ) => {
 	 * `deriveVitalsStatus` already draws the same distinction, and both layers
 	 * must agree or the row contradicts itself.
 	 *
-	 * @param {string[]} keys Candidate field names, in order.
+	 * @param {string[]} keys       Candidate field names, in order.
+	 * @param {Object[]} deviceRows The rows for one device class.
 	 * @return {number|undefined} The median, or undefined when unmeasured.
 	 */
-	const medianOf = ( keys ) => {
+	const medianOf = ( keys, deviceRows ) => {
 		const values = [];
-		for ( const row of rows ) {
+		for ( const row of deviceRows ) {
 			if ( ! row || typeof row !== 'object' ) {
 				continue;
 			}
@@ -206,22 +243,50 @@ export const summariseVitals = ( payload ) => {
 		return values[ Math.floor( values.length / 2 ) ];
 	};
 
-	const vitals = {
-		lcp: medianOf( [ 'lcp', 'LCP', 'lcp_ms' ] ),
-		cls: medianOf( [ 'cls', 'CLS', 'cls_value' ] ),
+	// One summary per device class, and the device is named on the row.
+	//
+	// Pooling hid a 2.4x difference on the live site, and the pooled figure
+	// happened to equal the desktop maximum — so the "typical" number the page
+	// showed was the best case anyone recorded.
+	const measure = ( deviceRows ) => ( {
+		lcp: medianOf( [ 'lcp', 'LCP', 'lcp_ms' ], deviceRows ),
+		cls: medianOf( [ 'cls', 'CLS', 'cls_value' ], deviceRows ),
 		// Only when the source genuinely measures it. There is no INP field in
 		// the stored history, so this stays undefined and the row is reported as
 		// unmeasured instead of borrowing a different metric.
-		inp: medianOf( [ 'inp', 'INP' ] ),
-	};
+		inp: medianOf( [ 'inp', 'INP' ], deviceRows ),
+	} );
 
-	return Object.values( vitals ).some( ( value ) => value !== undefined )
-		? vitals
-		: null;
+	const out = {};
+	let unlabelled = null;
+	for ( const [ device, deviceRows ] of byDevice ) {
+		if ( ! deviceRows.length ) {
+			continue;
+		}
+		const measured = measure( deviceRows );
+		if ( ! Object.values( measured ).some( ( v ) => v !== undefined ) ) {
+			continue;
+		}
+		// The unlabelled bucket is returned **flat**, not wrapped in an `all`
+		// key. Wrapping it made the model treat `all` as a device name and the
+		// sentence read "…on all (PageSpeed lab scan)".
+		if ( device === 'all' ) {
+			unlabelled = measured;
+			continue;
+		}
+		out[ device ] = measured;
+	}
+
+	// A source that could not be labelled is reported on its own, with no
+	// device word, so the consumer falls back to its flat reading.
+	if ( ! Object.keys( out ).length ) {
+		return unlabelled;
+	}
+	return out;
 };
 
 /**
- * Fetch the stored real-user vitals.
+ * Fetch the stored performance scans.
  *
  * @param {AbortSignal} signal Cancellation signal.
  * @return {Promise<Object|null>} `{ lcp, cls, inp? }` or null.

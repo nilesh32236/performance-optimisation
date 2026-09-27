@@ -172,26 +172,72 @@ export const DETAIL_COPY = {
 		[ 'wp', 'php' ]
 	),
 
+	// True, and it renders on every load: a PageSpeed lab scan records LCP and
+	// CLS but **never** INP, which is a field metric. "No real-user data yet"
+	// implied the missing measurement was real-user data waiting to be
+	// collected. It is not collected by this source at all.
 	'vital-unmeasured': t(
-		// translators: %s: advice on what to do about this metric.
-		__( 'No real-user data yet. %s', 'performance-optimisation' ),
-		[ 'hint' ]
+		// translators: 1: metric name, 2: advice on what to do about this metric.
+		__(
+			'%1$s has no reading in the stored PageSpeed lab scan history yet. %2$s',
+			'performance-optimisation'
+		),
+		[ 'label', 'hint' ]
 	),
 	'vital-good': t(
-		// translators: 1: metric name, 2: the measured value.
-		__( '%1$s is good at %2$s.', 'performance-optimisation' ),
-		[ 'label', 'value' ]
+		// translators: 1: metric name, 2: the measured value, 3: source and device clause.
+		__( '%1$s is good at %2$s%3$s.', 'performance-optimisation' ),
+		[ 'label', 'value', 'source' ]
 	),
 	'vital-attention': t(
-		// translators: 1: metric name, 2: the measured value, 3: advice.
-		__( '%1$s could be better (%2$s). %3$s', 'performance-optimisation' ),
-		[ 'label', 'value', 'hint' ]
+		// translators: 1: metric name, 2: the measured value, 3: source and device clause, 4: advice.
+		__(
+			'%1$s could be better (%2$s%3$s). %4$s',
+			'performance-optimisation'
+		),
+		[ 'label', 'value', 'source', 'hint' ]
 	),
 	'vital-poor': t(
-		// translators: 1: metric name, 2: the measured value, 3: advice.
-		__( '%1$s is poor at %2$s. %3$s', 'performance-optimisation' ),
-		[ 'label', 'value', 'hint' ]
+		// translators: 1: metric name, 2: the measured value, 3: source and device clause, 4: advice.
+		__( '%1$s is poor (%2$s%3$s). %4$s', 'performance-optimisation' ),
+		[ 'label', 'value', 'source', 'hint' ]
 	),
+};
+
+/**
+ * Device class names.
+ *
+ * The stored history is a **PageSpeed lab scan** run by a cron, keyed by
+ * `_desktop` and `_mobile`. Pooling the two produced a median that belonged to
+ * neither device: on the live site the pooled LCP was 504.5 ms — the desktop
+ * *maximum* — while mobile measured 1202 ms. Every vital sentence therefore
+ * names the device it was measured on, and says where the number came from.
+ */
+export const DEVICE_COPY = {
+	desktop: __( 'desktop', 'performance-optimisation' ),
+	mobile: __( 'mobile', 'performance-optimisation' ),
+};
+
+/**
+ * The trailing clause that names the device and the source.
+ *
+ * Built in one place so a number can never be shown with a dangling "on " or a
+ * literal "on all": an unlabelled source simply gets no device word, and the
+ * provenance — which is always true — is never dropped.
+ *
+ * @param {string} [device] `'desktop'`, `'mobile'`, or undefined.
+ * @return {string} e.g. `" on desktop (PageSpeed lab scan)"`.
+ */
+const sourceClause = ( device ) => {
+	const source = __( '(PageSpeed lab scan)', 'performance-optimisation' );
+	// An unlabelled source has no device, and an unrecognised one is not
+	// guessed at. Defaulting to a real device here would attribute a number to
+	// hardware it was never measured on - the pooling defect, inverted.
+	const name = device ? DEVICE_COPY[ device ] ?? null : null;
+	// An unrecognised device is not guessed at; only the proven source is said.
+	return name
+		? ` ${ __( 'on', 'performance-optimisation' ) } ${ name } ${ source }`
+		: ` ${ source }`;
 };
 
 /**
@@ -252,6 +298,8 @@ const resolveVital = ( args = {} ) => {
 			VITAL_COPY[ args.hintKey ]?.hint ??
 			VITAL_COPY[ args.labelKey ]?.hint ??
 			'',
+		// The device and provenance clause, built in one place.
+		source: sourceClause( args.device ),
 	};
 };
 

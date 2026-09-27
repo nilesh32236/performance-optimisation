@@ -6,6 +6,7 @@
  * where a status model is most likely to lie.
  */
 
+import { summariseVitals } from '../../components/overview/Overview';
 import {
 	DETAIL,
 	ALL_STATUSES,
@@ -444,6 +445,127 @@ describe( 'deriveVitalsStatus', () => {
 			expect( row.status ).toBe( STATUS.UNKNOWN );
 			expect( row.detailKey ).not.toBe( DETAIL.vital_good );
 		} );
+	} );
+
+	// Per device class. Found by a final review: the Overview pooled desktop
+	// and mobile into one median, and the pooled figure on the live site was
+	// the desktop *maximum* (504.5 ms) while mobile measured 1202 ms. These
+	// tests exist because reverting the whole per-device split left the suite
+	// green - nothing below had pinned the row shape.
+	it( 'reports each device class separately, with the device on every row', () => {
+		const rows = deriveVitalsStatus( {
+			desktop: { lcp: 345.5, cls: 0.01 },
+			mobile: { lcp: 1202, cls: 0.09 },
+		} );
+		// Four rows: the two metrics the source actually reports, for each of
+		// the two device classes. INP is absent from the stored history, and a
+		// row for a metric the source does not carry is not invented.
+		expect( rows.map( ( r ) => r.id ) ).toEqual( [
+			'vital-lcp--desktop',
+			'vital-cls--desktop',
+			'vital-lcp--mobile',
+			'vital-cls--mobile',
+		] );
+		// Judged independently per device, and both values are reported rather
+		// than one average standing in for the other.
+		expect( rows[ 0 ].detailArgs.value ).toBe( '346 ms' );
+		expect( rows[ 2 ].detailArgs.value ).toBe( '1202 ms' );
+		// Every row carries its device, so the copy can name it.
+		expect( rows.every( ( r ) => r.detailArgs.device ) ).toBe( true );
+	} );
+
+	// The mutation that survived the first attempt: stripping `device` from the
+	// attention and poor branches, where the value is a multi-line object, left
+	// every "good" row correct, so the whole suite stayed green. The device has
+	// to be pinned on the *bad* rows too, because those are the ones a user most
+	// needs to attribute to a device.
+	it( 'carries the device on an attention and a poor row as well', () => {
+		const rows = deriveVitalsStatus( {
+			desktop: { lcp: 3200, cls: 0.5 },
+			mobile: { lcp: 6000, cls: 0.9 },
+		} );
+		const attention = rows.find( ( r ) => r.id === 'vital-lcp--desktop' );
+		const poor = rows.find( ( r ) => r.id === 'vital-lcp--mobile' );
+		// Both are ATTENTION; the detail key is what separates "could be
+		// better" from "poor", and both must carry their device.
+		expect( attention.status ).toBe( STATUS.ATTENTION );
+		expect( attention.detailKey ).toBe( DETAIL.vital_attention );
+		expect( poor.status ).toBe( STATUS.ATTENTION );
+		expect( poor.detailKey ).toBe( DETAIL.vital_poor );
+		expect( attention.detailArgs.device ).toBe( 'desktop' );
+		expect( poor.detailArgs.device ).toBe( 'mobile' );
+		expect( attention.detailArgs.value ).toBe( '3200 ms' );
+		expect( poor.detailArgs.value ).toBe( '6000 ms' );
+	} );
+
+	// The mutation that survived the review: stripping `device` from the
+	// UNKNOWN branch left the whole suite green, because the author's fixture
+	// had no `inp` key, so `measure.key in vitals` filtered that row out and the
+	// branch never ran. It is the branch that renders on **every** live load -
+	// the stored history carries no `inp`, so both INP rows take it.
+	it( 'names the device on the unknown rows a real payload produces', () => {
+		const live = summariseVitals( {
+			trends: {
+				hasha_desktop: [
+					{ lcp: 345.5, cls: 0.0018, tbt: 120 },
+					{ lcp: 361, cls: 0.002, tbt: 130 },
+				],
+				hasha_mobile: [
+					{ lcp: 1202, cls: 0.0092, tbt: 480 },
+					{ lcp: 1180, cls: 0.01, tbt: 500 },
+				],
+			},
+		} );
+		const rows = deriveVitalsStatus( live );
+		expect( rows ).toHaveLength( 6 );
+		// Two of them are INP, which the source does not carry.
+		const unknown = rows.filter( ( r ) => r.status === STATUS.UNKNOWN );
+		expect( unknown ).toHaveLength( 2 );
+		expect( unknown.map( ( r ) => r.id ) ).toEqual( [
+			'vital-inp--desktop',
+			'vital-inp--mobile',
+		] );
+		// Every row, of every status, names its device.
+		expect( rows.every( ( r ) => r.detailArgs.device ) ).toBe( true );
+	} );
+
+	// The unlabelled source path, which rendered the literal word "all".
+	// `all` is `summariseVitals`' internal bucket for a source it could not
+	// label. Even so, the model must never treat that word as a device, because
+	// the sentence would then read "…on all (PageSpeed lab scan)".
+	it( 'never turns the internal all bucket into a device name', () => {
+		// `all` is `summariseVitals`' label for a source it could not name. If
+		// one ever reached the model, the sentence would read "…on all".
+		// It cannot: the key is not a metric name, so no row is produced for it,
+		// and therefore no row can claim that device.
+		const rows = deriveVitalsStatus( { all: { lcp: 1500 } } );
+		expect( rows.some( ( r ) => r.detailArgs.device === 'all' ) ).toBe(
+			false
+		);
+		// The normal, labelled path still reports its device.
+		expect(
+			deriveVitalsStatus( { desktop: { lcp: 1500 } } )[ 0 ].detailArgs
+				.device
+		).toBe( 'desktop' );
+	} );
+
+	it( 'treats an unsuffixed source as unlabelled rather than a device', () => {
+		// `summariseVitals` returns an unlabelled source **flat**, so `all` is
+		// an internal bucket and never reaches the model as a device name.
+		const rows = deriveVitalsStatus( { lcp: 1500, cls: 0.05 } );
+		expect( rows ).toHaveLength( 2 );
+		// No device word, rather than a made-up one, so the sentence cannot
+		// render "on all".
+		expect( rows[ 0 ].detailArgs.device ?? null ).toBeNull();
+	} );
+
+	it( 'keeps a flat reading working, including an unreported metric as an object', () => {
+		// `{ lcp: {} }` is a flat reading with a nonsense value, not a device
+		// map. Mistaking one for the other silently dropped the row, which is
+		// exactly what a structural "is any value an object" test would do.
+		const rows = deriveVitalsStatus( { lcp: {} } );
+		expect( rows ).toHaveLength( 1 );
+		expect( rows[ 0 ].status ).toBe( STATUS.UNKNOWN );
 	} );
 
 	it( 'reports a nonsense measurement as unknown, never as healthy', () => {

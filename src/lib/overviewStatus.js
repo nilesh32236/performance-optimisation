@@ -417,19 +417,52 @@ export const deriveCompatibilityStatus = ( info ) => {
 };
 
 /**
- * Turn real-user Core Web Vitals into status rows.
+ * Build one status row per metric, per device class.
  *
- * Each vital has its own published threshold, so each becomes its own row
- * rather than being averaged into a single number. A metric that has not been
- * measured yet is "unknown" — never "healthy", and never "attention".
+ * The input is now `{ desktop: { lcp, cls }, mobile: { … } }` rather than a
+ * single pooled `{ lcp, cls }`. Pooling was the defect: on the live site it
+ * produced 504.5 ms, which is the desktop **maximum**, while mobile measured
+ * 1202 ms. The device is now named on the row, because a number without one is
+ * not a fact about a site.
  *
- * @param {Object} vitals `{ lcp, cls, inp }` in milliseconds (CLS unitless).
- * @return {Array<Object>} Status rows.
+ * A flat, unkeyed object is still accepted and reported without a device, so a
+ * filter returning a single unlabelled set keeps working.
+ *
+ * @param {Object} vitals Per-device measurements, or a flat one.
+ * @return {Array} One row per metric per device.
  */
 export const deriveVitalsStatus = ( vitals ) => {
 	if ( ! vitals || typeof vitals !== 'object' ) {
 		return [];
 	}
+	// Grouped only when the keys are **device names**. A structural test like
+	// "any value is an object" cannot work: `{ lcp: {} }` is a legitimate flat
+	// reading with an unreported `lcp`, and it was being mistaken for a device
+	// map, which silently dropped the row. Known key names cannot be fooled that
+	// way, because no vitals metric is called `desktop` or `mobile`.
+	// `'all'` is the unlabelled bucket and is deliberately **not** a device: it
+	// is how `summariseVitals` groups a source it could not label, and
+	// reporting it as one rendered the literal word "all" in the sentence.
+	const DEVICE_KEYS = [ 'desktop', 'mobile' ];
+	const entries = Object.entries( vitals ).filter( ( [ key ] ) =>
+		DEVICE_KEYS.includes( key )
+	);
+	if ( ! entries.length ) {
+		return deriveOneDevice( vitals, null );
+	}
+	return entries.flatMap( ( [ device, measured ] ) =>
+		deriveOneDevice( measured, device )
+	);
+};
+
+/**
+ * The rows for a single device class.
+ *
+ * @param {Object}      vitals The measurements.
+ * @param {string|null} device `'desktop'`, `'mobile'`, or null when unlabelled.
+ * @return {Array} One row per metric.
+ */
+const deriveOneDevice = ( vitals, device ) => {
 	const measures = [
 		{
 			id: 'vital-lcp',
@@ -490,11 +523,15 @@ export const deriveVitalsStatus = ( vitals ) => {
 				86400000 <= raw
 			) {
 				return {
-					id: measure.id,
+					id: device ? `${ measure.id }--${ device }` : measure.id,
 					labelKey: measure.labelKey,
 					status: STATUS.UNKNOWN,
 					detailKey: DETAIL.vital_unmeasured,
-					detailArgs: { hintKey: measure.hintKey },
+					detailArgs: {
+						labelKey: measure.labelKey,
+						hintKey: measure.hintKey,
+						device,
+					},
 				};
 			}
 			// The number *judged* is the number *shown*.
@@ -516,16 +553,16 @@ export const deriveVitalsStatus = ( vitals ) => {
 					: `${ rounded } ms`;
 			if ( rounded <= measure.good ) {
 				return {
-					id: measure.id,
+					id: device ? `${ measure.id }--${ device }` : measure.id,
 					labelKey: measure.labelKey,
 					status: STATUS.HEALTHY,
 					detailKey: DETAIL.vital_good,
-					detailArgs: { labelKey: measure.labelKey, value },
+					detailArgs: { labelKey: measure.labelKey, value, device },
 				};
 			}
 			if ( rounded <= measure.poor ) {
 				return {
-					id: measure.id,
+					id: device ? `${ measure.id }--${ device }` : measure.id,
 					labelKey: measure.labelKey,
 					status: STATUS.ATTENTION,
 					detailKey: DETAIL.vital_attention,
@@ -533,11 +570,12 @@ export const deriveVitalsStatus = ( vitals ) => {
 						labelKey: measure.labelKey,
 						value,
 						hintKey: measure.hintKey,
+						device,
 					},
 				};
 			}
 			return {
-				id: measure.id,
+				id: device ? `${ measure.id }--${ device }` : measure.id,
 				labelKey: measure.labelKey,
 				status: STATUS.ATTENTION,
 				detailKey: DETAIL.vital_poor,
@@ -545,6 +583,7 @@ export const deriveVitalsStatus = ( vitals ) => {
 					labelKey: measure.labelKey,
 					value,
 					hintKey: measure.hintKey,
+					device,
 				},
 			};
 		} );
