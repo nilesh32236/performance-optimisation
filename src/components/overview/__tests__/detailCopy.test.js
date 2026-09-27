@@ -10,8 +10,8 @@
  * @package
  */
 
-import { DETAIL_COPY, renderDetail } from '../detailCopy';
-import { DETAIL } from '../../../lib/overviewStatus';
+import { DETAIL_COPY, renderDetail, renderLabel } from '../detailCopy';
+import { DETAIL, VITAL } from '../../../lib/overviewStatus';
 
 describe( 'Overview detail copy', () => {
 	it( 'has an entry for every key the model can emit', () => {
@@ -29,6 +29,189 @@ describe( 'Overview detail copy', () => {
 			( k ) => ! emit.has( k )
 		);
 		expect( orphan ).toEqual( [] );
+	} );
+
+	// A table, not a spot check.
+	//
+	// Nine mutations survived when only three keys had their English pinned:
+	// swapping `label` and `value`, swapping the `order` array, adding or
+	// dropping a placeholder, and making `t()` ignore its `order` altogether
+	// all left every other test green while rendering
+	// "9 MB is poor at 7.1.2. 8.3". Structural checks — the key exists, there
+	// is no orphan, no unresolved `%s` leaks — are invariant under every
+	// argument permutation, so they cannot catch any of it.
+	//
+	// Pinning the finished English for every key is what catches them, and it
+	// is also the direct guard for the one thing this refactor is for: the
+	// sentence the user reads must not change.
+	const RENDERED = [
+		[
+			DETAIL.cache_unavailable,
+			{},
+			'Cache state is not available right now.',
+		],
+		[
+			DETAIL.cache_unknown,
+			{},
+			'The plugin did not report whether the page cache is enabled.',
+		],
+		[
+			DETAIL.cache_off,
+			{},
+			'Page cache is turned off. Turning it on is usually the single biggest speed win.',
+		],
+		[
+			DETAIL.cache_unreadable,
+			{},
+			'Page cache is switched on, but the plugin could not read how much it has stored. Open Speed to check the cache status.',
+		],
+		[
+			DETAIL.cache_empty,
+			{},
+			'Page cache is switched on but nothing is cached yet. The next visitor will generate a page.',
+		],
+		[
+			DETAIL.cache_active,
+			{ stored: '9 MB' },
+			'Page cache is on, with 9 MB of cached pages stored.',
+		],
+		[
+			DETAIL.object_unavailable,
+			{},
+			'Object cache state is not available right now.',
+		],
+		[
+			DETAIL.object_off,
+			{},
+			'Object cache (Redis or Memcached) is off. Useful for busy or dynamic sites; not needed everywhere.',
+		],
+		[
+			DETAIL.object_unknown,
+			{},
+			'The plugin did not report whether the object cache is enabled.',
+		],
+		[
+			DETAIL.object_no_extension,
+			{},
+			'Object cache is enabled but the Redis extension is not available, so it cannot be used.',
+		],
+		[
+			DETAIL.object_foreign_dropin,
+			{},
+			'Another plugin installed the object-cache drop-in, so this one is not active.',
+		],
+		[
+			DETAIL.object_circuit_open,
+			{},
+			'Object cache is enabled but the safety breaker is open, so it is switched off until it recovers.',
+		],
+		[
+			DETAIL.object_bypassed,
+			{},
+			'Object cache is enabled but is currently bypassed because of recent failures.',
+		],
+		[
+			DETAIL.object_unreachable,
+			{},
+			'Object cache is enabled but the server is not reachable, so it is not speeding anything up.',
+		],
+		[
+			DETAIL.object_reachable,
+			{},
+			'Object cache is enabled and the server is reachable.',
+		],
+		[
+			DETAIL.object_reachability_unknown,
+			{},
+			'Object cache is enabled, but the plugin has not reported whether the server is reachable.',
+		],
+		[
+			DETAIL.system_unavailable,
+			{},
+			'Server details are not available right now.',
+		],
+		[
+			DETAIL.system_unknown,
+			{},
+			'The plugin did not report the PHP or WordPress version.',
+		],
+		[
+			DETAIL.system_versions,
+			{ wp: '7.1.2', php: '8.3' },
+			'Running on WordPress 7.1.2 and PHP 8.3.',
+		],
+		[
+			DETAIL.vital_unmeasured,
+			{ hintKey: VITAL.lcp },
+			'No real-user data yet. How long the main content takes to appear.',
+		],
+		[
+			DETAIL.vital_good,
+			{ labelKey: VITAL.lcp, value: '505 ms' },
+			'Loading (LCP) is good at 505 ms.',
+		],
+		[
+			DETAIL.vital_attention,
+			{ labelKey: VITAL.lcp, value: '2500 ms', hintKey: VITAL.lcp },
+			'Loading (LCP) could be better (2500 ms). How long the main content takes to appear.',
+		],
+		[
+			DETAIL.vital_poor,
+			{ labelKey: VITAL.lcp, value: '4000 ms', hintKey: VITAL.lcp },
+			'Loading (LCP) is poor at 4000 ms. How long the main content takes to appear.',
+		],
+	];
+
+	it.each( RENDERED )(
+		'renders %s exactly, with its arguments in place',
+		( key, args, expected ) => {
+			expect( renderDetail( { detailKey: key, detailArgs: args } ) ).toBe(
+				expected
+			);
+		}
+	);
+
+	// The order of the *arguments* must not matter; only the order declared by
+	// the copy does. Without this, a `t()` that ignored its `order` and used
+	// `Object.values(args)` would pass every other test, because the model
+	// happens to build each argument object in the same order as the map. An
+	// independent review found exactly that survivor.
+	it.each( [
+		[
+			DETAIL.vital_poor,
+			{ hintKey: VITAL.cls, value: '4000 ms', labelKey: VITAL.lcp },
+			'Loading (LCP) is poor at 4000 ms. How much the page jumps around while loading.',
+		],
+		[
+			DETAIL.vital_attention,
+			{ hintKey: VITAL.cls, value: '2500 ms', labelKey: VITAL.lcp },
+			'Loading (LCP) could be better (2500 ms). How much the page jumps around while loading.',
+		],
+		[
+			DETAIL.vital_good,
+			{ value: '505 ms', labelKey: VITAL.lcp },
+			'Loading (LCP) is good at 505 ms.',
+		],
+		[
+			DETAIL.system_versions,
+			{ php: '8.3', wp: '7.1.2' },
+			'Running on WordPress 7.1.2 and PHP 8.3.',
+		],
+	] )(
+		'places %s by the declared order, whatever order the args arrive in',
+		( key, args, expected ) => {
+			expect( renderDetail( { detailKey: key, detailArgs: args } ) ).toBe(
+				expected
+			);
+		}
+	);
+
+	it( 'covers every key the model can emit', () => {
+		// A key added without a pinned sentence would slip through, so the
+		// table is checked against the model rather than trusted.
+		expect( RENDERED.map( ( [ key ] ) => key ).sort() ).toEqual(
+			Object.values( DETAIL ).sort()
+		);
 	} );
 
 	it( 'renders a sentence rather than a key or a blank', () => {
@@ -53,15 +236,35 @@ describe( 'Overview detail copy', () => {
 		const sentence = renderDetail( {
 			detailKey: DETAIL.vital_poor,
 			detailArgs: {
-				label: 'Loading (LCP)',
+				labelKey: VITAL.lcp,
 				value: '4000 ms',
-				hint: 'How long the main content takes to appear.',
+				hintKey: VITAL.lcp,
 			},
 		} );
 		expect( sentence ).toContain( 'Loading (LCP)' );
 		expect( sentence ).toContain( '4000 ms' );
 		expect( sentence ).toContain(
 			'How long the main content takes to appear.'
+		);
+	} );
+
+	it( 'translates a metric name and its advice, not an English fragment', () => {
+		// The mixed-language case: the model used to hand English into these
+		// format strings, so a translator would have got "Loading (LCP)" as an
+		// argument. Both now resolve through this layer.
+		const sentence = renderDetail( {
+			detailKey: DETAIL.vital_poor,
+			detailArgs: {
+				labelKey: VITAL.inp,
+				value: '600 ms',
+				hintKey: VITAL.inp,
+			},
+		} );
+		expect( sentence ).toBe(
+			'Responsiveness (INP) is poor at 600 ms. How quickly the page reacts to a tap or click.'
+		);
+		expect( renderLabel( { labelKey: VITAL.cls } ) ).toBe(
+			'Visual stability (CLS)'
 		);
 	} );
 

@@ -195,6 +195,91 @@ export const DETAIL_COPY = {
 };
 
 /**
+ * Each metric's display name and the advice shown with it.
+ *
+ * These are English here rather than in the model precisely so they can be
+ * translated. The first version interpolated them straight from the model into
+ * these format strings, which meant a German translator would have received
+ * `"%1$s ist schlecht bei %2$s. %3$s"` with `%1$s` still reading
+ * "Loading (LCP)" — a mixed-language sentence, which is worse than the
+ * homogeneous English one it replaced. An independent review caught it.
+ */
+/** The row headings, so nothing the user reads is English-only. */
+export const ROW_COPY = {
+	'page-cache': __( 'Page cache', 'performance-optimisation' ),
+	'object-cache': __( 'Object cache', 'performance-optimisation' ),
+	compatibility: __( 'Compatibility', 'performance-optimisation' ),
+};
+
+export const VITAL_COPY = {
+	lcp: {
+		label: __( 'Loading (LCP)', 'performance-optimisation' ),
+		hint: __(
+			'How long the main content takes to appear.',
+			'performance-optimisation'
+		),
+	},
+	cls: {
+		label: __( 'Visual stability (CLS)', 'performance-optimisation' ),
+		hint: __(
+			'How much the page jumps around while loading.',
+			'performance-optimisation'
+		),
+	},
+	inp: {
+		label: __( 'Responsiveness (INP)', 'performance-optimisation' ),
+		hint: __(
+			'How quickly the page reacts to a tap or click.',
+			'performance-optimisation'
+		),
+	},
+};
+
+/**
+ * Turn a model's `{ labelKey, hintKey }` pair into translated strings.
+ *
+ * An unknown metric falls back to the key itself, so a gap shows up as visible
+ * text rather than a blank row.
+ *
+ * @param {Object} args The model's `detailArgs`.
+ * @return {Object} `{ label, hint }` in the caller's language.
+ */
+const resolveVital = ( args = {} ) => {
+	const copy = VITAL_COPY[ args.labelKey ] ?? {};
+	return {
+		label: copy.label ?? args.labelKey ?? '',
+		hint:
+			VITAL_COPY[ args.hintKey ]?.hint ??
+			VITAL_COPY[ args.labelKey ]?.hint ??
+			'',
+	};
+};
+
+/**
+ * A row's visible label, translated.
+ *
+ * Non-vital rows carry a plain `label` the model owns (Page cache, Object
+ * cache, Compatibility) and those are stable nouns a translator can reasonably
+ * keep; only the metric names needed moving, because they were being
+ * interpolated into a sentence.
+ *
+ * @param {Object} row A row from the status model.
+ * @return {string} The label to show.
+ */
+export const renderLabel = ( row ) => {
+	const key = row?.labelKey;
+	if ( ! key ) {
+		return '';
+	}
+	// A metric is keyed `lcp`/`cls`/`inp`; a row is keyed `page-cache`. Both
+	// are translated here, so no heading the user reads is English-only.
+	return (
+		VITAL_COPY[ key ]?.label ??
+		( Object.hasOwn( ROW_COPY, key ) ? ROW_COPY[ key ] : key )
+	);
+};
+
+/**
  * Render one row's status sentence.
  *
  * An unknown key renders nothing rather than a raw key, so a gap between the
@@ -204,9 +289,12 @@ export const DETAIL_COPY = {
  * @return {string} The translated sentence, or an empty string.
  */
 export const renderDetail = ( row ) => {
-	const build = DETAIL_COPY[ row?.detailKey ];
-	if ( ! build ) {
+	// `Object.hasOwn`, not a truthy lookup: a plain object literal inherits
+	// `constructor`, `toString` and `__proto__` from its prototype, so
+	// `renderDetail({ detailKey: '__proto__' })` used to throw.
+	if ( ! row || ! Object.hasOwn( DETAIL_COPY, row.detailKey ) ) {
 		return '';
 	}
-	return build( row.detailArgs );
+	const args = { ...row.detailArgs, ...resolveVital( row.detailArgs ) };
+	return DETAIL_COPY[ row.detailKey ]( args );
 };

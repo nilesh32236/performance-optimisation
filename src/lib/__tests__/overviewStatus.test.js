@@ -17,7 +17,10 @@ import {
 	deriveVitalsStatus,
 	needsAttention,
 	STATUS,
+	ROW,
+	VITAL,
 } from '../overviewStatus';
+import { renderLabel } from '../../components/overview/detailCopy';
 
 describe( 'deriveCacheStatus', () => {
 	it( 'says not-configured, not unhealthy, when the cache is off', () => {
@@ -599,8 +602,13 @@ describe( 'buildStatusModel', () => {
 	it( 'gives every row a label, so the card never renders a nameless badge', () => {
 		const { rows } = buildStatusModel( {} );
 		rows.forEach( ( row ) => {
-			expect( typeof row.label ).toBe( 'string' );
-			expect( row.label.length ).toBeGreaterThan( 0 );
+			// The model hands out a key, not prose; the copy layer turns it
+			// into a heading. What matters here is that it is never empty,
+			// because an empty key renders a nameless badge.
+			expect( typeof row.labelKey ).toBe( 'string' );
+			expect( row.labelKey.length ).toBeGreaterThan( 0 );
+			expect( Object.values( ROW ) ).toContain( row.labelKey );
+			expect( renderLabel( row ) ).toBeTruthy();
 		} );
 	} );
 

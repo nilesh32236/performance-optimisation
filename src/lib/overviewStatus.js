@@ -67,6 +67,31 @@ export const DETAIL = Object.freeze( {
 	vital_poor: 'vital-poor',
 } );
 
+/**
+ * The metrics the Overview reports.
+ *
+ * The metric's display name and its advice sentence are **English** and live in
+ * `detailCopy.js`, not here. Interpolating them into a translatable format
+ * string would produce a mixed-language sentence — a German translator getting
+ * `"%1$s ist schlecht bei %2$s. %3$s"` with `%1$s` still reading
+ * "Loading (LCP)". The model therefore hands out a key, and the copy layer
+ * resolves name, advice and sentence together.
+ */
+export const ROW = Object.freeze( {
+	pageCache: 'page-cache',
+	objectCache: 'object-cache',
+	compatibility: 'compatibility',
+} );
+
+export const VITAL = Object.freeze( {
+	lcp: 'lcp',
+	cls: 'cls',
+	inp: 'inp',
+} );
+
+/**
+ * The only states the Overview may claim.
+ */
 export const STATUS = Object.freeze( {
 	HEALTHY: 'healthy',
 	ATTENTION: 'attention',
@@ -137,7 +162,7 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 	if ( ! settings || typeof settings !== 'object' ) {
 		return {
 			id: 'page-cache',
-			label: 'Page cache',
+			labelKey: ROW.pageCache,
 			status: coerce( STATUS.UNAVAILABLE ),
 			detailKey: DETAIL.cache_unavailable,
 		};
@@ -150,7 +175,7 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 		// "Working" here is exactly the false claim this row exists to avoid.
 		return {
 			id: 'page-cache',
-			label: 'Page cache',
+			labelKey: ROW.pageCache,
 			status: STATUS.UNKNOWN,
 			detailKey: DETAIL.cache_unknown,
 		};
@@ -158,7 +183,7 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 	if ( cacheEnabled === false ) {
 		return {
 			id: 'page-cache',
-			label: 'Page cache',
+			labelKey: ROW.pageCache,
 			status: STATUS.NOT_CONFIGURED,
 			detailKey: DETAIL.cache_off,
 		};
@@ -182,7 +207,7 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 	if ( ! stored || stored === 'N/A' ) {
 		return {
 			id: 'page-cache',
-			label: 'Page cache',
+			labelKey: ROW.pageCache,
 			status: STATUS.UNKNOWN,
 			detailKey: DETAIL.cache_unreadable,
 		};
@@ -192,14 +217,14 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 	if ( /^0(?:\.0+)?\s*(?:b|bytes?)$/i.test( stored ) ) {
 		return {
 			id: 'page-cache',
-			label: 'Page cache',
+			labelKey: ROW.pageCache,
 			status: STATUS.NOT_CONFIGURED,
 			detailKey: DETAIL.cache_empty,
 		};
 	}
 	return {
 		id: 'page-cache',
-		label: 'Page cache',
+		labelKey: ROW.pageCache,
 		status: STATUS.HEALTHY,
 		detailKey: DETAIL.cache_active,
 		detailArgs: { stored },
@@ -220,7 +245,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 	if ( ! state || typeof state !== 'object' ) {
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: coerce( STATUS.UNAVAILABLE ),
 			detailKey: DETAIL.object_unavailable,
 		};
@@ -235,7 +260,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 	if ( enabled === false ) {
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: STATUS.NOT_CONFIGURED,
 			detailKey: DETAIL.object_off,
 		};
@@ -244,7 +269,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 		// Neither on nor off: say so, rather than quietly picking one.
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: STATUS.UNKNOWN,
 			detailKey: DETAIL.object_unknown,
 		};
@@ -260,7 +285,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 	if ( triState( state.redis_missing ) === true ) {
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: STATUS.ATTENTION,
 			detailKey: DETAIL.object_no_extension,
 		};
@@ -268,7 +293,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 	if ( triState( state.foreign_dropin ) === true ) {
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: STATUS.ATTENTION,
 			detailKey: DETAIL.object_foreign_dropin,
 		};
@@ -282,7 +307,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 	if ( triState( state.circuit_open ) === true ) {
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: STATUS.ATTENTION,
 			detailKey: DETAIL.object_circuit_open,
 		};
@@ -290,7 +315,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 	if ( triState( state.bypassed ) === true ) {
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: STATUS.ATTENTION,
 			detailKey: DETAIL.object_bypassed,
 		};
@@ -303,7 +328,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 	if ( reachable === false ) {
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: STATUS.ATTENTION,
 			detailKey: DETAIL.object_unreachable,
 		};
@@ -314,14 +339,14 @@ export const deriveObjectCacheStatus = ( state ) => {
 	if ( reachable === true ) {
 		return {
 			id: 'object-cache',
-			label: 'Object cache',
+			labelKey: ROW.objectCache,
 			status: STATUS.HEALTHY,
 			detailKey: DETAIL.object_reachable,
 		};
 	}
 	return {
 		id: 'object-cache',
-		label: 'Object cache',
+		labelKey: ROW.objectCache,
 		status: STATUS.UNKNOWN,
 		detailKey: DETAIL.object_reachability_unknown,
 	};
@@ -340,7 +365,7 @@ export const deriveCompatibilityStatus = ( info ) => {
 	if ( ! info || typeof info !== 'object' ) {
 		return {
 			id: 'compatibility',
-			label: 'Compatibility',
+			labelKey: ROW.compatibility,
 			status: coerce( STATUS.UNAVAILABLE ),
 			detailKey: DETAIL.system_unavailable,
 		};
@@ -377,14 +402,14 @@ export const deriveCompatibilityStatus = ( info ) => {
 	if ( ! php || ! wp ) {
 		return {
 			id: 'compatibility',
-			label: 'Compatibility',
+			labelKey: ROW.compatibility,
 			status: coerce( STATUS.UNKNOWN ),
 			detailKey: DETAIL.system_unknown,
 		};
 	}
 	return {
 		id: 'compatibility',
-		label: 'Compatibility',
+		labelKey: ROW.compatibility,
 		status: STATUS.HEALTHY,
 		detailKey: DETAIL.system_versions,
 		detailArgs: { wp, php },
@@ -409,26 +434,26 @@ export const deriveVitalsStatus = ( vitals ) => {
 		{
 			id: 'vital-lcp',
 			key: 'lcp',
-			label: 'Loading (LCP)',
+			labelKey: VITAL.lcp,
 			good: 2500,
 			poor: 4000,
-			hint: 'How long the main content takes to appear.',
+			hintKey: VITAL.lcp,
 		},
 		{
 			id: 'vital-cls',
 			key: 'cls',
-			label: 'Visual stability (CLS)',
+			labelKey: VITAL.cls,
 			good: 0.1,
 			poor: 0.25,
-			hint: 'How much the page jumps around while loading.',
+			hintKey: VITAL.cls,
 		},
 		{
 			id: 'vital-inp',
 			key: 'inp',
-			label: 'Responsiveness (INP)',
+			labelKey: VITAL.inp,
 			good: 200,
 			poor: 500,
-			hint: 'How quickly the page reacts to a tap or click.',
+			hintKey: VITAL.inp,
 		},
 	];
 
@@ -466,10 +491,10 @@ export const deriveVitalsStatus = ( vitals ) => {
 			) {
 				return {
 					id: measure.id,
-					label: measure.label,
+					labelKey: measure.labelKey,
 					status: STATUS.UNKNOWN,
 					detailKey: DETAIL.vital_unmeasured,
-					detailArgs: { hint: measure.hint },
+					detailArgs: { hintKey: measure.hintKey },
 				};
 			}
 			// The number *judged* is the number *shown*.
@@ -492,31 +517,35 @@ export const deriveVitalsStatus = ( vitals ) => {
 			if ( rounded <= measure.good ) {
 				return {
 					id: measure.id,
-					label: measure.label,
+					labelKey: measure.labelKey,
 					status: STATUS.HEALTHY,
 					detailKey: DETAIL.vital_good,
-					detailArgs: { label: measure.label, value },
+					detailArgs: { labelKey: measure.labelKey, value },
 				};
 			}
 			if ( rounded <= measure.poor ) {
 				return {
 					id: measure.id,
-					label: measure.label,
+					labelKey: measure.labelKey,
 					status: STATUS.ATTENTION,
 					detailKey: DETAIL.vital_attention,
 					detailArgs: {
-						label: measure.label,
+						labelKey: measure.labelKey,
 						value,
-						hint: measure.hint,
+						hintKey: measure.hintKey,
 					},
 				};
 			}
 			return {
 				id: measure.id,
-				label: measure.label,
+				labelKey: measure.labelKey,
 				status: STATUS.ATTENTION,
 				detailKey: DETAIL.vital_poor,
-				detailArgs: { label: measure.label, value, hint: measure.hint },
+				detailArgs: {
+					labelKey: measure.labelKey,
+					value,
+					hintKey: measure.hintKey,
+				},
 			};
 		} );
 };
