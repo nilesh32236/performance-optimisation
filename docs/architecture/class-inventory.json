@@ -81,7 +81,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 60,
+        "lines": 83,
         "methods": 1,
         "public_methods": 1,
         "large_methods": 0,
@@ -89,7 +89,7 @@
         "largest_method": {
             "name": "permission_check",
             "line": 37,
-            "lines": 22
+            "lines": 45
         },
         "method_prefixes": {
             "permission": 1
@@ -100,7 +100,7 @@
         "private_state_properties": 0,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 8,
+        "external_dependencies": 9,
         "wordpress_dependencies": 4,
         "filesystem_dependencies": 0,
         "network_dependencies": 0,
