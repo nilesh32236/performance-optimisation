@@ -4302,14 +4302,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Integrations",
-        "lines": 1031,
+        "lines": 1032,
         "methods": 11,
         "public_methods": 11,
         "large_methods": 1,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "woo_cache_self_test",
-            "line": 643,
+            "line": 644,
             "lines": 387
         },
         "method_prefixes": {

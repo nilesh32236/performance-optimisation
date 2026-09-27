@@ -175,7 +175,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 		 * `/blog/checkout/` is also treated as dynamic rather than risk
 		 * caching checkout content) plus Store API routes plus core Woo
 		 * order/account endpoint slugs (`order-pay`, `view-order`,
-		 * `download`, `add-payment-method`, issue #1705). Endpoint slugs
+		 * `downloads` (plus singular `download`, fail-safe),
+		 * `add-payment-method`, issue #1705). Endpoint slugs
 		 * are matched fail-safe as anywhere-segments: over-exclusion ships
 		 * as an audit list with manual toggles (safe mode + the
 		 * `wppo_woo_cacheable` override) rather than a silent stale-cart

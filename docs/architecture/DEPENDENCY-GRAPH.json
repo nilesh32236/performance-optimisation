@@ -23239,7 +23239,7 @@
             "file": "includes/Integrations/class-woo-detect.php",
             "domain": "Integrations",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 1031,
+            "lines": 1032,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -23252,8 +23252,8 @@
             "largest_methods": [
                 {
                     "name": "woo_cache_self_test",
-                    "line": 643,
-                    "end_line": 1029,
+                    "line": 644,
+                    "end_line": 1030,
                     "lines": 387,
                     "visibility": "public",
                     "static": true,
@@ -23261,8 +23261,8 @@
                 },
                 {
                     "name": "is_woo_excluded_url",
-                    "line": 513,
-                    "end_line": 586,
+                    "line": 514,
+                    "end_line": 587,
                     "lines": 74,
                     "visibility": "public",
                     "static": true,
@@ -23270,8 +23270,8 @@
                 },
                 {
                     "name": "is_woo_faceted_query",
-                    "line": 340,
-                    "end_line": 410,
+                    "line": 341,
+                    "end_line": 411,
                     "lines": 71,
                     "visibility": "public",
                     "static": true,
@@ -23279,8 +23279,8 @@
                 },
                 {
                     "name": "get_woo_excluded_paths",
-                    "line": 244,
-                    "end_line": 297,
+                    "line": 245,
+                    "end_line": 298,
                     "lines": 54,
                     "visibility": "public",
                     "static": true,
@@ -23288,8 +23288,8 @@
                 },
                 {
                     "name": "is_woo_dynamic_path",
-                    "line": 189,
-                    "end_line": 226,
+                    "line": 190,
+                    "end_line": 227,
                     "lines": 38,
                     "visibility": "public",
                     "static": true,
@@ -23297,8 +23297,8 @@
                 },
                 {
                     "name": "is_woo_ajax_request",
-                    "line": 430,
-                    "end_line": 456,
+                    "line": 431,
+                    "end_line": 457,
                     "lines": 27,
                     "visibility": "public",
                     "static": true,
@@ -23315,8 +23315,8 @@
                 },
                 {
                     "name": "is_woo_add_to_cart_request",
-                    "line": 473,
-                    "end_line": 495,
+                    "line": 474,
+                    "end_line": 496,
                     "lines": 23,
                     "visibility": "public",
                     "static": true,
@@ -23345,25 +23345,25 @@
             "references": {
                 "static_calls": {
                     "PerformanceOptimise\\Inc\\Settings_Store::get_settings": 72,
-                    "PerformanceOptimise\\Inc\\Url::cached_home_url": 673,
-                    "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 571,
-                    "PerformanceOptimise\\Inc\\Util::is_editor_preview_url": 790,
-                    "self::get_woo_excluded_paths": 207,
-                    "self::is_woo_active": 645,
-                    "self::is_woo_add_to_cart_request": 560,
-                    "self::is_woo_ajax_request": 552,
-                    "self::is_woo_dynamic_path": 579,
-                    "self::is_woo_excluded_url": 843,
-                    "self::is_woo_faceted_query": 566,
-                    "self::is_woo_safe_mode_enabled": 561,
+                    "PerformanceOptimise\\Inc\\Url::cached_home_url": 674,
+                    "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 572,
+                    "PerformanceOptimise\\Inc\\Util::is_editor_preview_url": 791,
+                    "self::get_woo_excluded_paths": 208,
+                    "self::is_woo_active": 646,
+                    "self::is_woo_add_to_cart_request": 561,
+                    "self::is_woo_ajax_request": 553,
+                    "self::is_woo_dynamic_path": 580,
+                    "self::is_woo_excluded_url": 844,
+                    "self::is_woo_faceted_query": 567,
+                    "self::is_woo_safe_mode_enabled": 562,
                     "self::is_woo_store_api_path": 143,
-                    "self::is_woo_store_api_request": 541
+                    "self::is_woo_store_api_request": 542
                 },
                 "instance_calls": [],
                 "new_expressions": [],
                 "class_references": {
-                    "PerformanceOptimise\\Inc\\Util": 571,
-                    "self": 552
+                    "PerformanceOptimise\\Inc\\Util": 572,
+                    "self": 553
                 },
                 "class_constant_references": [],
                 "class_string_references": {
@@ -23371,15 +23371,15 @@
                 },
                 "class_exists": {
                     "PerformanceOptimise\\Inc\\Woo_Detect": 44,
-                    "WooCommerce": 312
+                    "WooCommerce": 313
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 571,
-                    "self::is_woo_add_to_cart_request": 560,
-                    "self::is_woo_ajax_request": 552,
-                    "self::is_woo_dynamic_path": 575,
-                    "self::is_woo_excluded_url": 842,
-                    "self::is_woo_faceted_query": 566
+                    "PerformanceOptimise\\Inc\\Util::has_uncacheable_query": 572,
+                    "self::is_woo_add_to_cart_request": 561,
+                    "self::is_woo_ajax_request": 553,
+                    "self::is_woo_dynamic_path": 576,
+                    "self::is_woo_excluded_url": 843,
+                    "self::is_woo_faceted_query": 567
                 },
                 "interface_exists": [],
                 "trait_exists": [],
@@ -23387,34 +23387,34 @@
                 "loader_references": [],
                 "file_references": [],
                 "external_classes": {
-                    "WooCommerce": 312
+                    "WooCommerce": 313
                 },
                 "external_functions": {
-                    "apply_filters": 363,
-                    "array_filter": 269,
-                    "array_map": 270,
-                    "array_values": 268,
+                    "apply_filters": 364,
+                    "array_filter": 270,
+                    "array_map": 271,
+                    "array_values": 269,
                     "class_exists": 44,
                     "defined": 40,
-                    "explode": 280,
+                    "explode": 281,
                     "filter_var": 81,
-                    "function_exists": 247,
-                    "get_class": 697,
-                    "get_permalink": 257,
-                    "get_post_field": 266,
-                    "has_filter": 362,
-                    "implode": 287,
-                    "in_array": 289,
-                    "is_array": 364,
+                    "function_exists": 248,
+                    "get_class": 698,
+                    "get_permalink": 258,
+                    "get_post_field": 267,
+                    "has_filter": 363,
+                    "implode": 288,
+                    "in_array": 290,
+                    "is_array": 365,
                     "is_scalar": 78,
                     "is_string": 152,
-                    "method_exists": 552,
-                    "parse_str": 441,
-                    "parse_url": 524,
+                    "method_exists": 553,
+                    "parse_str": 442,
+                    "parse_url": 525,
                     "preg_match": 124,
-                    "preg_quote": 203,
-                    "preg_replace": 277,
-                    "preg_split": 375,
+                    "preg_quote": 204,
+                    "preg_replace": 278,
+                    "preg_split": 376,
                     "rawurldecode": 116,
                     "sanitize_text_field": 147,
                     "strlen": 112,
@@ -23422,16 +23422,16 @@
                     "strtolower": 105,
                     "substr": 112,
                     "trim": 105,
-                    "wc_get_page_id": 251,
-                    "wp_parse_url": 259,
+                    "wc_get_page_id": 252,
+                    "wp_parse_url": 260,
                     "wp_unslash": 147
                 },
                 "wordpress_functions": {
-                    "apply_filters": 363,
-                    "get_permalink": 257,
-                    "get_post_field": 266,
+                    "apply_filters": 364,
+                    "get_permalink": 258,
+                    "get_post_field": 267,
                     "sanitize_text_field": 147,
-                    "wp_parse_url": 259,
+                    "wp_parse_url": 260,
                     "wp_unslash": 147
                 },
                 "filesystem_dependencies": [],
@@ -35406,12 +35406,12 @@
                 "static_call"
             ],
             "lines": [
-                673,
-                737,
-                781,
-                832,
-                879,
-                929
+                674,
+                738,
+                782,
+                833,
+                880,
+                930
             ],
             "evidence_count": 6,
             "cross_domain": true,
@@ -35434,9 +35434,9 @@
                 "static_call"
             ],
             "lines": [
-                571,
-                790,
-                868
+                572,
+                791,
+                869
             ],
             "evidence_count": 3,
             "cross_domain": true,
@@ -46242,7 +46242,7 @@
                 "compatibility_in": 7,
                 "cross_domain": 11,
                 "static_state": false,
-                "lines": 1031
+                "lines": 1032
             },
             {
                 "node": "PerformanceOptimise\\Inc\\Server_Rules",
@@ -55777,12 +55777,12 @@
                     "static_call"
                 ],
                 "lines": [
-                    673,
-                    737,
-                    781,
-                    832,
-                    879,
-                    929
+                    674,
+                    738,
+                    782,
+                    833,
+                    880,
+                    930
                 ],
                 "evidence_count": 6,
                 "cross_domain": true,
@@ -55806,9 +55806,9 @@
                     "static_call"
                 ],
                 "lines": [
-                    571,
-                    790,
-                    868
+                    572,
+                    791,
+                    869
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -63955,9 +63955,9 @@
                     "static_call"
                 ],
                 "lines": [
-                    571,
-                    790,
-                    868
+                    572,
+                    791,
+                    869
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
