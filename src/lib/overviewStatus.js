@@ -29,6 +29,44 @@
  */
 
 /** The only states the Overview may claim. */
+/**
+ * The message keys this module can emit.
+ *
+ * The model deliberately carries no English prose. It returns a key plus its
+ * arguments, and `SiteStatusCard` owns the copy, so the whole Overview can be
+ * translated. That was the deal from the start — the model stays pure and
+ * testable, and never imports `wp.i18n` — but the component side was never
+ * finished, so every row rendered an English-only sentence.
+ *
+ * Exported so the copy map and this list can be checked against each other:
+ * a key with no translation would otherwise render as a blank row.
+ */
+export const DETAIL = Object.freeze( {
+	cache_unavailable: 'cache-unavailable',
+	cache_unknown: 'cache-unknown',
+	cache_off: 'cache-off',
+	cache_unreadable: 'cache-unreadable',
+	cache_empty: 'cache-empty',
+	cache_active: 'cache-active',
+	object_unavailable: 'object-unavailable',
+	object_off: 'object-off',
+	object_unknown: 'object-unknown',
+	object_no_extension: 'object-no-extension',
+	object_foreign_dropin: 'object-foreign-dropin',
+	object_circuit_open: 'object-circuit-open',
+	object_bypassed: 'object-bypassed',
+	object_unreachable: 'object-unreachable',
+	object_reachable: 'object-reachable',
+	object_reachability_unknown: 'object-reachability-unknown',
+	system_unavailable: 'system-unavailable',
+	system_unknown: 'system-unknown',
+	system_versions: 'system-versions',
+	vital_unmeasured: 'vital-unmeasured',
+	vital_good: 'vital-good',
+	vital_attention: 'vital-attention',
+	vital_poor: 'vital-poor',
+} );
+
 export const STATUS = Object.freeze( {
 	HEALTHY: 'healthy',
 	ATTENTION: 'attention',
@@ -101,7 +139,7 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 			id: 'page-cache',
 			label: 'Page cache',
 			status: coerce( STATUS.UNAVAILABLE ),
-			detail: 'Cache state is not available right now.',
+			detailKey: DETAIL.cache_unavailable,
 		};
 	}
 	// `! settings.enableCache` treated an *absent* key as "off". A payload with
@@ -114,7 +152,7 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 			id: 'page-cache',
 			label: 'Page cache',
 			status: STATUS.UNKNOWN,
-			detail: 'The plugin did not report whether the page cache is enabled.',
+			detailKey: DETAIL.cache_unknown,
 		};
 	}
 	if ( cacheEnabled === false ) {
@@ -122,7 +160,7 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 			id: 'page-cache',
 			label: 'Page cache',
 			status: STATUS.NOT_CONFIGURED,
-			detail: 'Page cache is turned off. Turning it on is usually the single biggest speed win.',
+			detailKey: DETAIL.cache_off,
 		};
 	}
 
@@ -146,7 +184,7 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 			id: 'page-cache',
 			label: 'Page cache',
 			status: STATUS.UNKNOWN,
-			detail: 'Page cache is switched on, but the plugin could not read how much it has stored. Open Speed to check the cache status.',
+			detailKey: DETAIL.cache_unreadable,
 		};
 	}
 	// A measured zero is a real fact, but not a fault: a freshly cleared cache
@@ -156,14 +194,15 @@ export const deriveCacheStatus = ( settings, cacheSize ) => {
 			id: 'page-cache',
 			label: 'Page cache',
 			status: STATUS.NOT_CONFIGURED,
-			detail: 'Page cache is switched on but nothing is cached yet. The next visitor will generate a page.',
+			detailKey: DETAIL.cache_empty,
 		};
 	}
 	return {
 		id: 'page-cache',
 		label: 'Page cache',
 		status: STATUS.HEALTHY,
-		detail: `Page cache is on, with ${ stored } of cached pages stored.`,
+		detailKey: DETAIL.cache_active,
+		detailArgs: { stored },
 	};
 };
 
@@ -183,7 +222,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: coerce( STATUS.UNAVAILABLE ),
-			detail: 'Object cache state is not available right now.',
+			detailKey: DETAIL.object_unavailable,
 		};
 	}
 
@@ -198,7 +237,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.NOT_CONFIGURED,
-			detail: 'Object cache (Redis or Memcached) is off. Useful for busy or dynamic sites; not needed everywhere.',
+			detailKey: DETAIL.object_off,
 		};
 	}
 	if ( enabled === null ) {
@@ -207,7 +246,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.UNKNOWN,
-			detail: 'The plugin did not report whether the object cache is enabled.',
+			detailKey: DETAIL.object_unknown,
 		};
 	}
 
@@ -223,7 +262,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.ATTENTION,
-			detail: 'Object cache is enabled but the Redis extension is not available, so it cannot be used.',
+			detailKey: DETAIL.object_no_extension,
 		};
 	}
 	if ( triState( state.foreign_dropin ) === true ) {
@@ -231,7 +270,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.ATTENTION,
-			detail: 'Another plugin installed the object-cache drop-in, so this one is not active.',
+			detailKey: DETAIL.object_foreign_dropin,
 		};
 	}
 
@@ -245,7 +284,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.ATTENTION,
-			detail: 'Object cache is enabled but the safety breaker is open, so it is switched off until it recovers.',
+			detailKey: DETAIL.object_circuit_open,
 		};
 	}
 	if ( triState( state.bypassed ) === true ) {
@@ -253,7 +292,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.ATTENTION,
-			detail: 'Object cache is enabled but is currently bypassed because of recent failures.',
+			detailKey: DETAIL.object_bypassed,
 		};
 	}
 
@@ -266,7 +305,7 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.ATTENTION,
-			detail: 'Object cache is enabled but the server is not reachable, so it is not speeding anything up.',
+			detailKey: DETAIL.object_unreachable,
 		};
 	}
 	// Reachable is the whole claim. If the backend never reported it we do not
@@ -277,14 +316,14 @@ export const deriveObjectCacheStatus = ( state ) => {
 			id: 'object-cache',
 			label: 'Object cache',
 			status: STATUS.HEALTHY,
-			detail: 'Object cache is enabled and the server is reachable.',
+			detailKey: DETAIL.object_reachable,
 		};
 	}
 	return {
 		id: 'object-cache',
 		label: 'Object cache',
 		status: STATUS.UNKNOWN,
-		detail: 'Object cache is enabled, but the plugin has not reported whether the server is reachable.',
+		detailKey: DETAIL.object_reachability_unknown,
 	};
 };
 
@@ -303,7 +342,7 @@ export const deriveCompatibilityStatus = ( info ) => {
 			id: 'compatibility',
 			label: 'Compatibility',
 			status: coerce( STATUS.UNAVAILABLE ),
-			detail: 'Server details are not available right now.',
+			detailKey: DETAIL.system_unavailable,
 		};
 	}
 	// The real `system_info` response nests these: `php.version` and
@@ -340,14 +379,15 @@ export const deriveCompatibilityStatus = ( info ) => {
 			id: 'compatibility',
 			label: 'Compatibility',
 			status: coerce( STATUS.UNKNOWN ),
-			detail: 'The plugin did not report the PHP or WordPress version.',
+			detailKey: DETAIL.system_unknown,
 		};
 	}
 	return {
 		id: 'compatibility',
 		label: 'Compatibility',
 		status: STATUS.HEALTHY,
-		detail: `Running on WordPress ${ wp } and PHP ${ php }.`,
+		detailKey: DETAIL.system_versions,
+		detailArgs: { wp, php },
 	};
 };
 
@@ -428,7 +468,8 @@ export const deriveVitalsStatus = ( vitals ) => {
 					id: measure.id,
 					label: measure.label,
 					status: STATUS.UNKNOWN,
-					detail: `No real-user data yet. ${ measure.hint }`,
+					detailKey: DETAIL.vital_unmeasured,
+					detailArgs: { hint: measure.hint },
 				};
 			}
 			// The number *judged* is the number *shown*.
@@ -453,7 +494,8 @@ export const deriveVitalsStatus = ( vitals ) => {
 					id: measure.id,
 					label: measure.label,
 					status: STATUS.HEALTHY,
-					detail: `${ measure.label } is good at ${ value }.`,
+					detailKey: DETAIL.vital_good,
+					detailArgs: { label: measure.label, value },
 				};
 			}
 			if ( rounded <= measure.poor ) {
@@ -461,14 +503,20 @@ export const deriveVitalsStatus = ( vitals ) => {
 					id: measure.id,
 					label: measure.label,
 					status: STATUS.ATTENTION,
-					detail: `${ measure.label } could be better (${ value }). ${ measure.hint }`,
+					detailKey: DETAIL.vital_attention,
+					detailArgs: {
+						label: measure.label,
+						value,
+						hint: measure.hint,
+					},
 				};
 			}
 			return {
 				id: measure.id,
 				label: measure.label,
 				status: STATUS.ATTENTION,
-				detail: `${ measure.label } is poor at ${ value }. ${ measure.hint }`,
+				detailKey: DETAIL.vital_poor,
+				detailArgs: { label: measure.label, value, hint: measure.hint },
 			};
 		} );
 };

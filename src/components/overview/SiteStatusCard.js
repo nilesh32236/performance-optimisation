@@ -10,6 +10,8 @@
 
 import { __ } from '@wordpress/i18n';
 
+import { renderDetail } from './detailCopy';
+
 import { ALL_STATUSES, needsAttention } from '../../lib/overviewStatus';
 
 /**
@@ -187,7 +189,7 @@ export default function SiteStatusCard( {
 									</strong>
 								) : null }
 								<span className="wppo-overview__status-detail">
-									{ row.detail }
+									{ renderDetail( row ) }
 								</span>
 							</span>
 						</li>

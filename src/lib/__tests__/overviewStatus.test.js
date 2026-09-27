@@ -7,6 +7,7 @@
  */
 
 import {
+	DETAIL,
 	ALL_STATUSES,
 	buildStatusModel,
 	deriveCacheStatus,
@@ -41,7 +42,8 @@ describe( 'deriveCacheStatus', () => {
 		// statistics rather than the setting.
 		const row = deriveCacheStatus( { enableCache: true }, '14 MB' );
 		expect( row.status ).toBe( STATUS.HEALTHY );
-		expect( row.detail ).toContain( '14 MB' );
+		expect( row.detailKey ).toBe( DETAIL.cache_active );
+		expect( row.detailArgs ).toEqual( { stored: '14 MB' } );
 	} );
 
 	it( 'treats a measured zero as a choice, not a fault', () => {
@@ -159,7 +161,7 @@ describe( 'deriveObjectCacheStatus', () => {
 			circuit_open: true,
 		} );
 		expect( row.status ).toBe( STATUS.ATTENTION );
-		expect( row.detail ).toMatch( /breaker/i );
+		expect( row.detailKey ).toBe( DETAIL.object_circuit_open );
 	} );
 
 	it( 'treats an outage bypass as a problem, not as working', () => {
@@ -183,8 +185,7 @@ describe( 'deriveObjectCacheStatus', () => {
 			redis_missing: true,
 		} );
 		expect( row.status ).toBe( STATUS.ATTENTION );
-		expect( row.detail ).toMatch( /extension/i );
-		expect( row.detail ).not.toMatch( /not reachable/i );
+		expect( row.detailKey ).toBe( DETAIL.object_no_extension );
 	} );
 
 	it( 'reports a working cache only when enabled, reachable, and not bypassed', () => {
@@ -251,8 +252,8 @@ describe( 'deriveCompatibilityStatus', () => {
 			wordpress: { version: '7.1.2' },
 		} );
 		expect( row.status ).toBe( STATUS.HEALTHY );
-		expect( row.detail ).toContain( '8.3.33' );
-		expect( row.detail ).toContain( '7.1.2' );
+		expect( row.detailKey ).toBe( DETAIL.system_versions );
+		expect( row.detailArgs ).toEqual( { wp: '7.1.2', php: '8.3.33' } );
 	} );
 
 	it( 'is unknown, not healthy, when EITHER version is missing', () => {
@@ -265,7 +266,7 @@ describe( 'deriveCompatibilityStatus', () => {
 		} );
 		expect( onlyWp.status ).not.toBe( STATUS.HEALTHY );
 		expect( onlyWp.status ).toBe( STATUS.UNKNOWN );
-		expect( onlyWp.detail ).not.toMatch( /PHP \./ );
+		expect( onlyWp.detailKey ).toBe( DETAIL.system_unknown );
 
 		const onlyPhp = deriveCompatibilityStatus( {
 			php: { version: '8.3' },
@@ -283,7 +284,7 @@ describe( 'deriveCompatibilityStatus', () => {
 		].forEach( ( payload ) => {
 			const row = deriveCompatibilityStatus( payload );
 			expect( row.status ).toBe( STATUS.UNKNOWN );
-			expect( row.detail ).not.toMatch( /false|PHP 0|PHP \./ );
+			expect( row.detailKey ).toBe( DETAIL.system_unknown );
 		} );
 	} );
 
@@ -372,26 +373,30 @@ describe( 'deriveVitalsStatus', () => {
 		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].status ).toBe(
 			STATUS.HEALTHY
 		);
-		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].detail ).toMatch(
-			/good at 2500 ms/
+		expect(
+			deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].detailArgs.value
+		).toBe( '2500 ms' );
+		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].detailKey ).toBe(
+			DETAIL.vital_good
 		);
 		// A value that displays past the boundary still is not good.
 		expect( deriveVitalsStatus( { lcp: 2500.6 } )[ 0 ].status ).toBe(
 			STATUS.ATTENTION
 		);
 		// The *poor* boundary is the other `<=` and was unpinned. Both sides of
-		// it are ATTENTION, so the difference is only in the wording, but the
-		// comparison itself is now pinned either way.
-		expect( deriveVitalsStatus( { lcp: 4000 } )[ 0 ].detail ).toMatch(
-			/could be better/
+		// it are ATTENTION, so the comparison alone cannot tell them apart — the
+		// message key is what distinguishes "could be better" from "is poor",
+		// and it is what a translator now sees.
+		expect( deriveVitalsStatus( { lcp: 4000 } )[ 0 ].detailKey ).toBe(
+			DETAIL.vital_attention
 		);
 		// 4000.1 also displays as 4000, which is the poor threshold, so it reads
 		// "could be better" — the judged and shown numbers agree again.
-		expect( deriveVitalsStatus( { lcp: 4000.1 } )[ 0 ].detail ).toMatch(
-			/could be better \(4000 ms\)/
+		expect( deriveVitalsStatus( { lcp: 4000.1 } )[ 0 ].detailKey ).toBe(
+			DETAIL.vital_attention
 		);
-		expect( deriveVitalsStatus( { lcp: 4000.6 } )[ 0 ].detail ).toMatch(
-			/is poor at/
+		expect( deriveVitalsStatus( { lcp: 4000.6 } )[ 0 ].detailKey ).toBe(
+			DETAIL.vital_poor
 		);
 		// And a good boundary value must not drag the page verdict down.
 		const { overall } = buildStatusModel( {
@@ -435,7 +440,7 @@ describe( 'deriveVitalsStatus', () => {
 		[ null, '', [], false, NaN, '  ', {} ].forEach( ( value ) => {
 			const row = deriveVitalsStatus( { lcp: value } )[ 0 ];
 			expect( row.status ).toBe( STATUS.UNKNOWN );
-			expect( row.detail ).not.toMatch( /good at 0/ );
+			expect( row.detailKey ).not.toBe( DETAIL.vital_good );
 		} );
 	} );
 
@@ -576,7 +581,7 @@ describe( 'buildStatusModel', () => {
 		} );
 		expect( rows[ 0 ].id ).toBe( 'page-cache' );
 		expect( rows[ 0 ].status ).toBe( STATUS.HEALTHY );
-		expect( rows[ 0 ].detail ).toContain( '14 MB' );
+		expect( rows[ 0 ].detailArgs.stored ).toBe( '14 MB' );
 		expect( overall ).toBe( STATUS.HEALTHY );
 	} );
 

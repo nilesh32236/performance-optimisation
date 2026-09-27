@@ -8,21 +8,36 @@
 import { render, screen } from '@testing-library/react';
 
 import SiteStatusCard from '../SiteStatusCard';
+import { renderDetail } from '../detailCopy';
 import {
 	ALL_STATUSES,
 	buildStatusModel,
+	DETAIL,
 	STATUS,
 } from '../../../lib/overviewStatus';
 
 const model = ( payload ) => buildStatusModel( payload );
 
 describe( 'SiteStatusCard', () => {
-	it( 'shows the model rows verbatim, including their detail text', () => {
+	it( 'renders the sentence the model asked for, via the copy layer', () => {
+		// The row no longer carries English prose, so this asserts that the
+		// component *interprets* the model rather than echoing it: the key and
+		// the arguments have to become a sentence a reader can see.
 		const { rows, overall } = model( {
 			cacheSettings: { enableCache: true, cache_enabled: true },
 		} );
 		render( <SiteStatusCard rows={ rows } overall={ overall } /> );
-		expect( screen.getByText( rows[ 0 ].detail ) ).toBeInTheDocument();
+		expect(
+			screen.getByText( renderDetail( rows[ 0 ] ) )
+		).toBeInTheDocument();
+		// And the finished sentence is real prose, not a key or a blank. This
+		// fixture reports no stored size, so the model asks for the
+		// `cache-unreadable` sentence — which is the point: the component
+		// follows the model, it does not assume one wording.
+		expect( rows[ 0 ].detailKey ).toBe( DETAIL.cache_unreadable );
+		expect( renderDetail( rows[ 0 ] ) ).toMatch(
+			/could not read how much/
+		);
 	} );
 
 	it( 'never renders a numeric score', () => {
