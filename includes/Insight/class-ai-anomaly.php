@@ -1666,6 +1666,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ai_Anomaly' ) ) {
 				);
 				$winner = $candidates[0];
 				unset( $winner['severity'] );
+				// Annotate breaches near a noted deploy (issue #1704): the
+				// RUM-digest path previously skipped the annotation that
+				// detect_anomalies() carries, so suggestion copy could not
+				// name the deploy. Annotation only — queue suppression stays
+				// behind is_css_refresh_deploy_gated().
+				$deploy_note = self::find_deploy_note_near( $resolved_now );
+				if ( '' !== $deploy_note ) {
+					$winner['deploy_note'] = $deploy_note;
+				}
 				// Record the alarm before filtering so a repeated regression
 				// re-alarms only after the cooldown elapses.
 				self::set_last_anomaly_alarm( $resolved_now );
@@ -2060,6 +2069,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ai_Anomaly' ) ) {
 		}
 
 		/**
+		 * Whether a recent deploy suppresses the CSS-refresh queue (issue #1704).
+		 *
+		 * Additive opt-in living in
+		 * `wppo_settings[ai_adaptive][css_refresh_require_no_recent_deploy]`
+		 * (default false/annotate-only, preserving the pre-#1704 behaviour).
+		 * When on, maybe_queue_css_refresh() returns `queued => false` with
+		 * reason `deploy-correlated` whenever find_deploy_note_near() finds a
+		 * deploy within DEPLOY_CORRELATION_DAYS, so a deploy-induced LCP
+		 * shift renders as a read-only suggestion row instead of queueing a
+		 * regen. Filterable via
+		 * `wppo_ai_css_refresh_require_no_recent_deploy`. Fail-open to false.
+		 *
+		 * @return bool True when a nearby deploy suppresses the queue.
+		 * @since NEXT
+		 */
+		public static function is_css_refresh_deploy_gated(): bool {
+			try {
+				$gated = false;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					$gated    = ! empty( $settings['ai_adaptive']['css_refresh_require_no_recent_deploy'] );
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters whether a nearby deploy suppresses the CSS-refresh queue.
+					 *
+					 * @since NEXT
+					 * @param bool $gated Whether the deploy gate is on.
+					 */
+					$gated = (bool) apply_filters( 'wppo_ai_css_refresh_require_no_recent_deploy', $gated );
+				}
+				return $gated;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Resolve a trend anomaly key back to its scanned URL.
 		 *
 		 * Trend keys are opaque (`md5( esc_url_raw( $url ) ) . '_' . strategy`,
@@ -2295,6 +2343,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ai_Anomaly' ) ) {
 		 * `ai_adaptive.css_refresh_on_lcp_regression` opt-in is on (default
 		 * off/suggest-only). Non-LCP anomalies never queue.
 		 *
+		 * Deploy correlation (issue #1704, Option A soft gate): the digest
+		 * and trend paths annotate nearby deploys via
+		 * find_deploy_note_near(); only when the additive
+		 * `ai_adaptive.css_refresh_require_no_recent_deploy` opt-in is on
+		 * (default off/back-compat) does a nearby deploy suppress the queue
+		 * with reason `deploy-correlated`, degrading to a read-only
+		 * suggestion row. Local only: no remote calls on this path.
+		 *
 		 * Fail-open by design: toggle-off, unresolvable URL, missing post,
 		 * homepage without a static front page, excluded post type,
 		 * scheduler absence, enqueue failure, or any throwable returns
@@ -2314,6 +2370,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ai_Anomaly' ) ) {
 		 * @param int|null $now Optional current timestamp (tests).
 		 * @return array{queued:bool,reason:string,url:string,post_id:int,before_lcp:float,current_lcp:float} Refresh decision.
 		 * @since 2.3.0
+		 * @since NEXT Deploy-correlation soft gate (`deploy-correlated` reason).
 		 */
 		public static function maybe_queue_css_refresh( array $anomaly, ?int $now = null ): array {
 			$fallback = array(
@@ -2348,6 +2405,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ai_Anomaly' ) ) {
 					$fallback['reason'] = 'opt-out';
 					return $fallback;
 				}
+				$resolved_now = self::anomaly_now( $now );
+				// Deploy-correlation soft gate (issue #1704, default
+				// permissive): only when the opt-in is on does a nearby
+				// deploy suppress the queue. Fail-open: lookup errors keep
+				// the legacy queue behaviour.
+				try {
+					if ( self::is_css_refresh_deploy_gated() && '' !== self::find_deploy_note_near( $resolved_now ) ) {
+						$fallback['reason'] = 'deploy-correlated';
+						return $fallback;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 				$cooldown_key = '';
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
 					$cooldown_key = Util::transient_key( self::CSS_REFRESH_COOLDOWN_PREFIX . md5( $url ) );
@@ -2358,7 +2428,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Ai_Anomaly' ) ) {
 					$fallback['reason'] = 'cooldown';
 					return $fallback;
 				}
-				$resolved_now        = self::anomaly_now( $now );
 				$post_id             = self::resolve_anomaly_post_id( $url );
 				$fallback['post_id'] = $post_id;
 				if ( $post_id <= 0 ) {

@@ -1837,6 +1837,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 
 		/**
 		 * Facade proxy (ARCH-010): canonical owner is
+		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::is_css_refresh_deploy_gated}.
+		 *
+		 * @since NEXT
+		 * @return bool Result (see Ai_Anomaly).
+		 */
+		public static function is_css_refresh_deploy_gated(): bool {
+			return Ai_Anomaly::is_css_refresh_deploy_gated();
+		}
+
+		/**
+		 * Facade proxy (ARCH-010): canonical owner is
 		 * {@see \PerformanceOptimise\Inc\Ai_Anomaly::resolve_anomaly_url}.
 		 *
 		 * @since 2.4.0
@@ -2809,6 +2820,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						/* translators: %d is the INP percentage increase vs baseline. */
 						$value       = sprintf( __( 'INP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
 						$description = __( 'AI: INP regression detected', 'performance-optimisation' );
+					}
+					// Read-only deploy correlation (issue #1704): a digest
+					// anomaly near a noted deploy names the deploy in the
+					// row copy without queueing anything or emitting a
+					// banner. Mirrors the LCP/CLS suffixes.
+					if ( isset( $anomaly_context['deploy_note'] ) ) {
+						/* translators: %s is the deploy note. */
+						$description .= sprintf( __( ' (near deploy: %s)', 'performance-optimisation' ), $anomaly_context['deploy_note'] );
 					}
 					$suggestions[] = array(
 						'metric'      => 'ai_inp_regression',

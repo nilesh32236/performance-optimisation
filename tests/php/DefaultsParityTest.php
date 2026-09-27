@@ -76,17 +76,19 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		// RUM anomaly digest tolerance band (issue #1445): 5% relative + 0.01 absolute.
 		// p75 anomaly hardening (issue #1384): additive keys, 3-window persistence + 10 RUM samples.
 		// Anomaly detector v2 (issue #1313): additive keys, 10-sample band window + 3-day recovery + manual deploy notes.
+		// Deploy-correlation soft gate (issue #1704): additive key, permissive (annotate-only) by default.
 		$this->assertSame(
 			array(
-				'enabled'                       => false,
-				'use_wp_ai_client'              => false,
-				'field_lcp_min_samples'         => 20,
-				'dismissed_suggestions'         => array(),
-				'anomaly_cooldown_days'         => 7,
-				'anomaly_min_samples'           => 10,
-				'css_refresh_on_lcp_regression' => false,
-				'css_refresh_cooldown_days'     => 7,
-				'speculation_autotune_enabled'  => false,
+				'enabled'                              => false,
+				'use_wp_ai_client'                     => false,
+				'field_lcp_min_samples'                => 20,
+				'dismissed_suggestions'                => array(),
+				'anomaly_cooldown_days'                => 7,
+				'anomaly_min_samples'                  => 10,
+				'css_refresh_on_lcp_regression'        => false,
+				'css_refresh_cooldown_days'            => 7,
+				'css_refresh_require_no_recent_deploy' => false,
+				'speculation_autotune_enabled'         => false,
 				'speculation_min_samples'       => 20,
 				'speculation_max_urls'          => 5,
 				'anomaly_tolerance_pct'         => 5.0,

@@ -1287,6 +1287,14 @@ Filters the per-URL CSS-refresh cooldown window in days (issue #1407). @since 2.
 
 ---
 
+### `wppo_ai_css_refresh_require_no_recent_deploy`
+Filters whether a nearby deploy suppresses the CSS-refresh queue (issue #1704). @since NEXT. Default off/annotate-only via `ai_adaptive.css_refresh_require_no_recent_deploy`; when on, a deploy within 7 days returns `queued => false` with reason `deploy-correlated` and the regression renders as a read-only suggestion row.
+
+**Parameters:**
+- `$gated` *(bool)* — Whether the deploy gate is on.
+
+---
+
 ### `wppo_ai_css_refresh_queued`
 Fires after an LCP regression queues a used-CSS refresh (issue #1407). @since 2.3.0. In-repo consumer `Main::on_ai_css_refresh_queued()` regenerates the matching critical-CSS template (`home`/`page`/`single`); third parties may hook additional template refreshes without coupling the bridge to template mapping.
 
