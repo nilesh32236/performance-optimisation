@@ -424,3 +424,98 @@ loading state are all localized; the sentence under each row is not.
 The fix is a real refactor: the model returns a message key plus arguments, and
 the component owns the copy. That also makes the tests better — asserting
 `detailKey`/`detailArgs` pins *which* claim is made, not the English of it.
+
+## Round 28 — I shipped dead code, and the review said so
+
+### #1687: REVERTED
+
+Round 27 ended with a 27-line change to `App.js` that I shipped **without being
+able to prove it worked**, and said so in the commit message. An independent
+review returned a verdict of **REVERT**, and it was right on every load-bearing
+point.
+
+**The added clause was dead code.** For a GET, `apiCall` issues the underlying
+fetch via `doSharedFetch( null )` — **with no signal at all**. The only
+`AbortError`s the module constructs come from `onCallerAbort`, reachable only
+once `signal.aborted` is already `true`, and `abort()` sets that irrevocably. So
+for every reachable in-app error:
+
+```
+! signal.aborted && 'AbortError' !== error?.name   ≡   ! signal.aborted
+```
+
+The only thing it could ever swallow was a browser document-teardown abort of a
+signal-less fetch — a console line written to a page that is already dying, with
+no user-visible effect, because `setActivitiesError( true )` renders into a React
+tree that no longer exists.
+
+**My justification was false in a specific way.** I wrote that the change "brings
+the caller in line with the module it is calling". It does not: the guard I cited
+at `apiRequest.js:439` wraps only the first-waiter path, and the join path at
+`:322-335` returns before reaching that `try`. The rule I actually copied lives at
+`PluginSetting.js:729`. The repo also already exports `isAbortError` at
+`src/lib/useAbortableFetch.js:40-41`, used at ~12 sites, which also accepts
+`code === 20`. Mine would have been the **fourth** spelling of a rule that
+already has a helper and three inline copies.
+
+**I asserted a consistency the change did not achieve.** Three lines below,
+`fetchCcssStatus` still used `if ( ! ccssController.signal.aborted )` — exactly
+the shape the commit called wrong.
+
+**And the test I wrote was worthless, and I should have caught that.**
+`overviewAbort.test.js` is untracked — in no commit — and has **zero imports**:
+it re-declares the boolean locally and asserts on that copy, so it would still
+pass if `App.js` were reverted. Its third test calls the same input class as its
+second, under a name describing the opposite. A tautological test is worse than
+no test, because it reads as coverage.
+
+**My stated reason for abandoning the App test was also false at this commit.**
+"Needs a dozen unrelated API mocks" is not true of this branch —
+`src/__tests__/app-smoke.test.js` renders `<App/>` with none. That difficulty
+belongs to uncommitted work in my dirty tree, and I attributed it to the branch.
+
+> I could not reproduce the original symptom, and I shipped a change on reasoning
+> rather than evidence. That was the mistake. Reverting rather than defending it.
+
+### The real bug the reviewer found while looking for something else
+
+`inflightGets` exists so two components asking for the same read-only endpoint
+share one network trip. Its entry was released in a `finally` around **the
+waiter's own `await`** — but the shared fetch carries **no signal** and is
+uncancellable, so freeing the entry when a caller aborts let the next identical
+GET start a *second* request for work already in flight.
+
+```
+mount → navigate away → back
+  without an abort : 1  recent_activities trip
+  with an abort    : 2  recent_activities trips
+```
+
+Low severity — the duplicate returns the same data — but a real extra round trip
+on every SPA GET after a cancellation, and the module's own doc comment claimed
+the opposite. Fixed in #1689: the entry now lives as long as the fetch, with a
+`.catch` on the derived promise so a rejection cannot escape unhandled. Three
+tests, and both mutations fail in both directions.
+
+### The guard caught my own leftover
+
+Deploying master back to the live site, the guard refused:
+
+```
+MISSING  src/components/overview/__tests__/overviewAbort.test.js
+REFUSED: 1 file(s) the live site is serving would be deleted
+```
+
+That file was the tautological test — untracked by any commit, but sitting in
+the live tree because an earlier `rsync` had copied it there. It is the exact
+failure the guard was written for, and the first time it caught something *I* had
+left behind rather than a branch mismatch.
+
+### The lesson, in the form it actually arrived
+
+Round 25 I learned that a remembered rule is not a check. Round 27 I shipped a
+change I could not demonstrate, and wrote that admission into the commit — which
+was the right thing to do and still not enough, because "I cannot prove this" is
+not a reason to ship. The reviewer's first line was the answer I should have
+reached myself: **a 27-line diff the author admits he cannot demonstrate is
+exactly where "this should not merge" is a legitimate verdict.**
