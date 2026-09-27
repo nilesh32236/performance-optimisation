@@ -42,6 +42,8 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
+import ConfirmDialog from './common/ConfirmDialog';
+import RiskBadge from './common/RiskBadge';
 
 import CriticalCssPanel from './CriticalCssPanel';
 import PresetsCard from './file-optimization/PresetsCard';
@@ -311,6 +313,100 @@ export const resolvePresetBundle = ( name ) => {
 		);
 	}
 	return getServerPresetBundle( 'safe' ) || SAFE_PRESET_BUNDLE;
+};
+
+// Aggressive toggles that can break a site with one click (issue #1702).
+// Enabling any of them off→on is gated behind the shared ConfirmDialog,
+// and a successful save offers a one-click revert from the success notice.
+// No settings-schema change: the revert restores the prior toggle values
+// through the existing update_settings endpoint.
+// Exported for direct Jest coverage.
+// @since NEXT
+export const RISKY_TOGGLE_NAMES = Object.freeze( [
+	'delayJS',
+	'deferJS',
+	'removeUnusedCSS',
+] );
+
+/**
+ * Snapshot the prior values of the aggressive toggles.
+ *
+ * @since NEXT
+ * @param {Object} settings Current form settings.
+ * @return {{delayJS:boolean,deferJS:boolean,removeUnusedCSS:boolean}} Prior risky-toggle values.
+ */
+export const snapshotRiskyToggles = ( settings ) => ( {
+	delayJS: !! settings?.delayJS,
+	deferJS: !! settings?.deferJS,
+	removeUnusedCSS: !! settings?.removeUnusedCSS,
+} );
+
+/**
+ * List risky toggles that are on in `next` but were off in `prev`.
+ *
+ * @since NEXT
+ * @param {Object} next Current (submitted) settings.
+ * @param {Object} prev Prior (snapshot) settings.
+ * @return {string[]} Newly enabled risky-toggle names.
+ */
+export const newlyEnabledRiskyToggles = ( next, prev ) =>
+	RISKY_TOGGLE_NAMES.filter( ( name ) => next?.[ name ] && ! prev?.[ name ] );
+
+/**
+ * Per-toggle risk copy: tooltip plus confirm-dialog title/body.
+ *
+ * @since NEXT
+ * @param {string} name Risky-toggle name.
+ * @return {{tooltip:string,dialogTitle:string,dialogMessage:string}} Translated copy.
+ */
+export const getRiskyToggleCopy = ( name ) => {
+	switch ( name ) {
+		case 'delayJS':
+			return {
+				tooltip: __(
+					'Aggressive: delays scripts until user interaction — can break menus, carts and sliders. Delay-JS safe mode and the exclusion presets stay on; test in incognito after enabling.',
+					'performance-optimisation'
+				),
+				dialogTitle: __(
+					'Enable Delay JavaScript?',
+					'performance-optimisation'
+				),
+				dialogMessage: __(
+					'Delaying JavaScript can break interactive features (menus, carts, sliders). Your change stays staged until you press Save, and you can revert in one click from the success notice. Enable anyway?',
+					'performance-optimisation'
+				),
+			};
+		case 'deferJS':
+			return {
+				tooltip: __(
+					'Aggressive: defers scripts until the page renders — can break jQuery-dependent features. Built-in exclusions cover jQuery, Elementor and WooCommerce; add handles under Exclude from Deferring if anything breaks.',
+					'performance-optimisation'
+				),
+				dialogTitle: __(
+					'Enable Defer JavaScript?',
+					'performance-optimisation'
+				),
+				dialogMessage: __(
+					'Deferring JavaScript can break jQuery-dependent features. Built-in exclusions cover jQuery, Elementor and WooCommerce, and you can revert in one click from the success notice after saving. Enable anyway?',
+					'performance-optimisation'
+				),
+			};
+		default:
+			return {
+				tooltip: __(
+					'Aggressive: removes page-level unused CSS — can strip builder or JS-injected styles. Safe mode plus the safelists stay on; add selectors to the safelist if styles go missing.',
+					'performance-optimisation'
+				),
+				dialogTitle: __(
+					'Enable Remove Unused CSS?',
+					'performance-optimisation'
+				),
+				dialogMessage: __(
+					'Removing unused CSS can strip styles needed by builders or dynamic content. Safe mode and the safelists stay on, and you can revert in one click from the success notice after saving. Enable anyway?',
+					'performance-optimisation'
+				),
+			};
+	}
 };
 
 // Textarea-backed file-optimisation keys: newline-delimited lists the backend
@@ -894,6 +990,60 @@ const FileOptimization = ( {
 		notify: notifyPurge,
 		dismiss: dismissPurge,
 	} = useNotice();
+	// Aggressive-toggle guard (issue #1702): enabling Delay JS, Defer JS or
+	// Remove Unused CSS off→on snapshots the prior risky values and opens a
+	// shared ConfirmDialog instead of staging the change. Cancel leaves state
+	// untouched; confirm stages the toggle and remembers the snapshot so the
+	// post-save success notice can offer a one-click revert (same
+	// update_settings endpoint, no schema change). Fail-open: disabling
+	// passes straight through, and a contested gate degrades to the risk
+	// tooltips + badges alone.
+	const [ pendingRisky, setPendingRisky ] = useState( null );
+	const [ riskySnapshot, setRiskySnapshot ] = useState( null );
+	const [ riskyRevert, setRiskyRevert ] = useState( null );
+	const isRevertingRef = useRef( false );
+	const handleRiskyToggle = useCallback(
+		( e ) => {
+			const { name, type, checked } = e?.target || {};
+			if (
+				'checkbox' !== type ||
+				! RISKY_TOGGLE_NAMES.includes( name ) ||
+				! checked
+			) {
+				onFieldChange( e );
+				return;
+			}
+			// Gate only the off→on move: if the toggle is already on (e.g.
+			// staged by a preset), pass the event straight through.
+			if ( settings?.[ name ] ) {
+				onFieldChange( e );
+				return;
+			}
+			setRiskySnapshot( snapshotRiskyToggles( settings ) );
+			setPendingRisky( name );
+		},
+		[ onFieldChange, settings ]
+	);
+	const cancelRiskyEnable = useCallback( () => {
+		// Cancel path: state was never staged, so closing the dialog alone
+		// preserves the prior values. Focus returns to the invoking toggle
+		// via ConfirmDialog's focus-restore effect.
+		setPendingRisky( null );
+		setRiskySnapshot( null );
+	}, [] );
+	const confirmRiskyEnable = useCallback( () => {
+		if ( ! pendingRisky ) {
+			return;
+		}
+		const name = pendingRisky;
+		setSettings( ( prev ) => ( { ...prev, [ name ]: true } ) );
+		// Remember the pre-enable values for the post-save revert offer.
+		// A later off→on intercept refreshes this; a save without a risky
+		// enable clears it as stale (see handleSubmit).
+		setRiskyRevert( riskySnapshot || snapshotRiskyToggles( settings ) );
+		setPendingRisky( null );
+		setRiskySnapshot( null );
+	}, [ pendingRisky, riskySnapshot, settings ] );
 	// Used-CSS staleness (issue #1220): last-regen time + stale flag from the
 	// read-only used_css_status endpoint, shown as a warning banner while
 	// removeUnusedCSS is on. Fail-open: a failed fetch simply hides the banner.
@@ -2846,6 +2996,72 @@ const FileOptimization = ( {
 			__( 'Failed to restore critical CSS.', 'performance-optimisation' )
 		);
 
+	const handleRiskyRevert = useCallback( async () => {
+		// One-click revert (issue #1702): restores the pre-enable risky
+		// values through the existing update_settings endpoint — no schema
+		// change. Fail-open: a failed revert keeps the snapshot and tells
+		// the user to toggle off manually.
+		if ( isRevertingRef.current || ! riskyRevert ) {
+			return;
+		}
+		isRevertingRef.current = true;
+		dismiss();
+		try {
+			// Restore only the risky keys; every other staged/saved value
+			// is preserved. Full-form payload matches handleSubmit.
+			const nextSettings = { ...settings, ...riskyRevert };
+			const res = await apiCall( 'update_settings', {
+				tab: 'file_optimisation',
+				settings: stripCdnRowIds( { ...nextSettings } ),
+			} );
+			if ( res && res.success ) {
+				setSettings( nextSettings );
+				setBaseline( stripCdnRowIds( { ...nextSettings } ) );
+				setIsDirty( false );
+				if ( res.data ) {
+					commitSettingsCache( res.data );
+				}
+				setRiskyRevert( null );
+				notify( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Aggressive setting reverted.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res?.message ||
+						__(
+							'Revert failed — turn the toggle off manually and press Save.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			}
+		} catch ( err ) {
+			console.error(
+				'Failed reverting aggressive toggle.',
+				getErrorLogMessage( err )
+			);
+			notify( {
+				type: 'error',
+				message: __(
+					'Revert failed — turn the toggle off manually and press Save.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
+		} finally {
+			isRevertingRef.current = false;
+		}
+	}, [ riskyRevert, settings, dismiss, notify, setIsDirty ] );
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
@@ -2858,6 +3074,10 @@ const FileOptimization = ( {
 		// Audit #1420: snapshot before await so edits typed during the save
 		// cannot be clobbered by a render-time baseline.
 		const submitSnapshot = stripCdnRowIds( { ...settings } );
+		// Capture the revert snapshot render-time too: a confirm landing
+		// mid-save must not move the revert target under the in-flight
+		// request.
+		const revertSnapshot = riskyRevert;
 		try {
 			const res = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
@@ -2868,16 +3088,44 @@ const FileOptimization = ( {
 			if ( res.success ) {
 				setBaseline( submitSnapshot );
 				setIsDirty( false );
-				notify( {
-					type: 'success',
-					message:
-						res.message ||
-						__(
-							'Settings updated successfully.',
-							'performance-optimisation'
-						),
-					durationMs: 3000,
-				} );
+				// Issue #1702: when the save enabled a risky toggle, the
+				// success notice carries a one-click revert of the
+				// pre-enable values (longer duration so it can be acted
+				// on). A save without a risky enable clears a stale
+				// snapshot.
+				const enabledRisky = revertSnapshot
+					? newlyEnabledRiskyToggles( submitSnapshot, revertSnapshot )
+					: [];
+				if ( enabledRisky.length > 0 ) {
+					notify( {
+						type: 'success',
+						message:
+							res.message ||
+							__(
+								'Settings updated successfully.',
+								'performance-optimisation'
+							),
+						durationMs: 10000,
+						action: {
+							label: __( 'Revert', 'performance-optimisation' ),
+							onClick: handleRiskyRevert,
+						},
+					} );
+				} else {
+					if ( revertSnapshot ) {
+						setRiskyRevert( null );
+					}
+					notify( {
+						type: 'success',
+						message:
+							res.message ||
+							__(
+								'Settings updated successfully.',
+								'performance-optimisation'
+							),
+						durationMs: 3000,
+					} );
+				}
 			} else {
 				notify( {
 					type: 'error',
@@ -2995,8 +3243,33 @@ const FileOptimization = ( {
 						message={ notice.message }
 						className="wppo-mb-20"
 						onDismiss={ dismiss }
+						action={ notice.action }
 					/>
 				) }
+				{ /* Issue #1702: shared confirm gate for aggressive toggles
+					(Delay/Defer/Unused-CSS). Cancel preserves state — the
+					change is only staged on confirm. Keyboard/focus handling
+					comes from ConfirmDialog. */ }
+				<ConfirmDialog
+					isOpen={ pendingRisky !== null }
+					onConfirm={ confirmRiskyEnable }
+					onCancel={ cancelRiskyEnable }
+					title={
+						pendingRisky
+							? getRiskyToggleCopy( pendingRisky ).dialogTitle
+							: ''
+					}
+					message={
+						pendingRisky
+							? getRiskyToggleCopy( pendingRisky ).dialogMessage
+							: ''
+					}
+					confirmLabel={ __(
+						'Enable Anyway',
+						'performance-optimisation'
+					) }
+					variant="warning"
+				/>
 
 				<div className="wppo-sub-tabs" role="tablist">
 					{ subTabs.map( ( tab, index ) => (
@@ -3146,10 +3419,9 @@ const FileOptimization = ( {
 									content={
 										optimizerDisabled
 											? pausedTooltip
-											: __(
-													'Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly.',
-													'performance-optimisation'
-											  )
+											: getRiskyToggleCopy(
+													'removeUnusedCSS'
+											  ).tooltip
 									}
 								>
 									<SwitchField
@@ -3157,13 +3429,14 @@ const FileOptimization = ( {
 											'Remove Unused CSS',
 											'performance-optimisation'
 										) }
+										badge={ <RiskBadge /> }
 										description={ __(
 											'Scan pages and remove CSS rules that are not used. Reduces file size by 30–80% and helps pass PageSpeed audits.',
 											'performance-optimisation'
 										) }
 										name="removeUnusedCSS"
 										checked={ settings.removeUnusedCSS }
-										onChange={ onFieldChange }
+										onChange={ handleRiskyToggle }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -4374,6 +4647,7 @@ const FileOptimization = ( {
 										type={ notice.type }
 										message={ notice.message }
 										onDismiss={ dismiss }
+										action={ notice.action }
 									/>
 								) }
 								<Tooltip
@@ -4398,7 +4672,10 @@ const FileOptimization = ( {
 								</Tooltip>
 								<Tooltip
 									content={
-										optimizerDisabled ? pausedTooltip : ''
+										optimizerDisabled
+											? pausedTooltip
+											: getRiskyToggleCopy( 'deferJS' )
+													.tooltip
 									}
 								>
 									<SwitchField
@@ -4406,13 +4683,14 @@ const FileOptimization = ( {
 											'Defer JavaScript',
 											'performance-optimisation'
 										) }
+										badge={ <RiskBadge /> }
 										description={ __(
 											'Load scripts after the page renders to prevent render-blocking and improve page speed.',
 											'performance-optimisation'
 										) }
 										name="deferJS"
 										checked={ settings.deferJS }
-										onChange={ onFieldChange }
+										onChange={ handleRiskyToggle }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -4449,7 +4727,10 @@ const FileOptimization = ( {
 								) }
 								<Tooltip
 									content={
-										optimizerDisabled ? pausedTooltip : ''
+										optimizerDisabled
+											? pausedTooltip
+											: getRiskyToggleCopy( 'delayJS' )
+													.tooltip
 									}
 								>
 									<SwitchField
@@ -4457,13 +4738,14 @@ const FileOptimization = ( {
 											'Delay JavaScript Execution',
 											'performance-optimisation'
 										) }
+										badge={ <RiskBadge /> }
 										description={ __(
 											'Delay all scripts until the user interacts (keyboard/mouse) or load during idle/viewport. Reduces initial CPU usage but may break immediate functionality — test carefully.',
 											'performance-optimisation'
 										) }
 										name="delayJS"
 										checked={ settings.delayJS }
-										onChange={ onFieldChange }
+										onChange={ handleRiskyToggle }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
