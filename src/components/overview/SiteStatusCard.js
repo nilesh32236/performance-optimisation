@@ -88,9 +88,14 @@ export default function SiteStatusCard( {
 				<h2 className="wppo-card__title" id={ titleId }>
 					{ __( 'Site status', 'performance-optimisation' ) }
 				</h2>
-				<p className="wppo-overview__placeholder" role="status">
-					{ __( 'Checking your site…', 'performance-optimisation' ) }
-				</p>
+				<div className="wppo-card__body">
+					<p className="wppo-overview__placeholder" role="status">
+						{ __(
+							'Checking your site…',
+							'performance-optimisation'
+						) }
+					</p>
+				</div>
 			</section>
 		);
 	}
@@ -101,21 +106,23 @@ export default function SiteStatusCard( {
 				<h2 className="wppo-card__title" id={ titleId }>
 					{ __( 'Site status', 'performance-optimisation' ) }
 				</h2>
-				<p className="wppo-overview__placeholder" role="status">
-					{ __(
-						'This information could not be loaded.',
-						'performance-optimisation'
-					) }
-				</p>
-				{ onRetry ? (
-					<button
-						type="button"
-						className="wppo-button wppo-button--secondary"
-						onClick={ () => onRetry?.( { force: true } ) }
-					>
-						{ __( 'Try again', 'performance-optimisation' ) }
-					</button>
-				) : null }
+				<div className="wppo-card__body">
+					<p className="wppo-overview__placeholder" role="status">
+						{ __(
+							'This information could not be loaded.',
+							'performance-optimisation'
+						) }
+					</p>
+					{ onRetry ? (
+						<button
+							type="button"
+							className="wppo-button wppo-button--secondary"
+							onClick={ () => onRetry?.( { force: true } ) }
+						>
+							{ __( 'Try again', 'performance-optimisation' ) }
+						</button>
+					) : null }
+				</div>
 			</section>
 		);
 	}
@@ -161,41 +168,43 @@ export default function SiteStatusCard( {
 				</p>
 			) : null }
 
-			<ul className="wppo-overview__status-list">
-				{ rows.map( ( row ) => {
-					const badge = badgeFor(
-						ALL_STATUSES.includes( row.status )
-							? row.status
-							: 'unknown'
-					);
-					return (
-						<li
-							key={ row.id }
-							className={ `wppo-overview__status${
-								needsAttention( row.status )
-									? ' wppo-overview__status--attention'
-									: ''
-							}` }
-						>
-							<span
-								className={ `wppo-status-badge wppo-status-badge--${ badge.tone }` }
+			<div className="wppo-card__body">
+				<ul className="wppo-overview__status-list">
+					{ rows.map( ( row ) => {
+						const badge = badgeFor(
+							ALL_STATUSES.includes( row.status )
+								? row.status
+								: 'unknown'
+						);
+						return (
+							<li
+								key={ row.id }
+								className={ `wppo-overview__status${
+									needsAttention( row.status )
+										? ' wppo-overview__status--attention'
+										: ''
+								}` }
 							>
-								{ badge.label }
-							</span>
-							<span className="wppo-overview__status-body">
-								{ renderLabel( row ) ? (
-									<strong className="wppo-overview__status-name">
-										{ renderLabel( row ) }
-									</strong>
-								) : null }
-								<span className="wppo-overview__status-detail">
-									{ renderDetail( row ) }
+								<span
+									className={ `wppo-status-badge wppo-status-badge--${ badge.tone }` }
+								>
+									{ badge.label }
 								</span>
-							</span>
-						</li>
-					);
-				} ) }
-			</ul>
+								<span className="wppo-overview__status-body">
+									{ renderLabel( row ) ? (
+										<strong className="wppo-overview__status-name">
+											{ renderLabel( row ) }
+										</strong>
+									) : null }
+									<span className="wppo-overview__status-detail">
+										{ renderDetail( row ) }
+									</span>
+								</span>
+							</li>
+						);
+					} ) }
+				</ul>
+			</div>
 		</section>
 	);
 }

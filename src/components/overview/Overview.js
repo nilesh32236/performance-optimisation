@@ -474,23 +474,31 @@ export default function Overview( { onNavigate, activities = [] } ) {
 					>
 						{ __( 'Recent activity', 'performance-optimisation' ) }
 					</h2>
-					<ul className="wppo-overview__activity">
-						{ activities.slice( 0, 8 ).map( ( entry, index ) => (
-							<li key={ entry?.id ?? index }>
-								<span className="wppo-overview__activity-text">
-									{ entry?.activity ?? entry?.message ?? '' }
-								</span>
-								{ entry?.created_at ? (
-									<time
-										className="wppo-overview__activity-time"
-										dateTime={ String( entry.created_at ) }
-									>
-										{ String( entry.created_at ) }
-									</time>
-								) : null }
-							</li>
-						) ) }
-					</ul>
+					<div className="wppo-card__body">
+						<ul className="wppo-overview__activity">
+							{ activities
+								.slice( 0, 8 )
+								.map( ( entry, index ) => (
+									<li key={ entry?.id ?? index }>
+										<span className="wppo-overview__activity-text">
+											{ entry?.activity ??
+												entry?.message ??
+												'' }
+										</span>
+										{ entry?.created_at ? (
+											<time
+												className="wppo-overview__activity-time"
+												dateTime={ String(
+													entry.created_at
+												) }
+											>
+												{ String( entry.created_at ) }
+											</time>
+										) : null }
+									</li>
+								) ) }
+						</ul>
+					</div>
 				</section>
 			) : null }
 		</div>
