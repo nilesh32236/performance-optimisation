@@ -1933,6 +1933,159 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		}
 
 		/**
+		 * Emit the automatic LCP hero preload tag (issue #1703).
+		 *
+		 * Opt-in single-preload entry point for the automatic LCP hero path:
+		 * resolves the hero candidate via the unified `resolve_auto_lcp_url()`
+		 * chain (manual `_wppo_lcp_preload_url` picker keeps precedence, then
+		 * OD real-visit data + RUM field data, then stored PageSpeed; the DOM
+		 * heuristic tier applies only when a `$buffer` is supplied), and emits
+		 * exactly one `<link rel="preload" as="image" fetchpriority="high">`
+		 * for the candidate (with `imagesrcset`/`imagesizes` when resolvable).
+		 *
+		 * Contract: opt-in gate first (`preload_settings.autoLcpPreload` or
+		 * legacy `image_optimisation.autoPreloadLCP`, both default-off) — the
+		 * manual picker is explicit opt-in and bypasses the gate; toggle-off
+		 * with no manual URL returns '' before touching any buffer or
+		 * per-request state (byte-identical output). Manual precedence holds
+		 * even on `_wppo_disable_auto_lcp` posts via the shared resolver.
+		 * Disagreeing (OD stability gate) or missing signals resolve to ''
+		 * and emit nothing (fail-open, never fatal). Single-preload dedup via
+		 * `response_already_has_high_preload()` + `claim_hero_preload_slot()`
+		 * (exact + any-media emitted set plus buffer scan) suppresses a second
+		 * tag, including when OD already emitted one; the claimed URL is also
+		 * recorded via `record_direct_preload_url()` so the lazy pipeline
+		 * (`get_lazy_lcp_exclusion_url()` + direct-preload normalized check)
+		 * excludes it from lazy-load rewriting in the same response.
+		 * Guards new symbols with `class_exists()`/`method_exists()`/
+		 * `function_exists()`; multisite-safe (per-site options via the owner,
+		 * per-request dedup flushed on `switch_blog`).
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for the heuristic tier and buffer-dedup scan.
+		 * @return string The preload `<link>` tag, or empty string when skipped.
+		 * @internal Call via the Image_Optimisation facade, never directly.
+		 */
+		public function emit_lcp_preload( ?string $buffer = null ): string {
+			try {
+				$manual = '';
+				try {
+					$manual = $this->get_manual_lcp_url();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$manual = '';
+				}
+				$is_manual = '' !== $manual;
+				if ( ! $is_manual ) {
+					$lcpown_options = $this->owner->lcp_get_options();
+					$preload_on     = ! empty( ( $lcpown_options['preload_settings'] ?? array() )['autoLcpPreload'] );
+					$legacy_on      = ! empty( ( $lcpown_options['image_optimisation'] ?? array() )['autoPreloadLCP'] );
+					if ( ! $preload_on && ! $legacy_on ) {
+						return '';
+					}
+				}
+				if ( $this->response_already_has_high_preload( $buffer ) ) {
+					return '';
+				}
+				$lcp_url = '';
+				try {
+					$lcp_url = $this->resolve_auto_lcp_url( $buffer );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return '';
+				}
+				$lcp_url = is_string( $lcp_url ) ? trim( $lcp_url ) : '';
+				if ( '' === $lcp_url ) {
+					return '';
+				}
+				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
+					return '';
+				}
+				if ( ! $this->claim_hero_preload_slot( $lcp_url, '', is_string( $buffer ) ? $buffer : null ) ) {
+					return '';
+				}
+				$srcset = '';
+				$sizes  = '';
+				try {
+					$breakpoint = $this->get_breakpoint_srcset_for_url( $lcp_url, is_string( $buffer ) ? $buffer : null );
+					if ( '' !== ( $breakpoint['srcset'] ?? '' ) && '' !== ( $breakpoint['sizes'] ?? '' ) ) {
+						$srcset = trim( (string) $breakpoint['srcset'] );
+						$sizes  = trim( (string) $breakpoint['sizes'] );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( '' === $srcset && is_string( $buffer ) && '' !== $buffer ) {
+					try {
+						$buf_srcset = $this->get_lcp_srcset_for_url( $lcp_url, $buffer );
+						if ( '' !== $buf_srcset ) {
+							$buf_sizes = $this->get_lcp_sizes_for_url( $lcp_url, $buffer );
+							if ( '' !== $buf_sizes ) {
+								$srcset = $buf_srcset;
+								$sizes  = $buf_sizes;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( '' === $srcset ) {
+					try {
+						if ( function_exists( 'attachment_url_to_postid' ) && function_exists( 'wp_get_attachment_image_srcset' ) && function_exists( 'wp_get_attachment_image_sizes' ) ) {
+							$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
+							if ( '' !== $responsive['srcset'] && '' !== $responsive['sizes'] ) {
+								$srcset = $responsive['srcset'];
+								$sizes  = $responsive['sizes'];
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( '' === $srcset || '' === $sizes ) {
+					$srcset = '';
+					$sizes  = '';
+				}
+				$link_tag = '';
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_preload_link' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) ) {
+						$link_tag = Util::get_preload_link(
+							$lcp_url,
+							'preload',
+							'image',
+							false,
+							Util::get_image_mime_type( $lcp_url ),
+							'',
+							'high',
+							$srcset,
+							$sizes
+						);
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$link_tag = '';
+				}
+				if ( ! is_string( $link_tag ) || '' === trim( $link_tag ) ) {
+					self::release_hero_preload_slot( $lcp_url, '' );
+					return '';
+				}
+				if ( false === strpos( $link_tag, 'fetchpriority="high"' ) && false === strpos( $link_tag, "fetchpriority='high'" ) ) {
+					self::release_hero_preload_slot( $lcp_url, '' );
+					return '';
+				}
+				try {
+					self::record_direct_preload_url( $lcp_url );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return $link_tag;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Resolve the responsive LCP candidate (OD breakpoints → RUM field).
 		 *
 		 * Shared resolver for `emit_responsive_lcp_preload()` and the

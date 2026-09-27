@@ -4168,6 +4168,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Emit the automatic LCP hero preload tag (issue #1703).
+		 *
+		 * Opt-in single-preload facade: manual picker keeps precedence, OD +
+		 * RUM field signals resolve the candidate, exactly one
+		 * `<link rel="preload" as="image" fetchpriority="high">` is emitted,
+		 * and the URL is excluded from lazy-load via the shared slot/direct
+		 * record. Toggle-off with no manual URL returns '' before touching
+		 * state (byte-identical). Fail-open: missing/disagreeing signals emit
+		 * nothing, never fatal.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for the heuristic tier and buffer-dedup scan.
+		 * @return string The preload `<link>` tag, or empty string when skipped.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::emit_lcp_preload}.
+		 */
+		public function emit_lcp_preload( ?string $buffer = null ): string {
+			return $this->lcp_preload()->emit_lcp_preload( $buffer );
+		}
+
+		/**
 		 * Resolve the responsive LCP candidate (OD breakpoints → RUM field).
 		 *
 		 * Shared resolver for `emit_responsive_lcp_preload()` and the
