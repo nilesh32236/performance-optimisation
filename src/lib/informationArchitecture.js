@@ -42,8 +42,14 @@ export const SECTIONS = [
 		),
 		items: [
 			{
-				id: 'dashboard',
+				id: 'overview',
 				label: __( 'Summary', 'performance-optimisation' ),
+			},
+			{
+				// The existing Dashboard keeps all thirteen panels; it is
+				// relocated, not reduced, so no capability is lost.
+				id: 'dashboard',
+				label: __( 'All diagnostics', 'performance-optimisation' ),
 			},
 		],
 	},

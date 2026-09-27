@@ -87,3 +87,241 @@ infinite recursion in the walker — `Object.values('a')` yields `['a']` forever
 
 Phase 2: the Overview components that render `overviewStatus`, built over
 existing endpoints with no new expensive calls.
+
+
+## Phase 2 — the Overview (in review, PR #1675)
+
+The Overview area had no page of its own. It rendered the old Dashboard, a
+13-panel accumulation of audits, charts and diagnostics — which answers "what
+does this plugin measure?", not "what state is my site in?".
+
+The new Overview adds `src/lib/overviewStatus.js`, a **pure** status model (no
+fetching, no React) so the rules deciding what the page *claims* are directly
+testable and cannot drift from what is rendered. The Dashboard keeps all thirteen
+panels as the area's second sub-item, "All diagnostics" — relocated, not
+reduced.
+
+### There is no health score, deliberately
+
+A composite "92/100" would be decoration. Every input is already weighted by
+something other than a made-up formula — PageSpeed weights LCP far above TTFB —
+and "enabled" says nothing about "working". The model reports five discrete
+states and never claims health without evidence: a feature that is **off** reads
+"Not set up", a value the backend **never reported** reads "Unknown", a **failed
+request** reads "Unavailable".
+
+### What the reviews caught that I could not
+
+The first review found four ways to make the deployed page lie, each reproduced
+by intercepting REST responses:
+
+| Payload | Rendered | Now |
+|---|---|---|
+| `enabled: "false"`, `redis_reachable: true` | **"Working"** | Not set up |
+| `bypassed` / `circuit_open: true` | **"Working"** | Needs attention |
+| `{success:false, code, data:{status:429}}` | **"Not set up"** | Unavailable |
+| `{lcp:null, cls:null, inp:null}` | 3× **"good at 0 ms"** | Unmeasured |
+
+The first of these was the exact bug my own commit message claimed to have
+caught. `triState()` was applied to `cache_enabled` and never to the
+neighbouring `enabled` field, so the string `"false"` read as true and a
+*disabled* object cache was reported as working.
+
+The vitals feature was also **entirely dead**: `web_vitals_trends` returns
+`trends` as an object keyed by `<url-hash>_<strategy>`, not the flat array I
+assumed, so zero vitals rows ever rendered.
+
+### The lesson worth keeping
+
+A second green suite covered code that could not work. `deriveCacheStatus` read
+`stats.cacheStats` from an object while `buildStatusModel` passed a plain
+string, so production read `undefined` — and every test passed, because they
+all used the object shape production never took. It surfaced only because live
+behaviour contradicted a passing test, and I diffed the minified bundle against
+the source to locate it.
+
+The fix was not "write more tests". It was: **a test that does not exercise the
+shape production actually uses proves nothing about it.**
+
+This is now the third time this campaign that a green suite hid broken code —
+after `useSectionRoute`'s named-vs-default export, and the `item.icon` render
+crash. The pattern is consistent enough to name: *a test asserts on what the
+code was written to accept, not on what it is actually given.*
+
+### Gate honesty
+
+I also reported "ESLint 0 errors" from a **stale summary line earlier in the
+same command block**. CI failed on 15 real errors, one of which was a test with
+no assertions at all. A gate result is only evidence if it came from the run
+being reported.
+
+### Verified live, against independent ground truth
+
+| Row | State | Checked with |
+|---|---|---|
+| Page cache | Working — "14 MB of cached pages stored" | `Cache::get_cache_stats()` |
+| Object cache | Working — server reachable | WP-CLI: drop-in present, `redis_reachable=true` |
+| Compatibility | Working — WP 7.1.2 / PHP 8.3 | `wp wppo system-info --format=json` |
+| Loading (LCP) | Working — 505 ms | stored real-user history |
+
+Nothing here is asserted from the page itself; each row was checked against a
+source the page did not derive from.
+
+## Round 24 — the seventh review, and a lesson about deploying
+
+### The blocker a review found
+
+A hanging `web_vitals_trends` froze the entire Overview **for ever**. `setLoading(false)`
+existed in exactly one place — the vitals `.finally()` — and `apiCall` has no request
+timeout. Measured live at 5s, 20s and 45s: **0 status rows, 0 "Try again" buttons**,
+while `system_info` and `object_cache` had both already answered.
+
+The code's own comment claimed vitals "never block the page". Absence *was* handled;
+**non-settlement was not**, so the one source declared optional was the only one that
+could block — and it blocked everything. `SiteStatusCard` returns the loading branch
+before the retry affordance, so there was no recourse.
+
+Loading now means "the required sources have settled", plus a backstop that records
+anything still outstanding as an error so the retry can appear. The comment's claim is
+now true. Verified live: with the request hung, all three required rows render and the
+spinner clears within 5s.
+
+### Five unpinned guards
+
+Each was reported as surviving its whole suite. All five now fail a test:
+
+| Mutation | What the page would then say |
+|---|---|
+| `!php \|\| !wp` → `&&` | green **"Working — Running on WordPress 7.1.2 and PHP ."** |
+| `String()` instead of a type-checked read | green **"Running on WordPress false and PHP 0."** |
+| `measure.key in vitals` → `!== undefined` | unmeasured metrics silently dropped |
+| `/^0/` instead of the anchored test | "0.5 MB" reported as **"nothing is cached yet"** |
+| `! settings.enableCache` | an **absent** key read as "switched off" |
+
+Also: a zero LCP is no longer a measurement (`good at 0 ms` is a missing reading wearing
+a number) while a zero **CLS** still is — the live store genuinely holds seven. That
+asymmetry is commented, because "0 is real" is only true of one metric.
+
+### The lesson: I broke production again, and the same way
+
+To verify a fix from a *master-based* branch I ran `rsync -a --delete` at the live site.
+That removed the Overview from the deployed tree. The admin page **threw** — sidebar and
+section title rendered, then the SPA died, because `tab-overview.js` was gone too.
+
+This is the **second** time. Round 19: an `rsync --delete` from a master-based worktree
+removed the Overview mid-review. The rule adopted then was not written down as a *mechanical*
+rule, which is why I did it again four rounds later.
+
+**The rule, now mechanical:** a deploy target is the *branch being reviewed*, never
+`master`, whenever master lacks the files the live site is currently serving. The check
+is one comparison, made before the copy:
+
+```sh
+# The live tree must match the head being deployed, or the deploy is a downgrade.
+git -C <worktree> diff --stat HEAD -- src build   # must be empty
+```
+
+and after the copy, the reverse — the served bundle must contain the feature the live
+page is using. A reviewer caught it before I did, and the right response was to restore
+from the reviewed SHA rather than from whatever branch happened to be closest.
+
+The second half of the lesson: **a review's evidence expires when the deployed tree
+moves under it.** The reviewer's report is explicitly scoped to "the deployed bundle was
+byte-for-byte `36dd9589` at 21:58". That is not a defect in the review; it is a property
+of reviews against a live target, and it means the merge claim has to be re-checked after
+any deploy, not inherited.
+
+## Round 25 — the guard I built caught me a third time, and I ignored it
+
+### What landed
+
+`master` is now `a094f3c9`, carrying the deploy guard and the Object Cache
+false-dirty fix. Full gate on a fresh `origin/master` worktree: ESLint **0
+errors** · Jest **65 suites / 1,131** · guard **10/10** · PHPCS 0 · PHPUnit
+**2,818 / 25,986** · architecture `--check` 0.
+
+### The guard worked, and I walked past it
+
+Deploying merged `master` to the live site, the guard printed:
+
+```
+MISSING  src/components/overview/Overview.js
+MISSING  build/tab-overview.js
+... 15 files
+REFUSED: 15 file(s) the live site is serving would be deleted
+```
+
+It was right. `master` did not yet contain the Overview — that is still `#1679`,
+open — so the deploy would have removed it. **And I deployed anyway**, because
+the shell chain was `guard | grep … && rsync`, and `grep` succeeded on the
+output. Exit 1 from the guard, exit 0 from the pipeline, rsync ran.
+
+The live site broke. I restored it within the same turn and verified
+`build/tab-overview.js` is byte-identical to the reviewed head again.
+
+Three occurrences, one cause: the guard's verdict is only consulted if someone
+reads it. The second occurrence was fixed by *writing the rule down*; the third
+was fixed by *writing the check*; this one was still just a check, because I
+chose to look at the pipeline's exit code instead of the script's. A check that
+can be ignored has not been made mechanical — it has been made *available*.
+
+**The rule, complete this time:** a guard's exit status must terminate the
+command. Never pipe a guard into `grep`, never gate it with `&&` on its
+*output*, and if a deploy is going to be part of a longer script, the script
+must stop. Concretely: `guard ... || exit 1` as a standalone statement, before
+anything else, never inside a pipeline whose status comes from `grep`.
+
+### A process failure worth recording plainly
+
+`#1681` (Object Cache) and `#1682` (deploy guard) were built from **one
+worktree**, so the guard branch carried the Object Cache commits. Squash-merging
+`#1682` put both in, so a fix to a user-blocking bug shipped under the title of
+a build script, and `#1681` was closed as already-merged.
+
+The content was reviewed, gated and mutation-tested independently, so no code is
+unverified. But the commit message describes the wrong change, and the campaign
+objective asks for small independently-reviewable PRs.
+
+**The rule:** one worktree, one branch, one line of work. Before pushing any
+campaign branch, `git diff --name-only origin/master...HEAD` must list only the
+files that PR is about. The deploy guard checks the mirror image of this failure
+— a branch that would *remove* a served file — and this failure is a branch that
+would *add* a file it has no business adding.
+
+### Reviews this round
+
+The eighth Overview review returned NEEDS FIXES for a defect **this campaign
+introduced**: a hanging *optional* source (`web_vitals_trends`) rendered 3
+correct rows and a "Working" verdict at 0.5s, then at 15s added "Some information
+could not be loaded" over byte-identical content — while an *absent* vitals
+source produced no banner at all. Slow was reported as broken, and "Try again"
+could not work because `apiCall` shares the pending GET. The same shape as the
+429 defect an earlier round settled: with no way to retry, then with a way to
+retry that does nothing. Only a **required** source is now marked an error.
+
+The same review confirmed the round-24 blocker is genuinely gone for required
+*and* optional sources, with an instrumented timer trace showing exactly one
+timer per load and no stale-controller or post-unmount writes.
+
+### Verification status, stated honestly
+
+Verified this round: the phantom-banner fix live (no banner with a hung optional
+source, rows still correct); **48/48** responsive checks across 6 screens × 8
+widths; the loading state is control-local with no page-level blocking overlay;
+the Object Cache false-dirty fix live (real mouse click navigates, no dialog);
+master's full gate; the live bundle byte-identical to the reviewed head by sha256
+and by `index.asset.php` version.
+
+**Not verified this round:** the final in-browser admin render, as a *merged*
+master. The Playwright environment degraded after ~15 launches in the session —
+the same script that passed 48/48 checks began crashing on the login navigation,
+with `ERR_INSUFFICIENT_RESOURCES` and a Chromium `useCommands is not a function`
+error originating in WordPress core's own `react-dom.min.js`, not in plugin code
+(nothing in `src/` or `build/` references it). Server-side the admin page serves
+**200**, 92,811 bytes, referencing `build/index.js` and `build/style-index.css`
+at version `b3037c0a985bf4edb235` — the exact version in the reviewed commit —
+with `wppoSettings` inlined and **zero** fatal/uncaught/critical-error matches.
+
+So: the deployed artefact is provably the reviewed one, and the server renders
+it without error, but the in-browser confirmation on merged master is still
+outstanding and is the first thing the next round should do.

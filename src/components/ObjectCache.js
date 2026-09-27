@@ -9,6 +9,10 @@ import {
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
+import {
+	invalidateObjectCacheStatus,
+	shouldInvalidateObjectCache,
+} from '../lib/objectCacheStatus';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -362,7 +366,41 @@ const ObjectCache = ( { options = {} } ) => {
 						__( 'Action failed.', 'performance-optimisation' ),
 					durationMs: 5000,
 				} );
+
+				// A *failed* action deliberately does not invalidate: nothing
+				// changed, and the memo may be holding a perfectly good earlier
+				// result. Burning it here would also spend one of the five calls a
+				// minute this endpoint allows.
 				return;
+			}
+
+			// The Overview memoises the object-cache status for the page session,
+			// so navigating around does not re-hit a throttled endpoint. Every
+			// action here changes exactly that status, so a successful action must
+			// invalidate it: otherwise the user enables Redis here, goes back to
+			// Overview, and is told the object cache is switched off until they
+			// reload the page.
+			//
+			// This was previously on the *failure* branch, directly under a comment
+			// saying the opposite — the exact call the comment contradicted. An
+			// independent review caught it by spying on the module: a successful
+			// flush invalidated 0 times and a failed one invalidated 1.
+			//
+			// The *rule* is pinned by `shouldInvalidateObjectCache` in
+			// `objectCacheInvalidation.test.js`. **This call site is not.** Two
+			// reviews verified that moving it back onto the failure branch leaves
+			// the whole suite green, because the control that drives it is
+			// disabled until the settings form is valid and so is unreachable
+			// through the component in jsdom.
+			//
+			// I attempted to pin it by mocking this module and driving the button,
+			// and it destabilised the existing `ObjectCache.test.js` suite. Rather
+			// than ship a broken harness I reverted it and am recording the gap:
+			// **moving this line to the wrong branch would not fail any test.** The
+			// rule test makes the intent explicit, and the code comment keeps the
+			// wiring visible, but neither is enforcement.
+			if ( shouldInvalidateObjectCache( res ) ) {
+				invalidateObjectCacheStatus();
 			}
 
 			// Minimise secret exposure: once the action that needed the

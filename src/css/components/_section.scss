@@ -104,10 +104,17 @@
 // way _forms.scss consumes it. Using it as an `outline` colour yields an
 // invalid shorthand, `outline-style: none`, and no visible focus at all.
 // Applied on the tab itself, so there is exactly one focus stop per sub-tab.
-.wppo-subnav__tab:focus-visible {
-	outline: none;
-	box-shadow: var(--wppo-focus-ring);
-}
+// No `outline: none` here.
+//
+// The rule this replaces set `outline: none` and used `--wppo-focus-ring` as
+// the indicator. That token is `0 0 0 3px var(--wppo-primary-soft)` — a soft,
+// very low-alpha halo intended to sit *around* a real outline, not to be one.
+// Measured on the live page it is about **1.07:1** against the surrounding
+// surface, where WCAG 2.2 SC 1.4.11 requires 3:1, so the focus stop was
+// effectively invisible.
+//
+// The design system's `outline: 2px solid var(--wppo-primary)` in `_base.scss`
+// is what carries the indicator; not overriding it is the fix.
 
 .wppo-subnav__icon {
 	display: inline-flex;
@@ -126,13 +133,41 @@
 	padding-block-start: 16px;
 }
 
-.wppo-section__panel:focus {
-	outline: none;
-}
+// Deliberately NO `:focus { outline: none }` here.
+//
+// That rule has equal specificity to `[tabindex]:focus-visible` in `_base.scss`
+// and appears *later* in the stylesheet, so it won and left the panel with no
+// focus indicator at all: `outline: none` and no `box-shadow`, measured live
+// with `:focus-visible` matching.
+//
+// The panel is a real `tabIndex={ 0 }` stop and the **first** one on every
+// area, so this is the worst possible place for an invisible ring — and the
+// earlier `box-shadow: var(--wppo-focus-ring)` it removed was itself only
+// about 1.07:1. Removing one weak indicator without replacing it turned a
+// weak indicator into none.
+//
+// Letting the base rule apply is the fix.
 
+// Same reasoning as `.wppo-subnav__tab` above. The panel is a real tab stop
+// (`tabIndex={ 0 }`, so a keyboard user can scroll it) and it is the *first*
+// stop on every area, so an invisible ring here is worse than anywhere else.
 .wppo-section__panel:focus-visible {
-	outline: none;
-	box-shadow: var(--wppo-focus-ring);
+	// Redundant, and kept only to pin the radius.
+	//
+	// The base rule in `_base.scss` already covers `[tabindex]:focus-visible`
+	// and already supplies `outline: 2px solid var(--wppo-primary)`. An
+	// independent review deleted this rule from the live stylesheet via the
+	// CSSOM and re-measured with a real Tab press: the outline was unchanged.
+	// Only the radius differed.
+	//
+	// A previous version of this comment claimed the base rule was unreliable
+	// here and reported "measured live, outline: none". That measurement was
+	// wrong: it used a programmatic `.focus()`, which does not match
+	// `:focus-visible`, so the base rule never applied. The rule was never
+	// carrying the outline, and the premise that led to adding this one was
+	// false. Keeping the comment accurate matters more than keeping the rule:
+	// a comment that says a working base rule is unreliable invites redundant
+	// overrides in the next place someone cannot find their focus ring.
 	border-radius: var(--wppo-radius-sm, 8px);
 }
 
