@@ -133,7 +133,7 @@ describe( 'summariseVitals', () => {
 		expect( inp ).toHaveLength( 2 );
 		for ( const row of inp ) {
 			expect( renderDetail( row ) ).toBe(
-				'Responsiveness (INP) has no reading in the stored PageSpeed lab scan history yet. How quickly the page reacts to a tap or click.'
+				'No reading in the stored PageSpeed lab scan history yet. How quickly the page reacts to a tap or click.'
 			);
 		}
 	} );

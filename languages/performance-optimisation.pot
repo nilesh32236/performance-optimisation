@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-27T08:22:58+00:00\n"
+"POT-Creation-Date: 2026-09-27T10:02:41+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -2350,9 +2350,11 @@ msgstr ""
 
 #. translators: %1$s LCP selector, %2$s page path.
 #. translators: %1$s preload URL, %2$s page path.
+#. translators: %1$s metric name, e.g. "Loading (LCP)"; %2$s device class.
 #: includes/Insight/class-ai-adaptive.php:2486
 #: includes/Insight/class-ai-adaptive.php:2544
-#, php-format
+#: src/components/overview/detailCopy.js:343
+#, php-format,js-format
 msgid "%1$s on %2$s"
 msgstr ""
 
@@ -6755,79 +6757,75 @@ msgstr ""
 msgid "Running on WordPress %1$s and PHP %2$s."
 msgstr ""
 
-#. translators: 1: metric name, 2: advice on what to do about this metric.
+#. translators: %s: advice on what to do about this metric.
 #: src/components/overview/detailCopy.js:181
 #, js-format
-msgid "%1$s has no reading in the stored PageSpeed lab scan history yet. %2$s"
+msgid "No reading in the stored PageSpeed lab scan history yet. %s"
 msgstr ""
 
-#. translators: 1: metric name, 2: the measured value, 3: source and device clause.
+#. translators: 1: the measured value, 2: source and device clause.
 #: src/components/overview/detailCopy.js:189
 #, js-format
-msgid "%1$s is good at %2$s%3$s."
+msgid "Good: %1$s%2$s."
 msgstr ""
 
-#. translators: 1: metric name, 2: the measured value, 3: source and device clause, 4: advice.
+#. translators: 1: the measured value, 2: source and device clause, 3: advice.
 #: src/components/overview/detailCopy.js:194
 #, js-format
-msgid "%1$s could be better (%2$s%3$s). %4$s"
+msgid "Could be better: %1$s%2$s. %3$s"
 msgstr ""
 
-#. translators: 1: metric name, 2: the measured value, 3: source and device clause, 4: advice.
-#: src/components/overview/detailCopy.js:202
+#. translators: 1: the measured value, 2: source and device clause, 3: advice.
+#: src/components/overview/detailCopy.js:199
 #, js-format
-msgid "%1$s is poor (%2$s%3$s). %4$s"
+msgid "Poor: %1$s%2$s. %3$s"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:217
+#: src/components/overview/detailCopy.js:214
 msgid "desktop"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:218
+#: src/components/overview/detailCopy.js:215
 msgid "mobile"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:232
+#: src/components/overview/detailCopy.js:243
 msgid "(PageSpeed lab scan)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:239
-msgid "on"
-msgstr ""
-
-#: src/components/overview/detailCopy.js:255
+#: src/components/overview/detailCopy.js:262
 msgid "Page cache"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:256
+#: src/components/overview/detailCopy.js:263
 msgid "Object cache"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:257
+#: src/components/overview/detailCopy.js:264
 msgid "Compatibility"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:262
+#: src/components/overview/detailCopy.js:269
 msgid "Loading (LCP)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:263
+#: src/components/overview/detailCopy.js:270
 msgid "How long the main content takes to appear."
 msgstr ""
 
-#: src/components/overview/detailCopy.js:269
+#: src/components/overview/detailCopy.js:276
 msgid "Visual stability (CLS)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:270
+#: src/components/overview/detailCopy.js:277
 msgid "How much the page jumps around while loading."
 msgstr ""
 
-#: src/components/overview/detailCopy.js:276
+#: src/components/overview/detailCopy.js:283
 msgid "Responsiveness (INP)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:277
+#: src/components/overview/detailCopy.js:284
 msgid "How quickly the page reacts to a tap or click."
 msgstr ""
 
