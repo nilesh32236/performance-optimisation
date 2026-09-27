@@ -424,3 +424,101 @@ loading state are all localized; the sentence under each row is not.
 The fix is a real refactor: the model returns a message key plus arguments, and
 the component owns the copy. That also makes the tests better — asserting
 `detailKey`/`detailArgs` pins *which* claim is made, not the English of it.
+
+### Corrections to round 27, from an independent fact-check
+
+A review checked every checkable number in the round-27 section. Six of nine
+claims held up under real attempt to break them. Three numbers were wrong, and
+one claim asserted that a real UI defect did not exist.
+
+**1. The msgid count was wrong.** The record said "1854 → **1902** msgids". The
+`.pot` at the base and the head of that docs branch is byte-identical — the
+regeneration is in #1685, which went **1854 → 1886**, +32. The 1902 came from
+`grep -c '^msgid'` *without* a trailing space, which also matches the 16
+`^msgid_plural` lines. Under that same inflated method the "before" number would
+have been 1870, so the arrow mixed two counting methods. The substantive point
+stands: all 32 new msgids are present.
+
+**2. "Every screen uses the same card treatment" was false — and it mattered.**
+True for Speed, Media, Data & System and Manage. **False for the Overview**, the
+screen the round is about. More in its own section below.
+
+**3. "The 742 elements are `.wppo-` throughout" was wrong in both halves.** 742
+is the All-diagnostics screen *alone*, which measures 743; all eight screens
+total 2545. And that one screen carries 47 distinct non-`.wppo-` classes —
+`svg-inline--fa` and 22 `fa-*` from Font Awesome, 10 `components-*` from
+`@wordpress/components`, seven Emotion-generated, and the state class
+`is-checked`. The two hashed classes I first reported are among them.
+
+One more trap worth passing on: the reviewer's *first* dirty-state run appeared
+to fail, and it was their harness, not the product — Playwright's `fill()` on a
+React-controlled `type="password"` input sets the DOM value without firing
+`onChange`, so the form was never dirty. `keyboard.type` reproduces the real
+path. **A future verifier using `fill()` will record a false negative.**
+
+### The real defect that check found: the Overview's cards were unstyled
+
+There was **no `.wppo-card` rule anywhere** — not in `src/css`, not in
+`build/style-index.css`. The Overview's three cards, including the Site status
+card that is that screen's primary surface, computed to:
+
+```
+background: rgba(0, 0, 0, 0)   border-radius: 0px   box-shadow: none
+```
+
+while every other screen used `.wppo-feature-card` — `#fff`, 16px, 1px border,
+shadow. So the "unified design system" held on seven screens and not on the
+eighth, and the eighth is the one this whole change is about.
+
+I missed it twice, in both directions. I sampled `speed/fileOptimization` and
+`manage/tools`, saw identical cards, and wrote that *every* screen shares the
+treatment. My record had even pre-empted the obvious objection — "a first
+reading suggested the Dashboard differed" — by blaming a wrapper, without ever
+checking the screen under discussion.
+
+It is also the same class as #1680. There, three styles referenced tokens that
+did not exist; here, a class references nothing at all. Both render without
+error, and **both are invisible to any check that only looks for a value that
+*is* present** — undefined tokens hide behind fallbacks, and unstyled classes
+hide behind a browser default.
+
+Fixed in #1691: the surface is declared once under both names via a SCSS
+placeholder, so the Overview keeps its BEM naming and gains the treatment
+without a second set of values to drift.
+
+```css
+.wppo-card,.wppo-feature-card{background:var(--wppo-bg-card);border:1px solid var(--wppo-border);border-radius:var(--wppo-radius);…}
+```
+
+The first draft of that fix used `--wppo-space-4`, `--wppo-space-5`,
+`--wppo-font-size-lg` and `--wppo-text` — **none of which exist**. This design
+system has colour and radius tokens and no spacing or typography tokens at all,
+and the codebase pads with literal values (`24px`) like the feature card already
+does. The mechanical check caught four more undefined tokens before they shipped
+— the same check that found the original three.
+
+Verified live, computed styles, after the fix:
+
+```
+overview/overview       .wppo-card          bg=#fff  r=16px  border=1px  shadow=set
+speed/fileOptimization  .wppo-feature-card  bg=#fff  r=16px  border=1px  shadow=set
+manage/tools            .wppo-feature-card  bg=#fff  r=16px  border=1px  shadow=set
+```
+
+### The lesson, again, in a new shape
+
+I already wrote that a remembered rule is not a check, and that "I cannot prove
+this" is not a reason to ship. This round adds a third: **I sampled two screens
+and generalised to all of them.** The claim was not wrong by accident — it was
+confidently, specifically, wrong, and it would have been believed.
+
+A property asserted about a set is only checked on the points you looked at.
+"Unified design system" is a claim about *every* screen, and it takes *every*
+screen to support it — or, better, a check that cannot be satisfied by a sample.
+
+### Merge order note
+
+The round-27 record and its fact-check corrections shipped as two branches
+(`docs/ux-campaign-round-27` and `docs/ux-campaign-round-28-fix`) and are
+consolidated here, so the file reads in order: round 27, then its corrections,
+then round 28. The superseded branches are closed rather than merged.
