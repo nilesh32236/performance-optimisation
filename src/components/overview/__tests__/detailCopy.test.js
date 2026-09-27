@@ -142,23 +142,33 @@ describe( 'Overview detail copy', () => {
 		],
 		[
 			DETAIL.vital_unmeasured,
-			{ hintKey: VITAL.lcp },
-			'No real-user data yet. How long the main content takes to appear.',
+			{ labelKey: VITAL.inp, hintKey: VITAL.inp },
+			'Responsiveness (INP) is not measured by a PageSpeed lab scan. How quickly the page reacts to a tap or click.',
 		],
 		[
 			DETAIL.vital_good,
-			{ labelKey: VITAL.lcp, value: '505 ms' },
-			'Loading (LCP) is good at 505 ms.',
+			{ labelKey: VITAL.lcp, value: '505 ms', device: 'desktop' },
+			'Loading (LCP) is good at 505 ms on desktop (PageSpeed lab scan).',
 		],
 		[
 			DETAIL.vital_attention,
-			{ labelKey: VITAL.lcp, value: '2500 ms', hintKey: VITAL.lcp },
-			'Loading (LCP) could be better (2500 ms). How long the main content takes to appear.',
+			{
+				labelKey: VITAL.lcp,
+				value: '2500 ms',
+				hintKey: VITAL.lcp,
+				device: 'desktop',
+			},
+			'Loading (LCP) could be better (2500 ms on desktop (PageSpeed lab scan)). How long the main content takes to appear.',
 		],
 		[
 			DETAIL.vital_poor,
-			{ labelKey: VITAL.lcp, value: '4000 ms', hintKey: VITAL.lcp },
-			'Loading (LCP) is poor at 4000 ms. How long the main content takes to appear.',
+			{
+				labelKey: VITAL.lcp,
+				value: '4000 ms',
+				hintKey: VITAL.lcp,
+				device: 'desktop',
+			},
+			'Loading (LCP) is poor (4000 ms on desktop (PageSpeed lab scan)). How long the main content takes to appear.',
 		],
 	];
 
@@ -179,18 +189,28 @@ describe( 'Overview detail copy', () => {
 	it.each( [
 		[
 			DETAIL.vital_poor,
-			{ hintKey: VITAL.cls, value: '4000 ms', labelKey: VITAL.lcp },
-			'Loading (LCP) is poor at 4000 ms. How much the page jumps around while loading.',
+			{
+				hintKey: VITAL.cls,
+				value: '4000 ms',
+				labelKey: VITAL.lcp,
+				device: 'desktop',
+			},
+			'Loading (LCP) is poor (4000 ms on desktop (PageSpeed lab scan)). How much the page jumps around while loading.',
 		],
 		[
 			DETAIL.vital_attention,
-			{ hintKey: VITAL.cls, value: '2500 ms', labelKey: VITAL.lcp },
-			'Loading (LCP) could be better (2500 ms). How much the page jumps around while loading.',
+			{
+				hintKey: VITAL.cls,
+				value: '2500 ms',
+				labelKey: VITAL.lcp,
+				device: 'desktop',
+			},
+			'Loading (LCP) could be better (2500 ms on desktop (PageSpeed lab scan)). How much the page jumps around while loading.',
 		],
 		[
 			DETAIL.vital_good,
-			{ value: '505 ms', labelKey: VITAL.lcp },
-			'Loading (LCP) is good at 505 ms.',
+			{ value: '505 ms', labelKey: VITAL.lcp, device: 'desktop' },
+			'Loading (LCP) is good at 505 ms on desktop (PageSpeed lab scan).',
 		],
 		[
 			DETAIL.system_versions,
@@ -239,10 +259,13 @@ describe( 'Overview detail copy', () => {
 				labelKey: VITAL.lcp,
 				value: '4000 ms',
 				hintKey: VITAL.lcp,
+				device: 'desktop',
 			},
 		} );
 		expect( sentence ).toContain( 'Loading (LCP)' );
 		expect( sentence ).toContain( '4000 ms' );
+		expect( sentence ).toContain( 'on desktop' );
+		expect( sentence ).toContain( 'PageSpeed lab scan' );
 		expect( sentence ).toContain(
 			'How long the main content takes to appear.'
 		);
@@ -258,10 +281,11 @@ describe( 'Overview detail copy', () => {
 				labelKey: VITAL.inp,
 				value: '600 ms',
 				hintKey: VITAL.inp,
+				device: 'mobile',
 			},
 		} );
 		expect( sentence ).toBe(
-			'Responsiveness (INP) is poor at 600 ms. How quickly the page reacts to a tap or click.'
+			'Responsiveness (INP) is poor (600 ms on mobile (PageSpeed lab scan)). How quickly the page reacts to a tap or click.'
 		);
 		expect( renderLabel( { labelKey: VITAL.cls } ) ).toBe(
 			'Visual stability (CLS)'

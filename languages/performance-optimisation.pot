@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-27T03:14:10+00:00\n"
+"POT-Creation-Date: 2026-09-27T07:49:00+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -6755,67 +6755,83 @@ msgstr ""
 msgid "Running on WordPress %1$s and PHP %2$s."
 msgstr ""
 
-#. translators: %s: advice on what to do about this metric.
-#: src/components/overview/detailCopy.js:177
+#. translators: 1: metric name, 2: advice on what to do about this metric.
+#: src/components/overview/detailCopy.js:181
 #, js-format
-msgid "No real-user data yet. %s"
+msgid "%1$s is not measured by a PageSpeed lab scan. %2$s"
 msgstr ""
 
-#. translators: 1: metric name, 2: the measured value.
-#: src/components/overview/detailCopy.js:182
+#. translators: 1: metric name, 2: the measured value, 3: source and device clause.
+#: src/components/overview/detailCopy.js:189
 #, js-format
-msgid "%1$s is good at %2$s."
+msgid "%1$s is good at %2$s%3$s."
 msgstr ""
 
-#. translators: 1: metric name, 2: the measured value, 3: advice.
-#: src/components/overview/detailCopy.js:187
+#. translators: 1: metric name, 2: the measured value, 3: source and device clause, 4: advice.
+#: src/components/overview/detailCopy.js:194
 #, js-format
-msgid "%1$s could be better (%2$s). %3$s"
+msgid "%1$s could be better (%2$s%3$s). %4$s"
 msgstr ""
 
-#. translators: 1: metric name, 2: the measured value, 3: advice.
-#: src/components/overview/detailCopy.js:192
+#. translators: 1: metric name, 2: the measured value, 3: source and device clause, 4: advice.
+#: src/components/overview/detailCopy.js:202
 #, js-format
-msgid "%1$s is poor at %2$s. %3$s"
-msgstr ""
-
-#: src/components/overview/detailCopy.js:209
-msgid "Page cache"
-msgstr ""
-
-#: src/components/overview/detailCopy.js:210
-msgid "Object cache"
-msgstr ""
-
-#: src/components/overview/detailCopy.js:211
-msgid "Compatibility"
-msgstr ""
-
-#: src/components/overview/detailCopy.js:216
-msgid "Loading (LCP)"
+msgid "%1$s is poor (%2$s%3$s). %4$s"
 msgstr ""
 
 #: src/components/overview/detailCopy.js:217
+msgid "desktop"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:218
+msgid "mobile"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:232
+msgid "(PageSpeed lab scan)"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:236
+msgid "on"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:252
+msgid "Page cache"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:253
+msgid "Object cache"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:254
+msgid "Compatibility"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:259
+msgid "Loading (LCP)"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:260
 msgid "How long the main content takes to appear."
 msgstr ""
 
-#: src/components/overview/detailCopy.js:223
+#: src/components/overview/detailCopy.js:266
 msgid "Visual stability (CLS)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:224
+#: src/components/overview/detailCopy.js:267
 msgid "How much the page jumps around while loading."
 msgstr ""
 
-#: src/components/overview/detailCopy.js:230
+#: src/components/overview/detailCopy.js:273
 msgid "Responsiveness (INP)"
 msgstr ""
 
-#: src/components/overview/detailCopy.js:231
+#: src/components/overview/detailCopy.js:274
 msgid "How quickly the page reacts to a tap or click."
 msgstr ""
 
-#: src/components/overview/Overview.js:475
+#: src/components/overview/Overview.js:540
 msgid "Recent activity"
 msgstr ""
 
@@ -6835,23 +6851,23 @@ msgstr ""
 msgid "Clearing…"
 msgstr ""
 
-#: src/components/overview/QuickActionsCard.js:111
+#: src/components/overview/QuickActionsCard.js:114
 msgid "Clear the page cache"
 msgstr ""
 
-#: src/components/overview/QuickActionsCard.js:119
+#: src/components/overview/QuickActionsCard.js:122
 msgid "The next visitor gets a freshly generated page."
 msgstr ""
 
-#: src/components/overview/QuickActionsCard.js:133
+#: src/components/overview/QuickActionsCard.js:136
 msgid "Review images"
 msgstr ""
 
-#: src/components/overview/QuickActionsCard.js:144
+#: src/components/overview/QuickActionsCard.js:150
 msgid "Review the database"
 msgstr ""
 
-#: src/components/overview/QuickActionsCard.js:158
+#: src/components/overview/QuickActionsCard.js:164
 msgid "Tune speed settings"
 msgstr ""
 
@@ -6873,29 +6889,29 @@ msgid "Unavailable"
 msgstr ""
 
 #: src/components/overview/SiteStatusCard.js:89
-#: src/components/overview/SiteStatusCard.js:102
-#: src/components/overview/SiteStatusCard.js:132
+#: src/components/overview/SiteStatusCard.js:107
+#: src/components/overview/SiteStatusCard.js:139
 msgid "Site status"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:92
+#: src/components/overview/SiteStatusCard.js:93
 msgid "Checking your site…"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:105
+#: src/components/overview/SiteStatusCard.js:111
 msgid "This information could not be loaded."
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:116
-#: src/components/overview/SiteStatusCard.js:159
+#: src/components/overview/SiteStatusCard.js:122
+#: src/components/overview/SiteStatusCard.js:166
 msgid "Try again"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:143
+#: src/components/overview/SiteStatusCard.js:150
 msgid "Overall status:"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:150
+#: src/components/overview/SiteStatusCard.js:157
 msgid "Some information could not be loaded."
 msgstr ""
 
