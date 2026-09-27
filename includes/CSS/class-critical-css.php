@@ -3103,12 +3103,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
-		 * Whether CCSS may be inlined on this request.
+		 * Whether the combined/minified CSS file may be inlined on this request.
 		 *
-		 * Yields to the `wppo_inline_combined_css` falsy filter (same contract
-		 * as Cache::register_combine_css_path()): operators who disabled
-		 * plugin inlining get normally-enqueued stylesheets instead of inline
-		 * critical CSS plus deferred stylesheets.
+		 * Combined-file gate only: operators who disabled plugin inlining
+		 * (e.g. serving the combined file from a CDN) get
+		 * normally-enqueued stylesheets instead of inline output. Critical
+		 * CSS has its own gate since NEXT
+		 * (`is_critical_css_inline_allowed()`): the legacy combined filter
+		 * below no longer disables Critical CSS.
 		 *
 		 * @return bool True when inlining is allowed.
 		 * @since 2.0.0
@@ -3118,6 +3120,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return true;
 			}
 			return (bool) apply_filters( 'wppo_inline_combined_css', true );
+		}
+
+		/**
+		 * Whether Critical CSS may be inlined on this request.
+		 *
+		 * Dedicated Critical-CSS gate (issue #1706), independent of the
+		 * combined-file `wppo_inline_combined_css` filter owned by the CSS
+		 * combine path (`Assets/class-css-combine.php`). When the new
+		 * `wppo_inline_critical_css` filter is present it wins; otherwise
+		 * the legacy combined filter is honoured for backward
+		 * compatibility, so existing CDN opt-outs keep their (now
+		 * deprecated) behaviour until they adopt the new filter.
+		 * Fail-open: any failure returns true (never unstyled).
+		 *
+		 * @return bool True when Critical-CSS inlining is allowed.
+		 * @since NEXT
+		 */
+		public static function is_critical_css_inline_allowed(): bool {
+			try {
+				if ( ! function_exists( 'apply_filters' ) ) {
+					return true;
+				}
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_inline_critical_css' ) ) {
+					return (bool) apply_filters( 'wppo_inline_critical_css', true );
+				}
+				return (bool) apply_filters( 'wppo_inline_combined_css', true );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Snapshot of the Critical-CSS emission gates for admin/status use.
+		 *
+		 * Fail-open aggregate of the split inline gates (issue #1706):
+		 * `inline_allowed` is the legacy combined-file gate,
+		 * `ccss_inline_allowed` the dedicated Critical-CSS gate,
+		 * `suspended` the defer/delay suspension, and `effective` the
+		 * emission verdict (`ccss_inline_allowed && ! suspended`). Never
+		 * throws: any failure degrades to the fail-open defaults.
+		 *
+		 * @return array{inline_allowed: bool, ccss_inline_allowed: bool, suspended: bool, effective: bool} Gate snapshot.
+		 * @since NEXT
+		 */
+		public static function get_ccss_effective_state(): array {
+			$state = array(
+				'inline_allowed'      => true,
+				'ccss_inline_allowed' => true,
+				'suspended'           => false,
+				'effective'           => true,
+			);
+			try {
+				$state['inline_allowed']      = self::is_inline_allowed();
+				$state['ccss_inline_allowed'] = self::is_critical_css_inline_allowed();
+				$state['suspended']           = self::is_deferral_suspended_by_js();
+				$state['effective']           = $state['ccss_inline_allowed'] && ! $state['suspended'];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $state;
 		}
 
 		/**
@@ -3142,7 +3205,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Whether critical CSS is effective on this request.
 		 *
 		 * Single shared predicate for the Critical-CSS contract: inlining
-		 * must be allowed AND deferral must be available. When deferral is
+		 * must be allowed (dedicated `wppo_inline_critical_css` gate, issue
+		 * #1706) AND deferral must be available. When deferral is
 		 * suspended by deferred/delayed JS, emitting critical CSS only adds
 		 * redundant weight (issue #1090).
 		 *
@@ -3150,7 +3214,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.2.0
 		 */
 		public static function is_ccss_effective(): bool {
-			return self::is_inline_allowed() && ! self::is_deferral_suspended_by_js();
+			return self::is_critical_css_inline_allowed() && ! self::is_deferral_suspended_by_js();
 		}
 
 		/**
@@ -5233,8 +5297,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * to match the hashes stored by generate_and_store().
 		 *
 		 * Output decision, in order:
-		 * 1. Yield entirely when the `wppo_inline_combined_css` filter is
-		 *    falsy — stylesheets load normally (no inline, no deferral).
+		 * 1. Yield entirely when the `wppo_inline_critical_css` gate is
+		 *    falsy (dedicated filter wins; legacy `wppo_inline_combined_css`
+		 *    applies as fallback, issue #1706) — stylesheets load normally
+		 *    (no inline, no deferral).
 		 * 1b. Yield entirely when deferJS or delayJS is active — deferral is
 		 *    suspended (media=print deadlock guard) so emitting critical CSS
 		 *    would only add redundant weight (issue #1090). No emission, no
@@ -5284,9 +5350,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
-			// Operators who disabled plugin inlining (e.g. serving CSS from a
-			// CDN) get normally-enqueued stylesheets: skip inline output and
-			// leave deferral to defer_stylesheets(), which yields too.
+			// Operators who disabled Critical-CSS inlining via the dedicated
+			// wppo_inline_critical_css filter (or the legacy combined filter
+			// it falls back to) get normally-enqueued stylesheets: skip
+			// inline output and leave deferral to defer_stylesheets(),
+			// which yields too. A CDN opt-out of the combined file alone
+			// (wppo_inline_combined_css=false with the new filter present)
+			// no longer blocks Critical CSS (issue #1706).
 			// Suspended while deferJS/delayJS is active: deferral is off, so
 			// emission would be redundant weight — skip everything (issue #1090).
 			if ( ! self::is_ccss_effective() ) {
@@ -5574,9 +5644,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return $tag;
 			}
 
-			// Yield when operators disabled plugin inlining via the
+			// Yield when operators disabled combined-file inlining via the
 			// wppo_inline_combined_css falsy filter: stylesheets load normally
-			// (mirrors the inline_ccss() early return).
+			// (the combined-file gate only — Critical CSS consults its own
+			// dedicated gate in inline_ccss(), issue #1706).
 			if ( ! self::is_inline_allowed() ) {
 				return $tag;
 			}

@@ -1625,6 +1625,16 @@ Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_s
 **Parameters:**
 - `$enabled` *(bool)* — Default `true`.
 
+**Note:** since NEXT this filter gates the combined file only. It no longer disables Critical CSS on its own — see `wppo_inline_critical_css`. When the new filter has no callbacks, the legacy combined filter is still honoured as the Critical-CSS fallback for backward compatibility.
+
+---
+
+### `wppo_inline_critical_css`
+Filters whether Critical CSS may be inlined. Return falsy to disable Critical-CSS emission (stylesheets then load normally). Independent of `wppo_inline_combined_css`: a CDN opt-out of the combined file no longer silently disables Critical CSS. When this filter has callbacks it wins; otherwise the legacy `wppo_inline_combined_css` value applies. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Default `true`.
+
 ---
 
 ### `wppo_exclude_defer_js`
@@ -1961,6 +1971,8 @@ add_filter( 'wppo_safe_css_combine_fallback', '__return_false' ); // disable saf
 
 ### `wppo_inline_combined_css`
 Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_styles()`. Return falsy to disable inlining (e.g. when serving the combined file from a CDN); the combined file is still generated and enqueued in that case. @since 2.0.0.
+
+**Note:** since NEXT this filter gates the combined file only — Critical CSS has its own `wppo_inline_critical_css` gate (see above). With no `wppo_inline_critical_css` callbacks the legacy value still applies to Critical CSS as a backward-compatible fallback.
 
 ---
 

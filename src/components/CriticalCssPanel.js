@@ -8,6 +8,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import NoticeBanner from './common/NoticeBanner';
 import { formatBytes } from '../lib/util';
 import { getErrorLogMessage } from '../lib/apiRequest';
 
@@ -145,6 +146,46 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 };
 
 /**
+ * Resolve a `ccss_status` payload into templates plus gate flags.
+ *
+ * The endpoint returns `{ templates, suspended, effective,
+ * ccss_inline_allowed, inline_allowed }` (issue #1706); older payloads
+ * are the bare template map. A `templates` key that is a plain object
+ * selects the new shape, otherwise the whole payload is the template
+ * map and the gates default to non-suspended. Never throws: malformed
+ * payloads resolve to empty templates with fail-open gates.
+ *
+ * @since NEXT
+ * @param {*} raw Raw `ccss_status` response data.
+ * @return {{templates: Object, suspended: boolean, effective: boolean, ccssInlineAllowed: boolean}} Normalized shape.
+ */
+export const resolveCcssStatusShape = ( raw ) => {
+	const failOpen = {
+		templates: {},
+		suspended: false,
+		effective: true,
+		ccssInlineAllowed: true,
+	};
+	if ( ! raw || typeof raw !== 'object' || Array.isArray( raw ) ) {
+		return failOpen;
+	}
+	const maybeTemplates = raw.templates;
+	if (
+		maybeTemplates &&
+		typeof maybeTemplates === 'object' &&
+		! Array.isArray( maybeTemplates )
+	) {
+		return {
+			templates: maybeTemplates,
+			suspended: raw.suspended === true,
+			effective: raw.effective !== false,
+			ccssInlineAllowed: raw.ccss_inline_allowed !== false,
+		};
+	}
+	return { ...failOpen, templates: raw };
+};
+
+/**
  * Resolve the badge config for a status key with an own-property check.
  *
  * Plain property access would resolve inherited keys like '__proto__' to
@@ -166,6 +207,7 @@ export const statusConfigFor = ( statusKey ) => {
 
 const CriticalCssPanel = ( {
 	status = {},
+	suspended = false,
 	onRegenerate,
 	onRegenerateSingle,
 	onPreviewTemplate,
@@ -187,9 +229,11 @@ const CriticalCssPanel = ( {
 	// preview/promote/rollback request runs). Kept separate from
 	// singleBusy so regenerate spinners never collide with rollout ones.
 	const [ rolloutBusy, setRolloutBusy ] = useState( null );
-	// No local useNotice/NoticeBanner here (issue #1274 review): the
-	// parent (FileOptimization via withNotification) is the single
-	// feedback owner; this panel logs locally and rethrows.
+	// No local useNotice here (issue #1274 review): the parent
+	// (FileOptimization via withNotification) is the single feedback
+	// owner for regen actions; this panel logs locally and rethrows.
+	// The suspended-state NoticeBanner below is static status display,
+	// not action feedback, so it needs no notice state.
 
 	const handleRegenerate = async () => {
 		setIsRegenerating( true );
@@ -256,15 +300,21 @@ const CriticalCssPanel = ( {
 		rolloutBusy.action === action;
 
 	const entries = useMemo( () => {
+		const { templates } = resolveCcssStatusShape( status );
 		if (
-			! status ||
-			typeof status !== 'object' ||
-			Array.isArray( status )
+			! templates ||
+			typeof templates !== 'object' ||
+			Array.isArray( templates )
 		) {
 			return [];
 		}
-		return Object.entries( status );
+		return Object.entries( templates );
 	}, [ status ] );
+
+	// Suspended while defer/delay is on (issue #1706): an explicit prop
+	// wins, otherwise the flag rides along in the status payload shape.
+	const isSuspended =
+		suspended === true || resolveCcssStatusShape( status ).suspended;
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
@@ -277,6 +327,15 @@ const CriticalCssPanel = ( {
 					'performance-optimisation'
 				) }
 			</p>
+			{ isSuspended && (
+				<NoticeBanner
+					type="warning"
+					message={ __(
+						'Critical CSS is suspended while deferred or delayed JavaScript is enabled — disable Defer JS and Delay JS to emit it.',
+						'performance-optimisation'
+					) }
+				/>
+			) }
 			{ entries.length > 0 ? (
 				<div
 					className="wppo-ccss-status-list wppo-mb-16"

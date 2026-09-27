@@ -43,7 +43,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 
-import CriticalCssPanel from './CriticalCssPanel';
+import CriticalCssPanel, { resolveCcssStatusShape } from './CriticalCssPanel';
 import PresetsCard from './file-optimization/PresetsCard';
 
 // Per-instance row ids (issue #1274 review): a module counter + Date.now()
@@ -3806,6 +3806,11 @@ const FileOptimization = ( {
 										) }
 										<CriticalCssPanel
 											status={ ccssStatus }
+											suspended={
+												resolveCcssStatusShape(
+													ccssStatus
+												).suspended
+											}
 											onRegenerate={ handleRegenerateCss }
 											onRegenerateSingle={
 												handleRegenerateSingleCcss

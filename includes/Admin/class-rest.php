@@ -3185,14 +3185,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Get critical CSS status per template.
 		 *
+		 * Returns the per-template status map under `templates` plus the
+		 * emission-gate snapshot (issue #1706): `suspended` (defer/delay
+		 * suspension), `effective`, `ccss_inline_allowed` and
+		 * `inline_allowed`. Legacy clients that read the response data as
+		 * the template map directly should prefer `templates` and fall
+		 * back to the whole payload when the key is absent.
+		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @since 2.0.0
+		 * @since NEXT Adds the templates envelope plus suspended/effective gate keys.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_ccss_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$status = Critical_CSS::get_status_all();
+			$state  = method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_ccss_effective_state' )
+				? Critical_CSS::get_ccss_effective_state()
+				: array(
+					'inline_allowed'      => true,
+					'ccss_inline_allowed' => true,
+					'suspended'           => method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_deferral_suspended_by_js' ) && Critical_CSS::is_deferral_suspended_by_js(),
+					'effective'           => true,
+				);
 
-			return $this->send_response( $status );
+			return $this->send_response(
+				array(
+					'templates'           => $status,
+					'suspended'           => ! empty( $state['suspended'] ),
+					'effective'           => ! empty( $state['effective'] ),
+					'ccss_inline_allowed' => ! empty( $state['ccss_inline_allowed'] ),
+					'inline_allowed'      => ! empty( $state['inline_allowed'] ),
+				)
+			);
 		}
 
 		/**

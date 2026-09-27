@@ -18,6 +18,7 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 
 import CriticalCssPanel, {
 	normalizeCcssEntry,
+	resolveCcssStatusShape,
 	statusConfigFor,
 } from '../CriticalCssPanel';
 
@@ -459,5 +460,135 @@ describe( 'statusConfigFor', () => {
 		expect(
 			screen.queryByRole( 'button', { name: 'Restore last-good Home' } )
 		).not.toBeInTheDocument();
+	} );
+
+	it( 'renders the suspended warning when the suspended prop is set', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'ready', label: 'Home' },
+				} }
+				suspended={ true }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.getByText(
+				'Critical CSS is suspended while deferred or delayed JavaScript is enabled — disable Defer JS and Delay JS to emit it.'
+			)
+		).toBeInTheDocument();
+		// Templates still render beneath the warning.
+		expect( screen.getByText( 'Home' ) ).toBeInTheDocument();
+	} );
+
+	it( 'derives the suspended warning from the shaped status payload', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					templates: {
+						abcdef1234567890: {
+							status: 'ready',
+							label: 'Home',
+						},
+					},
+					suspended: true,
+					effective: false,
+					ccss_inline_allowed: true,
+				} }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.getByText(
+				'Critical CSS is suspended while deferred or delayed JavaScript is enabled — disable Defer JS and Delay JS to emit it.'
+			)
+		).toBeInTheDocument();
+		expect( screen.getByText( 'Home' ) ).toBeInTheDocument();
+	} );
+
+	it( 'shows no suspended warning for legacy maps or unsuspended payloads', () => {
+		const { rerender } = render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'ready', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.queryByText(
+				'Critical CSS is suspended while deferred or delayed JavaScript is enabled — disable Defer JS and Delay JS to emit it.'
+			)
+		).not.toBeInTheDocument();
+
+		rerender(
+			<CriticalCssPanel
+				status={ {
+					templates: {
+						abcdef1234567890: {
+							status: 'ready',
+							label: 'Home',
+						},
+					},
+					suspended: false,
+					effective: true,
+					ccss_inline_allowed: true,
+				} }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.queryByText(
+				'Critical CSS is suspended while deferred or delayed JavaScript is enabled — disable Defer JS and Delay JS to emit it.'
+			)
+		).not.toBeInTheDocument();
+	} );
+} );
+
+describe( 'resolveCcssStatusShape', () => {
+	it( 'passes legacy template maps through with fail-open gates', () => {
+		const templates = {
+			abcdef1234567890: { status: 'ready', label: 'Home' },
+		};
+		expect( resolveCcssStatusShape( templates ) ).toEqual( {
+			templates,
+			suspended: false,
+			effective: true,
+			ccssInlineAllowed: true,
+		} );
+	} );
+
+	it( 'unpacks the shaped payload', () => {
+		const templates = {
+			abcdef1234567890: { status: 'ready', label: 'Home' },
+		};
+		expect(
+			resolveCcssStatusShape( {
+				templates,
+				suspended: true,
+				effective: false,
+				ccss_inline_allowed: false,
+			} )
+		).toEqual( {
+			templates,
+			suspended: true,
+			effective: false,
+			ccssInlineAllowed: false,
+		} );
+	} );
+
+	it( 'fails open for malformed payloads', () => {
+		for ( const raw of [ null, undefined, 'oops', 42, [] ] ) {
+			expect( resolveCcssStatusShape( raw ) ).toEqual( {
+				templates: {},
+				suspended: false,
+				effective: true,
+				ccssInlineAllowed: true,
+			} );
+		}
 	} );
 } );
