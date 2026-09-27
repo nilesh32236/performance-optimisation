@@ -33,7 +33,7 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 	private $options = array();
 
 	/**
-	 * Recorded add_filter() hooks.
+	 * Recorded add_filter()/add_action() hooks.
 	 *
 	 * @var string[]
 	 */
@@ -85,6 +85,16 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 		$this->added_filters = array();
 		$recorded            = &$this->added_filters;
 		Functions\when( 'add_filter' )->alias(
+			static function ( $hook, $callback = null, $priority = 10, $args = 1 ) use ( &$recorded ) {
+				unset( $callback, $priority, $args );
+				$recorded[] = (string) $hook;
+				return true;
+			}
+		);
+		// Record add_action() into the same array so the double-registration
+		// test also observes the wp_load_speculation_rules action (issue
+		// #1700): Brain Monkey otherwise backs it with real hook storage.
+		Functions\when( 'add_action' )->alias(
 			static function ( $hook, $callback = null, $priority = 10, $args = 1 ) use ( &$recorded ) {
 				unset( $callback, $priority, $args );
 				$recorded[] = (string) $hook;
@@ -298,6 +308,7 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 1, $counts['wp_speculation_rules_configuration'] ?? 0 );
 		$this->assertSame( 1, $counts['wp_speculation_rules_href_exclude_paths'] ?? 0 );
 		$this->assertSame( 1, $counts['wp_speculation_rules'] ?? 0 );
+		$this->assertSame( 1, $counts['wp_load_speculation_rules'] ?? 0 );
 	}
 
 	/**
