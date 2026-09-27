@@ -1001,6 +1001,10 @@ const FileOptimization = ( {
 	const [ pendingRisky, setPendingRisky ] = useState( null );
 	const [ riskySnapshot, setRiskySnapshot ] = useState( null );
 	const [ riskyRevert, setRiskyRevert ] = useState( null );
+	// Busy flag mirroring isRevertingRef for the NoticeBanner action slot
+	// (Working… + disabled) while the revert round-trip is in flight.
+	// @since NEXT
+	const [ isReverting, setIsReverting ] = useState( false );
 	const isRevertingRef = useRef( false );
 	const handleRiskyToggle = useCallback(
 		( e ) => {
@@ -2094,6 +2098,15 @@ const FileOptimization = ( {
 			setIsApplyingPreset( true );
 			dismissPreset();
 			const next = normalizeFileOpt( { ...settings, ...bundle } );
+			// Issue #1702 follow-up: presets intentionally bypass the
+			// toggle-level confirm gate (they carry their own explicit
+			// ConfirmDialog for aggressive mode plus the server-side
+			// restore_settings snapshot), but seed the toggle-level revert
+			// snapshot when a preset newly enables a risky toggle so a
+			// later Save can still offer the one-click risky revert.
+			const priorRisky = snapshotRiskyToggles( settings );
+			const presetEnablesRisky =
+				newlyEnabledRiskyToggles( next, priorRisky ).length > 0;
 			try {
 				const res = await apiCall( 'update_settings', {
 					tab: 'file_optimisation',
@@ -2104,6 +2117,9 @@ const FileOptimization = ( {
 					setSettings( next );
 					setBaseline( stripCdnRowIds( { ...next } ) );
 					setIsDirty( false );
+					if ( presetEnablesRisky ) {
+						setRiskyRevert( priorRisky );
+					}
 					if ( res.data ) {
 						commitSettingsCache( res.data );
 					}
@@ -3005,19 +3021,44 @@ const FileOptimization = ( {
 			return;
 		}
 		isRevertingRef.current = true;
-		dismiss();
+		setIsReverting( true );
+		// Busy feedback while the round-trip is in flight: NoticeBanner
+		// renders the action slot as a disabled Working… button.
+		notify( {
+			type: 'info',
+			message: __(
+				'Reverting aggressive setting…',
+				'performance-optimisation'
+			),
+			action: {
+				label: __( 'Revert', 'performance-optimisation' ),
+				onClick: () => null,
+				isBusy: true,
+			},
+		} );
 		try {
-			// Restore only the risky keys; every other staged/saved value
-			// is preserved. Full-form payload matches handleSubmit.
-			const nextSettings = { ...settings, ...riskyRevert };
+			// Build the payload from the last-saved baseline, not live form
+			// state, so unrelated edits typed after the save (inside the
+			// notice window) are neither silently persisted nor marked clean.
+			const payload = stripCdnRowIds( {
+				...baseline,
+				...riskyRevert,
+			} );
 			const res = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
-				settings: stripCdnRowIds( { ...nextSettings } ),
+				settings: payload,
 			} );
 			if ( res && res.success ) {
-				setSettings( nextSettings );
-				setBaseline( stripCdnRowIds( { ...nextSettings } ) );
-				setIsDirty( false );
+				// Keep any post-save unsaved edits in the form: overlay the
+				// risky revert onto live state and recompute dirtiness
+				// against the new baseline instead of forcing clean.
+				const nextLocal = { ...settings, ...riskyRevert };
+				setSettings( nextLocal );
+				setBaseline( payload );
+				setIsDirty(
+					stableStringify( stripCdnRowIds( nextLocal ) ) !==
+						stableStringify( payload )
+				);
 				if ( res.data ) {
 					commitSettingsCache( res.data );
 				}
@@ -3059,8 +3100,9 @@ const FileOptimization = ( {
 			} );
 		} finally {
 			isRevertingRef.current = false;
+			setIsReverting( false );
 		}
-	}, [ riskyRevert, settings, dismiss, notify, setIsDirty ] );
+	}, [ riskyRevert, settings, baseline, notify, setIsDirty ] );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
@@ -3090,8 +3132,9 @@ const FileOptimization = ( {
 				setIsDirty( false );
 				// Issue #1702: when the save enabled a risky toggle, the
 				// success notice carries a one-click revert of the
-				// pre-enable values (longer duration so it can be acted
-				// on). A save without a risky enable clears a stale
+				// pre-enable values. The notice stays until dismissed so
+				// slow readers keep the safety net (no auto-dismiss
+				// expiry). A save without a risky enable clears a stale
 				// snapshot.
 				const enabledRisky = revertSnapshot
 					? newlyEnabledRiskyToggles( submitSnapshot, revertSnapshot )
@@ -3105,10 +3148,10 @@ const FileOptimization = ( {
 								'Settings updated successfully.',
 								'performance-optimisation'
 							),
-						durationMs: 10000,
 						action: {
 							label: __( 'Revert', 'performance-optimisation' ),
 							onClick: handleRiskyRevert,
+							isBusy: isReverting,
 						},
 					} );
 				} else {
