@@ -602,7 +602,7 @@ const ObjectCache = ( { options = {} } ) => {
 								'performance-optimisation'
 							) }
 						</p>
-						<pre>
+						<pre className="wppo-code-block">
 							<code>
 								{
 									'location = /wp-content/wppo-redis-config.php { deny all; }'
