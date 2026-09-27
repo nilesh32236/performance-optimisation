@@ -18,7 +18,6 @@ import {
 	needsAttention,
 	STATUS,
 	ROW,
-	VITAL,
 } from '../overviewStatus';
 import { renderLabel } from '../../components/overview/detailCopy';
 
