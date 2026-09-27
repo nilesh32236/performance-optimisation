@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-27T02:18:21+00:00\n"
+"POT-Creation-Date: 2026-09-27T03:14:10+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -3342,7 +3342,7 @@ msgid "Poor"
 msgstr ""
 
 #: src/components/common/StatusBadge.js:36
-#: src/components/overview/SiteStatusCard.js:52
+#: src/components/overview/SiteStatusCard.js:54
 msgid "Unknown"
 msgstr ""
 
@@ -6675,6 +6675,146 @@ msgstr ""
 msgid "Export JSON"
 msgstr ""
 
+#: src/components/overview/detailCopy.js:55
+msgid "Cache state is not available right now."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:61
+msgid "The plugin did not report whether the page cache is enabled."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:67
+msgid "Page cache is turned off. Turning it on is usually the single biggest speed win."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:73
+msgid "Page cache is switched on, but the plugin could not read how much it has stored. Open Speed to check the cache status."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:79
+msgid "Page cache is switched on but nothing is cached yet. The next visitor will generate a page."
+msgstr ""
+
+#. translators: %s: how much the page cache is currently storing.
+#: src/components/overview/detailCopy.js:86
+#, js-format
+msgid "Page cache is on, with %s of cached pages stored."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:94
+msgid "Object cache state is not available right now."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:100
+msgid "Object cache (Redis or Memcached) is off. Useful for busy or dynamic sites; not needed everywhere."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:106
+msgid "The plugin did not report whether the object cache is enabled."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:112
+msgid "Object cache is enabled but the Redis extension is not available, so it cannot be used."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:118
+msgid "Another plugin installed the object-cache drop-in, so this one is not active."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:124
+msgid "Object cache is enabled but the safety breaker is open, so it is switched off until it recovers."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:130
+msgid "Object cache is enabled but is currently bypassed because of recent failures."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:136
+msgid "Object cache is enabled but the server is not reachable, so it is not speeding anything up."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:142
+msgid "Object cache is enabled and the server is reachable."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:148
+msgid "Object cache is enabled, but the plugin has not reported whether the server is reachable."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:155
+msgid "Server details are not available right now."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:161
+msgid "The plugin did not report the PHP or WordPress version."
+msgstr ""
+
+#. translators: 1: WordPress version, 2: PHP version.
+#: src/components/overview/detailCopy.js:168
+#, js-format
+msgid "Running on WordPress %1$s and PHP %2$s."
+msgstr ""
+
+#. translators: %s: advice on what to do about this metric.
+#: src/components/overview/detailCopy.js:177
+#, js-format
+msgid "No real-user data yet. %s"
+msgstr ""
+
+#. translators: 1: metric name, 2: the measured value.
+#: src/components/overview/detailCopy.js:182
+#, js-format
+msgid "%1$s is good at %2$s."
+msgstr ""
+
+#. translators: 1: metric name, 2: the measured value, 3: advice.
+#: src/components/overview/detailCopy.js:187
+#, js-format
+msgid "%1$s could be better (%2$s). %3$s"
+msgstr ""
+
+#. translators: 1: metric name, 2: the measured value, 3: advice.
+#: src/components/overview/detailCopy.js:192
+#, js-format
+msgid "%1$s is poor at %2$s. %3$s"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:209
+msgid "Page cache"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:210
+msgid "Object cache"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:211
+msgid "Compatibility"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:216
+msgid "Loading (LCP)"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:217
+msgid "How long the main content takes to appear."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:223
+msgid "Visual stability (CLS)"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:224
+msgid "How much the page jumps around while loading."
+msgstr ""
+
+#: src/components/overview/detailCopy.js:230
+msgid "Responsiveness (INP)"
+msgstr ""
+
+#: src/components/overview/detailCopy.js:231
+msgid "How quickly the page reacts to a tap or click."
+msgstr ""
+
 #: src/components/overview/Overview.js:475
 msgid "Recent activity"
 msgstr ""
@@ -6715,47 +6855,47 @@ msgstr ""
 msgid "Tune speed settings"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:32
+#: src/components/overview/SiteStatusCard.js:34
 msgid "Working"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:37
+#: src/components/overview/SiteStatusCard.js:39
 msgid "Needs attention"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:42
+#: src/components/overview/SiteStatusCard.js:44
 msgid "Not set up"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:47
+#: src/components/overview/SiteStatusCard.js:49
 #: src/components/SystemInfo.js:445
 msgid "Unavailable"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:87
-#: src/components/overview/SiteStatusCard.js:100
-#: src/components/overview/SiteStatusCard.js:130
+#: src/components/overview/SiteStatusCard.js:89
+#: src/components/overview/SiteStatusCard.js:102
+#: src/components/overview/SiteStatusCard.js:132
 msgid "Site status"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:90
+#: src/components/overview/SiteStatusCard.js:92
 msgid "Checking your site…"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:103
+#: src/components/overview/SiteStatusCard.js:105
 msgid "This information could not be loaded."
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:114
-#: src/components/overview/SiteStatusCard.js:157
+#: src/components/overview/SiteStatusCard.js:116
+#: src/components/overview/SiteStatusCard.js:159
 msgid "Try again"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:141
+#: src/components/overview/SiteStatusCard.js:143
 msgid "Overall status:"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:148
+#: src/components/overview/SiteStatusCard.js:150
 msgid "Some information could not be loaded."
 msgstr ""
 
