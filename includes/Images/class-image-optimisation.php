@@ -3349,7 +3349,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				} elseif ( in_array( $lower, self::HARDENED_URL_ATTRS, true ) ) {
 					$default = ! ( is_string( $value ) && $this->is_scriptable_image_url( $value ) );
 				} elseif ( in_array( $lower, self::HARDENED_SRCSET_ATTRS, true ) ) {
-					$default = '' !== $this->sanitize_lazy_moved_srcset( is_string( $value ) ? $value : '' );
+					// Lazy default: the full re-split/re-filter only matters
+					// as the filter's input default when a listener exists —
+					// every re-emission site already enforces per-candidate
+					// deny — so skip the parse work on the hot path when no
+					// listener is registered.
+					$default = true;
+					if ( function_exists( 'has_filter' ) && has_filter( 'wppo_lazyload_allow_attr' ) ) {
+						$default = '' !== $this->sanitize_lazy_moved_srcset( is_string( $value ) ? $value : '' );
+					}
 				}
 				if ( function_exists( 'apply_filters' ) && ( ! function_exists( 'has_filter' ) || has_filter( 'wppo_lazyload_allow_attr' ) ) ) {
 					$filtered = apply_filters( 'wppo_lazyload_allow_attr', $default, $lower, $value );
@@ -3358,7 +3366,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $default;
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return true;
+				return isset( $default ) ? $default : false;
 			}
 		}
 
@@ -3399,10 +3407,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * Filters hostile candidates (`javascript:`, `data:text/html`,
 		 * entity/control-obfuscated schemes) item-by-item so one poisoned
-		 * candidate cannot ride along into the cached artefact, then
-		 * re-checks the rebuilt value through the allow-attr gate.
+		 * candidate cannot ride along into the cached artefact.
 		 * Returns an empty string when every candidate is hostile.
 		 * Fail-open: any failure returns the input unchanged.
+		 *
+		 * Note: the rebuilt value is intentionally NOT re-checked through
+		 * the allow-attr gate — that gate consults this sanitizer for
+		 * srcset names, so re-checking here would recurse.
 		 *
 		 * @since NEXT
 		 * @param string $raw Raw srcset attribute value.
@@ -3463,8 +3474,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						break;
 					}
 				}
-				$compact = (string) preg_replace( '/[\x00-\x20]+/', '', strtolower( $decoded ) );
-				if ( false !== strpos( $compact, 'javascript:' ) || false !== strpos( $compact, 'vbscript:' ) || false !== strpos( $compact, 'expression(' ) || false !== strpos( $compact, 'behavior' ) || false !== strpos( $compact, '-moz-binding' ) ) {
+				// Shared style gate keeps both layers in parity (covers
+				// `expression(`/`javascript:`/`vbscript:`/`behavior:`/
+				// `behaviour:`/`-moz-binding`, entity/control-obfuscated).
+				if ( $this->is_hostile_style_value( $decoded ) ) {
 					return '';
 				}
 				if ( 1 === preg_match_all( '#url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)#i', $value, $m ) && isset( $m[1] ) && is_array( $m[1] ) ) {
@@ -3473,7 +3486,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( '' === $target ) {
 							return '';
 						}
-						if ( 0 === stripos( $target, 'data:image/' ) ) {
+						// Raster-only allowlist, mirroring the scriptable-URL
+						// gate: `data:image/svg+xml` stays scriptable and falls
+						// through to the check below instead of being skipped.
+						if ( 1 === preg_match( '#^data:image/(?:png|jpe?g|gif|webp|avif)[;,]#i', $target ) ) {
 							continue;
 						}
 						if ( $this->is_scriptable_image_url( $target ) ) {

@@ -3165,14 +3165,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Images",
-        "lines": 9385,
+        "lines": 9401,
         "methods": 187,
         "public_methods": 43,
         "large_methods": 15,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "add_delay_load_img",
-            "line": 7868,
+            "line": 7884,
             "lines": 498
         },
         "method_prefixes": {
