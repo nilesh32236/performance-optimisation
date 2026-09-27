@@ -366,6 +366,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private ?int $options_blog_id = null;
 
 		/**
+		 * Whether the core speculation-rules filters were already registered.
+		 *
+		 * Guards {@see add_speculation_rules()} against re-entrant `wp_head`
+		 * double-fire (issue #1700): the closure registrations cannot be
+		 * detected via `has_filter()`, so a second call would otherwise append
+		 * duplicate callbacks and core would emit the merged rules twice.
+		 *
+		 * @var   bool
+		 * @since NEXT
+		 */
+		private bool $speculation_rules_registered = false;
+
+		/**
 		 * Lazily-created settings-migration runner (ARCH-004).
 		 *
 		 * Owns the 17 `maybe_migrate_*()` backfill bodies (see
@@ -7078,6 +7091,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * skipped individually and logged-in visitors are always excluded.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Single-registration guard: re-entrant calls return
+		 *             early so core emits exactly one speculationrules block.
 		 *
 		 * @return void
 		 */
@@ -7102,6 +7117,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// (majority spelling); the pre-REF-010 bare-isset() cast compared
 			// '' as-is and failed this gate. Core never emits ''.
 			if ( ! Wp_Version::is_at_least( '6.8', true ) ) {
+				return;
+			}
+
+			// Single-registration guard (issue #1700): a re-entrant `wp_head`
+			// double-fire must not append duplicate callbacks — core would
+			// then emit the merged rules twice. Never echoes a plugin-owned
+			// block: the single core `<script type="speculationrules">`
+			// block stays canonical.
+			if ( ! $this->claim_speculation_rules_registration() ) {
 				return;
 			}
 
@@ -7143,6 +7167,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Single-registration guard for the core speculation-rules filters.
+		 *
+		 * A re-entrant `wp_head` double-fire must not append duplicate
+		 * callbacks (issue #1700). The closure filters registered by
+		 * {@see add_speculation_rules()} cannot be detected via
+		 * `has_filter()`, so the instance flag is authoritative; the
+		 * `has_filter()` probes (guarded for minimal installs without the
+		 * function) cover the named callbacks when registration state was
+		 * lost (e.g. a fresh instance after unserialization). Fail-open:
+		 * any throwable leaves prior state untouched and allows
+		 * registration (a duplicate block degrades gracefully; a missing
+		 * block would silently drop the feature).
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the caller should proceed with registration.
+		 */
+		private function claim_speculation_rules_registration(): bool {
+			if ( $this->speculation_rules_registered ) {
+				return false;
+			}
+			if ( function_exists( 'has_filter' ) ) {
+				try {
+					if ( has_filter( 'wp_speculation_rules', array( $this, 'filter_speculation_list_rules' ) )
+						|| has_filter( 'wp_load_speculation_rules', array( $this, 'wppo_register_speculation_rules' ) ) ) {
+						$this->speculation_rules_registered = true;
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			$this->speculation_rules_registered = true;
+			return true;
+		}
+
+		/**
 		 * Canonical speculation-rules href exclusion patterns.
 		 *
 		 * Merges core safety defaults (auth, admin, REST), generic commerce
@@ -7162,6 +7223,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * rejection in {@see is_speculation_list_url_valid()}.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Exclude the `/wc-ajax/*` dynamic endpoint (issue #1700).
 		 *
 		 * @param array $preload_settings The plugin's preload_settings option value.
 		 * @return string[] Exclusion patterns (possibly empty, never fatal).
@@ -7172,6 +7234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'/wp-login*',
 					'/wp-admin/*',
 					'/wp-json/*',
+					'/wc-ajax/*',
 					'/logout/*',
 					'/cart/*',
 					'/checkout/*',
@@ -7988,11 +8051,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Cache-aware: pages served with `DONOTCACHEPAGE` / `no-store`
 		 * (cart/checkout/account, previews) never speculate — speculating a
 		 * non-cacheable URL wastes origin load and risks broken carts.
+		 * Plain permalinks stay excluded (mirrors
+		 * `AI_Adaptive::is_speculation_hard_suppressed()`: an empty
+		 * `permalink_structure` means `?p=` URLs core always skips).
 		 * Fail-closed: any throwable means "suppressed" so uncertainty
 		 * disables output (privacy guard must never fail open for
 		 * logged-in/DONOTCACHEPAGE visitors).
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Suppress plain-permalink requests (issue #1700): the
+		 *             document config then returns null instead of emitting.
 		 *
 		 * @return bool True when rules must not be emitted.
 		 */
@@ -8000,6 +8068,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			try {
 				if ( function_exists( 'is_user_logged_in' ) && is_user_logged_in() ) {
 					return true;
+				}
+
+				// Plain permalinks (`?p=` URLs) are never speculated by core;
+				// suppress so the document config emits null (no rules) instead
+				// of a prefetch default. A missing option (false, e.g. minimal
+				// test installs) stays fail-open so unit tests without the
+				// stub still run.
+				if ( function_exists( 'get_option' ) ) {
+					try {
+						$structure = get_option( 'permalink_structure' );
+						if ( '' === $structure ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 
 				// Non-cacheable responses must not speculate.
