@@ -514,6 +514,7 @@ export default function Overview( { onNavigate, activities = [] } ) {
 	return (
 		<div className="wppo-overview">
 			<SiteStatusCard
+				onNavigate={ onNavigate }
 				rows={ model.rows }
 				overall={ model.overall }
 				loading={ loading }

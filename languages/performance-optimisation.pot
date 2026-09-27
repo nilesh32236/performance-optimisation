@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-27T10:02:41+00:00\n"
+"POT-Creation-Date: 2026-09-27T12:32:21+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -6829,7 +6829,7 @@ msgstr ""
 msgid "How quickly the page reacts to a tap or click."
 msgstr ""
 
-#: src/components/overview/Overview.js:540
+#: src/components/overview/Overview.js:541
 msgid "Recent activity"
 msgstr ""
 
@@ -6886,31 +6886,39 @@ msgstr ""
 msgid "Unavailable"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:89
-#: src/components/overview/SiteStatusCard.js:107
-#: src/components/overview/SiteStatusCard.js:139
+#: src/components/overview/SiteStatusCard.js:100
+#: src/components/overview/SiteStatusCard.js:118
+#: src/components/overview/SiteStatusCard.js:150
 msgid "Site status"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:93
+#: src/components/overview/SiteStatusCard.js:104
 msgid "Checking your site…"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:111
+#: src/components/overview/SiteStatusCard.js:122
 msgid "This information could not be loaded."
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:122
-#: src/components/overview/SiteStatusCard.js:166
+#: src/components/overview/SiteStatusCard.js:133
+#: src/components/overview/SiteStatusCard.js:177
 msgid "Try again"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:150
+#: src/components/overview/SiteStatusCard.js:161
 msgid "Overall status:"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:157
+#: src/components/overview/SiteStatusCard.js:168
 msgid "Some information could not be loaded."
+msgstr ""
+
+#: src/components/overview/SiteStatusCard.js:221
+msgid "Responsiveness to taps and clicks comes from real visitors, not a PageSpeed scan."
+msgstr ""
+
+#: src/components/overview/SiteStatusCard.js:241
+msgid "See Real-user Web Vitals"
 msgstr ""
 
 #: src/components/PageSpeedPanel.js:199

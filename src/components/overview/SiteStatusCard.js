@@ -68,6 +68,7 @@ const badgeFor = ( status ) => {
  * @param {Function} props.onRetry        Re-request the data.
  * @param {boolean}  props.partialFailure Whether some, but not all,
  *                                        sources produced nothing.
+ * @param {Function} [props.onNavigate]   Called with `{ area, view }` to navigate.
  * @return {Object} The card.
  */
 export default function SiteStatusCard( {
@@ -77,10 +78,20 @@ export default function SiteStatusCard( {
 	failed = false,
 	partialFailure = false,
 	onRetry,
+	onNavigate,
 } ) {
 	// One live region for the whole card, announcing only the verdict, so a
 	// screen reader hears the outcome once rather than once per badge.
 	const titleId = 'wppo-site-status-title';
+
+	// One shared line, not one per row: two INP rows each repeating the same
+	// advice is noise, and the rows already say what is missing.
+	const hasUnmeasuredVital = rows.some(
+		( row ) =>
+			typeof row.id === 'string' &&
+			row.id.startsWith( 'vital-' ) &&
+			row.status === 'unknown'
+	);
 
 	if ( loading ) {
 		return (
@@ -205,6 +216,35 @@ export default function SiteStatusCard( {
 					} ) }
 				</ul>
 			</div>
+			{ hasUnmeasuredVital ? (
+				<p className="wppo-overview__action-hint">
+					{ __(
+						'Responsiveness to taps and clicks comes from real visitors, not a PageSpeed scan.',
+						'performance-optimisation'
+					) }{ ' ' }
+					<button
+						type="button"
+						className="wppo-button wppo-button--link"
+						onClick={ () => {
+							if ( typeof onNavigate === 'function' ) {
+								// A bare view id, which `resolveDestination`
+								// maps to the area that owns it. Passing
+								// `{ area, view }` here is a **silent
+								// no-op**: the resolver does
+								// `String( target )`, so an object becomes
+								// `"[object Object]"`, matches no section, and
+								// the click appears to do nothing.
+								onNavigate( 'dashboard' );
+							}
+						} }
+					>
+						{ __(
+							'See Real-user Web Vitals',
+							'performance-optimisation'
+						) }
+					</button>
+				</p>
+			) : null }
 		</section>
 	);
 }
