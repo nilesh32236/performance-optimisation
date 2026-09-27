@@ -230,3 +230,98 @@ moves under it.** The reviewer's report is explicitly scoped to "the deployed bu
 byte-for-byte `36dd9589` at 21:58". That is not a defect in the review; it is a property
 of reviews against a live target, and it means the merge claim has to be re-checked after
 any deploy, not inherited.
+
+## Round 25 — the guard I built caught me a third time, and I ignored it
+
+### What landed
+
+`master` is now `a094f3c9`, carrying the deploy guard and the Object Cache
+false-dirty fix. Full gate on a fresh `origin/master` worktree: ESLint **0
+errors** · Jest **65 suites / 1,131** · guard **10/10** · PHPCS 0 · PHPUnit
+**2,818 / 25,986** · architecture `--check` 0.
+
+### The guard worked, and I walked past it
+
+Deploying merged `master` to the live site, the guard printed:
+
+```
+MISSING  src/components/overview/Overview.js
+MISSING  build/tab-overview.js
+... 15 files
+REFUSED: 15 file(s) the live site is serving would be deleted
+```
+
+It was right. `master` did not yet contain the Overview — that is still `#1679`,
+open — so the deploy would have removed it. **And I deployed anyway**, because
+the shell chain was `guard | grep … && rsync`, and `grep` succeeded on the
+output. Exit 1 from the guard, exit 0 from the pipeline, rsync ran.
+
+The live site broke. I restored it within the same turn and verified
+`build/tab-overview.js` is byte-identical to the reviewed head again.
+
+Three occurrences, one cause: the guard's verdict is only consulted if someone
+reads it. The second occurrence was fixed by *writing the rule down*; the third
+was fixed by *writing the check*; this one was still just a check, because I
+chose to look at the pipeline's exit code instead of the script's. A check that
+can be ignored has not been made mechanical — it has been made *available*.
+
+**The rule, complete this time:** a guard's exit status must terminate the
+command. Never pipe a guard into `grep`, never gate it with `&&` on its
+*output*, and if a deploy is going to be part of a longer script, the script
+must stop. Concretely: `guard ... || exit 1` as a standalone statement, before
+anything else, never inside a pipeline whose status comes from `grep`.
+
+### A process failure worth recording plainly
+
+`#1681` (Object Cache) and `#1682` (deploy guard) were built from **one
+worktree**, so the guard branch carried the Object Cache commits. Squash-merging
+`#1682` put both in, so a fix to a user-blocking bug shipped under the title of
+a build script, and `#1681` was closed as already-merged.
+
+The content was reviewed, gated and mutation-tested independently, so no code is
+unverified. But the commit message describes the wrong change, and the campaign
+objective asks for small independently-reviewable PRs.
+
+**The rule:** one worktree, one branch, one line of work. Before pushing any
+campaign branch, `git diff --name-only origin/master...HEAD` must list only the
+files that PR is about. The deploy guard checks the mirror image of this failure
+— a branch that would *remove* a served file — and this failure is a branch that
+would *add* a file it has no business adding.
+
+### Reviews this round
+
+The eighth Overview review returned NEEDS FIXES for a defect **this campaign
+introduced**: a hanging *optional* source (`web_vitals_trends`) rendered 3
+correct rows and a "Working" verdict at 0.5s, then at 15s added "Some information
+could not be loaded" over byte-identical content — while an *absent* vitals
+source produced no banner at all. Slow was reported as broken, and "Try again"
+could not work because `apiCall` shares the pending GET. The same shape as the
+429 defect an earlier round settled: with no way to retry, then with a way to
+retry that does nothing. Only a **required** source is now marked an error.
+
+The same review confirmed the round-24 blocker is genuinely gone for required
+*and* optional sources, with an instrumented timer trace showing exactly one
+timer per load and no stale-controller or post-unmount writes.
+
+### Verification status, stated honestly
+
+Verified this round: the phantom-banner fix live (no banner with a hung optional
+source, rows still correct); **48/48** responsive checks across 6 screens × 8
+widths; the loading state is control-local with no page-level blocking overlay;
+the Object Cache false-dirty fix live (real mouse click navigates, no dialog);
+master's full gate; the live bundle byte-identical to the reviewed head by sha256
+and by `index.asset.php` version.
+
+**Not verified this round:** the final in-browser admin render, as a *merged*
+master. The Playwright environment degraded after ~15 launches in the session —
+the same script that passed 48/48 checks began crashing on the login navigation,
+with `ERR_INSUFFICIENT_RESOURCES` and a Chromium `useCommands is not a function`
+error originating in WordPress core's own `react-dom.min.js`, not in plugin code
+(nothing in `src/` or `build/` references it). Server-side the admin page serves
+**200**, 92,811 bytes, referencing `build/index.js` and `build/style-index.css`
+at version `b3037c0a985bf4edb235` — the exact version in the reviewed commit —
+with `wppoSettings` inlined and **zero** fatal/uncaught/critical-error matches.
+
+So: the deployed artefact is provably the reviewed one, and the server renders
+it without error, but the in-browser confirmation on merged master is still
+outstanding and is the first thing the next round should do.
