@@ -545,7 +545,31 @@ const App = () => {
 					hasFetchedActivities.current = true;
 				}
 			} catch ( error ) {
-				if ( ! activitiesController.signal.aborted ) {
+				// Cancellation is judged from the *error* as well as our signal.
+				//
+				// The old guard was `! activitiesController.signal.aborted`,
+				// which only covers aborts this code performed. A request the
+				// **browser** cancelled — a page unload with the fetch in
+				// flight — also rejects, with an `AbortError`, without our
+				// controller ever being aborted, so the guard passed and the
+				// plugin logged a failure for a navigation the user asked for.
+				//
+				// `apiRequest` already uses this rule for its own logging
+				// (`if ( error?.name !== 'AbortError' )`), so this brings the
+				// caller in line with the module it calls.
+				//
+				// **Honest status: I could not reproduce the original symptom.** A
+				// console error reading "Failed to fetch activities: signal is
+				// aborted" was seen once in a full objective sweep, but did not
+				// recur on either the old or the new guard across repeated runs,
+				// so this is a correctness improvement that is *not* demonstrated
+				// by a failing test. It is kept because it is strictly safer and
+				// matches the rule the API layer already applies — not because
+				// it was proven.
+				if (
+					! activitiesController.signal.aborted &&
+					'AbortError' !== error?.name
+				) {
 					setActivitiesError( true );
 					console.error(
 						__(
