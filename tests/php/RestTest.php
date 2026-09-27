@@ -245,6 +245,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'lcp_preload_candidate',
 			'autoloaded_options',
 			'autoload_remediate',
+			'autoload_backup',
 			'expired_transients_export',
 			'ai_model',
 			'ai_learn',
@@ -263,8 +264,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 safe-mode + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge + 2 preset routes).
-		$this->assertCount( 47, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 safe-mode + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge + 2 preset + 1 autoload-backup routes).
+		$this->assertCount( 48, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );

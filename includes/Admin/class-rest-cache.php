@@ -81,15 +81,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest_Cache' ) ) {
 		 */
 		public function get_preload_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$preload = array(
-				'queued'      => 0,
-				'done'        => 0,
-				'failed'      => 0,
-				'total'       => 0,
-				'status'      => 'idle',
-				'failed_urls' => array(),
-				'cache_bytes' => 0,
-				'cache_files' => 0,
-				'stalled'     => false,
+				'queued'             => 0,
+				'done'               => 0,
+				'failed'             => 0,
+				'total'              => 0,
+				'status'             => 'idle',
+				'failed_urls'        => array(),
+				'cache_bytes'        => 0,
+				'cache_files'        => 0,
+				'stalled'            => false,
+				'verified_done'      => 0,
+				'filesystem_matched' => true,
 			);
 			$cache   = array(
 				'bytes'      => 0,
