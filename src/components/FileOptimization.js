@@ -528,7 +528,12 @@ export const stripCdnRowIds = ( source = {} ) => {
 // can never reach state/submit verbatim (display/UX parity — the server
 // stays authoritative).
 // Audit #1401: shared guarded-number core behind the sibling
-// normalizers (idle/ccss/regression) so PHP-parity fixes land once.
+// normalizers (idle/ccss/regression) so PHP-parity fixes for those three
+// land once. Scope note (audit #1628): normalizeRetries above and
+// coerceLongestEdge in ImageOptimization.js intentionally sit outside this
+// core — they carry distinct clamp/fallback contracts (0..5 fail-open to 5,
+// and 0-disables fail-open to 2560), so unifying them here would change the
+// values written to wppo_settings.
 // Returns { ok, n }: ok=false means fail open to the caller default.
 // @since 2.3.0
 const parseGuardedNumber = ( value ) => {
