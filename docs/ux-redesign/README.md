@@ -325,3 +325,102 @@ with `wppoSettings` inlined and **zero** fatal/uncaught/critical-error matches.
 So: the deployed artefact is provably the reviewed one, and the server renders
 it without error, but the in-browser confirmation on merged master is still
 outstanding and is the first thing the next round should do.
+
+## Round 26 — the Overview is merged, and the "broken" browser was not the site
+
+### Merged
+
+`9fb25c23` — the Overview, **27 files, 4,020 insertions**. Post-merge gate on a
+clean `origin/master` worktree: ESLint **0 errors** (2 pre-existing warnings) ·
+Jest **72 suites / 1,250 tests, 0 failed** · deploy guard **10/10** · PHPCS 0 ·
+PHPUnit **2,818 tests, 0 failed, 9 skipped** · architecture 0 ·
+`git diff --check` 0 — and the committed build is
+**byte-reproducible from source** (0 files differing after `npm run build`).
+
+### The outstanding verification, and what it cost
+
+Round 25 ended with the admin page unverifiable in-browser. That turned out to
+be **a broken cached Chromium build**, not the site. Two builds were cached;
+`chromium-1246` works and the default `chromium-1234` crashes its renderer on
+any wp-admin page.
+
+I spent a long time proving the site was fine before finding that — checking
+`dmesg` for OOM, cgroup pids, `/dev/shm`, every file modified in the last 6
+hours, WordPress's own version and core asset mtimes, which plugins were active,
+and whether `duoport-connect-for-opencode` enqueued anything. Every one of those
+was a reasonable hypothesis and every one was wrong. **The cheap diagnostic —
+try the other browser build — came last**, after curl had already proved the
+server returned `200` in 0.1s with 130 script tags and zero fatals.
+
+### A measurement I got wrong, twice, in one round
+
+I reported "12/12 tab stops with a visible focus ring, ring width 1px". The 1px
+was the giveaway and I did not follow it. Those stops were **WordPress core's own
+admin menu**, not the plugin: the plugin's area is 80+ Tab presses away from
+where the browser starts. The correct measurement puts the focus origin *inside*
+`.wppo-container` and then Tabs:
+
+```
+Overview / Speed / Media / Data & System / Manage   solid 2px  off=2px  rgb(0,124,186)
+Summary (sub-nav tab)                               solid 2px  off=2px  rgb(0,124,186)
+Section panel (tabIndex=0)                          solid 2px  off=2px  rgb(0,124,186)
+Clear the page cache                                 solid 2px  off=2px  rgb(0,124,186)
+Review images / Review the database / Tune speed     solid 2px  off=2px  rgb(0,124,186)
+
+11 plugin stops, 11 with a visible ring, 0 without
+```
+
+The twelfth control, "All diagnostics", is `tabindex="-1"` and arrow-reachable, so
+"12/12 Tab stops" was loose — 11 Tab stops plus one arrow-reachable tab, as an
+earlier review also found. Same claim, wrong in the same way, and I had it
+written down.
+
+**This is the fourth time in this campaign** that a focus-ring claim came out of a
+measurement whose scope I had not checked — the first produced a phantom
+"invisible ring", and the last two produced a phantom "1px ring". *A focus claim
+must name the elements it measured.*
+
+### Objective verification on merged master (live, Chromium 1246)
+
+| Requirement | Evidence |
+|---|---|
+| Five-area IA | All 8 screens render their own heading |
+| Invalid tab → Overview | 4 hostile URLs: `&section=bogus`, `&view=nope`, `&section=`, `&section=<script>` — all → Overview |
+| History API | In-app Overview→Media→Manage, **Back → Media, Forward → Manage, refresh survives**; no full reload |
+| Evidence-based Overview, no fake score | All rows real; `/\d+\/100/` **not present** |
+| Control-local loading | 0 blocking overlays during load; sidebar still clickable |
+| Responsive | **0 failures of 56** (8 screens × 7 widths, 360–1920) |
+| Accessibility | **11/11** plugin Tab stops with a 2px ring |
+| Design system | 75 tokens defined, 74 referenced, 1 unresolved (`--wppo-progress`, set by JS), 2 documented orphans |
+| Object Cache false-dirty fix | Navigates on a real mouse click, no dialog |
+
+### The `.pot` was never rebuilt — found by checking an artefact, not the source
+
+Every Overview string is correctly wrapped in `__()`. The lint rules pass. The
+feature is still **untranslatable**, because the template that ships to
+translators was never regenerated:
+
+```
+Site status                            in .pot: 0
+Overall status                         in .pot: 0
+Some information could not be loaded   in .pot: 0
+Working…                               in .pot: 0
+```
+
+**1783 → 1854 msgids (#1683).** All 13 removals were checked against the source
+first — a `.pot` rebuild that silently drops strings breaks existing
+translations — and every one is a literal that no longer exists, replaced by the
+new IA.
+
+### A real gap that remains, and is not small
+
+`src/lib/overviewStatus.js` returns **23 English `detail:` strings** from a pure
+function, and `SiteStatusCard` renders them as `{ row.detail }` with no
+translation wrapper. Keeping the model pure and testable rather than coupling it
+to `wp.i18n` was deliberate — but it was never finished on the component side, so
+the Overview's *status prose* is English-only. Headings, buttons, banners and the
+loading state are all localized; the sentence under each row is not.
+
+The fix is a real refactor: the model returns a message key plus arguments, and
+the component owns the copy. That also makes the tests better — asserting
+`detailKey`/`detailArgs` pins *which* claim is made, not the English of it.
