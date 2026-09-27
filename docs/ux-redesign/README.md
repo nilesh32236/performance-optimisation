@@ -162,7 +162,7 @@ being reported.
 | Page cache | Working — "14 MB of cached pages stored" | `Cache::get_cache_stats()` |
 | Object cache | Working — server reachable | WP-CLI: drop-in present, `redis_reachable=true` |
 | Compatibility | Working — WP 7.1.2 / PHP 8.3 | `wp wppo system-info --format=json` |
-| Loading (LCP) | Working — 505 ms | stored real-user history |
+| Loading (LCP) | Working — 505 ms | **WRONG — see the correction below** |
 
 Nothing here is asserted from the page itself; each row was checked against a
 source the page did not derive from.
@@ -522,3 +522,110 @@ The round-27 record and its fact-check corrections shipped as two branches
 (`docs/ux-campaign-round-27` and `docs/ux-campaign-round-28-fix`) and are
 consolidated here, so the file reads in order: round 27, then its corrections,
 then round 28. The superseded branches are closed rather than merged.
+
+## Round 30 — a final review of the whole result, and a verdict of NOT COMPLETE
+
+Rounds 1–29 each reviewed the change under review. Round 30 reviewed the
+**merged result against the objective itself**, and returned **NOT COMPLETE** on
+the clause this campaign exists for.
+
+### The verdict
+
+Seven of eight clauses passed. Navigation, security boundaries, loading
+feedback, i18n and accessibility were independently verified and were strong.
+The eighth — *a genuine evidence-based Overview* — did not.
+
+### D1: the headline performance number was a pooled lab median
+
+The Overview showed a green **"Loading (LCP) is good at 505 ms"**. Splitting the
+store by device class:
+
+```
+desktop (n=19)  median  345.5 ms
+mobile  (n=18)  median 1202   ms
+POOLED          median  504.5 ms   <- what the page showed
+```
+
+`summariseVitals` did `Object.values( trends ).flat()`. The pooled figure,
+**504.5 ms, is the desktop maximum** — so the screen's "typical" number was the
+best case anyone had recorded, while mobile, normally the majority of traffic,
+was 2.4x worse and invisible.
+
+It is also **lab data, not real-user data**. The stored rows carry `performance`
+(a 0–100 Lighthouse score) and `tbt`, both lab-only, written by a daily cron. The
+page's own INP row says *"No real-user data yet"*, which proves no real-user
+vitals exist on this site. Meanwhile `Overview.js` said *"Pull the median
+**real-user** vitals"*.
+
+> **An independent review raised the pooling in round 26 and I recorded it as an
+> accepted trade-off. That was the wrong call.** This is the Overview's headline
+> performance claim. A number belonging to neither device is not a trade-off; it
+> is a number that should not have been shown.
+
+And the record above made it worse. The table read:
+
+| Row | Value | Cross-check |
+|---|---|---|
+| Loading (LCP) | Working — 505 ms | stored real-user history |
+
+under the heading **"Verified live, against independent ground truth"**, beside
+the assertion that *"each row was checked against a source the page did not
+derive from."* The store **is** the page's source and holds no real-user
+history. That claim was false, and it is corrected in place above.
+
+### Fixed in #1694
+
+Vitals are summarised **per device class**, every row names its device, and every
+sentence states the provenance. The Overview now reads:
+
+```
+Loading (LCP)           Loading (LCP) is good at 346 ms on desktop (PageSpeed lab scan).
+Visual stability (CLS)  Visual stability (CLS) is good at 0.002 on desktop (PageSpeed lab scan).
+Responsiveness (INP)    No real-user data yet for desktop.
+Loading (LCP)           Loading (LCP) is good at 1202 ms on mobile (PageSpeed lab scan).
+Visual stability (CLS)  Visual stability (CLS) is good at 0.009 on mobile (PageSpeed lab scan).
+Responsiveness (INP)    No real-user data yet for mobile.
+```
+
+The 1202 ms that the pooled median concealed is now on screen, named.
+
+### What the tests caught in my own fix
+
+Two real defects, both in code I had just written:
+
+- **The null contract broke.** Returning an all-`undefined` object instead of
+  `null` made an unmeasured site render three "not measured" rows rather than no
+  vitals. Caught by a pre-existing `toBeNull()`.
+- **`{ lcp: {} }` is a flat reading, not a device map.** My grouping test was
+  structural — "is any value an object" — and that shape matched it, silently
+  dropping the row. Detection is now by key name.
+
+And one that the tests did **not** catch, which is the part worth remembering:
+
+> Reverting `overviewStatus.js` **entirely to master** left the suite **fully
+> green** — 1,293 passing. Nothing had pinned the per-device row shape, so the
+> whole fix could have been deleted and CI would have approved it.
+
+Only found because I checked that a revert *should* fail. Adding those tests is
+why a second mutation sweep now catches all four:
+
+```
+M1 revert overviewStatus.js to master           2 failed, 1292 passed
+M2 re-pool the device classes                   7 failed, 1287 passed
+M3 strip the device from attention/poor rows    1 failed, 1293 passed
+M4 remove the lab-scan qualifier from the copy  2 failed, 1292 passed
+```
+
+M3 survived its first attempt, because stripping `device` from the attention and
+poor branches left every "good" row correct. The device now has to be pinned on
+the *bad* rows too — those are the ones a user most needs to attribute.
+
+### The lesson, fourth form
+
+Round 25: a remembered rule is not a check. Round 27: "I cannot prove this" is
+not a reason to ship. Round 28: I sampled two screens and generalised to all
+eight.
+
+Round 30: **a green suite is not evidence that a change is pinned.** Every one of
+1,293 tests passed with the fix removed entirely. The suite was not weak — it
+was aimed at code nobody had changed.
