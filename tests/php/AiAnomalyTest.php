@@ -594,4 +594,230 @@ class AiAnomalyTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'opt-out', $result['reason'] );
 		$this->assertCount( 0, $enqueued );
 	}
+
+	/**
+	 * Seed the deploy-gate opt-in alongside the CSS-refresh opt-in.
+	 *
+	 * @param bool $refresh_on Whether css_refresh_on_lcp_regression is on.
+	 * @param bool $gated Whether css_refresh_require_no_recent_deploy is on.
+	 * @return void
+	 */
+	private function seed_deploy_gate_settings( bool $refresh_on, bool $gated ): void {
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive'       => array(
+				'enabled'                              => true,
+				'css_refresh_on_lcp_regression'        => $refresh_on,
+				'css_refresh_cooldown_days'            => 7,
+				'css_refresh_require_no_recent_deploy' => $gated,
+			),
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		Util::reset_cached_home_urls();
+	}
+
+	/**
+	 * Fewer than 10 samples never alarms on the digest path.
+	 *
+	 * Given a recent window with 9 samples (or a 9-sample baseline) When
+	 * the digest runs Then no alarm is raised and no cooldown is armed.
+	 *
+	 * @return void
+	 */
+	public function test_digest_minimum_sample_floor(): void {
+		$this->install_stubs();
+		$now = 1700000000;
+
+		$thin_recent = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 9, 4000.0 ),
+			)
+		);
+		$this->assertSame( array(), Ai_Anomaly::get_rum_anomaly_digest( $thin_recent, $now ) );
+
+		$thin_baseline = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 9, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 4000.0 ),
+			)
+		);
+		$this->assertSame( array(), Ai_Anomaly::get_rum_anomaly_digest( $thin_baseline, $now ) );
+
+		// Suppressed digests arm no cooldown: a full-sample regression
+		// still fires afterwards.
+		$full = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 2800.0 ),
+			)
+		);
+		$this->assertTrue( Ai_Anomaly::is_anomaly_cooled_down( $now ) );
+		$this->assertCount( 1, Ai_Anomaly::get_rum_anomaly_digest( $full, $now ) );
+	}
+
+	/**
+	 * The digest shares the single-alarm cooldown (one quiet window).
+	 *
+	 * Given a firing digest When evaluated twice in-window Then the
+	 * second verdict is empty (read-only row only, no second queue);
+	 * after 7 days + 1s it fires again.
+	 *
+	 * @return void
+	 */
+	public function test_digest_cooldown_single_alarm(): void {
+		$this->install_stubs();
+		$now = 1700000000;
+		$rum = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 2800.0 ),
+			)
+		);
+
+		$this->assertCount( 1, Ai_Anomaly::get_rum_anomaly_digest( $rum, $now ) );
+		$this->assertSame( array(), Ai_Anomaly::get_rum_anomaly_digest( $rum, $now ) );
+
+		unset( $this->options['wppo_ai_anomaly_last_alarm'] );
+		$this->assertCount( 1, Ai_Anomaly::get_rum_anomaly_digest( $rum, $now + ( 7 * DAY_IN_SECONDS ) + 1 ) );
+	}
+
+	/**
+	 * The digest annotates nearby deploys without suppressing the queue.
+	 *
+	 * Given a deploy note one day before the digest window When the
+	 * digest fires with the gate off (default) Then the anomaly carries
+	 * the deploy_note and maybe_queue_css_refresh() still queues once.
+	 *
+	 * Isolated in a separate process so the scheduler stubs cannot leak
+	 * (see test_css_refresh_queue_and_snapshot).
+	 *
+	 * @return void
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_digest_annotates_deploy_without_suppressing_by_default(): void {
+		$this->install_stubs();
+		$this->seed_deploy_gate_settings( true, false );
+		$now = 1700000000;
+		$this->assertTrue( Ai_Anomaly::add_deploy_note( 'shipped hero image', $now - DAY_IN_SECONDS ) );
+		Util::clear_settings_cache();
+		$this->seed_deploy_gate_settings( true, false );
+
+		$rum    = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 2800.0 ),
+			)
+		);
+		$digest = Ai_Anomaly::get_rum_anomaly_digest( $rum, $now );
+		$this->assertCount( 1, $digest );
+		$this->assertSame( 'shipped hero image', $digest[0]['deploy_note'] ?? '' );
+
+		unset( $this->options['wppo_ai_anomaly_last_alarm'] );
+		$this->assertFalse( Ai_Anomaly::is_css_refresh_deploy_gated() );
+		$this->assertSame( false, AI_Adaptive::is_css_refresh_deploy_gated() );
+
+		$enqueued = array();
+		$this->stub_css_refresh_scheduler( 123, $enqueued );
+		$result = Ai_Anomaly::maybe_queue_css_refresh( $this->make_resolvable_lcp_anomaly(), $now );
+		$this->assertTrue( $result['queued'] );
+		$this->assertSame( 'queued', $result['reason'] );
+		$this->assertCount( 1, $enqueued );
+	}
+
+	/**
+	 * The opt-in deploy gate suppresses the queue read-only.
+	 *
+	 * Given the gate on with a nearby deploy When gating runs Then no
+	 * job is queued with reason deploy-correlated; with no nearby
+	 * deploy the same anomaly queues normally.
+	 *
+	 * Isolated in a separate process so the scheduler stubs cannot leak
+	 * (see test_css_refresh_queue_and_snapshot).
+	 *
+	 * @return void
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_css_refresh_deploy_gate_suppresses_queue(): void {
+		$this->install_stubs();
+		$this->seed_deploy_gate_settings( true, true );
+		$now = 1700000000;
+		$this->assertTrue( Ai_Anomaly::add_deploy_note( 'shipped hero image', $now - DAY_IN_SECONDS ) );
+		Util::clear_settings_cache();
+		$this->seed_deploy_gate_settings( true, true );
+
+		$this->assertTrue( Ai_Anomaly::is_css_refresh_deploy_gated() );
+		$this->assertSame( true, AI_Adaptive::is_css_refresh_deploy_gated() );
+
+		$enqueued = array();
+		$this->stub_css_refresh_scheduler( 123, $enqueued );
+		$blocked = Ai_Anomaly::maybe_queue_css_refresh( $this->make_resolvable_lcp_anomaly(), $now );
+		$this->assertFalse( $blocked['queued'] );
+		$this->assertSame( 'deploy-correlated', $blocked['reason'] );
+		$this->assertCount( 0, $enqueued );
+
+		// A deploy outside the 7-day correlation window does not gate.
+		$this->options['wppo_ai_deploy_notes'] = array(
+			array(
+				'ts'   => $now - ( 30 * DAY_IN_SECONDS ),
+				'note' => 'ancient deploy',
+			),
+		);
+
+		$allowed = Ai_Anomaly::maybe_queue_css_refresh( $this->make_resolvable_lcp_anomaly(), $now );
+		$this->assertTrue( $allowed['queued'] );
+		$this->assertSame( 'queued', $allowed['reason'] );
+		$this->assertCount( 1, $enqueued );
+	}
+
+	/**
+	 * The RUM path performs no external HTTP with remote AI disabled.
+	 *
+	 * Given throwing wp_remote stubs When the digest,
+	 * trend detection (thin input), and the opt-out queue path run Then
+	 * nothing throws: the RUM path is local-only.
+	 *
+	 * @return void
+	 */
+	public function test_rum_path_makes_no_http_requests(): void {
+		$this->install_stubs();
+		$this->seed_rum_enabled();
+		foreach ( array( 'wp_remote_get', 'wp_remote_post', 'wp_safe_remote_get', 'wp_safe_remote_post', 'wp_remote_request' ) as $http_fn ) {
+			Functions\when( $http_fn )->alias(
+				static function () {
+					throw new \Exception( 'HTTP must not be called on the RUM path' );
+				}
+			);
+		}
+		$now = 1700000000;
+		$rum = $this->make_digest_rum(
+			'lcp',
+			array(
+				array( '2026-09-01', '/pricing/', 12, 2000.0 ),
+				array( '2026-09-10', '/pricing/', 12, 2800.0 ),
+			)
+		);
+
+		$digest = Ai_Anomaly::get_rum_anomaly_digest( $rum, $now );
+		$this->assertCount( 1, $digest );
+
+		unset( $this->options['wppo_ai_anomaly_last_alarm'] );
+		$thin = $this->make_trends( 'lcp', 4, 2000.0, 3000.0 );
+		$this->assertSame( array(), Ai_Anomaly::detect_anomalies( $thin, $rum, $now ) );
+
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$decision = Ai_Anomaly::maybe_queue_css_refresh( $this->make_resolvable_lcp_anomaly(), $now );
+		$this->assertFalse( $decision['queued'] );
+		$this->assertSame( 'opt-out', $decision['reason'] );
+	}
 }

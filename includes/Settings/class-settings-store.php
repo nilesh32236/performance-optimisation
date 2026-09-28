@@ -972,24 +972,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 					'enabled' => false,
 				),
 				'ai_adaptive'           => array(
-					'enabled'                       => false,
-					'use_wp_ai_client'              => false,
-					'field_lcp_min_samples'         => 20,
-					'dismissed_suggestions'         => array(),
-					'anomaly_cooldown_days'         => 7,
-					'anomaly_min_samples'           => 10,
-					'css_refresh_on_lcp_regression' => false,
-					'css_refresh_cooldown_days'     => 7,
-					'speculation_autotune_enabled'  => false,
-					'speculation_min_samples'       => 20,
-					'speculation_max_urls'          => 5,
-					'anomaly_tolerance_pct'         => 5.0,
-					'anomaly_tolerance_abs'         => 0.01,
-					'anomaly_persistence_windows'   => 3,
-					'anomaly_p75_min_samples'       => 10,
-					'anomaly_band_window'           => 10,
-					'anomaly_recovery_days'         => 3,
-					'deploy_notes'                  => array(),
+					'enabled'                              => false,
+					'use_wp_ai_client'                     => false,
+					'field_lcp_min_samples'                => 20,
+					'dismissed_suggestions'                => array(),
+					'anomaly_cooldown_days'                => 7,
+					'anomaly_min_samples'                  => 10,
+					'css_refresh_on_lcp_regression'        => false,
+					'css_refresh_cooldown_days'            => 7,
+					'css_refresh_require_no_recent_deploy' => false,
+					'speculation_autotune_enabled'         => false,
+					'speculation_min_samples'              => 20,
+					'speculation_max_urls'                 => 5,
+					'anomaly_tolerance_pct'                => 5.0,
+					'anomaly_tolerance_abs'                => 0.01,
+					'anomaly_persistence_windows'          => 3,
+					'anomaly_p75_min_samples'              => 10,
+					'anomaly_band_window'                  => 10,
+					'anomaly_recovery_days'                => 3,
+					'deploy_notes'                         => array(),
 				),
 				'edge_cache'            => array(
 					'enabled' => false,
@@ -1237,6 +1238,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 			}
 			if ( ! isset( $options['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
 				$options['ai_adaptive']['css_refresh_cooldown_days'] = 7;
+			}
+			// Deploy-correlation soft gate (issue #1704, default permissive).
+			if ( ! isset( $options['ai_adaptive']['css_refresh_require_no_recent_deploy'] ) ) {
+				$options['ai_adaptive']['css_refresh_require_no_recent_deploy'] = false;
 			}
 			// RUM-segmented speculation auto-tune keys (issue #1425).
 			if ( ! isset( $options['ai_adaptive']['speculation_autotune_enabled'] ) ) {
