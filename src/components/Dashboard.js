@@ -1991,12 +1991,17 @@ const Dashboard = ( {
 			</PanelGroup>
 
 			{ /* Server details, image jobs, and the activity log.
-			     Left open by default, and that is a correction: this group was
-			     first folded, which hid the "Optimize Images" action. Four
-			     existing tests failed because the button was no longer
-			     reachable, and they were right — a primary action does not
-			     belong behind a disclosure. Only the 3,086px of advanced tuning
-			     is folded. */ }
+			     Left open by default. The first version folded this group, and
+			     four existing tests failed because "Optimize All" was no longer
+			     reachable. Those tests were right: a primary action does not
+			     belong behind a fold.
+			     Note the rule is narrower than it first read. Three
+			     `wppo-button--primary` **Save** buttons — LLMs.txt, AI, Edge
+			     Cache — do sit inside the folded group, and that is deliberate:
+			     a per-panel Save is a commit for that panel's settings, not an
+			     arrival action, and folding it with its panel keeps the commit
+			     and the fields it commits in one place. What must stay reachable
+			     is the screen-level action, and it is. */ }
 			<PanelGroup
 				title={ __(
 					'Server, images and activity',

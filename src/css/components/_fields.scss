@@ -54,16 +54,19 @@
 	// notice needed, scoped to the plugin's own wrapper so no core class is
 	// touched.
 	//
-	// The DOM is not what its name suggests: `ToggleControl` renders
-	// `div.components-base-control.components-toggle-control` whose text sits in
-	// a **`div.components-base-control__field`**, with no `label` element inside
-	// it. An earlier attempt of this rule styled `label` and changed nothing —
-	// which is worth recording, because I had also assumed the wrong nesting
-	// level when the container was `.wppo-switch-field__info` rather than the
-	// row itself.
+	// A first attempt of this rule styled `label` and changed nothing, because
+	// the label is **not** a child of this element — it is two levels down, in
+	// `div.components-base-control__field > div[HStack] > label`. (The label
+	// does exist; an earlier note here claimed it did not, which was wrong and
+	// would have stopped the next person trying the selector that styles the
+	// text.)
+	//
+	// `min-width: 0` is what does the work. A separate `flex-shrink: 1` was
+	// removed after an independent review showed it was **inert**: an
+	// equal-specificity pre-existing rule later in this same file set
+	// `flex-shrink: 0`, and the computed value stayed `0`.
 	> .components-toggle-control {
 		min-width: 0;
-		flex-shrink: 1;
 	}
 
 	.components-base-control__field {

@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-28T09:22:07+00:00\n"
+"POT-Creation-Date: 2026-09-28T10:03:37+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -3331,14 +3331,6 @@ msgstr ""
 msgid "Working…"
 msgstr ""
 
-#: src/components/common/PanelGroup.js:82
-msgid "Collapse this group"
-msgstr ""
-
-#: src/components/common/PanelGroup.js:86
-msgid "Expand this group"
-msgstr ""
-
 #: src/components/common/StatusBadge.js:30
 msgid "Good"
 msgstr ""
@@ -3926,23 +3918,23 @@ msgstr ""
 msgid "Option bloat, edge caching, adaptive AI, and llms.txt."
 msgstr ""
 
-#: src/components/Dashboard.js:2001
+#: src/components/Dashboard.js:2006
 msgid "Server, images and activity"
 msgstr ""
 
-#: src/components/Dashboard.js:2005
+#: src/components/Dashboard.js:2010
 msgid "System information, image conversion, and what changed."
 msgstr ""
 
-#: src/components/Dashboard.js:2038
+#: src/components/Dashboard.js:2043
 msgid "Remove Optimized Images"
 msgstr ""
 
-#: src/components/Dashboard.js:2042
+#: src/components/Dashboard.js:2047
 msgid "This will delete all optimized WebP and AVIF copies. Original images will not be affected."
 msgstr ""
 
-#: src/components/Dashboard.js:2046
+#: src/components/Dashboard.js:2051
 #: src/components/DatabaseCleanup.js:934
 msgid "Delete"
 msgstr ""
