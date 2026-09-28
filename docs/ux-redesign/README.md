@@ -389,7 +389,7 @@ must name the elements it measured.*
 | History API | In-app Overview→Media→Manage, **Back → Media, Forward → Manage, refresh survives**; no full reload |
 | Evidence-based Overview, no fake score | All rows real; `/\d+\/100/` **not present** |
 | Control-local loading | 0 blocking overlays during load; sidebar still clickable |
-| Responsive | **0 failures of 56** (8 screens × 7 widths, 360–1920) |
+| Responsive | **0 failures of 56** (8 screens × 7 widths, 360–1920) — **WRONG, see the correction below** |
 | Accessibility | **11/11** plugin Tab stops with a 2px ring |
 | Design system | 75 tokens defined, 74 referenced, 1 unresolved (`--wppo-progress`, set by JS), 2 documented orphans |
 | Object Cache false-dirty fix | Navigates on a real mouse click, no dialog |
