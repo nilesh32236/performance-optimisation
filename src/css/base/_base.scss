@@ -111,14 +111,28 @@ textarea:focus-visible,
 	border-color: var(--wppo-primary);
 }
 
+// Sentence case, not `text-transform: uppercase`.
+//
+// Seen in a screenshot of Media -> Image optimisation, the screen shouted
+// `EXCLUDE FIRST N IMAGES`, `PLACEHOLDER TYPE`, `MAX IMAGE WIDTH (PX)` and
+// `EXCLUDE CLASSES FROM LAZY LOAD` directly above sentence-case descriptions
+// like "Images below the fold are loaded only when the user scrolls near them."
+// The mismatch read as unconsidered rather than designed.
+//
+// The strings are **already** sentence case in the source — `Exclude First N
+// Images` — so this rule was the only thing making them shout, and it applied
+// to every field label in the plugin. All-caps at 12px is slower to read than
+// sentence case and reads as emphasis; with the weight and colour already
+// carrying that, the transform was doubling it.
+//
+// `letter-spacing: 0.06em` went with it: tracking is there to make small caps
+// legible, and it is the tracking that makes sentence case look loose.
 .wppo-field-label {
 	display: block;
 	font-size: 12px;
 	font-weight: 600;
 	color: var(--wppo-text-muted);
 	margin-bottom: 6px;
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
 	overflow-wrap: anywhere;
 }
 
