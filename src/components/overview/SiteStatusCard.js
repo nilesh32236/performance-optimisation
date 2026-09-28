@@ -86,10 +86,20 @@ export default function SiteStatusCard( {
 
 	// One shared line, not one per row: two INP rows each repeating the same
 	// advice is noise, and the rows already say what is missing.
-	const hasUnmeasuredVital = rows.some(
+	//
+	// Scoped to **INP specifically**, because the sentence is about one metric.
+	// An independent review reproduced a state this site can produce — an
+	// unmeasured LCP and no INP row at all — where a predicate keyed on `vital-`
+	// rendered "Responsiveness to taps and clicks…" under a card with no
+	// responsiveness row, next to an LCP row ending `(PageSpeed lab scan)`,
+	// which is the opposite of what that sentence asserts.
+	//
+	// `startsWith( 'vital-inp' )` covers both id shapes: the per-device
+	// `vital-inp--desktop` and the flat `vital-inp` from the back-compat path.
+	const hasUnmeasuredInp = rows.some(
 		( row ) =>
 			typeof row.id === 'string' &&
-			row.id.startsWith( 'vital-' ) &&
+			row.id.startsWith( 'vital-inp' ) &&
 			row.status === 'unknown'
 	);
 
@@ -216,7 +226,7 @@ export default function SiteStatusCard( {
 					} ) }
 				</ul>
 			</div>
-			{ hasUnmeasuredVital ? (
+			{ hasUnmeasuredInp ? (
 				<p className="wppo-overview__action-hint">
 					{ __(
 						'Responsiveness to taps and clicks comes from real visitors, not a PageSpeed scan.',

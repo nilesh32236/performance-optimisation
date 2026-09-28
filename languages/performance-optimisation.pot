@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-27T12:32:21+00:00\n"
+"POT-Creation-Date: 2026-09-28T05:14:31+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -6886,38 +6886,38 @@ msgstr ""
 msgid "Unavailable"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:100
-#: src/components/overview/SiteStatusCard.js:118
-#: src/components/overview/SiteStatusCard.js:150
+#: src/components/overview/SiteStatusCard.js:110
+#: src/components/overview/SiteStatusCard.js:128
+#: src/components/overview/SiteStatusCard.js:160
 msgid "Site status"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:104
+#: src/components/overview/SiteStatusCard.js:114
 msgid "Checking your site…"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:122
+#: src/components/overview/SiteStatusCard.js:132
 msgid "This information could not be loaded."
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:133
-#: src/components/overview/SiteStatusCard.js:177
+#: src/components/overview/SiteStatusCard.js:143
+#: src/components/overview/SiteStatusCard.js:187
 msgid "Try again"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:161
+#: src/components/overview/SiteStatusCard.js:171
 msgid "Overall status:"
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:168
+#: src/components/overview/SiteStatusCard.js:178
 msgid "Some information could not be loaded."
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:221
+#: src/components/overview/SiteStatusCard.js:231
 msgid "Responsiveness to taps and clicks comes from real visitors, not a PageSpeed scan."
 msgstr ""
 
-#: src/components/overview/SiteStatusCard.js:241
+#: src/components/overview/SiteStatusCard.js:251
 msgid "See Real-user Web Vitals"
 msgstr ""
 
