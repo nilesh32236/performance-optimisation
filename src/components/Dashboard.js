@@ -1931,66 +1931,72 @@ const Dashboard = ( {
 			     9,053px, ten screens, 22 headings, no hierarchy. Grouped into
 			     what a site owner came for and what they did not, so the page
 			     of arrival is under two screens. Nothing is removed. */ }
-			<PanelGroup
-				title={ __(
-					'How your site is doing',
-					'performance-optimisation'
-				) }
-				summary={ __(
-					'Lab scans, real-user data, and what to do next.',
-					'performance-optimisation'
-				) }
-			>
-				{ /* Guided single RUM-driven next action + server-type note (NEXT) */ }
-				<GuidedNextStep onNavigate={ onNavigate } />
+			{ /* A reporting screen, not a task screen: the design system
+			     scopes the primary weight to settings screens only. */ }
+			<div className="wppo-dashboard">
+				<PanelGroup
+					title={ __(
+						'How your site is doing',
+						'performance-optimisation'
+					) }
+					summary={ __(
+						'Lab scans, real-user data, and what to do next.',
+						'performance-optimisation'
+					) }
+				>
+					{ /* Guided single RUM-driven next action + server-type note (NEXT) */ }
+					<GuidedNextStep onNavigate={ onNavigate } />
 
-				<PerformanceAudit
-					onSuggestionsReady={ setTelemetrySuggestions }
-					onUrlChange={ handleAuditUrlChange }
-				/>
-
-				{ /* Phase 2 — SuggestionsPanel sits directly below PerformanceAudit (v1.6.0) */ }
-				{ allSuggestions.length > 0 && (
-					<SuggestionsPanel
-						suggestions={ allSuggestions }
-						onNavigate={ onNavigate }
+					<PerformanceAudit
+						onSuggestionsReady={ setTelemetrySuggestions }
+						onUrlChange={ handleAuditUrlChange }
 					/>
-				) }
 
-				{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
-				<PageSpeedPanel
-					url={ auditUrl }
-					onSuggestionsReady={ setPagespeedSuggestions }
-				/>
+					{ /* Phase 2 — SuggestionsPanel sits directly below PerformanceAudit (v1.6.0) */ }
+					{ allSuggestions.length > 0 && (
+						<SuggestionsPanel
+							suggestions={ allSuggestions }
+							onNavigate={ onNavigate }
+						/>
+					) }
 
-				{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
-				<WebVitalsTrends url={ auditUrl } />
+					{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
+					<PageSpeedPanel
+						url={ auditUrl }
+						onSuggestionsReady={ setPagespeedSuggestions }
+					/>
 
-				{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
-				<WebVitalsRum />
-			</PanelGroup>
+					{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
+					<WebVitalsTrends url={ auditUrl } />
 
-			{ /* 3,086px of material a site owner usually does not open on
+					{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
+					<WebVitalsRum />
+				</PanelGroup>
+
+				{ /* 3,086px of material a site owner usually does not open on
 			     arrival. Folded, not hidden: one click, same screen. */ }
-			<PanelGroup
-				defaultOpen={ false }
-				title={ __( 'Advanced tuning', 'performance-optimisation' ) }
-				summary={ __(
-					'Option bloat, edge caching, adaptive AI, and llms.txt.',
-					'performance-optimisation'
-				) }
-			>
-				{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
-				<AutoloadedOptions />
+				<PanelGroup
+					defaultOpen={ false }
+					title={ __(
+						'Advanced tuning',
+						'performance-optimisation'
+					) }
+					summary={ __(
+						'Option bloat, edge caching, adaptive AI, and llms.txt.',
+						'performance-optimisation'
+					) }
+				>
+					{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
+					<AutoloadedOptions />
 
-				<LlmsPanel />
+					<LlmsPanel />
 
-				<AiPanel />
+					<AiPanel />
 
-				<EdgeCachePanel />
-			</PanelGroup>
+					<EdgeCachePanel />
+				</PanelGroup>
 
-			{ /* Server details, image jobs, and the activity log.
+				{ /* Server details, image jobs, and the activity log.
 			     Left open by default. The first version folded this group, and
 			     four existing tests failed because "Optimize All" was no longer
 			     reachable. Those tests were right: a primary action does not
@@ -2002,39 +2008,40 @@ const Dashboard = ( {
 			     arrival action, and folding it with its panel keeps the commit
 			     and the fields it commits in one place. What must stay reachable
 			     is the screen-level action, and it is. */ }
-			<PanelGroup
-				title={ __(
-					'Server, images and activity',
-					'performance-optimisation'
-				) }
-				summary={ __(
-					'System information, image conversion, and what changed.',
-					'performance-optimisation'
-				) }
-				className="wppo-panel-group--spaced"
-			>
-				<SystemInfo />
-				<ImageOptimizationCard
-					completed={ completed }
-					pending={ pending }
-					failed={ failed }
-					bgProcessing={ bgProcessing }
-					bgJobsQueued={ bgJobsQueued }
-					loading={ loading }
-					savings={ imageJobSavings }
-					pendingPathsCount={
-						( pending.webp || 0 ) + ( pending.avif || 0 )
-					}
-					onOptimize={ optimizeImages }
-					onRemove={ handleRemoveRequest }
-				/>
+				<PanelGroup
+					title={ __(
+						'Server, images and activity',
+						'performance-optimisation'
+					) }
+					summary={ __(
+						'System information, image conversion, and what changed.',
+						'performance-optimisation'
+					) }
+					className="wppo-panel-group--spaced"
+				>
+					<SystemInfo />
+					<ImageOptimizationCard
+						completed={ completed }
+						pending={ pending }
+						failed={ failed }
+						bgProcessing={ bgProcessing }
+						bgJobsQueued={ bgJobsQueued }
+						loading={ loading }
+						savings={ imageJobSavings }
+						pendingPathsCount={
+							( pending.webp || 0 ) + ( pending.avif || 0 )
+						}
+						onOptimize={ optimizeImages }
+						onRemove={ handleRemoveRequest }
+					/>
 
-				<RecentActivityCard
-					activities={ activities }
-					activitiesError={ activitiesError }
-					onNavigate={ onNavigate }
-				/>
-			</PanelGroup>
+					<RecentActivityCard
+						activities={ activities }
+						activitiesError={ activitiesError }
+						onNavigate={ onNavigate }
+					/>
+				</PanelGroup>
+			</div>
 
 			<ConfirmDialog
 				isOpen={ confirmRemove }

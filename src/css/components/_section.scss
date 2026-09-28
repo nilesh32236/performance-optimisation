@@ -279,3 +279,27 @@
 		color: var(--wppo-text-muted, #475569);
 	}
 }
+
+// On the All-diagnostics screen an action is **contextual**, not primary.
+//
+// Measured across the eight screens, that screen carried **12**
+// `wppo-button--primary` at once — "Purge All Cache", "Apply Balanced", "Save
+// Page Cache Settings", "Save CDN Purge", "Save Settings", "Run Scan", "Run
+// PageSpeed Scan", "Save LLMs.txt Settings", "Save AI Settings", "Save Edge
+// Cache", "Optimize All" and one more. Twelve blue buttons is twelve things
+// shouting at once, which is what "there is no visual hierarchy" and "I cannot
+// tell what to click" look like from the outside.
+//
+// The distinction is the screen's job, not the panel's: a **settings** screen
+// has one thing to commit, so its Save keeps the primary weight. A
+// **reporting** screen has none — an action belongs to the panel it sits in, so
+// it takes the secondary weight and the measurements lead the page.
+//
+// Scoped to that one view, so the settings screens keep their single primary
+// action and this cannot drift per panel.
+.wppo-dashboard .wppo-panel-group .wppo-button--primary {
+	background: var(--wppo-bg-card, #fff);
+	color: var(--wppo-primary, #007cb6);
+	border: 1px solid var(--wppo-border, #dcdcde);
+	box-shadow: none;
+}

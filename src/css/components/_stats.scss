@@ -256,6 +256,25 @@
 		align-items: center;
 		position: relative;
 		z-index: 1;
+
+		// The action is a flex item with the default `min-width: auto`, and
+		// `.wppo-button` sets `white-space: nowrap`. Together those two mean the
+		// button's min-content **is** its whole label, so it cannot shrink — and
+		// `.wppo-stat-item` is `overflow: hidden`, so the excess is silently cut.
+		//
+		// Measured on All diagnostics at 1280px: "Manage ->" painted to x=671
+		// inside a card that ends at x=648, losing 11-23px of the label depending
+		// on what else was on the page. No scrollbar, no indication — the text
+		// simply stops.
+		//
+		// `nowrap` is the real blocker: `overflow-wrap: anywhere` was already on
+		// the button and is inert against it, the same trap as the
+		// `min-width: 0`-only half-fix found in round 34.
+		> .wppo-button {
+			min-width: 0;
+			white-space: normal;
+			text-align: left;
+		}
 	}
 
 	.wppo-stat-link {
