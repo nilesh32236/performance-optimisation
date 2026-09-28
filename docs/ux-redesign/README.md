@@ -1054,3 +1054,97 @@ angles:
 > and immediately mislabelled by the control that owns it. In each case the
 > *signal* was correct and *the thing it described* was not — and in each case a
 > real gate had passed first.
+
+## Rounds 38–40 — what the user saw, and what I could not
+
+The feedback on this round was not a defect report. It was:
+
+> "I really not like current design and this is not look like created by human
+> and this is not easy to use."
+
+That is the most useful sentence anyone has said in forty rounds, and it
+arrived after every automated check had been passing for a dozen merges.
+
+### I could not look
+
+The image tool on this host cannot open any file. It returns
+`EACCES: permission denied, open '/opt'` — before it ever looks at the path, and
+regardless of where the file is. Tried four times, including with an absolute
+path supplied directly. The file was fine: 1280×1753, 298,134 bytes, a valid
+PNG. **The tool is broken, not the path, and I cannot fix it from inside the
+session.**
+
+So I can *show* a screenshot and I cannot *see* one. Every claim in this record
+that says a design "looks right" was, until now, a claim about measurements.
+
+### Measuring the pixels anyway
+
+I decoded the screenshots through the browser's canvas and got numbers:
+
+| screen | ink coverage |
+|---|---|
+| Overview | 39.6% |
+| All diagnostics | 30.2% |
+| Media → Images | 30.4% |
+| Data → Object cache | **46.9%** |
+
+A well-set admin screen carries roughly **8–18%** ink. These run double that.
+And the shape of the problem is not text — it is surfaces: on Object cache, nine
+boxes cover **55%** of a page holding 175 words; on Media → Images, boxes cover
+**83%**.
+
+Large filled rectangles of identical weight, with nothing visually dominant.
+That is the signature of a design system applied *uniformly* instead of building
+a hierarchy, and it is exactly what "does not look like a person made it"
+describes.
+
+### Then the user said what was actually wrong
+
+*No visual hierarchy.* *Hard to know where to click.*
+
+Both have one measured root cause. Counting primary buttons across all eight
+screens, **All diagnostics carried twelve `wppo-button--primary` at once**:
+
+> Purge All Cache · Apply Balanced · Save Page Cache Settings · Save CDN Purge ·
+> Save Settings · Run Scan · Run PageSpeed Scan · Save LLMs.txt Settings ·
+> Save AI Settings · Save Edge Cache · Optimize All · and one more
+
+The strongest signal on a screen, present twelve times, carries no information.
+
+### The rule, and the change
+
+A **settings** screen has one thing to commit, so its single Save keeps the
+primary weight — measured, each of them has exactly one. A **reporting** screen
+has none: an action there belongs to the panel it sits in, so it takes the
+secondary weight and the measurements lead.
+
+Applied as one scoped rule rather than thirteen per-panel edits that would drift:
+
+```scss
+.wppo-dashboard .wppo-panel-group .wppo-button--primary { … card surface … }
+```
+
+**Verified live:** 6 primary buttons inside the panel scope, **0 of them still
+rendering the blue**. The 6 above the groups are screen-level and keep the
+weight. Twelve shouting things became six deliberate ones.
+
+### The instrument lied first, again
+
+My first verification reported "6 of 6 still render filled" and the fix appeared
+not to work. **It had worked.** I had tested
+`backgroundColor !== 'rgba(0,0,0,0)'`, which a *white card background* satisfies
+exactly as well as a blue one. Measuring against `--wppo-primary` itself showed
+0. That is the **sixth** time in this campaign a check failed before the thing it
+measured did.
+
+### The lesson, tenth form
+
+Nine rounds each recorded a way of being wrong. This one:
+
+> **A design cannot be verified by the person who cannot see it.** Forty rounds
+> of gates, mutation testing and live measurement all passed, and the result
+> still did not look like something a person would ship. The measurements were
+> not wrong — they were answering questions nobody had asked. Density, overflow,
+> semantics and contrast were all clean while the thing that makes a screen feel
+> *designed* — what is being said first, and what is being asked of the user —
+> was unmeasured and wrong.
