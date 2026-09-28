@@ -368,6 +368,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'autoload_backup'           => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'export_autoload_backup' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'expired_transients_export' => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'export_expired_transients' ),
@@ -540,6 +546,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$report               = Database_Cleanup::plan_autoload_remediation( $threshold, $limit );
 			$report['remediated'] = Database_Cleanup::get_remediated_options();
 			return $this->send_response( $report );
+		}
+
+		/**
+		 * Export the autoload-remediation backup for archive/verify (read-only).
+		 *
+		 * GET companion to `autoload_remediate`: returns the persisted prior
+		 * map plus the current dry-run backup triples without writing
+		 * anything. Read-only like `dry_run`, so intentionally unthrottled.
+		 * Requires `manage_options` + `X-WP-Nonce` via `permission_callback`.
+		 * Privacy note: `prior` values are autoload flags only (`yes`/`no`),
+		 * never option payloads, so admin-gated exposure is intentional.
+		 *
+		 * Optional params: `threshold` (bytes, 100..10MB), `limit` (1..500).
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function export_autoload_backup( \WP_REST_Request $request ): \WP_REST_Response {
+			$params    = $request->get_params();
+			$threshold = isset( $params['threshold'] ) ? absint( $params['threshold'] ) : null;
+			if ( null !== $threshold ) {
+				$threshold = max( Database_Cleanup::AUTOLOAD_THRESHOLD_MIN, min( Database_Cleanup::AUTOLOAD_THRESHOLD_MAX, $threshold ) );
+			}
+			$limit  = isset( $params['limit'] ) ? absint( $params['limit'] ) : Database_Cleanup::AUTOLOAD_REMEDIATION_LIMIT;
+			$limit  = max( 1, min( Database_Cleanup::AUTOLOAD_LIMIT_MAX, $limit ) );
+			$result = Database_Cleanup::export_autoload_backup( $threshold, $limit );
+			return $this->send_response( $result );
 		}
 
 		/**
