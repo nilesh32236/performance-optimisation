@@ -837,3 +837,98 @@ Six previous rounds each recorded a way of being wrong. This one:
 > deserves the same suspicion as the defect.** My sweep's responsive check was
 > structurally incapable of failing, and my fix for a real bug introduced five
 > new ones while my own evidence for it was not reproducible.
+
+## Round 36 — a final review, and the record certifying a result that did not exist
+
+A holistic review of the **merged result** against the objective returned **NOT
+COMPLETE**. It said plainly that it could not dent the Overview's honesty — and
+that seven of nine clauses passed, including every one this campaign spent its
+life on. But it found four defects **in the campaign's own work**, and the
+severest was not a product bug at all.
+
+### The falsified pass line
+
+This record carried:
+
+> Responsive | **0 failures of 56** (8 screens × 7 widths, 360–1920px)
+
+The review reproduced **15–25px of glyphs cut at 360px** on two of the eight
+screens, stably, over three runs:
+
+- `media/images` — "Lazy-load CSS Background Images" cut by 15px
+- `overview/dashboard` — "Use WordPress AI client when available" cut by 25px
+
+The mechanism is `.components-toggle-control`, a `@wordpress/components` flex row
+265px wide inside a 204px `.wppo-switch-field`, truncated by
+`.wppo-feature-card { overflow: hidden }`.
+
+**The element box is in bounds.** The text is not. That is exactly the case this
+record names at length further down — a half-fix an element-rect check scores as
+a pass — which is why the replacement ink-based check still misses it: the
+toggle's label lives inside a shadow-DOM-ish component whose ink the current walk
+does not reach.
+
+The underlying defect is **pre-existing**, not introduced here. The claim was
+wrong, and a claim is part of the deliverable.
+
+### Four defects in the campaign's own work
+
+| # | Defect | Evidence |
+|---|---|---|
+| 1 | **Connected and Disconnected looked identical** | `ObjectCache.js` emitted `--success`/`--error`; **neither has a rule**. Live: `background: rgba(0,0,0,0)`, `border: 0px`. The same hole this record documents as fixed **for the Overview only** |
+| 2 | **The tablist's accessible name could not be translated** | `aria-label={\`${title} sections\`}` — a template literal, 0 matches in the `.pot`, campaign-introduced |
+| 3 | **A class the campaign's own Overview emits had no rule** | `.wppo-overview__stale`, in the campaign's own `_overview.scss` |
+| 4 | **Every area heading lost its weight *and* its size** | declares `600`/`1.5rem`, computed `400`/`23px` on all eight screens — WordPress core's id-keyed `h1` beats any number of classes |
+
+All four are fixed in #1720, verified live: the H1 computes **600 / 24px**, the
+badge computes **`rgb(236,253,245)` with a 1px border**, and the `.pot` grew to
+**1,892 msgids** with the tablist label in it.
+
+### What the review could not break
+
+It recomputed **every Overview number** from `wppo_web_vitals_trends` in WP-CLI —
+39 rows, fields `fetched_at, performance, lcp, cls, tbt`, **`has_inp=NO`** — and
+desktop **388.0** / mobile **1202.0** / CLS **0.0018445→0.002** / **0.0092514→0.009**
+matched the page to the digit. The pooled **504.5 ms** the round-30 review
+condemned still exists in the data and is correctly not shown. The remedy line's
+claim is true. Also verified: **no hand-written PHP in the campaign** (the 292
+PHP paths in #1676 are all `100644→100755` mode changes, zero content lines),
+48/47 routes, one `__return_true` = `rum_collect` only, every panel still saves
+under its original tab key, and **163 focus stops** all with a visible indicator
+under a delta test that can fail.
+
+### The fifth time a name-based search misled me
+
+Finding the badge tones, I grepped `src/css` for `status-badge--good` and got
+nothing — **four times**. The rules exist; they are written as `&--good` nested
+under `.wppo-status-badge` in `_performance-audit.scss`. A literal string cannot
+see a nested SCSS selector.
+
+After measuring WordPress core's focus rings, after concluding a class had no
+rule when it had eight, and after editing the wrong one of eight `&__value`
+blocks twice — the same failure, in a new disguise.
+
+> **A name is not a definition, and a search hit is not a proof.**
+
+The test now reads the **built** stylesheet, where there is no such ambiguity.
+
+### Record defects also corrected
+
+Beyond the falsified pass line: the Progress section still showed Phases 2–7
+unchecked while the rounds below declared them merged; two links point at a
+`defects-found-and-fixed.md` that has never existed; a quoted Overview rendering
+no longer matches the shipped page since #1698 moved the device into the label;
+and the tooltip's residual was recorded as "3 clipped, all at 390px" where the
+review measures the box overhanging its card at 390, 414, 768 and 1440 — though
+across 62 hovered instances **no glyph is lost**, so the original statement was
+both narrower and more severe than the truth.
+
+### The lesson, eighth form
+
+Seven previous rounds each recorded a way of being wrong. This one:
+
+> **A record that certifies its own result is not a check on that result.** The
+> responsive line was the one quantitative claim standing behind the
+> accessibility clause, and stable measurement falsified it at the campaign's own
+> declared lower bound — in precisely the half-fix shape the same record
+> describes two hundred lines later.
