@@ -198,3 +198,84 @@
 		padding-inline: 12px;
 	}
 }
+
+// A titled, foldable group of panels.
+//
+// The All-diagnostics screen rendered 13 panels in one flat column — a measured
+// 9,053px, ten screens, 22 headings. This gives it the hierarchy it never had.
+// The toggle is a real button with a full-width target; the panel keeps a small
+// left border so the fold is legible without a heavy rule.
+.wppo-panel-group {
+	margin-bottom: 24px;
+
+	&--spaced {
+		margin-top: 20px;
+	}
+
+	&__toggle {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		// 44px, not the ~30px a bare text button would be: this is the
+		// primary control for a third of the screen's content.
+		min-height: 44px;
+		padding: 10px 14px;
+		margin-bottom: 12px;
+		text-align: left;
+		cursor: pointer;
+		background: var(--wppo-bg-card, #fff);
+		border: 1px solid var(--wppo-border, #e2e8f0);
+		border-radius: var(--wppo-radius-sm, 4px);
+
+		&:hover {
+			border-color: var(--wppo-border-hover, #cbd5e1);
+			background: var(--wppo-switch-hover, #f1f5f9);
+		}
+
+		// The one focus treatment for the whole plugin.
+		&:focus-visible {
+			outline: solid 2px var(--wppo-primary, #2271b1);
+			outline-offset: 2px;
+		}
+	}
+
+	&__heading {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 2px;
+		// A flex item must be allowed to shrink, or the long summary sets the
+		// floor and the button overflows its card at 360px.
+		min-width: 0;
+	}
+
+	&__title {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--wppo-text-main, #0f172a);
+	}
+
+	&__summary {
+		font-size: 0.8125rem;
+		line-height: 1.4;
+		color: var(--wppo-text-muted, #475569);
+		overflow-wrap: anywhere;
+	}
+
+	// The HTML `hidden` attribute is `display: none` from the UA stylesheet, and
+	// **any author `display` beats it**. `.wppo-stacked-cards` sets one, so
+	// folding the group did nothing at all: the page measured 9,306px with the
+	// "Advanced tuning" group reported collapsed. This restores the attribute's
+	// meaning, scoped to this component.
+	&__panel[hidden] {
+		display: none;
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 0.75rem;
+		color: var(--wppo-text-muted, #475569);
+	}
+}

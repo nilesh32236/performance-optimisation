@@ -40,6 +40,39 @@
 		min-width: 0;
 	}
 
+	// The toggle is a flex item with the default `min-width: auto`, so it
+	// refuses to shrink below its own content — and `flex-wrap: wrap` does not
+	// save it, because wrapping only moves an item to its own line; the line is
+	// still 204px and the toggle still wants 265px.
+	//
+	// Measured at a 360px viewport, where the card clips at 332px:
+	//   "Lazy-load CSS Background Images"   ink 347, **15px lost**
+	//   "Use WordPress AI client when available"  ink 357, **25px lost**
+	//
+	// Both were invisible, with no scrollbar: `.wppo-feature-card` uses
+	// `overflow: hidden`. The fix is the same flex-shrink escape hatch the
+	// notice needed, scoped to the plugin's own wrapper so no core class is
+	// touched.
+	//
+	// The DOM is not what its name suggests: `ToggleControl` renders
+	// `div.components-base-control.components-toggle-control` whose text sits in
+	// a **`div.components-base-control__field`**, with no `label` element inside
+	// it. An earlier attempt of this rule styled `label` and changed nothing —
+	// which is worth recording, because I had also assumed the wrong nesting
+	// level when the container was `.wppo-switch-field__info` rather than the
+	// row itself.
+	> .components-toggle-control {
+		min-width: 0;
+		flex-shrink: 1;
+	}
+
+	.components-base-control__field {
+		min-width: 0;
+		// The label is the long part, so it has to be allowed to wrap rather
+		// than set the item's min-content floor.
+		overflow-wrap: anywhere;
+	}
+
 	strong {
 		display: block;
 		font-size: 14px;
