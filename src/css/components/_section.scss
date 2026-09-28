@@ -34,7 +34,17 @@
 	gap: 4px;
 }
 
-.wppo-section__title {
+// Scoped by the mount id, not just the class.
+//
+// WordPress core ships an `h1` rule keyed to an **id**, and an id beats any
+// number of classes. So the declared weight and size were both being discarded
+// on every screen: `.wppo-section__title` declares `600` / `1.5rem` and the
+// heading computed **400 / 23px** at a 16px root. An independent review measured
+// the override on all eight screens.
+//
+// `#performance-optimisation` is this plugin's own mount node, so this wins on
+// specificity without `!important`.
+#performance-optimisation .wppo-section__title {
 	margin: 0;
 	font-size: 1.5rem;
 	font-weight: 600;

@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-28T05:14:31+00:00\n"
+"POT-Creation-Date: 2026-09-28T07:56:10+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -619,7 +619,7 @@ msgstr ""
 
 #: includes/Admin/class-metabox.php:331
 #: includes/Admin/class-metabox.php:431
-#: src/components/ObjectCache.js:1265
+#: src/components/ObjectCache.js:1269
 msgid "Disable"
 msgstr ""
 
@@ -1796,7 +1796,7 @@ msgstr ""
 
 #: includes/Cache/class-cache-capacity.php:96
 #: includes/Core/class-main.php:3178
-#: src/components/ObjectCache.js:822
+#: src/components/ObjectCache.js:826
 msgid "N/A"
 msgstr ""
 
@@ -2658,7 +2658,7 @@ msgstr ""
 #. translators: %s: hit ratio value.
 #. translators: %s: percent value.
 #: includes/Insight/class-system-info.php:702
-#: src/components/ObjectCache.js:724
+#: src/components/ObjectCache.js:728
 #: src/lib/format.js:91
 #, php-format,js-format
 msgid "%s%%"
@@ -6297,8 +6297,8 @@ msgid "Save LLMs.txt Settings"
 msgstr ""
 
 #: src/components/ObjectCache.js:63
-#: src/components/ObjectCache.js:1130
-#: src/components/ObjectCache.js:1161
+#: src/components/ObjectCache.js:1134
+#: src/components/ObjectCache.js:1165
 msgid "(Disabled)"
 msgstr ""
 
@@ -6319,264 +6319,264 @@ msgstr ""
 msgid "Action successful."
 msgstr ""
 
-#: src/components/ObjectCache.js:486
+#: src/components/ObjectCache.js:490
 msgid "Disconnected"
 msgstr ""
 
-#: src/components/ObjectCache.js:492
+#: src/components/ObjectCache.js:496
 msgid "Connected"
 msgstr ""
 
-#: src/components/ObjectCache.js:497
+#: src/components/ObjectCache.js:501
 msgid "Unreachable"
 msgstr ""
 
 #. translators: %d: failure count.
-#: src/components/ObjectCache.js:512
+#: src/components/ObjectCache.js:516
 #, js-format
 msgid "%d failure"
 msgid_plural "%d failures"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/ObjectCache.js:528
+#: src/components/ObjectCache.js:532
 #: src/components/SystemInfo.js:378
 #: src/lib/informationArchitecture.js:108
 msgid "Object Cache"
 msgstr ""
 
-#: src/components/ObjectCache.js:529
+#: src/components/ObjectCache.js:533
 msgid "Enterprise-grade Redis object caching with Sentinel and Cluster support."
 msgstr ""
 
-#: src/components/ObjectCache.js:545
+#: src/components/ObjectCache.js:549
 msgid "Flush Cache"
 msgstr ""
 
-#: src/components/ObjectCache.js:569
+#: src/components/ObjectCache.js:573
 msgid "Enable Object Cache"
 msgstr ""
 
-#: src/components/ObjectCache.js:594
+#: src/components/ObjectCache.js:598
 msgid "Nginx servers: protect the Redis config file"
 msgstr ""
 
-#: src/components/ObjectCache.js:600
+#: src/components/ObjectCache.js:604
 msgid "Nginx ignores .htaccess rules, so the connection file stays fetchable unless denied at server level. The file never holds the password, but add this rule to hide topology:"
 msgstr ""
 
-#: src/components/ObjectCache.js:619
+#: src/components/ObjectCache.js:623
 msgid "Extension Missing"
 msgstr ""
 
-#: src/components/ObjectCache.js:625
+#: src/components/ObjectCache.js:629
 msgid "The PhpRedis extension is not installed. Native performance will be limited."
 msgstr ""
 
-#: src/components/ObjectCache.js:638
+#: src/components/ObjectCache.js:642
 msgid "Conflict Detected"
 msgstr ""
 
-#: src/components/ObjectCache.js:644
+#: src/components/ObjectCache.js:648
 msgid "Another object cache plugin is currently active. Please disable it to avoid site crashes."
 msgstr ""
 
-#: src/components/ObjectCache.js:661
+#: src/components/ObjectCache.js:665
 msgid "Object Cache Auto-Disabled"
 msgstr ""
 
-#: src/components/ObjectCache.js:667
+#: src/components/ObjectCache.js:671
 msgid "The circuit breaker disabled the object cache after repeated Redis failures."
 msgstr ""
 
-#: src/components/ObjectCache.js:680
+#: src/components/ObjectCache.js:684
 msgid "Re-enable Object Cache"
 msgstr ""
 
-#: src/components/ObjectCache.js:699
+#: src/components/ObjectCache.js:703
 #: src/components/SystemInfo.js:417
 msgid "Memory Usage"
 msgstr ""
 
-#: src/components/ObjectCache.js:705
+#: src/components/ObjectCache.js:709
 msgid "Peak:"
 msgstr ""
 
-#: src/components/ObjectCache.js:719
+#: src/components/ObjectCache.js:723
 msgid "Hit Ratio"
 msgstr ""
 
-#: src/components/ObjectCache.js:744
+#: src/components/ObjectCache.js:748
 msgid "Cache hits vs total requests"
 msgstr ""
 
 #. translators: 1: hit count, 2: total request count.
-#: src/components/ObjectCache.js:751
+#: src/components/ObjectCache.js:755
 #, js-format
 msgid "%1$s hit / %2$s total"
 msgid_plural "%1$s hits / %2$s total"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/ObjectCache.js:784
+#: src/components/ObjectCache.js:788
 msgid "Active Clients"
 msgstr ""
 
-#: src/components/ObjectCache.js:794
+#: src/components/ObjectCache.js:798
 msgid "Cumulative connections handled since Redis started"
 msgstr ""
 
-#: src/components/ObjectCache.js:799
+#: src/components/ObjectCache.js:803
 msgid "Total Connections:"
 msgstr ""
 
-#: src/components/ObjectCache.js:815
+#: src/components/ObjectCache.js:819
 msgid "Redis Version"
 msgstr ""
 
-#: src/components/ObjectCache.js:825
+#: src/components/ObjectCache.js:829
 msgid "Uptime:"
 msgstr ""
 
 #. translators: %s: uptime in hours.
-#: src/components/ObjectCache.js:828
+#: src/components/ObjectCache.js:832
 #, js-format
 msgid "%s h"
 msgstr ""
 
-#: src/components/ObjectCache.js:843
+#: src/components/ObjectCache.js:847
 msgid "Connection Settings"
 msgstr ""
 
-#: src/components/ObjectCache.js:861
+#: src/components/ObjectCache.js:865
 msgid "Deployment Mode"
 msgstr ""
 
-#: src/components/ObjectCache.js:875
+#: src/components/ObjectCache.js:879
 msgid "Standalone (Single Node)"
 msgstr ""
 
-#: src/components/ObjectCache.js:881
+#: src/components/ObjectCache.js:885
 msgid "Redis Sentinel (HA)"
 msgstr ""
 
-#: src/components/ObjectCache.js:887
+#: src/components/ObjectCache.js:891
 msgid "Redis Cluster"
 msgstr ""
 
-#: src/components/ObjectCache.js:897
+#: src/components/ObjectCache.js:901
 msgid "Choose the Redis topology that matches your infrastructure."
 msgstr ""
 
-#: src/components/ObjectCache.js:911
+#: src/components/ObjectCache.js:915
 msgid "Host"
 msgstr ""
 
-#: src/components/ObjectCache.js:930
+#: src/components/ObjectCache.js:934
 msgid "Port"
 msgstr ""
 
-#: src/components/ObjectCache.js:952
+#: src/components/ObjectCache.js:956
 msgid "Server Nodes"
 msgstr ""
 
-#: src/components/ObjectCache.js:962
+#: src/components/ObjectCache.js:966
 msgid "host:port (one per line)"
 msgstr ""
 
-#: src/components/ObjectCache.js:970
+#: src/components/ObjectCache.js:974
 msgid "One host:port per line. Example: 10.0.0.1:6379"
 msgstr ""
 
-#: src/components/ObjectCache.js:984
+#: src/components/ObjectCache.js:988
 msgid "Sentinel Master Name"
 msgstr ""
 
-#: src/components/ObjectCache.js:1002
+#: src/components/ObjectCache.js:1006
 msgid "Name of the Redis master as configured in sentinel.conf."
 msgstr ""
 
-#: src/components/ObjectCache.js:1016
+#: src/components/ObjectCache.js:1020
 msgid "Auth Password"
 msgstr ""
 
-#: src/components/ObjectCache.js:1026
+#: src/components/ObjectCache.js:1030
 msgid "Optional"
 msgstr ""
 
-#: src/components/ObjectCache.js:1039
+#: src/components/ObjectCache.js:1043
 msgid "Database ID"
 msgstr ""
 
-#: src/components/ObjectCache.js:1068
+#: src/components/ObjectCache.js:1072
 msgid "Test Connection"
 msgstr ""
 
-#: src/components/ObjectCache.js:1079
+#: src/components/ObjectCache.js:1083
 msgid "Save Changes"
 msgstr ""
 
-#: src/components/ObjectCache.js:1089
+#: src/components/ObjectCache.js:1093
 msgid "Enterprise Performance"
 msgstr ""
 
-#: src/components/ObjectCache.js:1101
+#: src/components/ObjectCache.js:1105
 msgid "Memory Compression"
 msgstr ""
 
-#: src/components/ObjectCache.js:1115
+#: src/components/ObjectCache.js:1119
 msgid "None (Fastest)"
 msgstr ""
 
-#: src/components/ObjectCache.js:1127
+#: src/components/ObjectCache.js:1131
 msgid "LZF"
 msgstr ""
 
-#: src/components/ObjectCache.js:1144
+#: src/components/ObjectCache.js:1148
 msgid "ZSTD"
 msgstr ""
 
-#: src/components/ObjectCache.js:1158
+#: src/components/ObjectCache.js:1162
 msgid "LZ4"
 msgstr ""
 
-#: src/components/ObjectCache.js:1172
+#: src/components/ObjectCache.js:1176
 msgid "Reduces memory footprint for enterprise caches."
 msgstr ""
 
-#: src/components/ObjectCache.js:1180
+#: src/components/ObjectCache.js:1184
 msgid "Persistent Connections"
 msgstr ""
 
-#: src/components/ObjectCache.js:1184
+#: src/components/ObjectCache.js:1188
 msgid "Keep connections alive between PHP requests."
 msgstr ""
 
-#: src/components/ObjectCache.js:1194
+#: src/components/ObjectCache.js:1198
 msgid "TLS / SSL Encryption"
 msgstr ""
 
-#: src/components/ObjectCache.js:1198
+#: src/components/ObjectCache.js:1202
 msgid "Encrypt traffic between WordPress and Redis."
 msgstr ""
 
-#: src/components/ObjectCache.js:1218
+#: src/components/ObjectCache.js:1222
 msgid "Danger Zone"
 msgstr ""
 
-#: src/components/ObjectCache.js:1223
+#: src/components/ObjectCache.js:1227
 msgid "Disabling the object cache will remove the drop-in and flush all cached objects. This cannot be undone."
 msgstr ""
 
-#: src/components/ObjectCache.js:1239
+#: src/components/ObjectCache.js:1243
 msgid "Disable Object Cache"
 msgstr ""
 
-#: src/components/ObjectCache.js:1257
+#: src/components/ObjectCache.js:1261
 msgid "Disable Object Cache?"
 msgstr ""
 
-#: src/components/ObjectCache.js:1261
+#: src/components/ObjectCache.js:1265
 msgid "This will remove the object-cache drop-in and clear all cached data. Are you sure?"
 msgstr ""
 
@@ -7844,6 +7844,12 @@ msgstr ""
 
 #: src/components/RecentActivityCard.js:95
 msgid "No optimisation activity recorded yet."
+msgstr ""
+
+#. translators: %s: the name of the section group, e.g. "Speed".
+#: src/components/SectionShell.js:112
+#, js-format
+msgid "%s sections"
 msgstr ""
 
 #: src/components/SuggestionsPanel.js:48
