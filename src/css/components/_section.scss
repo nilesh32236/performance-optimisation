@@ -279,3 +279,44 @@
 		color: var(--wppo-text-muted, #475569);
 	}
 }
+
+// On the All-diagnostics screen an action is **contextual**, not primary.
+//
+// Measured across the eight screens, that screen carried **12**
+// `wppo-button--primary` at once — "Purge All Cache", "Apply Balanced", "Save
+// Page Cache Settings", "Save CDN Purge", "Save Settings", "Run Scan", "Run
+// PageSpeed Scan", "Save LLMs.txt Settings", "Save AI Settings", "Save Edge
+// Cache", "Optimize All" and one more. Twelve blue buttons is twelve things
+// shouting at once, which is what "there is no visual hierarchy" and "I cannot
+// tell what to click" look like from the outside.
+//
+// The distinction is the screen's job, not the panel's: a **settings** screen
+// has one thing to commit, so its Save keeps the primary weight. A
+// **reporting** screen has none — an action belongs to the panel it sits in, so
+// it takes the secondary weight and the measurements lead the page.
+//
+// Scoped to that one view, so the settings screens keep their single primary
+// action and this cannot drift per panel.
+.wppo-dashboard .wppo-panel-group .wppo-button--primary {
+	background: var(--wppo-bg-card);
+	border: 1px solid var(--wppo-border);
+	box-shadow: none;
+	// `.wppo-button--secondary` already exists and is the canonical
+	// non-primary button. An independent review measured this rule rendering
+	// **blue** text where the real secondary renders `#0f172a` — a third
+	// appearance for the same idea, with the DOM class still claiming
+	// `primary`. Matching the token instead means there is one secondary
+	// button in the plugin, not two.
+	color: var(--wppo-text-main);
+
+	// Without this the button lifted 1px on hover and changed nothing else —
+	// no background, no colour — because `_section.scss` loads after
+	// `_forms.scss` and wins the specificity tie on `background` while never
+	// declaring `transform`. Measured: rest and hover were identical apart
+	// from `translateY(-1px)`, so aiming at "Run Scan" gave no feedback.
+	&:hover {
+		background: var(--wppo-switch-hover);
+		border-color: var(--wppo-border-hover);
+		transform: none;
+	}
+}
