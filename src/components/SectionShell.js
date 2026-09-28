@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef } from '@wordpress/element';
+import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 /**
@@ -106,7 +107,11 @@ export default function SectionShell( {
 				<div
 					className="wppo-subnav"
 					role="tablist"
-					aria-label={ `${ title } sections` }
+					aria-label={ sprintf(
+						// translators: %s: the name of the section group, e.g. "Speed".
+						__( '%s sections', 'performance-optimisation' ),
+						title
+					) }
 				>
 					{ items.map( ( item ) => {
 						const selected = item.id === activeId;
