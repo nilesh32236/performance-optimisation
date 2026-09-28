@@ -108,3 +108,41 @@ describe( 'every user-visible string can be translated', () => {
 		expect( source ).toContain( "'%s sections'" );
 	} );
 } );
+
+describe( 'a reporting screen does not shout', () => {
+	// The headline change of the screen-hierarchy work had **no** test at all:
+	// deleting the whole demotion rule failed nothing. The mirror of the
+	// `__stale` test, and the same shape of mistake.
+	it( 'demotes panel primary buttons to the existing secondary token', () => {
+		const scss = read( 'src/css/components/_section.scss' );
+		const rule = scss.slice(
+			scss.indexOf(
+				'.wppo-dashboard .wppo-panel-group .wppo-button--primary {'
+			)
+		);
+		expect( rule ).toMatch(
+			/^\.wppo-dashboard \.wppo-panel-group \.wppo-button--primary \{/
+		);
+		// The plugin already has one secondary button; this must not invent a
+		// third appearance with blue text where the real one is `#0f172a`.
+		expect( rule ).toMatch( /color:\s*var\(--wppo-text-main\)/ );
+		// And it needs a hover state, or the button lifts 1px and changes
+		// nothing else.
+		expect( rule ).toMatch( /&:hover \{/ );
+		expect( rule ).toMatch( /background:\s*var\(--wppo-switch-hover\)/ );
+	} );
+
+	it( 'and the rule ships in the built stylesheet', () => {
+		expect( read( 'build/style-index.css' ) ).toMatch(
+			/\.wppo-dashboard \.wppo-panel-group \.wppo-button--primary\{/
+		);
+	} );
+
+	// Two independent opt-ins: the wrapper, and being inside a PanelGroup. Miss
+	// either and the demotion silently does nothing, so both are pinned.
+	it( 'and the screen actually opts in', () => {
+		expect( read( 'src/components/Dashboard.js' ) ).toMatch(
+			/className="wppo-dashboard"/
+		);
+	} );
+} );

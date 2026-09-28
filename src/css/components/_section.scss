@@ -298,8 +298,25 @@
 // Scoped to that one view, so the settings screens keep their single primary
 // action and this cannot drift per panel.
 .wppo-dashboard .wppo-panel-group .wppo-button--primary {
-	background: var(--wppo-bg-card, #fff);
-	color: var(--wppo-primary, #007cb6);
-	border: 1px solid var(--wppo-border, #dcdcde);
+	background: var(--wppo-bg-card);
+	border: 1px solid var(--wppo-border);
 	box-shadow: none;
+	// `.wppo-button--secondary` already exists and is the canonical
+	// non-primary button. An independent review measured this rule rendering
+	// **blue** text where the real secondary renders `#0f172a` — a third
+	// appearance for the same idea, with the DOM class still claiming
+	// `primary`. Matching the token instead means there is one secondary
+	// button in the plugin, not two.
+	color: var(--wppo-text-main);
+
+	// Without this the button lifted 1px on hover and changed nothing else —
+	// no background, no colour — because `_section.scss` loads after
+	// `_forms.scss` and wins the specificity tie on `background` while never
+	// declaring `transform`. Measured: rest and hover were identical apart
+	// from `translateY(-1px)`, so aiming at "Run Scan" gave no feedback.
+	&:hover {
+		background: var(--wppo-switch-hover);
+		border-color: var(--wppo-border-hover);
+		transform: none;
+	}
 }

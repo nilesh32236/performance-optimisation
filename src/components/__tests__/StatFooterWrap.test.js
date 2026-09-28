@@ -42,18 +42,19 @@ describe( 'the stat card action can shrink', () => {
 				SCSS.indexOf( '.wppo-stat-footer {' ) + 1
 			)
 		);
+		expect( block ).toMatch( /flex-wrap:\s*wrap;/ );
 		expect( block ).toMatch( /> \.wppo-button \{/ );
-		expect( block ).toMatch( /white-space: normal;/ );
-		expect( block ).toMatch( /min-width: 0;/ );
+		expect( block ).toMatch( /min-width:\s*max-content;/ );
 	} );
 
 	it( 'ships those declarations in the built stylesheet', () => {
+		expect( CSS ).toMatch( /\.wppo-stat-footer\{[^}]*flex-wrap:wrap/ );
 		expect( CSS ).toMatch(
-			/\.wppo-stat-footer>\.wppo-button\{[^}]*white-space:normal/
+			/\.wppo-stat-footer>\.wppo-button\{[^}]*min-width:max-content/
 		);
 	} );
 
-	it( 'does not rely on overflow-wrap alone', () => {
+	it( 'keeps the label on one line, and bounds the block to the rule', () => {
 		const block = SCSS.slice(
 			SCSS.indexOf( '> .wppo-button {' ),
 			SCSS.indexOf( '> .wppo-button {' ) + 240
