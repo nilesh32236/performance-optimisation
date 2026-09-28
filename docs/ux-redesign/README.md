@@ -932,3 +932,125 @@ Seven previous rounds each recorded a way of being wrong. This one:
 > accessibility clause, and stable measurement falsified it at the campaign's own
 > declared lower bound — in precisely the half-fix shape the same record
 > describes two hundred lines later.
+
+## Round 37 — the screen that replaced the control panel was still a control panel
+
+The site owner arrives at **All diagnostics**. It rendered **13 panels in one flat,
+undifferentiated scroll** — a measured **9,053px, ten screens**, 22 headings,
+1,169 words, with nothing that said what to read first and nothing that let them
+skip what they came for.
+
+That is the "feature-heavy technical control panel" this campaign set out to
+remove, still intact inside the screen meant to have replaced it. It also was
+the single largest remaining item in a profile of all eight screens:
+
+| screen | height | screens | headings | cards | toggles |
+|---|---|---|---|---|---|
+| Overview | 1,753px | 2 | 5 | 3 | 0 |
+| **All diagnostics** | **9,053px** | **10** | **22** | **17** | 8 |
+| media/images | 4,659px | 5 | 8 | 5 | 16 |
+| speed/file-optimisation | 3,997px | 4 | 6 | 3 | 11 |
+| speed/preload | 3,600px | 4 | 7 | 4 | 10 |
+| data-system/database-cleanup | 2,403px | 3 | 16 | 12 | 1 |
+| manage/tools | 2,667px | 3 | 10 | 7 | 0 |
+| data-system/object-cache | 2,131px | 2 | 6 | 3 | 2 |
+
+The Overview was already fine. Everything below it was a long scroll.
+
+### Cut by measurement, not by taste
+
+Per-panel heights, from the live page:
+
+| group | panels | height |
+|---|---|---|
+| **How your site is doing** | next step, audit, PageSpeed, vitals trends, real-user vitals | **1,547px** |
+| **Advanced tuning** | autoloaded options, llms.txt, AI adaptive, edge cache | **3,086px** |
+| **Server, images and activity** | system info, image conversion, activity log | **1,067px** |
+
+The page of arrival is under two screens; the other 3,086px is one click away
+instead of in the way. **9,053px → 6,147px** at 1280×900, with 9,306px once
+"Advanced tuning" is expanded. Nothing removed.
+
+### The fold did nothing, twice over
+
+The first build reported `aria-expanded="false"` while the page measured
+**9,306px** — unchanged. The HTML `hidden` attribute is `display: none` from the
+UA stylesheet, and **any author `display` beats it**. `.wppo-stacked-cards` sets
+`display: flex`, so the attribute was inert.
+
+An independent review proved the fix load-bearing by deleting the rule through
+`CSSOM.deleteRule`: the collapsed panel returns to `display: flex`, **5,186px**
+tall, and the document grows from 11,381px to **16,579px**.
+
+### A test caught a design error before a user could
+
+The first version folded all three groups, which put the **"Optimize All"**
+action behind a disclosure. Four existing `Dashboard` tests failed because the
+button was no longer reachable. The tests were right and the design was wrong,
+so the design changed. A per-panel **Save** does stay inside the folded group,
+and that is deliberate: it is a commit for that panel's own fields, not an
+arrival action.
+
+### Three landmarks named by the control that collapses them
+
+`aria-labelledby` on the `<section>` pointed at the `<button>`, so Chrome's own
+accessibility tree reported:
+
+```
+region "Advanced tuning Option bloat, edge caching, adaptive AI, and llms.txt. Expand this group"
+```
+
+Fifteen words, and it **renamed itself on every toggle** because the action
+phrase was part of the name. The base had no landmarks here, so this was a net
+regression. An unnamed `<section>` is not exposed as a landmark at all, which is
+strictly better than a mislabelled one.
+
+Verified fixed through `Accessibility.getFullAXTree`: exactly two region
+landmarks remain — "Overview" and "System Health", both pre-existing.
+
+### Nine mutations survived, and every a11y claim was untested
+
+The review ran 19 mutations on the new component: 10 killed, **9 survived**. The
+landmark label survived both removal *and* being repointed at a nonexistent id;
+the screen-reader phrase could be deleted wholesale; the chevron could be
+inverted; and a hard-coded id — three duplicate ids on one page — was green.
+
+Six tests added, and all six now kill their mutation. Three of the new tests
+were wrong on the first attempt, and in each case the **code** changed to suit
+correct behaviour rather than the test being weakened:
+
+- `getByRole` cannot see a `hidden` subtree, so the "no landmark" test asserts
+  **absence**, not a mislabelled presence.
+- `useId` is stable across a rerender at the same position, so proving distinct
+  ids needs two real siblings, not a `rerender`.
+- The summary sits **inside** the button, so it joined the accessible name no
+  matter what `aria-describedby` said; it needed `aria-hidden` before the
+  description channel could mean anything.
+
+### Two of my own comments were false
+
+`_fields.scss` claimed `ToggleControl` renders "no `label` element inside it".
+There is one: `label.components-toggle-control__label`, two levels down. The
+original rule failed because of the **ancestor**, not the tag — a different
+mistake carrying a misleading explanation.
+
+And `flex-shrink: 1` never applied: an equal-specificity pre-existing rule later
+in the same file set `flex-shrink: 0`, and the computed value stayed `0`. The
+reviewer read the real cascade via `CSS.getMatchedStylesForNode`. The declaration
+was deleted, because the comment's own root-cause analysis had already
+identified `min-width: 0` as what does the work — and it does: **0 clipped
+toggles at 360, 390, 414, 768 and 1280**, from a screen that had been losing 15px
+and 25px of label text at 360px.
+
+### The lesson, ninth form
+
+Eight rounds each recorded a way of being wrong. This one, from three unrelated
+angles:
+
+> **A measurement you cannot reproduce is not a measurement, and a mechanism
+> that reports itself working while changing nothing is the worst of both.** The
+> fold reported `aria-expanded="false"` and did nothing. A `className` was passed
+> and discarded, silently making its own SCSS dead code. A landmark was created
+> and immediately mislabelled by the control that owns it. In each case the
+> *signal* was correct and *the thing it described* was not — and in each case a
+> real gate had passed first.
