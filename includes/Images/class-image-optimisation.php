@@ -2991,7 +2991,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$cleaned = preg_replace_callback(
 						'#[\s/]+(on[a-z]+)\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>"\']+)#i',
 						function ( $matches ) {
-							return $this->is_event_attribute_name( $matches[1] ) ? '' : $matches[0];
+							if ( ! $this->is_event_attribute_name( $matches[1] ) ) {
+								return $matches[0];
+							}
+							// Opt-in: exotic handlers can be re-admitted via
+							// `wppo_lazyload_allow_attr`; default stays denied.
+							if ( $this->is_lazyload_attr_allowed( $matches[1], $matches[0] ) ) {
+								return $matches[0];
+							}
+							return '';
 						},
 						$tag
 					);
@@ -3022,10 +3030,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 							if ( 'srcdoc' === $attr ) {
 								// Inline HTML payload: never legitimate on
-								// image-adjacent tags; drop unconditionally.
+								// image-adjacent tags; drop unconditionally
+								// unless the opt-in filter re-admits it.
+								if ( $this->is_lazyload_attr_allowed( $attr, $value ) ) {
+									return $matches[0];
+								}
 								return '';
 							}
 							if ( $this->is_scriptable_image_url( $value ) ) {
+								if ( $this->is_lazyload_attr_allowed( $attr, $value ) ) {
+									return $matches[0];
+								}
 								return '';
 							}
 							return $matches[0];
@@ -3056,7 +3071,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$kept = array();
 							foreach ( $this->split_srcset_candidates( $raw ) as $item ) {
 								list( $candidate ) = $this->split_srcset_item( $item );
-								if ( $this->is_scriptable_image_url( $candidate ) ) {
+								if ( $this->is_scriptable_image_url( $candidate ) && ! $this->is_lazyload_attr_allowed( 'src', $candidate ) ) {
 									continue;
 								}
 								$kept[] = $item;
@@ -3090,6 +3105,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$value = $matches[4];
 							}
 							if ( $this->is_hostile_style_value( $value ) ) {
+								if ( $this->is_lazyload_attr_allowed( 'style', $value ) ) {
+									return $matches[0];
+								}
 								return '';
 							}
 							return $matches[0];
@@ -3247,19 +3265,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 					$lower = strtolower( $name );
 					if ( $this->is_event_attribute_name( $lower ) ) {
+						// Opt-in: exotic handlers can be re-admitted via
+						// `wppo_lazyload_allow_attr`; default stays denied.
+						$value = $tags->get_attribute( $name );
+						if ( $this->is_lazyload_attr_allowed( $lower, $value ) ) {
+							continue;
+						}
 						$tags->remove_attribute( $name );
 						continue;
 					}
 					if ( 'srcdoc' === $lower ) {
 						$value = $tags->get_attribute( $name );
 						if ( null !== $value ) {
+							if ( $this->is_lazyload_attr_allowed( $lower, $value ) ) {
+								continue;
+							}
 							$tags->remove_attribute( $name );
 						}
 						continue;
 					}
 					if ( in_array( $lower, self::HARDENED_URL_ATTRS, true ) && 'srcdoc' !== $lower ) {
 						$value = $tags->get_attribute( $name );
-						if ( is_string( $value ) && $this->is_scriptable_image_url( $value ) ) {
+						if ( is_string( $value ) && $this->is_scriptable_image_url( $value ) && ! $this->is_lazyload_attr_allowed( $lower, $value ) ) {
 							$tags->remove_attribute( $name );
 						}
 						continue;
@@ -3272,7 +3299,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$kept = array();
 						foreach ( $this->split_srcset_candidates( $value ) as $item ) {
 							list( $candidate ) = $this->split_srcset_item( $item );
-							if ( $this->is_scriptable_image_url( $candidate ) ) {
+							if ( $this->is_scriptable_image_url( $candidate ) && ! $this->is_lazyload_attr_allowed( 'src', $candidate ) ) {
 								continue;
 							}
 							$kept[] = $item;
@@ -3286,13 +3313,197 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 					if ( 'style' === $lower ) {
 						$value = $tags->get_attribute( $name );
-						if ( is_string( $value ) && $this->is_hostile_style_value( $value ) ) {
+						if ( is_string( $value ) && $this->is_hostile_style_value( $value ) && ! $this->is_lazyload_attr_allowed( $lower, $value ) ) {
 							$tags->remove_attribute( $name );
 						}
 					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+		}
+
+		/**
+		 * Whether a lazy-load attribute re-emission is allowed.
+		 *
+		 * Single opt-in gate for the `wppo_lazyload_allow_attr` filter so
+		 * exotic markup can opt back in without forking. Default-deny for
+		 * hostile attributes (event handlers, `srcdoc`, scriptable URLs,
+		 * hostile `style`); benign attributes default-allow. A filter
+		 * returning true re-admits the attribute; returning false drops it.
+		 * Fail-open: any failure returns the default verdict, never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $name  Raw attribute name.
+		 * @param mixed  $value Raw attribute value.
+		 * @return bool True when the attribute may be re-emitted.
+		 */
+		private function is_lazyload_attr_allowed( string $name, $value ): bool {
+			try {
+				$lower   = strtolower( $name );
+				$default = true;
+				if ( $this->is_event_attribute_name( $lower ) || 'srcdoc' === $lower ) {
+					$default = false;
+				} elseif ( 'style' === $lower ) {
+					$default = ! ( is_string( $value ) && $this->is_hostile_style_value( $value ) );
+				} elseif ( in_array( $lower, self::HARDENED_URL_ATTRS, true ) ) {
+					$default = ! ( is_string( $value ) && $this->is_scriptable_image_url( $value ) );
+				} elseif ( in_array( $lower, self::HARDENED_SRCSET_ATTRS, true ) ) {
+					// Lazy default: the full re-split/re-filter only matters
+					// as the filter's input default when a listener exists —
+					// every re-emission site already enforces per-candidate
+					// deny — so skip the parse work on the hot path when no
+					// listener is registered.
+					$default = true;
+					if ( function_exists( 'has_filter' ) && has_filter( 'wppo_lazyload_allow_attr' ) ) {
+						$default = '' !== $this->sanitize_lazy_moved_srcset( is_string( $value ) ? $value : '' );
+					}
+				}
+				if ( function_exists( 'apply_filters' ) && ( ! function_exists( 'has_filter' ) || has_filter( 'wppo_lazyload_allow_attr' ) ) ) {
+					$filtered = apply_filters( 'wppo_lazyload_allow_attr', $default, $lower, $value );
+					return (bool) $filtered;
+				}
+				return $default;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return isset( $default ) ? $default : false;
+			}
+		}
+
+		/**
+		 * Sanitize a URL value before it is moved into a lazy `data-*` attribute.
+		 *
+		 * Re-runs the scriptable-URL gate after the `src` -> `data-src`
+		 * move so a hostile value that survived the pre-pass (or arrived
+		 * with hardening disabled) is dropped instead of laundered into
+		 * `data-src`/`data-wppo-video-src` and baked into the static cache
+		 * artefact. Returns an empty string when the value must be dropped.
+		 * Fail-open: undecodable input returns the input unchanged.
+		 *
+		 * @since NEXT
+		 * @param mixed $url Raw attribute URL value.
+		 * @return string Sanitized URL or empty string when hostile.
+		 */
+		private function sanitize_lazy_moved_url( $url ): string {
+			try {
+				if ( ! is_string( $url ) || '' === $url ) {
+					return is_string( $url ) ? $url : '';
+				}
+				if ( $this->is_scriptable_image_url( $url ) ) {
+					return '';
+				}
+				if ( ! $this->is_lazyload_attr_allowed( 'src', $url ) ) {
+					return '';
+				}
+				return $url;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return is_string( $url ) ? $url : '';
+			}
+		}
+
+		/**
+		 * Sanitize a srcset value before it is moved into `data-srcset`.
+		 *
+		 * Filters hostile candidates (`javascript:`, `data:text/html`,
+		 * entity/control-obfuscated schemes) item-by-item so one poisoned
+		 * candidate cannot ride along into the cached artefact.
+		 * Returns an empty string when every candidate is hostile.
+		 * Fail-open: any failure returns the input unchanged.
+		 *
+		 * Note: the rebuilt value is intentionally NOT re-checked through
+		 * the allow-attr gate — that gate consults this sanitizer for
+		 * srcset names, so re-checking here would recurse.
+		 *
+		 * @since NEXT
+		 * @param string $raw Raw srcset attribute value.
+		 * @return string Sanitized srcset or empty string when fully hostile.
+		 */
+		private function sanitize_lazy_moved_srcset( string $raw ): string {
+			try {
+				if ( '' === $raw ) {
+					return $raw;
+				}
+				$kept = array();
+				foreach ( $this->split_srcset_candidates( $raw ) as $item ) {
+					list( $candidate ) = $this->split_srcset_item( $item );
+					if ( $this->is_scriptable_image_url( $candidate ) ) {
+						continue;
+					}
+					$kept[] = $item;
+				}
+				if ( array() === $kept ) {
+					return '';
+				}
+				return implode( ', ', $kept );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $raw;
+			}
+		}
+
+		/**
+		 * Sanitize a CSS background value before it is stored in `data-wppo-bg`.
+		 *
+		 * Rejects `javascript:`/`vbscript:`/`expression()`/`behavior`/
+		 * `-moz-binding` payloads and scriptable `url(...)` targets (in
+		 * parity with the `isSafeBackgroundValue` client gate in
+		 * `src/lazyload.js`) so a poisoned inline background is never
+		 * deferred-and-restored from the cached artefact. Returns an empty
+		 * string when the value must be dropped. Fail-open: any failure
+		 * returns the input unchanged.
+		 *
+		 * @since NEXT
+		 * @param string $value Raw background declaration value.
+		 * @return string Sanitized value or empty string when hostile.
+		 */
+		private function sanitize_lazy_bg_value( string $value ): string {
+			try {
+				if ( '' === $value ) {
+					return $value;
+				}
+				$decoded = $value;
+				for ( $i = 0; $i < 5; $i++ ) {
+					$next = html_entity_decode( $decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+					if ( $next === $decoded ) {
+						break;
+					}
+					$decoded = $next;
+					if ( strlen( $decoded ) > 4096 ) {
+						$decoded = substr( $decoded, 0, 4096 );
+						break;
+					}
+				}
+				// Shared style gate keeps both layers in parity (covers
+				// `expression(`/`javascript:`/`vbscript:`/`behavior:`/
+				// `behaviour:`/`-moz-binding`, entity/control-obfuscated).
+				if ( $this->is_hostile_style_value( $decoded ) ) {
+					return '';
+				}
+				if ( 1 === preg_match_all( '#url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)#i', $value, $m ) && isset( $m[1] ) && is_array( $m[1] ) ) {
+					foreach ( $m[1] as $target ) {
+						$target = trim( (string) $target );
+						if ( '' === $target ) {
+							return '';
+						}
+						// Raster-only allowlist, mirroring the scriptable-URL
+						// gate: `data:image/svg+xml` stays scriptable and falls
+						// through to the check below instead of being skipped.
+						if ( 1 === preg_match( '#^data:image/(?:png|jpe?g|gif|webp|avif)[;,]#i', $target ) ) {
+							continue;
+						}
+						if ( $this->is_scriptable_image_url( $target ) ) {
+							return '';
+						}
+					}
+				}
+				if ( ! $this->is_lazyload_attr_allowed( 'data-wppo-bg', $value ) ) {
+					return '';
+				}
+				return $value;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $value;
 			}
 		}
 
@@ -5384,59 +5595,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							// get_updated_html(), so pre-escaping here would
 							// double-encode. The client additionally validates
 							// data-src via isSafeSubresourceUrl before restoring.
-							$tags->set_attribute( 'data-src', $original_src_decoded );
+							// Post-move re-check (issue #1699): a scriptable
+							// value that survived the pre-pass (or arrived
+							// with hardening disabled) is dropped instead of
+							// laundered into data-src. Fail-open per node:
+							// the src is stripped and lazy is skipped.
+							$safe_lazy_src = $this->sanitize_lazy_moved_url( $original_src_decoded );
+							if ( '' === $safe_lazy_src && '' !== $original_src_decoded ) {
+								$tags->remove_attribute( 'src' );
+								// A hostile src must not leave a hostile
+								// srcset behind to be laundered either.
+								$tags->remove_attribute( 'srcset' );
+							} else {
+								$tags->set_attribute( 'data-src', $safe_lazy_src );
 
-							// WP_HTML_Tag_Processor blocks data: URIs in src for security.
-							// Use regex on the serialized HTML to swap src to the placeholder.
-							if ( 'none' !== $this->get_placeholder_type() ) {
-								$placeholder = $this->get_placeholder_src_for_image( $img_tag, $original_src_decoded );
-								if ( ! empty( $placeholder['src'] ) ) {
-									$serialized = $tags->get_updated_html();
-									// Stored-XSS hardening (issue #967): the placeholder is
-									// re-emitted via raw string concatenation (Tag
-									// Processor blocks data: URIs in src), so escape
-									// at emit — set_attribute() paths below are
-									// escaped by Tag Processor on serialize and
-									// must stay raw to avoid double-encoding.
-									$placeholder_src = function_exists( 'esc_attr' ) ? esc_attr( $placeholder['src'] ) : $placeholder['src'];
-									$img_tag         = preg_replace(
-										'#(?<!data-)src=(["\'])[^"\']*\1#i',
-										'src="' . $placeholder_src . '"',
-										$serialized,
-										1
-									);
-									// Guard against null return from preg_replace (PCRE engine failure).
-									if ( null === $img_tag ) {
-										$img_tag = $serialized;
+								// WP_HTML_Tag_Processor blocks data: URIs in src for security.
+								// Use regex on the serialized HTML to swap src to the placeholder.
+								if ( 'none' !== $this->get_placeholder_type() ) {
+									$placeholder = $this->get_placeholder_src_for_image( $img_tag, $original_src_decoded );
+									if ( ! empty( $placeholder['src'] ) ) {
+										$serialized = $tags->get_updated_html();
+										// Stored-XSS hardening (issue #967): the placeholder is
+										// re-emitted via raw string concatenation (Tag
+										// Processor blocks data: URIs in src), so escape
+										// at emit — set_attribute() paths below are
+										// escaped by Tag Processor on serialize and
+										// must stay raw to avoid double-encoding.
+										$placeholder_src = function_exists( 'esc_attr' ) ? esc_attr( $placeholder['src'] ) : $placeholder['src'];
+										$img_tag         = preg_replace(
+											'#(?<!data-)src=(["\'])[^"\']*\1#i',
+											'src="' . $placeholder_src . '"',
+											$serialized,
+											1
+										);
+										// Guard against null return from preg_replace (PCRE engine failure).
+										if ( null === $img_tag ) {
+											$img_tag = $serialized;
+										}
+										$tags = new \WP_HTML_Tag_Processor( $img_tag );
+										$tags->next_tag( array( 'tag_name' => 'img' ) );
+										// Add extra placeholder data attributes.
+										foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+											$tags->set_attribute( $attr_name, $attr_value );
+										}
+										$img_tag = $tags->get_updated_html();
+										$tags    = new \WP_HTML_Tag_Processor( $img_tag );
+										$tags->next_tag( array( 'tag_name' => 'img' ) );
+									} else {
+										$tags->remove_attribute( 'src' );
 									}
-									$tags = new \WP_HTML_Tag_Processor( $img_tag );
-									$tags->next_tag( array( 'tag_name' => 'img' ) );
-									// Add extra placeholder data attributes.
-									foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
-										$tags->set_attribute( $attr_name, $attr_value );
-									}
-									$img_tag = $tags->get_updated_html();
-									$tags    = new \WP_HTML_Tag_Processor( $img_tag );
-									$tags->next_tag( array( 'tag_name' => 'img' ) );
 								} else {
 									$tags->remove_attribute( 'src' );
 								}
-							} else {
-								$tags->remove_attribute( 'src' );
-							}
 
-							// Replace 'srcset' with 'data-srcset'.
-							$srcset = $tags->get_attribute( 'srcset' );
-							if ( $srcset ) {
-								$tags->set_attribute( 'data-srcset', $srcset );
-								$tags->remove_attribute( 'srcset' );
-							}
+								// Replace 'srcset' with 'data-srcset' (post-move
+								// re-check: hostile candidates are dropped, a
+								// fully-hostile srcset is stripped outright).
+								$srcset = $tags->get_attribute( 'srcset' );
+								if ( $srcset ) {
+									$safe_srcset = $this->sanitize_lazy_moved_srcset( $srcset );
+									if ( '' === $safe_srcset ) {
+										$tags->remove_attribute( 'srcset' );
+									} else {
+										$tags->set_attribute( 'data-srcset', $safe_srcset );
+										$tags->remove_attribute( 'srcset' );
+									}
+								}
 
-							// Replace 'sizes' with 'data-sizes' (auto-aware when supported).
-							$sizes = $tags->get_attribute( 'sizes' );
-							if ( $sizes ) {
-								$tags->set_attribute( 'data-sizes', $this->prepare_auto_sizes_value( $sizes, $tags ) );
-								$tags->remove_attribute( 'sizes' );
+								// Replace 'sizes' with 'data-sizes' (auto-aware when supported).
+								$sizes = $tags->get_attribute( 'sizes' );
+								if ( $sizes ) {
+									$tags->set_attribute( 'data-sizes', $this->prepare_auto_sizes_value( $sizes, $tags ) );
+									$tags->remove_attribute( 'sizes' );
+								}
 							}
 						}
 					}
@@ -5608,46 +5839,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="low"', $img_tag );
 							}
 						}
-						$replaced_tag = preg_replace_callback(
-							'#src=["\']([^"\']+)["\']#i',
-							function () use ( $original_src_decoded ) {
-								return 'data-src="' . esc_attr( $original_src_decoded ) . '"';
-							},
-							$img_tag
-						);
-						// Guard against null return from preg_replace_callback (PCRE engine failure).
-						if ( null !== $replaced_tag ) {
-							$img_tag = $replaced_tag;
-						}
-
-						// Replace with placeholder if the option is enabled.
-						if ( 'none' !== $this->get_placeholder_type() ) {
-							$placeholder = $this->get_placeholder_src_for_image( $img_tag, $original_src_decoded );
-							if ( ! empty( $placeholder['src'] ) ) {
-								$replaced_placeholder = preg_replace_callback(
-									'#<img\b([^>]*)#i',
-									function ( $matches ) use ( $placeholder ) {
-										$extra_attrs = '';
-										foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
-											$extra_attrs .= ' ' . $attr_name . '="' . esc_attr( $attr_value ) . '"';
-										}
-										return '<img src="' . esc_attr( $placeholder['src'] ) . '"' . $extra_attrs . $matches[1];
-									},
-									$img_tag
-								);
-								if ( null !== $replaced_placeholder ) {
-									$img_tag = $replaced_placeholder;
-								}
+						// Post-move re-check (issue #1699): a scriptable
+						// src is stripped instead of laundered into
+						// data-src. Fail-open: the tag keeps its other
+						// attributes and lazy is skipped for this node.
+						$safe_lazy_src = $this->sanitize_lazy_moved_url( $original_src_decoded );
+						if ( '' === $safe_lazy_src && '' !== $original_src_decoded ) {
+							$stripped_tag = preg_replace( '#\ssrc=["\']([^"\']+)["\']#i', '', $img_tag );
+							// Guard against null return (PCRE engine failure).
+							if ( null !== $stripped_tag ) {
+								$img_tag = $stripped_tag;
 							}
-						}
-
-						// Replace 'srcset' with 'data-srcset' if 'srcset' is present.
-						if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
-							$img_tag = preg_replace(
-								'#srcset=["\']([^"\']+)["\']#i',
-								'data-srcset="' . esc_attr( $srcset_matches[1] ) . '"',
+							$stripped_srcset = preg_replace( '#\ssrcset=["\']([^"\']+)["\']#i', '', $img_tag );
+							if ( null !== $stripped_srcset ) {
+								$img_tag = $stripped_srcset;
+							}
+						} else {
+							$replaced_tag = preg_replace_callback(
+								'#src=["\']([^"\']+)["\']#i',
+								function () use ( $safe_lazy_src ) {
+									$escaped = function_exists( 'esc_attr' ) ? esc_attr( $safe_lazy_src ) : $safe_lazy_src;
+									return 'data-src="' . $escaped . '"';
+								},
 								$img_tag
 							);
+							// Guard against null return from preg_replace_callback (PCRE engine failure).
+							if ( null !== $replaced_tag ) {
+								$img_tag = $replaced_tag;
+							}
+
+							// Replace with placeholder if the option is enabled.
+							if ( 'none' !== $this->get_placeholder_type() ) {
+								$placeholder = $this->get_placeholder_src_for_image( $img_tag, $safe_lazy_src );
+								if ( ! empty( $placeholder['src'] ) ) {
+									$replaced_placeholder = preg_replace_callback(
+										'#<img\b([^>]*)#i',
+										function ( $matches ) use ( $placeholder ) {
+											$extra_attrs = '';
+											foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+												$extra_attrs .= ' ' . $attr_name . '="' . esc_attr( $attr_value ) . '"';
+											}
+											return '<img src="' . esc_attr( $placeholder['src'] ) . '"' . $extra_attrs . $matches[1];
+										},
+										$img_tag
+									);
+									if ( null !== $replaced_placeholder ) {
+										$img_tag = $replaced_placeholder;
+									}
+								}
+							}
+
+							// Replace 'srcset' with 'data-srcset' if 'srcset' is present.
+							if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
+								$safe_srcset = $this->sanitize_lazy_moved_srcset( $srcset_matches[1] );
+								if ( '' === $safe_srcset ) {
+									$stripped_srcset = preg_replace( '#\ssrcset=["\']([^"\']+)["\']#i', '', $img_tag );
+									// Guard against null return (PCRE engine failure).
+									if ( null !== $stripped_srcset ) {
+										$img_tag = $stripped_srcset;
+									}
+								} else {
+									$replaced_srcset = preg_replace(
+										'#srcset=["\']([^"\']+)["\']#i',
+										'data-srcset="' . esc_attr( $safe_srcset ) . '"',
+										$img_tag
+									);
+									// Guard against null return (PCRE engine failure).
+									if ( null !== $replaced_srcset ) {
+										$img_tag = $replaced_srcset;
+									}
+								}
+							}
 						}
 
 						// Replace 'sizes' with 'data-sizes' if 'sizes' is present.
@@ -5661,11 +5923,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									$data_sizes = 'auto, ' . $data_sizes;
 								}
 							}
-							$img_tag = preg_replace(
+							$replaced_sizes = preg_replace(
 								'#\bsizes=["\']([^"\']+)["\']#i',
 								'data-sizes="' . esc_attr( $data_sizes ) . '"',
 								$img_tag
 							);
+							// Guard against null return (PCRE engine
+							// failure): fail-open keeps the pre-sizes tag.
+							if ( null !== $replaced_sizes ) {
+								$img_tag = $replaced_sizes;
+							}
 						}
 					}
 				}
@@ -5760,6 +6027,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $iframe_tag;
 			}
 
+			// Post-move re-check (issue #1699): the placeholder re-emits
+			// the source URL into `data-wppo-video-src` (baked into the
+			// static cache artefact), so a scriptable src must never reach
+			// it. Fail-open: return the sanitized iframe without a
+			// placeholder, never fatal.
+			if ( '' === $this->sanitize_lazy_moved_url( $original_src ) && '' !== $original_src ) {
+				return $iframe_tag;
+			}
+
 			if ( empty( $video_id ) ) {
 				$video_id = $this->get_youtube_video_id( $original_src );
 			}
@@ -5812,6 +6088,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					foreach ( $attrs_to_store as $attr ) {
 						$val = $tags->get_attribute( $attr );
 						if ( null !== $val ) {
+							// Post-move re-check (issue #1699): stored attrs
+							// are restored verbatim by the client, so a
+							// hostile stored value (event-handler smuggling
+							// or scriptable URL) is dropped here instead of
+							// riding along in the cached artefact. The
+							// `wppo_lazyload_allow_attr` opt-in still applies.
+							if ( ! $this->is_lazyload_attr_allowed( $attr, $val ) ) {
+								continue;
+							}
 							$stored_attrs[ $attr ] = $val;
 						}
 					}
@@ -6131,6 +6416,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$allowed = apply_filters( 'wppo_lazyload_iframe_allowed', true, $original_src, $iframe_tag );
 			if ( ! $allowed ) {
+				return $iframe_tag;
+			}
+
+			// Post-move re-check (issue #1699): the lazy path re-emits the
+			// source URL into `data-src` (baked into the static cache
+			// artefact), so a scriptable src must never be moved. Fail-open:
+			// strip the hostile src and return the neutralized tag without
+			// lazy deferral, never fatal. The `wppo_lazyload_allow_attr`
+			// opt-in still applies. A preg failure below returns the tag
+			// unchanged for the same fail-open reason.
+			if ( is_string( $original_src ) && '' !== $original_src && '' === $this->sanitize_lazy_moved_url( $original_src ) ) {
+				$neutralized = preg_replace( '#\ssrc\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#i', '', $iframe_tag );
+				if ( is_string( $neutralized ) && '' !== $neutralized ) {
+					return $neutralized;
+				}
 				return $iframe_tag;
 			}
 
@@ -7917,19 +8217,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								} elseif ( null === $wppo_tags->get_attribute( 'fetchpriority' ) ) {
 									$wppo_tags->set_attribute( 'fetchpriority', 'low' );
 								}
-								$wppo_tags->set_attribute( 'data-src', $original_src_decoded );
-								$wppo_tags->remove_attribute( 'src' );
-
-								$srcset = $wppo_tags->get_attribute( 'srcset' );
-								if ( $srcset ) {
-									$wppo_tags->set_attribute( 'data-srcset', $srcset );
+								// Post-move re-check (issue #1699): a scriptable
+								// value is stripped instead of laundered into
+								// data-src/data-srcset. Fail-open per node.
+								$safe_lazy_src = $this->sanitize_lazy_moved_url( $original_src_decoded );
+								if ( '' === $safe_lazy_src && '' !== $original_src_decoded ) {
+									$wppo_tags->remove_attribute( 'src' );
 									$wppo_tags->remove_attribute( 'srcset' );
-								}
+								} else {
+									$wppo_tags->set_attribute( 'data-src', $safe_lazy_src );
+									$wppo_tags->remove_attribute( 'src' );
 
-								$sizes = $wppo_tags->get_attribute( 'sizes' );
-								if ( $sizes ) {
-									$wppo_tags->set_attribute( 'data-sizes', $this->prepare_auto_sizes_value( $sizes, $wppo_tags ) );
-									$wppo_tags->remove_attribute( 'sizes' );
+									$srcset = $wppo_tags->get_attribute( 'srcset' );
+									if ( $srcset ) {
+										$safe_srcset = $this->sanitize_lazy_moved_srcset( $srcset );
+										if ( '' === $safe_srcset ) {
+											$wppo_tags->remove_attribute( 'srcset' );
+										} else {
+											$wppo_tags->set_attribute( 'data-srcset', $safe_srcset );
+											$wppo_tags->remove_attribute( 'srcset' );
+										}
+									}
+
+									$sizes = $wppo_tags->get_attribute( 'sizes' );
+									if ( $sizes ) {
+										$wppo_tags->set_attribute( 'data-sizes', $this->prepare_auto_sizes_value( $sizes, $wppo_tags ) );
+										$wppo_tags->remove_attribute( 'sizes' );
+									}
 								}
 							}
 						} elseif ( 'IFRAME' === $tag_name ) {
@@ -7980,6 +8294,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								if ( null === $wppo_tags->get_attribute( 'loading' ) ) {
 									$wppo_tags->set_attribute( 'loading', 'lazy' );
 								}
+								continue;
+							}
+
+							// Post-move re-check (issue #1699): a scriptable
+							// iframe src must never be moved into data-src.
+							// Fail-open per node: strip and skip deferral.
+							if ( '' === $this->sanitize_lazy_moved_url( $src ) ) {
+								$wppo_tags->remove_attribute( 'src' );
 								continue;
 							}
 
@@ -8438,6 +8760,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					continue;
 				}
 
+				// Post-move re-check (issue #1699): a hostile background
+				// value (`javascript:`/`expression()`/scriptable url())
+				// must never be deferred into data-wppo-bg and restored
+				// from the cached artefact. Fail-open: skip deferral for
+				// this node, leaving the inline style untouched.
+				if ( '' === $this->sanitize_lazy_bg_value( $bg_value ) ) {
+					continue;
+				}
+
 				if ( '' !== $lcp_hero_normalized && preg_match( '#url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)#i', $bg_value, $url_match ) ) {
 					$bg_candidate = trim( $url_match[1] );
 					if ( '' !== $bg_candidate && 0 !== stripos( $bg_candidate, 'data:' ) && $this->normalize_image_url( $bg_candidate ) === $lcp_hero_normalized ) {
@@ -8514,8 +8845,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( null === $p->get_last_error() && $p->next_tag( array( 'tag_name' => 'video' ) ) ) {
 							$src = $p->get_attribute( 'src' );
 							if ( $src ) {
-								$p->set_attribute( 'data-src', $src );
-								$p->remove_attribute( 'src' );
+								// Post-move re-check (issue #1699): a
+								// scriptable video src is stripped instead of
+								// laundered into data-src. Fail-open per node.
+								if ( '' === $this->sanitize_lazy_moved_url( $src ) ) {
+									$p->remove_attribute( 'src' );
+								} else {
+									$p->set_attribute( 'data-src', $src );
+									$p->remove_attribute( 'src' );
+								}
 							}
 
 							// Detect core's animated-GIF companion videos (WP 7.1):
@@ -8534,9 +8872,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 							// Defer the poster so below-the-fold companion videos do not
 							// eagerly fetch the GIF/first-frame image.
+							// Post-move re-check (issue #1699): a scriptable
+							// poster is stripped instead of deferred.
 							if ( $is_companion_video && ! empty( $poster ) ) {
-								$p->set_attribute( 'data-poster', $poster );
-								$p->remove_attribute( 'poster' );
+								if ( '' === $this->sanitize_lazy_moved_url( $poster ) ) {
+									$p->remove_attribute( 'poster' );
+								} else {
+									$p->set_attribute( 'data-poster', $poster );
+									$p->remove_attribute( 'poster' );
+								}
 							}
 
 							$p->set_attribute( 'preload', 'none' );
@@ -8545,8 +8889,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							while ( $p->next_tag( array( 'tag_name' => 'source' ) ) ) {
 								$src = $p->get_attribute( 'src' );
 								if ( $src ) {
-									$p->set_attribute( 'data-src', $src );
-									$p->remove_attribute( 'src' );
+									if ( '' === $this->sanitize_lazy_moved_url( $src ) ) {
+										$p->remove_attribute( 'src' );
+									} else {
+										$p->set_attribute( 'data-src', $src );
+										$p->remove_attribute( 'src' );
+									}
 								}
 							}
 							return $p->get_updated_html();
@@ -8585,8 +8933,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( $tags->next_tag( array( 'tag_name' => 'video' ) ) ) {
 							$src = $tags->get_attribute( 'src' );
 							if ( $src ) {
-								$tags->set_attribute( 'data-src', $src );
-								$tags->remove_attribute( 'src' );
+								// Post-move re-check (issue #1699): strip a
+								// scriptable video src instead of deferring it.
+								if ( '' === $this->sanitize_lazy_moved_url( $src ) ) {
+									$tags->remove_attribute( 'src' );
+								} else {
+									$tags->set_attribute( 'data-src', $src );
+									$tags->remove_attribute( 'src' );
+								}
 							}
 
 							// Detect core's animated-GIF companion videos (WP 7.1).
@@ -8603,9 +8957,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 
 							// Defer the poster for companion videos (restored on intersect).
+							// Post-move re-check (issue #1699): strip a
+							// scriptable poster instead of deferring it.
 							if ( $is_companion_video && ! empty( $poster ) ) {
-								$tags->set_attribute( 'data-poster', $poster );
-								$tags->remove_attribute( 'poster' );
+								if ( '' === $this->sanitize_lazy_moved_url( $poster ) ) {
+									$tags->remove_attribute( 'poster' );
+								} else {
+									$tags->set_attribute( 'data-poster', $poster );
+									$tags->remove_attribute( 'poster' );
+								}
 							}
 
 							$tags->set_attribute( 'preload', 'none' );
@@ -8616,8 +8976,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						while ( $tags->next_tag( array( 'tag_name' => 'source' ) ) ) {
 							$src = $tags->get_attribute( 'src' );
 							if ( $src ) {
-								$tags->set_attribute( 'data-src', $src );
-								$tags->remove_attribute( 'src' );
+								if ( '' === $this->sanitize_lazy_moved_url( $src ) ) {
+									$tags->remove_attribute( 'src' );
+								} else {
+									$tags->set_attribute( 'data-src', $src );
+									$tags->remove_attribute( 'src' );
+								}
 							}
 						}
 
@@ -8640,13 +9004,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 						}
 
-						// Process <video src="..."> attribute.
-						if ( preg_match( '#\bsrc=["\']([^"\']+)["\']#i', $attributes ) ) {
-							$attributes = preg_replace( '#\bsrc=["\']([^"\']+)["\']#i', 'data-src="$1"', $attributes );
+						// Process <video src="..."> attribute. Post-move
+						// re-check (issue #1699): a scriptable src is
+						// stripped instead of laundered into data-src.
+						// Fail-open: a PCRE failure keeps $attributes as-is.
+						if ( preg_match( '#\bsrc=["\']([^"\']+)["\']#i', $attributes, $video_src_matches ) ) {
+							if ( '' === $this->sanitize_lazy_moved_url( $video_src_matches[1] ) ) {
+								$stripped = preg_replace( '#\bsrc=["\']([^"\']+)["\']#i', '', $attributes );
+								if ( null !== $stripped ) {
+									$attributes = $stripped;
+								}
+							} else {
+								$moved = preg_replace( '#\bsrc=["\']([^"\']+)["\']#i', 'data-src="$1"', $attributes );
+								if ( null !== $moved ) {
+									$attributes = $moved;
+								}
+							}
 						}
 
-						// Process inner <source src="..."> tags.
-						$inner_html = preg_replace( '#(<source\b[^>]*)\bsrc=["\']([^"\']+)["\']#i', '$1 data-src="$2"', $inner_html );
+						// Process inner <source src="..."> tags with the same gate.
+						$inner_moved = preg_replace_callback(
+							'#<source\b[^>]*\bsrc=["\']([^"\']+)["\']#i',
+							function ( $source_matches ) {
+								if ( '' === $this->sanitize_lazy_moved_url( $source_matches[1] ) ) {
+									return (string) preg_replace( '#\bsrc=["\']([^"\']+)["\']#i', '', $source_matches[0] );
+								}
+								return (string) preg_replace( '#\bsrc=["\']([^"\']+)["\']#i', 'data-src="$1"', $source_matches[0] );
+							},
+							$inner_html
+						);
+						// Guard against null return (PCRE engine failure).
+						if ( null !== $inner_moved ) {
+							$inner_html = $inner_moved;
+						}
 
 						$had_autoplay = preg_match( '#\bautoplay\b#i', $attributes );
 
@@ -8659,13 +9049,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 						// Defer poster for core's animated-GIF companion videos (WP 7.1):
 						// autoplay + loop + muted + playsinline + a poster frame.
+						// Post-move re-check (issue #1699): strip a scriptable
+						// poster instead of deferring it into data-poster.
 						if ( $had_autoplay
 							&& preg_match( '#\bloop\b#i', $attributes )
 							&& preg_match( '#\bmuted\b#i', $attributes )
 							&& preg_match( '#\bplaysinline\b#i', $attributes )
 							&& preg_match( '#\bposter=["\']([^"\']+)["\']#i', $attributes, $poster_matches )
 						) {
-							$attributes = preg_replace( '#\bposter=["\']([^"\']+)["\']#i', 'data-poster="$1"', $attributes );
+							if ( '' === $this->sanitize_lazy_moved_url( $poster_matches[1] ) ) {
+								$stripped_poster = preg_replace( '#\bposter=["\']([^"\']+)["\']#i', '', $attributes );
+								if ( null !== $stripped_poster ) {
+									$attributes = $stripped_poster;
+								}
+							} else {
+								$moved_poster = preg_replace( '#\bposter=["\']([^"\']+)["\']#i', 'data-poster="$1"', $attributes );
+								if ( null !== $moved_poster ) {
+									$attributes = $moved_poster;
+								}
+							}
 						}
 
 						// Add preload="none" if not already present.
