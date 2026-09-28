@@ -62,6 +62,7 @@ import {
 	faBolt,
 	faGlobe,
 } from '@fortawesome/free-solid-svg-icons';
+import PanelGroup from './common/PanelGroup';
 
 /**
  * Coerce a TTL override select value to a finite number, or undefined when
@@ -1926,8 +1927,20 @@ const Dashboard = ( {
 				onSave={ saveLoggedInCacheSettings }
 			/>
 
-			{ /* Phase 1 — Performance Audit & System Info (v1.5.0) */ }
-			<div className="wppo-stacked-cards">
+			{ /* Thirteen panels used to render as one flat column: a measured
+			     9,053px, ten screens, 22 headings, no hierarchy. Grouped into
+			     what a site owner came for and what they did not, so the page
+			     of arrival is under two screens. Nothing is removed. */ }
+			<PanelGroup
+				title={ __(
+					'How your site is doing',
+					'performance-optimisation'
+				) }
+				summary={ __(
+					'Lab scans, real-user data, and what to do next.',
+					'performance-optimisation'
+				) }
+			>
 				{ /* Guided single RUM-driven next action + server-type note (NEXT) */ }
 				<GuidedNextStep onNavigate={ onNavigate } />
 
@@ -1955,7 +1968,18 @@ const Dashboard = ( {
 
 				{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
 				<WebVitalsRum />
+			</PanelGroup>
 
+			{ /* 3,086px of material a site owner usually does not open on
+			     arrival. Folded, not hidden: one click, same screen. */ }
+			<PanelGroup
+				defaultOpen={ false }
+				title={ __( 'Advanced tuning', 'performance-optimisation' ) }
+				summary={ __(
+					'Option bloat, edge caching, adaptive AI, and llms.txt.',
+					'performance-optimisation'
+				) }
+			>
 				{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
 				<AutoloadedOptions />
 
@@ -1964,12 +1988,32 @@ const Dashboard = ( {
 				<AiPanel />
 
 				<EdgeCachePanel />
+			</PanelGroup>
 
+			{ /* Server details, image jobs, and the activity log.
+			     Left open by default. The first version folded this group, and
+			     four existing tests failed because "Optimize All" was no longer
+			     reachable. Those tests were right: a primary action does not
+			     belong behind a fold.
+			     Note the rule is narrower than it first read. Three
+			     `wppo-button--primary` **Save** buttons — LLMs.txt, AI, Edge
+			     Cache — do sit inside the folded group, and that is deliberate:
+			     a per-panel Save is a commit for that panel's settings, not an
+			     arrival action, and folding it with its panel keeps the commit
+			     and the fields it commits in one place. What must stay reachable
+			     is the screen-level action, and it is. */ }
+			<PanelGroup
+				title={ __(
+					'Server, images and activity',
+					'performance-optimisation'
+				) }
+				summary={ __(
+					'System information, image conversion, and what changed.',
+					'performance-optimisation'
+				) }
+				className="wppo-panel-group--spaced"
+			>
 				<SystemInfo />
-			</div>
-
-			{ /* Image optimization + activity log */ }
-			<div className="wppo-stacked-cards wppo-mt-20">
 				<ImageOptimizationCard
 					completed={ completed }
 					pending={ pending }
@@ -1990,7 +2034,7 @@ const Dashboard = ( {
 					activitiesError={ activitiesError }
 					onNavigate={ onNavigate }
 				/>
-			</div>
+			</PanelGroup>
 
 			<ConfirmDialog
 				isOpen={ confirmRemove }

@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-28T07:56:10+00:00\n"
+"POT-Creation-Date: 2026-09-28T10:03:37+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -688,7 +688,7 @@ msgid "Delay priority for %s"
 msgstr ""
 
 #: includes/Admin/class-metabox.php:409
-#: src/components/Dashboard.js:1120
+#: src/components/Dashboard.js:1121
 msgid "High"
 msgstr ""
 
@@ -940,7 +940,7 @@ msgid "%d images queued for background optimization."
 msgstr ""
 
 #: includes/Admin/class-rest.php:1461
-#: src/components/Dashboard.js:624
+#: src/components/Dashboard.js:625
 msgid "Images optimized successfully."
 msgstr ""
 
@@ -2008,13 +2008,13 @@ msgid "Clear cache for this specific page or post"
 msgstr ""
 
 #: includes/Core/class-main.php:10188
-#: src/components/Dashboard.js:530
+#: src/components/Dashboard.js:531
 msgid "Cache cleared successfully."
 msgstr ""
 
 #: includes/Core/class-main.php:10189
-#: src/components/Dashboard.js:548
-#: src/components/Dashboard.js:567
+#: src/components/Dashboard.js:549
+#: src/components/Dashboard.js:568
 msgid "Failed to clear cache."
 msgstr ""
 
@@ -2669,7 +2669,7 @@ msgid "Not available"
 msgstr ""
 
 #: includes/Insight/class-system-info.php:904
-#: src/components/Dashboard.js:1813
+#: src/components/Dashboard.js:1814
 #: src/components/ImageOptimization.js:751
 #: src/components/ImageOptimization.js:777
 #: src/components/PerformanceAudit.js:557
@@ -3083,8 +3083,8 @@ msgid "Save AI Settings"
 msgstr ""
 
 #: src/components/AiPanel.js:453
-#: src/components/Dashboard.js:1781
-#: src/components/Dashboard.js:1910
+#: src/components/Dashboard.js:1782
+#: src/components/Dashboard.js:1911
 #: src/components/dashboard/LoggedInCacheCard.js:83
 #: src/components/EdgeCachePanel.js:309
 #: src/components/LlmsPanel.js:141
@@ -3491,426 +3491,450 @@ msgstr ""
 msgid "Regenerate All"
 msgstr ""
 
-#: src/components/Dashboard.js:108
+#: src/components/Dashboard.js:109
 msgid "Inconclusive (re-run)"
 msgstr ""
 
-#: src/components/Dashboard.js:178
+#: src/components/Dashboard.js:179
 msgid "Bypassed (pass)"
 msgstr ""
 
-#: src/components/Dashboard.js:179
+#: src/components/Dashboard.js:180
 msgid "Cacheable (fail)"
 msgstr ""
 
-#: src/components/Dashboard.js:205
+#: src/components/Dashboard.js:206
 msgid "Inherit global"
 msgstr ""
 
-#: src/components/Dashboard.js:206
-#: src/components/Dashboard.js:1489
+#: src/components/Dashboard.js:207
+#: src/components/Dashboard.js:1490
 msgid "Never expire"
 msgstr ""
 
-#: src/components/Dashboard.js:207
-#: src/components/Dashboard.js:1492
+#: src/components/Dashboard.js:208
+#: src/components/Dashboard.js:1493
 msgid "1 hour"
 msgstr ""
 
-#: src/components/Dashboard.js:208
-#: src/components/Dashboard.js:1495
+#: src/components/Dashboard.js:209
+#: src/components/Dashboard.js:1496
 msgid "6 hours"
 msgstr ""
 
-#: src/components/Dashboard.js:209
-#: src/components/Dashboard.js:1498
+#: src/components/Dashboard.js:210
+#: src/components/Dashboard.js:1499
 msgid "12 hours"
 msgstr ""
 
-#: src/components/Dashboard.js:210
-#: src/components/Dashboard.js:1501
+#: src/components/Dashboard.js:211
+#: src/components/Dashboard.js:1502
 msgid "24 hours"
 msgstr ""
 
-#: src/components/Dashboard.js:211
-#: src/components/Dashboard.js:1504
+#: src/components/Dashboard.js:212
+#: src/components/Dashboard.js:1505
 msgid "48 hours"
 msgstr ""
 
-#: src/components/Dashboard.js:212
-#: src/components/Dashboard.js:1507
+#: src/components/Dashboard.js:213
+#: src/components/Dashboard.js:1508
 msgid "1 week"
 msgstr ""
 
-#: src/components/Dashboard.js:459
+#: src/components/Dashboard.js:460
 msgid "Failed to load database counts."
 msgstr ""
 
-#: src/components/Dashboard.js:608
+#: src/components/Dashboard.js:609
 msgid "Image optimisation started in background."
 msgstr ""
 
-#: src/components/Dashboard.js:644
+#: src/components/Dashboard.js:645
 msgid "Image optimisation failed."
 msgstr ""
 
-#: src/components/Dashboard.js:689
+#: src/components/Dashboard.js:690
 msgid "Optimized images removed."
 msgstr ""
 
-#: src/components/Dashboard.js:700
-#: src/components/Dashboard.js:719
+#: src/components/Dashboard.js:701
+#: src/components/Dashboard.js:720
 msgid "Failed to remove optimized images."
 msgstr ""
 
-#: src/components/Dashboard.js:833
+#: src/components/Dashboard.js:834
 msgid "Page cache settings saved."
 msgstr ""
 
-#: src/components/Dashboard.js:834
+#: src/components/Dashboard.js:835
 msgid "Failed to save page cache settings."
 msgstr ""
 
-#: src/components/Dashboard.js:891
-#: src/components/Dashboard.js:931
+#: src/components/Dashboard.js:892
+#: src/components/Dashboard.js:932
 #: src/components/WelcomePanel.js:345
 #: src/components/WelcomePanel.js:386
 msgid "Failed to run the WooCommerce self-test."
 msgstr ""
 
-#: src/components/Dashboard.js:917
+#: src/components/Dashboard.js:918
 msgid "The WooCommerce self-test timed out after 5 seconds. Please retry."
 msgstr ""
 
-#: src/components/Dashboard.js:961
+#: src/components/Dashboard.js:962
 msgid "Logged-in cache settings saved."
 msgstr ""
 
-#: src/components/Dashboard.js:962
+#: src/components/Dashboard.js:963
 msgid "Failed to save logged-in cache settings."
 msgstr ""
 
-#: src/components/Dashboard.js:989
+#: src/components/Dashboard.js:990
 msgid "CDN purge settings saved."
 msgstr ""
 
-#: src/components/Dashboard.js:990
+#: src/components/Dashboard.js:991
 msgid "Failed to save CDN purge settings."
 msgstr ""
 
-#: src/components/Dashboard.js:1062
+#: src/components/Dashboard.js:1063
 msgid "WooCommerce safe mode staged on — click Save Page Cache Settings below to apply."
 msgstr ""
 
-#: src/components/Dashboard.js:1108
+#: src/components/Dashboard.js:1109
 msgid "Cache missing"
 msgstr ""
 
-#: src/components/Dashboard.js:1117
+#: src/components/Dashboard.js:1118
 msgid "Healthy"
 msgstr ""
 
-#: src/components/Dashboard.js:1123
+#: src/components/Dashboard.js:1124
 msgid "Medium"
 msgstr ""
 
-#: src/components/Dashboard.js:1132
+#: src/components/Dashboard.js:1133
 msgid "Not cached"
 msgstr ""
 
-#: src/components/Dashboard.js:1142
+#: src/components/Dashboard.js:1143
 msgid "Ready"
 msgstr ""
 
-#: src/components/Dashboard.js:1176
+#: src/components/Dashboard.js:1177
 msgid "LiteSpeed Detected"
 msgstr ""
 
-#: src/components/Dashboard.js:1182
+#: src/components/Dashboard.js:1183
 msgid "LiteSpeed Cache plugin is active."
 msgstr ""
 
-#: src/components/Dashboard.js:1186
+#: src/components/Dashboard.js:1187
 msgid "Server is LiteSpeed / OpenLiteSpeed."
 msgstr ""
 
-#: src/components/Dashboard.js:1195
+#: src/components/Dashboard.js:1196
 #: src/components/FileOptimization.js:5281
 msgid "Effective:"
 msgstr ""
 
-#: src/components/Dashboard.js:1206
+#: src/components/Dashboard.js:1207
 #: src/components/FileOptimization.js:5263
 msgid "LSCache Active"
 msgstr ""
 
-#: src/components/Dashboard.js:1210
+#: src/components/Dashboard.js:1211
 #: src/components/FileOptimization.js:5267
 msgid "LSCache Inactive"
 msgstr ""
 
-#: src/components/Dashboard.js:1218
+#: src/components/Dashboard.js:1219
 msgid "WPPO optimisation is paused in this mode."
 msgstr ""
 
-#: src/components/Dashboard.js:1232
+#: src/components/Dashboard.js:1233
 msgid "System Health"
 msgstr ""
 
-#: src/components/Dashboard.js:1235
+#: src/components/Dashboard.js:1236
 msgid "Real-time performance overview and quick optimisation actions."
 msgstr ""
 
-#: src/components/Dashboard.js:1253
+#: src/components/Dashboard.js:1254
 msgid "Purge All Cache"
 msgstr ""
 
-#: src/components/Dashboard.js:1259
+#: src/components/Dashboard.js:1260
 msgid "Purging…"
 msgstr ""
 
-#: src/components/Dashboard.js:1282
+#: src/components/Dashboard.js:1283
 msgid "Cache directory not found."
 msgstr ""
 
-#: src/components/Dashboard.js:1292
+#: src/components/Dashboard.js:1293
 msgid "Fix Now"
 msgstr ""
 
-#: src/components/Dashboard.js:1301
+#: src/components/Dashboard.js:1302
 msgid "Cache Size"
 msgstr ""
 
 #. translators: %d: cached page file count.
-#: src/components/Dashboard.js:1323
+#: src/components/Dashboard.js:1324
 #, js-format
 msgid "%d pages"
 msgstr ""
 
-#: src/components/Dashboard.js:1338
+#: src/components/Dashboard.js:1339
 msgid "Purge Cache"
 msgstr ""
 
-#: src/components/Dashboard.js:1348
+#: src/components/Dashboard.js:1349
 msgid "Manage →"
 msgstr ""
 
-#: src/components/Dashboard.js:1355
+#: src/components/Dashboard.js:1356
 msgid "Optimized Files"
 msgstr ""
 
-#: src/components/Dashboard.js:1368
+#: src/components/Dashboard.js:1369
 msgid "file"
 msgid_plural "files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/Dashboard.js:1381
+#: src/components/Dashboard.js:1382
 msgid "Configure →"
 msgstr ""
 
-#: src/components/Dashboard.js:1388
+#: src/components/Dashboard.js:1389
 msgid "DB Overhead"
 msgstr ""
 
-#: src/components/Dashboard.js:1396
+#: src/components/Dashboard.js:1397
 msgid "item"
 msgid_plural "items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/Dashboard.js:1414
+#: src/components/Dashboard.js:1415
 msgid "Optimize →"
 msgstr ""
 
-#: src/components/Dashboard.js:1421
+#: src/components/Dashboard.js:1422
 msgid "Images Optimized"
 msgstr ""
 
-#: src/components/Dashboard.js:1443
+#: src/components/Dashboard.js:1444
 msgid "optimized"
 msgstr ""
 
-#: src/components/Dashboard.js:1444
+#: src/components/Dashboard.js:1445
 msgid "No images"
 msgstr ""
 
-#: src/components/Dashboard.js:1452
+#: src/components/Dashboard.js:1453
 msgid "View →"
 msgstr ""
 
-#: src/components/Dashboard.js:1460
+#: src/components/Dashboard.js:1461
 msgid "Page Cache"
 msgstr ""
 
-#: src/components/Dashboard.js:1464
+#: src/components/Dashboard.js:1465
 msgid "Enable Page Cache"
 msgstr ""
 
-#: src/components/Dashboard.js:1468
+#: src/components/Dashboard.js:1469
 msgid "Generate static HTML copies of your pages and serve them to visitors without running WordPress. Recommended for faster TTFB on non-logged-in traffic."
 msgstr ""
 
-#: src/components/Dashboard.js:1478
+#: src/components/Dashboard.js:1479
 msgid "Cache Lifespan"
 msgstr ""
 
-#: src/components/Dashboard.js:1514
+#: src/components/Dashboard.js:1515
 msgid "File cache uses this lifespan. LiteSpeed server layer may vary per post type below."
 msgstr ""
 
-#: src/components/Dashboard.js:1522
+#: src/components/Dashboard.js:1523
 msgid "Posts TTL override"
 msgstr ""
 
-#: src/components/Dashboard.js:1540
+#: src/components/Dashboard.js:1541
 msgid "Pages TTL override"
 msgstr ""
 
-#: src/components/Dashboard.js:1561
+#: src/components/Dashboard.js:1562
 msgid "Products TTL override"
 msgstr ""
 
-#: src/components/Dashboard.js:1580
+#: src/components/Dashboard.js:1581
 msgid "LiteSpeed only — per post type overrides for X-LiteSpeed-Cache-Control. Non-singular pages use the global lifespan. Filter wppo_litespeed_ttl still works."
 msgstr ""
 
-#: src/components/Dashboard.js:1588
+#: src/components/Dashboard.js:1589
 msgid "WooCommerce safe mode"
 msgstr ""
 
-#: src/components/Dashboard.js:1592
+#: src/components/Dashboard.js:1593
 msgid "Always bypass the static cache for cart, checkout, account pages and Store API routes. Custom Woo slugs stay excluded even without WooCommerce conditional tags."
 msgstr ""
 
-#: src/components/Dashboard.js:1608
+#: src/components/Dashboard.js:1609
 msgid "Run Woo Cache Self-Test"
 msgstr ""
 
-#: src/components/Dashboard.js:1612
+#: src/components/Dashboard.js:1613
 #: src/components/WelcomePanel.js:614
 #: src/components/WelcomePanel.js:794
 msgid "Running…"
 msgstr ""
 
-#: src/components/Dashboard.js:1621
+#: src/components/Dashboard.js:1622
 msgid "Proves in one click that cart, checkout and account paths plus cart/checkout fragments (?wc-ajax=, ?add-to-cart=, plain-permalink Store API) bypass the static cache under path/query/safe-mode semantics, that faceted filter URLs are skipped by preload, and that a guest cart survives with page and object cache on (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope). On failure, force-exclude dynamic routes plus cookie bypass (re-enable safe mode) and serve dynamic."
 msgstr ""
 
-#: src/components/Dashboard.js:1632
+#: src/components/Dashboard.js:1633
 #: src/components/WelcomePanel.js:691
 #: src/lib/wooSelfTest.js:81
 msgid "The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached."
 msgstr ""
 
-#: src/components/Dashboard.js:1641
+#: src/components/Dashboard.js:1642
 #: src/components/WelcomePanel.js:701
 #: src/lib/wooSelfTest.js:85
 msgid "WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached."
 msgstr ""
 
-#: src/components/Dashboard.js:1656
+#: src/components/Dashboard.js:1657
 msgid "Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Stage WooCommerce safe mode back on, then save below to apply — never a stale cart."
 msgstr ""
 
-#: src/components/Dashboard.js:1665
+#: src/components/Dashboard.js:1666
 msgid "Stage safe mode on"
 msgstr ""
 
-#: src/components/Dashboard.js:1671
+#: src/components/Dashboard.js:1672
 msgid "Staging only — click Save Page Cache Settings to apply."
 msgstr ""
 
-#: src/components/Dashboard.js:1690
+#: src/components/Dashboard.js:1691
 msgid "Fragment probes (query-string):"
 msgstr ""
 
-#: src/components/Dashboard.js:1700
+#: src/components/Dashboard.js:1701
 msgid "Fragment probes (query-string)"
 msgstr ""
 
-#: src/components/Dashboard.js:1711
+#: src/components/Dashboard.js:1712
 msgid "Editor bypass probes (admin + previews):"
 msgstr ""
 
-#: src/components/Dashboard.js:1721
+#: src/components/Dashboard.js:1722
 msgid "Editor bypass probes (admin + previews)"
 msgstr ""
 
-#: src/components/Dashboard.js:1732
+#: src/components/Dashboard.js:1733
 msgid "Preload probes (faceted URLs skipped):"
 msgstr ""
 
-#: src/components/Dashboard.js:1742
+#: src/components/Dashboard.js:1743
 msgid "Preload probes (faceted URLs skipped)"
 msgstr ""
 
-#: src/components/Dashboard.js:1753
+#: src/components/Dashboard.js:1754
 msgid "Guest-cart survival (page + object cache on):"
 msgstr ""
 
-#: src/components/Dashboard.js:1763
+#: src/components/Dashboard.js:1764
 msgid "Guest-cart survival (page + object cache on)"
 msgstr ""
 
-#: src/components/Dashboard.js:1777
+#: src/components/Dashboard.js:1778
 msgid "Save Page Cache Settings"
 msgstr ""
 
-#: src/components/Dashboard.js:1791
+#: src/components/Dashboard.js:1792
 msgid "CDN Cache Purge"
 msgstr ""
 
-#: src/components/Dashboard.js:1799
+#: src/components/Dashboard.js:1800
 msgid "CDN Purge Service"
 msgstr ""
 
-#: src/components/Dashboard.js:1816
+#: src/components/Dashboard.js:1817
 msgid "Cloudflare"
 msgstr ""
 
-#: src/components/Dashboard.js:1819
+#: src/components/Dashboard.js:1820
 msgid "Varnish"
 msgstr ""
 
-#: src/components/Dashboard.js:1826
+#: src/components/Dashboard.js:1827
 msgid "Purge the edge cache whenever the plugin cache is cleared."
 msgstr ""
 
-#: src/components/Dashboard.js:1839
+#: src/components/Dashboard.js:1840
 #: src/components/EdgeCachePanel.js:242
 msgid "Cloudflare Zone ID"
 msgstr ""
 
-#: src/components/Dashboard.js:1857
+#: src/components/Dashboard.js:1858
 msgid "Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with an API token that has Zone > Cache Purge permission. The token is never stored in the database."
 msgstr ""
 
-#: src/components/Dashboard.js:1871
+#: src/components/Dashboard.js:1872
 msgid "Varnish Purge Endpoints"
 msgstr ""
 
-#: src/components/Dashboard.js:1884
+#: src/components/Dashboard.js:1885
 msgid "http://127.0.0.1:8081/purge"
 msgstr ""
 
-#: src/components/Dashboard.js:1893
+#: src/components/Dashboard.js:1894
 msgid "One URL per line. Each receives a PURGE request on cache clear."
 msgstr ""
 
-#: src/components/Dashboard.js:1906
+#: src/components/Dashboard.js:1907
 msgid "Save CDN Purge"
 msgstr ""
 
-#: src/components/Dashboard.js:1999
+#: src/components/Dashboard.js:1935
+msgid "How your site is doing"
+msgstr ""
+
+#: src/components/Dashboard.js:1939
+msgid "Lab scans, real-user data, and what to do next."
+msgstr ""
+
+#: src/components/Dashboard.js:1977
+msgid "Advanced tuning"
+msgstr ""
+
+#: src/components/Dashboard.js:1978
+msgid "Option bloat, edge caching, adaptive AI, and llms.txt."
+msgstr ""
+
+#: src/components/Dashboard.js:2006
+msgid "Server, images and activity"
+msgstr ""
+
+#: src/components/Dashboard.js:2010
+msgid "System information, image conversion, and what changed."
+msgstr ""
+
+#: src/components/Dashboard.js:2043
 msgid "Remove Optimized Images"
 msgstr ""
 
-#: src/components/Dashboard.js:2003
+#: src/components/Dashboard.js:2047
 msgid "This will delete all optimized WebP and AVIF copies. Original images will not be affected."
 msgstr ""
 
-#: src/components/Dashboard.js:2007
+#: src/components/Dashboard.js:2051
 #: src/components/DatabaseCleanup.js:934
 msgid "Delete"
 msgstr ""
