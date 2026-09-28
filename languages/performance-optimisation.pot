@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-28T10:03:37+00:00\n"
+"POT-Creation-Date: 2026-09-28T11:52:11+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -3935,7 +3935,7 @@ msgid "This will delete all optimized WebP and AVIF copies. Original images will
 msgstr ""
 
 #: src/components/Dashboard.js:2051
-#: src/components/DatabaseCleanup.js:934
+#: src/components/DatabaseCleanup.js:965
 msgid "Delete"
 msgstr ""
 
@@ -4200,59 +4200,65 @@ msgid_plural "%d items can be safely removed to reclaim space."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/DatabaseCleanup.js:775
+#: src/components/DatabaseCleanup.js:792
 msgid "Granular Cleanup Options"
 msgstr ""
 
-#: src/components/DatabaseCleanup.js:799
+#: src/components/DatabaseCleanup.js:816
 msgid "Clean"
 msgstr ""
 
-#: src/components/DatabaseCleanup.js:803
+#. translators: %s: the kind of database cleanup, e.g. "Post Revisions".
+#: src/components/DatabaseCleanup.js:826
+#, js-format
+msgid "Clean %s"
+msgstr ""
+
+#: src/components/DatabaseCleanup.js:832
 msgid "Cleaning"
 msgstr ""
 
-#: src/components/DatabaseCleanup.js:830
+#: src/components/DatabaseCleanup.js:861
 msgid "Export"
 msgstr ""
 
-#: src/components/DatabaseCleanup.js:834
+#: src/components/DatabaseCleanup.js:865
 msgid "Exporting"
 msgstr ""
 
-#: src/components/DatabaseCleanup.js:842
+#: src/components/DatabaseCleanup.js:873
 msgid "No items to clean"
 msgstr ""
 
 #. translators: %1$d pending, %2$d failed, %3$s oldest pending age.
-#: src/components/DatabaseCleanup.js:873
+#: src/components/DatabaseCleanup.js:904
 #, js-format
 msgid "Queue health: %1$d pending, %2$d failed, oldest pending %3$s."
 msgstr ""
 
-#: src/components/DatabaseCleanup.js:887
+#: src/components/DatabaseCleanup.js:918
 msgid "n/a"
 msgstr ""
 
 #. translators: %d is an age in seconds.
-#: src/components/DatabaseCleanup.js:893
+#: src/components/DatabaseCleanup.js:924
 #, js-format
 msgid "%d seconds ago"
 msgstr ""
 
 #. translators: %s is the cleanup type label.
-#: src/components/DatabaseCleanup.js:921
+#: src/components/DatabaseCleanup.js:952
 #, js-format
 msgid "Confirm %s"
 msgstr ""
 
 #. translators: %s is the cleanup type label (lowercased unless it is the 'all' aggregate).
-#: src/components/DatabaseCleanup.js:926
+#: src/components/DatabaseCleanup.js:957
 #, js-format
 msgid "This action will permanently delete %s from your database. Proceed?"
 msgstr ""
 
-#: src/components/DatabaseCleanup.js:931
+#: src/components/DatabaseCleanup.js:962
 msgid "overhead items"
 msgstr ""
 
