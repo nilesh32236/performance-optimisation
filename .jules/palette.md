@@ -15,6 +15,7 @@
 ## 2024-06-01 - Avoid Layout Shifts in Granular Button Arrays
 **Learning:** When listing an array of features with individual "Action" buttons (e.g., Clean Database items), replacing button text with loading ellipses ("...") inside a standard `<button>` element breaks the layout bounds, introduces jarring UI shifts, and fails to announce state changes to screen readers properly. Additionally, replacing the original native `.wppo-button` classes entirely can break visual alignment.
 **Action:** When refactoring granular action buttons to show loading states, replace the generic `<button>` with `<LoadingSubmitButton>`. Critically, preserve the original visual classes (e.g., `className="wppo-button wppo-button--secondary"`) and pass `isLoading={loadingState}` so that the component internally manages the loading spinner and accessible `aria-live` region while maintaining exact physical button dimensions.
+
 ## 2026-08-03 - Replaced Hardcoded Color with CSS Variable
 **Learning:** The video placeholder play button hover state used a hardcoded YouTube red color (`#cc0000`), which failed to adapt to the user's active WordPress admin theme. Also, its outline fallback used an outdated WP blue (`#007cba`).
 **Action:** Replaced `#cc0000` with `var(--wppo-primary-hover)` and updated the outline fallback to `#2271b1` in `_video-placeholder.scss` to ensure consistent theme adaptation across the UI.
@@ -46,18 +47,19 @@
 ## 2024-05-24 - Link Inputs with Helper Text
 **Learning:** Found inputs lacking explicit `aria-describedby` associations with their description text, leading to accessibility issues.
 **Action:** Always link inputs to accompanying helper text by giving the text an ID and using `aria-describedby` on the input element.
+
 ## 2024-06-03 - Replacing Hardcoded Text Colors Properly
 **Learning:** When replacing hardcoded text colors like `#fff` in SCSS to ensure compatibility with WordPress themes (especially potential dark modes), using a background variable like `--wppo-bg-card` for a text `color` property is semantically incorrect and creates accessibility contrast failures.
 **Action:** Always map white-on-brand text to var(--wppo-text-sidebar-active, #fff) and never use background tokens (e.g. --wppo-bg-card) for the `color` property.
+
 ## 2024-05-23 - Icon-only Tooltip Accessibility
 **Learning:** Found an accessibility issue where icon-only tooltip trigger elements (`span` with `role="button"`) lacked an accessible name for screen readers.
 **Action:** Added an `aria-label` attribute (e.g., `__( 'More information', 'performance-optimisation' )`) to the tooltip trigger element when it functions as an icon-only button without visible text.
+
 ## 2024-05-23 - Accessible Tooltip Fallbacks
 **Learning:** For icon-only tooltips, using the full string content as `aria-label` is better than a generic fallback, even if long. When `aria-label` exactly matches the tooltip content, `aria-describedby` should be omitted to prevent screen readers from announcing the text twice. Rich/JSX content requires an explicit `label` prop.
 **Action:** Added an optional `label` prop, removed the length restriction on the string fallback, and conditionally omitted `aria-describedby` when it duplicates the label.
-## YYYY-MM-DD - [Dynamic Danger Button Shadows]
-**Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
-**Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
-## 2024-05-24 - Dynamic Danger Button Shadows
-**Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) or other element shadows (like the Welcome step numbers) break visual consistency if the underlying --wppo-primary or --wppo-danger CSS variable is modified by the user's WP admin theme.
-**Action:** Replace hardcoded rgba() values in box-shadows with color-mix(in srgb, var(--variable) X%, transparent) to ensure dynamic theme adaptation.
+
+## 2026-09-29 - Dynamic Theme Colors in Box Shadows
+**Learning:** Hardcoded RGB approximations of design tokens in `box-shadow` / `filter: drop-shadow` (e.g. `rgba(34, 113, 177, 0.3)` for `--wppo-primary`, `rgba(220, 38, 38, 0.25)` for `--wppo-danger`) desync from the user's active WP Admin Color Scheme, and `rgba()` cannot interpolate a CSS custom property at all.
+**Action:** Replace hardcoded `rgba()` values in shadows with `color-mix(in srgb, var(--wppo-<token>) X%, transparent)`. Keep the theme-independent neutral shadow layer in a separate layer (or an `@supports` block) so it survives on engines without `color-mix()`. Applied to the Welcome step numbers in `_welcome.scss`.
