@@ -921,9 +921,10 @@ jobs:
           # before EACH create (gh issue list --state all --label wp-monitor
           # --search "<keywords>" --json number,title,body --limit 20), now
           # done once in script so it cannot be skipped or fudged by the
-          # model. The limit is raised 20 -> 100 so a monitor run that files
-          # the 8th issue this quarter still sees the older ones.
-          if ! gh issue list --state all --label wp-monitor --json number,title,body --limit 100 -R "${REPO}" > /tmp/wppo-existing-wp-monitor.json; then
+          # model. The limit is raised 20 -> 1000 because the whole-label
+          # index must be complete: this repo has 298 wp-monitor issues
+          # (mostly closed), and a truncated index silently re-files them.
+          if ! gh issue list --state all --label wp-monitor --json number,title,body --limit 1000 -R "${REPO}" > /tmp/wppo-existing-wp-monitor.json; then
             echo "::error::Could not list existing wp-monitor issues — refusing to publish without dedup"
             exit 1
           fi
