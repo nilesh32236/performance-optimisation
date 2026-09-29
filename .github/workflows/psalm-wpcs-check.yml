@@ -52,12 +52,6 @@ jobs:
         with:
           php-version: "8.2"
           tools: composer:v2
-          # ext-redis so Psalm can resolve Redis/RedisCluster. Without it the
-          # object-cache drop-in and the Redis helper collapse into a cascade
-          # of UndefinedClass/UndefinedDocblockClass findings that would have
-          # to be baselined, and the scan would be blind to exactly the Redis
-          # calls it most needs to check.
-          extensions: redis
 
       - name: Install Dependencies
         run: composer install --optimize-autoloader
@@ -134,14 +128,6 @@ jobs:
             echo "::error::Psalm security scan exited ${PSALM_RC} (findings above, or a crash). The SARIF path still runs."
             exit "${PSALM_RC}"
           fi
-
-      - name: TEMP regenerate baseline in the scan image
-        if: always()
-        run: |
-          docker run --rm --entrypoint sh -v "$GITHUB_WORKSPACE:/github/workspace" -w /github/workspace \
-            ghcr.io/psalm/psalm-security-scan \
-            -c 'psalm --root=/github/workspace --no-progress --set-baseline=/github/workspace/psalm-baseline.xml >/dev/null 2>&1; echo "=====BASELINE====="; cat /github/workspace/psalm-baseline.xml; echo "=====END====="' \
-            2>&1 | sed -n '/=====BASELINE=====/,/=====END=====/p'
 
       - name: Assert Psalm actually analysed the codebase
         if: always() && steps.psalm.outcome != 'skipped'

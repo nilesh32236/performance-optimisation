@@ -1,14 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<files psalm-version="5.26.1@d747f6500b38ac4f7dfc5edbcae6e4b637d7add0">
+<files psalm-version="5.25.0@01a8eb06b9e9cc6cfb6a320bf9fb14331919d505">
   <file src="includes/Support/redis-connect-helper.php">
     <InvalidCast>
       <code><![CDATA[$node]]></code>
     </InvalidCast>
+    <UndefinedClass>
+      <code><![CDATA[\Redis]]></code>
+      <code><![CDATA[\Redis]]></code>
+      <code><![CDATA[\Redis]]></code>
+    </UndefinedClass>
+    <UndefinedDocblockClass>
+      <code><![CDATA[\RedisCluster|\WP_Error]]></code>
+      <code><![CDATA[\Redis|\RedisCluster]]></code>
+      <code><![CDATA[\Redis|\RedisCluster]]></code>
+      <code><![CDATA[\Redis|\RedisCluster|\WP_Error]]></code>
+      <code><![CDATA[\Redis|\RedisCluster|\WP_Error]]></code>
+      <code><![CDATA[\Redis|\WP_Error]]></code>
+      <code><![CDATA[\Redis|\WP_Error]]></code>
+    </UndefinedDocblockClass>
   </file>
   <file src="templates/object-cache.php">
-    <InvalidArgument>
-      <code><![CDATA[$node]]></code>
-    </InvalidArgument>
     <InvalidGlobal>
       <code><![CDATA[global $table_prefix;]]></code>
     </InvalidGlobal>
@@ -20,19 +31,6 @@
       <code><![CDATA[$results]]></code>
       <code><![CDATA[$results]]></code>
       <code><![CDATA[$results]]></code>
-      <code><![CDATA[$this->redis->decrBy( $this->get_key( $key, $group ), $offset )]]></code>
-      <code><![CDATA[$this->redis->incrBy( $this->get_key( $key, $group ), $offset )]]></code>
-      <code><![CDATA[$this->redis->set(
-						$local_key,
-						$data,
-						array(
-							'nx' => true,
-							'ex' => $expire,
-						)
-					)]]></code>
-      <code><![CDATA[$this->redis->set( $formatted_key, $data )]]></code>
-      <code><![CDATA[$this->redis->setex( $formatted_key, $expire, $data )]]></code>
-      <code><![CDATA[$this->redis->setnx( $local_key, $data )]]></code>
       <code><![CDATA[array()]]></code>
       <code><![CDATA[array()]]></code>
       <code><![CDATA[array_fill_keys( array_keys( $data ), false )]]></code>
@@ -40,19 +38,51 @@
     <InvalidReturnType>
       <code><![CDATA[bool]]></code>
       <code><![CDATA[bool]]></code>
-      <code><![CDATA[bool]]></code>
-      <code><![CDATA[bool]]></code>
     </InvalidReturnType>
-    <NullArgument>
-      <code><![CDATA[$cursor]]></code>
-    </NullArgument>
-    <TooFewArguments>
-      <code><![CDATA[flushDb]]></code>
-    </TooFewArguments>
-    <UndefinedMethod>
-      <code><![CDATA[$redis_values]]></code>
-      <code><![CDATA[$replies]]></code>
-    </UndefinedMethod>
+    <UndefinedClass>
+      <code><![CDATA[\Redis]]></code>
+      <code><![CDATA[\Redis]]></code>
+      <code><![CDATA[\RedisCluster]]></code>
+      <code><![CDATA[\RedisCluster]]></code>
+    </UndefinedClass>
+    <UndefinedDocblockClass>
+      <code><![CDATA[$redis_instance]]></code>
+      <code><![CDATA[$redis_instance]]></code>
+      <code><![CDATA[$redis_instance]]></code>
+      <code><![CDATA[$redis_instance]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[$this->redis]]></code>
+      <code><![CDATA[\Redis|\RedisCluster|null]]></code>
+      <code><![CDATA[\Redis|\RedisCluster|null]]></code>
+      <code><![CDATA[\Redis|null]]></code>
+      <code><![CDATA[private $redis_replica = null;]]></code>
+    </UndefinedDocblockClass>
   </file>
   <file src="uninstall.php">
     <InvalidArgument>
