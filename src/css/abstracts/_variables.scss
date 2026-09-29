@@ -88,6 +88,8 @@
 	--wppo-shadow-premium: 0 0 0 1px rgba(34, 113, 177, 0.1), 0 12px 32px -8px rgba(34, 113, 177, 0.18);
 	--wppo-shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06), 0 10px 32px -14px rgba(0, 0, 0, 0.11);
 	--wppo-shadow-card-hover: 0 6px 20px rgba(0, 0, 0, 0.09), 0 18px 40px -18px rgba(0, 0, 0, 0.14);
+	--wppo-shadow-welcome-step: 0 2px 8px rgba(34, 113, 177, 0.3), 0 1px 3px rgba(0, 0, 0, 0.08);
+	--wppo-shadow-welcome-step-done: 0 2px 8px rgba(5, 150, 105, 0.3), 0 1px 3px rgba(0, 0, 0, 0.08);
 
 	--wppo-transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 	--wppo-max-width: 1120px;
@@ -102,5 +104,7 @@
 		--wppo-primary-medium: color-mix(in srgb, var(--wppo-primary) 15%, transparent);
 		--wppo-bg-sidebar-active: color-mix(in srgb, var(--wppo-primary) 20%, transparent);
 		--wppo-shadow-premium: 0 0 0 1px color-mix(in srgb, var(--wppo-primary) 8%, transparent), 0 8px 24px -4px color-mix(in srgb, var(--wppo-primary) 12%, transparent);
+		--wppo-shadow-welcome-step: 0 2px 8px color-mix(in srgb, var(--wppo-primary) 30%, transparent), 0 1px 3px rgba(0, 0, 0, 0.08);
+		--wppo-shadow-welcome-step-done: 0 2px 8px color-mix(in srgb, var(--wppo-success) 30%, transparent), 0 1px 3px rgba(0, 0, 0, 0.08);
 	}
 }

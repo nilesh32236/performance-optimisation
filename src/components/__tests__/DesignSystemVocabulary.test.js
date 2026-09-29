@@ -72,6 +72,26 @@ describe( 'a class the markup emits has a rule behind it', () => {
 	} );
 } );
 
+describe( 'the welcome step badge halo tracks the admin colour scheme', () => {
+	it( 'mixes the token inside an @supports guard, not a frozen rgba()', () => {
+		const css = read( 'build/style-index.css' );
+		// Ensure the fallback shadow is present via the variables block.
+		expect( css ).toMatch(
+			/:root\s*\{[^}]*--wppo-shadow-welcome-step:[^}]*rgba\(34,113,177,\.3\)[^}]*rgba\(0,0,0,\.08\)/
+		);
+		expect( css ).toMatch(
+			/:root\s*\{[^}]*--wppo-shadow-welcome-step-done:[^}]*rgba\(5,150,105,\.3\)[^}]*rgba\(0,0,0,\.08\)/
+		);
+		// Ensure the root element supports block is present, injecting the upgraded variables.
+		expect( css ).toMatch(
+			/@supports *\(color: *color-mix[^{]*\)\s*\{\s*:root\s*\{[^}]*--wppo-shadow-welcome-step:[^}]*color-mix\(in srgb,var\(--wppo-primary\) 30%/
+		);
+		expect( css ).toMatch(
+			/@supports *\(color: *color-mix[^{]*\)\s*\{\s*:root\s*\{[^}]*--wppo-shadow-welcome-step-done:[^}]*color-mix\(in srgb,var\(--wppo-success\) 30%/
+		);
+	} );
+} );
+
 describe( 'the area heading is not overridden by WordPress core', () => {
 	it( 'scopes the title rule by the mount id, not only by class', () => {
 		// A **tripwire, not a CSS test**: only a browser can observe which
