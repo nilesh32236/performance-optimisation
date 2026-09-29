@@ -52,6 +52,12 @@ jobs:
         with:
           php-version: "8.2"
           tools: composer:v2
+          # ext-redis so Psalm can resolve Redis/RedisCluster. Without it the
+          # object-cache drop-in and the Redis helper collapse into a cascade
+          # of UndefinedClass/UndefinedDocblockClass findings that would have
+          # to be baselined, and the scan would be blind to exactly the Redis
+          # calls it most needs to check.
+          extensions: redis
 
       - name: Install Dependencies
         run: composer install --optimize-autoloader
