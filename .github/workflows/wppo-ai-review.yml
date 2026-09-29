@@ -206,14 +206,34 @@ jobs:
         id: resolve-ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Untrusted event data must be passed through env, never interpolated
+          # into the run body: for fork pull requests github.event.pull_request
+          # is fully attacker-controlled, and "$(...)"/backticks are legal in git
+          # ref names, so inline interpolation is command injection.
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_PR: ${{ github.event.issue.pull_request }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY: ${{ github.repository }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
-            PR_NUMBER="${{ github.event.issue.number }}"
-            REF=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
-            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "issue_comment" ] && [ -n "$ISSUE_PR" ]; then
+            REF="$(gh pr view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json headRefName --jq .headRefName)"
           else
-            echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+            REF="$PR_HEAD_REF"
           fi
+          # An empty ref means a non-PR event (e.g. manual dispatch): keep
+          # checkout's default ref exactly as before.
+          if [ -z "$REF" ]; then
+            echo "ref=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Defence in depth: a ref is a single line by construction, so the
+          # GITHUB_OUTPUT write below can never become a multi-line injection.
+          if ! git check-ref-format "refs/heads/$REF"; then
+            echo "::error::Resolved pull request ref is not a valid branch name."
+            exit 1
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -282,14 +302,34 @@ jobs:
         id: resolve-ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Untrusted event data must be passed through env, never interpolated
+          # into the run body: for fork pull requests github.event.pull_request
+          # is fully attacker-controlled, and "$(...)"/backticks are legal in git
+          # ref names, so inline interpolation is command injection.
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_PR: ${{ github.event.issue.pull_request }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY: ${{ github.repository }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
-            PR_NUMBER="${{ github.event.issue.number }}"
-            REF=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
-            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "issue_comment" ] && [ -n "$ISSUE_PR" ]; then
+            REF="$(gh pr view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json headRefName --jq .headRefName)"
           else
-            echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+            REF="$PR_HEAD_REF"
           fi
+          # An empty ref means a non-PR event (e.g. manual dispatch): keep
+          # checkout's default ref exactly as before.
+          if [ -z "$REF" ]; then
+            echo "ref=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Defence in depth: a ref is a single line by construction, so the
+          # GITHUB_OUTPUT write below can never become a multi-line injection.
+          if ! git check-ref-format "refs/heads/$REF"; then
+            echo "::error::Resolved pull request ref is not a valid branch name."
+            exit 1
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -319,7 +359,6 @@ jobs:
         run: |
           .github/scripts/setup-opencode.sh
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           # Pinned for reproducible runs (resolved 2026-09-08 via
           # `npm view opencode-ai version` — matches the anomalyco/opencode
           # release tag the setup script downloads).
@@ -540,14 +579,34 @@ jobs:
         id: resolve-ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Untrusted event data must be passed through env, never interpolated
+          # into the run body: for fork pull requests github.event.pull_request
+          # is fully attacker-controlled, and "$(...)"/backticks are legal in git
+          # ref names, so inline interpolation is command injection.
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_PR: ${{ github.event.issue.pull_request }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY: ${{ github.repository }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
-            PR_NUMBER="${{ github.event.issue.number }}"
-            REF=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
-            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "issue_comment" ] && [ -n "$ISSUE_PR" ]; then
+            REF="$(gh pr view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json headRefName --jq .headRefName)"
           else
-            echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+            REF="$PR_HEAD_REF"
           fi
+          # An empty ref means a non-PR event (e.g. manual dispatch): keep
+          # checkout's default ref exactly as before.
+          if [ -z "$REF" ]; then
+            echo "ref=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Defence in depth: a ref is a single line by construction, so the
+          # GITHUB_OUTPUT write below can never become a multi-line injection.
+          if ! git check-ref-format "refs/heads/$REF"; then
+            echo "::error::Resolved pull request ref is not a valid branch name."
+            exit 1
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -629,25 +688,41 @@ jobs:
       - name: Wait for green checks, then squash merge PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Bind the decision to the exact head the reviewer approved.
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           REPO="${{ github.repository }}"
           ATTEMPTS=0
           PENDING=1
           FAILED=0
+          TOTAL=0
           while [ "$ATTEMPTS" -lt 20 ]; do
             # statusCheckRollup mixes CheckRuns ({name,status,conclusion}) and
             # legacy StatusContexts ({context,state}): normalize both shapes.
-            READY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json statusCheckRollup --jq '
+            # SKIPPED/NEUTRAL are deliberately NOT treated as success: a
+            # path-filtered or `if: false` job proves nothing about this head.
+            READY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid,statusCheckRollup --jq '
               [.statusCheckRollup[] |
                 if .__typename == "StatusContext" then
                   {done: (.state != "PENDING"), bad: (.state == "FAILURE" or .state == "ERROR")}
                 else
-                  {done: (.status == "COMPLETED"), bad: (.conclusion as $c | $c != null and (["SUCCESS","SKIPPED","NEUTRAL"] | index($c) | not))}
-                end] |
-              {pending: ([.[] | select(.done | not)] | length), failed: ([.[] | select(.bad)] | length)}')
+                  {done: (.status == "COMPLETED"), bad: (.conclusion as $c | $c != null and (["SUCCESS"] | index($c) | not))}
+                end] as $checks |
+              {oid: .headRefOid,
+               total: ($checks | length),
+               pending: ([$checks[] | select(.done | not)] | length),
+               failed: ([$checks[] | select(.bad)] | length)}')
             PENDING=$(printf '%s' "$READY" | jq -r .pending)
             FAILED=$(printf '%s' "$READY" | jq -r .failed)
+            TOTAL=$(printf '%s' "$READY" | jq -r .total)
+            CURRENT_SHA=$(printf '%s' "$READY" | jq -r .oid)
+            # A commit pushed during the poll was never reviewed; merging it on
+            # the strength of the previous head's checks is a false green.
+            if [ "$CURRENT_SHA" != "$PR_HEAD_SHA" ]; then
+              echo "::warning::Auto-merge skipped — head moved ${PR_HEAD_SHA} -> ${CURRENT_SHA} while waiting for checks"
+              exit 0
+            fi
             if [ "$PENDING" -eq 0 ]; then break; fi
             ATTEMPTS=$((ATTEMPTS + 1))
             echo "Waiting for $PENDING check(s)... (attempt $ATTEMPTS/20)"
@@ -661,10 +736,17 @@ jobs:
             echo "::warning::Auto-merge blocked — PR #${PR_NUMBER} has $FAILED failing check(s)"
             exit 0
           fi
-          echo "All checks green — merging PR #${PR_NUMBER} (autofix:ready)..."
+          # An empty rollup previously counted as "all green" and merged a PR
+          # that had never run CI at all.
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "::warning::Auto-merge blocked — PR #${PR_NUMBER} reported no checks; refusing to merge unverified code"
+            exit 0
+          fi
+          echo "All $TOTAL check(s) green — merging PR #${PR_NUMBER} (autofix:ready)..."
           gh pr merge "$PR_NUMBER" \
             --repo "$REPO" \
             --squash \
+            --match-head-commit "$PR_HEAD_SHA" \
             --delete-branch || {
             echo "::warning::Auto-merge failed — PR #${PR_NUMBER} may need manual merge"
           }
@@ -685,9 +767,10 @@ jobs:
       - name: Post merge notification
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PR titles are attacker-controlled; pass through env, never the run body.
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
           LINKED_ISSUE=$(echo "$PR_TITLE" | grep -oP '#\d+' | head -1 || echo "")
 
           BODY="## ✅ Autofix PR Merged
