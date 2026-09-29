@@ -213,3 +213,9 @@
 		font-size: 13px !important; // keep density for code lists
 	}
 }
+
+.wppo-file-input-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}

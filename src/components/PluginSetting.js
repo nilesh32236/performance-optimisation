@@ -1513,7 +1513,7 @@ const PluginSetting = ( { options } ) => {
 							) }
 						</p>
 						<LoadingSubmitButton
-							className="wppo-button wppo-button--primary"
+							className="wppo-button wppo-button--secondary"
 							onClick={ exportSettings }
 							label={ __(
 								'Download JSON',
@@ -1523,7 +1523,13 @@ const PluginSetting = ( { options } ) => {
 					</FeatureCard>
 
 					{ /* Import — danger zone — uses .wppo-danger-zone tokens (D-17). */ }
-					<div className="wppo-danger-zone">
+					<div
+						className={ `wppo-danger-zone ${
+							importNotice && importNotice.type === 'error'
+								? 'wppo-danger-zone--has-error'
+								: ''
+						}` }
+					>
 						<FeatureCard
 							title={ __(
 								'Import Configuration',
@@ -1550,17 +1556,39 @@ const PluginSetting = ( { options } ) => {
 										'performance-optimisation'
 									) }
 								</label>
-								<input
-									type="file"
-									id="import-config"
-									// Audit #1354: match by extension as well — some
-									// browsers filter file pickers by extension.
-									accept="application/json,.json"
-									onChange={ handleFileSelection }
-									ref={ fileInputRef }
-									className="wppo-input"
-									aria-describedby="import-config-desc"
-								/>
+								<div className="wppo-file-input-wrapper">
+									<input
+										type="file"
+										id="import-config"
+										// Audit #1354: match by extension as well — some
+										// browsers filter file pickers by extension.
+										accept="application/json,.json"
+										onChange={ handleFileSelection }
+										ref={ fileInputRef }
+										className="wppo-visually-hidden"
+										aria-describedby="import-config-desc"
+									/>
+									<button
+										type="button"
+										className="wppo-button wppo-button--secondary"
+										onClick={ () =>
+											fileInputRef.current.click()
+										}
+									>
+										{ __(
+											'Choose File',
+											'performance-optimisation'
+										) }
+									</button>
+									<span className="wppo-text-muted">
+										{ selectedFile
+											? selectedFile.name
+											: __(
+													'No file chosen',
+													'performance-optimisation'
+											  ) }
+									</span>
+								</div>
 								<p className="wppo-text-muted wppo-text-small wppo-mt-10">
 									{ __(
 										'Only .json files exported from this plugin are accepted.',
