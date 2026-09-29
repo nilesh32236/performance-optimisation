@@ -13,6 +13,10 @@
 #
 set -euo pipefail
 
+# No TTY in the sandbox, so debconf falls back to Teletype and complains on
+# every apt call. It is noise, not failure.
+export DEBIAN_FRONTEND=noninteractive
+
 # Intended to be run from the agent sandbox, where the repo is at /app.
 
 # --------------------------------------------------------------------------
@@ -49,11 +53,27 @@ INSTALL_PLAYWRIGHT="${INSTALL_PLAYWRIGHT:-1}"  # scripted screenshots
 
 BOLD=$'\033[1m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RED=$'\033[31m'; OFF=$'\033[0m'
 step() { echo "${BOLD}==>${OFF} $*"; }
-ok()   { echo "  ${GREEN}✓${OFF} $*"; }
+# Download a URL and install it as an executable. Every binary lands somewhere
+# root-owned, and a bare `curl -o /usr/local/bin/x` fails with exit 23 ("Failure
+# writing output to destination") when the script is not root. One helper, so
+# that cannot be got wrong per-binary again.
+install_bin() {
+  local url="$1" dest="$2" tmp
+  tmp="$(mktemp)"
+  curl -sSL --retry 3 --retry-delay 2 "$url" -o "$tmp" || { rm -f "$tmp"; die "download failed: $url"; }
+  sudo install -d "$(dirname "$dest")"
+  sudo install -m 0755 "$tmp" "$dest"
+  rm -f "$tmp"
+}
+ok()   { echo "  ${GREEN}ok${OFF} $*"; }
 warn() { echo "  ${YELLOW}!${OFF} $*"; }
 die()  { echo "  ${RED}✗${OFF} $*" >&2; exit 1; }
 
-trap 'die "setup failed on line $LINENO"' ERR
+# A failing step must not dump shell internals on top of the real message. The
+# default handler can leave the shell mid-context, which produced a stray
+# "pop_var_context: head of shell_variables not a function context" after the
+# actual error had already been printed.
+trap 'rc=$?; trap - ERR; die "setup failed on line $LINENO (exit $rc)"' EXIT
 
 # --------------------------------------------------------------------------
 step "1/9  System packages"
@@ -94,11 +114,9 @@ fi
 # --------------------------------------------------------------------------
 step "3/9  WP-CLI"
 # --------------------------------------------------------------------------
-if ! command -v wp >/dev/null 2>&1; then
-  curl -sSLo /usr/local/bin/wp \
-    https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-  chmod +x /usr/local/bin/wp
-fi
+command -v wp >/dev/null 2>&1 || install_bin \
+  https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
+  /usr/local/bin/wp
 # `wp` in an agent sandbox usually has no TTY, so always allow root.
 wp --allow-root --version >/dev/null 2>&1 || die "wp-cli is not runnable"
 ok "wp-cli $(wp --allow-root --version | head -1 | awk '{print $2}')"
@@ -108,11 +126,11 @@ step "4/9  Composer and the plugin's PHP dependencies"
 # --------------------------------------------------------------------------
 # THE STEP THE ORIGINAL SCRIPT MISSED. `vendor/` is gitignored, so without this
 # the plugin is dead on arrival.
-if ! command -v composer >/dev/null 2>&1; then
-  curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php
-  php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
-  rm -f /tmp/composer-setup.php
-fi
+# The composer installer prompts for sudo and dies without a TTY, so install
+# the phar directly instead.
+command -v composer >/dev/null 2>&1 || install_bin \
+  https://getcomposer.org/download/latest-stable/composer.phar \
+  /usr/local/bin/composer
 cd "$REPO"
 composer install --no-interaction --no-progress --quiet
 [ -f "$REPO/vendor/autoload.php" ] || die "composer install produced no vendor/autoload.php"
@@ -123,8 +141,16 @@ step "5/9  Node (optional, needed only to rebuild CSS/JS)"
 # --------------------------------------------------------------------------
 if [ "${INSTALL_NODE}" = "1" ]; then
   if ! command -v node >/dev/null 2>&1; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - >/dev/null
-    sudo apt-get install -y -qq nodejs >/dev/null
+    # Nodesource's installer is a piped script; prefer it, but fall back to
+    # plain apt rather than dying if the pipe cannot run without a TTY.
+    if curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/ns.sh \
+       && sudo -E bash /tmp/ns.sh >/dev/null 2>&1; then
+      sudo apt-get install -y -qq nodejs >/dev/null
+    else
+      warn "nodesource unavailable; using the distribution's node"
+      sudo apt-get install -y -qq nodejs npm >/dev/null
+    fi
+    rm -f /tmp/ns.sh
   fi
   ok "node $(node -v)"
   [ -d "$REPO/node_modules" ] || (cd "$REPO" && npm ci --no-audit --no-fund)
