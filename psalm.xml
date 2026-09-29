@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="6"
+    resolveFromConfigFile="true"
+    findUnusedBaselineEntry="true"
+    findUnusedCode="false"
+    cacheDirectory=".psalm-cache"
+    errorBaseline="psalm-baseline.xml"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+>
+    <projectFiles>
+        <directory name="includes" />
+        <directory name="templates" />
+        <file name="performance-optimisation.php" />
+        <file name="uninstall.php" />
+        <!-- vendor/ is never scanned, only used for class resolution via the
+             Composer autoloader below. node_modules/ and build/ are not PHP
+             source; tests/ is dev-only and is the largest PHP corpus in the
+             repo, so scanning it would swamp the security signal. scripts/ is
+             build and architecture tooling, not runtime code. -->
+        <ignoreFiles>
+            <directory name="vendor" />
+            <directory name="node_modules" />
+            <directory name="build" />
+            <directory name="tests" />
+            <directory name="scripts" />
+        </ignoreFiles>
+    </projectFiles>
+
+    <!-- composer install --optimize-autoloader runs before the scan, and
+         composer.json declares autoload.classmap = ["includes/"], so
+         vendor/autoload.php maps every PerformanceOptimise\Inc\* class. Without
+         it Psalm cannot resolve cross-class types and every finding degrades
+         to mixed. -->
+    <autoloader file="vendor/autoload.php" />
+
+    <!-- WordPress globals ($wpdb, $_GET, $_POST, $_SERVER) are untyped, so the
+         Mixed* family is noise on this codebase. Taint analysis is what this
+         scan is for, and it is not suppressed here. -->
+    <issueHandlers>
+        <MixedAssignment errorLevel="suppress" />
+        <MixedArgument errorLevel="suppress" />
+        <MixedArrayAccess errorLevel="suppress" />
+        <MixedInferredReturnType errorLevel="suppress" />
+        <MixedOperand errorLevel="suppress" />
+        <MixedPropertyFetch errorLevel="suppress" />
+        <MixedMethodCall errorLevel="suppress" />
+    </issueHandlers>
+</psalm>
