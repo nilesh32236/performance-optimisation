@@ -211,12 +211,12 @@ jobs:
           # is fully attacker-controlled, and "$(...)"/backticks are legal in git
           # ref names, so inline interpolation is command injection.
           EVENT_NAME: ${{ github.event_name }}
-          ISSUE_PR: ${{ github.event.issue.pull_request }}
+          ISSUE_PR: ${{ github.event.issue.pull_request != null }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPOSITORY: ${{ github.repository }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          if [ "$EVENT_NAME" = "issue_comment" ] && [ -n "$ISSUE_PR" ]; then
+          if [ "$EVENT_NAME" = "issue_comment" ] && [ "$ISSUE_PR" = "true" ]; then
             REF="$(gh pr view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json headRefName --jq .headRefName)"
           else
             REF="$PR_HEAD_REF"
@@ -307,12 +307,12 @@ jobs:
           # is fully attacker-controlled, and "$(...)"/backticks are legal in git
           # ref names, so inline interpolation is command injection.
           EVENT_NAME: ${{ github.event_name }}
-          ISSUE_PR: ${{ github.event.issue.pull_request }}
+          ISSUE_PR: ${{ github.event.issue.pull_request != null }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPOSITORY: ${{ github.repository }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          if [ "$EVENT_NAME" = "issue_comment" ] && [ -n "$ISSUE_PR" ]; then
+          if [ "$EVENT_NAME" = "issue_comment" ] && [ "$ISSUE_PR" = "true" ]; then
             REF="$(gh pr view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json headRefName --jq .headRefName)"
           else
             REF="$PR_HEAD_REF"
@@ -584,12 +584,12 @@ jobs:
           # is fully attacker-controlled, and "$(...)"/backticks are legal in git
           # ref names, so inline interpolation is command injection.
           EVENT_NAME: ${{ github.event_name }}
-          ISSUE_PR: ${{ github.event.issue.pull_request }}
+          ISSUE_PR: ${{ github.event.issue.pull_request != null }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPOSITORY: ${{ github.repository }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          if [ "$EVENT_NAME" = "issue_comment" ] && [ -n "$ISSUE_PR" ]; then
+          if [ "$EVENT_NAME" = "issue_comment" ] && [ "$ISSUE_PR" = "true" ]; then
             REF="$(gh pr view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json headRefName --jq .headRefName)"
           else
             REF="$PR_HEAD_REF"
