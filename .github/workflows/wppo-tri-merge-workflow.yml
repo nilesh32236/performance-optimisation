@@ -76,6 +76,15 @@ jobs:
     needs: [verify]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Job-level least privilege instead of inheriting the wide workflow default
+    # at the top of this file (contents/pull-requests/issues: write). This job
+    # only READS: checkout runs with persist-credentials: false, `gh pr list`
+    # authenticates with GH_PAT (falling back to GITHUB_TOKEN, hence the read
+    # scopes), and every push goes through AUTHENTICATED_REMOTE, which
+    # embeds the PAT — not GITHUB_TOKEN.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       ready_prs: ${{ steps.resolve.outputs.ready_prs }}
     steps:
@@ -120,8 +129,14 @@ jobs:
           GH_TOKEN_VALUE="${GH_TOKEN}"
           OPENCODE_API_KEY_VALUE="${OPENCODE_API_KEY}"
           OPENAI_API_KEY_VALUE="${OPENAI_API_KEY}"
-          unset GH_TOKEN OPENCODE_API_KEY OPENAI_API_KEY
+          # `gh` reads credentials from the environment, so the unset must come
+          # AFTER every authenticated `gh` call in this script — the unset used
+          # to sit above `gh pr list`, which then ran unauthenticated against a
+          # 60/hr rate limit on every scheduled run. The key values are still
+          # available in the private `*_VALUE` shell variables, which is what
+          # the `env -i` model call below uses.
           gh pr list --repo "${{ github.repository }}" --state open --json number,title,headRefName,baseRefName,mergeable,reviews,statusCheckRollup > /tmp/all-prs.json
+          unset GH_TOKEN OPENCODE_API_KEY OPENAI_API_KEY
           AUTHENTICATED_REMOTE="https://x-access-token:${GH_TOKEN_VALUE}@github.com/${{ github.repository }}.git"
 
           READY_PRS=""
