@@ -13,6 +13,8 @@
 #
 set -euo pipefail
 
+# Intended to be run from the agent sandbox, where the repo is at /app.
+
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
@@ -29,15 +31,21 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-test@example.com}"
 
 PORT="${PORT:-8080}"
 
-# The plugin repository. In an agent sandbox this is normally the checkout
-# root, which is what `/app` was for.
-REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# The plugin repository. The agent sandbox clones this repo into /app
+# automatically, so /app is the default and the script is self-contained.
+REPO="${REPO:-/app}"
+[ -d "$REPO" ] || die "repo not found at $REPO (set REPO=... to override)"
 
-# Optional extras. Set INSTALL_NODE=1 to get `npm run build` working, which
-# costs roughly 740MB; set INSTALL_REDIS=1 to exercise the object-cache UI.
-INSTALL_NODE="${INSTALL_NODE:-0}"
-INSTALL_REDIS="${INSTALL_REDIS:-0}"
-INSTALL_PLAYWRIGHT="${INSTALL_PLAYWRIGHT:-0}"
+# Optional extras, ON by default.
+#
+# This is the opposite of the usual instinct, and it is because the environment
+# is SNAPSHOTTED after the first successful run. The first run pays ~740MB for
+# node_modules and a browser download; every later session reuses the snapshot
+# for free. Leaving these off means paying that cost again in every session.
+# Set any of them to 0 to skip.
+INSTALL_NODE="${INSTALL_NODE:-1}"        # npm run build (SCSS/JSX edits)
+INSTALL_REDIS="${INSTALL_REDIS:-1}"      # object-cache UI states
+INSTALL_PLAYWRIGHT="${INSTALL_PLAYWRIGHT:-1}"  # scripted screenshots
 
 BOLD=$'\033[1m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RED=$'\033[31m'; OFF=$'\033[0m'
 step() { echo "${BOLD}==>${OFF} $*"; }
