@@ -208,31 +208,6 @@ wp plugin is-active performance-optimisation --allow-root --path="$WP_PATH" \
   || die "the plugin did not activate — run the checks below"
 ok "plugin active"
 
-# A disabled-by-error plugin still "activates", so verify the failure mode that
-# actually matters: does the admin screen render, or does it show the
-# missing-dependencies notice?
-# A plugin can activate and still be non-functional. Probing a class name is the
-# wrong check: it guesses at internals, and this one is declared conditionally so
-# it is absent at `wp eval` time even when the plugin is working perfectly.
-#
-# Fetch the plugin's own admin page and look for its mount node instead. That
-# proves the composer autoloader, the script enqueue and the React shell all
-# work together - which is the thing that actually needs verifying.
-rm -f /tmp/wppo-jar
-curl -sS -c /tmp/wppo-jar -b /tmp/wppo-jar -o /dev/null --max-time 20 \
-  --data-urlencode "log=$ADMIN_USER" --data-urlencode "pwd=$ADMIN_PASS" \
-  --data-urlencode "wp-submit=Log In" --data-urlencode "testcookie=1" \
-  --data-urlencode "redirect_to=${SITE_URL}/wp-admin/" \
-  "${SITE_URL}/wp-login.php" >/dev/null 2>&1 || true
-if curl -sS -b /tmp/wppo-jar --max-time 20 \
-     "${SITE_URL}/wp-admin/admin.php?page=performance-optimisation" 2>/dev/null \
-   | grep -q 'id="performance-optimisation"'; then
-  ok "the admin page renders the plugin's mount node"
-else
-  die "the admin page did not render - check /tmp/wp-server.log, and 'wp plugin list'"
-fi
-rm -f /tmp/wppo-jar
-
 # --------------------------------------------------------------------------
 step "8/9  Web server"
 # --------------------------------------------------------------------------
@@ -252,6 +227,32 @@ curl -sS -o /dev/null --max-time 5 "${SITE_URL}/" \
 ok "serving on ${SITE_URL} (PHP_CLI_SERVER_WORKERS=8 so REST calls cannot deadlock)"
 
 # --------------------------------------------------------------------------
+step "8b/9  Does the plugin actually work?"
+# --------------------------------------------------------------------------
+# A plugin can activate and still be non-functional. Probing a class name is the
+# wrong check: it guesses at internals, and this one is declared conditionally so
+# it is absent at `wp eval` time even when the plugin is working perfectly.
+#
+# Fetch the plugin's own admin page and look for its mount node instead. That
+# proves the composer autoloader, the script enqueue and the React shell all
+# work together - which is the thing that actually needs verifying, and it runs
+# here because the server is only up from the previous step.
+rm -f /tmp/wppo-jar
+curl -sS -c /tmp/wppo-jar -b /tmp/wppo-jar -o /dev/null --max-time 20 \
+  --data-urlencode "log=$ADMIN_USER" --data-urlencode "pwd=$ADMIN_PASS" \
+  --data-urlencode "wp-submit=Log In" --data-urlencode "testcookie=1" \
+  --data-urlencode "redirect_to=${SITE_URL}/wp-admin/" \
+  "${SITE_URL}/wp-login.php" >/dev/null 2>&1 || true
+if curl -sS -b /tmp/wppo-jar --max-time 20 \
+     "${SITE_URL}/wp-admin/admin.php?page=performance-optimisation" 2>/dev/null \
+   | grep -q 'id="performance-optimisation"'; then
+  ok "the admin page renders the plugin's mount node"
+else
+  die "the admin page did not render - check /tmp/wp-server.log, and 'wp plugin list'"
+fi
+rm -f /tmp/wppo-jar
+
+# --------------------------------------------------------------------------
 step "9/9  Browser (optional)"
 # --------------------------------------------------------------------------
 if [ "${INSTALL_PLAYWRIGHT}" = "1" ]; then
@@ -269,7 +270,7 @@ fi
 # --------------------------------------------------------------------------
 step "Health check"
 # --------------------------------------------------------------------------
-PLUGIN_PAGE="${SITE_URL}/wp-login.php?page=performance-optimisation"
+PLUGIN_PAGE="${SITE_URL}/wp-admin/admin.php?page=performance-optimisation"
 code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
   -c /tmp/wppo-cookies.txt -b /tmp/wppo-cookies.txt \
   --data-urlencode "log=${ADMIN_USER}" \
