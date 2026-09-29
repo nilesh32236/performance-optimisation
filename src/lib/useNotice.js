@@ -22,8 +22,12 @@
  *   - `dismiss`: `() => void` — clears the notice and any pending timer.
  */
 import { useState, useCallback, useEffect, useRef } from '@wordpress/element';
+import { publish as publishNotice } from './noticeBus';
 
 const useNotice = () => {
+	// Published to the app-level message region so the outcome is visible
+	// wherever this card sits. The inline banner still renders for context.
+	const publish = useCallback( ( payload ) => publishNotice( payload ), [] );
 	const [ notice, setNotice ] = useState( null );
 	const timerRef = useRef( null );
 
@@ -54,6 +58,7 @@ const useNotice = () => {
 		( { type, message, durationMs } ) => {
 			clearTimer();
 			setNotice( { type, message } );
+			publish( { type, message } );
 			if ( durationMs ) {
 				timerRef.current = setTimeout( () => {
 					timerRef.current = null;
@@ -61,7 +66,7 @@ const useNotice = () => {
 				}, durationMs );
 			}
 		},
-		[ clearTimer ]
+		[ clearTimer, publish ]
 	);
 
 	useEffect( () => {
