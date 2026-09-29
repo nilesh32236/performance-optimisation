@@ -129,6 +129,14 @@ jobs:
             exit "${PSALM_RC}"
           fi
 
+      - name: TEMP regenerate baseline in the scan image
+        if: always()
+        run: |
+          docker run --rm --entrypoint sh -v "$GITHUB_WORKSPACE:/github/workspace" -w /github/workspace \
+            ghcr.io/psalm/psalm-security-scan \
+            -c 'psalm --root=/github/workspace --no-progress --set-baseline=/github/workspace/psalm-baseline.xml >/dev/null 2>&1; echo "=====BASELINE====="; cat /github/workspace/psalm-baseline.xml; echo "=====END====="' \
+            2>&1 | sed -n '/=====BASELINE=====/,/=====END=====/p'
+
       - name: Assert Psalm actually analysed the codebase
         if: always() && steps.psalm.outcome != 'skipped'
         run: |
