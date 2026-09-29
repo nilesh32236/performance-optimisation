@@ -39,6 +39,7 @@ const areaItemIds = ( sectionId ) =>
 	itemsForSection( sectionId ).map( ( item ) => item.id );
 
 import { __ } from '@wordpress/i18n';
+import MessageRegion from './components/common/MessageRegion';
 
 const Overview = lazy( () =>
 	import(
@@ -630,6 +631,10 @@ const App = () => {
 
 	return (
 		<UnsavedChangesContext.Provider value={ unsavedContextValue }>
+			{ /* One visible place for every notice, wherever its card sits.
+			     See MessageRegion for why this is aria-hidden. */ }
+			<MessageRegion />
+
 			<div className="wppo-container">
 				{ /* Mobile Top Header */ }
 				<div className="wppo-mobile-header">
