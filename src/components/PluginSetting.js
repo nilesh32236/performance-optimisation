@@ -1569,18 +1569,26 @@ const PluginSetting = ( { options } ) => {
 										tabIndex={ -1 }
 										aria-describedby="import-config-desc"
 									/>
-									<button
-										type="button"
+									{ /* A **label**, not a button. A button
+									     here gave one control TWO tab stops:
+									     the visually-hidden input is
+									     clip-based, not `display:none`, so it
+									     stays focusable — and its focus ring
+									     is drawn on a 1px clipped box, so a
+									     keyboard user landed on it and saw
+									     nothing. The label activates the input
+									     natively and is not a tab stop, which
+									     leaves exactly one; the ring is drawn
+									     on the proxy by :focus-within. */ }
+									<label
+										htmlFor="import-config"
 										className="wppo-button wppo-button--secondary"
-										onClick={ () =>
-											fileInputRef.current?.click()
-										}
 									>
 										{ __(
 											'Choose File',
 											'performance-optimisation'
 										) }
-									</button>
+									</label>
 									<span className="wppo-text-muted">
 										{ selectedFile
 											? selectedFile.name
