@@ -81,16 +81,20 @@ jobs:
           # the dev autoloader: WPCS and the class-inventory check have
           # already run.
           cp vendor/autoload.php vendor/autoload.composer.bak
-          cat > vendor/autoload.php <<'PHP'
+          cat > reports/psalm-scan-autoload.php <<'PHP'
           <?php
-          require_once __DIR__ . '/composer/ClassLoader.php';
+          require_once __DIR__ . '/../vendor/composer/ClassLoader.php';
           $loader = new \Composer\Autoload\ClassLoader();
-          foreach (require __DIR__ . '/composer/autoload_classmap.php' as $class => $path) {
+          foreach (require __DIR__ . '/../vendor/composer/autoload_classmap.php' as $class => $path) {
               if (strpos($path, '/vendor/') === false) {
                   $loader->addClassMap([$class => $path]);
               }
           }
           return $loader;
+          PHP
+          cat > vendor/autoload.php <<'PHP'
+          <?php
+          return require __DIR__ . '/../reports/psalm-scan-autoload.php';
           PHP
 
       - name: Psalm Security Scan
@@ -109,11 +113,12 @@ jobs:
         run: |
           set +e
           docker run --rm \
+            --entrypoint sh \
             -v "$GITHUB_WORKSPACE:/github/workspace" \
-            -e GITHUB_WORKSPACE -e HOME -e COMPOSER_CACHE_DIR \
-            -e INPUT_REPORT_FILE=reports/psalm.sarif \
+            -e GITHUB_WORKSPACE -e HOME \
             -w /github/workspace \
             ghcr.io/psalm/psalm-security-scan \
+            -c 'echo "psalm binary: $(command -v psalm)"; psalm --version; cd /github/workspace; php -r '"'"'$x = require "/github/workspace/vendor/autoload.php"; echo "autoloader: ", get_class($x), " classes=", count($x->getClassMap()), PHP_EOL;'"'"'; echo "--- psalm scan ---"; psalm --root=/github/workspace --report=reports/psalm.sarif --no-progress' \
             > reports/psalm-stdout.txt 2>&1
           PSALM_RC=$?
           set -e
