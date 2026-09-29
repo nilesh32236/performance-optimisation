@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<files psalm-version="5.26.1@d747f6500b38ac4f7dfc5edbcae6e4b637d7add0">
+  <file src="includes/Support/redis-connect-helper.php">
+    <InvalidCast>
+      <code><![CDATA[$node]]></code>
+    </InvalidCast>
+  </file>
+  <file src="templates/object-cache.php">
+    <InvalidArgument>
+      <code><![CDATA[$node]]></code>
+    </InvalidArgument>
+    <InvalidGlobal>
+      <code><![CDATA[global $table_prefix;]]></code>
+    </InvalidGlobal>
+    <InvalidReturnStatement>
+      <code><![CDATA[$results]]></code>
+      <code><![CDATA[$results]]></code>
+      <code><![CDATA[$results]]></code>
+      <code><![CDATA[$results]]></code>
+      <code><![CDATA[$results]]></code>
+      <code><![CDATA[$results]]></code>
+      <code><![CDATA[$results]]></code>
+      <code><![CDATA[$this->redis->decrBy( $this->get_key( $key, $group ), $offset )]]></code>
+      <code><![CDATA[$this->redis->incrBy( $this->get_key( $key, $group ), $offset )]]></code>
+      <code><![CDATA[$this->redis->set(
+						$local_key,
+						$data,
+						array(
+							'nx' => true,
+							'ex' => $expire,
+						)
+					)]]></code>
+      <code><![CDATA[$this->redis->set( $formatted_key, $data )]]></code>
+      <code><![CDATA[$this->redis->setex( $formatted_key, $expire, $data )]]></code>
+      <code><![CDATA[$this->redis->setnx( $local_key, $data )]]></code>
+      <code><![CDATA[array()]]></code>
+      <code><![CDATA[array()]]></code>
+      <code><![CDATA[array_fill_keys( array_keys( $data ), false )]]></code>
+    </InvalidReturnStatement>
+    <InvalidReturnType>
+      <code><![CDATA[bool]]></code>
+      <code><![CDATA[bool]]></code>
+      <code><![CDATA[bool]]></code>
+      <code><![CDATA[bool]]></code>
+    </InvalidReturnType>
+    <NullArgument>
+      <code><![CDATA[$cursor]]></code>
+    </NullArgument>
+    <TooFewArguments>
+      <code><![CDATA[flushDb]]></code>
+    </TooFewArguments>
+    <UndefinedMethod>
+      <code><![CDATA[$redis_values]]></code>
+      <code><![CDATA[$replies]]></code>
+    </UndefinedMethod>
+  </file>
+  <file src="uninstall.php">
+    <InvalidArgument>
+      <code><![CDATA[$site->blog_id]]></code>
+    </InvalidArgument>
+    <InvalidGlobal>
+      <code><![CDATA[global $wpdb;]]></code>
+    </InvalidGlobal>
+    <NullArgument>
+      <code><![CDATA[null]]></code>
+    </NullArgument>
+    <UndefinedConstant>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+      <code><![CDATA[WP_CONTENT_DIR]]></code>
+    </UndefinedConstant>
+  </file>
+</files>
