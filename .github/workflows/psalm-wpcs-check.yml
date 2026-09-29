@@ -23,6 +23,11 @@ on:
       - 'docs/architecture/DEPENDENCY-GRAPH.json'
   schedule:
     - cron: "28 13 * * 0"
+  # Manual re-run. The path filters below mean a change to psalm.xml, the
+  # baseline or this workflow file does not trigger the job on a PR, so there
+  # was previously no way to prove a change to the scan configuration except
+  # waiting for the weekly run.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -61,25 +66,129 @@ jobs:
       - name: Check architecture inventory drift
         run: php scripts/generate-class-inventory.php --check
 
+      - name: Restrict the Psalm scan autoloader to plugin code
+        run: |
+          # MEASURED, not speculative. With the full dev autoloader installed,
+          # Psalm resolves classes into vendor/ (phpunit, phpstan, mockery,
+          # voku, ...), starts deep-scanning, and then exits 0 having analysed
+          # nothing and printed no result at all. Reproduced locally against
+          # Psalm 5.26.1 with this repo's own vendor/ present, and it is the
+          # same failure shape as the "No files analyzed" line this gate
+          # exists to catch. Third-party library sources are not what this
+          # security scan is for, and every WordPress symbol comes from the
+          # <stubs> entry in psalm.xml, so swap in a loader that registers
+          # only this plugin's own classmap. Nothing later in this job needs
+          # the dev autoloader: WPCS and the class-inventory check have
+          # already run.
+          cp vendor/autoload.php vendor/autoload.composer.bak
+          cat > reports/psalm-scan-autoload.php <<'PHP'
+          <?php
+          require_once __DIR__ . '/../vendor/composer/ClassLoader.php';
+          $loader = new \Composer\Autoload\ClassLoader();
+          foreach (require __DIR__ . '/../vendor/composer/autoload_classmap.php' as $class => $path) {
+              if (strpos($path, '/vendor/') === false) {
+                  $loader->addClassMap([$class => $path]);
+              }
+          }
+          return $loader;
+          PHP
+          cat > vendor/autoload.php <<'PHP'
+          <?php
+          return require __DIR__ . '/../reports/psalm-scan-autoload.php';
+          PHP
+
       - name: Psalm Security Scan
         id: psalm
-        uses: docker://ghcr.io/psalm/psalm-security-scan
-        with:
-          report_file: reports/psalm.sarif
-        continue-on-error: true
-
-      - name: Warn on Psalm scan failure
-        if: steps.psalm.outcome == 'failure'
+        # A `uses: docker://` action streams Psalm's stdout to the log and
+        # offers no way to assert on it, so a scan that analysed nothing was
+        # indistinguishable from a clean one. A controlled `docker run` whose
+        # stdout is teed to a file is what makes the gate below possible.
+        # INPUT_REPORT_FILE reproduces the `with: report_file:` input GitHub
+        # would have passed to the container action.
+        # No continue-on-error: with psalm.xml, a committed baseline and the
+        # gate below all in place, a non-zero Psalm exit is a real finding and
+        # must fail the job. The step still prints Psalm's full output and
+        # records its exit code before failing, and every step after it is
+        # guarded with always() so the SARIF is still produced and uploaded.
         run: |
-          echo "::warning::Psalm security scan failed (continue-on-error kept so the SARIF path still runs)"
-          echo "Psalm security scan failed (continue-on-error) — SARIF upload path still ran; treat results as partial." >> $GITHUB_STEP_SUMMARY
+          set +e
+          docker run --rm \
+            --entrypoint sh \
+            -v "$GITHUB_WORKSPACE:/github/workspace" \
+            -e GITHUB_WORKSPACE -e HOME \
+            -w /github/workspace \
+            ghcr.io/psalm/psalm-security-scan \
+            -c 'echo "psalm binary: $(command -v psalm)"; psalm --version; cd /github/workspace; php -r '"'"'$x = require "/github/workspace/vendor/autoload.php"; echo "autoloader: ", get_class($x), " classes=", count($x->getClassMap()), PHP_EOL;'"'"'; echo "--- psalm scan ---"; psalm --root=/github/workspace --report=reports/psalm.sarif --no-progress' \
+            > reports/psalm-stdout.txt 2>&1
+          PSALM_RC=$?
+          set -e
+          cat reports/psalm-stdout.txt
+          echo "rc=${PSALM_RC}" >> "$GITHUB_OUTPUT"
+          if [ "${PSALM_RC}" -ne 0 ]; then
+            echo "::error::Psalm security scan exited ${PSALM_RC} (findings above, or a crash). The SARIF path still runs."
+            exit "${PSALM_RC}"
+          fi
+
+      - name: Assert Psalm actually analysed the codebase
+        if: always() && steps.psalm.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          OUT=reports/psalm-stdout.txt
+          EXPECTED=89
+
+          [ -s "${OUT}" ] || { echo "::error::FAIL-CLOSED: Psalm produced no output at all"; exit 1; }
+
+          if grep -q 'No files analyzed' "${OUT}"; then
+            echo "::error::FAIL-CLOSED: Psalm analysed zero files. The scan is vacuous; a green run here means nothing."
+            exit 1
+          fi
+          if grep -qi 'unable to infer types' "${OUT}"; then
+            echo "::error::FAIL-CLOSED: Psalm could not infer types; psalm.xml, the autoloader or the stubs are broken."
+            exit 1
+          fi
+          # Positive proof. A run that analysed the codebase always reports
+          # type inference and a duration; a run that analysed nothing reports
+          # neither, and still exits 0.
+          if ! grep -q 'was able to infer types for' "${OUT}"; then
+            echo "::error::FAIL-CLOSED: Psalm never reported type inference, so it did not complete a real analysis."
+            exit 1
+          fi
+          if ! grep -q 'Checks took' "${OUT}"; then
+            echo "::error::FAIL-CLOSED: Psalm never reported a completion time."
+            exit 1
+          fi
+
+          # Scope regression: a future projectFiles mis-edit that silently
+          # narrows the scan must be caught even if Psalm stays happy.
+          SCOPE=$(( $(find includes templates -name '*.php' | wc -l) + 2 ))
+          if [ "${SCOPE}" -lt "${EXPECTED}" ]; then
+            echo "::error::FAIL-CLOSED: psalm.xml should cover at least ${EXPECTED} production PHP files but the tree only offers ${SCOPE}. Scan scope has been narrowed."
+            exit 1
+          fi
+
+          echo "psalm analysed the codebase: $(grep -o 'was able to infer types for [0-9.]*%' "${OUT}" | head -1), $(grep -o 'Checks took [0-9.]* seconds' "${OUT}" | head -1), scope ${SCOPE}/${EXPECTED} production PHP files" >> "$GITHUB_STEP_SUMMARY"
+          echo "psalm analysed the codebase: $(grep -o 'was able to infer types for [0-9.]*%' "${OUT}" | head -1), $(grep -o 'Checks took [0-9.]* seconds' "${OUT}" | head -1), scope ${SCOPE}/${EXPECTED} production PHP files"
 
       - name: Check psalm report exists
         id: psalm_report
         if: always()
-        run: echo "exists=$(test -f reports/psalm.sarif && echo true || echo false)" >> $GITHUB_OUTPUT
+        run: |
+          exists=false
+          if [ -f reports/psalm.sarif ]; then
+            exists=true
+          else
+            # Previously this was a silent skip of the upload step. A scan
+            # that produced no SARIF at all is a fault, not a non-event, and
+            # must be visible in the log rather than implied by a missing
+            # annotation.
+            echo "::error::No SARIF report at reports/psalm.sarif - the scan did not complete, so there is nothing to upload"
+          fi
+          echo "exists=${exists}" >> "$GITHUB_OUTPUT"
 
       - name: Upload Security Analysis results
+        # always() so a failed scan still uploads its report; the outcome and
+        # existence guards keep a skipped or SARIF-less run from calling the
+        # action with nothing to read.
         if: always() && steps.psalm.outcome != 'skipped' && steps.psalm_report.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@fddeee1a7ece751b577e409a89057319e3172939 # v4
         with:
