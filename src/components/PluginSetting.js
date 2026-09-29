@@ -944,6 +944,7 @@ const PluginSetting = ( { options } ) => {
 								'performance-optimisation'
 							),
 						} );
+						resetFileInput();
 					} )
 					.finally( () => {
 						// Only clear when still current: a first import
@@ -1547,15 +1548,12 @@ const PluginSetting = ( { options } ) => {
 								) }
 							</p>
 							<div className="wppo-field wppo-mt-24">
-								<label
-									className="wppo-field-label"
-									htmlFor="import-config"
-								>
+								<span className="wppo-field-label">
 									{ __(
 										'Select configuration file',
 										'performance-optimisation'
 									) }
-								</label>
+								</span>
 								<div className="wppo-file-input-wrapper">
 									<input
 										type="file"

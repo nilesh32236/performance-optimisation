@@ -513,12 +513,9 @@ describe( 'PluginSetting', () => {
 			'settings.json',
 			{ type: 'application/json' }
 		);
-		fireEvent.change(
-			screen.getByLabelText( 'Select configuration file' ),
-			{
-				target: { files: [ file ] },
-			}
-		);
+		fireEvent.change( document.getElementById( 'import-config' ), {
+			target: { files: [ file ] },
+		} );
 
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Import Settings/i } )
@@ -553,12 +550,9 @@ describe( 'PluginSetting', () => {
 			'settings.json',
 			{ type: 'application/json' }
 		);
-		fireEvent.change(
-			screen.getByLabelText( 'Select configuration file' ),
-			{
-				target: { files: [ file ] },
-			}
-		);
+		fireEvent.change( document.getElementById( 'import-config' ), {
+			target: { files: [ file ] },
+		} );
 
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Import Settings/i } )
@@ -605,12 +599,9 @@ describe( 'PluginSetting', () => {
 			'settings.json',
 			{ type: 'application/json' }
 		);
-		fireEvent.change(
-			screen.getByLabelText( 'Select configuration file' ),
-			{
-				target: { files: [ file ] },
-			}
-		);
+		fireEvent.change( document.getElementById( 'import-config' ), {
+			target: { files: [ file ] },
+		} );
 
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Import Settings/i } )
@@ -884,14 +875,17 @@ describe( 'PluginSetting', () => {
 		it( 'has exactly one tab stop for the file chooser (the input) and uses a label as a proxy', () => {
 			render( <PluginSetting options={ baseOptions } /> );
 
-			const fileInput = screen.getByLabelText(
-				'Select configuration file'
+			const fileInput = document.getElementById( 'import-config' );
+			const wrapper = document.querySelector(
+				'.wppo-file-input-wrapper'
 			);
+
+			expect(
+				wrapper.querySelectorAll( 'input, button, [tabindex]' )
+			).toHaveLength( 1 );
+
 			const proxyLabel = screen.getByText( 'Choose File' );
-
 			expect( fileInput ).toHaveClass( 'wppo-visually-hidden' );
-			expect( fileInput ).not.toHaveAttribute( 'tabindex' );
-
 			expect( proxyLabel.tagName ).toBe( 'LABEL' );
 			expect( proxyLabel ).toHaveAttribute( 'for', fileInput.id );
 		} );

@@ -1212,7 +1212,7 @@ const ObjectCache = ( { options = {} } ) => {
 			</form>
 
 			{ cacheStatus.enabled && (
-				<div className="wppo-feature-card wppo-danger-zone">
+				<div className="wppo-feature-card wppo-danger-zone wppo-danger-zone--destructive">
 					<div className="wppo-feature-card__header">
 						<h3>
 							<FontAwesomeIcon

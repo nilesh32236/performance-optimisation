@@ -217,16 +217,25 @@
 .wppo-file-input-wrapper {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 10px;
-}
 
-// The file chooser's focus ring is drawn on the proxy, because the real input is
-// a 1px clipped box and focusing it shows nothing at all.
-.wppo-file-input-wrapper {
+	> span {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	// The file chooser's focus ring is drawn on the proxy, because the real input is
+	// a 1px clipped box and focusing it shows nothing at all.
 	&:focus-within {
 		> .wppo-button {
-			outline: solid 2px var(--wppo-primary, #007cb6);
-			outline-offset: 2px;
+			outline: 2px solid transparent;
+			box-shadow: var(--wppo-focus-ring);
 		}
+	}
+
+	&:has(:focus-visible) > .wppo-button {
+		outline: 2px solid transparent;
+		box-shadow: var(--wppo-focus-ring);
 	}
 }
