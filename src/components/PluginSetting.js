@@ -1525,10 +1525,10 @@ const PluginSetting = ( { options } ) => {
 					{ /* Import — danger zone — uses .wppo-danger-zone tokens (D-17). */ }
 					<div
 						className={ `wppo-danger-zone ${
-							importNotice && importNotice.type === 'error'
-								? 'wppo-danger-zone--has-error'
+							importNotice?.type === 'error'
+								? 'wppo-danger-zone--has-error '
 								: ''
-						}` }
+						}`.trim() }
 					>
 						<FeatureCard
 							title={ __(
@@ -1566,13 +1566,14 @@ const PluginSetting = ( { options } ) => {
 										onChange={ handleFileSelection }
 										ref={ fileInputRef }
 										className="wppo-visually-hidden"
+										tabIndex={ -1 }
 										aria-describedby="import-config-desc"
 									/>
 									<button
 										type="button"
 										className="wppo-button wppo-button--secondary"
 										onClick={ () =>
-											fileInputRef.current.click()
+											fileInputRef.current?.click()
 										}
 									>
 										{ __(

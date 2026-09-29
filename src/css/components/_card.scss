@@ -249,7 +249,7 @@
 }
 
 .wppo-danger-zone {
-	border-left: 4px solid var(--wppo-border);
+	border-left: 4px solid var(--wppo-border, #e2e8f0);
 	background: transparent;
 	margin-top: 20px;
 	border-radius: var(--wppo-radius-sm, 10px);
