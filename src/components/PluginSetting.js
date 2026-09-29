@@ -1566,7 +1566,6 @@ const PluginSetting = ( { options } ) => {
 										onChange={ handleFileSelection }
 										ref={ fileInputRef }
 										className="wppo-visually-hidden"
-										tabIndex={ -1 }
 										aria-describedby="import-config-desc"
 									/>
 									{ /* A **label**, not a button. A button
@@ -1589,7 +1588,11 @@ const PluginSetting = ( { options } ) => {
 											'performance-optimisation'
 										) }
 									</label>
-									<span className="wppo-text-muted">
+									<span
+										role="status"
+										aria-live="polite"
+										className="wppo-text-muted"
+									>
 										{ selectedFile
 											? selectedFile.name
 											: __(
