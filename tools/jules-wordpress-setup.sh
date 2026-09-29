@@ -211,12 +211,27 @@ ok "plugin active"
 # A disabled-by-error plugin still "activates", so verify the failure mode that
 # actually matters: does the admin screen render, or does it show the
 # missing-dependencies notice?
-if wp eval 'echo defined("PerformanceOptimise\\Inc\\Main") ? "ok" : "no";' \
-     --allow-root --path="$WP_PATH" 2>/dev/null | grep -q ok; then
-  ok "PHP autoloader resolves the plugin's classes"
+# A plugin can activate and still be non-functional. Probing a class name is the
+# wrong check: it guesses at internals, and this one is declared conditionally so
+# it is absent at `wp eval` time even when the plugin is working perfectly.
+#
+# Fetch the plugin's own admin page and look for its mount node instead. That
+# proves the composer autoloader, the script enqueue and the React shell all
+# work together - which is the thing that actually needs verifying.
+rm -f /tmp/wppo-jar
+curl -sS -c /tmp/wppo-jar -b /tmp/wppo-jar -o /dev/null --max-time 20 \
+  --data-urlencode "log=$ADMIN_USER" --data-urlencode "pwd=$ADMIN_PASS" \
+  --data-urlencode "wp-submit=Log In" --data-urlencode "testcookie=1" \
+  --data-urlencode "redirect_to=${SITE_URL}/wp-admin/" \
+  "${SITE_URL}/wp-login.php" >/dev/null 2>&1 || true
+if curl -sS -b /tmp/wppo-jar --max-time 20 \
+     "${SITE_URL}/wp-admin/admin.php?page=performance-optimisation" 2>/dev/null \
+   | grep -q 'id="performance-optimisation"'; then
+  ok "the admin page renders the plugin's mount node"
 else
-  die "plugin classes do not resolve — check vendor/ in $REPO"
+  die "the admin page did not render - check /tmp/wp-server.log, and 'wp plugin list'"
 fi
+rm -f /tmp/wppo-jar
 
 # --------------------------------------------------------------------------
 step "8/9  Web server"
