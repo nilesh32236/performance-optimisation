@@ -58,3 +58,6 @@
 ## YYYY-MM-DD - [Dynamic Danger Button Shadows]
 **Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
+## 2024-05-24 - Dynamic Danger Button Shadows
+**Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) or other element shadows (like the Welcome step numbers) break visual consistency if the underlying --wppo-primary or --wppo-danger CSS variable is modified by the user's WP admin theme.
+**Action:** Replace hardcoded rgba() values in box-shadows with color-mix(in srgb, var(--variable) X%, transparent) to ensure dynamic theme adaptation.
