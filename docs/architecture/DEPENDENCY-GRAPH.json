@@ -1014,7 +1014,7 @@
             "file": "includes/Admin/class-admin-auth.php",
             "domain": "Admin",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 60,
+            "lines": 83,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -1028,8 +1028,8 @@
                 {
                     "name": "permission_check",
                     "line": 37,
-                    "end_line": 58,
-                    "lines": 22,
+                    "end_line": 81,
+                    "lines": 45,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
@@ -1039,7 +1039,7 @@
             "references": {
                 "static_calls": [],
                 "instance_calls": {
-                    "$request->get_header": 47
+                    "$request->get_header": 51
                 },
                 "new_expressions": [],
                 "class_references": [],
@@ -1059,19 +1059,20 @@
                 "external_classes": [],
                 "external_functions": {
                     "class_exists": 15,
-                    "current_user_can": 38,
+                    "current_user_can": 42,
                     "defined": 11,
-                    "is_array": 48,
-                    "reset": 48,
-                    "sanitize_text_field": 57,
-                    "wp_unslash": 54,
-                    "wp_verify_nonce": 57
+                    "function_exists": 42,
+                    "is_array": 52,
+                    "reset": 52,
+                    "sanitize_text_field": 80,
+                    "wp_unslash": 64,
+                    "wp_verify_nonce": 80
                 },
                 "wordpress_functions": {
-                    "current_user_can": 38,
-                    "sanitize_text_field": 57,
-                    "wp_unslash": 54,
-                    "wp_verify_nonce": 57
+                    "current_user_can": 42,
+                    "sanitize_text_field": 80,
+                    "wp_unslash": 64,
+                    "wp_verify_nonce": 80
                 },
                 "filesystem_dependencies": [],
                 "network_dependencies": [],
