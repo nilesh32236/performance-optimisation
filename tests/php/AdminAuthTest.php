@@ -41,6 +41,33 @@ final class AdminAuthTest extends PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A missing current_user_can() pluggable fails closed with no fatal.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_missing_capability_function_fails_closed(): void {
+		$this->assertFalse( function_exists( 'current_user_can' ) );
+		$this->assertFalse( Admin_Auth::permission_check() );
+	}
+
+	/**
+	 * A missing wp_verify_nonce() pluggable fails closed with no fatal.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_missing_nonce_verify_function_fails_closed(): void {
+		Functions\when( 'current_user_can' )->justReturn( true );
+		$this->assertFalse( function_exists( 'wp_verify_nonce' ) );
+		$this->assertFalse( Admin_Auth::permission_check() );
+	}
+
+	/**
 	 * A canonical request header is sanitized and verified for wp_rest.
 	 *
 	 * @return void
