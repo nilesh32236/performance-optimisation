@@ -120,7 +120,7 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		Functions\when( 'set_transient' )->alias(
-			function ( $key, $value, $expiration = 0 ) {
+			function ( $key, $value, $expiration = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$this->transients[ $key ] = $value;
 			}
 		);
@@ -144,7 +144,7 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_rand' )->justReturn( 2 );
 		Functions\when( 'wp_next_scheduled' )->justReturn( false );
 		Functions\when( 'wp_schedule_single_event' )->alias(
-			function ( $timestamp, $hook, $args = array() ) {
+			function ( $timestamp, $hook, $args = array() ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$this->scheduled[] = array(
 					'timestamp' => $timestamp,
 					'hook'      => $hook,
@@ -164,7 +164,7 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		// Settings live under the wppo_settings option; Util::get_settings()
 		// proxies to Settings_Store, so the cache must be cleared too.
-		$this->options   = array(
+		$this->options = array(
 			'wppo_settings' => array(
 				'performance_audit' => array( 'rum_enabled' => true ),
 			),
@@ -203,8 +203,8 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 	private function rum_route(): array {
 		// get_routes() is private; reflect it the same way the plugin's own
 		// internals do, rather than exposing a seam just for the test.
-		$rest     = new Rest();
-		$method   = new \ReflectionMethod( Rest::class, 'get_routes' );
+		$rest   = new Rest();
+		$method = new \ReflectionMethod( Rest::class, 'get_routes' );
 		$method->setAccessible( true );
 		$routes = $method->invoke( $rest );
 
