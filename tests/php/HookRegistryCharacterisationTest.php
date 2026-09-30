@@ -346,13 +346,22 @@ class HookRegistryCharacterisationTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * The double-registration wart, recorded as-is: register() has no
-	 * idempotency guard of its own, and a second call is NOT simply a repeat
-	 * of the first - it registers strictly fewer distinct hooks, because
-	 * something in the first pass has already satisfied a class_exists or
-	 * option check by the time the second runs.
+	 * idempotency guard, and a second call is NOT a repeat of the first - 94
+	 * distinct hooks on the first pass, 84 on the second.
 	 *
-	 * A refactor that "fixes" this would break this test. That is the point:
-	 * it pins today's behaviour, not today's wishes.
+	 * This pins the OBSERVATION only. It deliberately does not claim WHY the
+	 * ten differ: an earlier draft of this docblock guessed that the first
+	 * pass satisfied a condition the second re-tests, and that guess was not
+	 * verified. The cause is not established, so it is not asserted here.
+	 *
+	 * The counts are brittle by nature - they also move when a collaborator
+	 * class that register_integration_hooks() delegates to changes. That is
+	 * accepted: this file records today's behaviour, and a change that moves
+	 * it should be a deliberate, visible edit to this pin rather than a
+	 * silent drift.
+	 *
+	 * A refactor that "fixes" the non-idempotency would break this test. That
+	 * is the point: it pins today's behaviour, not today's wishes.
 	 *
 	 * @return void
 	 */
