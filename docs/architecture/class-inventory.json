@@ -3355,7 +3355,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Images",
-        "lines": 4554,
+        "lines": 4550,
         "methods": 78,
         "public_methods": 73,
         "large_methods": 8,
@@ -3367,7 +3367,7 @@
         },
         "method_prefixes": {
             "get": 27,
-            "is": 11,
+            "is": 13,
             "resolve": 4,
             "buffer": 3,
             "clear": 2,
@@ -3394,8 +3394,6 @@
             "wppo": 1,
             "fetchpriority": 1,
             "fail": 1,
-            "attachment": 1,
-            "attr": 1,
             "tag": 1
         },
         "hooks": [],

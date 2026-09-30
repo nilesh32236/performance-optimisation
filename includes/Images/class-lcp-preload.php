@@ -192,9 +192,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 
 
 		/**
-		 * Normalized + size-preserving LCP URL memo, keyed by candidate URL.
+		 * Normalized + size-preserving LCP URL memo, keyed by request URL and candidate URL.
 		 *
-		 * @var array<string, array{valid:bool, normalized?:string, exact?:string, lcp_path?:string}>
+		 * @var array<string, array{normalized:string, exact:string}>
 		 * @since NEXT
 		 */
 		private static array $fetchpriority_url_memos = array();
@@ -3401,31 +3401,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				return $attr;
 			}
 
-			if ( isset( self::$fetchpriority_url_memos[ $lcp_url ] ) ) {
-				if ( ! self::$fetchpriority_url_memos[ $lcp_url ]['valid'] ) {
-					return $attr;
-				}
-				$normalized_lcp = self::$fetchpriority_url_memos[ $lcp_url ]['normalized'];
-				$exact_lcp      = self::$fetchpriority_url_memos[ $lcp_url ]['exact'];
-				$lcp_path       = self::$fetchpriority_url_memos[ $lcp_url ]['lcp_path'];
+			$memo_key = (string) $this->owner->lcp_state_fetchpriority_lcp_key() . '|' . $lcp_url;
+
+			if ( isset( self::$fetchpriority_url_memos[ $memo_key ] ) ) {
+				$normalized_lcp = self::$fetchpriority_url_memos[ $memo_key ]['normalized'];
+				$exact_lcp      = self::$fetchpriority_url_memos[ $memo_key ]['exact'];
 			} else {
 				try {
+					// Defense in depth: resolve_fetchpriority_lcp_url() guards on memo miss only.
 					if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
-						self::$fetchpriority_url_memos[ $lcp_url ] = array( 'valid' => false );
 						return $attr;
 					}
 					$normalized_lcp = $this->normalize_image_url( $lcp_url );
 					$exact_lcp      = '' === $normalized_lcp ? '' : $this->normalize_image_url( $lcp_url, false );
 
-					$slash    = strpos( $exact_lcp, '/' );
-					$lcp_path = false === $slash ? $exact_lcp : substr( $exact_lcp, $slash );
-
-					self::$fetchpriority_url_memos[ $lcp_url ] = array(
-						'valid'      => true,
+					self::$fetchpriority_url_memos[ $memo_key ] = array(
 						'normalized' => $normalized_lcp,
 						'exact'      => $exact_lcp,
-						'lcp_path'   => $lcp_path,
 					);
+					if ( count( self::$fetchpriority_url_memos ) > 30 ) {
+						self::$fetchpriority_url_memos = array();
+					}
 				} catch ( \Throwable $e ) {
 					return $this->fail_open_attr( $e, $attr );
 				}
@@ -3453,14 +3449,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 
 			if ( $attachment_id > 0 ) {
 				try {
-					$is_lcp = $this->attachment_src_is_lcp( $attachment_id, $size, $normalized_lcp, $exact_lcp, $size_is_full );
+					$is_lcp = $this->is_attachment_lcp( $attachment_id, $size, $normalized_lcp, $exact_lcp, $size_is_full );
 				} catch ( \Throwable $e ) {
 					return $this->fail_open_attr( $e, $attr );
 				}
 			}
 
 			if ( ! $is_lcp ) {
-				$is_lcp = $this->attr_references_lcp( $attr, $normalized_lcp, $exact_lcp, $size_is_full, $attachment_id );
+				$is_lcp = $this->is_attr_lcp( $attr, $normalized_lcp, $exact_lcp, $size_is_full, $attachment_id );
 			}
 
 			if ( ! $is_lcp ) {
@@ -3588,7 +3584,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param bool   $size_is_full   Whether the requested size is 'full'.
 		 * @return bool True if the attachment matches the LCP URL.
 		 */
-		private function attachment_src_is_lcp( int $attachment_id, $size, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
+		private function is_attachment_lcp( int $attachment_id, $size, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
 			if ( ! function_exists( 'wp_get_attachment_image_src' ) ) {
 				return false;
 			}
@@ -3621,7 +3617,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param int    $attachment_id  Optional attachment ID.
 		 * @return bool True if the attributes reference the LCP URL.
 		 */
-		private function attr_references_lcp( array $attr, string $normalized_lcp, string $exact_lcp, bool $size_is_full, int $attachment_id = 0 ): bool {
+		private function is_attr_lcp( array $attr, string $normalized_lcp, string $exact_lcp, bool $size_is_full, int $attachment_id = 0 ): bool {
 			foreach ( array( 'src', 'data-src' ) as $key ) {
 				if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
 					return true;
