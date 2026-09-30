@@ -3447,16 +3447,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				return $this->fail_open_attr( $e, $attr );
 			}
 
-			if ( $attachment_id > 0 ) {
-				try {
-					$is_lcp = $this->is_attachment_lcp( $attachment_id, $size, $normalized_lcp, $exact_lcp, $size_is_full );
-				} catch ( \Throwable $e ) {
-					return $this->fail_open_attr( $e, $attr );
-				}
-			}
+			$is_lcp = $this->is_attr_lcp( $attr, $normalized_lcp, $exact_lcp, $size_is_full );
 
-			if ( ! $is_lcp ) {
-				$is_lcp = $this->is_attr_lcp( $attr, $normalized_lcp, $exact_lcp, $size_is_full, $attachment_id );
+			if ( ! $is_lcp && $attachment_id > 0 ) {
+				$is_lcp = $this->is_attachment_lcp( $attachment_id, $size, $normalized_lcp, $exact_lcp, $size_is_full );
 			}
 
 			if ( ! $is_lcp ) {
@@ -3565,10 +3559,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @return mixed The attributes unmodified.
 		 */
 		private function fail_open_attr( \Throwable $e, $attr ): mixed {
-			try {
-				do_action( 'wppo_debug_log', 'WPPO LCP fetchpriority stamping failed: ' . $e->getMessage(), array( 'exception' => $e ) );
-			} catch ( \Throwable $ignore ) {
-				unset( $ignore );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				try {
+					do_action( 'wppo_debug_log', 'WPPO fetchpriority filter failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				} catch ( \Throwable $ignore ) {
+					unset( $ignore );
+				}
+			} else {
+				unset( $e );
 			}
 			return $attr;
 		}
@@ -3614,17 +3612,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $normalized_lcp The normalized LCP URL.
 		 * @param string $exact_lcp      The exact normalized LCP URL.
 		 * @param bool   $size_is_full   Whether the requested size is 'full'.
-		 * @param int    $attachment_id  Optional attachment ID.
 		 * @return bool True if the attributes reference the LCP URL.
 		 */
-		private function is_attr_lcp( array $attr, string $normalized_lcp, string $exact_lcp, bool $size_is_full, int $attachment_id = 0 ): bool {
+		private function is_attr_lcp( array $attr, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
 			foreach ( array( 'src', 'data-src' ) as $key ) {
 				if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
 					return true;
 				}
 			}
 
-			if ( 0 === $attachment_id && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
+			if ( isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
 				return $this->has_exact_lcp_srcset_entry( $attr['srcset'], $exact_lcp );
 			}
 
