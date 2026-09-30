@@ -192,6 +192,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 
 
 		/**
+		 * Normalized + size-preserving LCP URL memo, keyed by request URL and candidate URL.
+		 *
+		 * @var array<string, array{normalized:string, exact:string}>
+		 * @since NEXT
+		 */
+		private static array $fetchpriority_url_memos = array();
+
+		/**
 		 * Clear the per-request LCP/preload static caches.
 		 *
 		 * Invoked from `Image_Optimisation::clear_runtime_caches()` (wired to
@@ -205,6 +213,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 			self::$preload_emitted_urls           = array();
 			self::$heuristic_lcp_memo             = array();
 			self::$responsive_lcp_preload_emitted = false;
+			self::$fetchpriority_url_memos        = array();
 		}
 
 		/**
@@ -3361,54 +3370,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @return mixed The (possibly stamped) attributes, unchanged on miss.
 		 */
 		public function wppo_add_fetchpriority( $attr, $attachment = null, $size = null ) {
-			$lcpown_options = $this->owner->lcp_get_options();
-			try {
-				if ( ! is_array( $attr ) ) {
-					return $attr;
-				}
-				$image_optimisation = $lcpown_options['image_optimisation'] ?? array();
-				if ( empty( $image_optimisation['prioritizeLCPImages'] ) ) {
-					return $attr;
-				}
-				if ( function_exists( 'is_admin' ) ) {
-					try {
-						if ( is_admin() ) {
-							return $attr;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+			if ( ! is_array( $attr ) ) {
+				return $attr;
+			}
+
+			$lcpown_options     = $this->owner->lcp_get_options();
+			$image_optimisation = $lcpown_options['image_optimisation'] ?? array();
+
+			if ( empty( $image_optimisation['prioritizeLCPImages'] ) ) {
+				return $attr;
+			}
+
+			if ( function_exists( 'is_admin' ) ) {
+				try {
+					if ( is_admin() ) {
 						return $attr;
 					}
-				}
-				$lcp_url = '';
-				try {
-					$lcp_url = $this->resolve_fetchpriority_lcp_url();
 				} catch ( \Throwable $e ) {
-					unset( $e );
-					$lcp_url = '';
+					return $this->fail_open_attr( $e, $attr );
 				}
-				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
-					return $attr;
-				}
+			}
+
+			try {
+				$lcp_url = $this->resolve_fetchpriority_lcp_url();
+			} catch ( \Throwable $e ) {
+				return $this->fail_open_attr( $e, $attr );
+			}
+
+			if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
+				return $attr;
+			}
+
+			$memo_key = (string) $this->owner->lcp_state_fetchpriority_lcp_key() . '|' . $lcp_url;
+
+			if ( isset( self::$fetchpriority_url_memos[ $memo_key ] ) ) {
+				$normalized_lcp = self::$fetchpriority_url_memos[ $memo_key ]['normalized'];
+				$exact_lcp      = self::$fetchpriority_url_memos[ $memo_key ]['exact'];
+			} else {
 				try {
+					// Defense in depth: resolve_fetchpriority_lcp_url() guards on memo miss only.
 					if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
 						return $attr;
 					}
+					$normalized_lcp = $this->normalize_image_url( $lcp_url );
+					$exact_lcp      = '' === $normalized_lcp ? '' : $this->normalize_image_url( $lcp_url, false );
+
+					self::$fetchpriority_url_memos[ $memo_key ] = array(
+						'normalized' => $normalized_lcp,
+						'exact'      => $exact_lcp,
+					);
+					if ( count( self::$fetchpriority_url_memos ) > 30 ) {
+						self::$fetchpriority_url_memos = array();
+					}
 				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $attr;
+					return $this->fail_open_attr( $e, $attr );
 				}
-				$normalized_lcp = $this->normalize_image_url( $lcp_url );
-				if ( '' === $normalized_lcp ) {
-					return $attr;
-				}
-				$exact_lcp = $this->normalize_image_url( $lcp_url, false );
-				if ( '' === $exact_lcp ) {
-					return $attr;
-				}
-				$size_is_full  = ( 'full' === $size );
-				$is_lcp        = false;
-				$attachment_id = 0;
+			}
+
+			if ( '' === $normalized_lcp || '' === $exact_lcp ) {
+				return $attr;
+			}
+
+			$size_is_full = ( 'full' === $size );
+			$is_lcp       = false;
+
+			$attachment_id = 0;
+			try {
 				if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
 					$attachment_id = (int) $attachment->ID;
 				} elseif ( is_numeric( $attachment ) ) {
@@ -3416,69 +3443,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				} elseif ( is_array( $attachment ) && isset( $attachment['ID'] ) && is_numeric( $attachment['ID'] ) ) {
 					$attachment_id = (int) $attachment['ID'];
 				}
-				if ( $attachment_id > 0 && function_exists( 'wp_get_attachment_image_src' ) ) {
-					try {
-						$lookup_size = ( null === $size || '' === $size ) ? 'thumbnail' : $size;
-						$src_data    = wp_get_attachment_image_src( $attachment_id, $lookup_size );
-						$candidate   = '';
-						if ( is_array( $src_data ) && isset( $src_data[0] ) && is_string( $src_data[0] ) ) {
-							$candidate = $src_data[0];
-						} elseif ( is_string( $src_data ) ) {
-							$candidate = $src_data;
-						}
-						if ( '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full ) ) {
-							$is_lcp = true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ! $is_lcp ) {
-					// Fallback when the attachment ID is unresolvable (bare
-					// array context): compare the built src/srcset against
-					// the candidate with normalized-URL equality only (no
-					// substring fallback, mirroring tag_matches_lcp_url()).
-					// The src/data-src entries use the same size-aware rule
-					// as the ID path; srcset entries require an exact match
-					// (a srcset inherently lists sized variants, so a
-					// suffix-insensitive fallback would stamp every image
-					// whose srcset merely contains a thumbnail of the hero).
-					foreach ( array( 'src', 'data-src' ) as $key ) {
-						if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
-							$is_lcp = true;
-							break;
-						}
-					}
-					if ( ! $is_lcp && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
-						$candidates = preg_split( '/\s*,\s*/', trim( $attr['srcset'] ) );
-						if ( is_array( $candidates ) ) {
-							foreach ( $candidates as $candidate ) {
-								$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
-								$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
-								if ( '' !== $candidate_url && $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
-									$is_lcp = true;
-									break;
-								}
-							}
-						}
-					}
-				}
-				if ( ! $is_lcp ) {
-					return $attr;
-				}
-				// Stamp the hero triple: eager first so the core-parity
-				// invariant (never lazy + high) always holds, then high,
-				// then the decoding default when absent.
-				$attr['loading']       = 'eager';
-				$attr['fetchpriority'] = 'high';
-				if ( ! isset( $attr['decoding'] ) || ! is_string( $attr['decoding'] ) || '' === $attr['decoding'] ) {
-					$attr['decoding'] = 'async';
-				}
-				return $this->owner->lcp_sanitize_loading_triple( $attr );
 			} catch ( \Throwable $e ) {
-				unset( $e );
+				return $this->fail_open_attr( $e, $attr );
+			}
+
+			// THROW PATH, stated as what it is. is_attachment_lcp() is the only
+			// call here that can throw (core's wp_get_attachment_image_src()
+			// may); it catches internally and reports false. is_attr_lcp() is the
+			// src/data-src/srcset comparison and runs first.
+			//
+			// The two orderings are equivalent for the boolean OR, so this order
+			// is a readability choice, NOT a load-bearing one: swapping them does
+			// not change behaviour, and a mutation run confirmed that. An earlier
+			// revision of this comment claimed the order was load-bearing; that
+			// claim was false and is removed rather than restated.
+			//
+			// What IS preserved is master's behaviour: the empty catch at
+			// master:3432-3434 fell through to this same fallback, so a throw
+			// from the image API never stopped the hero being stamped.
+			//
+			// Pinned by the throw-path tests in tests/php/ImageOptimisationTest.php,
+			// which assert that the throwing stub is actually reached as well as
+			// that the hero is still stamped.
+			$is_lcp = $this->is_attr_lcp( $attr, $normalized_lcp, $exact_lcp, $size_is_full );
+
+			if ( ! $is_lcp && $attachment_id > 0 ) {
+				$is_lcp = $this->is_attachment_lcp( $attachment_id, $size, $normalized_lcp, $exact_lcp, $size_is_full );
+			}
+
+			if ( ! $is_lcp ) {
 				return $attr;
 			}
+
+			// Stamp the hero triple: eager first so the core-parity
+			// invariant (never lazy + high) always holds, then high,
+			// then the decoding default when absent.
+			// fetchpriority is stamped UNCONDITIONALLY, exactly as master does.
+			// #1744 made this conditional (only set when absent), which silently
+			// stopped forcing fetchpriority="high" on the LCP image whenever
+			// another component had already set one. That is a behaviour change,
+			// not a refactor, so it does not belong here. If it should ever stop
+			// being forced, that is a product decision for its own titled PR with
+			// a changelog note.
+			$attr['loading']       = 'eager';
+			$attr['fetchpriority'] = 'high';
+			if ( ! isset( $attr['decoding'] ) || ! is_string( $attr['decoding'] ) || '' === $attr['decoding'] ) {
+				$attr['decoding'] = 'async';
+			}
+
+			// Hand-off restored from master. #1744 dropped it, which orphaned
+			// lcp_sanitize_loading_triple() - the single place that enforces the
+			// core-parity invariant (never lazy + high) across the stamping
+			// surface. Reinstating it keeps the bridge reachable and master
+			// semantics exactly.
+			return $this->owner->lcp_sanitize_loading_triple( $attr );
 		}
 
 		/**
@@ -3556,6 +3574,129 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+			return false;
+		}
+
+		/**
+		 * Swallows an exception and returns attributes unmodified (fail-open helper).
+		 *
+		 * @since NEXT
+		 * @param \Throwable $e    The exception.
+		 * @param mixed      $attr The original attributes.
+		 * @return mixed The attributes unmodified.
+		 */
+		private function fail_open_attr( \Throwable $e, $attr ): mixed {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				try {
+					do_action( 'wppo_debug_log', 'WPPO fetchpriority filter failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				} catch ( \Throwable $ignore ) {
+					unset( $ignore );
+				}
+			} else {
+				unset( $e );
+			}
+			return $attr;
+		}
+
+		/**
+		 * Check if an attachment ID matches the LCP candidate.
+		 *
+		 * @since NEXT
+		 * @param int    $attachment_id  The attachment ID.
+		 * @param mixed  $size           The requested image size.
+		 * @param string $normalized_lcp The normalized LCP URL.
+		 * @param string $exact_lcp      The exact normalized LCP URL.
+		 * @param bool   $size_is_full   Whether the requested size is 'full'.
+		 * @return bool True if the attachment matches the LCP URL.
+		 */
+		private function is_attachment_lcp( int $attachment_id, $size, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
+			if ( ! function_exists( 'wp_get_attachment_image_src' ) ) {
+				return false;
+			}
+			try {
+				$lookup_size = ( null === $size || '' === $size ) ? 'thumbnail' : $size;
+				$src_data    = wp_get_attachment_image_src( $attachment_id, $lookup_size );
+				$candidate   = '';
+
+				if ( is_array( $src_data ) && isset( $src_data[0] ) && is_string( $src_data[0] ) ) {
+					$candidate = $src_data[0];
+				} elseif ( is_string( $src_data ) ) {
+					$candidate = $src_data;
+				}
+
+				return '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full );
+			} catch ( \Throwable $e ) {
+				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed.', array( 'exception' => $e ) );
+				return false;
+			}
+		}
+
+		/**
+		 * Check if image attributes reference the LCP candidate.
+		 *
+		 * @since NEXT
+		 * @param array  $attr           The image attributes.
+		 * @param string $normalized_lcp The normalized LCP URL.
+		 * @param string $exact_lcp      The exact normalized LCP URL.
+		 * @param bool   $size_is_full   Whether the requested size is 'full'.
+		 * @return bool True if the attributes reference the LCP URL.
+		 */
+		private function is_attr_lcp( array $attr, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
+			foreach ( array( 'src', 'data-src' ) as $key ) {
+				if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
+					return true;
+				}
+			}
+
+			if ( isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
+				return $this->has_exact_lcp_srcset_entry( $attr['srcset'], $exact_lcp );
+			}
+
+			return false;
+		}
+
+		/**
+		 * Check if a srcset contains a candidate matching the exact LCP URL.
+		 *
+		 * A srcset inherently lists sized variants, so a suffix-insensitive fallback
+		 * would stamp every image whose srcset merely contains a thumbnail of the hero.
+		 * Thrown exceptions on parsing a candidate are swallowed to skip the malformed
+		 * entry and continue checking.
+		 *
+		 * @since NEXT
+		 * @param string $srcset    The raw srcset string.
+		 * @param string $exact_lcp The exact normalized LCP URL, size suffix preserved
+		 *                          (see normalize_image_url( $url, false )).
+		 * @return bool True if a match is found.
+		 */
+		private function has_exact_lcp_srcset_entry( string $srcset, string $exact_lcp ): bool {
+			$slash    = strpos( $exact_lcp, '/' );
+			$lcp_path = false === $slash ? $exact_lcp : substr( $exact_lcp, $slash );
+			if ( '' === $lcp_path ) {
+				return false;
+			}
+			if ( false === strpos( $srcset, $lcp_path ) ) {
+				return false; // Cheap reject: no split, no per-candidate normalize.
+			}
+
+			$candidates = preg_split( '/\s*,\s*/', trim( $srcset ) );
+			if ( ! is_array( $candidates ) ) {
+				return false;
+			}
+			foreach ( $candidates as $candidate ) {
+				$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
+				$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
+				if ( '' === $candidate_url ) {
+					continue;
+				}
+				try {
+					if ( $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			return false;
 		}

@@ -93,7 +93,7 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 | `Cache` | 5,643 | 161 | 8 | 4 | 29 | 14/13 | 71 | 8 | `maybe_store_cache` 177 |
 | `Util` | 4,791 | 156 | 5 | 4 | 4 | 57/9 | 1,138 | 3 | `get_with_stampede_lock` 197 |
 | `Used_CSS` | 4,961 | 94 | 8 | 1 | 11 | 10/8 | 39 | 5 | `regenerate_all` 291 |
-| `Lcp_Preload` | 4,434 | 74 | 8 | 4 | 6 | 1/4 | 12 | 3 | `apply_occlusion_fetchpriority_low` 163 |
+| `Lcp_Preload` | 4,575 | 74 | 8 | 4 | 6 | 1/4 | 12 | 3 | `apply_occlusion_fetchpriority_low` 163 |
 | `Img_Converter` | 4,077 | 66 | 8 | 4 | 8 | 9/2 | 36 | 0 | `convert_image` 691 |
 | `Script_Strategy` | 3,859 | 56 | 12 | 11 | 12 | 1/4 | 35 | 1 | `add_defer_attribute` 203 |
 | `AI_Adaptive` | 3,989 | 76 | 8 | 2 | 2 | 5/5 | 20 | 4 | `get_suggestions` 761 |
