@@ -343,6 +343,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'collect_rum' ),
 					'permission_callback' => '__return_true',
 					'schema'              => $schemas,
+					// Schema hygiene / defence in depth (issue #1686). The
+					// endpoint stays public by the reviewed decision above - this
+					// only declares the contract the collector already enforces in
+					// RUM::is_valid_token(), so a tokenless beacon is rejected at
+					// argument validation instead of relying on the callback. Does
+					// not change who may call it: permission_callback is untouched.
+					'args'                => array(
+						'token' => array(
+							'required'          => true,
+							'type'              => 'string',
+							'validate_callback' => function ( $param ) {
+								return is_string( $param ) && ! empty( $param );
+							},
+						),
+					),
 				),
 				'rum_data'                  => array(
 					'methods'             => 'GET',

@@ -418,15 +418,15 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 3699,
+        "lines": 3714,
         "methods": 77,
         "public_methods": 56,
         "large_methods": 8,
         "large_method_threshold_lines": 80,
         "largest_method": {
-            "name": "optimise_image",
-            "line": 1187,
-            "lines": 310
+            "name": "get_routes",
+            "line": 143,
+            "lines": 323
         },
         "method_prefixes": {
             "get": 25,
