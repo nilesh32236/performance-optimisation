@@ -3447,24 +3447,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				return $this->fail_open_attr( $e, $attr );
 			}
 
-			// THROW PATH, stated as what it is. is_attachment_lcp() is the only
-			// call here that can throw (core's wp_get_attachment_image_src()
-			// may); it catches internally and reports false. is_attr_lcp() is the
-			// src/data-src/srcset comparison and runs first.
+			// THROW PATH - what is preserved, and what is NOT.
 			//
-			// The two orderings are equivalent for the boolean OR, so this order
-			// is a readability choice, NOT a load-bearing one: swapping them does
-			// not change behaviour, and a mutation run confirmed that. An earlier
-			// revision of this comment claimed the order was load-bearing; that
-			// claim was false and is removed rather than restated.
+			// PRESERVED: the stamped outcome. On master the attachment lookup
+			// ran first inside a try whose empty catch fell through to the
+			// src/srcset fallback below, so a throw from the image API never
+			// stopped the hero being stamped. That still holds here.
 			//
-			// What IS preserved is master's behaviour: the empty catch at
-			// master:3432-3434 fell through to this same fallback, so a throw
-			// from the image API never stopped the hero being stamped.
+			// NOT preserved - a real, filter-observable divergence: master calls
+			// wp_get_attachment_image_src() whenever attachment_id > 0, even
+			// when the src/srcset already matches the LCP URL. This ordering
+			// short-circuits that call in the matching case, so a hook or plugin
+			// that counts image-API lookups sees fewer of them. The stamped
+			// result is identical either way, but the call graph is not, and the
+			// two are easy to confuse. Do not read "equivalent" here as
+			// "identical": only the outcome is equivalent.
+			//
+			// is_attr_lcp() is the src/data-src/srcset comparison; it is listed
+			// first only as a readability choice, not a load-bearing one.
+			// is_attachment_lcp() is the only call here that can throw, and it
+			// catches internally, so its do_action() is guarded (see below).
 			//
 			// Pinned by the throw-path tests in tests/php/ImageOptimisationTest.php,
-			// which assert that the throwing stub is actually reached as well as
-			// that the hero is still stamped.
+			// which assert both the short-circuit and the branch where the
+			// throwing call really is made.
 			$is_lcp = $this->is_attr_lcp( $attr, $normalized_lcp, $exact_lcp, $size_is_full );
 
 			if ( ! $is_lcp && $attachment_id > 0 ) {
@@ -3627,7 +3633,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 
 				return '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full );
 			} catch ( \Throwable $e ) {
-				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed.', array( 'exception' => $e ) );
+				// The do_action() must not be able to re-throw. This catch
+				// exists precisely to swallow a failure of the image API; an
+				// unguarded hook call on the far side would let a listener's
+				// own error escape and turn a swallowed exception into a
+				// front-end fatal inside wppo_add_fetchpriority(). Same
+				// guard shape as fail_open_attr() above.
+				try {
+					do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed.', array( 'exception' => $e ) );
+				} catch ( \Throwable $ignore ) {
+					unset( $ignore );
+				}
 				return false;
 			}
 		}
