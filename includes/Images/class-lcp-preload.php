@@ -3378,38 +3378,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 						return $attr;
 					}
 				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $attr;
+					return $this->fail_open_attr( $e, $attr );
 				}
 			}
 
 			try {
 				$lcp_url = $this->resolve_fetchpriority_lcp_url();
 			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $attr;
+				return $this->fail_open_attr( $e, $attr );
 			}
 
 			if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
 				return $attr;
 			}
 
-			try {
-				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
-					return $attr;
+			static $url_memos = array();
+			$memo_key         = $this->get_lcp_memo_key();
+
+			if ( isset( $url_memos[ $memo_key ] ) && $url_memos[ $memo_key ]['url'] === $lcp_url ) {
+				$normalized_lcp = $url_memos[ $memo_key ]['normalized'];
+				$exact_lcp      = $url_memos[ $memo_key ]['exact'];
+			} else {
+				try {
+					$normalized_lcp         = $this->normalize_image_url( $lcp_url );
+					$exact_lcp              = '' === $normalized_lcp ? '' : $this->normalize_image_url( $lcp_url, false );
+					$url_memos[ $memo_key ] = array(
+						'url'        => $lcp_url,
+						'normalized' => $normalized_lcp,
+						'exact'      => $exact_lcp,
+					);
+				} catch ( \Throwable $e ) {
+					return $this->fail_open_attr( $e, $attr );
 				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $attr;
 			}
 
-			try {
-				$normalized_lcp = $this->normalize_image_url( $lcp_url );
-				$exact_lcp      = '' === $normalized_lcp ? '' : $this->normalize_image_url( $lcp_url, false );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $attr;
-			}
 			if ( '' === $normalized_lcp || '' === $exact_lcp ) {
 				return $attr;
 			}
@@ -3418,12 +3420,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 			$is_lcp        = false;
 			$attachment_id = 0;
 
-			if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
-				$attachment_id = (int) $attachment->ID;
-			} elseif ( is_numeric( $attachment ) ) {
-				$attachment_id = (int) $attachment;
-			} elseif ( is_array( $attachment ) && isset( $attachment['ID'] ) && is_numeric( $attachment['ID'] ) ) {
-				$attachment_id = (int) $attachment['ID'];
+			try {
+				if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
+					$attachment_id = (int) $attachment->ID;
+				} elseif ( is_numeric( $attachment ) ) {
+					$attachment_id = (int) $attachment;
+				} elseif ( is_array( $attachment ) && isset( $attachment['ID'] ) && is_numeric( $attachment['ID'] ) ) {
+					$attachment_id = (int) $attachment['ID'];
+				}
+			} catch ( \Throwable $e ) {
+				return $this->fail_open_attr( $e, $attr );
 			}
 
 			if ( $attachment_id > 0 && function_exists( 'wp_get_attachment_image_src' ) ) {
@@ -3442,7 +3448,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 						$is_lcp = true;
 					}
 				} catch ( \Throwable $e ) {
-					unset( $e );
+					return $this->fail_open_attr( $e, $attr );
 				}
 			}
 
@@ -3464,9 +3470,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				}
 
 				if ( ! $is_lcp && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
-					if ( $this->srcset_has_exact_lcp_entry( $attr['srcset'], $exact_lcp ) ) {
-						$is_lcp = true;
-					}
+					$is_lcp = $this->has_exact_lcp_srcset_entry( $attr['srcset'], $exact_lcp );
 				}
 			}
 
@@ -3486,8 +3490,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 			try {
 				return $this->owner->lcp_sanitize_loading_triple( $attr );
 			} catch ( \Throwable $e ) {
-				unset( $e );
-				return $attr;
+				return $this->fail_open_attr( $e, $attr );
 			}
 		}
 
@@ -3571,26 +3574,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		}
 
 		/**
+		 * Swallows an exception and returns attributes unmodified (fail-open helper).
+		 *
+		 * @since NEXT
+		 * @param \Throwable $e    The exception.
+		 * @param mixed      $attr The original attributes.
+		 * @return mixed The attributes unmodified.
+		 */
+		private function fail_open_attr( \Throwable $e, $attr ) {
+			unset( $e );
+			return $attr;
+		}
+
+		/**
 		 * Check if a srcset contains a candidate matching the exact LCP URL.
 		 *
 		 * @since NEXT
 		 * @param string $srcset    The raw srcset string.
-		 * @param string $exact_lcp The un-suffixed normalized LCP URL.
-		 * @return bool True if a match is found.
+		 * @param string $exact_lcp The exact normalized LCP URL, size suffix preserved
+		 *                          (see normalize_image_url( $url, false )).
+		 * @return bool True if a match is found. Thrown exceptions on parsing a candidate
+		 *              are swallowed to skip the malformed entry and continue checking.
 		 */
-		private function srcset_has_exact_lcp_entry( string $srcset, string $exact_lcp ): bool {
-			$candidates = preg_split( '/\s*,\s*/', trim( $srcset ) );
-			if ( ! is_array( $candidates ) ) {
-				return false;
-			}
-			foreach ( $candidates as $candidate ) {
-				$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
-				$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
-				if ( '' === $candidate_url ) {
+		private function has_exact_lcp_srcset_entry( string $srcset, string $exact_lcp ): bool {
+			foreach ( $this->owner->lcp_split_srcset_candidates( $srcset ) as $part ) {
+				$url = $this->owner->lcp_split_srcset_item( $part )[0];
+				if ( '' === $url ) {
 					continue;
 				}
 				try {
-					if ( $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
+					if ( $this->normalize_image_url( $url, false ) === $exact_lcp ) {
 						return true;
 					}
 				} catch ( \Throwable $e ) {
