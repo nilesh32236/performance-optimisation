@@ -793,6 +793,8 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * Test that an exact srcset entry stamps when the attachment ID is unresolvable.
 	 */
 	/**
+	 * Test that existing fetchpriority is not overwritten.
+	 *
 	 * @covers \PerformanceOptimise\Inc\Lcp_Preload::wppo_add_fetchpriority
 	 */
 	public function test_wppo_add_fetchpriority_preserves_existing_fetchpriority(): void {
@@ -815,6 +817,8 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a negative memo correctly short-circuits.
+	 *
 	 * @covers \PerformanceOptimise\Inc\Lcp_Preload::wppo_add_fetchpriority
 	 */
 	public function test_wppo_add_fetchpriority_negative_memo_short_circuits(): void {
@@ -837,6 +841,9 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 
+	/**
+	 * Test that an exact srcset entry stamps.
+	 */
 	public function test_wppo_add_fetchpriority_srcset_exact_match_stamps(): void {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'is_admin' )->justReturn( false );
