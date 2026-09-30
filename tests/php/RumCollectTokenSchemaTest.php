@@ -6,15 +6,18 @@
  * contracts and either can be removed independently:
  *
  * 1. The REST route schema declares `token` as a required, non-empty
- *    string. A beacon with no token is rejected at argument validation.
+ *    string, so a tokenless beacon is rejected at argument validation.
  * 2. RUM::collect() validates the token itself with hash_equals, scoped to
  *    the path and the day, and refuses everything downstream of that -
  *    including queueing a sample and scheduling the delayed flush.
  *
+ * The callback layer needs the WP_REST_Request / WP_REST_Response doubles
+ * that RestTest.php owns, so the end-to-end beacon test lives there:
+ * RestTest::test_collect_rum_rejects_forged_token_and_accepts_valid_token().
+ *
  * @package PerformanceOptimise\Tests
  */
 
-use Brain\Monkey\Actions;
 use Brain\Monkey\Functions;
 use PerformanceOptimise\Inc\RUM;
 use PerformanceOptimise\Inc\Rest;
@@ -51,10 +54,27 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 	private $scheduled = array();
 
 	/**
-	 * Install the WP stubs the beacon path needs.
+	 * Reset per-test state and install the WP stubs the beacon path needs.
+	 *
+	 * Deliberately NOT named setUp(): a same-named method here would shadow
+	 * WPPO_Test_Bootstrap::setUp(), so Brain Monkey's own setUp() would never
+	 * run and patched functions would leak between tests.
+	 *
+	 * @return void
 	 */
-	private function install_stubs(): void {
+	private function reset_state(): void {
+		unset( $GLOBALS['wp_version'] );
 		RUM::clear_field_lcp_cache();
+
+		$this->options    = array(
+			'wppo_settings' => array(
+				'performance_audit' => array( 'rum_enabled' => true ),
+			),
+		);
+		$this->transients = array();
+		$this->scheduled  = array();
+		Util::clear_settings_cache();
+
 		Functions\stubs(
 			array(
 				'get_option',
@@ -81,27 +101,6 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 				'do_action',
 				'apply_filters',
 			)
-		);
-		Functions\when( 'add_action' )->justReturn( true );
-		Functions\when( 'add_filter' )->justReturn( true );
-		Functions\when( 'do_action' )->justReturn( null );
-		Functions\when( 'apply_filters' )->alias(
-			static function ( $hook, $value ) {
-				return $value;
-			}
-		);
-		Functions\when( '__' )->returnArg( 1 );
-		Functions\when( 'trailingslashit' )->returnArg();
-		Functions\when( 'untrailingslashit' )->alias(
-			static function ( $value ) {
-				return rtrim( (string) $value, '/\\' );
-			}
-		);
-		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
-		Functions\when( 'absint' )->alias(
-			static function ( $value ) {
-				return abs( (int) $value );
-			}
 		);
 		Functions\when( 'get_option' )->alias(
 			function ( $name, $fallback = false ) {
@@ -130,7 +129,6 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 				return true;
 			}
 		);
-		// Deterministic token derivation so the valid token is predictable.
 		Functions\when( 'wp_hash' )->alias(
 			static function ( $data ) {
 				return 'h_' . $data;
@@ -142,7 +140,28 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'wp_rand' )->justReturn( 2 );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Functions\when( 'wp_next_scheduled' )->justReturn( false );
+		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'trailingslashit' )->returnArg();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/\\' );
+			}
+		);
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'add_filter' )->justReturn( true );
+		Functions\when( 'do_action' )->justReturn( null );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				return $value;
+			}
+		);
 		Functions\when( 'wp_schedule_single_event' )->alias(
 			function ( $timestamp, $hook, $args = array() ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$this->scheduled[] = array(
@@ -153,36 +172,6 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		$GLOBALS['wp_version'] = '6.8';
-	}
-
-	/**
-	 * Set up the stubs and enable RUM.
-	 *
-	 * @return void
-	 */
-	protected function setUp(): void {
-		parent::setUp();
-		// Settings live under the wppo_settings option; Util::get_settings()
-		// proxies to Settings_Store, so the cache must be cleared too.
-		$this->options = array(
-			'wppo_settings' => array(
-				'performance_audit' => array( 'rum_enabled' => true ),
-			),
-		);
-		Util::clear_settings_cache();
-		$this->transients = array();
-		$this->scheduled  = array();
-		$this->install_stubs();
-	}
-
-	/**
-	 * Tear down.
-	 *
-	 * @return void
-	 */
-	protected function tearDown(): void {
-		unset( $GLOBALS['wp_version'] );
-		parent::tearDown();
 	}
 
 	/**
@@ -198,15 +187,15 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * The registered rum_collect route definition.
 	 *
+	 * Reflect the private get_routes() the same way the plugin's own internals
+	 * are reflected, rather than exposing a seam just for the test.
+	 *
 	 * @return array
 	 */
 	private function rum_route(): array {
-		// get_routes() is private; reflect it the same way the plugin's own
-		// internals do, rather than exposing a seam just for the test.
-		$rest   = new Rest();
 		$method = new \ReflectionMethod( Rest::class, 'get_routes' );
 		$method->setAccessible( true );
-		$routes = $method->invoke( $rest );
+		$routes = $method->invoke( new Rest() );
 
 		$this->assertArrayHasKey(
 			'rum_collect',
@@ -218,12 +207,12 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * (a) The route schema declares the token as a required, non-empty
-	 *     string, so a tokenless beacon is rejected at argument validation.
+	 * The route schema declares the token as a required, non-empty string.
 	 *
 	 * @return void
 	 */
 	public function test_route_schema_requires_a_non_empty_string_token(): void {
+		$this->reset_state();
 		$route = $this->rum_route();
 
 		$this->assertArrayHasKey( 'args', $route, 'rum_collect must declare its args.' );
@@ -244,12 +233,13 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * (b) A beacon with no token, or a forged one, is rejected - and nothing
-	 *     downstream of the check runs.
+	 * A beacon with no token, or a forged one, is rejected - and nothing
+	 * downstream of the check runs.
 	 *
 	 * @return void
 	 */
 	public function test_collect_rejects_missing_and_forged_tokens(): void {
+		$this->reset_state();
 		foreach ( array( array(), array( 'token' => '' ), array( 'token' => 'forged' ) ) as $params ) {
 			$result = RUM::collect( $params );
 
@@ -257,18 +247,17 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 			$this->assertSame( 401, $result['status'] );
 		}
 
-		// A rejected beacon must not queue a sample...
 		$this->assertSame( array(), $this->transients );
-		// ...nor schedule the delayed flush.
 		$this->assertSame( array(), $this->scheduled );
 	}
 
 	/**
-	 * (b-cont) The correct token is accepted.
+	 * The correct token is accepted.
 	 *
 	 * @return void
 	 */
 	public function test_collect_accepts_the_correct_token(): void {
+		$this->reset_state();
 		$result = RUM::collect(
 			array(
 				'path'  => '/',
@@ -283,48 +272,13 @@ class RumCollectTokenSchemaTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * (c) The REST path works end to end, both ways: a forged token is
-	 *     refused with the failure status, a valid one succeeds.
-	 *
-	 * @return void
-	 */
-	public function test_rest_collect_rum_end_to_end(): void {
-		$rest = new Rest();
-
-		$forged = $rest->collect_rum(
-			new \WP_REST_Request(
-				array(
-					'path'  => '/',
-					'token' => 'forged',
-				)
-			)
-		);
-
-		$this->assertSame( 401, $forged->get_status(), 'A forged token must not reach the collector.' );
-		$this->assertFalse( $forged->get_data()['success'] );
-
-		$valid = $rest->collect_rum(
-			new \WP_REST_Request(
-				array(
-					'path'  => '/',
-					'token' => $this->valid_token( '/' ),
-					'url'   => 'https://example.test/',
-					'lcp'   => 1234,
-				)
-			)
-		);
-
-		$this->assertSame( 200, $valid->get_status(), 'A valid token must still work end to end.' );
-		$this->assertTrue( $valid->get_data()['success'] );
-	}
-
-	/**
-	 * (d) The delayed flush is only ever scheduled by an accepted beacon, so
-	 *     an unauthenticated caller cannot force a purge or a cron event.
+	 * The delayed flush is only ever scheduled by an accepted beacon, so an
+	 * unauthenticated caller cannot force a flush of the aggregate queue.
 	 *
 	 * @return void
 	 */
 	public function test_rejected_beacon_cannot_schedule_the_delayed_flush(): void {
+		$this->reset_state();
 		RUM::collect(
 			array(
 				'path'  => '/',
