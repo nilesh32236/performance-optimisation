@@ -3392,6 +3392,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				return $attr;
 			}
 
+			// Defense in depth: resolve_fetchpriority_lcp_url() guards on memo miss only.
+			try {
+				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
+					return $attr;
+				}
+			} catch ( \Throwable $e ) {
+				return $this->fail_open_attr( $e, $attr );
+			}
+
 			static $url_memos = array();
 			$memo_key         = $this->get_lcp_memo_key();
 
@@ -3444,9 +3453,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 						$candidate = $src_data;
 					}
 
-					if ( '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full ) ) {
-						$is_lcp = true;
-					}
+					$is_lcp = '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full );
 				} catch ( \Throwable $e ) {
 					return $this->fail_open_attr( $e, $attr );
 				}
@@ -3458,10 +3465,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				// the candidate with normalized-URL equality only (no
 				// substring fallback, mirroring tag_matches_lcp_url()).
 				// The src/data-src entries use the same size-aware rule
-				// as the ID path; srcset entries require an exact match
-				// (a srcset inherently lists sized variants, so a
-				// suffix-insensitive fallback would stamp every image
-				// whose srcset merely contains a thumbnail of the hero).
+				// as the ID path; srcset entries require an exact match.
 				foreach ( array( 'src', 'data-src' ) as $key ) {
 					if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
 						$is_lcp = true;
@@ -3487,11 +3491,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				$attr['decoding'] = 'async';
 			}
 
-			try {
-				return $this->owner->lcp_sanitize_loading_triple( $attr );
-			} catch ( \Throwable $e ) {
-				return $this->fail_open_attr( $e, $attr );
-			}
+			return $attr;
 		}
 
 		/**
@@ -3589,21 +3589,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		/**
 		 * Check if a srcset contains a candidate matching the exact LCP URL.
 		 *
+		 * A srcset inherently lists sized variants, so a suffix-insensitive fallback
+		 * would stamp every image whose srcset merely contains a thumbnail of the hero.
+		 * Thrown exceptions on parsing a candidate are swallowed to skip the malformed
+		 * entry and continue checking.
+		 *
 		 * @since NEXT
 		 * @param string $srcset    The raw srcset string.
 		 * @param string $exact_lcp The exact normalized LCP URL, size suffix preserved
 		 *                          (see normalize_image_url( $url, false )).
-		 * @return bool True if a match is found. Thrown exceptions on parsing a candidate
-		 *              are swallowed to skip the malformed entry and continue checking.
+		 * @return bool True if a match is found.
 		 */
 		private function has_exact_lcp_srcset_entry( string $srcset, string $exact_lcp ): bool {
-			foreach ( $this->owner->lcp_split_srcset_candidates( $srcset ) as $part ) {
-				$url = $this->owner->lcp_split_srcset_item( $part )[0];
-				if ( '' === $url ) {
+			$slash    = strpos( $exact_lcp, '/' );
+			$lcp_path = false === $slash ? $exact_lcp : substr( $exact_lcp, $slash );
+			if ( '' === $lcp_path ) {
+				return false;
+			}
+			if ( false === strpos( $srcset, $lcp_path ) && false === strpos( $srcset, ltrim( $lcp_path, '/' ) ) ) {
+				return false; // Cheap reject: no split, no per-candidate normalize.
+			}
+
+			$candidates = preg_split( '/\s*,\s*/', trim( $srcset ) );
+			if ( ! is_array( $candidates ) ) {
+				return false;
+			}
+			foreach ( $candidates as $candidate ) {
+				$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
+				$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
+				if ( '' === $candidate_url ) {
 					continue;
 				}
 				try {
-					if ( $this->normalize_image_url( $url, false ) === $exact_lcp ) {
+					if ( $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
 						return true;
 					}
 				} catch ( \Throwable $e ) {
