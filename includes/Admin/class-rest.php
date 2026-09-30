@@ -343,15 +343,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'collect_rum' ),
 					'permission_callback' => '__return_true',
 					'schema'              => $schemas,
-					'args'                => array(
-						'token' => array(
-							'required'          => true,
-							'type'              => 'string',
-							'validate_callback' => function ( $param ) {
-								return is_string( $param ) && ! empty( $param );
-							},
-						),
-					),
 				),
 				'rum_data'                  => array(
 					'methods'             => 'GET',
