@@ -3361,119 +3361,129 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @return mixed The (possibly stamped) attributes, unchanged on miss.
 		 */
 		public function wppo_add_fetchpriority( $attr, $attachment = null, $size = null ) {
-			$lcpown_options = $this->owner->lcp_get_options();
+			if ( ! is_array( $attr ) ) {
+				return $attr;
+			}
+
+			$lcpown_options     = $this->owner->lcp_get_options();
+			$image_optimisation = $lcpown_options['image_optimisation'] ?? array();
+
+			if ( empty( $image_optimisation['prioritizeLCPImages'] ) ) {
+				return $attr;
+			}
+
+			if ( function_exists( 'is_admin' ) && is_admin() ) {
+				return $attr;
+			}
+
 			try {
-				if ( ! is_array( $attr ) ) {
+				$lcp_url = $this->resolve_fetchpriority_lcp_url();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $attr;
+			}
+
+			if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
+				return $attr;
+			}
+
+			try {
+				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
 					return $attr;
 				}
-				$image_optimisation = $lcpown_options['image_optimisation'] ?? array();
-				if ( empty( $image_optimisation['prioritizeLCPImages'] ) ) {
-					return $attr;
-				}
-				if ( function_exists( 'is_admin' ) ) {
-					try {
-						if ( is_admin() ) {
-							return $attr;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						return $attr;
-					}
-				}
-				$lcp_url = '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $attr;
+			}
+
+			$normalized_lcp = $this->normalize_image_url( $lcp_url );
+			if ( '' === $normalized_lcp ) {
+				return $attr;
+			}
+
+			$exact_lcp = $this->normalize_image_url( $lcp_url, false );
+			if ( '' === $exact_lcp ) {
+				return $attr;
+			}
+
+			$size_is_full  = ( 'full' === $size );
+			$is_lcp        = false;
+			$attachment_id = 0;
+
+			if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
+				$attachment_id = (int) $attachment->ID;
+			} elseif ( is_numeric( $attachment ) ) {
+				$attachment_id = (int) $attachment;
+			} elseif ( is_array( $attachment ) && isset( $attachment['ID'] ) && is_numeric( $attachment['ID'] ) ) {
+				$attachment_id = (int) $attachment['ID'];
+			}
+
+			if ( $attachment_id > 0 && function_exists( 'wp_get_attachment_image_src' ) ) {
 				try {
-					$lcp_url = $this->resolve_fetchpriority_lcp_url();
+					$lookup_size = ( null === $size || '' === $size ) ? 'thumbnail' : $size;
+					$src_data    = wp_get_attachment_image_src( $attachment_id, $lookup_size );
+					$candidate   = '';
+
+					if ( is_array( $src_data ) && isset( $src_data[0] ) && is_string( $src_data[0] ) ) {
+						$candidate = $src_data[0];
+					} elseif ( is_string( $src_data ) ) {
+						$candidate = $src_data;
+					}
+
+					if ( '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full ) ) {
+						$is_lcp = true;
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
-					$lcp_url = '';
 				}
-				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
-					return $attr;
-				}
-				try {
-					if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
-						return $attr;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $attr;
-				}
-				$normalized_lcp = $this->normalize_image_url( $lcp_url );
-				if ( '' === $normalized_lcp ) {
-					return $attr;
-				}
-				$exact_lcp = $this->normalize_image_url( $lcp_url, false );
-				if ( '' === $exact_lcp ) {
-					return $attr;
-				}
-				$size_is_full  = ( 'full' === $size );
-				$is_lcp        = false;
-				$attachment_id = 0;
-				if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
-					$attachment_id = (int) $attachment->ID;
-				} elseif ( is_numeric( $attachment ) ) {
-					$attachment_id = (int) $attachment;
-				} elseif ( is_array( $attachment ) && isset( $attachment['ID'] ) && is_numeric( $attachment['ID'] ) ) {
-					$attachment_id = (int) $attachment['ID'];
-				}
-				if ( $attachment_id > 0 && function_exists( 'wp_get_attachment_image_src' ) ) {
-					try {
-						$lookup_size = ( null === $size || '' === $size ) ? 'thumbnail' : $size;
-						$src_data    = wp_get_attachment_image_src( $attachment_id, $lookup_size );
-						$candidate   = '';
-						if ( is_array( $src_data ) && isset( $src_data[0] ) && is_string( $src_data[0] ) ) {
-							$candidate = $src_data[0];
-						} elseif ( is_string( $src_data ) ) {
-							$candidate = $src_data;
-						}
-						if ( '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full ) ) {
-							$is_lcp = true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+			}
+
+			if ( ! $is_lcp ) {
+				// Fallback when the attachment ID is unresolvable (bare
+				// array context): compare the built src/srcset against
+				// the candidate with normalized-URL equality only (no
+				// substring fallback, mirroring tag_matches_lcp_url()).
+				// The src/data-src entries use the same size-aware rule
+				// as the ID path; srcset entries require an exact match
+				// (a srcset inherently lists sized variants, so a
+				// suffix-insensitive fallback would stamp every image
+				// whose srcset merely contains a thumbnail of the hero).
+				foreach ( array( 'src', 'data-src' ) as $key ) {
+					if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
+						$is_lcp = true;
+						break;
 					}
 				}
-				if ( ! $is_lcp ) {
-					// Fallback when the attachment ID is unresolvable (bare
-					// array context): compare the built src/srcset against
-					// the candidate with normalized-URL equality only (no
-					// substring fallback, mirroring tag_matches_lcp_url()).
-					// The src/data-src entries use the same size-aware rule
-					// as the ID path; srcset entries require an exact match
-					// (a srcset inherently lists sized variants, so a
-					// suffix-insensitive fallback would stamp every image
-					// whose srcset merely contains a thumbnail of the hero).
-					foreach ( array( 'src', 'data-src' ) as $key ) {
-						if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
-							$is_lcp = true;
-							break;
-						}
-					}
-					if ( ! $is_lcp && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
-						$candidates = preg_split( '/\s*,\s*/', trim( $attr['srcset'] ) );
-						if ( is_array( $candidates ) ) {
-							foreach ( $candidates as $candidate ) {
-								$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
-								$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
-								if ( '' !== $candidate_url && $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
-									$is_lcp = true;
-									break;
-								}
+
+				if ( ! $is_lcp && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
+					$candidates = preg_split( '/\s*,\s*/', trim( $attr['srcset'] ) );
+					if ( is_array( $candidates ) ) {
+						foreach ( $candidates as $candidate ) {
+							$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
+							$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
+							if ( '' !== $candidate_url && $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
+								$is_lcp = true;
+								break;
 							}
 						}
 					}
 				}
-				if ( ! $is_lcp ) {
-					return $attr;
-				}
-				// Stamp the hero triple: eager first so the core-parity
-				// invariant (never lazy + high) always holds, then high,
-				// then the decoding default when absent.
-				$attr['loading']       = 'eager';
-				$attr['fetchpriority'] = 'high';
-				if ( ! isset( $attr['decoding'] ) || ! is_string( $attr['decoding'] ) || '' === $attr['decoding'] ) {
-					$attr['decoding'] = 'async';
-				}
+			}
+
+			if ( ! $is_lcp ) {
+				return $attr;
+			}
+
+			// Stamp the hero triple: eager first so the core-parity
+			// invariant (never lazy + high) always holds, then high,
+			// then the decoding default when absent.
+			$attr['loading']       = 'eager';
+			$attr['fetchpriority'] = 'high';
+			if ( ! isset( $attr['decoding'] ) || ! is_string( $attr['decoding'] ) || '' === $attr['decoding'] ) {
+				$attr['decoding'] = 'async';
+			}
+
+			try {
 				return $this->owner->lcp_sanitize_loading_triple( $attr );
 			} catch ( \Throwable $e ) {
 				unset( $e );
