@@ -3355,8 +3355,8 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Images",
-        "lines": 4444,
-        "methods": 74,
+        "lines": 4474,
+        "methods": 75,
         "public_methods": 73,
         "large_methods": 8,
         "large_method_threshold_lines": 80,
@@ -3393,6 +3393,7 @@
             "generate": 1,
             "wppo": 1,
             "fetchpriority": 1,
+            "srcset": 1,
             "tag": 1
         },
         "hooks": [],

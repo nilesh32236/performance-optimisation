@@ -3372,8 +3372,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				return $attr;
 			}
 
-			if ( function_exists( 'is_admin' ) && is_admin() ) {
-				return $attr;
+			if ( function_exists( 'is_admin' ) ) {
+				try {
+					if ( is_admin() ) {
+						return $attr;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $attr;
+				}
 			}
 
 			try {
@@ -3396,13 +3403,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				return $attr;
 			}
 
-			$normalized_lcp = $this->normalize_image_url( $lcp_url );
-			if ( '' === $normalized_lcp ) {
+			try {
+				$normalized_lcp = $this->normalize_image_url( $lcp_url );
+				$exact_lcp      = '' === $normalized_lcp ? '' : $this->normalize_image_url( $lcp_url, false );
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return $attr;
 			}
-
-			$exact_lcp = $this->normalize_image_url( $lcp_url, false );
-			if ( '' === $exact_lcp ) {
+			if ( '' === $normalized_lcp || '' === $exact_lcp ) {
 				return $attr;
 			}
 
@@ -3456,16 +3464,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				}
 
 				if ( ! $is_lcp && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
-					$candidates = preg_split( '/\s*,\s*/', trim( $attr['srcset'] ) );
-					if ( is_array( $candidates ) ) {
-						foreach ( $candidates as $candidate ) {
-							$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
-							$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
-							if ( '' !== $candidate_url && $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
-								$is_lcp = true;
-								break;
-							}
-						}
+					if ( $this->srcset_has_exact_lcp_entry( $attr['srcset'], $exact_lcp ) ) {
+						$is_lcp = true;
 					}
 				}
 			}
@@ -3566,6 +3566,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+			return false;
+		}
+
+		/**
+		 * Check if a srcset contains a candidate matching the exact LCP URL.
+		 *
+		 * @since NEXT
+		 * @param string $srcset    The raw srcset string.
+		 * @param string $exact_lcp The un-suffixed normalized LCP URL.
+		 * @return bool True if a match is found.
+		 */
+		private function srcset_has_exact_lcp_entry( string $srcset, string $exact_lcp ): bool {
+			$candidates = preg_split( '/\s*,\s*/', trim( $srcset ) );
+			if ( ! is_array( $candidates ) ) {
+				return false;
+			}
+			foreach ( $candidates as $candidate ) {
+				$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
+				$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
+				if ( '' === $candidate_url ) {
+					continue;
+				}
+				try {
+					if ( $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			return false;
 		}
