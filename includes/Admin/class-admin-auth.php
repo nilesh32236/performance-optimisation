@@ -58,7 +58,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Auth' ) ) {
 				// unavailable so auth never fatals; the nonce verify below
 				// still fails closed.
 				//
-				// @since NEXT Fail-open-to-raw fallback for missing wp_unslash().
+				// @since NEXT Fail-closed raw fallback for missing wp_unslash().
 				if ( function_exists( 'wp_unslash' ) ) {
 					// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 					$nonce = (string) wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] );
