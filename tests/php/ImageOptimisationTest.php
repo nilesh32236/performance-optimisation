@@ -792,6 +792,72 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that an exact srcset entry stamps when the attachment ID is unresolvable.
 	 */
+	/**
+	 * @covers \PerformanceOptimise\Inc\Lcp_Preload::wppo_add_fetchpriority
+	 */
+	public function test_wppo_add_fetchpriority_preserves_existing_fetchpriority(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+		$this->stub_lcp_resolution( 'http://example.com/wp-content/uploads/hero.jpg' );
+
+		$attr = array(
+			'src'           => 'http://example.com/wp-content/uploads/hero.jpg',
+			'fetchpriority' => 'low',
+			'loading'       => 'lazy',
+		);
+
+		$result = $image_opt->wppo_add_fetchpriority( $attr, 0, 'full' );
+		$this->assertSame( 'eager', $result['loading'] );
+		$this->assertSame( 'low', $result['fetchpriority'] );
+	}
+
+	/**
+	 * @covers \PerformanceOptimise\Inc\Lcp_Preload::wppo_add_fetchpriority
+	 */
+	public function test_wppo_add_fetchpriority_negative_memo_short_circuits(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+		$this->stub_lcp_resolution( 'http://foreign-origin.com/hero.jpg' );
+
+		$attr1 = array( 'src' => 'http://foreign-origin.com/hero.jpg' );
+		$attr2 = array( 'src' => 'http://foreign-origin.com/hero.jpg' );
+
+		$result1 = $image_opt->wppo_add_fetchpriority( $attr1, 0, 'full' );
+		$this->assertArrayNotHasKey( 'fetchpriority', $result1 );
+
+		// The second call hits the negative memo array( 'valid' => false ).
+		$result2 = $image_opt->wppo_add_fetchpriority( $attr2, 0, 'full' );
+		$this->assertArrayNotHasKey( 'fetchpriority', $result2 );
+	}
+
+	/**
+	 * @covers \PerformanceOptimise\Inc\Lcp_Preload::clear_lcp_preload_caches
+	 */
+	public function test_clear_lcp_preload_caches_empties_url_memos(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+		$this->stub_lcp_resolution( 'http://example.com/hero.jpg' );
+		$attr = array( 'src' => 'http://example.com/hero.jpg' );
+		$image_opt->wppo_add_fetchpriority( $attr, 0, 'full' );
+
+		$reflection = new \ReflectionClass( \PerformanceOptimise\Inc\Lcp_Preload::class );
+		$property   = $reflection->getProperty( 'fetchpriority_url_memos' );
+		$property->setAccessible( true );
+		$this->assertNotEmpty( $property->getValue() );
+
+		\PerformanceOptimise\Inc\Lcp_Preload::clear_lcp_preload_caches();
+		$this->assertEmpty( $property->getValue() );
+	}
+
 	public function test_wppo_add_fetchpriority_srcset_exact_match_stamps(): void {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'is_admin' )->justReturn( false );

@@ -3436,25 +3436,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 			}
 
 			$size_is_full = ( 'full' === $size );
-			$is_lcp       = $this->attr_references_lcp( $attr, $normalized_lcp, $exact_lcp, $lcp_path, $size_is_full );
+			$is_lcp       = false;
 
-			if ( ! $is_lcp ) {
-				$attachment_id = 0;
+			$attachment_id = 0;
+			try {
+				if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
+					$attachment_id = (int) $attachment->ID;
+				} elseif ( is_numeric( $attachment ) ) {
+					$attachment_id = (int) $attachment;
+				} elseif ( is_array( $attachment ) && isset( $attachment['ID'] ) && is_numeric( $attachment['ID'] ) ) {
+					$attachment_id = (int) $attachment['ID'];
+				}
+			} catch ( \Throwable $e ) {
+				return $this->fail_open_attr( $e, $attr );
+			}
+
+			if ( $attachment_id > 0 ) {
 				try {
-					if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
-						$attachment_id = (int) $attachment->ID;
-					} elseif ( is_numeric( $attachment ) ) {
-						$attachment_id = (int) $attachment;
-					} elseif ( is_array( $attachment ) && isset( $attachment['ID'] ) && is_numeric( $attachment['ID'] ) ) {
-						$attachment_id = (int) $attachment['ID'];
-					}
+					$is_lcp = $this->attachment_src_is_lcp( $attachment_id, $size, $normalized_lcp, $exact_lcp, $size_is_full );
 				} catch ( \Throwable $e ) {
 					return $this->fail_open_attr( $e, $attr );
 				}
+			}
 
-				if ( $attachment_id > 0 ) {
-					$is_lcp = $this->attachment_src_is_lcp( $attachment_id, $size, $normalized_lcp, $exact_lcp, $size_is_full );
-				}
+			if ( ! $is_lcp ) {
+				$is_lcp = $this->attr_references_lcp( $attr, $normalized_lcp, $exact_lcp, $size_is_full, $attachment_id );
 			}
 
 			if ( ! $is_lcp ) {
@@ -3563,7 +3569,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @return mixed The attributes unmodified.
 		 */
 		private function fail_open_attr( \Throwable $e, $attr ): mixed {
-			do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed.', array( 'exception' => $e ) );
+			try {
+				do_action( 'wppo_debug_log', 'WPPO LCP fetchpriority stamping failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+			} catch ( \Throwable $ignore ) {
+				unset( $ignore );
+			}
 			return $attr;
 		}
 
@@ -3607,19 +3617,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param array  $attr           The image attributes.
 		 * @param string $normalized_lcp The normalized LCP URL.
 		 * @param string $exact_lcp      The exact normalized LCP URL.
-		 * @param string $lcp_path       The exact LCP URL path.
 		 * @param bool   $size_is_full   Whether the requested size is 'full'.
+		 * @param int    $attachment_id  Optional attachment ID.
 		 * @return bool True if the attributes reference the LCP URL.
 		 */
-		private function attr_references_lcp( array $attr, string $normalized_lcp, string $exact_lcp, string $lcp_path, bool $size_is_full ): bool {
+		private function attr_references_lcp( array $attr, string $normalized_lcp, string $exact_lcp, bool $size_is_full, int $attachment_id = 0 ): bool {
 			foreach ( array( 'src', 'data-src' ) as $key ) {
 				if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
 					return true;
 				}
 			}
 
-			if ( isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
-				return $this->has_exact_lcp_srcset_entry( $attr['srcset'], $exact_lcp, $lcp_path );
+			if ( 0 === $attachment_id && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
+				return $this->has_exact_lcp_srcset_entry( $attr['srcset'], $exact_lcp );
 			}
 
 			return false;
@@ -3637,10 +3647,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * @param string $srcset    The raw srcset string.
 		 * @param string $exact_lcp The exact normalized LCP URL, size suffix preserved
 		 *                          (see normalize_image_url( $url, false )).
-		 * @param string $lcp_path  The path portion of the exact LCP URL.
 		 * @return bool True if a match is found.
 		 */
-		private function has_exact_lcp_srcset_entry( string $srcset, string $exact_lcp, string $lcp_path ): bool {
+		private function has_exact_lcp_srcset_entry( string $srcset, string $exact_lcp ): bool {
+			$slash    = strpos( $exact_lcp, '/' );
+			$lcp_path = false === $slash ? $exact_lcp : substr( $exact_lcp, $slash );
 			if ( '' === $lcp_path ) {
 				return false;
 			}
@@ -3648,18 +3659,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				return false; // Cheap reject: no split, no per-candidate normalize.
 			}
 
-			try {
-				foreach ( $this->owner->lcp_split_srcset_candidates( $srcset ) as $part ) {
-					$url = $this->owner->lcp_split_srcset_item( $part )[0];
-					if ( '' === $url ) {
-						continue;
-					}
-					if ( $this->normalize_image_url( $url, false ) === $exact_lcp ) {
+			$candidates = preg_split( '/\s*,\s*/', trim( $srcset ) );
+			if ( ! is_array( $candidates ) ) {
+				return false;
+			}
+			foreach ( $candidates as $candidate ) {
+				$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
+				$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
+				if ( '' === $candidate_url ) {
+					continue;
+				}
+				try {
+					if ( $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
 						return true;
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
 			}
 			return false;
 		}
