@@ -14,6 +14,7 @@ import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import { useHeaderActions } from '../lib/HeaderActionsContext';
 import SwitchField from './common/SwitchField';
 import SettingField from './common/SettingField';
 import SettingRow from './common/SettingRow';
@@ -324,6 +325,19 @@ const PreloadSettings = ( { options = {} } ) => {
 		}
 	};
 
+	// The page head owns the one Save the reference shows, level with the H1.
+	// Mounted without the provider - a unit test - `inPageHead` is false and the
+	// button renders in the card instead, so the control never disappears.
+	const saveButton = (
+		<LoadingSubmitButton
+			className="wppo-button wppo-button--primary"
+			isLoading={ isLoading }
+			onClick={ handleSubmit }
+			label={ __( 'Save Settings', 'performance-optimisation' ) }
+		/>
+	);
+	const inPageHead = useHeaderActions( saveButton, [ isLoading ] );
+
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
@@ -332,17 +346,7 @@ const PreloadSettings = ( { options = {} } ) => {
 					'Improve perceived performance by pre-connecting to domains and preloading critical assets.',
 					'performance-optimisation'
 				) }
-				actions={
-					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary"
-						isLoading={ isLoading }
-						onClick={ handleSubmit }
-						label={ __(
-							'Save Settings',
-							'performance-optimisation'
-						) }
-					/>
-				}
+				actions={ inPageHead ? undefined : saveButton }
 			>
 				{ notice && (
 					<NoticeBanner
