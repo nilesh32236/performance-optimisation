@@ -57,31 +57,31 @@
 /* The left rule carries the tone; the icon repeats it, so neither is the only
    signal — which also keeps it readable without relying on colour alone. */
 .wppo-message-region__item--success {
-	border-left-color: var(--wppo-success, #059669);
+	border-left-color: var(--wppo-success-strong, #0f7b4f);
 }
 .wppo-message-region__item--success .wppo-message-region__icon {
-	background: var(--wppo-success, #059669);
+	background: var(--wppo-success-strong, #0f7b4f);
 }
 
 .wppo-message-region__item--error {
-	border-left-color: var(--wppo-error, #dc2626);
+	border-left-color: var(--wppo-error-strong, #b3261e);
 }
 .wppo-message-region__item--error .wppo-message-region__icon {
-	background: var(--wppo-error, #dc2626);
+	background: var(--wppo-error-strong, #b3261e);
 }
 
 .wppo-message-region__item--warning {
-	border-left-color: var(--wppo-warning, #d97706);
+	border-left-color: var(--wppo-warning-strong, #8a5a00);
 }
 .wppo-message-region__item--warning .wppo-message-region__icon {
-	background: var(--wppo-warning, #d97706);
+	background: var(--wppo-warning-strong, #8a5a00);
 }
 
 .wppo-message-region__item--info {
-	border-left-color: var(--wppo-info, #0284c7);
+	border-left-color: var(--wppo-info-strong, #0b6e75);
 }
 .wppo-message-region__item--info .wppo-message-region__icon {
-	background: var(--wppo-info, #0284c7);
+	background: var(--wppo-info-strong, #0b6e75);
 }
 
 @media (max-width: 600px) {
