@@ -308,18 +308,20 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 	 * Parses a Redis node string into host and port components.
 	 *
 	 * Handles standard "host:port" formats as well as IPv6 enclosed in brackets.
-	 * Falls back to the Sentinel default port (26379) when no port is provided.
+	 * A node with no port at all falls back to the Sentinel default (26379);
+	 * a node with an empty or non-numeric port segment ('host:') yields
+	 * port 0, which callers reject.
 	 *
-	 * @param string $node The node string to parse.
+	 * @param mixed $node         Node string to parse; non-string values are cast to string.
+	 * @param int   $default_port Default port to return if the node provides none.
 	 * @since 2.0.0
 	 * @return array Associative array containing 'host' and 'port'.
 	 */
-	function wppo_parse_redis_node( $node ) {
+	function wppo_parse_redis_node( $node, $default_port = 26379 ) {
 		// Null-safe: internal string functions deprecate null arguments on
 		// PHP 8.1+, so normalize any non-string input up front (fail-open to
 		// the invalid-node path handled by callers).
-		$node                  = is_string( $node ) ? $node : (string) $node;
-		$default_sentinel_port = 26379;
+		$node = is_scalar( $node ) ? (string) $node : '';
 
 		if ( 0 === strpos( $node, '[' ) ) {
 			$port_start = strpos( $node, ']:' );
@@ -333,14 +335,14 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 
 			return array(
 				'host' => trim( $node, '[]' ),
-				'port' => $default_sentinel_port,
+				'port' => $default_port,
 			);
 		}
 
 		if ( substr_count( $node, ':' ) > 1 ) {
 			return array(
 				'host' => $node,
-				'port' => $default_sentinel_port,
+				'port' => $default_port,
 			);
 		}
 
@@ -355,7 +357,7 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 
 		return array(
 			'host' => $node,
-			'port' => $default_sentinel_port,
+			'port' => $default_port,
 		);
 	}
 }
