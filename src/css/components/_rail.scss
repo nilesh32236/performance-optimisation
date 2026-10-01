@@ -1,0 +1,90 @@
+/**
+ * Threshold rail.
+ *
+ * The scale is 4px tall and has to be legible at a glance, so the zones carry
+ * colour at low opacity and the marker is the only full-strength element. The
+ * marker deliberately overflows the track by 3px top and bottom: a 2px tick
+ * inside a 4px track is invisible, and the whole point of the rail is that the
+ * eye lands on the current value.
+ *
+ * An unmeasured metric gets a dashed empty track and no colour at all — "not
+ * measured" is idle, not failing, and must never read as red.
+ *
+ * @since x-release-please-version
+ */
+
+@use '../abstracts/mixins' as *;
+
+.wppo-rail {
+	display: inline-flex;
+	align-items: center;
+	min-width: var(--wppo-rail-min);
+	flex: 0 0 auto;
+}
+
+.wppo-rail__graphic {
+	display: block;
+	width: 100%;
+	/* Decorative: the meaning is carried by the visually hidden sentence, so
+	   nothing in the graphic should be reachable or announced on its own. */
+	pointer-events: none;
+}
+
+.wppo-rail__track {
+	position: relative;
+	display: flex;
+	width: 100%;
+	height: var(--wppo-rail-height);
+	background: var(--wppo-rail-track);
+	border-radius: 999px;
+}
+
+.wppo-rail__zone {
+	height: 100%;
+	opacity: 0.38;
+
+	&:first-child {
+		border-top-left-radius: 999px;
+		border-bottom-left-radius: 999px;
+	}
+
+	&:last-child {
+		border-top-right-radius: 999px;
+		border-bottom-right-radius: 999px;
+	}
+
+	&--good {
+		background: var(--wppo-rail-good);
+	}
+
+	&--warn {
+		background: var(--wppo-rail-watch);
+	}
+
+	&--bad {
+		background: var(--wppo-rail-poor);
+	}
+}
+
+.wppo-rail__marker {
+	position: absolute;
+	top: -3px;
+	bottom: -3px;
+	width: 2px;
+	margin-left: -1px;
+	background: var(--wppo-rail-marker);
+	border-radius: 1px;
+}
+
+/* Unmeasured: an empty dashed track. No zones, no marker, no signal colour. */
+.wppo-rail--idle .wppo-rail__track {
+	background: transparent;
+	border: 1px dashed var(--wppo-signal-idle-line);
+	box-sizing: border-box;
+}
+
+@include respond-to('sm') {
+	.wppo-rail {
+		min-width: 72px;
+	}
+}

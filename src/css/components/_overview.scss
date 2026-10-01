@@ -65,6 +65,17 @@
 	min-width: 0;
 }
 
+/* The rail sits between the metric name and its verdict sentence, which is the
+   reading order that makes sense: name, position on the scale, then the words.
+   It is given the full column width because a scale is only useful if it is
+   long enough to show the gap between the marker and the boundary. */
+.wppo-overview__status-rail {
+	margin-top: 7px;
+	margin-bottom: 3px;
+	width: 100%;
+	max-width: 220px;
+}
+
 .wppo-overview__status-name {
 	font-weight: 600;
 	color: var(--wppo-text-main, #0f172a);

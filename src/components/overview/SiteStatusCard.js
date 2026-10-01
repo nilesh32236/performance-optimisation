@@ -10,6 +10,7 @@
 
 import { __ } from '@wordpress/i18n';
 
+import ThresholdRail from '../common/ThresholdRail';
 import { renderDetail, renderLabel } from './detailCopy';
 
 import { ALL_STATUSES, needsAttention } from '../../lib/overviewStatus';
@@ -216,6 +217,24 @@ export default function SiteStatusCard( {
 										<strong className="wppo-overview__status-name">
 											{ renderLabel( row ) }
 										</strong>
+									) : null }
+									{ /* Only measurements get a rail. A cache being on or
+									     a version pair being readable is a state, not a
+									     position on a scale, and drawing a scale for it
+									     would be decoration. */ }
+									{ row.good !== undefined &&
+									row.poor !== undefined ? (
+										<ThresholdRail
+											className="wppo-overview__status-rail"
+											value={ row.raw }
+											thresholds={ {
+												good: row.good,
+												poor: row.poor,
+											} }
+											display={
+												row.detailArgs?.value
+											}
+										/>
 									) : null }
 									<span className="wppo-overview__status-detail">
 										{ renderDetail( row ) }

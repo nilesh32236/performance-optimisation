@@ -1,0 +1,190 @@
+/**
+ * App shell — the three-zone instrument layout.
+ *
+ *   ┌──────────┬─────────────────────────────┬──────────────┐
+ *   │ nav      │ work area                   │ inspector    │
+ *   │ 236px    │ fluid, content capped 880px │ 344px        │
+ *   └──────────┴─────────────────────────────┴──────────────┘
+ *
+ * The nav is **light**. The plugin renders inside wp-admin's own chrome, and a
+ * dark slab next to it fights the host rather than sitting in it. Depth comes
+ * from a single hairline between the zones, not from shadow.
+ *
+ * This file is an override layer on top of `layout/_sidebar.scss`, which is
+ * `@use`d earlier so these rules win at equal specificity. The sidebar's mobile
+ * drawer behaviour (`.wppo-sidebar--mobile-open`) is deliberately left to the
+ * original file — only colour and geometry change here.
+ *
+ * Below `xl` (1200px) the inspector stops being a column: it becomes a sheet
+ * anchored to the bottom, opened from the same explain affordances. Below `lg`
+ * (992px) the nav becomes the drawer it already is.
+ *
+ * @since x-release-please-version
+ */
+
+@use '../abstracts/mixins' as *;
+
+/* ------------------------------------------------------------------ *
+ * Container — flex row becomes a three-column grid.
+ * ------------------------------------------------------------------ */
+
+.wppo-container {
+	display: grid;
+	grid-template-columns: var(--wppo-nav-width) minmax(0, 1fr) var(--wppo-inspector-width);
+	align-items: stretch;
+	min-height: calc(100dvh - var(--wp-admin--admin-bar--height, 0px));
+	background: var(--wppo-canvas);
+	font-family: var(--wppo-font-body);
+	color: var(--wppo-ink);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+
+	/* The inspector is a column only where there is room for three. */
+	@include respond-to('xl') {
+		grid-template-columns: var(--wppo-nav-width) minmax(0, 1fr);
+	}
+
+	@include respond-to('lg') {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * Nav — light, quiet, hairline-separated.
+ * ------------------------------------------------------------------ */
+
+.wppo-container .wppo-sidebar {
+	width: auto;
+	background: var(--wppo-surface);
+	color: var(--wppo-ink-muted);
+	border-inline-end: 1px solid var(--wppo-hairline);
+	align-self: stretch;
+	position: sticky;
+	top: 0;
+	max-height: calc(100dvh - var(--wp-admin--admin-bar--height, 0px));
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.wppo-container .wppo-sidebar-header {
+	padding: 18px 16px 14px;
+	border-bottom: 1px solid var(--wppo-hairline);
+
+	.wppo-sidebar-logo {
+		width: 30px;
+		height: 30px;
+		border-radius: var(--wppo-radius-tool-sm);
+		background: var(--wppo-focus);
+		box-shadow: none;
+		color: #fff;
+	}
+
+	h3 {
+		font-family: var(--wppo-font-display);
+		font-size: 14px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		line-height: 1.25;
+		color: var(--wppo-ink);
+
+		span {
+			display: block;
+			color: var(--wppo-ink-faint);
+			font-weight: 400;
+		}
+	}
+}
+
+.wppo-container .wppo-sidebar nav {
+	padding: 10px 8px;
+	flex-grow: 1;
+
+	ul {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	li {
+		margin: 0;
+	}
+
+	button {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 10px;
+		border: 0;
+		border-radius: var(--wppo-radius-tool-sm);
+		background: transparent;
+		color: var(--wppo-ink-muted);
+		font-family: var(--wppo-font-body);
+		font-size: 13px;
+		font-weight: 500;
+		text-align: start;
+		cursor: pointer;
+		transition: background-color 0.15s ease, color 0.15s ease;
+
+		&:hover {
+			background: var(--wppo-surface-quiet);
+			color: var(--wppo-ink);
+		}
+
+		/* The active item is marked by weight and colour, plus a left rule —
+		   three signals, because this is the only navigation on the screen. */
+		&.wppo-is-active {
+			background: var(--wppo-focus-soft);
+			color: var(--wppo-focus);
+			font-weight: 600;
+			box-shadow: inset 2px 0 0 var(--wppo-focus);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-focus);
+			outline-offset: -2px;
+		}
+	}
+
+	.wppo-sidebar-icon {
+		width: 14px;
+		font-size: 13px;
+		flex-shrink: 0;
+	}
+}
+
+.wppo-container .wppo-sidebar-footer {
+	padding: 12px 16px 16px;
+	border-top: 1px solid var(--wppo-hairline);
+	color: var(--wppo-ink-faint);
+	font-family: var(--wppo-font-mono);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ *
+ * Work area — left-aligned, capped, never centred. A long settings list
+ * has to scan as one column.
+ * ------------------------------------------------------------------ */
+
+.wppo-container .wppo-content {
+	min-width: 0;
+	max-width: 100%;
+	padding: 28px 32px 96px;
+
+	@include respond-to('md') {
+		padding: 20px 16px 72px;
+	}
+}
+
+.wppo-container .wppo-main {
+	width: 100%;
+	max-width: var(--wppo-work-max);
+	margin: 0;
+}

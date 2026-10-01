@@ -1,0 +1,54 @@
+/**
+ * Self-hosted webfonts.
+ *
+ * This plugin exists to make pages faster, so shipping webfonts has to be
+ * earned rather than assumed. Four decisions keep the cost honest:
+ *
+ *   1. **Self-hosted, not a Google Fonts request.** No third-party DNS,
+ *      no third-party connection, no visitor data leaving the site.
+ *   2. **Latin subset only.** Google also serves cyrillic, cyrillic-ext,
+ *      greek, latin-ext and vietnamese for these families; together they
+ *      were the majority of the bytes and none of them are used here.
+ *   3. **Three variable files, not one per weight.** These families ship
+ *      as variable fonts, so a single file covers the whole weight axis.
+ *      Declaring `font-weight` as a range is what makes the browser pick
+ *      the real axis instead of synthesising a bold.
+ *   4. **`font-display: swap`**, so text is readable immediately and the
+ *      face never blocks a paint.
+ *
+ * Total 88 KB for all three. If these files are ever removed, the fallback
+ * stacks in `_variables.scss` keep the layout identical.
+ *
+ * @since x-release-please-version
+ */
+
+
+@font-face {
+	font-family: 'IBM Plex Sans';
+	font-style: normal;
+	font-weight: 100 700;
+	font-display: swap;
+	src: url('../../assets/fonts/ibm-plex-sans.woff2') format('woff2-variations'),
+		url('../../assets/fonts/ibm-plex-sans.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	font-style: normal;
+	font-weight: 100 800;
+	font-display: swap;
+	src: url('../../assets/fonts/jetbrains-mono.woff2') format('woff2-variations'),
+		url('../../assets/fonts/jetbrains-mono.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+	font-family: 'Space Grotesk';
+	font-style: normal;
+	font-weight: 300 700;
+	font-display: swap;
+	src: url('../../assets/fonts/space-grotesk.woff2') format('woff2-variations'),
+		url('../../assets/fonts/space-grotesk.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

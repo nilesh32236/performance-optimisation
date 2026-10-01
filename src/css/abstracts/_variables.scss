@@ -76,6 +76,90 @@
 	--wppo-header-gradient-mid: #eef2ff;
 	--wppo-header-gradient-end: #f0f9ff;
 
+	/* ------------------------------------------------------------------ *
+	 * Instrument layer — the design language for the redesigned admin.
+	 *
+	 * Two ideas carry it:
+	 *   1. The threshold rail — a metric is a position on a scale with real
+	 *      published boundaries, not a pass/fail. See components/_rail.scss.
+	 *   2. The inspector — a persistent panel that explains whatever control
+	 *      is focused. See components/_inspector.scss.
+	 *
+	 * Restraint is the aesthetic: hairlines instead of shadows, colour spent
+	 * only on signal, and every number set in tabular monospace so a column of
+	 * measurements can be compared without reading each one.
+	 *
+	 * The legacy tokens above are retained while screens migrate one at a
+	 * time; they are removed once nothing consumes them.
+	 * ------------------------------------------------------------------ */
+
+	/* Type roles. Three families, one job each. The stacks carry full
+	   fallbacks so a font failure never changes layout. */
+	--wppo-font-display: 'Space Grotesk', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--wppo-font-body: 'IBM Plex Sans', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--wppo-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+	/* Surfaces */
+	--wppo-canvas: #f4f6f9;
+	--wppo-canvas-sunken: #edf1f6;
+	--wppo-surface: #ffffff;
+	--wppo-surface-quiet: #f8fafc;
+
+	/* Ink */
+	--wppo-ink: #0c1420;
+	--wppo-ink-muted: #4a5a6e;
+	--wppo-ink-faint: #7c8ca0;
+
+	/* Structure. Depth comes from these, not from shadow. */
+	--wppo-hairline: #dde3ea;
+	--wppo-hairline-strong: #c3cdd9;
+
+	/* Accent — actions and focus only. Never decoration, never a heading,
+	   never a background wash. */
+	--wppo-focus: #1b5fd9;
+	--wppo-focus-hover: #1549ac;
+	--wppo-focus-soft: #e8f0fe;
+
+	/* Signal scale. `idle` is a first-class state, not an error: an
+	   unconfigured feature and an unmeasured metric are both idle, because
+	   neither is a fault. It must stay visually quiet, and an unmeasured
+	   metric must never render in the poor colour. */
+	--wppo-signal-good: #0b8a5c;
+	--wppo-signal-good-soft: #e6f6ef;
+	--wppo-signal-good-line: #a7dcc4;
+	--wppo-signal-watch: #b26a00;
+	--wppo-signal-watch-soft: #fff4e0;
+	--wppo-signal-watch-line: #ecd2a2;
+	--wppo-signal-poor: #c02626;
+	--wppo-signal-poor-soft: #fdecec;
+	--wppo-signal-poor-line: #f0b8b8;
+	--wppo-signal-idle: #6b7a8d;
+	--wppo-signal-idle-soft: #eef1f5;
+	--wppo-signal-idle-line: #d5dbe2;
+
+	/* Threshold rail. The rail is the one place the palette is allowed to be
+	   brighter, because a scale must be readable at a glance and at 4px. */
+	--wppo-rail-height: 4px;
+	--wppo-rail-track: #e4e9ef;
+	--wppo-rail-good: #0b8a5c;
+	--wppo-rail-watch: #e0a32e;
+	--wppo-rail-poor: #c02626;
+	--wppo-rail-marker: #0c1420;
+	--wppo-rail-min: 96px;
+
+	/* Shell geometry. Light nav: the plugin renders inside wp-admin chrome
+	   and a dark slab fights it. */
+	--wppo-nav-width: 236px;
+	--wppo-inspector-width: 344px;
+	--wppo-work-max: 880px;
+	--wppo-row-pad-y: 12px;
+	--wppo-card-pad: 20px;
+	--wppo-section-gap: 28px;
+
+	/* A tool, not a card deck. */
+	--wppo-radius-tool: 8px;
+	--wppo-radius-tool-sm: 5px;
+
 	/* Effects */
 	--wppo-radius: 16px;
 	--wppo-radius-sm: 10px;

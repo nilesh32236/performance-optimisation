@@ -1,0 +1,419 @@
+/**
+ * Instrument primitives — eyebrow, signal chip, setting row, inspector.
+ *
+ * These four belong together: the eyebrow labels every block in the panel, the
+ * chip carries state in both the panel and the work area, the row is what
+ * loads a subject, and the panel is where it lands.
+ *
+ * Depth is hairlines and spacing. There is exactly one shadow in this file and
+ * it is on the collapsed sheet below `xl`, where the panel genuinely floats
+ * over the content.
+ *
+ * @since x-release-please-version
+ */
+
+@use '../abstracts/mixins' as *;
+
+/* ------------------------------------------------------------------ *
+ * Eyebrow — uppercase micro-label above a group.
+ * ------------------------------------------------------------------ */
+
+.wppo-eyebrow {
+	display: block;
+	margin: 0;
+	font-family: var(--wppo-font-body);
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.4;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--wppo-ink-faint);
+}
+
+/* ------------------------------------------------------------------ *
+ * Signal chip
+ * ------------------------------------------------------------------ */
+
+.wppo-signal-chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	font-family: var(--wppo-font-body);
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.5;
+	letter-spacing: 0.01em;
+	white-space: nowrap;
+
+	&--sm {
+		font-size: 10.5px;
+		padding: 1px 7px;
+	}
+
+	&--good {
+		background: var(--wppo-signal-good-soft);
+		border-color: var(--wppo-signal-good-line);
+		color: var(--wppo-signal-good);
+	}
+
+	&--warn {
+		background: var(--wppo-signal-watch-soft);
+		border-color: var(--wppo-signal-watch-line);
+		color: var(--wppo-signal-watch);
+	}
+
+	&--bad {
+		background: var(--wppo-signal-poor-soft);
+		border-color: var(--wppo-signal-poor-line);
+		color: var(--wppo-signal-poor);
+	}
+
+	/* Idle stays quiet on purpose: "not set up" is not a fault. */
+	&--idle {
+		background: var(--wppo-signal-idle-soft);
+		border-color: var(--wppo-signal-idle-line);
+		color: var(--wppo-signal-idle);
+	}
+}
+
+/* Tone helpers for monospace readouts inside the panel. */
+.wppo-tone-good { color: var(--wppo-signal-good); }
+.wppo-tone-warn { color: var(--wppo-signal-watch); }
+.wppo-tone-bad { color: var(--wppo-signal-poor); }
+.wppo-tone-idle { color: var(--wppo-signal-idle); }
+
+/* ------------------------------------------------------------------ *
+ * Setting row — wraps an existing field component.
+ * ------------------------------------------------------------------ */
+
+.wppo-setting-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 8px;
+	padding: var(--wppo-row-pad-y) 12px;
+	margin: 0 -12px;
+	border-radius: var(--wppo-radius-tool-sm);
+	transition: background-color 0.15s ease, box-shadow 0.15s ease;
+
+	&__field {
+		min-width: 0;
+	}
+
+	/* The selected row is marked three ways — tint, rule, and a brighter
+	   affordance — because it is the visible link between the two zones. */
+	&--active {
+		background: var(--wppo-focus-soft);
+		box-shadow: inset 2px 0 0 var(--wppo-focus);
+
+		.wppo-setting-row__explain {
+			border-color: var(--wppo-focus);
+			color: var(--wppo-focus);
+			opacity: 1;
+		}
+	}
+
+	&__explain {
+		flex-shrink: 0;
+		width: 22px;
+		height: 22px;
+		margin-top: 2px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--wppo-hairline);
+		border-radius: 999px;
+		background: var(--wppo-surface);
+		color: var(--wppo-ink-faint);
+		font-family: var(--wppo-font-mono);
+		font-size: 11px;
+		font-weight: 600;
+		line-height: 1;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+		&:hover {
+			border-color: var(--wppo-focus);
+			color: var(--wppo-focus);
+		}
+
+		&:focus-visible {
+			opacity: 1;
+			outline: 2px solid var(--wppo-focus);
+			outline-offset: 1px;
+		}
+	}
+
+	/* Pointer users get the affordance on hover; keyboard users always get it,
+	   because `:focus-within` is not a hover. */
+	&:hover .wppo-setting-row__explain,
+	&:focus-within .wppo-setting-row__explain {
+		opacity: 1;
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * Inspector
+ * ------------------------------------------------------------------ */
+
+.wppo-inspector {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	background: var(--wppo-surface);
+	border-inline-start: 1px solid var(--wppo-hairline);
+	align-self: stretch;
+	position: sticky;
+	top: 0;
+	max-height: calc(100dvh - var(--wp-admin--admin-bar--height, 0px));
+
+	&__bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 14px 16px;
+		border-bottom: 1px solid var(--wppo-hairline);
+		flex-shrink: 0;
+	}
+
+	&__toggle {
+		border: 0;
+		background: transparent;
+		padding: 2px 4px;
+		border-radius: var(--wppo-radius-tool-sm);
+		color: var(--wppo-ink-muted);
+		font-family: var(--wppo-font-body);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		cursor: pointer;
+
+		&:hover {
+			color: var(--wppo-focus);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-focus);
+			outline-offset: 1px;
+		}
+	}
+
+	&__body {
+		overflow-y: auto;
+		padding: 0 16px 24px;
+		min-height: 0;
+	}
+
+	&__subject {
+		padding: 16px 0 14px;
+		border-bottom: 1px solid var(--wppo-hairline);
+	}
+
+	&__subject-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 10px;
+
+		h2 {
+			margin: 0;
+			font-family: var(--wppo-font-display);
+			font-size: 16px;
+			font-weight: 600;
+			line-height: 1.3;
+			letter-spacing: -0.01em;
+			color: var(--wppo-ink);
+		}
+	}
+
+	&__kicker {
+		margin: 6px 0 0;
+		font-family: var(--wppo-font-mono);
+		font-size: 11px;
+		color: var(--wppo-ink-faint);
+	}
+
+	&__block {
+		padding: 16px 0 0;
+
+		p {
+			margin: 8px 0 0;
+			font-size: 13px;
+			line-height: 1.6;
+			color: var(--wppo-ink-muted);
+		}
+
+		/* A consequence block that carries real risk gets a rule and a tint,
+		   so it reads as a warning before the words are read. */
+		&--warn,
+		&--bad {
+			margin-top: 16px;
+			padding: 14px 14px 16px;
+			border-radius: var(--wppo-radius-tool);
+			border-inline-start: 3px solid currentcolor;
+
+			.wppo-eyebrow {
+				color: inherit;
+			}
+
+			p {
+				color: inherit;
+			}
+		}
+
+		&--warn {
+			background: var(--wppo-signal-watch-soft);
+			color: var(--wppo-signal-watch);
+		}
+
+		&--bad {
+			background: var(--wppo-signal-poor-soft);
+			color: var(--wppo-signal-poor);
+		}
+	}
+
+	&__now {
+		margin: 10px 0 0;
+
+		&-row {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 12px;
+			padding: 6px 0;
+
+			& + & {
+				border-top: 1px solid var(--wppo-hairline);
+			}
+		}
+
+		dt {
+			font-size: 12.5px;
+			color: var(--wppo-ink-muted);
+			min-width: 0;
+		}
+
+		&-value {
+			margin: 0;
+			font-family: var(--wppo-font-mono);
+			font-size: 12.5px;
+			font-weight: 500;
+			font-variant-numeric: tabular-nums;
+			color: var(--wppo-ink);
+			text-align: end;
+			overflow-wrap: anywhere;
+		}
+	}
+
+	&__related {
+		margin: 10px 0 0;
+		padding: 0;
+		list-style: none;
+
+		li + li {
+			border-top: 1px solid var(--wppo-hairline);
+		}
+
+		button {
+			width: 100%;
+			padding: 8px 0;
+			border: 0;
+			background: transparent;
+			color: var(--wppo-focus);
+			font-family: var(--wppo-font-body);
+			font-size: 12.5px;
+			font-weight: 500;
+			text-align: start;
+			cursor: pointer;
+
+			&:hover {
+				text-decoration: underline;
+			}
+
+			&:focus-visible {
+				outline: 2px solid var(--wppo-focus);
+				outline-offset: 1px;
+			}
+		}
+	}
+
+	&__clear {
+		margin-top: 20px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--wppo-ink-faint);
+		font-family: var(--wppo-font-body);
+		font-size: 11.5px;
+		cursor: pointer;
+
+		&:hover {
+			color: var(--wppo-ink-muted);
+			text-decoration: underline;
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-focus);
+			outline-offset: 1px;
+		}
+	}
+
+	&__empty {
+		p {
+			margin: 20px 0 0;
+			font-size: 13px;
+			line-height: 1.6;
+			color: var(--wppo-ink-faint);
+		}
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * Below xl the panel stops being a column and becomes a sheet anchored to
+ * the bottom — the same affordances open it, so nothing is lost, but the
+ * work area keeps its width on a laptop.
+ * ------------------------------------------------------------------ */
+
+@include respond-to('xl') {
+	.wppo-inspector {
+		position: fixed;
+		inset-inline: 0;
+		bottom: 0;
+		top: auto;
+		z-index: 100;
+		max-height: 60dvh;
+		border-inline-start: 0;
+		border-top: 1px solid var(--wppo-hairline);
+		box-shadow: 0 -8px 28px -12px rgb(0 0 0 / 0.18);
+		transition: transform 0.2s ease;
+
+		&--collapsed {
+			transform: translateY(calc(100% - 45px));
+		}
+	}
+
+	/* Keep the last row reachable under the sheet. */
+	.wppo-container .wppo-content {
+		padding-bottom: 120px;
+	}
+}
+
+@include respond-to('md') {
+	.wppo-inspector {
+		max-height: 70dvh;
+	}
+}
+
+/* Motion is a nicety here, never load-bearing. */
+@media (prefers-reduced-motion: reduce) {
+	.wppo-inspector,
+	.wppo-setting-row,
+	.wppo-setting-row__explain {
+		transition: none;
+	}
+}

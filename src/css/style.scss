@@ -4,11 +4,13 @@
 
 @use 'abstracts/variables';
 @use 'abstracts/mixins';
+@use 'abstracts/fonts';
 
 @use 'base/base';
 
 @use 'layout/container';
 @use 'layout/sidebar';
+@use 'layout/shell';
 
 @use 'components/card';
 @use 'components/header';
@@ -22,6 +24,9 @@
 @use 'components/fields';
 @use 'components/dialog';
 @use 'components/tooltip';
+
+@use 'components/rail';
+@use 'components/inspector';
 
 @use 'components/performance-audit';
 @use 'components/video-placeholder';

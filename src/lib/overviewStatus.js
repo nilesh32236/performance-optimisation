@@ -498,6 +498,19 @@ const deriveOneDevice = ( vitals, device ) => {
 	return measures
 		.filter( ( measure ) => measure.key in vitals )
 		.map( ( measure ) => {
+			// The row carries its own thresholds and raw value so the rail can
+			// plot the *same* number the verdict was computed from. Deriving
+			// them again at the render site is how a chart and a verdict end up
+			// disagreeing at the boundary.
+			const base = {
+				id: device ? `${ measure.id }--${ device }` : measure.id,
+				labelKey: measure.labelKey,
+				good: measure.good,
+				poor: measure.poor,
+				// Replaced with the rounded reading on the measured paths below.
+				raw: null,
+			};
+
 			// `Number( null )`, `Number( '' )`, `Number( [] )` and
 			// `Number( false )` are all 0, and 0 <= 2500, so an unreported vital
 			// scored a *perfect* result. The review reproduced three green
@@ -523,8 +536,7 @@ const deriveOneDevice = ( vitals, device ) => {
 				86400000 <= raw
 			) {
 				return {
-					id: device ? `${ measure.id }--${ device }` : measure.id,
-					labelKey: measure.labelKey,
+					...base,
 					status: STATUS.UNKNOWN,
 					detailKey: DETAIL.vital_unmeasured,
 					detailArgs: {
@@ -551,10 +563,11 @@ const deriveOneDevice = ( vitals, device ) => {
 				measure.key === 'cls'
 					? rounded.toFixed( 3 )
 					: `${ rounded } ms`;
+			// Every measured path shares one raw reading.
+			base.raw = rounded;
 			if ( rounded <= measure.good ) {
 				return {
-					id: device ? `${ measure.id }--${ device }` : measure.id,
-					labelKey: measure.labelKey,
+					...base,
 					status: STATUS.HEALTHY,
 					detailKey: DETAIL.vital_good,
 					detailArgs: { labelKey: measure.labelKey, value, device },
@@ -562,8 +575,7 @@ const deriveOneDevice = ( vitals, device ) => {
 			}
 			if ( rounded <= measure.poor ) {
 				return {
-					id: device ? `${ measure.id }--${ device }` : measure.id,
-					labelKey: measure.labelKey,
+					...base,
 					status: STATUS.ATTENTION,
 					detailKey: DETAIL.vital_attention,
 					detailArgs: {
@@ -575,8 +587,7 @@ const deriveOneDevice = ( vitals, device ) => {
 				};
 			}
 			return {
-				id: device ? `${ measure.id }--${ device }` : measure.id,
-				labelKey: measure.labelKey,
+				...base,
 				status: STATUS.ATTENTION,
 				detailKey: DETAIL.vital_poor,
 				detailArgs: {
