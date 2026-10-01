@@ -40,7 +40,10 @@ import Tooltip from './common/Tooltip';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
-import { useHeaderActions } from '../lib/HeaderActionsContext';
+import {
+	useHeaderActions,
+	useStableHandler,
+} from '../lib/HeaderActionsContext';
 import SwitchField from './common/SwitchField';
 import SettingRow from './common/SettingRow';
 import SettingField from './common/SettingField';
@@ -2977,11 +2980,15 @@ const FileOptimization = ( {
 	// Publishing it here rather than passing it to FeatureHeader's `actions` is
 	// what moves it out of the card and into the head; the handler, the button
 	// and its loading state are unchanged.
+	// Stable indirection: the node is only republished when isSaving flips, so it must
+	// not capture this render's closure.
+	const currentHandleSubmit = useStableHandler( handleSubmit );
+
 	const saveButton = (
 		<LoadingSubmitButton
 			className="wppo-button wppo-button--primary"
 			isLoading={ isSaving }
-			onClick={ handleSubmit }
+			onClick={ currentHandleSubmit }
 			label={ __( 'Save Settings', 'performance-optimisation' ) }
 		/>
 	);

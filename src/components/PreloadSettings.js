@@ -14,7 +14,10 @@ import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
-import { useHeaderActions } from '../lib/HeaderActionsContext';
+import {
+	useHeaderActions,
+	useStableHandler,
+} from '../lib/HeaderActionsContext';
 import SwitchField from './common/SwitchField';
 import SettingField from './common/SettingField';
 import SettingRow from './common/SettingRow';
@@ -328,11 +331,15 @@ const PreloadSettings = ( { options = {} } ) => {
 	// The page head owns the one Save the reference shows, level with the H1.
 	// Mounted without the provider - a unit test - `inPageHead` is false and the
 	// button renders in the card instead, so the control never disappears.
+	// Stable indirection: the node is only republished when isLoading flips, so it must
+	// not capture this render's closure.
+	const currentHandleSubmit = useStableHandler( handleSubmit );
+
 	const saveButton = (
 		<LoadingSubmitButton
 			className="wppo-button wppo-button--primary"
 			isLoading={ isLoading }
-			onClick={ handleSubmit }
+			onClick={ currentHandleSubmit }
 			label={ __( 'Save Settings', 'performance-optimisation' ) }
 		/>
 	);

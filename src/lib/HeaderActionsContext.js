@@ -104,3 +104,27 @@ export const usePublishedHeaderActions = () => {
 	const { actions } = useContext( HeaderActionsContext );
 	return actions;
 };
+
+/**
+ * Wrap a handler so a node captured earlier still calls the CURRENT one.
+ *
+ * `useHeaderActions` republishes only when its `deps` change, and every screen
+ * passes the loading flag as its only dep. The save handlers are NOT memoised —
+ * `handleSubmit` is recreated each render and closes over that render's
+ * `settings` — so a node published when the screen mounted carries a stale
+ * closure. Typing a new value and clicking Save would then submit the settings
+ * as they were when the node was published. No test catches that, because the
+ * button looks and behaves like a working Save.
+ *
+ * The indirection is what makes it safe: the wrapper is stable, so it can be
+ * captured by a node that is never republished, and every call still reaches the
+ * newest handler.
+ *
+ * @param {Function} handler The handler to keep current.
+ * @return {Function} A stable function that invokes the latest `handler`.
+ */
+export const useStableHandler = ( handler ) => {
+	const ref = useRef( handler );
+	ref.current = handler;
+	return useCallback( ( ...args ) => ref.current( ...args ), [] );
+};

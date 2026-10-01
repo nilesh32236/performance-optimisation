@@ -21,7 +21,10 @@ import SettingRow from './common/SettingRow';
 import SwitchField from './common/SwitchField';
 import { subjectFor } from './database-cleanup/subjects';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
-import { useHeaderActions } from '../lib/HeaderActionsContext';
+import {
+	useHeaderActions,
+	useStableHandler,
+} from '../lib/HeaderActionsContext';
 import ConfirmDialog from './common/ConfirmDialog';
 import NoticeBanner from './common/NoticeBanner';
 import Tooltip from './common/Tooltip';
@@ -525,11 +528,15 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	// The page head owns the one Save the reference shows, level with the H1.
 	// Mounted without the provider - a unit test - `inPageHead` is false and the
 	// button renders in the card instead, so the control never disappears.
+	// Stable indirection: the node is only republished when isSaving flips, so it must
+	// not capture this render's closure.
+	const currentOnSubmitSettings = useStableHandler( onSubmitSettings );
+
 	const saveButton = (
 		<LoadingSubmitButton
 			className="wppo-button wppo-button--primary"
 			isLoading={ isSaving }
-			onClick={ onSubmitSettings }
+			onClick={ currentOnSubmitSettings }
 			label={ __( 'Save Settings', 'performance-optimisation' ) }
 		/>
 	);
