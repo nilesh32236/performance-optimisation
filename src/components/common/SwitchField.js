@@ -1,5 +1,7 @@
-import { useId } from '@wordpress/element';
+import { useCallback, useId } from '@wordpress/element';
 import { ToggleControl } from '@wordpress/components';
+import { __ } from '@wordpress/i18n';
+import { useInspector } from '../../lib/InspectorContext';
 
 /**
  * SwitchField — Accessible toggle switch with label and description.
@@ -13,6 +15,13 @@ import { ToggleControl } from '@wordpress/components';
  * @param {Function} props.onChange      Change handler (receives synthetic event).
  * @param {boolean}  [props.showLabel]   Whether to show the label.
  * @param {boolean}  [props.disabled]    Whether the switch is disabled.
+ * @param {Object}   [props.subject]     Inspector subject. See `InspectorPanel`.
+ *
+ *                                       A switch is a setting like any other, so it carries the same inspector
+ *                                       wiring `SettingRow` gives a row — hover, focus, and an explicit click that
+ *                                       pins the explanation open. Precedence is unchanged: hover yields to focus,
+ *                                       focus yields to a pin. Without this the panel stayed empty for every switch
+ *                                       however good its copy was, because no subject was ever offered to it.
  */
 const SwitchField = ( {
 	label,
@@ -22,7 +31,29 @@ const SwitchField = ( {
 	onChange,
 	showLabel = true,
 	disabled = false,
+	subject,
 } ) => {
+	const { show, hide, setOpen } = useInspector();
+
+	const enter = useCallback( () => {
+		if ( subject ) {
+			show( subject, 'hover' );
+		}
+	}, [ show, subject ] );
+	const leave = useCallback( () => hide( 'hover' ), [ hide ] );
+	const focus = useCallback( () => {
+		if ( subject ) {
+			show( subject, 'focus' );
+		}
+	}, [ show, subject ] );
+	const blur = useCallback( () => hide( 'focus' ), [ hide ] );
+	const pin = useCallback( () => {
+		if ( subject ) {
+			show( subject, 'pinned' );
+			setOpen( true );
+		}
+	}, [ show, subject, setOpen ] );
+
 	const handleToggle = ( newValue ) => {
 		// Synthesize an event-like object so existing handleChange() util works unchanged.
 		onChange( {
@@ -37,7 +68,13 @@ const SwitchField = ( {
 	const labelId = useId();
 
 	return (
-		<div className="wppo-switch-field">
+		<div
+			className="wppo-switch-field"
+			onMouseEnter={ enter }
+			onMouseLeave={ leave }
+			onFocusCapture={ focus }
+			onBlurCapture={ blur }
+		>
 			{ ( showLabel || description ) && (
 				<div className="wppo-switch-field__info">
 					{ showLabel && (
@@ -83,6 +120,19 @@ const SwitchField = ( {
 				help={ description }
 				disabled={ disabled }
 			/>
+			{ subject && (
+				<button
+					type="button"
+					className="wppo-switch-field__explain"
+					onClick={ pin }
+					aria-hidden="true"
+					tabIndex={ -1 }
+					title={ __(
+						'Pin this explanation',
+						'performance-optimisation'
+					) }
+				/>
+			) }
 		</div>
 	);
 };
