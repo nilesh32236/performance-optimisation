@@ -35,7 +35,33 @@ const OVERFLOW_PROBE = () => {
 			} );
 		}
 	}
-	return { docW, scrollW, overflowing: scrollW > docW + 1, offenders: offenders.slice( 0, 6 ) };
+	// A SQUASHED element is narrow, not wide, so the overflow probe above cannot
+	// see it. An H1 laid out one character per line is ~10px wide and 200px tall:
+	// no horizontal overflow anywhere, and a completely unusable heading. Any
+	// text-bearing block element under 90px wide and over 40px tall is reported.
+	const squashed = [];
+	for ( const el of document.querySelectorAll(
+		'h1, h2, h3, p, .wppo-section__title, .wppo-section__eyebrow, .wppo-section__purpose'
+	) ) {
+		const r = el.getBoundingClientRect();
+		const txt = ( el.textContent || '' ).trim();
+		if ( txt.length > 3 && r.width < 90 && r.height > 40 ) {
+			squashed.push( {
+				tag: el.tagName.toLowerCase(),
+				cls: ( el.className || '' ).toString().slice( 0, 60 ),
+				w: Math.round( r.width ),
+				h: Math.round( r.height ),
+				text: txt.slice( 0, 40 ),
+			} );
+		}
+	}
+	return {
+		docW,
+		scrollW,
+		overflowing: scrollW > docW + 1,
+		offenders: offenders.slice( 0, 6 ),
+		squashed: squashed.slice( 0, 6 ),
+	};
 };
 
 const CONTROL_PROBE = () => {
@@ -158,8 +184,17 @@ for ( const [ slug, r ] of Object.entries( report.areas ) ) {
 			`  saveInHead=${ r.head.saveInHead }  subtabs=${ r.head.subtabs.length }` +
 			`  inner=${ r.head.innerSubtabs }  controls=${ r.controls.total }` +
 			`  unnamed=${ r.controls.unnamed.length }` +
-			( bad.length ? `  OVERFLOW@${ bad.join( ',' ) }` : '  overflow=none' )
+			( bad.length ? `  OVERFLOW@${ bad.join( ',' ) }` : '  overflow=none' ) +
+			( r.widths[ 390 ].squashed.length ||
+			  Object.values( r.widths ).some( ( v ) => v.squashed.length )
+				? `  SQUASHED=${ Object.values( r.widths ).reduce( ( n, v ) => n + v.squashed.length, 0 ) }`
+				: '  squash=none' )
 	);
+	for ( const [ w, v ] of Object.entries( r.widths ) ) {
+		for ( const q of v.squashed ) {
+			console.log( `      @${ w } SQUASHED <${ q.tag } class="${ q.cls }"> ${ q.w }x${ q.h } "${ q.text }"` );
+		}
+	}
 	if ( bad.length ) {
 		for ( const [ w ] of Object.entries( r.widths ).filter( ( [ , v ] ) => v.overflowing ) ) {
 			for ( const o of r.widths[ w ].offenders ) {

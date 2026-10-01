@@ -46,6 +46,16 @@
 	justify-content: space-between;
 	gap: 20px;
 	min-width: 0;
+
+	/* Below `md` the row stacks. Without this the action kept its place on the
+	   right and squeezed the title column down to a few pixels — the H1 rendered
+	   one character per line while the horizontal-overflow probe still reported
+	   none, because a squeezed element is narrow rather than wide. */
+	@include respond-to('md') {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 12px;
+	}
 }
 
 .wppo-section__head-main {
