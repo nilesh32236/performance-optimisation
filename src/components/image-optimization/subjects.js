@@ -468,6 +468,27 @@ const IMAGE_SUBJECTS = {
 	// setting applies to. Each chip is a raw <label>+<input> pair with no
 	// subject of its own; one explanation per chip would repeat the same prose
 	// four times for four chips.
+	// The CLIENT_SIDE_MIME_OPTIONS chip grid, which sits at :1185. It is upload
+	// FORMATS, not post types - postTypeScope was pasted onto both grids and is
+	// flatly wrong here, claiming archives and feeds where these are JPEG/PNG/
+	// GIF/WebP/AVIF. Two different questions, so two different subjects.
+	mimeTypeScope: subject( 'mimeTypeScope', {
+		kicker: __( 'Images · Formats', 'performance-optimisation' ),
+		title: __(
+			'Which formats to keep converting',
+			'performance-optimisation'
+		),
+		does: __(
+			'Chooses which upload formats this plugin is allowed to convert. Leave a format off and images uploaded as it are served exactly as they arrived, unoptimised.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'A format left out never gets compressed or resized, so it keeps every pixel and every byte of a modern camera original. Turn a format off here and already-uploaded images in that format are not touched either - they need a separate convert pass.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
 	postTypeScope: subject( 'postTypeScope', {
 		kicker: __( 'Images · Scope', 'performance-optimisation' ),
 		title: __(

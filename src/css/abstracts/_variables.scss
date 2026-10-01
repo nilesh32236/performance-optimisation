@@ -165,7 +165,8 @@
 	--wppo-radius-tool-sm: 5px;
 
 	/* Effects */
-	// 8 / 6 / 4, per designs/variant-c/style.css --wppo-radius:8px. The admin
+	// 8 / 6 / 6, per designs/variant-c/style.css --wppo-radius:8px. (This
+	// comment first said 8/6/4; xs was never changed from 6.) The admin
 	// read as "Soft" at 16/10/6; Variant C is a dense utility look whose corner
 	// radius is part of the density, not decoration. Measured: cards rendered
 	// 16px where the reference specifies 8px.

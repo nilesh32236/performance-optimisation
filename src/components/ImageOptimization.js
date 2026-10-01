@@ -1184,7 +1184,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									</legend>
 									<SettingRow
 										subject={ subjectFor(
-											'postTypeScope',
+											'mimeTypeScope',
 											settings
 										) }
 									>

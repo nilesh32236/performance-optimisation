@@ -92,7 +92,12 @@ export default function Toolbar( { onNavigate, actions } ) {
 				setOpen( ( v ) => ! v );
 			}
 			if ( e.key === 'Escape' ) {
+				// Both, not just `open`: showList is `open || query.trim()`, so
+				// clearing only `open` left the list on screen whenever the user
+				// had typed something. Escape has to close what it looks like it
+				// closes.
 				setOpen( false );
+				setQuery( '' );
 			}
 		};
 		document.addEventListener( 'keydown', onKey );

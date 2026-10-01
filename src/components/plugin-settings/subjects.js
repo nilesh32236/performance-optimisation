@@ -86,7 +86,7 @@ const PLUGIN_SETTINGS_SUBJECTS = {
 	rumEnabled: subject( 'rumEnabled', {
 		title: __( 'Collect Real-user Web Vitals', 'performance-optimisation' ),
 		does: __(
-			'Records LCP, CLS, INP, FCP and TTIB from real visitors and charts them here, instead of showing only the lab figures a single PageSpeed run produces.',
+			'Records TTFB, FCP, LCP, INP and CLS from real visitors and charts them here, instead of showing only the lab figures a single PageSpeed run produces.',
 			'performance-optimisation'
 		),
 		detail: __(
@@ -94,7 +94,7 @@ const PLUGIN_SETTINGS_SUBJECTS = {
 			'performance-optimisation'
 		),
 		cost: __(
-			'Adds a small script to every page view, so it costs a little speed to get a truer picture. Numbers stay anonymous and are kept on your own site. If you are chasing a Core Web Vitals problem, the field data is usually the one that tells you whether a fix worked.',
+			'Adds a small script to every page view, so it costs a little speed to get a truer picture, and numbers stay anonymous on your own site. It also needs enough visits to be meaningful: below roughly 100 visits a Core Web Vitals figure is dominated by who happened to load the page, so a green score can mean nothing. If you are chasing a CWV problem, the field data is usually the one that tells you whether a fix worked.',
 			'performance-optimisation'
 		),
 	} ),
