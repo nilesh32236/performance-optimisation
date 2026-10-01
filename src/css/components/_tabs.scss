@@ -3,8 +3,9 @@
 .wppo-sub-tabs {
 	display: flex;
 	gap: 4px;
-	background: var(--wppo-surface-quiet, #f8fafc);
+	background: var(--wppo-surface, #ffffff);
 	border: 1px solid var(--wppo-hairline, #dde3ea);
+	border-bottom: 1px solid var(--wppo-hairline, #dde3ea);
 	border-radius: var(--wppo-radius-tool, 8px);
 	padding: 4px;
 	margin-top: 20px;

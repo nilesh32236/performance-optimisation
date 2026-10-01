@@ -10,6 +10,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import ConfirmDialog from './components/common/ConfirmDialog';
 import UnsavedChangesContext from './lib/UnsavedChangesContext';
+import { HeaderActionsProvider } from './lib/HeaderActionsContext';
 import {
 	faBars,
 	faTimes,
@@ -633,174 +634,181 @@ const App = () => {
 
 	return (
 		<UnsavedChangesContext.Provider value={ unsavedContextValue }>
-			{ /* The inspector explains whatever control is focused, so its
+			{ /* The active screen publishes its primary action here, so the page
+			     head can own the single Save the reference shows. It wraps the
+			     screens (which publish) and SectionShell (which renders). */ }
+			<HeaderActionsProvider>
+				{ /* The inspector explains whatever control is focused, so its
 			     provider has to wrap both the screens and the panel. */ }
-			<InspectorProvider
-				resetKey={ `${ activeSection }:${ activeView }` }
-			>
-				{ /* One visible place for every notice, wherever its card sits.
+				<InspectorProvider
+					resetKey={ `${ activeSection }:${ activeView }` }
+				>
+					{ /* One visible place for every notice, wherever its card sits.
 			     See MessageRegion for why this is aria-hidden. */ }
-				<MessageRegion />
+					<MessageRegion />
 
-				<div className="wppo-container">
-					{ /* Mobile Top Header */ }
-					<div className="wppo-mobile-header">
-						<div
-							className="wppo-mobile-brand"
-							title={ __(
-								'Performance Optimisation',
-								'performance-optimisation'
-							) }
-						>
-							<div className="wppo-mobile-logo">
-								<FontAwesomeIcon icon={ faBolt } />
-							</div>
-							<span className="wppo-mobile-brand__text">
-								{ __(
+					<div className="wppo-container">
+						{ /* Mobile Top Header */ }
+						<div className="wppo-mobile-header">
+							<div
+								className="wppo-mobile-brand"
+								title={ __(
 									'Performance Optimisation',
 									'performance-optimisation'
 								) }
-							</span>
-						</div>
-						<button
-							className="wppo-mobile-toggle"
-							onClick={ toggleMobileMenu }
-							aria-label={ __(
-								'Toggle Menu',
-								'performance-optimisation'
-							) }
-							aria-expanded={ mobileMenuOpen }
-							aria-controls="mobile-sidebar"
-							ref={ toggleBtnRef }
-						>
-							<FontAwesomeIcon
-								icon={ mobileMenuOpen ? faTimes : faBars }
-							/>
-						</button>
-					</div>
-
-					{ /* Sidebar Overlay */ }
-					{ mobileMenuOpen && (
-						<button
-							type="button"
-							className="wppo-sidebar-overlay"
-							onClick={ toggleMobileMenu }
-							aria-label={ __(
-								'Close Menu',
-								'performance-optimisation'
-							) }
-						/>
-					) }
-
-					<div
-						id="mobile-sidebar"
-						ref={ sidebarRef }
-						className={ `wppo-sidebar ${
-							mobileMenuOpen ? 'wppo-sidebar--mobile-open' : ''
-						}` }
-					>
-						<div className="wppo-sidebar-header">
-							<div className="wppo-sidebar-logo">
-								<FontAwesomeIcon icon={ faBolt } />
-							</div>
-							<h3>
-								{ __(
-									'Performance',
-									'performance-optimisation'
-								) }
-								<span>
+							>
+								<div className="wppo-mobile-logo">
+									<FontAwesomeIcon icon={ faBolt } />
+								</div>
+								<span className="wppo-mobile-brand__text">
 									{ __(
-										'Optimisation',
+										'Performance Optimisation',
 										'performance-optimisation'
 									) }
 								</span>
-							</h3>
+							</div>
+							<button
+								className="wppo-mobile-toggle"
+								onClick={ toggleMobileMenu }
+								aria-label={ __(
+									'Toggle Menu',
+									'performance-optimisation'
+								) }
+								aria-expanded={ mobileMenuOpen }
+								aria-controls="mobile-sidebar"
+								ref={ toggleBtnRef }
+							>
+								<FontAwesomeIcon
+									icon={ mobileMenuOpen ? faTimes : faBars }
+								/>
+							</button>
 						</div>
-						<nav
-							aria-label={ __(
-								'Main Navigation',
+
+						{ /* Sidebar Overlay */ }
+						{ mobileMenuOpen && (
+							<button
+								type="button"
+								className="wppo-sidebar-overlay"
+								onClick={ toggleMobileMenu }
+								aria-label={ __(
+									'Close Menu',
+									'performance-optimisation'
+								) }
+							/>
+						) }
+
+						<div
+							id="mobile-sidebar"
+							ref={ sidebarRef }
+							className={ `wppo-sidebar ${
+								mobileMenuOpen
+									? 'wppo-sidebar--mobile-open'
+									: ''
+							}` }
+						>
+							<div className="wppo-sidebar-header">
+								<div className="wppo-sidebar-logo">
+									<FontAwesomeIcon icon={ faBolt } />
+								</div>
+								<h3>
+									{ __(
+										'Performance',
+										'performance-optimisation'
+									) }
+									<span>
+										{ __(
+											'Optimisation',
+											'performance-optimisation'
+										) }
+									</span>
+								</h3>
+							</div>
+							<nav
+								aria-label={ __(
+									'Main Navigation',
+									'performance-optimisation'
+								) }
+							>
+								<ul>
+									{ sidebarItems.map( ( item ) => (
+										<li key={ item.id }>
+											<button
+												className={
+													activeSection === item.id
+														? 'wppo-is-active'
+														: ''
+												}
+												aria-current={
+													activeSection === item.id
+														? 'page'
+														: undefined
+												}
+												onClick={ () =>
+													handleTabChange( item.id )
+												}
+											>
+												<FontAwesomeIcon
+													className="wppo-sidebar-icon"
+													icon={ item.icon }
+												/>
+												<span className="wppo-sidebar-label">
+													{ item.label }
+												</span>
+											</button>
+										</li>
+									) ) }
+								</ul>
+							</nav>
+							<div className="wppo-sidebar-footer">
+								<div className="wppo-sidebar-version">
+									{ wppoVersion ? `v${ wppoVersion }` : '' }
+								</div>
+							</div>
+						</div>
+
+						<div className="wppo-content">
+							<div className="wppo-main">
+								<div
+									className={
+										transition ? 'wppo-fadeIn' : undefined
+									}
+								>
+									<ErrorBoundary>
+										{ renderContent() }
+									</ErrorBoundary>
+								</div>
+							</div>
+						</div>
+
+						{ /* Third zone of the shell. Sticky beside the work area above
+				     xl, a bottom sheet below it. */ }
+						<InspectorPanel />
+
+						<ConfirmDialog
+							isOpen={ showGuard }
+							onConfirm={ confirmDiscard }
+							onCancel={ cancelGuard }
+							title={ __(
+								'Unsaved changes — Discard?',
 								'performance-optimisation'
 							) }
-						>
-							<ul>
-								{ sidebarItems.map( ( item ) => (
-									<li key={ item.id }>
-										<button
-											className={
-												activeSection === item.id
-													? 'wppo-is-active'
-													: ''
-											}
-											aria-current={
-												activeSection === item.id
-													? 'page'
-													: undefined
-											}
-											onClick={ () =>
-												handleTabChange( item.id )
-											}
-										>
-											<FontAwesomeIcon
-												className="wppo-sidebar-icon"
-												icon={ item.icon }
-											/>
-											<span className="wppo-sidebar-label">
-												{ item.label }
-											</span>
-										</button>
-									</li>
-								) ) }
-							</ul>
-						</nav>
-						<div className="wppo-sidebar-footer">
-							<div className="wppo-sidebar-version">
-								{ wppoVersion ? `v${ wppoVersion }` : '' }
-							</div>
-						</div>
+							message={ __(
+								'You have unsaved changes. Leave without saving?',
+								'performance-optimisation'
+							) }
+							confirmLabel={ __(
+								'Discard',
+								'performance-optimisation'
+							) }
+							cancelLabel={ __(
+								'Cancel',
+								'performance-optimisation'
+							) }
+							variant="warning"
+						/>
 					</div>
-
-					<div className="wppo-content">
-						<div className="wppo-main">
-							<div
-								className={
-									transition ? 'wppo-fadeIn' : undefined
-								}
-							>
-								<ErrorBoundary>
-									{ renderContent() }
-								</ErrorBoundary>
-							</div>
-						</div>
-					</div>
-
-					{ /* Third zone of the shell. Sticky beside the work area above
-				     xl, a bottom sheet below it. */ }
-					<InspectorPanel />
-
-					<ConfirmDialog
-						isOpen={ showGuard }
-						onConfirm={ confirmDiscard }
-						onCancel={ cancelGuard }
-						title={ __(
-							'Unsaved changes — Discard?',
-							'performance-optimisation'
-						) }
-						message={ __(
-							'You have unsaved changes. Leave without saving?',
-							'performance-optimisation'
-						) }
-						confirmLabel={ __(
-							'Discard',
-							'performance-optimisation'
-						) }
-						cancelLabel={ __(
-							'Cancel',
-							'performance-optimisation'
-						) }
-						variant="warning"
-					/>
-				</div>
-			</InspectorProvider>
+				</InspectorProvider>
+			</HeaderActionsProvider>
 		</UnsavedChangesContext.Provider>
 	);
 };

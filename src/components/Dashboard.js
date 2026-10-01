@@ -1157,7 +1157,7 @@ const Dashboard = ( {
 			: 'wppo-status-badge--good';
 
 	return (
-		<div className="wppo-dashboard-view">
+		<div className="wppo-dashboard-view wppo-dashboard-view--home">
 			{ notice && (
 				<NoticeBanner
 					type={ notice.type }

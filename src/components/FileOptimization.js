@@ -40,6 +40,7 @@ import Tooltip from './common/Tooltip';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import { useHeaderActions } from '../lib/HeaderActionsContext';
 import SwitchField from './common/SwitchField';
 import SettingRow from './common/SettingRow';
 import SettingField from './common/SettingField';
@@ -2972,6 +2973,24 @@ const FileOptimization = ( {
 		[ subTabs ]
 	);
 
+	// The page head owns the one Save the reference shows, level with the H1.
+	// Publishing it here rather than passing it to FeatureHeader's `actions` is
+	// what moves it out of the card and into the head; the handler, the button
+	// and its loading state are unchanged.
+	const saveButton = (
+		<LoadingSubmitButton
+			className="wppo-button wppo-button--primary"
+			isLoading={ isSaving }
+			onClick={ handleSubmit }
+			label={ __( 'Save Settings', 'performance-optimisation' ) }
+		/>
+	);
+
+	// In the app the page head owns the one Save the reference shows. Mounted
+	// without the provider - a unit test - `inPageHead` is false and the button
+	// renders in the card instead, so the control never disappears.
+	const inPageHead = useHeaderActions( saveButton, [ isSaving ] );
+
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
@@ -2980,17 +2999,7 @@ const FileOptimization = ( {
 					'Fine-tune how your site delivers CSS, JS, and HTML for maximum performance.',
 					'performance-optimisation'
 				) }
-				actions={
-					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary"
-						isLoading={ isSaving }
-						onClick={ handleSubmit }
-						label={ __(
-							'Save Settings',
-							'performance-optimisation'
-						) }
-					/>
-				}
+				actions={ inPageHead ? undefined : saveButton }
 			>
 				{ notice && (
 					<NoticeBanner

@@ -21,6 +21,8 @@
  *   so a two-item row never reflows the panel height under the user.
  */
 
+@use '../abstracts/mixins' as *;
+
 .wppo-section {
 	display: flex;
 	flex-direction: column;
@@ -35,9 +37,42 @@
 	margin-block-end: 18px;
 }
 
-/* The screen you are on, above the area you are in. Uppercase micro-label, so
-   it reads as a category marker rather than a second heading. Rendered only
-   where a sub-nav exists to change it (see SectionShell). */
+/* Title block on the left, the screen's primary action on the right — the
+   layout the reference page head uses (ui/instrument/stitch/*.html: eyebrow,
+   H1 and purpose stacked, action level with the top of the H1). */
+.wppo-section__head-row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 20px;
+	min-width: 0;
+}
+
+.wppo-section__head-main {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.wppo-section__header-actions {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding-top: 2px;
+
+	/* Below the desktop breakpoint the action drops under the title rather
+	   than squeezing it — a two-word H1 plus a button does not fit at 390. */
+	@include respond-to('md') {
+		flex-direction: column;
+		align-items: stretch;
+		width: 100%;
+		padding-top: 0;
+	}
+}
+
+/* The area you are in, above the area title. Uppercase micro-label, a position
+   marker rather than a state indicator. Always rendered, matching the
+   reference (see SectionShell). */
 .wppo-section__eyebrow {
 	margin: 0 0 2px;
 	font-family: var(--wppo-font-body);

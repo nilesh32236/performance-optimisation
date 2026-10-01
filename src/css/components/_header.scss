@@ -20,8 +20,14 @@
 		background: linear-gradient(90deg, var(--wppo-border) 0%, rgba(226, 232, 240, 0) 100%);
 	}
 
-	// Premium hero for dashboard System Health
-	.wppo-dashboard-view > &:first-of-type {
+	// Premium hero — System Health, on the real dashboard ONLY.
+	//
+	// This used to be `.wppo-dashboard-view > &:first-of-type`, but that class is
+	// the shared screen root rendered by all seven top-level screens, so the
+	// gradient was being applied to every one of them rather than to the
+	// dashboard. The rule is scoped to the `--home` modifier that only
+	// Dashboard.js sets, which is what "System Health" actually refers to.
+	.wppo-dashboard-view--home > &:first-of-type {
 		background: linear-gradient(135deg, var(--wppo-header-gradient-start, #ffffff) 0%, var(--wppo-header-gradient-mid, #eef2ff) 55%, var(--wppo-header-gradient-end, #f0f9ff) 100%);
 		border: 1px solid rgba(226, 232, 240, 0.9);
 		border-radius: 16px;

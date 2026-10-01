@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { usePublishedHeaderActions } from '../lib/HeaderActionsContext';
 
 /**
  * One top-level area, and the screens inside it.
@@ -85,10 +86,21 @@ export default function SectionShell( {
 
 	const single = items.length < 2;
 
-	// The eyebrow names the screen you are on, not the area you are in, so it
-	// carries information instead of repeating the heading beneath it — and it
-	// appears only where a sub-nav actually exists to change it.
-	const activeItem = items.find( ( item ) => item.id === activeId );
+	// The active screen publishes its primary action here, so the page head owns
+	// the single Save the reference shows, level with the H1, instead of each
+	// card carrying its own.
+	const headerActions = usePublishedHeaderActions();
+
+	// The eyebrow names the AREA you are in, not the screen within it. The
+	// approved reference (ui/instrument/stitch/03-assets-scripts.html) sets an
+	// 11px uppercase mono label reading "SPEED" directly above an H1 reading
+	// "Speed" — the repetition is the pattern, not a mistake. The screen name
+	// belongs on the sub-tab, which is where it acts as a control.
+	//
+	// It is shown unconditionally for the same reason the reference shows it
+	// unconditionally: it is a position marker, not a state indicator, and
+	// dropping it on a single-screen area would make the page head change
+	// shape depending on how many screens happened to be registered.
 
 	return (
 		<section
@@ -97,20 +109,25 @@ export default function SectionShell( {
 			aria-labelledby={ `wppo-section-${ id }-title` }
 		>
 			<header className="wppo-section__header">
-				{ ! single && activeItem ? (
-					<p className="wppo-section__eyebrow">
-						{ activeItem.label }
-					</p>
-				) : null }
-				<h1
-					className="wppo-section__title"
-					id={ `wppo-section-${ id }-title` }
-				>
-					{ title }
-				</h1>
-				{ purpose ? (
-					<p className="wppo-section__purpose">{ purpose }</p>
-				) : null }
+				<div className="wppo-section__head-row">
+					<div className="wppo-section__head-main">
+						<p className="wppo-section__eyebrow">{ title }</p>
+						<h1
+							className="wppo-section__title"
+							id={ `wppo-section-${ id }-title` }
+						>
+							{ title }
+						</h1>
+						{ purpose ? (
+							<p className="wppo-section__purpose">{ purpose }</p>
+						) : null }
+					</div>
+					{ headerActions ? (
+						<div className="wppo-section__header-actions">
+							{ headerActions }
+						</div>
+					) : null }
+				</div>
 			</header>
 
 			{ ! single && (
