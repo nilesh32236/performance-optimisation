@@ -35,6 +35,14 @@
 	pointer-events: auto;
 }
 
+/* Scoped: consumed only by .wppo-message-region. Mirrors _overview.scss:204-208. */
+.wppo-message-region {
+	--wppo-success-strong: #0f7b4f;
+	--wppo-error-strong: #b3261e;
+	--wppo-warning-strong: #8a5a00;
+	--wppo-info-strong: #0b6e75;
+}
+
 .wppo-message-region__icon {
 	flex-shrink: 0;
 	width: 20px;
@@ -44,8 +52,10 @@
 	font-size: 12px;
 	font-weight: 700;
 	line-height: 1;
-	color: var(--wppo-text-on-accent, #fff);
+	color: var(--wppo-text-inverse, #fff);
 	border-radius: 50%;
+	/* Deliberate: no neutral-badge token exists yet. `--wppo-warning-badge`
+	   (_variables.scss:48) is the only established glyph-fill token. */
 	background: var(--wppo-text-light, #64748b);
 }
 

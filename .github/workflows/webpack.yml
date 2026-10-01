@@ -80,6 +80,9 @@ jobs:
         # unrelated model-registry failure cannot stop exercising it.
         run: bash tests/shell/test-deploy-guard.sh
 
+      - name: Test the CSS variable guard
+        run: bash tests/shell/test_css_vars.sh
+
       - name: Build
         run: npm run build
 
