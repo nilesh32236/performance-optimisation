@@ -1,5 +1,14 @@
 @use '../abstracts/mixins' as *;
 
+// The page canvas. The plugin renders inside wp-admin, whose own body is a
+// warm #f0f0f0; the approved reference is a cool slate (designs/variant-c:
+// --wppo-bg #f8fafc; the stitch files: canvas #F4F6F9). Without this the
+// admin's grey shows through every gap between cards and the page reads
+// warmer than the design it is supposed to match.
+#performance-optimisation {
+	background: var(--wppo-canvas, #f4f6f9);
+}
+
 .wppo-dashboard-view {
 	padding: 0;
 	max-width: 100%;

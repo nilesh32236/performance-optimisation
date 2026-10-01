@@ -108,7 +108,10 @@
 	margin: 0;
 	// Space Grotesk carries headings and nothing else on this screen.
 	font-family: var(--wppo-font-display);
-	font-size: 1.75rem;
+	// 1.5rem = 24px, matching the reference page head
+	// (ui/instrument/stitch/03-assets-scripts.html: text-2xl bold). The previous
+	// 1.75rem was 28px, four px larger than the approved design.
+	font-size: 1.5rem;
 	font-weight: 600;
 	line-height: 1.2;
 	letter-spacing: -0.02em;
