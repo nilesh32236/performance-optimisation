@@ -148,9 +148,13 @@
 	--wppo-rail-min: 96px;
 
 	/* Shell geometry. Light nav: the plugin renders inside wp-admin chrome
-	   and a dark slab fights it. */
-	--wppo-nav-width: 236px;
-	--wppo-inspector-width: 344px;
+	   and a dark slab fights it.
+
+	   220 | 1fr | 320 matches the approved reference
+	   (designs/variant-c/style.css: --wppo-nav-w 220px, --wppo-inspector-w
+	   320px). The previous 236 | 344 was 16px and 24px wider on each edge. */
+	--wppo-nav-width: 220px;
+	--wppo-inspector-width: 320px;
 	--wppo-work-max: 880px;
 	--wppo-row-pad-y: 12px;
 	--wppo-card-pad: 20px;
